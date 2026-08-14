@@ -3,6 +3,13 @@ import {
   ApplicantFormData,
   BackendResponse,
   CVGenerationResponse,
+  ProcessingRoleType,
+  ContractorDocument,
+  LMSProcessing,
+  InjazProcessing,
+  WakalaProcessing,
+  EmbassyProcessing,
+  DepartureInfo,
 } from "@/types/applicant";
 
 export class ApiError extends Error {
@@ -52,7 +59,6 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
     throw new ApiError(errorMessage, res.status, serverMessages, json.exc);
   }
 
-  // Handle standard Frappe / REST response wrapper { data: ... } or { message: ... } or raw
   if (json.data !== undefined) return json.data as T;
   if (json.message !== undefined) return json.message as T;
   return json as unknown as T;
@@ -71,7 +77,7 @@ export async function createApplicantDraft(
 
 export async function updateApplicantDraft(
   applicantName: string,
-  payload: Partial<ApplicantFormData>
+  payload: Partial<Applicant>
 ): Promise<Applicant> {
   const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
     method: "PUT",
@@ -117,4 +123,118 @@ export async function generateCV(
     }
   );
   return handleApiResponse<CVGenerationResponse>(res);
+}
+
+export async function transitionToRequestPendingApi(
+  applicantName: string
+): Promise<Applicant> {
+  const res = await fetch("/api/method/request_pending", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function uploadAndExtractContractorDocApi(
+  applicantName: string,
+  docData: Partial<ContractorDocument>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/upload_contractor_doc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, doc_data: docData }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function approveContractorDocApi(
+  applicantName: string,
+  approved: boolean = true
+): Promise<Applicant> {
+  const res = await fetch("/api/method/approve_contractor_doc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, approved }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function assignEmployeeApi(
+  applicantIds: string[],
+  roleType: ProcessingRoleType,
+  employeeId: string,
+  notes?: string
+): Promise<Applicant[]> {
+  const res = await fetch("/api/method/assign_employee", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      applicant_ids: applicantIds,
+      role_type: roleType,
+      employee_id: employeeId,
+      notes,
+    }),
+  });
+  return handleApiResponse<Applicant[]>(res);
+}
+
+export async function updateLmsStreamApi(
+  applicantName: string,
+  lmsData: Partial<LMSProcessing>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/update_lms_stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, lms_data: lmsData }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function updateInjazStreamApi(
+  applicantName: string,
+  injazData: Partial<InjazProcessing>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/update_injaz_stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, injaz_data: injazData }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function updateWakalaStreamApi(
+  applicantName: string,
+  wakalaData: Partial<WakalaProcessing>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/update_wakala_stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, wakala_data: wakalaData }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function updateEmbassyStreamApi(
+  applicantName: string,
+  embassyData: Partial<EmbassyProcessing>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/update_embassy_stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, embassy_data: embassyData }),
+  });
+  return handleApiResponse<Applicant>(res);
+}
+
+export async function markDepartedApi(
+  applicantName: string,
+  departureData: Partial<DepartureInfo>
+): Promise<Applicant> {
+  const res = await fetch("/api/method/mark_departed", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ applicant_name: applicantName, departure_data: departureData }),
+  });
+  return handleApiResponse<Applicant>(res);
 }
