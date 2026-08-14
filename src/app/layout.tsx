@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppNavbar } from "@/components/layout/AppNavbar";
 
-const inter = Inter({
+const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-hanken-grotesk",
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -22,10 +24,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen bg-slate-50/50 font-sans text-slate-900 antialiased">
+    <html lang="en" className={hankenGrotesk.variable}>
+      <body className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
         <QueryProvider>
-          <div className="flex min-h-screen flex-col">
+          <div className="flex min-h-screen flex-col bg-slate-50">
             <AppSidebar />
             <div className="flex flex-1 flex-col md:pl-64">
               <AppNavbar />

@@ -2,23 +2,19 @@
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
   Bookmark,
-  CheckCircle,
-  AlertCircle,
   FileCheck2,
   FileText,
   Loader2,
-  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import {
   BaseApplicantFormValues,
-  baseApplicantSchema,
   stage1DraftSchema,
   stage2RegistrationSchema,
 } from "@/lib/validations/applicant.schema";
@@ -44,6 +40,67 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+const FIELD_TO_STEP_MAP: Record<string, number> = {
+  first_name: 1,
+  middle_name: 1,
+  last_name: 1,
+  gender: 1,
+  religion: 1,
+  marital_status: 1,
+  children: 1,
+  nationality: 1,
+  phone_number: 1,
+  alternate_phone: 1,
+  email: 1,
+  city: 1,
+  country: 1,
+  region: 1,
+  sub_region: 1,
+  address_line_1: 1,
+  highest_education: 2,
+  institution: 2,
+  graduation_year: 2,
+  current_employer: 2,
+  years_of_experience: 2,
+  education_remarks: 2,
+  date_of_birth: 3,
+  national_id: 3,
+  passport_number: 3,
+  passport_expiry: 3,
+  labour_id: 3,
+  contact_person_name: 3,
+  contact_person_phone: 3,
+  coc_status: 4,
+  exam_date: 4,
+  medical_status: 4,
+  medical_expiry_date: 4,
+  medical_remarks: 4,
+  remarks: 4,
+};
+
+const FIELD_LABEL_MAP: Record<string, string> = {
+  first_name: "First Name",
+  last_name: "Last Name",
+  gender: "Gender",
+  religion: "Religion",
+  marital_status: "Marital Status",
+  children: "Children Count",
+  nationality: "Nationality",
+  phone_number: "Phone Number",
+  city: "City",
+  country: "Country",
+  date_of_birth: "Date of Birth",
+  passport_number: "Passport Number",
+  highest_education: "Highest Education Level",
+  labour_id: "Labour ID Number",
+  contact_person_name: "Emergency Contact Name",
+  contact_person_phone: "Emergency Contact Phone",
+  coc_status: "COC Status",
+  exam_date: "COC Exam Date",
+  medical_status: "Medical Status",
+  medical_expiry_date: "Medical Expiration Date",
+};
 
 interface ApplicantRegistrationFormProps {
   initialData?: Partial<BaseApplicantFormValues>;
@@ -114,7 +171,7 @@ export function ApplicantRegistrationForm({
     },
   });
 
-  const { getValues, trigger, setError, formState: { isDirty } } = form;
+  const { getValues, trigger, setError, clearErrors } = form;
 
   // Track max reached step for navigation
   const handleStepChange = (targetStep: number) => {
@@ -147,7 +204,7 @@ export function ApplicantRegistrationForm({
   const handleNextStep = async () => {
     const isValid = await validateCurrentStep();
     if (!isValid) {
-      toast.error("Please complete all required fields on this step before proceeding.");
+      toast.error("Please complete required fields on this step before proceeding.");
       return;
     }
     if (currentStep < FORM_STEPS.length) {
@@ -166,6 +223,7 @@ export function ApplicantRegistrationForm({
   // 1. SAVE DRAFT MUTATION
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
+      clearErrors();
       const formData = getValues();
       const validation = stage1DraftSchema.safeParse(formData);
 
@@ -174,14 +232,25 @@ export function ApplicantRegistrationForm({
         validation.error.errors.forEach((err) => {
           if (err.path[0]) {
             setError(err.path[0] as keyof BaseApplicantFormValues, {
+              type: "manual",
               message: err.message,
             });
           }
         });
+
+        // Switch to Step 1 so the user sees the highlighted fields immediately
+        setCurrentStep(1);
+
+        const missingLabels = Array.from(
+          new Set(
+            validation.error.errors.map(
+              (e) => FIELD_LABEL_MAP[e.path[0] as string] || (e.path[0] as string)
+            )
+          )
+        );
+
         throw new Error(
-          `Stage 1 mandatory fields missing: ${validation.error.errors
-            .map((e) => e.message)
-            .join(", ")}`
+          `Please provide the following required draft fields: ${missingLabels.join(", ")}`
         );
       }
 
@@ -195,14 +264,15 @@ export function ApplicantRegistrationForm({
       setDraftApplicantId(data.name);
       setApplicantState(data.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(`Draft saved successfully! (ID: ${data.name})`, {
-        description: "You can continue editing now or return to this draft later.",
+      toast.success(`Draft Saved Successfully (ID: ${data.name})`, {
+        description: "Your applicant record is saved as a Draft. You can continue editing or return later.",
       });
     },
     onError: (error: unknown) => {
       const err = error as ApiError;
-      toast.error("Could not save Draft", {
-        description: err.message || "Please check Stage 1 required fields.",
+      toast.error("Cannot Save Draft", {
+        description: err.message || "Please fill in all Stage 1 required fields.",
+        duration: 5000,
       });
     },
   });
@@ -210,6 +280,7 @@ export function ApplicantRegistrationForm({
   // 2. REGISTER APPLICANT MUTATION
   const registerMutation = useMutation({
     mutationFn: async () => {
+      clearErrors();
       const formData = getValues();
 
       // Check Stage 2 validation strictly
@@ -218,11 +289,19 @@ export function ApplicantRegistrationForm({
         validation.error.errors.forEach((err) => {
           if (err.path[0]) {
             setError(err.path[0] as keyof BaseApplicantFormValues, {
+              type: "manual",
               message: err.message,
             });
           }
         });
-        const errMsgs = validation.error.errors.map((e) => e.message).join(", ");
+
+        // Navigate to the first step containing an error
+        const firstErrorField = validation.error.errors[0]?.path[0] as string;
+        if (firstErrorField && FIELD_TO_STEP_MAP[firstErrorField]) {
+          setCurrentStep(FIELD_TO_STEP_MAP[firstErrorField]);
+        }
+
+        const errMsgs = validation.error.errors.map((e) => e.message).join(" • ");
         throw new Error(errMsgs);
       }
 
@@ -243,18 +322,19 @@ export function ApplicantRegistrationForm({
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message || "Applicant successfully Registered!", {
-        description: "Status changed to Registered. Ready for CV Generation.",
+      toast.success(data.message || "Applicant Successfully Registered!", {
+        description: "The applicant is now in the Registered state. You can generate their official CV.",
       });
       if (onSuccessRedirect && draftApplicantId) {
-        // Optional redirect callback
+        onSuccessRedirect(draftApplicantId);
       }
     },
     onError: (error: unknown) => {
       const err = error as ApiError;
       setIsConfirmRegisterOpen(false);
-      toast.error("Registration Failed", {
+      toast.error("Registration Incomplete", {
         description: err.message || "Backend rejected the registration request.",
+        duration: 6000,
       });
     },
   });
@@ -289,20 +369,30 @@ export function ApplicantRegistrationForm({
       validation.error.errors.forEach((err) => {
         if (err.path[0]) {
           setError(err.path[0] as keyof BaseApplicantFormValues, {
+            type: "manual",
             message: err.message,
           });
         }
       });
 
-      // Find the first step with error and navigate there if needed
+      // Find first error and navigate to that step
+      const firstError = validation.error.errors[0];
+      const fieldName = firstError?.path[0] as string;
+      if (fieldName && FIELD_TO_STEP_MAP[fieldName]) {
+        setCurrentStep(FIELD_TO_STEP_MAP[fieldName]);
+      }
+
       toast.error("Registration Requirements Incomplete", {
-        description: validation.error.errors[0]?.message || "Please check required fields.",
+        description: firstError?.message || "Please check the highlighted required fields.",
+        duration: 5000,
       });
       return;
     }
 
     if (formData.medical_status === "UNFIT") {
-      toast.error("Applicant cannot be registered while medical status is UNFIT.");
+      toast.error("Applicant cannot be registered while medical status is UNFIT.", {
+        description: "Please change medical status to FIT once cleared, or keep this record as a Draft.",
+      });
       return;
     }
 
@@ -369,7 +459,7 @@ export function ApplicantRegistrationForm({
               variant="outline"
               onClick={() => saveDraftMutation.mutate()}
               disabled={isSavingDraft || isRegistering}
-              className="border-slate-300 bg-white hover:bg-slate-50"
+              className="border-slate-300 bg-white hover:bg-slate-50 font-medium"
             >
               {isSavingDraft ? (
                 <>
@@ -389,7 +479,7 @@ export function ApplicantRegistrationForm({
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white"
+                className="bg-emerald-900 hover:bg-emerald-950 text-white font-medium shadow-xs"
               >
                 Next Step
                 <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -400,7 +490,7 @@ export function ApplicantRegistrationForm({
                   type="button"
                   onClick={handleRegisterClick}
                   disabled={isRegistering || isSavingDraft || isMedicalUnfit}
-                  className="bg-emerald-900 hover:bg-emerald-950 text-white shadow-sm"
+                  className="bg-emerald-900 hover:bg-emerald-950 text-white font-medium shadow-sm"
                 >
                   {isRegistering ? (
                     <>
