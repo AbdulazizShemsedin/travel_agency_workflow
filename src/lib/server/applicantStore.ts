@@ -1,13 +1,15 @@
 import {
   Applicant,
   ApplicantFormData,
-  ProcessingRoleType,
+  ApplicantState,
   ContractorDocument,
-  LMSProcessing,
-  InjazProcessing,
-  WakalaProcessing,
-  EmbassyProcessing,
   DepartureInfo,
+  EmbassyProcessing,
+  InjazProcessing,
+  LMSProcessing,
+  ProcessingRoleType,
+  WakalaProcessing,
+  StreamAssignmentPayload,
 } from "@/types/applicant";
 import { calculateRemainingDays, deriveFullName } from "@/lib/validations/applicant.schema";
 
@@ -471,14 +473,18 @@ export function approveContractorDocInStore(id: string, approved: boolean): Appl
   const existing = mockApplicants.get(id);
   if (!existing) throw new Error(`Applicant ${id} not found.`);
 
-  if (existing.contractor_doc) {
-    existing.contractor_doc.approval_status = approved ? "Approved" : "Rejected";
-  }
-
   if (approved) {
+    if (existing.contractor_doc) {
+      existing.contractor_doc.approval_status = "Approved";
+    }
     existing.applicant_state = "Selected";
   } else {
-    existing.applicant_state = "Cancelled";
+    // User only rejected the extracted fields; reset extracted info and keep in Request Pending
+    if (existing.contractor_doc) {
+      existing.contractor_doc.approval_status = "Rejected";
+      existing.contractor_doc.extracted_at = undefined;
+    }
+    existing.applicant_state = "Request Pending";
   }
 
   existing.updated_at = new Date().toISOString();
@@ -488,12 +494,22 @@ export function approveContractorDocInStore(id: string, approved: boolean): Appl
 
 export function assignEmployeeInStore(
   ids: string[],
-  roleType: ProcessingRoleType,
-  employeeId: string,
-  notes?: string
+  roleType: ProcessingRoleType = "All Roles / Operations Lead",
+  employeeId?: string,
+  notes?: string,
+  streamAssignments?: StreamAssignmentPayload,
+  employeeIds?: string[]
 ): Applicant[] {
-  const employee = mockEmployeesList.find((e) => e.id === employeeId);
-  const employeeName = employee?.name || "Assigned Officer";
+  // Determine primary employee or collaborating employees
+  const primaryEmployee = mockEmployeesList.find((e) => e.id === employeeId) || mockEmployeesList[0];
+  const collaboratingEmployees = employeeIds && employeeIds.length > 0
+    ? mockEmployeesList.filter((e) => employeeIds.includes(e.id))
+    : [primaryEmployee];
+
+  const primaryName = collaboratingEmployees.map((e) => e.name).join(", ");
+  const lmsStaff = streamAssignments?.lms_employee_name || (roleType === "LMS Officer" ? primaryEmployee.name : "Sara Mohammed (LMS)");
+  const injazStaff = streamAssignments?.injaz_employee_name || (roleType === "Injaz Officer" ? primaryEmployee.name : "Dawit Haile (Injaz)");
+  const wakalaStaff = streamAssignments?.wakala_employee_name || (roleType === "Wakala Admin" ? primaryEmployee.name : "Tigist Alemu (Wakala)");
 
   const updatedApplicants: Applicant[] = [];
 
@@ -502,45 +518,41 @@ export function assignEmployeeInStore(
     if (existing) {
       existing.applicant_state = "Processing";
       existing.assigned_role_type = roleType;
-      existing.assigned_employee_id = employeeId;
-      existing.assigned_employee_name = employeeName;
+      existing.assigned_employee_id = employeeId || collaboratingEmployees[0]?.id;
+      existing.assigned_employee_name = primaryName;
       existing.assigned_at = new Date().toISOString();
 
-      // Initialize parallel processing streams if not present
-      if (!existing.lms_processing) {
-        existing.lms_processing = {
-          status: "In Progress",
-          assigned_employee: roleType === "LMS Officer" ? employeeName : "Sara Mohammed (LMS)",
-          ticket_pnr: "",
-          flight_number: "",
-          departure_date: "",
-          destination: "Riyadh (RUH)",
-          additional_field_1: "",
-          additional_field_2: "",
-          notes: notes || "LMS workflow initialized.",
-        };
-      }
-      if (!existing.injaz_processing) {
-        existing.injaz_processing = {
-          status: "In Progress",
-          assigned_employee: roleType === "Injaz Officer" ? employeeName : "Dawit Haile (Injaz)",
-          injaz_app_no: `INJ-${Math.floor(1000000 + Math.random() * 9000000)}`,
-          teashir_fee: 140,
-          biometrics_date: "",
-          biometrics_center: "Teashir VFS Global",
-          notes: "Teashir fingerprint processing active.",
-        };
-      }
-      if (!existing.wakala_processing) {
-        existing.wakala_processing = {
-          status: "In Progress",
-          assigned_employee: roleType === "Wakala Admin" ? employeeName : "Tigist Alemu (Wakala)",
-          wakala_number: `WAK-${Math.floor(1000000 + Math.random() * 9000000)}`,
-          sponsor_auth_code: "ENJAZ-AUTH-ACTIVE",
-          foreign_agency_name: existing.contractor_doc?.contractor_name || "Authorized Foreign Agency",
-          notes: "Wakala power of attorney delegation pending endorsement.",
-        };
-      }
+      // Initialize parallel processing streams with assigned staff
+      existing.lms_processing = {
+        status: existing.lms_processing?.status || "In Progress",
+        assigned_employee: lmsStaff,
+        ticket_pnr: existing.lms_processing?.ticket_pnr || "",
+        flight_number: existing.lms_processing?.flight_number || "ET-402",
+        departure_date: existing.lms_processing?.departure_date || "",
+        destination: existing.lms_processing?.destination || "Riyadh (RUH)",
+        additional_field_1: existing.lms_processing?.additional_field_1 || "MOL-CLEARANCE-9941",
+        additional_field_2: existing.lms_processing?.additional_field_2 || "INS-MED-2026-441",
+        notes: notes || existing.lms_processing?.notes || "LMS workflow initialized.",
+      };
+
+      existing.injaz_processing = {
+        status: existing.injaz_processing?.status || "In Progress",
+        assigned_employee: injazStaff,
+        injaz_app_no: existing.injaz_processing?.injaz_app_no || `INJ-${Math.floor(1000000 + Math.random() * 9000000)}`,
+        teashir_fee: existing.injaz_processing?.teashir_fee ?? 140,
+        biometrics_date: existing.injaz_processing?.biometrics_date || "",
+        biometrics_center: existing.injaz_processing?.biometrics_center || "Teashir VFS Global Addis",
+        notes: existing.injaz_processing?.notes || "Teashir fingerprint processing active.",
+      };
+
+      existing.wakala_processing = {
+        status: existing.wakala_processing?.status || "In Progress",
+        assigned_employee: wakalaStaff,
+        wakala_number: existing.wakala_processing?.wakala_number || `WAK-${Math.floor(1000000 + Math.random() * 9000000)}`,
+        sponsor_auth_code: existing.wakala_processing?.sponsor_auth_code || "ENJAZ-AUTH-ACTIVE",
+        foreign_agency_name: existing.contractor_doc?.contractor_name || "Authorized Foreign Agency",
+        notes: existing.wakala_processing?.notes || "Wakala power of attorney delegation pending endorsement.",
+      };
 
       existing.updated_at = new Date().toISOString();
       mockApplicants.set(id, existing);

@@ -11,9 +11,11 @@ import {
   BarChart3,
   Receipt,
   Plus,
-  Bell,
   Settings,
   Globe2,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,104 +29,158 @@ const navItems = [
   { label: "Expenses/Income", href: "/expenses-income", icon: Receipt },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  isCollapsed?: boolean;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
+  onToggleCollapse?: () => void;
+}
+
+export function AppSidebar({
+  isCollapsed = false,
+  isMobileOpen = false,
+  onCloseMobile,
+  onToggleCollapse,
+}: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200/80 bg-white md:flex">
-      {/* Brand Header */}
-      <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-900 text-white shadow-xs">
-          <Globe2 className="h-5 w-5" />
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden animate-in fade-in duration-200"
+        />
+      )}
+
+      {/* Sidebar Container */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#0d0d10] transition-all duration-300 shadow-sm",
+          // Mobile state
+          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
+          // Desktop collapsed state
+          isCollapsed ? "md:w-20" : "md:w-64"
+        )}
+      >
+        {/* Brand Header */}
+        <div className="flex h-16 items-center justify-between border-b border-slate-100 dark:border-[#222227] px-4">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-900 dark:bg-emerald-600 text-white shadow-xs">
+              <Globe2 className="h-5 w-5" />
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0 transition-opacity duration-200">
+                <h1 className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">
+                  Travel Agency
+                </h1>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                  Management Portal
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Close button on mobile */}
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <div>
-          <h1 className="text-sm font-bold text-slate-900 leading-tight">
-            Travel Agency
-          </h1>
-          <p className="text-[11px] text-slate-500">Management Portal</p>
-        </div>
-      </div>
 
-      {/* Primary Action Button */}
-      <div className="p-4">
-        <Link href="/applicants/new">
-          <Button className="w-full justify-center gap-2 bg-emerald-900 hover:bg-emerald-950 text-white shadow-sm font-medium">
-            <Plus className="h-4 w-4" />
-            Add Applicant
-          </Button>
-        </Link>
-      </div>
-
-      {/* Navigation Links */}
-      <nav className="flex-1 space-y-1 px-3 py-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === "/applicants"
-              ? pathname.startsWith("/applicants") || pathname === "/"
-              : pathname === item.href;
-
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
+        {/* Primary Action: Add Applicant Button */}
+        <div className="p-3">
+          <Link href="/applicants/new" onClick={onCloseMobile}>
+            <Button
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-emerald-50 text-emerald-950 font-semibold border-l-4 border-emerald-800 rounded-l-none"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                "w-full justify-center gap-2 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-medium text-xs",
+                isCollapsed ? "px-0" : ""
               )}
+              title={isCollapsed ? "Add Applicant" : undefined}
             >
-              <Icon
+              <Plus className="h-4 w-4 shrink-0" />
+              {!isCollapsed && <span>Add Applicant</span>}
+            </Button>
+          </Link>
+        </div>
+
+        {/* Navigation Links */}
+        <nav className="flex-1 space-y-1 px-2.5 py-2 overflow-y-auto">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              item.href === "/applicants"
+                ? pathname.startsWith("/applicants") || pathname === "/"
+                : pathname === item.href;
+
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={onCloseMobile}
+                title={isCollapsed ? item.label : undefined}
                 className={cn(
-                  "h-4 w-4",
-                  isActive ? "text-emerald-800" : "text-slate-400"
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 font-semibold border-l-4 border-emerald-800 dark:border-emerald-500 rounded-l-none"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white",
+                  isCollapsed ? "justify-center px-2" : ""
                 )}
-              />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+              >
+                <Icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"
+                  )}
+                />
+                {!isCollapsed && <span>{item.label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
 
-      {/* Bottom Profile & Settings Section */}
-      <div className="border-t border-slate-100 p-4 space-y-3">
-        <Link
-          href="/notifications"
-          className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-        >
-          <div className="flex items-center gap-3">
-            <Bell className="h-4 w-4 text-slate-400" />
-            <span>Notifications</span>
-          </div>
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white">
-            3
-          </span>
-        </Link>
+        {/* Bottom Section */}
+        <div className="border-t border-slate-100 dark:border-[#222227] p-3 space-y-2">
+          <Link
+            href="/settings"
+            onClick={onCloseMobile}
+            title={isCollapsed ? "Settings" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-[#18181f] hover:text-slate-900 dark:hover:text-white transition",
+              isCollapsed ? "justify-center px-2" : ""
+            )}
+          >
+            <Settings className="h-4 w-4 text-slate-400 dark:text-zinc-500 shrink-0" />
+            {!isCollapsed && <span>Settings</span>}
+          </Link>
 
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-        >
-          <Settings className="h-4 w-4 text-slate-400" />
-          <span>Settings</span>
-        </Link>
-
-        {/* User Card matching Figma */}
-        <div className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
-            E1
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-slate-900">
-              Employee 1
-            </p>
-            <p className="truncate text-[11px] text-slate-500">
-              Operations Lead
-            </p>
+          {/* User Card */}
+          <div
+            className={cn(
+              "flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50/80 dark:bg-[#141418] p-2",
+              isCollapsed ? "justify-center p-1.5" : ""
+            )}
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              OP
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
+                  Operations Lead
+                </p>
+                <p className="truncate text-[10px] text-slate-500 dark:text-zinc-400">
+                  operations@agency.et
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

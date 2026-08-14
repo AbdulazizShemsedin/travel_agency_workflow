@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       data: updated,
       message: approved !== false
         ? `Contractor document approved! Applicant ${applicant_name} is now Selected.`
-        : `Contractor document rejected. Applicant status updated to Cancelled.`,
+        : `Extracted document fields rejected. Candidate remains in Request Pending for re-extraction or revised upload.`,
     });
   } catch (error: unknown) {
     const err = error as Error;

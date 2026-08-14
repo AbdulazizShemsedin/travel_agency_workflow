@@ -10,6 +10,7 @@ import {
   WakalaProcessing,
   EmbassyProcessing,
   DepartureInfo,
+  StreamAssignmentPayload,
 } from "@/types/applicant";
 
 export class ApiError extends Error {
@@ -162,9 +163,11 @@ export async function approveContractorDocApi(
 
 export async function assignEmployeeApi(
   applicantIds: string[],
-  roleType: ProcessingRoleType,
-  employeeId: string,
-  notes?: string
+  roleType: ProcessingRoleType = "All Roles / Operations Lead",
+  employeeId?: string,
+  notes?: string,
+  streamAssignments?: StreamAssignmentPayload,
+  employeeIds?: string[]
 ): Promise<Applicant[]> {
   const res = await fetch("/api/method/assign_employee", {
     method: "POST",
@@ -174,6 +177,8 @@ export async function assignEmployeeApi(
       role_type: roleType,
       employee_id: employeeId,
       notes,
+      stream_assignments: streamAssignments,
+      employee_ids: employeeIds,
     }),
   });
   return handleApiResponse<Applicant[]>(res);

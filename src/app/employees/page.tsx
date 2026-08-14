@@ -1,77 +1,69 @@
 import Link from "next/link";
-import { Plus, Search, Filter, Download, Eye } from "lucide-react";
+import { Plus, Search, Filter, Download, Eye, Briefcase } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-
-const mockEmployees = [
-  {
-    id: "EMP-2024-001",
-    name: "Abdella Ahmed",
-    joined: "Joined Jan 2024",
-    role: "LMS Officer",
-    phone: "+1 (555) 019-2834",
-    status: "Active",
-  },
-  {
-    id: "EMP-2024-002",
-    name: "Aisha Ali",
-    joined: "Joined Feb 2024",
-    role: "Wakala Admin",
-    phone: "+1 (555) 012-9843",
-    status: "Active",
-  },
-];
+import { mockEmployeesList } from "@/lib/server/applicantStore";
 
 export default function EmployeesPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Employee Directory
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage and view all registered operational staff.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Operational team members assigned to LMS, Wakala, and Injaz processing streams.
           </p>
         </div>
         <Button className="bg-emerald-900 hover:bg-emerald-950 text-white font-medium text-xs">
-          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Employee
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Staff Member
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-xs">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
         <table className="w-full text-left text-xs">
-          <thead className="border-b border-slate-100 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-semibold">
+          <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
             <tr>
               <th className="px-4 py-3.5">Employee ID</th>
               <th className="px-4 py-3.5">Name</th>
-              <th className="px-4 py-3.5">Role</th>
-              <th className="px-4 py-3.5">Phone Number</th>
+              <th className="px-4 py-3.5">Role Type Designation</th>
+              <th className="px-4 py-3.5">Email Contact</th>
               <th className="px-4 py-3.5">Status</th>
               <th className="px-4 py-3.5 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-700">
-            {mockEmployees.map((emp) => (
-              <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
-                <td className="px-4 py-3 font-mono font-semibold text-slate-800">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+            {mockEmployeesList.map((emp) => (
+              <tr key={emp.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                <td className="px-4 py-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
                   {emp.id}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-900">{emp.name}</div>
-                  <div className="text-[11px] text-slate-400">{emp.joined}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                      {emp.name.split(" ").map((n) => n[0]).join("")}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-white">{emp.name}</div>
+                      <div className="text-[11px] text-slate-400">{emp.role}</div>
+                    </div>
+                  </div>
                 </td>
-                <td className="px-4 py-3">{emp.role}</td>
-                <td className="px-4 py-3 font-mono">{emp.phone}</td>
+                <td className="px-4 py-3">
+                  <span className="font-medium text-emerald-900 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded text-[11px] border border-emerald-200 dark:border-emerald-800">
+                    {emp.roleType}
+                  </span>
+                </td>
+                <td className="px-4 py-3 font-mono">{emp.email}</td>
                 <td className="px-4 py-3">
                   <Badge variant="success" dotColor="bg-emerald-600">
-                    {emp.status}
+                    Active
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
-                    <Eye className="h-3.5 w-3.5 mr-1" /> View
+                    <Eye className="h-3.5 w-3.5 mr-1" /> View Assignments
                   </Button>
                 </td>
               </tr>

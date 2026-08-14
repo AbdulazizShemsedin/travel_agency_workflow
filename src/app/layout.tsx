@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
-import { AppSidebar } from "@/components/layout/AppSidebar";
-import { AppNavbar } from "@/components/layout/AppNavbar";
+import { AppLayoutClient } from "@/components/layout/AppLayoutClient";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
@@ -13,9 +12,9 @@ const hankenGrotesk = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Applicant Registration | Travel Agency Management Portal",
+  title: "Travel Agency Management Portal",
   description:
-    "Enterprise applicant registration workflow module according to backend specification and Figma prototype.",
+    "Enterprise applicant registration, document verification, processing pipeline and deployment management workflow.",
 };
 
 export default function RootLayout({
@@ -24,18 +23,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={hankenGrotesk.variable}>
-      <body className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
+    <html lang="en" className={hankenGrotesk.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-slate-50 dark:bg-[#090d16] font-sans text-slate-900 dark:text-slate-100 antialiased">
         <QueryProvider>
-          <div className="flex min-h-screen flex-col bg-slate-50">
-            <AppSidebar />
-            <div className="flex flex-1 flex-col md:pl-64">
-              <AppNavbar />
-              <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-                {children}
-              </main>
-            </div>
-          </div>
+          <AppLayoutClient>{children}</AppLayoutClient>
         </QueryProvider>
       </body>
     </html>

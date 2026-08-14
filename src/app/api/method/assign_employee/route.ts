@@ -5,27 +5,23 @@ import { ProcessingRoleType } from "@/types/applicant";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { applicant_ids, role_type, employee_id, notes } = body;
+    const { applicant_ids, role_type, employee_id, notes, stream_assignments, employee_ids } = body;
     if (!applicant_ids || !Array.isArray(applicant_ids) || applicant_ids.length === 0) {
       return NextResponse.json({ message: "applicant_ids array is required" }, { status: 400 });
-    }
-    if (!role_type) {
-      return NextResponse.json({ message: "role_type is required" }, { status: 400 });
-    }
-    if (!employee_id) {
-      return NextResponse.json({ message: "employee_id is required" }, { status: 400 });
     }
 
     const updated = assignEmployeeInStore(
       applicant_ids,
-      role_type as ProcessingRoleType,
+      (role_type as ProcessingRoleType) || "All Roles / Operations Lead",
       employee_id,
-      notes
+      notes,
+      stream_assignments,
+      employee_ids
     );
 
     return NextResponse.json({
       data: updated,
-      message: `Successfully assigned ${updated.length} applicant(s) to ${role_type}. Status transitioned to Processing.`,
+      message: `Successfully assigned ${updated.length} applicant(s). Status transitioned to Processing.`,
     });
   } catch (error: unknown) {
     const err = error as Error;

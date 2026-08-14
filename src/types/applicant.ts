@@ -33,6 +33,15 @@ export type ProcessingRoleType =
   | "Wakala Admin"
   | "Injaz Officer";
 
+export interface StreamAssignmentPayload {
+  lms_employee_id?: string;
+  lms_employee_name?: string;
+  injaz_employee_id?: string;
+  injaz_employee_name?: string;
+  wakala_employee_id?: string;
+  wakala_employee_name?: string;
+}
+
 export type StreamStatus = "Pending" | "In Progress" | "Completed" | "Rejected";
 
 export interface IncomeExpenseLog {
