@@ -27,7 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 interface Step5ReviewProps {
-  form: UseFormReturn<BaseApplicantFormValues>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: UseFormReturn<BaseApplicantFormValues, any, any>;
   onNavigateToStep: (stepNumber: number) => void;
   draftApplicantId?: string | null;
   applicantState?: string;

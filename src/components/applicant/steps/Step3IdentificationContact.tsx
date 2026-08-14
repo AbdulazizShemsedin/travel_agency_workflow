@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface Step3IdentificationContactProps {
-  form: UseFormReturn<BaseApplicantFormValues>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: UseFormReturn<BaseApplicantFormValues, any, any>;
 }
 
 export function Step3IdentificationContact({ form }: Step3IdentificationContactProps) {

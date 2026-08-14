@@ -34,27 +34,21 @@ export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 // Base schema covering all fields
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft
-  first_name: z.string().trim().min(1, "First Name is required to save a draft"),
+  first_name: z.string().trim().default(""),
   middle_name: z.string().trim().optional().or(z.literal("")),
-  last_name: z.string().trim().min(1, "Last Name is required to save a draft"),
-  gender: z.enum(GENDER_OPTIONS, {
-    errorMap: () => ({ message: "Please select a valid Gender" }),
-  }),
-  religion: z.enum(RELIGION_OPTIONS, {
-    errorMap: () => ({ message: "Please select a Religion" }),
-  }),
-  marital_status: z.enum(MARITAL_STATUS_OPTIONS, {
-    errorMap: () => ({ message: "Please select a Marital Status" }),
-  }),
+  last_name: z.string().trim().default(""),
+  gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default(""),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
+  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   children: z.coerce
     .number({ invalid_type_error: "Children count must be a number" })
     .int("Children must be a whole number")
     .min(0, "Children count cannot be negative")
     .default(0),
-  nationality: z.string().trim().min(1, "Nationality is required"),
-  phone_number: z.string().trim().min(1, "Phone Number is required"),
-  city: z.string().trim().min(1, "City is required"),
-  country: z.string().trim().min(1, "Country is required"),
+  nationality: z.string().trim().default("Ethiopia"),
+  phone_number: z.string().trim().default(""),
+  city: z.string().trim().default(""),
+  country: z.string().trim().default("Ethiopia"),
 
   // Stage 2: Registration Fields (optional for draft)
   date_of_birth: z.string().optional().or(z.literal("")),
@@ -106,10 +100,26 @@ export const baseApplicantSchema = z.object({
 });
 
 // Stage 1 Schema: validates mandatory Draft requirements only
-export const stage1DraftSchema = baseApplicantSchema;
+export const stage1DraftSchema = baseApplicantSchema.extend({
+  first_name: z.string().trim().min(1, "First Name is required to save a draft"),
+  last_name: z.string().trim().min(1, "Last Name is required to save a draft"),
+  gender: z.enum(GENDER_OPTIONS, {
+    errorMap: () => ({ message: "Please select a valid Gender" }),
+  }),
+  religion: z.enum(RELIGION_OPTIONS, {
+    errorMap: () => ({ message: "Please select a Religion" }),
+  }),
+  marital_status: z.enum(MARITAL_STATUS_OPTIONS, {
+    errorMap: () => ({ message: "Please select a Marital Status" }),
+  }),
+  nationality: z.string().trim().min(1, "Nationality is required"),
+  phone_number: z.string().trim().min(1, "Phone Number is required"),
+  city: z.string().trim().min(1, "City is required"),
+  country: z.string().trim().min(1, "Country is required"),
+});
 
 // Stage 2 Schema: validates all requirements for Registration
-export const stage2RegistrationSchema = baseApplicantSchema
+export const stage2RegistrationSchema = stage1DraftSchema
   .extend({
     date_of_birth: z
       .string({ required_error: "Date of Birth is required for registration" })

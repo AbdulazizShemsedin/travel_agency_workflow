@@ -11,7 +11,8 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Step2EducationExperienceProps {
-  form: UseFormReturn<BaseApplicantFormValues>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: UseFormReturn<BaseApplicantFormValues, any, any>;
   isRegistrationAttempt?: boolean;
 }
 

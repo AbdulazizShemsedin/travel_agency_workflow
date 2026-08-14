@@ -72,7 +72,6 @@ export function ApplicantRegistrationForm({
 
   // React Hook Form
   const form = useForm<BaseApplicantFormValues>({
-    resolver: zodResolver(baseApplicantSchema),
     mode: "onBlur",
     defaultValues: {
       first_name: initialData?.first_name || "",

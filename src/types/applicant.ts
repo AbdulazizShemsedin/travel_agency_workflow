@@ -22,6 +22,7 @@ export type ApplicantState =
   | "CV Generated"
   | "Contract Requested"
   | "Dossier Submitted"
+  | "Selected"
   | "Processing"
   | "Stamped"
   | "Ticketed"

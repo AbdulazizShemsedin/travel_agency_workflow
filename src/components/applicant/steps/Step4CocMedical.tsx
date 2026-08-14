@@ -18,7 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
 interface Step4CocMedicalProps {
-  form: UseFormReturn<BaseApplicantFormValues>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: UseFormReturn<BaseApplicantFormValues, any, any>;
 }
 
 export function Step4CocMedical({ form }: Step4CocMedicalProps) {

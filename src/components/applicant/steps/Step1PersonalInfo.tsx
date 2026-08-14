@@ -11,7 +11,8 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
 interface Step1PersonalInfoProps {
-  form: UseFormReturn<BaseApplicantFormValues>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: UseFormReturn<BaseApplicantFormValues, any, any>;
 }
 
 export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {

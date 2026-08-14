@@ -2,27 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  ColumnDef,
-  flexRender,
-} from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   Filter,
   Download,
   Plus,
-  MoreVertical,
   Eye,
   Edit,
-  FileText,
-  Clock,
-  CheckCircle2,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Applicant, ApplicantState } from "@/types/applicant";
 import { getApplicantsList } from "@/lib/api/applicantApi";
@@ -53,123 +43,57 @@ function getStageBadgeVariant(stage: ApplicantState): {
 }
 
 export function ApplicantTable() {
-  const [globalFilter, setGlobalFilter] = React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedStage, setSelectedStage] = React.useState<string>("All");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize] = React.useState(10);
+  const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
 
   const { data: applicants = [], isLoading, isError } = useQuery({
     queryKey: ["applicants"],
     queryFn: getApplicantsList,
   });
 
-  const columns = React.useMemo<ColumnDef<Applicant>[]>(
-    () => [
-      {
-        id: "select",
-        header: ({ table }) => (
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-            checked={table.getIsAllPageRowsSelected()}
-            onChange={table.getToggleAllPageRowsSelectedHandler()}
-          />
-        ),
-        cell: ({ row }) => (
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-            checked={row.getIsSelected()}
-            onChange={row.getToggleSelectedHandler()}
-          />
-        ),
-      },
-      {
-        accessorKey: "name",
-        header: "ID",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs font-semibold text-slate-800">
-            {row.original.name}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "full_name",
-        header: "Full Name",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-bold text-emerald-900 border border-emerald-200">
-              {row.original.first_name?.[0] || "A"}
-            </div>
-            <span className="font-medium text-slate-900">
-              {row.original.full_name || `${row.original.first_name} ${row.original.last_name}`}
-            </span>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "passport_number",
-        header: "Passport No.",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-slate-600">
-            {row.original.passport_number || "N/A"}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "applicant_state",
-        header: "Current Stage",
-        cell: ({ row }) => {
-          const state = row.original.applicant_state || "Draft";
-          const badgeConfig = getStageBadgeVariant(state);
-          return (
-            <Badge variant={badgeConfig.variant} dotColor={badgeConfig.dotColor}>
-              {state}
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "actions",
-        header: "Action",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1">
-            <Link href={`/applicants/${encodeURIComponent(row.original.name)}`}>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-xs text-slate-600 hover:text-emerald-900"
-              >
-                <Eye className="mr-1 h-3.5 w-3.5" /> Details
-              </Button>
-            </Link>
-          </div>
-        ),
-      },
-    ],
-    []
-  );
+  // Filtered & searched data
+  const filteredApplicants = React.useMemo(() => {
+    return applicants.filter((applicant) => {
+      const matchesStage =
+        selectedStage === "All" || applicant.applicant_state === selectedStage;
 
-  const filteredData = React.useMemo(() => {
-    if (selectedStage === "All") return applicants;
-    return applicants.filter((a) => a.applicant_state === selectedStage);
-  }, [applicants, selectedStage]);
+      const query = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        applicant.name?.toLowerCase().includes(query) ||
+        applicant.full_name?.toLowerCase().includes(query) ||
+        applicant.passport_number?.toLowerCase().includes(query) ||
+        applicant.phone_number?.toLowerCase().includes(query) ||
+        applicant.city?.toLowerCase().includes(query);
 
-  const table = useReactTable({
-    data: filteredData,
-    columns,
-    state: {
-      globalFilter,
-    },
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
-  });
+      return matchesStage && matchesSearch;
+    });
+  }, [applicants, selectedStage, searchQuery]);
+
+  // Paginated slice
+  const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
+  const paginatedApplicants = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredApplicants.slice(start, start + pageSize);
+  }, [filteredApplicants, currentPage, pageSize]);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedRows(new Set(paginatedApplicants.map((a) => a.name)));
+    } else {
+      setSelectedRows(new Set());
+    }
+  };
+
+  const handleToggleRow = (name: string) => {
+    const next = new Set(selectedRows);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    setSelectedRows(next);
+  };
 
   return (
     <div className="space-y-4">
@@ -180,8 +104,11 @@ export function ApplicantTable() {
           <Input
             type="search"
             placeholder="Search applicant, passport, phone..."
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="pl-9 text-xs"
           />
         </div>
@@ -190,7 +117,10 @@ export function ApplicantTable() {
           {/* Stage Filter */}
           <select
             value={selectedStage}
-            onChange={(e) => setSelectedStage(e.target.value)}
+            onChange={(e) => {
+              setSelectedStage(e.target.value);
+              setCurrentPage(1);
+            }}
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 shadow-xs focus:border-emerald-700 focus:outline-none"
           >
             <option value="All">All Stages</option>
@@ -207,7 +137,7 @@ export function ApplicantTable() {
             onClick={() => {
               const dataStr =
                 "data:text/json;charset=utf-8," +
-                encodeURIComponent(JSON.stringify(applicants, null, 2));
+                encodeURIComponent(JSON.stringify(filteredApplicants, null, 2));
               const downloadAnchor = document.createElement("a");
               downloadAnchor.setAttribute("href", dataStr);
               downloadAnchor.setAttribute("download", "applicants_export.json");
@@ -238,47 +168,95 @@ export function ApplicantTable() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="border-b border-slate-100 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-semibold">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th key={header.id} className="px-4 py-3.5">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </th>
-                  ))}
-                </tr>
-              ))}
+              <tr>
+                <th className="px-4 py-3.5 w-10">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                    checked={
+                      paginatedApplicants.length > 0 &&
+                      paginatedApplicants.every((a) => selectedRows.has(a.name))
+                    }
+                    onChange={handleSelectAll}
+                  />
+                </th>
+                <th className="px-4 py-3.5">ID</th>
+                <th className="px-4 py-3.5">Full Name</th>
+                <th className="px-4 py-3.5">Passport No.</th>
+                <th className="px-4 py-3.5">Current Stage</th>
+                <th className="px-4 py-3.5 text-right">Action</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={columns.length} className="py-12 text-center text-slate-500">
+                  <td colSpan={6} className="py-12 text-center text-slate-500">
                     Loading applicants...
                   </td>
                 </tr>
-              ) : table.getRowModel().rows.length === 0 ? (
+              ) : paginatedApplicants.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="py-12 text-center text-slate-500">
-                    No applicants found. Click &quot;New Applicant&quot; to register your first candidate.
+                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                    No applicants found matching criteria.
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-slate-50/80 transition-colors"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                paginatedApplicants.map((applicant) => {
+                  const stage = applicant.applicant_state || "Draft";
+                  const badge = getStageBadgeVariant(stage);
+                  const isSelected = selectedRows.has(applicant.name);
+
+                  return (
+                    <tr
+                      key={applicant.name}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        isSelected ? "bg-emerald-50/40" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                          checked={isSelected}
+                          onChange={() => handleToggleRow(applicant.name)}
+                        />
                       </td>
-                    ))}
-                  </tr>
-                ))
+                      <td className="px-4 py-3 font-mono font-semibold text-slate-800">
+                        {applicant.name}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-bold text-emerald-900 border border-emerald-200">
+                            {applicant.first_name?.[0] || "A"}
+                          </div>
+                          <span className="font-medium text-slate-900">
+                            {applicant.full_name ||
+                              `${applicant.first_name} ${applicant.last_name}`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-600">
+                        {applicant.passport_number || "N/A"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={badge.variant} dotColor={badge.dotColor}>
+                          {stage}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link href={`/applicants/${encodeURIComponent(applicant.name)}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs text-slate-600 hover:text-emerald-900"
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5" /> Details
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -289,42 +267,38 @@ export function ApplicantTable() {
           <div>
             Showing{" "}
             <span className="font-semibold text-slate-900">
-              {table.getRowModel().rows.length > 0
-                ? table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1
-                : 0}
+              {filteredApplicants.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
             </span>{" "}
             to{" "}
             <span className="font-semibold text-slate-900">
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                filteredData.length
-              )}
+              {Math.min(currentPage * pageSize, filteredApplicants.length)}
             </span>{" "}
-            of <span className="font-semibold text-slate-900">{filteredData.length}</span> entries
+            of <span className="font-semibold text-slate-900">{filteredApplicants.length}</span> entries
           </div>
 
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
               className="h-8 px-2 text-xs"
             >
+              <ChevronLeft className="h-3.5 w-3.5 mr-1" />
               Previous
             </Button>
             <span className="px-2 text-xs font-semibold text-slate-800">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount() || 1}
+              Page {currentPage} of {totalPages}
             </span>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
               className="h-8 px-2 text-xs"
             >
               Next
+              <ChevronRight className="h-3.5 w-3.5 ml-1" />
             </Button>
           </div>
         </div>
