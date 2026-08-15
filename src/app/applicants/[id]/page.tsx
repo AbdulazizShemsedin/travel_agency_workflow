@@ -110,7 +110,8 @@ export default function ApplicantDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message?.message || "CV generated successfully!");
+      toast.success(data.message?.message || "CV generated successfully! Opening preview...");
+      router.push(`/applicants/${encodeURIComponent(applicantId)}/cv`);
     },
     onError: (err: Error) => {
       toast.error("CV generation failed", { description: err.message });

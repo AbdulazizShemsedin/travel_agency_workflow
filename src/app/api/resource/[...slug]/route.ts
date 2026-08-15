@@ -107,6 +107,42 @@ export async function POST(
         body: JSON.stringify(body),
       });
       const data = await res.json();
+
+      // State progression synchronization on Frappe
+      if (res.ok && body.applicant) {
+        if (doctype === "DSR Stamp") {
+          await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(body.applicant)}`, {
+            method: "PUT",
+            headers: config.headers,
+            body: JSON.stringify({
+              applicant_state: "Stamped",
+              state_step: "7 of 9",
+              state_progress: 77.8,
+            }),
+          }).catch(() => {});
+        } else if (doctype === "DSR Ticket") {
+          await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(body.applicant)}`, {
+            method: "PUT",
+            headers: config.headers,
+            body: JSON.stringify({
+              applicant_state: "Ticketed",
+              state_step: "8 of 9",
+              state_progress: 88.9,
+            }),
+          }).catch(() => {});
+        } else if (doctype === "DSR Departure") {
+          await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(body.applicant)}`, {
+            method: "PUT",
+            headers: config.headers,
+            body: JSON.stringify({
+              applicant_state: "Departed",
+              state_step: "9 of 9",
+              state_progress: 100.0,
+            }),
+          }).catch(() => {});
+        }
+      }
+
       return NextResponse.json(data, { status: res.status });
     } catch (err: any) {
       console.warn(`[Frappe Proxy Error] Failed to create live ${doctype}: ${err.message}. Falling back to local store.`);
@@ -178,6 +214,20 @@ export async function PUT(
         body: JSON.stringify(body),
       });
       const data = await res.json();
+
+      // Clearances -> Processing stage synchronization
+      if (res.ok && body.applicant && (doctype.includes("Clearance"))) {
+        await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(body.applicant)}`, {
+          method: "PUT",
+          headers: config.headers,
+          body: JSON.stringify({
+            applicant_state: "Processing",
+            state_step: "6 of 9",
+            state_progress: 66.7,
+          }),
+        }).catch(() => {});
+      }
+
       return NextResponse.json(data, { status: res.status });
     } catch (err: any) {
       console.warn(`[Frappe Proxy Error] Failed to update live ${doctype}: ${err.message}. Falling back to local store.`);

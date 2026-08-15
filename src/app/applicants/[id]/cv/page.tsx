@@ -22,8 +22,10 @@ import {
   ChevronRight,
   Loader2,
   FileText,
+  MessageSquare,
 } from "lucide-react";
 import { getApplicant, updateApplicantDraft } from "@/lib/api/applicantApi";
+import { ContractRequestModal } from "@/components/applicant/ContractRequestModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -32,6 +34,7 @@ export default function CandidateCvPreviewPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const applicantId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
+  const [isContractModalOpen, setIsContractModalOpen] = React.useState(false);
 
   const { data: applicant, isLoading } = useQuery({
     queryKey: ["applicant", applicantId],
@@ -117,19 +120,32 @@ export default function CandidateCvPreviewPage() {
             Download PDF
           </Button>
 
-          {/* If applicant is on CV Generated, show button to advance to Request Pending */}
+          {/* If applicant is on CV Generated, show button to send Contract Request via WhatsApp */}
           {applicant.applicant_state === "CV Generated" && (
             <Button
               size="sm"
+              onClick={() => setIsContractModalOpen(true)}
+              className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-semibold"
+            >
+              <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+              Send Contract Request (WhatsApp)
+            </Button>
+          )}
+
+          {/* Quick manual advance button */}
+          {applicant.applicant_state === "CV Generated" && (
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => advanceToRequestPendingMutation.mutate()}
               disabled={advanceToRequestPendingMutation.isPending}
-              className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-medium"
+              className="text-xs border-slate-300 dark:border-slate-700"
             >
               {advanceToRequestPendingMutation.isPending ? (
                 "Advancing..."
               ) : (
                 <>
-                  Proceed to Request Pending
+                  Proceed to Step 4
                   <ChevronRight className="ml-1 h-3.5 w-3.5" />
                 </>
               )}
@@ -137,6 +153,12 @@ export default function CandidateCvPreviewPage() {
           )}
         </div>
       </div>
+
+      <ContractRequestModal
+        applicant={applicant}
+        isOpen={isContractModalOpen}
+        onClose={() => setIsContractModalOpen(false)}
+      />
 
       {/* CV Sheet matching Figma Page Design */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl overflow-hidden print:border-none print:shadow-none">
