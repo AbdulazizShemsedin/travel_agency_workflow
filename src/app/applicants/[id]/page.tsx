@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import {
   getApplicant,
+  registerApplicant,
   generateCV,
   cancelApplicant,
   restoreApplicant,
@@ -113,6 +114,18 @@ export default function ApplicantDetailPage() {
     },
     onError: (err: Error) => {
       toast.error("CV generation failed", { description: err.message });
+    },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: () => registerApplicant(applicantId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      toast.success(data.message || "Applicant successfully registered!");
+    },
+    onError: (err: Error) => {
+      toast.error("Registration validation failed", { description: err.message });
     },
   });
 
@@ -291,14 +304,31 @@ export default function ApplicantDetailPage() {
                 Stage: Draft (Incomplete Registration)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Complete Stage 2 KYC/Medical requirements to register this applicant.
+                Complete Stage 2 KYC/Medical requirements, or click Register Applicant if requirements are already met.
               </p>
             </div>
-            <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
-                Complete Registration Form
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => registerMutation.mutate()}
+                disabled={registerMutation.isPending}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+              >
+                {registerMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Registering...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Register Applicant
+                  </>
+                )}
               </Button>
-            </Link>
+              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
+                <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
+                  <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit Registration Form
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
 

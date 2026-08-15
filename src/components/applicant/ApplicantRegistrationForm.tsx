@@ -166,7 +166,19 @@ export function ApplicantRegistrationForm({
     },
   });
 
-  const { getValues, trigger, setError, clearErrors } = form;
+  const { getValues, trigger, setError, clearErrors, reset } = form;
+
+  React.useEffect(() => {
+    if (initialData && Object.keys(initialData).length > 0) {
+      reset({
+        ...getValues(),
+        ...initialData,
+      });
+      if (existingApplicantId) {
+        setDraftApplicantId(existingApplicantId);
+      }
+    }
+  }, [initialData, existingApplicantId]);
 
   const navigateToStepWithError = (targetStep: number, fieldName?: string) => {
     setCurrentStep(targetStep);
