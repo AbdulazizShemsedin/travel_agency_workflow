@@ -263,6 +263,25 @@ export const stage2RegistrationSchema = stage1DraftSchema
         return isValid(parsed) && isFuture(startOfDay(parsed));
       }, "Passport Expiry Date must be a future date"),
 
+    passport_issue_date: z
+      .string({ required_error: "Passport Issue Date is required for registration" })
+      .min(1, "Passport Issue Date is required")
+      .refine((val) => {
+        if (!val) return false;
+        const parsed = parseISO(val);
+        return isValid(parsed) && isPast(startOfDay(parsed));
+      }, "Passport Issue Date must be in the past"),
+
+    place_of_issue: z
+      .string({ required_error: "Place of Issue is required for registration" })
+      .trim()
+      .min(2, "Place of Issue is required (e.g. Addis Ababa)"),
+
+    job_applied: z
+      .string({ required_error: "Job / Position Applied is required for registration" })
+      .trim()
+      .min(1, "Please select or enter the Job / Position Applied"),
+
     highest_education: z.enum(EDUCATION_OPTIONS, {
       errorMap: () => ({
         message: "Highest Education Level is required for registration",

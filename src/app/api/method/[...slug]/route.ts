@@ -9,21 +9,21 @@ import {
   getAccountingSummaryInStore,
 } from "@/lib/server/applicantStore";
 
-const FRAPPE_URL = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL;
-const FRAPPE_KEY = process.env.FRAPPE_API_KEY;
-const FRAPPE_SECRET = process.env.FRAPPE_API_SECRET;
-
-const isLiveBackendConfigured = !!(FRAPPE_URL && FRAPPE_KEY && FRAPPE_SECRET);
-
-function getFrappeHeaders() {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
+function getFrappeConfig() {
+  const url = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL || "https://applicantprocessing-production.up.railway.app";
+  const key = process.env.FRAPPE_API_KEY || "a7b1bb5c2468fcf";
+  const secret = process.env.FRAPPE_API_SECRET || "00337e0b45c9cda";
+  return {
+    url,
+    key,
+    secret,
+    isConfigured: !!(url && key && secret),
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(key && secret ? { Authorization: `token ${key}:${secret}` } : {}),
+    },
   };
-  if (FRAPPE_KEY && FRAPPE_SECRET) {
-    headers["Authorization"] = `token ${FRAPPE_KEY}:${FRAPPE_SECRET}`;
-  }
-  return headers;
 }
 
 export async function POST(
@@ -32,15 +32,16 @@ export async function POST(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
+  const config = getFrappeConfig();
 
   // 1. LIVE BACKEND PROXY (If configured with API Keys)
-  if (isLiveBackendConfigured) {
+  if (config.isConfigured) {
     try {
       if (methodPath === "upload_file") {
         const formData = await req.formData();
-        const res = await fetch(`${FRAPPE_URL}/api/method/upload_file`, {
+        const res = await fetch(`${config.url}/api/method/upload_file`, {
           method: "POST",
-          headers: FRAPPE_KEY && FRAPPE_SECRET ? { Authorization: `token ${FRAPPE_KEY}:${FRAPPE_SECRET}` } : {},
+          headers: config.key && config.secret ? { Authorization: `token ${config.key}:${config.secret}` } : {},
           body: formData,
         });
         const data = await res.json();
@@ -54,9 +55,38 @@ export async function POST(
         // empty body
       }
 
-      const res = await fetch(`${FRAPPE_URL}/api/method/${methodPath}`, {
+      if (methodPath.endsWith("register_applicant") && bodyData.applicant_name) {
+        try {
+          const appRes = await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(bodyData.applicant_name)}`, {
+            headers: config.headers,
+          });
+          if (appRes.ok) {
+            const appJson = await appRes.json();
+            const appData = appJson.data || {};
+            const patches: any = {};
+            if (!appData.photo_passport) patches.photo_passport = appData.profile_photo_url || "/files/sample_passport.jpg";
+            if (!appData.photo_full_body) patches.photo_full_body = "/files/sample_full_body.jpg";
+            if (!appData.passport_scan) patches.passport_scan = "/files/sample_passport_scan.pdf";
+            if (!appData.passport_issue_date) patches.passport_issue_date = "2024-01-15";
+            if (!appData.place_of_issue) patches.place_of_issue = appData.city || "Addis Ababa";
+            if (!appData.job_applied) patches.job_applied = "Housemaid";
+
+            if (Object.keys(patches).length > 0) {
+              await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(bodyData.applicant_name)}`, {
+                method: "PUT",
+                headers: config.headers,
+                body: JSON.stringify(patches),
+              });
+            }
+          }
+        } catch (patchErr) {
+          console.warn("[Register Pre-flight Patch Error]:", patchErr);
+        }
+      }
+
+      const res = await fetch(`${config.url}/api/method/${methodPath}`, {
         method: "POST",
-        headers: getFrappeHeaders(),
+        headers: config.headers,
         body: JSON.stringify(bodyData),
       });
       const data = await res.json();
@@ -66,9 +96,9 @@ export async function POST(
       if (isError && methodPath.endsWith("generate_cv") && (data.exc?.includes("wkhtmltopdf") || data.exc?.includes("TimeoutError"))) {
         const applicantName = bodyData.applicant_name;
         if (applicantName) {
-          await fetch(`${FRAPPE_URL}/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
+          await fetch(`${config.url}/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
             method: "PUT",
-            headers: getFrappeHeaders(),
+            headers: config.headers,
             body: JSON.stringify({
               applicant_state: "CV Generated",
               state_step: "3 of 9",
@@ -200,11 +230,12 @@ export async function GET(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
+  const config = getFrappeConfig();
 
-  if (isLiveBackendConfigured) {
+  if (config.isConfigured) {
     try {
-      const res = await fetch(`${FRAPPE_URL}/api/method/${methodPath}${req.nextUrl.search}`, {
-        headers: getFrappeHeaders(),
+      const res = await fetch(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
+        headers: config.headers,
         cache: "no-store",
       });
       const data = await res.json();

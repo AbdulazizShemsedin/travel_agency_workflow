@@ -15,21 +15,21 @@ import {
   submitDsrDepartureInStore,
 } from "@/lib/server/applicantStore";
 
-const FRAPPE_URL = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL;
-const FRAPPE_KEY = process.env.FRAPPE_API_KEY;
-const FRAPPE_SECRET = process.env.FRAPPE_API_SECRET;
-
-const isLiveBackendConfigured = !!(FRAPPE_URL && FRAPPE_KEY && FRAPPE_SECRET);
-
-function getFrappeHeaders() {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
+function getFrappeConfig() {
+  const url = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL || "https://applicantprocessing-production.up.railway.app";
+  const key = process.env.FRAPPE_API_KEY || "a7b1bb5c2468fcf";
+  const secret = process.env.FRAPPE_API_SECRET || "00337e0b45c9cda";
+  return {
+    url,
+    key,
+    secret,
+    isConfigured: !!(url && key && secret),
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(key && secret ? { Authorization: `token ${key}:${secret}` } : {}),
+    },
   };
-  if (FRAPPE_KEY && FRAPPE_SECRET) {
-    headers["Authorization"] = `token ${FRAPPE_KEY}:${FRAPPE_SECRET}`;
-  }
-  return headers;
 }
 
 export async function GET(
@@ -39,17 +39,18 @@ export async function GET(
   const { slug } = await params;
   const doctype = decodeURIComponent(slug[0] || "");
   const docname = slug[1] ? decodeURIComponent(slug[1]) : null;
+  const config = getFrappeConfig();
 
   // 1. LIVE BACKEND PROXY (If configured with API Keys)
-  if (isLiveBackendConfigured) {
+  if (config.isConfigured) {
     try {
       const search = req.nextUrl.search || `?fields=${encodeURIComponent('["*"]')}&limit_page_length=1000`;
       const url = docname
-        ? `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`
-        : `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}${search}`;
+        ? `${config.url}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`
+        : `${config.url}/api/resource/${encodeURIComponent(doctype)}${search}`;
 
       const res = await fetch(url, {
-        headers: getFrappeHeaders(),
+        headers: config.headers,
         cache: "no-store",
       });
       const data = await res.json();
@@ -94,14 +95,15 @@ export async function POST(
   const { slug } = await params;
   const doctype = decodeURIComponent(slug[0] || "");
   const body = await req.json();
+  const config = getFrappeConfig();
 
   // 1. LIVE BACKEND PROXY
-  if (isLiveBackendConfigured) {
+  if (config.isConfigured) {
     try {
-      const url = `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}`;
+      const url = `${config.url}/api/resource/${encodeURIComponent(doctype)}`;
       const res = await fetch(url, {
         method: "POST",
-        headers: getFrappeHeaders(),
+        headers: config.headers,
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -164,14 +166,15 @@ export async function PUT(
   const doctype = decodeURIComponent(slug[0] || "");
   const docname = slug[1] ? decodeURIComponent(slug[1]) : "";
   const body = await req.json();
+  const config = getFrappeConfig();
 
   // 1. LIVE BACKEND PROXY
-  if (isLiveBackendConfigured) {
+  if (config.isConfigured) {
     try {
-      const url = `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`;
+      const url = `${config.url}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`;
       const res = await fetch(url, {
         method: "PUT",
-        headers: getFrappeHeaders(),
+        headers: config.headers,
         body: JSON.stringify(body),
       });
       const data = await res.json();
