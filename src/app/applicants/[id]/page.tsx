@@ -454,21 +454,42 @@ export default function ApplicantDetailPage() {
                 </Button>
               </div>
 
-              {/* Wakala Card */}
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-2 text-xs">
+              {/* Wakala Card Matching Figma Design */}
+              <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-amber-600" /> Wakala Agency
+                    <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Wakala
                   </span>
-                  <Badge variant={applicant.wakala_processing?.status === "Completed" ? "success" : "warning"}>
-                    {applicant.wakala_processing?.status || "In Progress"}
+                  <Badge variant={applicant.wakala_processing?.status === "Completed" ? "success" : applicant.wakala_processing?.status === "In Progress" ? "warning" : "neutral"}>
+                    {applicant.wakala_processing?.status === "In Progress" ? "WAITING" : applicant.wakala_processing?.status || "WAITING"}
                   </Badge>
                 </div>
-                <p className="text-slate-500">Staff: {applicant.wakala_processing?.assigned_employee || "Tigist Alemu"}</p>
-                <div className="space-y-1 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded border border-slate-100 dark:border-slate-800 text-[11px]">
-                  <p><strong>Wakala No:</strong> {applicant.wakala_processing?.wakala_number || "WAK-9921448"}</p>
-                  <p><strong>Enjaz Auth:</strong> {applicant.wakala_processing?.sponsor_auth_code || "ENJAZ-SA-8812"}</p>
-                  <p><strong>Foreign Agency:</strong> {applicant.wakala_processing?.foreign_agency_name || "Al-Baraka Recruitment"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Assigned To: <strong>{applicant.wakala_processing?.assigned_employee || "Tigist Alemu"}</strong></p>
+                <div className="space-y-1.5 bg-slate-50 dark:bg-[#16161b] p-2.5 rounded-lg border border-slate-100 dark:border-[#26262d] text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">Started On:</span>
+                    <span className="font-medium text-slate-800 dark:text-zinc-200">{applicant.wakala_processing?.started_on || "14 May 2024"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 dark:text-zinc-400">Request Payment ?</span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      {applicant.wakala_processing?.request_payment !== false ? "Yes" : "No"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 dark:text-zinc-400">Request Via:</span>
+                    <span className="font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded text-[10px]">
+                      {applicant.wakala_processing?.request_via || "WhatsApp"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">Wakala No:</span>
+                    <span className="font-mono text-slate-800 dark:text-zinc-200">{applicant.wakala_processing?.wakala_number || "WAK-9921448"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">Foreign Agency:</span>
+                    <span className="text-slate-800 dark:text-zinc-200 truncate max-w-[140px]">{applicant.wakala_processing?.foreign_agency_name || "Al-Khaleej Manpower"}</span>
+                  </div>
                 </div>
                 <Button
                   variant="outline"
@@ -477,7 +498,7 @@ export default function ApplicantDetailPage() {
                     setProcessingInitialTab("wakala");
                     setIsProcessingModalOpen(true);
                   }}
-                  className="w-full text-xs h-7"
+                  className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
                 >
                   Manage Wakala
                 </Button>

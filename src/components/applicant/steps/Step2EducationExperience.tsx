@@ -18,7 +18,6 @@ interface Step2EducationExperienceProps {
 
 export function Step2EducationExperience({
   form,
-  isRegistrationAttempt = false,
 }: Step2EducationExperienceProps) {
   const {
     register,
@@ -28,23 +27,23 @@ export function Step2EducationExperience({
   return (
     <div className="space-y-6">
       {/* Education Background Card */}
-      <Card className="border-slate-200/80">
+      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 <GraduationCap className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-lg font-semibold text-slate-900">
+                <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">
                   Education Background
                 </CardTitle>
-                <CardDescription className="mt-0.5">
+                <CardDescription className="mt-0.5 text-slate-500 dark:text-zinc-400">
                   Academic qualifications and degree information.
                 </CardDescription>
               </div>
             </div>
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 border border-amber-200">
+            <span className="rounded-md bg-amber-50 dark:bg-amber-950/60 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
               Stage 2 • Required for Registration
             </span>
           </div>
@@ -53,7 +52,7 @@ export function Step2EducationExperience({
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5 sm:col-span-1">
-              <Label htmlFor="highest_education" className="text-xs font-semibold text-slate-800">
+              <Label htmlFor="highest_education" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                 Highest Education Level{" "}
                 <span className="text-amber-600 font-bold">*</span>
               </Label>
@@ -70,13 +69,15 @@ export function Step2EducationExperience({
                 ))}
               </Select>
               {errors.highest_education && (
-                <p className="text-xs text-rose-600">{errors.highest_education.message}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                  {errors.highest_education.message}
+                </p>
               )}
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="institution" className="text-xs font-semibold text-slate-700">
-                Institution Name <span className="text-slate-400 font-normal">(Optional)</span>
+              <Label htmlFor="institution" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Institution Name <span className="text-slate-400 dark:text-zinc-500 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="institution"
@@ -88,8 +89,8 @@ export function Step2EducationExperience({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="graduation_year" className="text-xs font-semibold text-slate-700">
-                Graduation Year <span className="text-slate-400 font-normal">(Optional)</span>
+              <Label htmlFor="graduation_year" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Graduation Year <span className="text-slate-400 dark:text-zinc-500 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="graduation_year"
@@ -97,11 +98,13 @@ export function Step2EducationExperience({
                 placeholder="e.g., 2020"
                 min="1950"
                 max={new Date().getFullYear() + 5}
-                {...register("graduation_year", { valueAsNumber: true })}
-                className={errors.graduation_year ? "border-rose-500" : ""}
+                {...register("graduation_year")}
+                className={errors.graduation_year ? "border-rose-500 dark:border-rose-500" : ""}
               />
               {errors.graduation_year && (
-                <p className="text-xs text-rose-600">{errors.graduation_year.message}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                  {errors.graduation_year.message}
+                </p>
               )}
             </div>
           </div>
@@ -109,17 +112,17 @@ export function Step2EducationExperience({
       </Card>
 
       {/* Work Experience & Skills Card */}
-      <Card className="border-slate-200/80">
+      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
         <CardHeader className="pb-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-[#1c1c22] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#26262d]">
               <Briefcase className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-lg font-semibold text-slate-900">
+              <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">
                 Work Experience & Remarks
               </CardTitle>
-              <CardDescription className="mt-0.5">
+              <CardDescription className="mt-0.5 text-slate-500 dark:text-zinc-400">
                 Past employment history and candidate qualifications.
               </CardDescription>
             </div>
@@ -129,8 +132,8 @@ export function Step2EducationExperience({
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="current_employer" className="text-xs font-semibold text-slate-700">
-                Current / Last Employer <span className="text-slate-400 font-normal">(Optional)</span>
+              <Label htmlFor="current_employer" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Current / Last Employer <span className="text-slate-400 dark:text-zinc-500 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="current_employer"
@@ -140,8 +143,8 @@ export function Step2EducationExperience({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="years_of_experience" className="text-xs font-semibold text-slate-700">
-                Years of Experience <span className="text-slate-400 font-normal">(Optional)</span>
+              <Label htmlFor="years_of_experience" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Years of Experience <span className="text-slate-400 dark:text-zinc-500 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="years_of_experience"
@@ -149,14 +152,14 @@ export function Step2EducationExperience({
                 step="0.5"
                 min="0"
                 placeholder="e.g., 3.5"
-                {...register("years_of_experience", { valueAsNumber: true })}
+                {...register("years_of_experience")}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="education_remarks" className="text-xs font-semibold text-slate-700">
-              Education & Experience Remarks <span className="text-slate-400 font-normal">(Optional)</span>
+            <Label htmlFor="education_remarks" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Education & Experience Remarks <span className="text-slate-400 dark:text-zinc-500 font-normal">(Optional)</span>
             </Label>
             <Textarea
               id="education_remarks"

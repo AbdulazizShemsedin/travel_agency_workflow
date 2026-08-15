@@ -7,16 +7,16 @@ import {
   Plane,
   Building2,
   Fingerprint,
+  Send,
   CheckCircle2,
   Clock,
-  Send,
-  Loader2,
-  FileText,
-  AlertCircle,
+  MessageSquare,
   DollarSign,
-  Ticket,
+  AlertTriangle,
+  Play,
+  Share2,
 } from "lucide-react";
-import { Applicant, LMSProcessing, InjazProcessing, WakalaProcessing, DepartureInfo } from "@/types/applicant";
+import { Applicant } from "@/types/applicant";
 import {
   updateLmsStreamApi,
   updateInjazStreamApi,
@@ -29,25 +29,24 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 
 interface ProcessingStreamsModalProps {
+  applicant: Applicant;
   isOpen: boolean;
   onClose: () => void;
-  applicant: Applicant;
   initialTab?: "lms" | "injaz" | "wakala" | "departure";
 }
 
 export function ProcessingStreamsModal({
+  applicant,
   isOpen,
   onClose,
-  applicant,
   initialTab = "lms",
 }: ProcessingStreamsModalProps) {
   const queryClient = useQueryClient();
@@ -75,9 +74,24 @@ export function ProcessingStreamsModal({
   const [biometricsCenter, setBiometricsCenter] = React.useState(applicant.injaz_processing?.biometrics_center || "Teashir VFS Global Addis Ababa");
   const [injazNotes, setInjazNotes] = React.useState(applicant.injaz_processing?.notes || "");
 
-  // Wakala form state
+  // Wakala form state matching Figma
   const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "In Progress" | "Completed">(
     (applicant.wakala_processing?.status as "Pending" | "In Progress" | "Completed") || "In Progress"
+  );
+  const [startedOn, setStartedOn] = React.useState(
+    applicant.wakala_processing?.started_on || new Date().toISOString().split("T")[0]
+  );
+  const [completedOn, setCompletedOn] = React.useState(
+    applicant.wakala_processing?.completed_on || ""
+  );
+  const [requestPayment, setRequestPayment] = React.useState<boolean>(
+    applicant.wakala_processing?.request_payment ?? true
+  );
+  const [requestVia, setRequestVia] = React.useState<"WhatsApp" | "Email" | "SMS">(
+    applicant.wakala_processing?.request_via || "WhatsApp"
+  );
+  const [paymentAmount, setPaymentAmount] = React.useState<number>(
+    applicant.wakala_processing?.payment_amount ?? 500
   );
   const [wakalaNumber, setWakalaNumber] = React.useState(applicant.wakala_processing?.wakala_number || "");
   const [sponsorAuthCode, setSponsorAuthCode] = React.useState(applicant.wakala_processing?.sponsor_auth_code || "");
@@ -137,9 +151,14 @@ export function ProcessingStreamsModal({
   });
 
   const updateWakalaMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (overrideStatus?: "Pending" | "In Progress" | "Completed" | void) =>
       updateWakalaStreamApi(applicant.name, {
-        status: wakalaStatus,
+        status: (typeof overrideStatus === "string" ? overrideStatus : undefined) || wakalaStatus,
+        started_on: startedOn,
+        completed_on: (typeof overrideStatus === "string" ? overrideStatus : wakalaStatus) === "Completed" ? (completedOn || new Date().toISOString().split("T")[0]) : completedOn,
+        request_payment: requestPayment,
+        request_via: requestVia,
+        payment_amount: Number(paymentAmount),
         wakala_number: wakalaNumber,
         sponsor_auth_code: sponsorAuthCode,
         foreign_agency_name: foreignAgencyName,
@@ -182,34 +201,34 @@ export function ProcessingStreamsModal({
     markDepartedMutation.isPending;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
+        <DialogHeader className="border-b border-slate-200 dark:border-[#222227] pb-3">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
               Employee Processing Portal: {applicant.full_name}
             </DialogTitle>
             <Badge variant="default">{applicant.applicant_state}</Badge>
           </div>
-          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-            ID: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{applicant.name}</span> • Passport:{" "}
+          <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+            ID: <span className="font-mono font-semibold text-slate-700 dark:text-zinc-300">{applicant.name}</span> • Passport:{" "}
             <span className="font-mono">{applicant.passport_number || "N/A"}</span>
           </DialogDescription>
         </DialogHeader>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold">
+        <div className="flex border-b border-slate-200 dark:border-[#222227] text-xs font-semibold">
           <button
             type="button"
             onClick={() => setActiveTab("lms")}
             className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
               activeTab === "lms"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
             <Plane className="h-4 w-4" />
-            LMS & Ticket Processing
+            LMS & Ticket
           </button>
           <button
             type="button"
@@ -217,11 +236,11 @@ export function ProcessingStreamsModal({
             className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
               activeTab === "injaz"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
             <Fingerprint className="h-4 w-4" />
-            Injaz & Teashir Biometrics
+            Injaz & Teashir
           </button>
           <button
             type="button"
@@ -229,7 +248,7 @@ export function ProcessingStreamsModal({
             className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
               activeTab === "wakala"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
             <Building2 className="h-4 w-4" />
@@ -241,7 +260,7 @@ export function ProcessingStreamsModal({
             className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
               activeTab === "departure"
                 ? "border-purple-800 text-purple-900 dark:text-purple-400 dark:border-purple-500 bg-purple-50/50 dark:bg-purple-950/20"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
             <Send className="h-4 w-4" />
@@ -264,7 +283,7 @@ export function ProcessingStreamsModal({
                 <select
                   value={lmsStatus}
                   onChange={(e) => setLmsStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
                 >
                   <option value="Pending">Pending</option>
                   <option value="In Progress">In Progress</option>
@@ -275,9 +294,9 @@ export function ProcessingStreamsModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">Ticket PNR / Booking Ref</Label>
+                <Label className="font-semibold">Airline Ticket PNR</Label>
                 <Input
-                  placeholder="e.g. ET-8839201"
+                  placeholder="e.g. ET-PNR-88992"
                   value={ticketPnr}
                   onChange={(e) => setTicketPnr(e.target.value)}
                 />
@@ -285,13 +304,13 @@ export function ProcessingStreamsModal({
               <div className="space-y-1">
                 <Label className="font-semibold">Flight Number</Label>
                 <Input
-                  placeholder="e.g. ET-402"
+                  placeholder="e.g. ET-402 / SV-120"
                   value={flightNumber}
                   onChange={(e) => setFlightNumber(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Target Departure Date</Label>
+                <Label className="font-semibold">Scheduled Departure Date</Label>
                 <Input
                   type="date"
                   value={departureDate}
@@ -301,23 +320,23 @@ export function ProcessingStreamsModal({
               <div className="space-y-1">
                 <Label className="font-semibold">Destination City / Airport</Label>
                 <Input
-                  placeholder="e.g. Riyadh (RUH) or Jeddah (JED)"
+                  placeholder="e.g. Riyadh (RUH), Jeddah (JED)"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Additional Field 1 (Labor Ministry Clearance Ref)</Label>
+                <Label className="font-semibold">Ministry Clearance Reference 1</Label>
                 <Input
-                  placeholder="e.g. MOL-CLEARANCE-9941"
+                  placeholder="e.g. MOL-ETH-772910"
                   value={additionalField1}
                   onChange={(e) => setAdditionalField1(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Additional Field 2 (Overseas Insurance Ref)</Label>
+                <Label className="font-semibold">Insurance Policy Ref 2</Label>
                 <Input
-                  placeholder="e.g. INS-MED-2026-441"
+                  placeholder="e.g. INS-MED-99014"
                   value={additionalField2}
                   onChange={(e) => setAdditionalField2(e.target.value)}
                 />
@@ -327,7 +346,7 @@ export function ProcessingStreamsModal({
             <div className="space-y-1">
               <Label className="font-semibold">LMS Processing Notes</Label>
               <Textarea
-                placeholder="Candidate flight confirmed and insurance logged..."
+                placeholder="Candidate clearance endorsed by Ministry of Labour..."
                 value={lmsNotes}
                 onChange={(e) => setLmsNotes(e.target.value)}
                 rows={2}
@@ -339,9 +358,9 @@ export function ProcessingStreamsModal({
                 type="button"
                 onClick={() => updateLmsMutation.mutate()}
                 disabled={isPending}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
               >
-                {updateLmsMutation.isPending ? "Saving..." : "Save LMS Stream Data"}
+                {updateLmsMutation.isPending ? "Saving..." : "Save LMS Data"}
               </Button>
             </div>
           </div>
@@ -352,9 +371,9 @@ export function ProcessingStreamsModal({
           <div className="space-y-4 py-2 text-xs">
             <div className="flex items-center justify-between rounded-lg bg-blue-50 dark:bg-blue-950/40 p-3 border border-blue-200 dark:border-blue-800">
               <div>
-                <p className="font-semibold text-blue-950 dark:text-blue-200">Injaz Visa Platform & Teashir Biometrics</p>
+                <p className="font-semibold text-blue-950 dark:text-blue-200">Injaz Visa & Teashir Biometrics</p>
                 <p className="text-[11px] text-blue-800 dark:text-blue-400">
-                  Manage fingerprint biometrics appointment and record the Teashir processing fee.
+                  Track Saudi Enjaz E-Visa registration and VFS Teashir fingerprint clearance.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -362,7 +381,7 @@ export function ProcessingStreamsModal({
                 <select
                   value={injazStatus}
                   onChange={(e) => setInjazStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
                 >
                   <option value="Pending">Pending</option>
                   <option value="In Progress">In Progress</option>
@@ -375,7 +394,7 @@ export function ProcessingStreamsModal({
               <div className="space-y-1">
                 <Label className="font-semibold">Injaz Application Number</Label>
                 <Input
-                  placeholder="e.g. INJ-7788412"
+                  placeholder="e.g. INJ-9921448"
                   value={injazAppNo}
                   onChange={(e) => setInjazAppNo(e.target.value)}
                 />
@@ -424,7 +443,7 @@ export function ProcessingStreamsModal({
                 type="button"
                 onClick={() => updateInjazMutation.mutate()}
                 disabled={isPending}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
               >
                 {updateInjazMutation.isPending ? "Saving..." : "Save Injaz & Teashir Data"}
               </Button>
@@ -432,33 +451,122 @@ export function ProcessingStreamsModal({
           </div>
         )}
 
-        {/* Tab 3: Wakala */}
+        {/* Tab 3: Wakala (Enhanced with Figma Fields) */}
         {activeTab === "wakala" && (
           <div className="space-y-4 py-2 text-xs">
-            <div className="flex items-center justify-between rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-800">
+            {/* Header matching Figma Banner */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-800">
               <div>
-                <p className="font-semibold text-amber-950 dark:text-amber-200">Wakala Power of Attorney Authorization</p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-400">
-                  Electronic agency power of attorney from foreign recruitment agency and sponsor.
+                <p className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                  Wakala Power of Attorney Authorization
+                </p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-400 mt-0.5">
+                  Foreign electronic agency delegation and Musaned authorization.
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold">Status:</Label>
+                <Badge variant={wakalaStatus === "Completed" ? "success" : wakalaStatus === "In Progress" ? "warning" : "neutral"}>
+                  {wakalaStatus === "In Progress" ? "WAITING / IN PROGRESS" : wakalaStatus.toUpperCase()}
+                </Badge>
                 <select
                   value={wakalaStatus}
                   onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
                 >
-                  <option value="Pending">Pending</option>
+                  <option value="Pending">Pending (Waiting)</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
             </div>
 
+            {/* Figma Dates Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-[#16161b] p-3 rounded-lg border border-slate-200 dark:border-[#26262d]">
+              <div className="space-y-1">
+                <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-amber-600" />
+                  Started On
+                </Label>
+                <Input
+                  type="date"
+                  value={startedOn}
+                  onChange={(e) => setStartedOn(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  Completed On
+                </Label>
+                <Input
+                  type="date"
+                  value={completedOn}
+                  onChange={(e) => setCompletedOn(e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                />
+              </div>
+            </div>
+
+            {/* Figma Field: Request Payment & Request Via */}
+            <div className="rounded-lg border border-slate-200 dark:border-[#26262d] p-3 space-y-3 bg-white dark:bg-[#121215]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                    Request Payment ?
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    Send electronic invoice or payment link to candidate/sponsor for Wakala clearance.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requestPayment}
+                    onChange={(e) => setRequestPayment(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:bg-[#26262d] peer-checked:bg-emerald-800"></div>
+                </label>
+              </div>
+
+              {requestPayment && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-[#222227] animate-in fade-in duration-200">
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                      <Share2 className="h-3.5 w-3.5 text-blue-600" />
+                      Request Via
+                    </Label>
+                    <select
+                      value={requestVia}
+                      onChange={(e) => setRequestVia(e.target.value as "WhatsApp" | "Email" | "SMS")}
+                      className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-200"
+                    >
+                      <option value="WhatsApp">WhatsApp (Direct Link)</option>
+                      <option value="Email">Email (Formal Notice)</option>
+                      <option value="SMS">SMS (Text Message)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="font-semibold text-slate-700 dark:text-zinc-300">
+                      Payment Amount (SAR)
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="500"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Wakala ID & Agency Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">Wakala Number</Label>
+                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Wakala Number / Code</Label>
                 <Input
                   placeholder="e.g. WAK-9921448"
                   value={wakalaNumber}
@@ -466,7 +574,7 @@ export function ProcessingStreamsModal({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Sponsor Electronic Auth Code</Label>
+                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Sponsor Electronic Auth Code</Label>
                 <Input
                   placeholder="e.g. ENJAZ-SA-8812"
                   value={sponsorAuthCode}
@@ -474,9 +582,9 @@ export function ProcessingStreamsModal({
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold">Foreign Agency / Sponsor Organization Name</Label>
+                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Foreign Agency / Sponsor Organization Name</Label>
                 <Input
-                  placeholder="e.g. Al-Baraka Recruitment Agency (Riyadh)"
+                  placeholder="e.g. Al-Khaleej Manpower / Al-Baraka Agency"
                   value={foreignAgencyName}
                   onChange={(e) => setForeignAgencyName(e.target.value)}
                 />
@@ -484,7 +592,7 @@ export function ProcessingStreamsModal({
             </div>
 
             <div className="space-y-1">
-              <Label className="font-semibold">Wakala Verification Notes</Label>
+              <Label className="font-semibold text-slate-700 dark:text-zinc-300">Wakala Verification Notes</Label>
               <Textarea
                 placeholder="Wakala verified on Musaned/foreign ministry portal..."
                 value={wakalaNotes}
@@ -493,15 +601,30 @@ export function ProcessingStreamsModal({
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            {/* Action Buttons matching Figma */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-[#222227]">
               <Button
                 type="button"
-                onClick={() => updateWakalaMutation.mutate()}
+                variant="outline"
+                onClick={() => {
+                  setWakalaStatus("In Progress");
+                  updateWakalaMutation.mutate("In Progress");
+                }}
                 disabled={isPending}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
+                className="text-xs border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
               >
-                {updateWakalaMutation.isPending ? "Saving..." : "Save Wakala Data"}
+                <Play className="mr-1.5 h-3.5 w-3.5" /> Start Processing
               </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => updateWakalaMutation.mutate()}
+                  disabled={isPending}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+                >
+                  {updateWakalaMutation.isPending ? "Saving..." : "Save Wakala Data"}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -523,8 +646,9 @@ export function ProcessingStreamsModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">Confirmed Flight Number</Label>
+                <Label className="font-semibold">Departure Flight Number</Label>
                 <Input
+                  placeholder="e.g. ET-402 / SV-120"
                   value={depFlightNo}
                   onChange={(e) => setDepFlightNo(e.target.value)}
                 />
@@ -540,6 +664,7 @@ export function ProcessingStreamsModal({
               <div className="space-y-1">
                 <Label className="font-semibold">Departure Time</Label>
                 <Input
+                  placeholder="09:30 AM"
                   value={depTime}
                   onChange={(e) => setDepTime(e.target.value)}
                 />
@@ -547,13 +672,15 @@ export function ProcessingStreamsModal({
               <div className="space-y-1">
                 <Label className="font-semibold">Departure Airport</Label>
                 <Input
+                  placeholder="Bole International Airport (ADD)"
                   value={depAirport}
                   onChange={(e) => setDepAirport(e.target.value)}
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold">Destination City / Country</Label>
+                <Label className="font-semibold">Destination City</Label>
                 <Input
+                  placeholder="Riyadh, Saudi Arabia"
                   value={depDestination}
                   onChange={(e) => setDepDestination(e.target.value)}
                 />
@@ -561,9 +688,9 @@ export function ProcessingStreamsModal({
             </div>
 
             <div className="space-y-1">
-              <Label className="font-semibold">Departure Notes / Confirmation</Label>
+              <Label className="font-semibold">Departure Confirmation Notes</Label>
               <Textarea
-                placeholder="Candidate accompanied to Bole terminal, checked in baggage and through immigration..."
+                placeholder="Candidate cleared through Addis Ababa Bole International Airport..."
                 value={depNotes}
                 onChange={(e) => setDepNotes(e.target.value)}
                 rows={2}
@@ -574,20 +701,14 @@ export function ProcessingStreamsModal({
               <Button
                 type="button"
                 onClick={() => markDepartedMutation.mutate()}
-                disabled={isPending}
-                className="bg-purple-900 hover:bg-purple-950 text-white text-xs font-semibold"
+                disabled={isPending || applicant.applicant_state === "Departed"}
+                className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold shadow-xs"
               >
-                {markDepartedMutation.isPending ? "Confirming Departure..." : "Confirm & Mark as Departed"}
+                {markDepartedMutation.isPending ? "Confirming Departure..." : "Confirm & Mark Departed"}
               </Button>
             </div>
           </div>
         )}
-
-        <DialogFooter className="mt-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Close Portal
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

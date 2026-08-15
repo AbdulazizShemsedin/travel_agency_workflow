@@ -79,27 +79,22 @@ const FIELD_TO_STEP_MAP: Record<string, number> = {
   remarks: 4,
 };
 
-const FIELD_LABEL_MAP: Record<string, string> = {
-  first_name: "First Name",
-  last_name: "Last Name",
-  gender: "Gender",
-  religion: "Religion",
-  marital_status: "Marital Status",
-  children: "Children Count",
-  nationality: "Nationality",
-  phone_number: "Phone Number",
-  city: "City",
-  country: "Country",
-  date_of_birth: "Date of Birth",
-  passport_number: "Passport Number",
-  highest_education: "Highest Education Level",
-  labour_id: "Labour ID Number",
-  contact_person_name: "Emergency Contact Name",
-  contact_person_phone: "Emergency Contact Phone",
-  coc_status: "COC Status",
-  exam_date: "COC Exam Date",
-  medical_status: "Medical Status",
-  medical_expiry_date: "Medical Expiration Date",
+const STEP_FIELDS_MAP: Record<number, (keyof BaseApplicantFormValues)[]> = {
+  1: [
+    "first_name",
+    "last_name",
+    "gender",
+    "religion",
+    "marital_status",
+    "children",
+    "nationality",
+    "phone_number",
+    "city",
+    "country",
+  ],
+  2: [],
+  3: [],
+  4: [],
 };
 
 interface ApplicantRegistrationFormProps {
@@ -152,9 +147,9 @@ export function ApplicantRegistrationForm({
       passport_expiry: initialData?.passport_expiry || "",
       highest_education: initialData?.highest_education || "",
       institution: initialData?.institution || "",
-      graduation_year: initialData?.graduation_year || ("" as unknown as number),
+      graduation_year: initialData?.graduation_year ?? undefined,
       current_employer: initialData?.current_employer || "",
-      years_of_experience: initialData?.years_of_experience || ("" as unknown as number),
+      years_of_experience: initialData?.years_of_experience ?? undefined,
       labour_id: initialData?.labour_id || "",
       contact_person_name: initialData?.contact_person_name || "",
       contact_person_phone: initialData?.contact_person_phone || "",
@@ -173,7 +168,20 @@ export function ApplicantRegistrationForm({
 
   const { getValues, trigger, setError, clearErrors } = form;
 
-  // Track max reached step for navigation
+  const navigateToStepWithError = (targetStep: number, fieldName?: string) => {
+    setCurrentStep(targetStep);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      if (fieldName) {
+        const el = document.getElementById(fieldName);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    }, 150);
+  };
+
   const handleStepChange = (targetStep: number) => {
     setCurrentStep(targetStep);
     if (targetStep > maxReachedStep) {
@@ -181,31 +189,14 @@ export function ApplicantRegistrationForm({
     }
   };
 
-  // Step 1 Validation Trigger
-  const validateCurrentStep = async (): Promise<boolean> => {
-    if (currentStep === 1) {
-      const step1Fields: (keyof BaseApplicantFormValues)[] = [
-        "first_name",
-        "last_name",
-        "gender",
-        "religion",
-        "marital_status",
-        "children",
-        "nationality",
-        "phone_number",
-        "city",
-        "country",
-      ];
-      return await trigger(step1Fields);
-    }
-    return true;
-  };
-
   const handleNextStep = async () => {
-    const isValid = await validateCurrentStep();
-    if (!isValid) {
-      toast.error("Please complete required fields on this step before proceeding.");
-      return;
+    if (currentStep === 1) {
+      const step1Fields = STEP_FIELDS_MAP[1];
+      const isValid = await trigger(step1Fields);
+      if (!isValid) {
+        toast.error("Please complete the required personal information fields.");
+        return;
+      }
     }
     if (currentStep < FORM_STEPS.length) {
       handleStepChange(currentStep + 1);
@@ -228,7 +219,6 @@ export function ApplicantRegistrationForm({
       const validation = stage1DraftSchema.safeParse(formData);
 
       if (!validation.success) {
-        // Set field errors in form
         validation.error.errors.forEach((err) => {
           if (err.path[0]) {
             setError(err.path[0] as keyof BaseApplicantFormValues, {
@@ -238,20 +228,13 @@ export function ApplicantRegistrationForm({
           }
         });
 
-        // Switch to Step 1 so the user sees the highlighted fields immediately
-        setCurrentStep(1);
+        const firstError = validation.error.errors[0];
+        const errorField = firstError?.path[0] as string;
+        const targetStep = (errorField && FIELD_TO_STEP_MAP[errorField]) || 1;
 
-        const missingLabels = Array.from(
-          new Set(
-            validation.error.errors.map(
-              (e) => FIELD_LABEL_MAP[e.path[0] as string] || (e.path[0] as string)
-            )
-          )
-        );
+        navigateToStepWithError(targetStep, errorField);
 
-        throw new Error(
-          `Please provide the following required draft fields: ${missingLabels.join(", ")}`
-        );
+        throw new Error(firstError?.message || "Please complete required Stage 1 draft fields.");
       }
 
       if (draftApplicantId) {
@@ -265,7 +248,7 @@ export function ApplicantRegistrationForm({
       setApplicantState(data.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       toast.success(`Draft Saved Successfully (ID: ${data.name})`, {
-        description: "Your applicant record is saved as a Draft. You can continue editing or return later.",
+        description: "Applicant record saved. You can continue editing or return later.",
       });
     },
     onError: (error: unknown) => {
@@ -283,7 +266,6 @@ export function ApplicantRegistrationForm({
       clearErrors();
       const formData = getValues();
 
-      // Check Stage 2 validation strictly
       const validation = stage2RegistrationSchema.safeParse(formData);
       if (!validation.success) {
         validation.error.errors.forEach((err) => {
@@ -295,18 +277,16 @@ export function ApplicantRegistrationForm({
           }
         });
 
-        // Navigate to the first step containing an error
-        const firstErrorField = validation.error.errors[0]?.path[0] as string;
-        if (firstErrorField && FIELD_TO_STEP_MAP[firstErrorField]) {
-          setCurrentStep(FIELD_TO_STEP_MAP[firstErrorField]);
-        }
+        const firstError = validation.error.errors[0];
+        const firstField = firstError?.path[0] as string;
+        const targetStep = (firstField && FIELD_TO_STEP_MAP[firstField]) || 1;
 
-        const errMsgs = validation.error.errors.map((e) => e.message).join(" • ");
-        throw new Error(errMsgs);
+        navigateToStepWithError(targetStep, firstField);
+
+        throw new Error(firstError?.message || "Please complete all registration requirements.");
       }
 
       let activeId = draftApplicantId;
-      // If not yet saved as draft, save draft first
       if (!activeId) {
         const draft = await createApplicantDraft(formData);
         activeId = draft.name;
@@ -315,7 +295,6 @@ export function ApplicantRegistrationForm({
         await updateApplicantDraft(activeId, formData);
       }
 
-      // Call authoritative registration endpoint
       return await registerApplicant(activeId);
     },
     onSuccess: (data) => {
@@ -323,7 +302,7 @@ export function ApplicantRegistrationForm({
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       toast.success(data.message || "Applicant Successfully Registered!", {
-        description: "The applicant is now in the Registered state. You can generate their official CV.",
+        description: "Status transitioned to Registered. You can now generate an official CV.",
       });
       if (onSuccessRedirect && draftApplicantId) {
         onSuccessRedirect(draftApplicantId);
@@ -332,8 +311,8 @@ export function ApplicantRegistrationForm({
     onError: (error: unknown) => {
       const err = error as ApiError;
       setIsConfirmRegisterOpen(false);
-      toast.error("Registration Incomplete", {
-        description: err.message || "Backend rejected the registration request.",
+      toast.error("Registration Requirement Not Met", {
+        description: err.message || "Please check the highlighted required fields.",
         duration: 6000,
       });
     },
@@ -361,7 +340,7 @@ export function ApplicantRegistrationForm({
   });
 
   const handleRegisterClick = async () => {
-    // Client-side pre-validation
+    clearErrors();
     const formData = getValues();
     const validation = stage2RegistrationSchema.safeParse(formData);
 
@@ -375,23 +354,24 @@ export function ApplicantRegistrationForm({
         }
       });
 
-      // Find first error and navigate to that step
       const firstError = validation.error.errors[0];
-      const fieldName = firstError?.path[0] as string;
-      if (fieldName && FIELD_TO_STEP_MAP[fieldName]) {
-        setCurrentStep(FIELD_TO_STEP_MAP[fieldName]);
-      }
+      const errorField = firstError?.path[0] as string;
+      const targetStep = (errorField && FIELD_TO_STEP_MAP[errorField]) || 1;
 
-      toast.error("Registration Requirements Incomplete", {
-        description: firstError?.message || "Please check the highlighted required fields.",
+      // Automatically navigate to the step with error and focus
+      navigateToStepWithError(targetStep, errorField);
+
+      toast.error("Required Registration Field Missing", {
+        description: firstError?.message || "Please complete the highlighted required fields.",
         duration: 5000,
       });
       return;
     }
 
     if (formData.medical_status === "UNFIT") {
-      toast.error("Applicant cannot be registered while medical status is UNFIT.", {
-        description: "Please change medical status to FIT once cleared, or keep this record as a Draft.",
+      navigateToStepWithError(4, "medical_status");
+      toast.error("Medical Status is UNFIT", {
+        description: "Applicant cannot be registered while medical status is UNFIT. Please update once cleared.",
       });
       return;
     }
@@ -431,23 +411,23 @@ export function ApplicantRegistrationForm({
           />
         )}
 
-        {/* Bottom Action Toolbar matching Figma */}
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white/95 p-4 shadow-md backdrop-blur-xs">
+        {/* Bottom Action Toolbar */}
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-md backdrop-blur-md">
           <div className="flex items-center gap-2">
             {currentStep > 1 && (
               <Button
                 type="button"
                 variant="outline"
                 onClick={handlePrevStep}
-                className="text-slate-700"
+                className="text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#26262d]"
               >
                 <ArrowLeft className="mr-1.5 h-4 w-4" />
                 Previous Step
               </Button>
             )}
             {draftApplicantId && (
-              <span className="hidden items-center gap-1 text-xs text-slate-500 sm:inline-flex">
-                Draft ID: <strong className="font-mono text-slate-800">{draftApplicantId}</strong>
+              <span className="hidden items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 sm:inline-flex">
+                Draft ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
               </span>
             )}
           </div>
@@ -459,7 +439,7 @@ export function ApplicantRegistrationForm({
               variant="outline"
               onClick={() => saveDraftMutation.mutate()}
               disabled={isSavingDraft || isRegistering}
-              className="border-slate-300 bg-white hover:bg-slate-50 font-medium"
+              className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium"
             >
               {isSavingDraft ? (
                 <>
@@ -468,7 +448,7 @@ export function ApplicantRegistrationForm({
                 </>
               ) : (
                 <>
-                  <Bookmark className="mr-1.5 h-4 w-4 text-emerald-800" />
+                  <Bookmark className="mr-1.5 h-4 w-4 text-emerald-800 dark:text-emerald-400" />
                   Save Draft
                 </>
               )}
@@ -479,7 +459,7 @@ export function ApplicantRegistrationForm({
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white font-medium shadow-xs"
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-xs"
               >
                 Next Step
                 <ArrowRight className="ml-1.5 h-4 w-4" />
@@ -490,7 +470,7 @@ export function ApplicantRegistrationForm({
                   type="button"
                   onClick={handleRegisterClick}
                   disabled={isRegistering || isSavingDraft || isMedicalUnfit}
-                  className="bg-emerald-900 hover:bg-emerald-950 text-white font-medium shadow-sm"
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-sm"
                 >
                   {isRegistering ? (
                     <>
@@ -512,31 +492,31 @@ export function ApplicantRegistrationForm({
 
       {/* Registration Confirmation Dialog Modal */}
       <Dialog open={isConfirmRegisterOpen} onOpenChange={setIsConfirmRegisterOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <FileCheck2 className="h-5 w-5 text-emerald-800" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <FileCheck2 className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
               Confirm Applicant Registration
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600 mt-1">
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
               Are you sure you want to register this applicant? This will validate all Stage 1 & Stage 2 requirements and transition the record from <strong>Draft</strong> to <strong>Registered</strong>.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs space-y-1.5">
+          <div className="rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50 dark:bg-[#16161b] p-3 text-xs space-y-1.5">
             <div className="flex justify-between">
-              <span className="text-slate-500">Applicant:</span>
-              <span className="font-semibold text-slate-900">
+              <span className="text-slate-500 dark:text-zinc-400">Applicant:</span>
+              <span className="font-semibold text-slate-900 dark:text-white">
                 {form.getValues("first_name")} {form.getValues("last_name")}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Passport:</span>
-              <span className="font-mono text-slate-900">{form.getValues("passport_number")}</span>
+              <span className="text-slate-500 dark:text-zinc-400">Passport:</span>
+              <span className="font-mono text-slate-900 dark:text-zinc-200">{form.getValues("passport_number")}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Medical Status:</span>
-              <span className="font-semibold text-emerald-700">{form.getValues("medical_status")}</span>
+              <span className="text-slate-500 dark:text-zinc-400">Medical Status:</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">{form.getValues("medical_status")}</span>
             </div>
           </div>
 
@@ -545,6 +525,7 @@ export function ApplicantRegistrationForm({
               type="button"
               variant="outline"
               onClick={() => setIsConfirmRegisterOpen(false)}
+              className="dark:border-[#26262d]"
             >
               Cancel
             </Button>
@@ -552,7 +533,7 @@ export function ApplicantRegistrationForm({
               type="button"
               onClick={() => registerMutation.mutate()}
               disabled={isRegistering}
-              className="bg-emerald-900 hover:bg-emerald-950 text-white"
+              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
             >
               {isRegistering ? (
                 <>
@@ -569,59 +550,59 @@ export function ApplicantRegistrationForm({
 
       {/* Generated CV Preview Modal */}
       <Dialog open={isCvPreviewOpen} onOpenChange={setIsCvPreviewOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <FileText className="h-5 w-5 text-emerald-800" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <FileText className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
               Standardized Candidate CV
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600">
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
               Generated candidate CV record for {form.getValues("first_name")} {form.getValues("last_name")}.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-            <div className="border border-slate-200 bg-white p-6 rounded-lg shadow-xs space-y-4">
-              <div className="border-b border-slate-200 pb-4 flex justify-between items-start">
+          <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-slate-50 dark:bg-[#16161b] p-6">
+            <div className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#121215] p-6 rounded-lg shadow-xs space-y-4">
+              <div className="border-b border-slate-200 dark:border-[#222227] pb-4 flex justify-between items-start">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                     {form.getValues("first_name")} {form.getValues("middle_name")} {form.getValues("last_name")}
                   </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
                     {form.getValues("highest_education")} • {form.getValues("nationality")}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="rounded bg-emerald-100 px-2 py-0.5 font-mono text-xs font-bold text-emerald-800">
+                  <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 font-mono text-xs font-bold text-emerald-800 dark:text-emerald-300">
                     {draftApplicantId}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-1">Status: Registered</p>
+                  <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1">Status: Registered</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
-                  <h5 className="font-semibold text-slate-700">Contact</h5>
-                  <p className="text-slate-600">{form.getValues("phone_number")}</p>
-                  <p className="text-slate-600">{form.getValues("email") || "No email"}</p>
-                  <p className="text-slate-600">{form.getValues("city")}, {form.getValues("country")}</p>
+                  <h5 className="font-semibold text-slate-700 dark:text-zinc-300">Contact</h5>
+                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("phone_number")}</p>
+                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("email") || "No email"}</p>
+                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("city")}, {form.getValues("country")}</p>
                 </div>
                 <div>
-                  <h5 className="font-semibold text-slate-700">Identification</h5>
-                  <p className="text-slate-600">Passport: {form.getValues("passport_number")}</p>
-                  <p className="text-slate-600">Labour ID: {form.getValues("labour_id")}</p>
-                  <p className="text-slate-600">COC: {form.getValues("coc_status")}</p>
+                  <h5 className="font-semibold text-slate-700 dark:text-zinc-300">Identification</h5>
+                  <p className="text-slate-600 dark:text-zinc-400">Passport: {form.getValues("passport_number")}</p>
+                  <p className="text-slate-600 dark:text-zinc-400">Labour ID: {form.getValues("labour_id")}</p>
+                  <p className="text-slate-600 dark:text-zinc-400">COC: {form.getValues("coc_status")}</p>
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 pt-3 text-xs">
-                <h5 className="font-semibold text-slate-700 mb-1">Education & Experience</h5>
-                <p className="text-slate-600">
+              <div className="border-t border-slate-100 dark:border-[#222227] pt-3 text-xs">
+                <h5 className="font-semibold text-slate-700 dark:text-zinc-300 mb-1">Education & Experience</h5>
+                <p className="text-slate-600 dark:text-zinc-400">
                   {form.getValues("highest_education")} from {form.getValues("institution") || "N/A"}{" "}
                   {form.getValues("graduation_year") ? `(${form.getValues("graduation_year")})` : ""}
                 </p>
                 {form.getValues("years_of_experience") ? (
-                  <p className="text-slate-600 mt-1">
+                  <p className="text-slate-600 dark:text-zinc-400 mt-1">
                     {form.getValues("years_of_experience")} years at {form.getValues("current_employer") || "Previous Employer"}
                   </p>
                 ) : null}

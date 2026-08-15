@@ -48,7 +48,17 @@ export const PASSPORT_REGEX = /^[A-Z]{1,2}[0-9]{6,8}$|^[A-Z0-9]{7,9}$/;
 // Name regex: letters, spaces, hyphens, and apostrophes only
 export const NAME_REGEX = /^[a-zA-Z\s\-'.]+$/;
 
-// Base schema for form state
+// Helper to safely handle optional numeric fields without coercion errors on empty strings
+const optionalNumber = (schema: z.ZodNumber) =>
+  z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined || Number.isNaN(val)) {
+      return undefined;
+    }
+    const num = Number(val);
+    return Number.isNaN(num) ? undefined : num;
+  }, schema.optional());
+
+// Base schema for form state and draft validation
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft
   first_name: z.string().trim().default(""),
@@ -57,12 +67,10 @@ export const baseApplicantSchema = z.object({
   gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default(""),
   religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
   marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
-  children: z.coerce
-    .number({ invalid_type_error: "Children count must be a number" })
-    .int("Children must be a whole number")
-    .min(0, "Children count cannot be negative")
-    .max(25, "Please enter a realistic number of children")
-    .default(0),
+  children: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
+    z.number().int("Children must be a whole number").min(0, "Children count cannot be negative").max(25, "Please enter a valid number of children").default(0)
+  ),
   nationality: z.string().trim().default("Ethiopia"),
   phone_number: z.string().trim().default(""),
   city: z.string().trim().default(""),
@@ -80,7 +88,7 @@ export const baseApplicantSchema = z.object({
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   medical_expiry_date: z.string().optional().or(z.literal("")),
 
-  // Stage 3: Optional Context Fields
+  // Stage 3: Strictly Optional Context Fields
   alternate_phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().trim().optional().or(z.literal("")),
   region: z.string().trim().optional().or(z.literal("")),
@@ -89,27 +97,22 @@ export const baseApplicantSchema = z.object({
   national_id: z.string().trim().optional().or(z.literal("")),
   passport_expiry: z.string().optional().or(z.literal("")),
   institution: z.string().trim().optional().or(z.literal("")),
-  graduation_year: z.coerce
-    .number()
-    .int()
-    .min(1950, "Graduation year cannot be earlier than 1950")
-    .max(new Date().getFullYear() + 1, "Graduation year cannot be in the far future")
-    .optional()
-    .or(z.literal("")),
+  graduation_year: optionalNumber(
+    z.number().int("Graduation year must be a whole number").min(1950, "Graduation year cannot be earlier than 1950").max(new Date().getFullYear() + 1, "Graduation year cannot be in the future")
+  ),
   current_employer: z.string().trim().optional().or(z.literal("")),
-  years_of_experience: z.coerce
-    .number()
-    .min(0, "Years of experience cannot be negative")
-    .max(50, "Years of experience must be realistic")
-    .optional()
-    .or(z.literal("")),
+  years_of_experience: optionalNumber(
+    z.number().min(0, "Years of experience cannot be negative").max(50, "Years of experience must be realistic")
+  ),
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),
 
   // Visual/UI context fields
   fee_required: z.boolean().default(false).optional(),
-  registration_fee_amount: z.coerce.number().min(0, "Fee amount cannot be negative").default(0).optional(),
+  registration_fee_amount: optionalNumber(
+    z.number().min(0, "Fee amount cannot be negative")
+  ),
   profile_photo_url: z.string().optional().or(z.literal("")),
 });
 
@@ -150,11 +153,10 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
     errorMap: () => ({ message: "Please select a Marital Status" }),
   }),
 
-  children: z.coerce
-    .number({ invalid_type_error: "Children count must be a number" })
-    .int("Children must be a whole number")
-    .min(0, "Children count cannot be negative")
-    .max(25, "Please enter a realistic number of children"),
+  children: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
+    z.number().int("Children must be a whole number").min(0, "Children count cannot be negative").max(25, "Please enter a valid number of children")
+  ),
 
   nationality: z
     .string({ required_error: "Nationality is required" })
@@ -207,7 +209,7 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
 export const stage2RegistrationSchema = stage1DraftSchema
   .extend({
     date_of_birth: z
-      .string({ required_error: "Date of Birth is required for registration" })
+      .string({ required_error: "Date of Birth is required" })
       .min(1, "Date of Birth is required")
       .refine((val) => {
         if (!val) return false;
@@ -228,16 +230,17 @@ export const stage2RegistrationSchema = stage1DraftSchema
       }, "Applicant age must be 65 years or younger"),
 
     passport_number: z
-      .string({ required_error: "Passport Number is required for registration" })
+      .string({ required_error: "Passport Number is required" })
       .trim()
       .min(7, "Passport Number must be between 7 and 9 characters")
       .max(9, "Passport Number must not exceed 9 characters")
       .transform((val) => val.toUpperCase())
       .refine(
         (val) => PASSPORT_REGEX.test(val),
-        "Passport Number must be 7-9 alphanumeric characters with 1-2 leading letters (e.g. EP1234567 or A12345678)"
+        "Passport Number must be 7-9 alphanumeric characters with 1-2 leading letters (e.g. EP1234567)"
       ),
 
+    // passport_expiry is OPTIONAL in Stage 3 per spec; validate future date only if filled
     passport_expiry: z
       .string()
       .optional()
@@ -255,20 +258,20 @@ export const stage2RegistrationSchema = stage1DraftSchema
     }),
 
     labour_id: z
-      .string({ required_error: "Labour ID Number is required for registration" })
+      .string({ required_error: "Labour ID Number is required" })
       .trim()
       .min(3, "Labour ID Number must be at least 3 characters (e.g. LBR-998844)")
       .max(30, "Labour ID too long"),
 
     contact_person_name: z
-      .string({ required_error: "Emergency Contact Name is required for registration" })
+      .string({ required_error: "Emergency Contact Name is required" })
       .trim()
       .min(2, "Emergency Contact Name must be at least 2 characters")
       .max(80, "Emergency Contact Name too long")
       .regex(NAME_REGEX, "Emergency Contact Name can only contain letters, hyphens, and spaces"),
 
     contact_person_phone: z
-      .string({ required_error: "Emergency Contact Phone is required for registration" })
+      .string({ required_error: "Emergency Contact Phone is required" })
       .trim()
       .min(9, "Emergency Contact Phone must be at least 9 digits")
       .max(18, "Emergency Contact Phone cannot exceed 18 digits")
@@ -282,7 +285,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
     }),
 
     exam_date: z
-      .string({ required_error: "COC Exam Date is required for registration" })
+      .string({ required_error: "COC Exam Date is required" })
       .min(1, "COC Exam Date is required")
       .refine((val) => {
         if (!val) return false;
@@ -295,13 +298,13 @@ export const stage2RegistrationSchema = stage1DraftSchema
 
     medical_expiry_date: z
       .string({
-        required_error: "Medical Expiry Date is required for registration",
+        required_error: "Medical Expiration Date is required",
       })
-      .min(1, "Medical Expiry Date is required")
+      .min(1, "Medical Expiration Date is required")
       .refine((val) => {
         if (!val) return false;
         return isValid(parseISO(val));
-      }, "Please enter a valid Medical Expiry Date"),
+      }, "Please enter a valid Medical Expiration Date"),
   })
   .refine((data) => data.medical_status !== "UNFIT", {
     message: "Applicant cannot be registered while medical status is UNFIT.",
@@ -330,9 +333,9 @@ export function getExpiryBadgeStatus(days?: number): {
     return {
       label: "Not Set",
       variant: "neutral",
-      textClass: "text-slate-600 dark:text-slate-400",
-      bgClass: "bg-slate-100 dark:bg-slate-800",
-      borderClass: "border-slate-200 dark:border-slate-700",
+      textClass: "text-slate-600 dark:text-zinc-400",
+      bgClass: "bg-slate-100 dark:bg-[#18181f]",
+      borderClass: "border-slate-200 dark:border-[#26262d]",
     };
   }
 

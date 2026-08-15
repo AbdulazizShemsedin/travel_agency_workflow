@@ -78,6 +78,11 @@ export interface InjazProcessing {
 export interface WakalaProcessing {
   status: StreamStatus;
   assigned_employee?: string;
+  started_on?: string;
+  completed_on?: string;
+  request_payment?: boolean;
+  request_via?: "WhatsApp" | "Email" | "SMS";
+  payment_amount?: number;
   wakala_number?: string;
   sponsor_auth_code?: string;
   foreign_agency_name?: string;
