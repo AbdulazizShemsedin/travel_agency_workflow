@@ -43,9 +43,10 @@ export async function GET(
   // 1. LIVE BACKEND PROXY (If configured with API Keys)
   if (isLiveBackendConfigured) {
     try {
+      const search = req.nextUrl.search || `?fields=${encodeURIComponent('["*"]')}&limit_page_length=1000`;
       const url = docname
         ? `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`
-        : `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}${req.nextUrl.search}`;
+        : `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}${search}`;
 
       const res = await fetch(url, {
         headers: getFrappeHeaders(),
