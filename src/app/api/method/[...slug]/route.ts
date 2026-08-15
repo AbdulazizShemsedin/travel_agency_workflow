@@ -9,21 +9,71 @@ import {
   getAccountingSummaryInStore,
 } from "@/lib/server/applicantStore";
 
+const FRAPPE_URL = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL;
+const FRAPPE_KEY = process.env.FRAPPE_API_KEY;
+const FRAPPE_SECRET = process.env.FRAPPE_API_SECRET;
+
+const isLiveBackendConfigured = !!(FRAPPE_URL && FRAPPE_KEY && FRAPPE_SECRET);
+
+function getFrappeHeaders() {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (FRAPPE_KEY && FRAPPE_SECRET) {
+    headers["Authorization"] = `token ${FRAPPE_KEY}:${FRAPPE_SECRET}`;
+  }
+  return headers;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
-  try {
-    const { slug } = await params;
-    const methodPath = slug.join("/");
+  const { slug } = await params;
+  const methodPath = slug.join("/");
 
-    // 1. Upload File RPC (Multipart)
+  // 1. LIVE BACKEND PROXY (If configured with API Keys)
+  if (isLiveBackendConfigured) {
+    try {
+      if (methodPath === "upload_file") {
+        const formData = await req.formData();
+        const res = await fetch(`${FRAPPE_URL}/api/method/upload_file`, {
+          method: "POST",
+          headers: FRAPPE_KEY && FRAPPE_SECRET ? { Authorization: `token ${FRAPPE_KEY}:${FRAPPE_SECRET}` } : {},
+          body: formData,
+        });
+        const data = await res.json();
+        return NextResponse.json(data, { status: res.status });
+      }
+
+      let bodyData: any = {};
+      try {
+        bodyData = await req.json();
+      } catch {
+        // empty body
+      }
+
+      const res = await fetch(`${FRAPPE_URL}/api/method/${methodPath}`, {
+        method: "POST",
+        headers: getFrappeHeaders(),
+        body: JSON.stringify(bodyData),
+      });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (err: any) {
+      console.warn(`[Frappe RPC Proxy Error] Failed to execute live method ${methodPath}: ${err.message}. Falling back to local store.`);
+    }
+  }
+
+  // 2. LOCAL DEV FALLBACK STORE
+  try {
     if (methodPath === "upload_file") {
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
-      const doctype = formData.get("doctype") as string || "Applicant";
-      const docname = formData.get("docname") as string || "";
-      const fieldname = formData.get("fieldname") as string || "file_attachment";
+      const doctype = (formData.get("doctype") as string) || "Applicant";
+      const docname = (formData.get("docname") as string) || "";
+      const fieldname = (formData.get("fieldname") as string) || "file_attachment";
 
       const fileName = file ? file.name : "uploaded_document.pdf";
       const fileUrl = `/private/files/${docname ? `${docname}-` : ""}${fileName}`;
@@ -46,7 +96,6 @@ export async function POST(
       // Body may be empty
     }
 
-    // 2. Register Applicant RPC
     if (methodPath.endsWith("register_applicant")) {
       const applicantName = body.applicant_name;
       if (!applicantName) {
@@ -59,7 +108,6 @@ export async function POST(
       });
     }
 
-    // 3. Generate CV RPC
     if (methodPath.endsWith("generate_cv")) {
       const applicantName = body.applicant_name;
       if (!applicantName) {
@@ -69,14 +117,12 @@ export async function POST(
       return NextResponse.json({ message: res });
     }
 
-    // 4. Send Contract Request (WhatsApp) RPC
     if (methodPath.endsWith("send_contract_request")) {
       const crName = body.contract_request_name || `CR-${Date.now()}`;
       const res = sendContractRequestInStore(crName);
       return NextResponse.json({ message: res });
     }
 
-    // 5. Batch Send Contract Requests RPC
     if (methodPath.endsWith("batch_send_contract_requests")) {
       const cvRefs: string[] = body.cv_references || [];
       const contractor: string = body.contractor || "Al Qurashi Recruitment Office";
@@ -91,14 +137,12 @@ export async function POST(
       });
     }
 
-    // 6. Parse Dossier File RPC
     if (methodPath.endsWith("parse_dossier_file")) {
       const dossierName = body.dossier_name || `DOSSIER-${Date.now()}`;
       const res = parseDossierFileInStore(dossierName);
       return NextResponse.json({ message: res });
     }
 
-    // 7. Cancel Applicant RPC
     if (methodPath.endsWith("cancel_applicant")) {
       const applicantName = body.applicant_name;
       const remarks = body.cancel_remarks || "Process cancelled by user.";
@@ -106,7 +150,6 @@ export async function POST(
       return NextResponse.json(res);
     }
 
-    // 8. Restore Applicant RPC
     if (methodPath.endsWith("restore_applicant")) {
       const applicantName = body.applicant_name;
       const res = restoreApplicantInStore(applicantName, body.restore_option || "auto");
@@ -132,6 +175,19 @@ export async function GET(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
+
+  if (isLiveBackendConfigured) {
+    try {
+      const res = await fetch(`${FRAPPE_URL}/api/method/${methodPath}${req.nextUrl.search}`, {
+        headers: getFrappeHeaders(),
+        cache: "no-store",
+      });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (err: any) {
+      console.warn(`[Frappe RPC Proxy Error] Failed to execute live GET ${methodPath}: ${err.message}. Falling back to local store.`);
+    }
+  }
 
   if (methodPath.endsWith("get_accounting_summary")) {
     const summary = getAccountingSummaryInStore();

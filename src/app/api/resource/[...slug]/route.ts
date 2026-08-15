@@ -15,6 +15,23 @@ import {
   submitDsrDepartureInStore,
 } from "@/lib/server/applicantStore";
 
+const FRAPPE_URL = process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL;
+const FRAPPE_KEY = process.env.FRAPPE_API_KEY;
+const FRAPPE_SECRET = process.env.FRAPPE_API_SECRET;
+
+const isLiveBackendConfigured = !!(FRAPPE_URL && FRAPPE_KEY && FRAPPE_SECRET);
+
+function getFrappeHeaders() {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (FRAPPE_KEY && FRAPPE_SECRET) {
+    headers["Authorization"] = `token ${FRAPPE_KEY}:${FRAPPE_SECRET}`;
+  }
+  return headers;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
@@ -23,6 +40,25 @@ export async function GET(
   const doctype = decodeURIComponent(slug[0] || "");
   const docname = slug[1] ? decodeURIComponent(slug[1]) : null;
 
+  // 1. LIVE BACKEND PROXY (If configured with API Keys)
+  if (isLiveBackendConfigured) {
+    try {
+      const url = docname
+        ? `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`
+        : `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}${req.nextUrl.search}`;
+
+      const res = await fetch(url, {
+        headers: getFrappeHeaders(),
+        cache: "no-store",
+      });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (err: any) {
+      console.warn(`[Frappe Proxy Error] Failed to fetch live ${doctype}: ${err.message}. Falling back to local store.`);
+    }
+  }
+
+  // 2. LOCAL DEV FALLBACK STORE
   if (doctype === "Applicant") {
     if (docname) {
       const applicant = getApplicantFromStore(docname);
@@ -54,11 +90,28 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
-  try {
-    const { slug } = await params;
-    const doctype = decodeURIComponent(slug[0] || "");
-    const body = await req.json();
+  const { slug } = await params;
+  const doctype = decodeURIComponent(slug[0] || "");
+  const body = await req.json();
 
+  // 1. LIVE BACKEND PROXY
+  if (isLiveBackendConfigured) {
+    try {
+      const url = `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: getFrappeHeaders(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (err: any) {
+      console.warn(`[Frappe Proxy Error] Failed to create live ${doctype}: ${err.message}. Falling back to local store.`);
+    }
+  }
+
+  // 2. LOCAL DEV FALLBACK STORE
+  try {
     if (doctype === "Applicant") {
       const newApplicant = createDraftInStore(body);
       return NextResponse.json({ data: newApplicant }, { status: 201 });
@@ -106,12 +159,29 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
-  try {
-    const { slug } = await params;
-    const doctype = decodeURIComponent(slug[0] || "");
-    const docname = slug[1] ? decodeURIComponent(slug[1]) : "";
-    const body = await req.json();
+  const { slug } = await params;
+  const doctype = decodeURIComponent(slug[0] || "");
+  const docname = slug[1] ? decodeURIComponent(slug[1]) : "";
+  const body = await req.json();
 
+  // 1. LIVE BACKEND PROXY
+  if (isLiveBackendConfigured) {
+    try {
+      const url = `${FRAPPE_URL}/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(docname)}`;
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: getFrappeHeaders(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (err: any) {
+      console.warn(`[Frappe Proxy Error] Failed to update live ${doctype}: ${err.message}. Falling back to local store.`);
+    }
+  }
+
+  // 2. LOCAL DEV FALLBACK STORE
+  try {
     if (doctype === "Applicant") {
       const updated = updateDraftInStore(docname, body);
       return NextResponse.json({ data: updated });
