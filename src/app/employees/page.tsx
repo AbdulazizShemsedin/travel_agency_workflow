@@ -2,7 +2,14 @@ import Link from "next/link";
 import { Plus, Search, Filter, Download, Eye, Briefcase } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockEmployeesList } from "@/lib/server/applicantStore";
+
+const AGENCY_EMPLOYEES = [
+  { id: "EMP-001", name: "Sara Tefera", role: "LMS Documentation Specialist", roleType: "LMS", email: "sara@agency.et", status: "Active" },
+  { id: "EMP-002", name: "Dawit Haile", role: "Injaz & Biometrics Officer", roleType: "Injaz", email: "dawit@agency.et", status: "Active" },
+  { id: "EMP-003", name: "Tigist Bekele", role: "Wakala Payment Coordinator", roleType: "Wakala", email: "tigist@agency.et", status: "Active" },
+  { id: "EMP-004", name: "Abebe Kebede", role: "Embassy Visa Stamping Liaison", roleType: "Embassy", email: "abebe@agency.et", status: "Active" },
+  { id: "EMP-005", name: "Helen Wolde", role: "Flight Ticketing Agent", roleType: "Ticketing", email: "helen@agency.et", status: "Active" },
+];
 
 export default function EmployeesPage() {
   return (
@@ -34,7 +41,7 @@ export default function EmployeesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-            {mockEmployeesList.map((emp) => (
+            {AGENCY_EMPLOYEES.map((emp) => (
               <tr key={emp.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                 <td className="px-4 py-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
                   {emp.id}

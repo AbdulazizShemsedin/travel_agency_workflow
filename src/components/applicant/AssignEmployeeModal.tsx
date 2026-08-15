@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { ProcessingRoleType, StreamAssignmentPayload } from "@/types/applicant";
 import { assignEmployeeApi } from "@/lib/api/applicantApi";
-import { mockEmployeesList } from "@/lib/server/applicantStore";
+
+const AGENCY_EMPLOYEES = [
+  { id: "EMP-001", name: "Sara Tefera", role: "LMS Documentation Specialist", roleType: "LMS" as const, email: "sara@agency.et" },
+  { id: "EMP-002", name: "Dawit Haile", role: "Injaz & Biometrics Officer", roleType: "Injaz" as const, email: "dawit@agency.et" },
+  { id: "EMP-003", name: "Tigist Bekele", role: "Wakala Payment Coordinator", roleType: "Wakala" as const, email: "tigist@agency.et" },
+  { id: "EMP-004", name: "Abebe Kebede", role: "Embassy Visa Stamping Liaison", roleType: "Embassy" as const, email: "abebe@agency.et" },
+  { id: "EMP-005", name: "Helen Wolde", role: "Flight Ticketing Agent", roleType: "Ticketing" as const, email: "helen@agency.et" },
+];
 import {
   Dialog,
   DialogContent,
@@ -57,7 +64,7 @@ export function AssignEmployeeModal({
     "All Roles / Operations Lead"
   );
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>(
-    mockEmployeesList[0]?.id || ""
+    AGENCY_EMPLOYEES[0]?.id || ""
   );
 
   // Mode 2: Multi-Process Staffing
@@ -92,9 +99,9 @@ export function AssignEmployeeModal({
         empIds = [empId];
       } else if (assignmentMode === "multi_process") {
         roleType = "All Roles / Operations Lead";
-        const lmsEmp = mockEmployeesList.find((e: any) => e.id === lmsStaffId);
-        const injazEmp = mockEmployeesList.find((e: any) => e.id === injazStaffId);
-        const wakalaEmp = mockEmployeesList.find((e: any) => e.id === wakalaStaffId);
+        const lmsEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === lmsStaffId);
+        const injazEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === injazStaffId);
+        const wakalaEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === wakalaStaffId);
 
         streamAssignments = {
           lms: lmsStaffId,
@@ -266,7 +273,7 @@ export function AssignEmployeeModal({
                   Select Lead Employee
                 </Label>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {mockEmployeesList.map((emp: any) => {
+                  {AGENCY_EMPLOYEES.map((emp: any) => {
                     const isSelected = emp.id === selectedEmployeeId;
                     return (
                       <div
@@ -317,7 +324,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setLmsStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e: any) => (
+                  {AGENCY_EMPLOYEES.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -335,7 +342,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setInjazStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e: any) => (
+                  {AGENCY_EMPLOYEES.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -353,7 +360,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setWakalaStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e: any) => (
+                  {AGENCY_EMPLOYEES.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -376,19 +383,19 @@ export function AssignEmployeeModal({
                   size="sm"
                   onClick={() =>
                     setCollaboratingIds(
-                      collaboratingIds.length === mockEmployeesList.length
-                        ? [mockEmployeesList[0].id]
-                        : mockEmployeesList.map((e: any) => e.id)
+                      collaboratingIds.length === AGENCY_EMPLOYEES.length
+                        ? [AGENCY_EMPLOYEES[0].id]
+                        : AGENCY_EMPLOYEES.map((e: any) => e.id)
                     )
                   }
                   className="h-6 text-[11px] text-emerald-800 dark:text-emerald-400"
                 >
-                  {collaboratingIds.length === mockEmployeesList.length ? "Clear" : "Select All"}
+                  {collaboratingIds.length === AGENCY_EMPLOYEES.length ? "Clear" : "Select All"}
                 </Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {mockEmployeesList.map((emp: any) => {
+                {AGENCY_EMPLOYEES.map((emp: any) => {
                   const isChecked = collaboratingIds.includes(emp.id);
                   return (
                     <div
