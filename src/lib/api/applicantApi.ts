@@ -84,50 +84,56 @@ interface FrappeResponse<T> {
 
 // Generic error handler
 async function handleApiResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let errorMsg = `HTTP Error ${res.status}: ${res.statusText}`;
+  const rawText = await res.text();
+  let json: any = {};
+  try {
+    json = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    json = { message: rawText };
+  }
+
+  const hasException = !res.ok || !!(json.exc || json.exception || json.exc_type);
+
+  if (hasException) {
+    let errorMsg = json.exception || `HTTP Error ${res.status}: ${res.statusText}`;
     let serverMsgs: string[] = [];
 
-    try {
-      const errBody = await res.json();
-      if (errBody._server_messages) {
-        try {
-          const parsed = JSON.parse(errBody._server_messages);
-          if (Array.isArray(parsed)) {
-            serverMsgs = parsed.map((m: unknown) => {
-              if (typeof m === "string") {
-                try {
-                  const inner = JSON.parse(m);
-                  return inner.message || m;
-                } catch {
-                  return m;
-                }
+    if (json._server_messages) {
+      try {
+        const parsed = JSON.parse(json._server_messages);
+        if (Array.isArray(parsed)) {
+          serverMsgs = parsed.map((m: unknown) => {
+            if (typeof m === "string") {
+              try {
+                const inner = JSON.parse(m);
+                return inner.message || m;
+              } catch {
+                return m;
               }
-              return String(m);
-            });
-            errorMsg = serverMsgs.join(" • ");
-          }
-        } catch {
-          errorMsg = errBody._server_messages;
+            }
+            return String(m);
+          });
+          errorMsg = serverMsgs.join(" • ");
         }
-      } else if (errBody.message) {
-        errorMsg = typeof errBody.message === "string" ? errBody.message : JSON.stringify(errBody.message);
-      } else if (errBody.exc) {
-        errorMsg = "Server Exception occurred during processing.";
+      } catch {
+        errorMsg = json._server_messages;
       }
-    } catch {
-      // Use fallback errorMsg
+    } else if (json.message && typeof json.message === "string") {
+      errorMsg = json.message;
+    } else if (json.exception && typeof json.exception === "string") {
+      // Strip python traceback if present
+      const match = json.exception.match(/ValidationError: (.*)/) || json.exception.match(/Exception: (.*)/);
+      errorMsg = match ? match[1] : json.exception;
     }
 
     const apiError: ApiError = {
       message: errorMsg,
-      statusCode: res.status,
+      statusCode: res.status >= 400 ? res.status : 400,
       serverMessages: serverMsgs,
     };
     throw apiError;
   }
 
-  const json = (await res.json()) as FrappeResponse<T>;
   if (json.data !== undefined) return json.data;
   if (json.message !== undefined) return json.message as T;
   return json as unknown as T;
