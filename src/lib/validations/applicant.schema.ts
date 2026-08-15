@@ -71,6 +71,14 @@ const optionalNumber = (schema: z.ZodNumber) =>
     return Number.isNaN(num) ? undefined : num;
   }, schema.optional());
 
+// Safe helper for boolean fields (converts Frappe "1", "0", "", 1, 0, "true", "false" to boolean)
+const optionalBoolean = z.preprocess((val) => {
+  if (val === true || val === "true" || val === 1 || val === "1" || val === "yes" || val === "Yes") {
+    return true;
+  }
+  return false;
+}, z.boolean().default(false));
+
 // Base Applicant Schema
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
@@ -113,7 +121,7 @@ export const baseApplicantSchema = z.object({
   passport_scan: z.string().optional().or(z.literal("")),
 
   // Fees & Registration
-  fee_required: z.boolean().default(false).optional(),
+  fee_required: optionalBoolean,
   registration_fee_amount: optionalNumber(z.number().min(0)),
 
   // Stage 3: Optional Context Fields
@@ -132,12 +140,12 @@ export const baseApplicantSchema = z.object({
   arabic_level: z.enum(LANGUAGE_LEVEL_OPTIONS).optional().or(z.literal("")),
   experience_country: z.string().trim().optional().or(z.literal("")),
   experience_period: z.string().trim().optional().or(z.literal("")),
-  skill_cleaning: z.boolean().default(false).optional(),
-  skill_cooking: z.boolean().default(false).optional(),
-  skill_baby_care: z.boolean().default(false).optional(),
-  skill_elder_care: z.boolean().default(false).optional(),
-  skill_driving: z.boolean().default(false).optional(),
-  skill_sewing: z.boolean().default(false).optional(),
+  skill_cleaning: optionalBoolean,
+  skill_cooking: optionalBoolean,
+  skill_baby_care: optionalBoolean,
+  skill_elder_care: optionalBoolean,
+  skill_driving: optionalBoolean,
+  skill_sewing: optionalBoolean,
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),

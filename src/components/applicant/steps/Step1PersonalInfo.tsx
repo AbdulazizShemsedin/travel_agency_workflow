@@ -24,7 +24,14 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   } = form;
 
   const feeRequired = watch("fee_required");
-  const [photoPreview, setPhotoPreview] = React.useState<string | null>(null);
+  const profilePhotoValue = watch("profile_photo_url");
+  const [photoPreview, setPhotoPreview] = React.useState<string | null>(profilePhotoValue || null);
+
+  React.useEffect(() => {
+    if (profilePhotoValue) {
+      setPhotoPreview(profilePhotoValue);
+    }
+  }, [profilePhotoValue]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

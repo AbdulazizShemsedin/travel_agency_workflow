@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 
 const FIELD_TO_STEP_MAP: Record<string, number> = {
+  // Step 1: Personal Info & Basic Contacts
   first_name: 1,
   middle_name: 1,
   last_name: 1,
@@ -58,19 +59,44 @@ const FIELD_TO_STEP_MAP: Record<string, number> = {
   region: 1,
   sub_region: 1,
   address_line_1: 1,
+  fee_required: 1,
+  registration_fee_amount: 1,
+
+  // Step 2: Education, Skills & Experience
   highest_education: 2,
   institution: 2,
   graduation_year: 2,
   current_employer: 2,
   years_of_experience: 2,
   education_remarks: 2,
+  english_level: 2,
+  arabic_level: 2,
+  experience_country: 2,
+  experience_period: 2,
+  skill_cleaning: 2,
+  skill_cooking: 2,
+  skill_baby_care: 2,
+  skill_elder_care: 2,
+  skill_driving: 2,
+  skill_sewing: 2,
+
+  // Step 3: Identification, Passport & Photos
   date_of_birth: 3,
   national_id: 3,
   passport_number: 3,
+  passport_issue_date: 3,
   passport_expiry: 3,
+  place_of_issue: 3,
+  job_applied: 3,
   labour_id: 3,
   contact_person_name: 3,
   contact_person_phone: 3,
+  profile_photo_url: 3,
+  photo_passport: 3,
+  photo_full_body: 3,
+  passport_scan: 3,
+
+  // Step 4: Medical & COC
   coc_status: 4,
   exam_date: 4,
   medical_status: 4,
@@ -144,13 +170,17 @@ export function ApplicantRegistrationForm({
       address_line_1: initialData?.address_line_1 || "",
       date_of_birth: initialData?.date_of_birth || "",
       passport_number: initialData?.passport_number || "",
+      passport_issue_date: initialData?.passport_issue_date || "",
       passport_expiry: initialData?.passport_expiry || "",
+      place_of_issue: initialData?.place_of_issue || "",
+      job_applied: initialData?.job_applied || "",
       highest_education: initialData?.highest_education || "",
       institution: initialData?.institution || "",
       graduation_year: initialData?.graduation_year ?? undefined,
       current_employer: initialData?.current_employer || "",
       years_of_experience: initialData?.years_of_experience ?? undefined,
       labour_id: initialData?.labour_id || "",
+      national_id: initialData?.national_id || "",
       contact_person_name: initialData?.contact_person_name || "",
       contact_person_phone: initialData?.contact_person_phone || "",
       coc_status: initialData?.coc_status || "",
@@ -163,6 +193,9 @@ export function ApplicantRegistrationForm({
       fee_required: initialData?.fee_required || false,
       registration_fee_amount: initialData?.registration_fee_amount || 0,
       profile_photo_url: initialData?.profile_photo_url || "",
+      photo_passport: initialData?.photo_passport || "",
+      photo_full_body: initialData?.photo_full_body || "",
+      passport_scan: initialData?.passport_scan || "",
     },
   });
 
@@ -182,16 +215,26 @@ export function ApplicantRegistrationForm({
 
   const navigateToStepWithError = (targetStep: number, fieldName?: string) => {
     setCurrentStep(targetStep);
+    setMaxReachedStep((prev) => Math.max(prev, targetStep));
     window.scrollTo({ top: 0, behavior: "smooth" });
+
     setTimeout(() => {
       if (fieldName) {
-        const el = document.getElementById(fieldName);
+        const el =
+          document.getElementById(fieldName) ||
+          document.querySelector(`[name="${fieldName}"]`) ||
+          document.getElementById(`field-${fieldName}`);
+
         if (el) {
-          el.focus();
           el.scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLElement).focus?.();
+          el.classList.add("ring-4", "ring-rose-500", "ring-offset-2", "transition-all", "duration-500");
+          setTimeout(() => {
+            el.classList.remove("ring-4", "ring-rose-500", "ring-offset-2");
+          }, 3500);
         }
       }
-    }, 150);
+    }, 200);
   };
 
   const handleStepChange = (targetStep: number) => {
@@ -374,9 +417,13 @@ export function ApplicantRegistrationForm({
       // Automatically navigate to the step with error and focus
       navigateToStepWithError(targetStep, errorField);
 
-      toast.error("Required Registration Field Missing", {
-        description: firstError?.message || "Please complete the highlighted required fields.",
-        duration: 5000,
+      const fieldTitle = errorField
+        ? errorField.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+        : "Field";
+
+      toast.error("Registration Requirements Incomplete", {
+        description: `Please check "${fieldTitle}": ${firstError?.message || "Please complete this field"}. We've opened Step ${targetStep} for you.`,
+        duration: 6000,
       });
       return;
     }
