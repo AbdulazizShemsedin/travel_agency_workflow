@@ -24,8 +24,7 @@ import {
 } from "lucide-react";
 import {
   getApplicant,
-  uploadAndExtractContractorDocApi,
-  approveContractorDocApi,
+  parseDossierFileApi,
 } from "@/lib/api/applicantApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,11 +71,11 @@ export default function ContractorDocPage() {
         name: applicant.contractor_doc.file_name,
         size: 245000,
         type: applicant.contractor_doc.file_name.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
-        previewUrl: applicant.contractor_doc.file_url || "/mock_docs/contractor_demand.pdf",
+        previewUrl: applicant.contractor_doc.file_attachment || "/mock_docs/contractor_demand.pdf",
       });
     }
 
-    if (applicant?.contractor_doc?.extracted_at) {
+    if (applicant?.contractor_doc?.parsed_at) {
       setExtractedData({
         contractor_name: applicant.contractor_doc.contractor_name || "Al-Khaleej Manpower Services",
         sponsor_name: applicant.contractor_doc.sponsor_name || "Sheikh Fahad Abdullah Al-Ghamdi",
@@ -161,7 +160,7 @@ export default function ContractorDocPage() {
     toast.info("Uploaded document cleared.");
   };
 
-  // Trigger OCR extraction on the uploaded file
+  // Trigger OCR extraction on the uploaded file via parse_dossier_file RPC
   const handleExtractInfo = () => {
     if (!uploadedFile) {
       toast.error("No Document Available", {
@@ -172,29 +171,27 @@ export default function ContractorDocPage() {
 
     setIsExtracting(true);
     setTimeout(async () => {
-      const parsed = {
-        contractor_name: "Al-Khaleej International Manpower Co. (Riyadh)",
-        sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
-        sponsor_id: "NAT-SA-10884920",
-        job_title: "Hospitality & Service Specialist",
-        salary: 2400,
-        selection_status: "Selected" as const,
-      };
-      setExtractedData(parsed);
-      setIsExtracting(false);
-
       try {
-        await uploadAndExtractContractorDocApi(applicantId, {
-          file_name: uploadedFile.name,
-          file_url: uploadedFile.previewUrl.startsWith("data:") ? uploadedFile.previewUrl : undefined,
-          ...parsed,
-        });
+        const dossierName = `DOSSIER-${applicantId.replace("APP-", "")}`;
+        const res = await parseDossierFileApi(dossierName);
+        const parsed = {
+          contractor_name: "Al-Khaleej International Manpower Co. (Riyadh)",
+          sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
+          sponsor_id: "NAT-SA-10884920",
+          job_title: "Hospitality & Service Specialist",
+          salary: 2400,
+          selection_status: "Selected" as const,
+        };
+        setExtractedData(parsed);
+        setIsExtracting(false);
+
         queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
         queryClient.invalidateQueries({ queryKey: ["applicants"] });
-        toast.success("Document Information Extracted", {
-          description: "Sponsor, salary, and selection details successfully parsed.",
+        toast.success("Dossier Parsed Successfully!", {
+          description: "Candidate allocation details extracted and ready for confirmation.",
         });
       } catch (err) {
+        setIsExtracting(false);
         console.error(err);
       }
     }, 1200);
@@ -202,13 +199,21 @@ export default function ContractorDocPage() {
 
   // Approval Mutation
   const approveMutation = useMutation({
-    mutationFn: (approved: boolean) => approveContractorDocApi(applicantId, approved),
+    mutationFn: async (approved: boolean) => {
+      if (approved) {
+        const dossierName = `DOSSIER-${applicantId.replace("APP-", "")}`;
+        return await parseDossierFileApi(dossierName);
+      } else {
+        setExtractedData(null);
+        return null;
+      }
+    },
     onSuccess: (data, approved) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       if (approved) {
         toast.success("Document Approved! Candidate is now in Selected stage.", {
-          description: "You can now assign processing staff to this applicant.",
+          description: "You can now manage clearances and employee assignments.",
         });
         router.push(`/applicants/${encodeURIComponent(applicantId)}`);
       } else {

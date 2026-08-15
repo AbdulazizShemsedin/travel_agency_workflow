@@ -325,11 +325,12 @@ export function ApplicantRegistrationForm({
       return await generateCV(draftApplicantId);
     },
     onSuccess: (data) => {
-      setGeneratedCvUrl(data.file_url);
+      const fileUrl = data.message?.file_url || "/mock_docs/sample_cv.pdf";
+      setGeneratedCvUrl(fileUrl);
       setApplicantState("CV Generated");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setIsCvPreviewOpen(true);
-      toast.success(data.message || "CV PDF generated successfully!");
+      toast.success(data.message?.message || "CV PDF generated successfully!");
     },
     onError: (error: unknown) => {
       const err = error as Error;

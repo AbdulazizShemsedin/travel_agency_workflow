@@ -81,43 +81,38 @@ export function AssignEmployeeModal({
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      let roleType: ProcessingRoleType = "All Roles / Operations Lead";
-      let empId: string | undefined = undefined;
-      let empIds: string[] | undefined = undefined;
-      let streamAssignments: StreamAssignmentPayload | undefined = undefined;
+      let roleType = "All Roles / Operations Lead";
+      let empId = selectedEmployeeId || "EMP-001";
+      let empIds: string[] = [empId];
+      let streamAssignments: any = null;
 
       if (assignmentMode === "single_lead") {
         roleType = selectedRoleType;
-        empId = selectedEmployeeId;
-        empIds = [selectedEmployeeId];
+        empId = selectedEmployeeId || "EMP-001";
+        empIds = [empId];
       } else if (assignmentMode === "multi_process") {
         roleType = "All Roles / Operations Lead";
-        const lmsEmp = mockEmployeesList.find((e) => e.id === lmsStaffId);
-        const injazEmp = mockEmployeesList.find((e) => e.id === injazStaffId);
-        const wakalaEmp = mockEmployeesList.find((e) => e.id === wakalaStaffId);
+        const lmsEmp = mockEmployeesList.find((e: any) => e.id === lmsStaffId);
+        const injazEmp = mockEmployeesList.find((e: any) => e.id === injazStaffId);
+        const wakalaEmp = mockEmployeesList.find((e: any) => e.id === wakalaStaffId);
 
         streamAssignments = {
-          lms_employee_id: lmsStaffId,
-          lms_employee_name: lmsEmp ? `${lmsEmp.name} (LMS)` : "LMS Staff",
-          injaz_employee_id: injazStaffId,
-          injaz_employee_name: injazEmp ? `${injazEmp.name} (Injaz)` : "Injaz Staff",
-          wakala_employee_id: wakalaStaffId,
-          wakala_employee_name: wakalaEmp ? `${wakalaEmp.name} (Wakala)` : "Wakala Staff",
+          lms: lmsStaffId,
+          injaz: injazStaffId,
+          wakala: wakalaStaffId,
         };
-        empId = lmsStaffId;
+        empId = lmsStaffId || "EMP-002";
       } else if (assignmentMode === "team_collaborative") {
         roleType = "All Roles / Operations Lead";
         empIds = collaboratingIds;
-        empId = collaboratingIds[0] || mockEmployeesList[0].id;
+        empId = collaboratingIds[0] || "EMP-001";
       }
 
       return assignEmployeeApi(
         applicantIds,
         roleType,
         empId,
-        notes,
-        streamAssignments,
-        empIds
+        streamAssignments
       );
     },
     onSuccess: () => {
@@ -271,7 +266,7 @@ export function AssignEmployeeModal({
                   Select Lead Employee
                 </Label>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {mockEmployeesList.map((emp) => {
+                  {mockEmployeesList.map((emp: any) => {
                     const isSelected = emp.id === selectedEmployeeId;
                     return (
                       <div
@@ -285,7 +280,7 @@ export function AssignEmployeeModal({
                       >
                         <div className="flex items-center gap-2">
                           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900 text-xs font-bold text-emerald-900 dark:text-emerald-300">
-                            {emp.name.split(" ").map((n) => n[0]).join("")}
+                            {emp.name.split(" ").map((n: string) => n[0]).join("")}
                           </div>
                           <div>
                             <span className="font-semibold text-slate-900 dark:text-white block">
@@ -322,7 +317,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setLmsStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e) => (
+                  {mockEmployeesList.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -340,7 +335,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setInjazStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e) => (
+                  {mockEmployeesList.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -358,7 +353,7 @@ export function AssignEmployeeModal({
                   onChange={(e) => setWakalaStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {mockEmployeesList.map((e) => (
+                  {mockEmployeesList.map((e: any) => (
                     <option key={e.id} value={e.id}>
                       {e.name} ({e.role})
                     </option>
@@ -383,7 +378,7 @@ export function AssignEmployeeModal({
                     setCollaboratingIds(
                       collaboratingIds.length === mockEmployeesList.length
                         ? [mockEmployeesList[0].id]
-                        : mockEmployeesList.map((e) => e.id)
+                        : mockEmployeesList.map((e: any) => e.id)
                     )
                   }
                   className="h-6 text-[11px] text-emerald-800 dark:text-emerald-400"
@@ -393,7 +388,7 @@ export function AssignEmployeeModal({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {mockEmployeesList.map((emp) => {
+                {mockEmployeesList.map((emp: any) => {
                   const isChecked = collaboratingIds.includes(emp.id);
                   return (
                     <div

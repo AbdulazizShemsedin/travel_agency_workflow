@@ -1,19 +1,23 @@
 import {
   Applicant,
-  ApplicantFormData,
   ApplicantState,
-  ContractorDocument,
-  DepartureInfo,
-  EmbassyProcessing,
-  InjazProcessing,
-  LMSProcessing,
-  ProcessingRoleType,
-  WakalaProcessing,
-  StreamAssignmentPayload,
+  Contractor,
+  ContractRequest,
+  ApplicantDossier,
+  LMSClearance,
+  WakalaClearance,
+  InjazClearance,
+  DSRStamp,
+  DSRTicket,
+  DSRDeparture,
+  AccountingSummaryResponse,
 } from "@/types/applicant";
-import { calculateRemainingDays, deriveFullName } from "@/lib/validations/applicant.schema";
+import { BaseApplicantFormValues, deriveFullName, calculateRemainingDays } from "@/lib/validations/applicant.schema";
 
-let applicantCounter = 1254;
+let applicantCounter = 1255;
+let contractorCounter = 10;
+let contractRequestCounter = 100;
+let dossierCounter = 100;
 
 export const mockEmployeesList = [
   { id: "EMP-001", name: "Abebe Kebede", role: "Operations Lead", email: "abebe@agency.et", roleType: "All Roles / Operations Lead" },
@@ -23,11 +27,66 @@ export const mockEmployeesList = [
   { id: "EMP-005", name: "Khadija Omar", role: "LMS & Departure Officer", email: "khadija@agency.et", roleType: "LMS Officer" },
 ];
 
-const mockApplicants: Map<string, Applicant> = new Map([
+// Mock Contractors
+export const mockContractors: Map<string, Contractor> = new Map([
   [
-    "APP-2024-1250",
+    "Al Qurashi Recruitment Office",
     {
-      name: "APP-2024-1250",
+      name: "CTR-0001",
+      company_name: "Al Qurashi Recruitment Office",
+      country: "Saudi Arabia",
+      contact_person: "Sheikh Tariq Al-Qurashi",
+      phone: "+966501234567",
+      email: "contracts@alqurashi.sa",
+      whatsapp_phone: "+966501234567",
+      status: "Active",
+    },
+  ],
+  [
+    "Al-Khaleej International Manpower Co.",
+    {
+      name: "CTR-0002",
+      company_name: "Al-Khaleej International Manpower Co.",
+      country: "Saudi Arabia",
+      contact_person: "Fahad Abdullah Al-Ghamdi",
+      phone: "+966559876543",
+      email: "recruitment@alkhaleej.sa",
+      whatsapp_phone: "+966559876543",
+      status: "Active",
+    },
+  ],
+  [
+    "Gulf Horizons Agency",
+    {
+      name: "CTR-0003",
+      company_name: "Gulf Horizons Agency",
+      country: "United Arab Emirates",
+      contact_person: "Omar Al-Mansoor",
+      phone: "+971509988776",
+      email: "visa@gulfhorizons.ae",
+      whatsapp_phone: "+971509988776",
+      status: "Active",
+    },
+  ],
+]);
+
+// Mock Contract Requests
+export const mockContractRequests: Map<string, ContractRequest> = new Map();
+
+// Mock Applicant Dossiers
+export const mockDossiers: Map<string, ApplicantDossier> = new Map();
+
+// Mock Clearances
+export const mockLmsClearances: Map<string, LMSClearance> = new Map();
+export const mockWakalaClearances: Map<string, WakalaClearance> = new Map();
+export const mockInjazClearances: Map<string, InjazClearance> = new Map();
+
+// Mock Applicants Seed Data
+export const mockApplicants: Map<string, Applicant> = new Map([
+  [
+    "APP-00001",
+    {
+      name: "APP-00001",
       first_name: "Ahmed",
       middle_name: "Ali",
       last_name: "Muhammed",
@@ -45,7 +104,10 @@ const mockApplicants: Map<string, Applicant> = new Map([
       address_line_1: "House 456, St. 22",
       date_of_birth: "1994-05-12",
       passport_number: "EP1234567",
+      passport_issue_date: "2024-05-10",
       passport_expiry: "2029-05-12",
+      place_of_issue: "Addis Ababa",
+      job_applied: "Hospitality & Service Specialist",
       highest_education: "Bachelor's Degree",
       institution: "Addis Ababa University",
       graduation_year: 2018,
@@ -61,77 +123,97 @@ const mockApplicants: Map<string, Applicant> = new Map([
       medical_expiry_date: "2026-11-20",
       medical_remaining_days: 98,
       applicant_state: "Processing",
+      state_step: 6,
+      state_progress: 66.7,
       registration_date: "2024-05-05",
-      fee_required: true,
-      registration_fee_amount: 500,
       total_income: 5000,
       total_expense: 1200,
       net_balance: 3800,
       remarks: "Candidate is ready for deployment.",
       education_remarks: "Certified general practitioner credentials verified.",
       medical_remarks: "FIT - All biological tests clear.",
-      cv_record: "CV-2024-001",
-      cv_file_url: "/private/files/CV-APP-2024-1250.pdf",
-      assigned_role_type: "All Roles / Operations Lead",
-      assigned_employee_id: "EMP-001",
-      assigned_employee_name: "Abebe Kebede",
-      assigned_at: "2024-05-08T10:00:00Z",
+      cv_record: "CV-00001",
+      cv_file_url: "/private/files/CV-APP-00001-CV-00001.pdf",
       lms_processing: {
-        status: "In Progress",
-        assigned_employee: "Sara Mohammed",
+        name: "LMS-00001",
+        applicant: "APP-00001",
+        status: "Issued",
+        employee: "sara@agency.et",
+        issued_on: "2024-05-12",
         ticket_pnr: "ET-8839201",
         flight_number: "ET-402",
         departure_date: "2026-09-28",
         destination: "Riyadh (RUH)",
         additional_field_1: "MOL-CLEARANCE-9941",
         additional_field_2: "INS-MED-2026-441",
-        notes: "Flight reservation held, awaiting embassy stamp clearance.",
+        notes: "Clearance issued by Ministry.",
       },
       injaz_processing: {
-        status: "In Progress",
-        assigned_employee: "Dawit Haile",
+        name: "INJ-00001",
+        applicant: "APP-00001",
+        status: "Completed",
+        employee: "dawit@agency.et",
         injaz_app_no: "INJ-7788412",
         teashir_fee: 140,
         biometrics_date: "2026-08-20",
         biometrics_center: "Teashir VFS Global Addis Ababa",
-        notes: "Fingerprint biometrics appointment scheduled.",
+        notes: "Biometrics completed and endorsed.",
       },
       wakala_processing: {
-        status: "In Progress",
-        assigned_employee: "Tigist Alemu",
+        name: "WAK-00001",
+        applicant: "APP-00001",
+        status: "Completed",
+        employee: "tigist@agency.et",
         started_on: "2024-05-14",
-        completed_on: "",
+        completed_on: "2024-05-15",
         request_payment: true,
         request_via: "WhatsApp",
         payment_amount: 500,
         wakala_number: "WAK-9921448",
         sponsor_auth_code: "ENJAZ-SA-8812",
         foreign_agency_name: "Al-Khaleej International Manpower Co.",
-        notes: "Wakala electronic delegation pending endorsement on Musaned portal.",
+        notes: "Wakala power of attorney delegation verified on Musaned.",
       },
       contractor_doc: {
+        name: "DOSSIER-00001",
+        applicant: "APP-00001",
         file_name: "Saudi_Contract_Ahmed_Ali.pdf",
-        contractor_name: "Al-Baraka International Recruitment",
-        sponsor_name: "Sheikh Khalid Al-Otaibi",
-        sponsor_id: "NAT-SA-10928374",
-        job_title: "Healthcare Assistant",
-        salary: 2200,
+        contractor_name: "Al-Khaleej International Manpower Co.",
+        sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
+        sponsor_id: "NAT-SA-10884920",
+        job_title: "Hospitality & Service Specialist",
+        salary: 2400,
         selection_status: "Selected",
-        extracted_at: "2024-05-07T09:15:00Z",
         approval_status: "Approved",
-        notes: "Contractor approved salary package and visa allocation.",
+        parsed_at: "2024-05-08T10:00:00Z",
       },
+      income_expense_logs: [
+        {
+          name: "TXN-001",
+          transaction_type: "Income",
+          amount: 5000,
+          date: "2024-05-05",
+          description: "Initial registration and placement deposit",
+        },
+        {
+          name: "TXN-002",
+          transaction_type: "Expense",
+          amount: 1200,
+          date: "2024-05-08",
+          description: "Teashir biometric and medical assessment fee",
+        },
+      ],
     },
   ],
   [
-    "APP-2024-1249",
+    "APP-00002",
     {
-      name: "APP-2024-1249",
-      first_name: "Ali",
+      name: "APP-00002",
+      first_name: "Fatima",
       middle_name: "Hassan",
-      last_name: "Ahmed",
-      full_name: "Ali Hassan Ahmed",
-      gender: "Male",
+      last_name: "Ali",
+      full_name: "Fatima Hassan Ali",
+      gender: "Female",
       religion: "Muslim",
       marital_status: "Single",
       children: 0,
@@ -152,202 +234,55 @@ const mockApplicants: Map<string, Applicant> = new Map([
       medical_expiry_date: "2026-08-25",
       medical_remaining_days: 11,
       applicant_state: "Selected",
+      state_step: 5,
+      state_progress: 55.6,
       registration_date: "2024-05-04",
       total_income: 3000,
       total_expense: 500,
       net_balance: 2500,
-      cv_record: "CV-2024-002",
-      cv_file_url: "/private/files/CV-APP-2024-1249.pdf",
-      contractor_doc: {
-        file_name: "Contract_Request_Ali_Ahmed.pdf",
-        contractor_name: "Gulf Horizons Agency",
-        sponsor_name: "Omar Al-Mansoor",
-        sponsor_id: "NAT-UAE-774411",
-        job_title: "Heavy Equipment Driver",
-        salary: 2800,
-        selection_status: "Selected",
-        extracted_at: "2024-05-06T11:00:00Z",
-        approval_status: "Approved",
-        notes: "Document approved. Ready for employee assignment.",
-      },
-    },
-  ],
-  [
-    "APP-2024-1248",
-    {
-      name: "APP-2024-1248",
-      first_name: "Tesfaye",
-      middle_name: "Mulugeta",
-      last_name: "Bekele",
-      full_name: "Tesfaye Mulugeta Bekele",
-      gender: "Male",
-      religion: "Orthodox",
-      marital_status: "Single",
-      children: 0,
-      nationality: "Ethiopia",
-      phone_number: "+251911445566",
-      city: "Hawassa",
-      country: "Ethiopia",
-      applicant_state: "Draft",
-      total_income: 0,
-      total_expense: 0,
-      net_balance: 0,
-    },
-  ],
-  [
-    "APP-2024-1247",
-    {
-      name: "APP-2024-1247",
-      first_name: "Marta",
-      middle_name: "Girma",
-      last_name: "Tadesse",
-      full_name: "Marta Girma Tadesse",
-      gender: "Female",
-      religion: "Protestant",
-      marital_status: "Single",
-      children: 0,
-      nationality: "Ethiopia",
-      phone_number: "+251913998877",
-      city: "Addis Ababa",
-      country: "Ethiopia",
-      date_of_birth: "1999-11-04",
-      passport_number: "EP8877665",
-      highest_education: "Bachelor's Degree",
-      labour_id: "LBR-665544",
-      contact_person_name: "Girma Tadesse",
-      contact_person_phone: "+251911009988",
-      coc_status: "Issued",
-      exam_date: "2026-10-10",
-      medical_status: "FIT",
-      medical_expiry_date: "2026-12-01",
-      applicant_state: "CV Generated",
-      registration_date: "2024-05-03",
-      total_income: 4000,
-      total_expense: 800,
-      net_balance: 3200,
-      cv_record: "CV-2024-003",
-      cv_file_url: "/private/files/CV-APP-2024-1247.pdf",
-    },
-  ],
-  [
-    "APP-2024-1246",
-    {
-      name: "APP-2024-1246",
-      first_name: "Hanan",
-      middle_name: "Zuber",
-      last_name: "Ibrahim",
-      full_name: "Hanan Zuber Ibrahim",
-      gender: "Female",
-      religion: "Muslim",
-      marital_status: "Married",
-      children: 1,
-      nationality: "Ethiopia",
-      phone_number: "+251912445588",
-      city: "Jimma",
-      country: "Ethiopia",
-      date_of_birth: "1996-03-18",
-      passport_number: "EP4455667",
-      highest_education: "High School",
-      labour_id: "LBR-112233",
-      contact_person_name: "Zuber Ibrahim",
-      contact_person_phone: "+251911224466",
-      coc_status: "Issued",
-      exam_date: "2026-09-01",
-      medical_status: "FIT",
-      medical_expiry_date: "2026-10-30",
-      applicant_state: "Request Pending",
-      registration_date: "2024-05-02",
-      total_income: 3500,
-      total_expense: 600,
-      net_balance: 2900,
-      cv_record: "CV-2024-004",
-      cv_file_url: "/private/files/CV-APP-2024-1246.pdf",
-    },
-  ],
-  [
-    "APP-2024-1245",
-    {
-      name: "APP-2024-1245",
-      first_name: "Solomon",
-      middle_name: "Fikru",
-      last_name: "Desta",
-      full_name: "Solomon Fikru Desta",
-      gender: "Male",
-      religion: "Orthodox",
-      marital_status: "Single",
-      children: 0,
-      nationality: "Ethiopia",
-      phone_number: "+251911776655",
-      city: "Bahir Dar",
-      country: "Ethiopia",
-      date_of_birth: "1995-07-22",
-      passport_number: "EP5566778",
-      highest_education: "Bachelor's Degree",
-      labour_id: "LBR-778899",
-      contact_person_name: "Fikru Desta",
-      contact_person_phone: "+251911335577",
-      coc_status: "Issued",
-      exam_date: "2026-08-15",
-      medical_status: "FIT",
-      medical_expiry_date: "2026-11-15",
-      applicant_state: "Departed",
-      registration_date: "2024-04-10",
-      total_income: 6000,
-      total_expense: 2000,
-      net_balance: 4000,
-      cv_record: "CV-2024-005",
-      cv_file_url: "/private/files/CV-APP-2024-1245.pdf",
-      departure_info: {
-        flight_number: "ET-414",
-        departure_date: "2024-05-01",
-        departure_time: "08:45 AM",
-        airport: "Addis Ababa Bole International (ADD)",
-        destination_city: "Jeddah (JED)",
-        status: "Departed",
-        marked_by: "Sara Mohammed (LMS Officer)",
-        marked_at: "2024-05-01T09:00:00Z",
-        notes: "Candidate successfully checked in and departed.",
-      },
+      cv_record: "CV-00002",
+      cv_file_url: "/private/files/CV-APP-00002-CV-00002.pdf",
     },
   ],
 ]);
 
-export function getAllApplicants(): Applicant[] {
-  return Array.from(mockApplicants.values()).sort((a, b) =>
-    (b.created_at || b.name).localeCompare(a.created_at || a.name)
-  );
+// ---------------------------------------------------------------------------
+// APPLICANT STORE HANDLERS
+// ---------------------------------------------------------------------------
+
+export function getAllApplicantsFromStore(): Applicant[] {
+  return Array.from(mockApplicants.values());
 }
 
-export function getApplicantById(id: string): Applicant | undefined {
+export function getApplicantFromStore(id: string): Applicant | undefined {
   return mockApplicants.get(id);
 }
 
-export function saveApplicantDraft(data: ApplicantFormData): Applicant {
-  const newId = `APP-2026-${String(applicantCounter++).padStart(4, "0")}`;
-  const fullName = deriveFullName(data.first_name, data.middle_name, data.last_name);
-  const examDays = calculateRemainingDays(data.exam_date);
-  const medicalDays = calculateRemainingDays(data.medical_expiry_date);
+export function createDraftInStore(formData: BaseApplicantFormValues): Applicant {
+  const newId = `APP-${String(applicantCounter++).padStart(5, "0")}`;
+  const fullName = deriveFullName(formData.first_name, formData.middle_name, formData.last_name);
 
   const newApplicant: Applicant = {
-    ...data,
+    ...(formData as any),
     name: newId,
     full_name: fullName,
     applicant_state: "Draft",
+    state_step: 1,
+    state_progress: 11.1,
     registration_date: new Date().toISOString().split("T")[0],
-    exam_remaining_days: examDays,
-    medical_remaining_days: medicalDays,
-    total_income: data.registration_fee_amount || 0,
+    total_income: 0,
     total_expense: 0,
-    net_balance: data.registration_fee_amount || 0,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    net_balance: 0,
+    income_expense_logs: [],
+    creation: new Date().toISOString(),
+    modified: new Date().toISOString(),
   };
 
   mockApplicants.set(newId, newApplicant);
   return newApplicant;
 }
 
-export function updateApplicant(id: string, data: Partial<Applicant>): Applicant {
+export function updateDraftInStore(id: string, formData: Partial<Applicant>): Applicant {
   const existing = mockApplicants.get(id);
   if (!existing) {
     throw new Error(`Applicant ${id} not found.`);
@@ -355,21 +290,13 @@ export function updateApplicant(id: string, data: Partial<Applicant>): Applicant
 
   const updated: Applicant = {
     ...existing,
-    ...data,
+    ...formData,
     full_name: deriveFullName(
-      data.first_name || existing.first_name,
-      data.middle_name !== undefined ? data.middle_name : existing.middle_name,
-      data.last_name || existing.last_name
+      formData.first_name || existing.first_name,
+      formData.middle_name !== undefined ? formData.middle_name : existing.middle_name,
+      formData.last_name || existing.last_name
     ),
-    exam_remaining_days:
-      data.exam_date !== undefined
-        ? calculateRemainingDays(data.exam_date)
-        : existing.exam_remaining_days,
-    medical_remaining_days:
-      data.medical_expiry_date !== undefined
-        ? calculateRemainingDays(data.medical_expiry_date)
-        : existing.medical_remaining_days,
-    updated_at: new Date().toISOString(),
+    modified: new Date().toISOString(),
   };
 
   mockApplicants.set(id, updated);
@@ -382,43 +309,33 @@ export function registerApplicantInStore(id: string): Applicant {
     throw new Error(`Applicant ${id} not found.`);
   }
 
+  // Validate Stage 2 KYC/Medical requirements
   const missing: string[] = [];
   if (!existing.date_of_birth) missing.push("Date of Birth");
   if (!existing.passport_number) missing.push("Passport Number");
   if (!existing.highest_education) missing.push("Highest Education Level");
-  if (!existing.labour_id) missing.push("Labour ID");
-  if (!existing.contact_person_name) missing.push("Contact Person Name");
-  if (!existing.contact_person_phone) missing.push("Contact Person Phone");
-  if (!existing.coc_status) missing.push("COC Status");
-  if (!existing.exam_date) missing.push("COC Exam Date");
   if (!existing.medical_status) missing.push("Medical Status");
   if (!existing.medical_expiry_date) missing.push("Medical Expiration Date");
 
   if (missing.length > 0) {
-    const errorMsg = `Missing required field(s): ${missing.join(", ")}`;
-    const err = new Error(errorMsg);
-    (err as unknown as { serverMessages: string[] }).serverMessages = [errorMsg];
-    throw err;
+    throw new Error(`Missing required field(s): ${missing.join(", ")}`);
   }
 
   if (existing.medical_status === "UNFIT") {
-    const errorMsg = "Applicant cannot be registered while medical status is UNFIT.";
-    const err = new Error(errorMsg);
-    (err as unknown as { serverMessages: string[] }).serverMessages = [errorMsg];
-    throw err;
+    throw new Error("Applicant cannot be registered while medical status is UNFIT.");
   }
 
   existing.applicant_state = "Registered";
-  existing.updated_at = new Date().toISOString();
+  existing.state_step = 2;
+  existing.state_progress = 22.2;
+  existing.modified = new Date().toISOString();
   mockApplicants.set(id, existing);
   return existing;
 }
 
 export function generateCVInStore(id: string) {
   const existing = mockApplicants.get(id);
-  if (!existing) {
-    throw new Error(`Applicant ${id} not found.`);
-  }
+  if (!existing) throw new Error(`Applicant ${id} not found.`);
 
   if (existing.applicant_state === "Draft") {
     throw new Error("CV can only be generated for Registered applicants.");
@@ -426,9 +343,11 @@ export function generateCVInStore(id: string) {
 
   const cvId = `CV-${id.replace("APP-", "")}`;
   existing.applicant_state = "CV Generated";
+  existing.state_step = 3;
+  existing.state_progress = 33.3;
   existing.cv_record = cvId;
   existing.cv_file_url = `/private/files/CV-${id}-${cvId}.pdf`;
-  existing.updated_at = new Date().toISOString();
+  existing.modified = new Date().toISOString();
 
   return {
     cv_record: cvId,
@@ -437,248 +356,295 @@ export function generateCVInStore(id: string) {
   };
 }
 
-export function transitionToRequestPending(id: string): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-  existing.applicant_state = "Request Pending";
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
+export function sendContractRequestInStore(contractRequestName: string) {
+  let cr = mockContractRequests.get(contractRequestName);
+  const applicantId = contractRequestName.replace("CR-", "APP-");
+  const targetApplicantId = mockApplicants.has(applicantId) ? applicantId : "APP-00001";
 
-export function uploadAndExtractContractorDocInStore(
-  id: string,
-  docData: Partial<ContractorDocument>
-): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.contractor_doc = {
-    file_name: docData.file_name || "Contractor_Visa_Demand_Doc.pdf",
-    file_url: docData.file_url || "/mock_docs/contractor_demand.pdf",
-    uploaded_at: new Date().toISOString(),
-    contractor_name: docData.contractor_name || "Al-Khaleej Manpower Services",
-    sponsor_name: docData.sponsor_name || "Fahad Abdullah Al-Ghamdi",
-    sponsor_id: docData.sponsor_id || "SA-ID-10884920",
-    job_title: docData.job_title || "Hospitality / Service Attendant",
-    salary: docData.salary || 2400,
-    selection_status: docData.selection_status || "Selected",
-    extracted_at: new Date().toISOString(),
-    approval_status: "Pending",
-    notes: docData.notes || "Parsed successfully from uploaded contractor visa allotment document.",
-  };
-
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
-
-export function approveContractorDocInStore(id: string, approved: boolean): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  if (approved) {
-    if (existing.contractor_doc) {
-      existing.contractor_doc.approval_status = "Approved";
-    }
-    existing.applicant_state = "Selected";
+  if (!cr) {
+    cr = {
+      name: contractRequestName,
+      applicant: targetApplicantId,
+      contractor: "Al Qurashi Recruitment Office",
+      status: "Sent",
+      whatsapp_message_id: `WAM-${Date.now()}`,
+      whatsapp_url: `https://api.whatsapp.com/send?phone=966501234567&text=Candidate%20CV`,
+      whatsapp_api_sent: true,
+      sent_at: new Date().toISOString(),
+    };
+    mockContractRequests.set(contractRequestName, cr);
   } else {
-    // User only rejected the extracted fields; reset extracted info and keep in Request Pending
-    if (existing.contractor_doc) {
-      existing.contractor_doc.approval_status = "Rejected";
-      existing.contractor_doc.extracted_at = undefined;
-    }
-    existing.applicant_state = "Request Pending";
+    cr.status = "Sent";
+    cr.whatsapp_api_sent = true;
+    cr.sent_at = new Date().toISOString();
   }
 
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
+  const applicant = mockApplicants.get(cr.applicant);
+  if (applicant) {
+    applicant.applicant_state = "Request Pending";
+    applicant.state_step = 4;
+    applicant.state_progress = 44.4;
+  }
+
+  return {
+    status: "success" as const,
+    message: `Contract Request ${contractRequestName} successfully sent to contractor via WhatsApp.`,
+    whatsapp_url: cr.whatsapp_url,
+    whatsapp_api_sent: true,
+    contract_request: cr,
+  };
 }
 
-export function assignEmployeeInStore(
-  ids: string[],
-  roleType: ProcessingRoleType = "All Roles / Operations Lead",
-  employeeId?: string,
-  notes?: string,
-  streamAssignments?: StreamAssignmentPayload,
-  employeeIds?: string[]
-): Applicant[] {
-  // Determine primary employee or collaborating employees
-  const primaryEmployee = mockEmployeesList.find((e) => e.id === employeeId) || mockEmployeesList[0];
-  const collaboratingEmployees = employeeIds && employeeIds.length > 0
-    ? mockEmployeesList.filter((e) => employeeIds.includes(e.id))
-    : [primaryEmployee];
+export function parseDossierFileInStore(dossierName: string) {
+  let dossier = mockDossiers.get(dossierName);
+  const applicantId = dossierName.replace("DOSSIER-", "APP-");
+  const targetApplicantId = mockApplicants.has(applicantId) ? applicantId : "APP-00001";
 
-  const primaryName = collaboratingEmployees.map((e) => e.name).join(", ");
-  const lmsStaff = streamAssignments?.lms_employee_name || (roleType === "LMS Officer" ? primaryEmployee.name : "Sara Mohammed (LMS)");
-  const injazStaff = streamAssignments?.injaz_employee_name || (roleType === "Injaz Officer" ? primaryEmployee.name : "Dawit Haile (Injaz)");
-  const wakalaStaff = streamAssignments?.wakala_employee_name || (roleType === "Wakala Admin" ? primaryEmployee.name : "Tigist Alemu (Wakala)");
+  if (!dossier) {
+    dossier = {
+      name: dossierName,
+      applicant: targetApplicantId,
+      contractor_name: "Al-Khaleej International Manpower Co.",
+      sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
+      sponsor_id: "NAT-SA-10884920",
+      job_title: "Hospitality & Service Specialist",
+      salary: 2400,
+      selection_status: "Selected",
+      approval_status: "Approved",
+      parsed_at: new Date().toISOString(),
+    };
+    mockDossiers.set(dossierName, dossier);
+  }
 
-  const updatedApplicants: Applicant[] = [];
+  const applicant = mockApplicants.get(dossier.applicant);
+  if (applicant) {
+    applicant.contractor_doc = dossier;
+    applicant.applicant_state = "Selected";
+    applicant.state_step = 5;
+    applicant.state_progress = 55.6;
 
-  ids.forEach((id) => {
-    const existing = mockApplicants.get(id);
-    if (existing) {
-      existing.applicant_state = "Processing";
-      existing.assigned_role_type = roleType;
-      existing.assigned_employee_id = employeeId || collaboratingEmployees[0]?.id;
-      existing.assigned_employee_name = primaryName;
-      existing.assigned_at = new Date().toISOString();
-
-      // Initialize parallel processing streams with assigned staff
-      existing.lms_processing = {
-        status: existing.lms_processing?.status || "In Progress",
-        assigned_employee: lmsStaff,
-        ticket_pnr: existing.lms_processing?.ticket_pnr || "",
-        flight_number: existing.lms_processing?.flight_number || "ET-402",
-        departure_date: existing.lms_processing?.departure_date || "",
-        destination: existing.lms_processing?.destination || "Riyadh (RUH)",
-        additional_field_1: existing.lms_processing?.additional_field_1 || "MOL-CLEARANCE-9941",
-        additional_field_2: existing.lms_processing?.additional_field_2 || "INS-MED-2026-441",
-        notes: notes || existing.lms_processing?.notes || "LMS workflow initialized.",
+    // Auto-create clearance stubs
+    if (!applicant.lms_processing) {
+      applicant.lms_processing = {
+        name: `LMS-${applicant.name.replace("APP-", "")}`,
+        applicant: applicant.name,
+        status: "Pending",
       };
-
-      existing.injaz_processing = {
-        status: existing.injaz_processing?.status || "In Progress",
-        assigned_employee: injazStaff,
-        injaz_app_no: existing.injaz_processing?.injaz_app_no || `INJ-${Math.floor(1000000 + Math.random() * 9000000)}`,
-        teashir_fee: existing.injaz_processing?.teashir_fee ?? 140,
-        biometrics_date: existing.injaz_processing?.biometrics_date || "",
-        biometrics_center: existing.injaz_processing?.biometrics_center || "Teashir VFS Global Addis",
-        notes: existing.injaz_processing?.notes || "Teashir fingerprint processing active.",
+    }
+    if (!applicant.wakala_processing) {
+      applicant.wakala_processing = {
+        name: `WAK-${applicant.name.replace("APP-", "")}`,
+        applicant: applicant.name,
+        status: "Pending",
+        started_on: new Date().toISOString().split("T")[0],
+        request_payment: true,
+        request_via: "WhatsApp",
+        payment_amount: 500,
       };
-
-      existing.wakala_processing = {
-        status: existing.wakala_processing?.status || "In Progress",
-        assigned_employee: wakalaStaff,
-        wakala_number: existing.wakala_processing?.wakala_number || `WAK-${Math.floor(1000000 + Math.random() * 9000000)}`,
-        sponsor_auth_code: existing.wakala_processing?.sponsor_auth_code || "ENJAZ-AUTH-ACTIVE",
-        foreign_agency_name: existing.contractor_doc?.contractor_name || "Authorized Foreign Agency",
-        notes: existing.wakala_processing?.notes || "Wakala power of attorney delegation pending endorsement.",
+    }
+    if (!applicant.injaz_processing) {
+      applicant.injaz_processing = {
+        name: `INJ-${applicant.name.replace("APP-", "")}`,
+        applicant: applicant.name,
+        status: "Pending",
+        teashir_fee: 140,
       };
+    }
+  }
 
-      existing.updated_at = new Date().toISOString();
-      mockApplicants.set(id, existing);
-      updatedApplicants.push(existing);
+  return {
+    status: "success",
+    message: "File successfully parsed and candidate transitioned to Selected.",
+    dossier,
+    extracted_data: {
+      contractor_name: dossier.contractor_name,
+      sponsor_name: dossier.sponsor_name,
+      sponsor_id: dossier.sponsor_id,
+      job_title: dossier.job_title,
+      salary: dossier.salary,
+    },
+  };
+}
+
+export function updateLmsClearanceInStore(name: string, data: Partial<LMSClearance>): LMSClearance {
+  const applicantId = data.applicant || name.replace("LMS-", "APP-");
+  let applicant = mockApplicants.get(applicantId) || Array.from(mockApplicants.values()).find(
+    (a) => a.lms_processing?.name === name || a.name === data.applicant
+  );
+  if (applicant) {
+    if (!applicant.lms_processing) {
+      applicant.lms_processing = { name, applicant: applicant.name, status: "Pending" };
+    }
+    applicant.lms_processing = { ...applicant.lms_processing, ...data };
+    if (applicant.applicant_state === "Selected") {
+      applicant.applicant_state = "Processing";
+      applicant.state_step = 6;
+      applicant.state_progress = 66.7;
+    }
+    return applicant.lms_processing;
+  }
+  return { name, applicant: data.applicant || "APP-00001", status: data.status || "Issued", ...data };
+}
+
+export function updateWakalaClearanceInStore(name: string, data: Partial<WakalaClearance>): WakalaClearance {
+  const applicantId = data.applicant || name.replace("WAK-", "APP-");
+  let applicant = mockApplicants.get(applicantId) || Array.from(mockApplicants.values()).find(
+    (a) => a.wakala_processing?.name === name || a.name === data.applicant
+  );
+  if (applicant) {
+    if (!applicant.wakala_processing) {
+      applicant.wakala_processing = { name, applicant: applicant.name, status: "Pending" };
+    }
+    applicant.wakala_processing = { ...applicant.wakala_processing, ...data };
+    if (applicant.applicant_state === "Selected") {
+      applicant.applicant_state = "Processing";
+      applicant.state_step = 6;
+      applicant.state_progress = 66.7;
+    }
+    return applicant.wakala_processing;
+  }
+  return { name, applicant: data.applicant || "APP-00001", status: data.status || "Completed", ...data };
+}
+
+export function updateInjazClearanceInStore(name: string, data: Partial<InjazClearance>): InjazClearance {
+  const applicantId = data.applicant || name.replace("INJ-", "APP-");
+  let applicant = mockApplicants.get(applicantId) || Array.from(mockApplicants.values()).find(
+    (a) => a.injaz_processing?.name === name || a.name === data.applicant
+  );
+  if (applicant) {
+    if (!applicant.injaz_processing) {
+      applicant.injaz_processing = { name, applicant: applicant.name, status: "Pending" };
+    }
+    applicant.injaz_processing = { ...applicant.injaz_processing, ...data };
+    if (applicant.applicant_state === "Selected") {
+      applicant.applicant_state = "Processing";
+      applicant.state_step = 6;
+      applicant.state_progress = 66.7;
+    }
+    return applicant.injaz_processing;
+  }
+  return { name, applicant: data.applicant || "APP-00001", status: data.status || "Completed", ...data };
+}
+
+export function submitDsrStampInStore(data: Partial<DSRStamp>): DSRStamp {
+  const applicant = mockApplicants.get(data.applicant || "");
+  if (applicant) {
+    // Check clearances guardrail
+    const lmsOk = applicant.lms_processing?.status === "Issued";
+    const wakalaOk = applicant.wakala_processing?.status === "Completed";
+    const injazOk = applicant.injaz_processing?.status === "Completed";
+
+    if (!lmsOk || !wakalaOk || !injazOk) {
+      throw new Error("Pre-departure guardrail: LMS, Wakala, and Injaz clearances must all be completed before submitting Visa Stamp.");
+    }
+
+    applicant.applicant_state = "Stamped";
+    applicant.state_step = 7;
+    applicant.state_progress = 77.8;
+    applicant.dsr_stamp = { ...data, applicant: applicant.name, stamped_date: data.stamped_date || new Date().toISOString().split("T")[0] };
+    return applicant.dsr_stamp;
+  }
+  return { ...data, applicant: data.applicant || "" };
+}
+
+export function submitDsrTicketInStore(data: Partial<DSRTicket>): DSRTicket {
+  const applicant = mockApplicants.get(data.applicant || "");
+  if (applicant) {
+    applicant.applicant_state = "Ticketed";
+    applicant.state_step = 8;
+    applicant.state_progress = 88.9;
+    applicant.dsr_ticket = { ...data, applicant: applicant.name };
+    return applicant.dsr_ticket;
+  }
+  return { ...data, applicant: data.applicant || "" };
+}
+
+export function submitDsrDepartureInStore(data: Partial<DSRDeparture>): DSRDeparture {
+  const applicant = mockApplicants.get(data.applicant || "");
+  if (applicant) {
+    if (data.medical_2_result === "Fail") {
+      throw new Error(`Pre-departure Medical 2 verification FAILED: ${data.medical_2_remarks || "Candidate is unfit for flight"}. Departure is blocked.`);
+    }
+
+    applicant.applicant_state = "Departed";
+    applicant.state_step = 9;
+    applicant.state_progress = 100.0;
+    applicant.departure_info = {
+      ...data,
+      applicant: applicant.name,
+      departure_date: data.departure_date || new Date().toISOString().split("T")[0],
+    };
+    return applicant.departure_info;
+  }
+  return { ...data, applicant: data.applicant || "" };
+}
+
+export function cancelApplicantInStore(applicantName: string, cancelRemarks: string) {
+  const applicant = mockApplicants.get(applicantName);
+  if (!applicant) throw new Error(`Applicant ${applicantName} not found.`);
+
+  applicant.applicant_state = "Cancelled";
+  applicant.state_step = 0;
+  applicant.state_progress = 0;
+  applicant.cancel_remarks = cancelRemarks;
+  applicant.cancelled_at = new Date().toISOString();
+  applicant.cancelled_by = "admin@example.com";
+
+  return {
+    message: `Applicant ${applicantName} process has been Cancelled.`,
+  };
+}
+
+export function restoreApplicantInStore(applicantName: string, restoreOption: string = "auto") {
+  const applicant = mockApplicants.get(applicantName);
+  if (!applicant) throw new Error(`Applicant ${applicantName} not found.`);
+
+  let targetState: ApplicantState = "Draft";
+  if (applicant.departure_info) targetState = "Departed";
+  else if (applicant.dsr_ticket) targetState = "Ticketed";
+  else if (applicant.dsr_stamp) targetState = "Stamped";
+  else if (applicant.lms_processing || applicant.wakala_processing || applicant.injaz_processing) targetState = "Processing";
+  else if (applicant.contractor_doc) targetState = "Selected";
+  else if (applicant.cv_record) targetState = "CV Generated";
+  else if (applicant.passport_number && applicant.date_of_birth) targetState = "Registered";
+
+  applicant.applicant_state = targetState;
+  applicant.cancel_remarks = undefined;
+  applicant.cancelled_at = undefined;
+  applicant.cancelled_by = undefined;
+
+  return {
+    status: "success",
+    new_state: targetState,
+    message: `Applicant ${applicantName} restored to ${targetState}.`,
+  };
+}
+
+export function getAccountingSummaryInStore(): AccountingSummaryResponse {
+  let totalIncome = 0;
+  let totalExpense = 0;
+  const recentTransactions: any[] = [];
+
+  mockApplicants.forEach((a) => {
+    if (a.income_expense_logs) {
+      a.income_expense_logs.forEach((log) => {
+        if (log.transaction_type === "Income") totalIncome += log.amount;
+        else if (log.transaction_type === "Expense") totalExpense += log.amount;
+        recentTransactions.push({ ...log, source_doctype: a.name });
+      });
     }
   });
 
-  return updatedApplicants;
-}
-
-export function updateLmsStreamInStore(id: string, data: Partial<LMSProcessing>): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.lms_processing = {
-    ...existing.lms_processing,
-    ...data,
-    status: data.status || existing.lms_processing?.status || "In Progress",
-    completed_at: data.status === "Completed" ? new Date().toISOString() : existing.lms_processing?.completed_at,
+  return {
+    total_income: totalIncome || 45000,
+    total_expense: totalExpense || 18500,
+    net_balance: (totalIncome || 45000) - (totalExpense || 18500),
+    by_stage: [
+      { stage: "Draft", income: 0, expense: 0, net: 0 },
+      { stage: "Registered", income: 5000, expense: 500, net: 4500 },
+      { stage: "Selected", income: 15000, expense: 3000, net: 12000 },
+      { stage: "Processing", income: 25000, expense: 15000, net: 10000 },
+    ],
+    recent_transactions: recentTransactions.slice(0, 10),
   };
-
-  // Check if all 3 parallel streams are completed to advance to Embassy/Stamped
-  checkAndAdvanceToEmbassy(existing);
-
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
-
-export function updateInjazStreamInStore(id: string, data: Partial<InjazProcessing>): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.injaz_processing = {
-    ...existing.injaz_processing,
-    ...data,
-    status: data.status || existing.injaz_processing?.status || "In Progress",
-    completed_at: data.status === "Completed" ? new Date().toISOString() : existing.injaz_processing?.completed_at,
-  };
-
-  checkAndAdvanceToEmbassy(existing);
-
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
-
-export function updateWakalaStreamInStore(id: string, data: Partial<WakalaProcessing>): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.wakala_processing = {
-    ...existing.wakala_processing,
-    ...data,
-    status: data.status || existing.wakala_processing?.status || "In Progress",
-    completed_at: data.status === "Completed" ? new Date().toISOString() : existing.wakala_processing?.completed_at,
-  };
-
-  checkAndAdvanceToEmbassy(existing);
-
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
-
-function checkAndAdvanceToEmbassy(applicant: Applicant) {
-  if (
-    applicant.lms_processing?.status === "Completed" &&
-    applicant.injaz_processing?.status === "Completed" &&
-    applicant.wakala_processing?.status === "Completed"
-  ) {
-    if (applicant.applicant_state === "Processing") {
-      applicant.applicant_state = "Embassy/Stamped";
-      if (!applicant.embassy_processing) {
-        applicant.embassy_processing = {
-          status: "Stamped",
-          submission_date: new Date().toISOString().split("T")[0],
-          visa_number: `VISA-${Math.floor(10000000 + Math.random() * 90000000)}`,
-          stamp_date: new Date().toISOString().split("T")[0],
-          embassy_name: "Royal Embassy of Saudi Arabia (Addis Ababa)",
-          completed_at: new Date().toISOString(),
-          notes: "All parallel processing streams cleared. Visa stamped successfully.",
-        };
-      }
-    }
-  }
-}
-
-export function updateEmbassyStreamInStore(id: string, data: Partial<EmbassyProcessing>): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.embassy_processing = {
-    ...existing.embassy_processing,
-    ...data,
-    status: data.status || "Stamped",
-    completed_at: new Date().toISOString(),
-  };
-  existing.applicant_state = "Embassy/Stamped";
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
-}
-
-export function markDepartedInStore(id: string, data: Partial<DepartureInfo>): Applicant {
-  const existing = mockApplicants.get(id);
-  if (!existing) throw new Error(`Applicant ${id} not found.`);
-
-  existing.departure_info = {
-    flight_number: data.flight_number || existing.lms_processing?.flight_number || "ET-402",
-    departure_date: data.departure_date || existing.lms_processing?.departure_date || new Date().toISOString().split("T")[0],
-    departure_time: data.departure_time || "09:30 AM",
-    airport: data.airport || "Bole International Airport (ADD)",
-    destination_city: data.destination_city || existing.lms_processing?.destination || "Riyadh",
-    marked_by: data.marked_by || "LMS Officer (Sara Mohammed)",
-    marked_at: new Date().toISOString(),
-    status: "Departed",
-    notes: data.notes || "Applicant successfully checked in, boarded and departed overseas.",
-  };
-
-  existing.applicant_state = "Departed";
-  existing.updated_at = new Date().toISOString();
-  mockApplicants.set(id, existing);
-  return existing;
 }

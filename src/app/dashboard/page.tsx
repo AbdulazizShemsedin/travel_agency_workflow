@@ -48,22 +48,24 @@ export default function DashboardPage() {
   // Calculate dynamic stats
   const totalCount = applicants.length;
   const draftCount = applicants.filter((a) => a.applicant_state === "Draft").length;
+  const registeredCount = applicants.filter((a) => a.applicant_state === "Registered").length;
   const cvCount = applicants.filter((a) => a.applicant_state === "CV Generated").length;
   const requestCount = applicants.filter((a) => a.applicant_state === "Request Pending").length;
   const selectedCount = applicants.filter((a) => a.applicant_state === "Selected").length;
   const processingCount = applicants.filter((a) => a.applicant_state === "Processing").length;
-  const embassyCount = applicants.filter((a) => a.applicant_state === "Embassy/Stamped").length;
+  const stampedCount = applicants.filter((a) => a.applicant_state === "Stamped").length;
+  const ticketedCount = applicants.filter((a) => a.applicant_state === "Ticketed").length;
   const departedCount = applicants.filter((a) => a.applicant_state === "Departed").length;
 
   // Sub-stream breakdown for parallel Processing stage
   const lmsActiveCount = applicants.filter(
-    (a) => a.lms_processing?.status === "In Progress" || a.applicant_state === "Processing"
+    (a) => a.lms_processing?.status === "Issued" || a.applicant_state === "Processing"
   ).length;
   const wakalaActiveCount = applicants.filter(
-    (a) => a.wakala_processing?.status === "In Progress" || (a.applicant_state === "Processing" && a.wakala_processing?.status !== "Completed")
+    (a) => a.wakala_processing?.status === "Completed" || a.applicant_state === "Processing"
   ).length;
   const injazActiveCount = applicants.filter(
-    (a) => a.injaz_processing?.status === "In Progress" || (a.applicant_state === "Processing" && a.injaz_processing?.status !== "Completed")
+    (a) => a.injaz_processing?.status === "Completed" || a.applicant_state === "Processing"
   ).length;
 
   const inProgressCount =
@@ -74,7 +76,7 @@ export default function DashboardPage() {
         a.applicant_state !== "Cancelled"
     ).length;
 
-  const completedCount = departedCount + embassyCount;
+  const completedCount = departedCount + stampedCount + ticketedCount;
 
   // Real compliance & expiry alerts
   const realAlerts = React.useMemo(() => {
@@ -240,20 +242,20 @@ export default function DashboardPage() {
     {
       step: 6,
       title: "Embassy Stamp",
-      count: embassyCount || 42,
+      count: stampedCount || 42,
       badge: "Stamped",
       color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300",
       accent: "bg-teal-600",
-      link: "/applicants?filter=Embassy/Stamped",
+      link: "/applicants?filter=Stamped",
     },
     {
       step: 7,
       title: "Ticket Issued",
-      count: 58,
+      count: ticketedCount || 58,
       badge: "Ticketed",
       color: "border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-300",
       accent: "bg-indigo-600",
-      link: "/applicants?filter=Processing",
+      link: "/applicants?filter=Ticketed",
     },
     {
       step: 8,

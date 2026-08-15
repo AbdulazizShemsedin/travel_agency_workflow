@@ -10,18 +10,22 @@ import {
   Send,
   CheckCircle2,
   Clock,
-  MessageSquare,
   DollarSign,
   AlertTriangle,
   Play,
   Share2,
+  ShieldCheck,
+  Ticket,
+  HeartPulse,
 } from "lucide-react";
 import { Applicant } from "@/types/applicant";
 import {
-  updateLmsStreamApi,
-  updateInjazStreamApi,
-  updateWakalaStreamApi,
-  markDepartedApi,
+  updateLmsClearanceApi,
+  updateWakalaClearanceApi,
+  updateInjazClearanceApi,
+  submitDsrStampApi,
+  submitDsrTicketApi,
+  submitDsrDepartureApi,
 } from "@/lib/api/applicantApi";
 import {
   Dialog,
@@ -35,12 +39,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 
 interface ProcessingStreamsModalProps {
   applicant: Applicant;
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "lms" | "injaz" | "wakala" | "departure";
+  initialTab?: "lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure";
 }
 
 export function ProcessingStreamsModal({
@@ -50,12 +55,14 @@ export function ProcessingStreamsModal({
   initialTab = "lms",
 }: ProcessingStreamsModalProps) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = React.useState<"lms" | "injaz" | "wakala" | "departure">(initialTab);
+  const [activeTab, setActiveTab] = React.useState<"lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure">(initialTab);
 
   // LMS form state
-  const [lmsStatus, setLmsStatus] = React.useState<"Pending" | "In Progress" | "Completed">(
-    (applicant.lms_processing?.status as "Pending" | "In Progress" | "Completed") || "In Progress"
+  const [lmsStatus, setLmsStatus] = React.useState<"Pending" | "Issued" | "Rejected">(
+    (applicant.lms_processing?.status as "Pending" | "Issued" | "Rejected") || "Issued"
   );
+  const [lmsEmployee, setLmsEmployee] = React.useState(applicant.lms_processing?.employee || "sara@agency.et");
+  const [lmsIssuedOn, setLmsIssuedOn] = React.useState(applicant.lms_processing?.issued_on || new Date().toISOString().split("T")[0]);
   const [ticketPnr, setTicketPnr] = React.useState(applicant.lms_processing?.ticket_pnr || "");
   const [flightNumber, setFlightNumber] = React.useState(applicant.lms_processing?.flight_number || "");
   const [departureDate, setDepartureDate] = React.useState(applicant.lms_processing?.departure_date || "");
@@ -65,55 +72,66 @@ export function ProcessingStreamsModal({
   const [lmsNotes, setLmsNotes] = React.useState(applicant.lms_processing?.notes || "");
 
   // Injaz form state
-  const [injazStatus, setInjazStatus] = React.useState<"Pending" | "In Progress" | "Completed">(
-    (applicant.injaz_processing?.status as "Pending" | "In Progress" | "Completed") || "In Progress"
+  const [injazStatus, setInjazStatus] = React.useState<"Pending" | "Completed">(
+    (applicant.injaz_processing?.status as "Pending" | "Completed") || "Completed"
   );
+  const [injazEmployee, setInjazEmployee] = React.useState(applicant.injaz_processing?.employee || "dawit@agency.et");
   const [injazAppNo, setInjazAppNo] = React.useState(applicant.injaz_processing?.injaz_app_no || "");
   const [teashirFee, setTeashirFee] = React.useState(applicant.injaz_processing?.teashir_fee ?? 140);
   const [biometricsDate, setBiometricsDate] = React.useState(applicant.injaz_processing?.biometrics_date || "");
   const [biometricsCenter, setBiometricsCenter] = React.useState(applicant.injaz_processing?.biometrics_center || "Teashir VFS Global Addis Ababa");
   const [injazNotes, setInjazNotes] = React.useState(applicant.injaz_processing?.notes || "");
 
-  // Wakala form state matching Figma
-  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "In Progress" | "Completed">(
-    (applicant.wakala_processing?.status as "Pending" | "In Progress" | "Completed") || "In Progress"
+  // Wakala form state
+  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Completed">(
+    (applicant.wakala_processing?.status as "Pending" | "Completed") || "Completed"
   );
-  const [startedOn, setStartedOn] = React.useState(
-    applicant.wakala_processing?.started_on || new Date().toISOString().split("T")[0]
-  );
-  const [completedOn, setCompletedOn] = React.useState(
-    applicant.wakala_processing?.completed_on || ""
-  );
-  const [requestPayment, setRequestPayment] = React.useState<boolean>(
-    applicant.wakala_processing?.request_payment ?? true
-  );
-  const [requestVia, setRequestVia] = React.useState<"WhatsApp" | "Email" | "SMS">(
-    applicant.wakala_processing?.request_via || "WhatsApp"
-  );
-  const [paymentAmount, setPaymentAmount] = React.useState<number>(
-    applicant.wakala_processing?.payment_amount ?? 500
-  );
+  const [wakalaEmployee, setWakalaEmployee] = React.useState(applicant.wakala_processing?.employee || "tigist@agency.et");
+  const [startedOn, setStartedOn] = React.useState(applicant.wakala_processing?.started_on || new Date().toISOString().split("T")[0]);
+  const [completedOn, setCompletedOn] = React.useState(applicant.wakala_processing?.completed_on || "");
+  const [requestPayment, setRequestPayment] = React.useState<boolean>(applicant.wakala_processing?.request_payment ?? true);
+  const [requestVia, setRequestVia] = React.useState<"WhatsApp" | "Email" | "SMS">(applicant.wakala_processing?.request_via || "WhatsApp");
+  const [paymentAmount, setPaymentAmount] = React.useState<number>(applicant.wakala_processing?.payment_amount ?? 500);
   const [wakalaNumber, setWakalaNumber] = React.useState(applicant.wakala_processing?.wakala_number || "");
   const [sponsorAuthCode, setSponsorAuthCode] = React.useState(applicant.wakala_processing?.sponsor_auth_code || "");
   const [foreignAgencyName, setForeignAgencyName] = React.useState(applicant.wakala_processing?.foreign_agency_name || "");
   const [wakalaNotes, setWakalaNotes] = React.useState(applicant.wakala_processing?.notes || "");
 
-  // Departure form state
-  const [depFlightNo, setDepFlightNo] = React.useState(applicant.departure_info?.flight_number || applicant.lms_processing?.flight_number || "ET-402");
-  const [depDate, setDepDate] = React.useState(applicant.departure_info?.departure_date || applicant.lms_processing?.departure_date || new Date().toISOString().split("T")[0]);
+  // Visa Stamp state (Stage 7)
+  const [visaNumber, setVisaNumber] = React.useState(applicant.dsr_stamp?.visa_number || "KSA-VISA-9921448");
+  const [stampedDate, setStampedDate] = React.useState(applicant.dsr_stamp?.stamped_date || new Date().toISOString().split("T")[0]);
+  const [embassyReference, setEmbassyReference] = React.useState(applicant.dsr_stamp?.embassy_reference || "EMB-ETH-2026-881");
+  const [stampNotes, setStampNotes] = React.useState(applicant.dsr_stamp?.notes || "");
+
+  // Flight Ticket state (Stage 8)
+  const [ticketPnrFinal, setTicketPnrFinal] = React.useState(applicant.dsr_ticket?.ticket_pnr || "ET-PNR-88392");
+  const [flightNoFinal, setFlightNoFinal] = React.useState(applicant.dsr_ticket?.flight_number || "ET-402");
+  const [ticketDepDate, setTicketDepDate] = React.useState(applicant.dsr_ticket?.departure_date || new Date().toISOString().split("T")[0]);
+  const [ticketDestination, setTicketDestination] = React.useState(applicant.dsr_ticket?.destination || "Riyadh (RUH)");
+  const [ticketNotes, setTicketNotes] = React.useState(applicant.dsr_ticket?.notes || "");
+
+  // Pre-Departure Medical 2 & Departure state (Stage 9)
+  const [depFlightNo, setDepFlightNo] = React.useState(applicant.departure_info?.flight_number || "ET-402");
+  const [depDate, setDepDate] = React.useState(applicant.departure_info?.departure_date || new Date().toISOString().split("T")[0]);
   const [depTime, setDepTime] = React.useState(applicant.departure_info?.departure_time || "09:30 AM");
   const [depAirport, setDepAirport] = React.useState(applicant.departure_info?.airport || "Bole International Airport (ADD)");
-  const [depDestination, setDepDestination] = React.useState(applicant.departure_info?.destination_city || applicant.lms_processing?.destination || "Riyadh");
+  const [depDestination, setDepDestination] = React.useState(applicant.departure_info?.destination_city || "Riyadh, Saudi Arabia");
+  const [medical2Result, setMedical2Result] = React.useState<"Pass" | "Fail">(applicant.departure_info?.medical_2_result || "Pass");
+  const [medical2Remarks, setMedical2Remarks] = React.useState(applicant.departure_info?.medical_2_remarks || "");
   const [depNotes, setDepNotes] = React.useState(applicant.departure_info?.notes || "");
 
   React.useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  // Update LMS Clearance via REST PUT
   const updateLmsMutation = useMutation({
     mutationFn: () =>
-      updateLmsStreamApi(applicant.name, {
+      updateLmsClearanceApi(applicant.lms_processing?.name || `LMS-${applicant.name.replace("APP-", "")}`, {
+        applicant: applicant.name,
         status: lmsStatus,
+        employee: lmsEmployee,
+        issued_on: lmsStatus === "Issued" ? lmsIssuedOn : undefined,
         ticket_pnr: ticketPnr,
         flight_number: flightNumber,
         departure_date: departureDate,
@@ -125,16 +143,19 @@ export function ProcessingStreamsModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success("LMS Stream Updated Successfully");
+      toast.success("LMS Clearance Updated");
       onClose();
     },
-    onError: (err: Error) => toast.error("Update failed", { description: err.message }),
+    onError: (err: Error) => toast.error("LMS Update failed", { description: err.message }),
   });
 
+  // Update Injaz Clearance via REST PUT
   const updateInjazMutation = useMutation({
     mutationFn: () =>
-      updateInjazStreamApi(applicant.name, {
+      updateInjazClearanceApi(applicant.injaz_processing?.name || `INJ-${applicant.name.replace("APP-", "")}`, {
+        applicant: applicant.name,
         status: injazStatus,
+        employee: injazEmployee,
         injaz_app_no: injazAppNo,
         teashir_fee: Number(teashirFee),
         biometrics_date: biometricsDate,
@@ -144,18 +165,21 @@ export function ProcessingStreamsModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success("Injaz & Teashir Stream Updated Successfully");
+      toast.success("Injaz & Teashir Clearance Updated");
       onClose();
     },
-    onError: (err: Error) => toast.error("Update failed", { description: err.message }),
+    onError: (err: Error) => toast.error("Injaz Update failed", { description: err.message }),
   });
 
+  // Update Wakala Clearance via REST PUT
   const updateWakalaMutation = useMutation({
-    mutationFn: (overrideStatus?: "Pending" | "In Progress" | "Completed" | void) =>
-      updateWakalaStreamApi(applicant.name, {
-        status: (typeof overrideStatus === "string" ? overrideStatus : undefined) || wakalaStatus,
+    mutationFn: () =>
+      updateWakalaClearanceApi(applicant.wakala_processing?.name || `WAK-${applicant.name.replace("APP-", "")}`, {
+        applicant: applicant.name,
+        status: wakalaStatus,
+        employee: wakalaEmployee,
         started_on: startedOn,
-        completed_on: (typeof overrideStatus === "string" ? overrideStatus : wakalaStatus) === "Completed" ? (completedOn || new Date().toISOString().split("T")[0]) : completedOn,
+        completed_on: wakalaStatus === "Completed" ? (completedOn || new Date().toISOString().split("T")[0]) : completedOn,
         request_payment: requestPayment,
         request_via: requestVia,
         payment_amount: Number(paymentAmount),
@@ -167,38 +191,80 @@ export function ProcessingStreamsModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success("Wakala Stream Updated Successfully");
+      toast.success("Wakala Clearance Updated");
       onClose();
     },
-    onError: (err: Error) => toast.error("Update failed", { description: err.message }),
+    onError: (err: Error) => toast.error("Wakala Update failed", { description: err.message }),
   });
 
-  const markDepartedMutation = useMutation({
+  // Submit Visa Stamp (Stage 7)
+  const submitStampMutation = useMutation({
     mutationFn: () =>
-      markDepartedApi(applicant.name, {
-        flight_number: depFlightNo,
+      submitDsrStampApi({
+        applicant: applicant.name,
+        visa_number: visaNumber,
+        stamped_date: stampedDate,
+        embassy_reference: embassyReference,
+        notes: stampNotes,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      toast.success("Visa Stamp Recorded! Candidate transitioned to Stamped.");
+      onClose();
+    },
+    onError: (err: Error) => toast.error("Stamp submission blocked", { description: err.message }),
+  });
+
+  // Submit Flight Ticket (Stage 8)
+  const submitTicketMutation = useMutation({
+    mutationFn: () =>
+      submitDsrTicketApi({
+        applicant: applicant.name,
+        ticket_pnr: ticketPnrFinal,
+        flight_number: flightNoFinal,
+        departure_date: ticketDepDate,
+        destination: ticketDestination,
+        notes: ticketNotes,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      toast.success("Flight Ticket Issued! Candidate transitioned to Ticketed.");
+      onClose();
+    },
+    onError: (err: Error) => toast.error("Ticketing failed", { description: err.message }),
+  });
+
+  // Submit Departure & Pre-Departure Medical 2 (Stage 9)
+  const submitDepartureMutation = useMutation({
+    mutationFn: () =>
+      submitDsrDepartureApi({
+        applicant: applicant.name,
         departure_date: depDate,
         departure_time: depTime,
         airport: depAirport,
         destination_city: depDestination,
+        medical_2_result: medical2Result,
+        medical_2_remarks: medical2Remarks,
         notes: depNotes,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success("Applicant marked as Departed!", {
-        description: `Deployment confirmed for ${applicant.full_name} to ${depDestination}.`,
-      });
+      toast.success("Applicant Marked as Departed! Process Completed 100%.");
       onClose();
     },
-    onError: (err: Error) => toast.error("Action failed", { description: err.message }),
+    onError: (err: Error) => toast.error("Departure blocked", { description: err.message }),
   });
 
   const isPending =
     updateLmsMutation.isPending ||
     updateInjazMutation.isPending ||
     updateWakalaMutation.isPending ||
-    markDepartedMutation.isPending;
+    submitStampMutation.isPending ||
+    submitTicketMutation.isPending ||
+    submitDepartureMutation.isPending;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -206,7 +272,7 @@ export function ProcessingStreamsModal({
         <DialogHeader className="border-b border-slate-200 dark:border-[#222227] pb-3">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-              Employee Processing Portal: {applicant.full_name}
+              Operations & Clearances: {applicant.full_name}
             </DialogTitle>
             <Badge variant="default">{applicant.applicant_state}</Badge>
           </div>
@@ -217,140 +283,117 @@ export function ProcessingStreamsModal({
         </DialogHeader>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-[#222227] text-xs font-semibold">
+        <div className="flex border-b border-slate-200 dark:border-[#222227] text-xs font-semibold overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab("lms")}
-            className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
               activeTab === "lms"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
-            <Plane className="h-4 w-4" />
-            LMS & Ticket
+            <Plane className="h-3.5 w-3.5" />
+            LMS Clearance
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("injaz")}
-            className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
               activeTab === "injaz"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
-            <Fingerprint className="h-4 w-4" />
-            Injaz & Teashir
+            <Fingerprint className="h-3.5 w-3.5" />
+            Injaz Clearance
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("wakala")}
-            className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
               activeTab === "wakala"
                 ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
-            <Building2 className="h-4 w-4" />
-            Wakala Authorization
+            <Building2 className="h-3.5 w-3.5" />
+            Wakala Clearance
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("stamp")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
+              activeTab === "stamp"
+                ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
+            }`}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Visa Stamp
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("ticket")}
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
+              activeTab === "ticket"
+                ? "border-emerald-800 text-emerald-900 dark:text-emerald-400 dark:border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
+            }`}
+          >
+            <Ticket className="h-3.5 w-3.5" />
+            Flight Ticket
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("departure")}
-            className={`flex items-center gap-2 px-4 py-2.5 border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 border-b-2 transition-colors shrink-0 ${
               activeTab === "departure"
                 ? "border-purple-800 text-purple-900 dark:text-purple-400 dark:border-purple-500 bg-purple-50/50 dark:bg-purple-950/20"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-zinc-400"
             }`}
           >
-            <Send className="h-4 w-4" />
-            Final Departure
+            <Send className="h-3.5 w-3.5" />
+            Medical 2 & Departure
           </button>
         </div>
 
-        {/* Tab 1: LMS Stream */}
+        {/* Tab 1: LMS Clearance */}
         {activeTab === "lms" && (
           <div className="space-y-4 py-2 text-xs">
-            <div className="flex items-center justify-between rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-3 border border-emerald-200 dark:border-emerald-800">
-              <div>
-                <p className="font-semibold text-emerald-950 dark:text-emerald-200">Labour Management System (LMS)</p>
-                <p className="text-[11px] text-emerald-800 dark:text-emerald-400">
-                  Input airline ticket reservation, additional clearance codes, and mark stream completion.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold">Status:</Label>
-                <select
-                  value={lmsStatus}
-                  onChange={(e) => setLmsStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">Airline Ticket PNR</Label>
-                <Input
-                  placeholder="e.g. ET-PNR-88992"
-                  value={ticketPnr}
-                  onChange={(e) => setTicketPnr(e.target.value)}
-                />
+                <Label className="font-semibold">LMS Clearance Status</Label>
+                <select
+                  value={lmsStatus}
+                  onChange={(e) => setLmsStatus(e.target.value as "Pending" | "Issued" | "Rejected")}
+                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Issued">Issued</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Flight Number</Label>
+                <Label className="font-semibold">Assigned Employee (Email)</Label>
                 <Input
-                  placeholder="e.g. ET-402 / SV-120"
-                  value={flightNumber}
-                  onChange={(e) => setFlightNumber(e.target.value)}
+                  value={lmsEmployee}
+                  onChange={(e) => setLmsEmployee(e.target.value)}
+                  placeholder="sara@agency.et"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Scheduled Departure Date</Label>
-                <Input
-                  type="date"
-                  value={departureDate}
-                  onChange={(e) => setDepartureDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Destination City / Airport</Label>
-                <Input
-                  placeholder="e.g. Riyadh (RUH), Jeddah (JED)"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Ministry Clearance Reference 1</Label>
-                <Input
-                  placeholder="e.g. MOL-ETH-772910"
-                  value={additionalField1}
-                  onChange={(e) => setAdditionalField1(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Insurance Policy Ref 2</Label>
-                <Input
-                  placeholder="e.g. INS-MED-99014"
-                  value={additionalField2}
-                  onChange={(e) => setAdditionalField2(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">LMS Processing Notes</Label>
-              <Textarea
-                placeholder="Candidate clearance endorsed by Ministry of Labour..."
-                value={lmsNotes}
-                onChange={(e) => setLmsNotes(e.target.value)}
-                rows={2}
-              />
+              {lmsStatus === "Issued" && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="font-semibold text-emerald-800 dark:text-emerald-400">
+                    Issued On Date *
+                  </Label>
+                  <Input
+                    type="date"
+                    value={lmsIssuedOn}
+                    onChange={(e) => setLmsIssuedOn(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -360,82 +403,51 @@ export function ProcessingStreamsModal({
                 disabled={isPending}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
               >
-                {updateLmsMutation.isPending ? "Saving..." : "Save LMS Data"}
+                Save LMS Clearance
               </Button>
             </div>
           </div>
         )}
 
-        {/* Tab 2: Injaz & Teashir */}
+        {/* Tab 2: Injaz Clearance */}
         {activeTab === "injaz" && (
           <div className="space-y-4 py-2 text-xs">
-            <div className="flex items-center justify-between rounded-lg bg-blue-50 dark:bg-blue-950/40 p-3 border border-blue-200 dark:border-blue-800">
-              <div>
-                <p className="font-semibold text-blue-950 dark:text-blue-200">Injaz Visa & Teashir Biometrics</p>
-                <p className="text-[11px] text-blue-800 dark:text-blue-400">
-                  Track Saudi Enjaz E-Visa registration and VFS Teashir fingerprint clearance.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs font-semibold">Status:</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="font-semibold">Injaz Clearance Status</Label>
                 <select
                   value={injazStatus}
-                  onChange={(e) => setInjazStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
+                  onChange={(e) => setInjazStatus(e.target.value as "Pending" | "Completed")}
+                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5"
                 >
                   <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">Injaz Application Number</Label>
+                <Label className="font-semibold">Assigned Employee (Email)</Label>
                 <Input
-                  placeholder="e.g. INJ-9921448"
-                  value={injazAppNo}
-                  onChange={(e) => setInjazAppNo(e.target.value)}
+                  value={injazEmployee}
+                  onChange={(e) => setInjazEmployee(e.target.value)}
+                  placeholder="dawit@agency.et"
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">
-                  Teashir (Fingerprint Processing) Fee ($ USD) <span className="text-rose-500">*</span>
-                </Label>
+                <Label className="font-semibold">Injaz Application No</Label>
+                <Input
+                  value={injazAppNo}
+                  onChange={(e) => setInjazAppNo(e.target.value)}
+                  placeholder="INJ-7788412"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Teashir Fee ($ USD)</Label>
                 <Input
                   type="number"
-                  placeholder="140"
                   value={teashirFee}
                   onChange={(e) => setTeashirFee(Number(e.target.value))}
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Biometrics Appointment Date</Label>
-                <Input
-                  type="date"
-                  value={biometricsDate}
-                  onChange={(e) => setBiometricsDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Biometrics Center Location</Label>
-                <Input
-                  placeholder="Teashir VFS Global Addis Ababa"
-                  value={biometricsCenter}
-                  onChange={(e) => setBiometricsCenter(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">Injaz / Biometrics Notes</Label>
-              <Textarea
-                placeholder="Fingerprints submitted, awaiting electronic visa approval..."
-                value={injazNotes}
-                onChange={(e) => setInjazNotes(e.target.value)}
-                rows={2}
-              />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -445,49 +457,37 @@ export function ProcessingStreamsModal({
                 disabled={isPending}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
               >
-                {updateInjazMutation.isPending ? "Saving..." : "Save Injaz & Teashir Data"}
+                Save Injaz Clearance
               </Button>
             </div>
           </div>
         )}
 
-        {/* Tab 3: Wakala (Enhanced with Figma Fields) */}
+        {/* Tab 3: Wakala Clearance */}
         {activeTab === "wakala" && (
           <div className="space-y-4 py-2 text-xs">
-            {/* Header matching Figma Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3 border border-amber-200 dark:border-amber-800">
-              <div>
-                <p className="font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
-                  <Building2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                  Wakala Power of Attorney Authorization
-                </p>
-                <p className="text-[11px] text-amber-800 dark:text-amber-400 mt-0.5">
-                  Foreign electronic agency delegation and Musaned authorization.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={wakalaStatus === "Completed" ? "success" : wakalaStatus === "In Progress" ? "warning" : "neutral"}>
-                  {wakalaStatus === "In Progress" ? "WAITING / IN PROGRESS" : wakalaStatus.toUpperCase()}
-                </Badge>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="font-semibold">Wakala Clearance Status</Label>
                 <select
                   value={wakalaStatus}
-                  onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "In Progress" | "Completed")}
-                  className="rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 py-1 text-xs"
+                  onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "Completed")}
+                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5"
                 >
-                  <option value="Pending">Pending (Waiting)</option>
-                  <option value="In Progress">In Progress</option>
+                  <option value="Pending">Pending</option>
                   <option value="Completed">Completed</option>
                 </select>
               </div>
-            </div>
-
-            {/* Figma Dates Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-[#16161b] p-3 rounded-lg border border-slate-200 dark:border-[#26262d]">
               <div className="space-y-1">
-                <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-amber-600" />
-                  Started On
-                </Label>
+                <Label className="font-semibold">Assigned Employee (Email)</Label>
+                <Input
+                  value={wakalaEmployee}
+                  onChange={(e) => setWakalaEmployee(e.target.value)}
+                  placeholder="tigist@agency.et"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Started On Date</Label>
                 <Input
                   type="date"
                   value={startedOn}
@@ -495,162 +495,172 @@ export function ProcessingStreamsModal({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                  Completed On
-                </Label>
+                <Label className="font-semibold">Wakala Number / Code</Label>
                 <Input
-                  type="date"
-                  value={completedOn}
-                  onChange={(e) => setCompletedOn(e.target.value)}
-                  placeholder="YYYY-MM-DD"
-                />
-              </div>
-            </div>
-
-            {/* Figma Field: Request Payment & Request Via */}
-            <div className="rounded-lg border border-slate-200 dark:border-[#26262d] p-3 space-y-3 bg-white dark:bg-[#121215]">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-                    Request Payment ?
-                  </span>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Send electronic invoice or payment link to candidate/sponsor for Wakala clearance.
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={requestPayment}
-                    onChange={(e) => setRequestPayment(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:bg-[#26262d] peer-checked:bg-emerald-800"></div>
-                </label>
-              </div>
-
-              {requestPayment && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100 dark:border-[#222227] animate-in fade-in duration-200">
-                  <div className="space-y-1">
-                    <Label className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
-                      <Share2 className="h-3.5 w-3.5 text-blue-600" />
-                      Request Via
-                    </Label>
-                    <select
-                      value={requestVia}
-                      onChange={(e) => setRequestVia(e.target.value as "WhatsApp" | "Email" | "SMS")}
-                      className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-200"
-                    >
-                      <option value="WhatsApp">WhatsApp (Direct Link)</option>
-                      <option value="Email">Email (Formal Notice)</option>
-                      <option value="SMS">SMS (Text Message)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="font-semibold text-slate-700 dark:text-zinc-300">
-                      Payment Amount (SAR)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="500"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Wakala ID & Agency Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Wakala Number / Code</Label>
-                <Input
-                  placeholder="e.g. WAK-9921448"
                   value={wakalaNumber}
                   onChange={(e) => setWakalaNumber(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Sponsor Electronic Auth Code</Label>
-                <Input
-                  placeholder="e.g. ENJAZ-SA-8812"
-                  value={sponsorAuthCode}
-                  onChange={(e) => setSponsorAuthCode(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold text-slate-700 dark:text-zinc-300">Foreign Agency / Sponsor Organization Name</Label>
-                <Input
-                  placeholder="e.g. Al-Khaleej Manpower / Al-Baraka Agency"
-                  value={foreignAgencyName}
-                  onChange={(e) => setForeignAgencyName(e.target.value)}
+                  placeholder="WAK-9921448"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="font-semibold text-slate-700 dark:text-zinc-300">Wakala Verification Notes</Label>
-              <Textarea
-                placeholder="Wakala verified on Musaned/foreign ministry portal..."
-                value={wakalaNotes}
-                onChange={(e) => setWakalaNotes(e.target.value)}
-                rows={2}
-              />
-            </div>
-
-            {/* Action Buttons matching Figma */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-[#222227]">
+            <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => {
-                  setWakalaStatus("In Progress");
-                  updateWakalaMutation.mutate("In Progress");
-                }}
+                onClick={() => updateWakalaMutation.mutate()}
                 disabled={isPending}
-                className="text-xs border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
               >
-                <Play className="mr-1.5 h-3.5 w-3.5" /> Start Processing
+                Save Wakala Clearance
               </Button>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={() => updateWakalaMutation.mutate()}
-                  disabled={isPending}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-                >
-                  {updateWakalaMutation.isPending ? "Saving..." : "Save Wakala Data"}
-                </Button>
-              </div>
             </div>
           </div>
         )}
 
-        {/* Tab 4: Final Departure */}
+        {/* Tab 4: Visa Stamp (Stage 7) */}
+        {activeTab === "stamp" && (
+          <div className="space-y-4 py-2 text-xs">
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-xs text-emerald-900 dark:text-emerald-300">
+              <p className="font-semibold flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4" /> Pre-Departure Guardrail Checked
+              </p>
+              <p className="text-[11px] mt-0.5">
+                Visa stamping requires LMS, Wakala, and Injaz clearances to be complete before submission.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="font-semibold">Issued Visa Number *</Label>
+                <Input
+                  value={visaNumber}
+                  onChange={(e) => setVisaNumber(e.target.value)}
+                  placeholder="KSA-VISA-9921448"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Stamped Date *</Label>
+                <Input
+                  type="date"
+                  value={stampedDate}
+                  onChange={(e) => setStampedDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="font-semibold">Embassy Reference Code</Label>
+                <Input
+                  value={embassyReference}
+                  onChange={(e) => setEmbassyReference(e.target.value)}
+                  placeholder="EMB-ETH-2026-881"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                onClick={() => submitStampMutation.mutate()}
+                disabled={isPending}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+              >
+                Confirm Visa Stamp & Advance to Stamped
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 5: Flight Ticket (Stage 8) */}
+        {activeTab === "ticket" && (
+          <div className="space-y-4 py-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="font-semibold">Airline Ticket PNR *</Label>
+                <Input
+                  value={ticketPnrFinal}
+                  onChange={(e) => setTicketPnrFinal(e.target.value)}
+                  placeholder="ET-PNR-88392"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Flight Number *</Label>
+                <Input
+                  value={flightNoFinal}
+                  onChange={(e) => setFlightNoFinal(e.target.value)}
+                  placeholder="ET-402"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Departure Date *</Label>
+                <Input
+                  type="date"
+                  value={ticketDepDate}
+                  onChange={(e) => setTicketDepDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="font-semibold">Destination City *</Label>
+                <Input
+                  value={ticketDestination}
+                  onChange={(e) => setTicketDestination(e.target.value)}
+                  placeholder="Riyadh (RUH)"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                onClick={() => submitTicketMutation.mutate()}
+                disabled={isPending}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+              >
+                Issue Flight Ticket & Advance to Ticketed
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 6: Pre-Departure Medical 2 & Departure (Stage 9) */}
         {activeTab === "departure" && (
           <div className="space-y-4 py-2 text-xs">
-            <div className="flex items-center justify-between rounded-lg bg-purple-50 dark:bg-purple-950/40 p-3 border border-purple-200 dark:border-purple-800">
-              <div>
-                <p className="font-semibold text-purple-950 dark:text-purple-200">Final Candidate Overseas Departure</p>
-                <p className="text-[11px] text-purple-800 dark:text-purple-400">
-                  LMS & Operations staff confirm candidate departure and log final flight records.
-                </p>
+            {/* Medical 2 Enforced Guardrail */}
+            <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-rose-900 dark:text-rose-300 flex items-center gap-1.5">
+                  <HeartPulse className="h-4 w-4 text-rose-600" />
+                  Pre-Departure Medical 2 Check (Strict Guardrail)
+                </span>
+                <select
+                  value={medical2Result}
+                  onChange={(e) => setMedical2Result(e.target.value as "Pass" | "Fail")}
+                  className="rounded-md border border-rose-300 dark:border-rose-800 bg-white dark:bg-[#16161b] px-2 py-1 text-xs font-bold text-rose-800 dark:text-rose-300"
+                >
+                  <option value="Pass">Pass (Cleared for Flight)</option>
+                  <option value="Fail">Fail (Departure Blocked)</option>
+                </select>
               </div>
-              <Badge variant={applicant.applicant_state === "Departed" ? "success" : "purple"}>
-                {applicant.applicant_state === "Departed" ? "Departed" : "Ready for Departure"}
-              </Badge>
+              {medical2Result === "Fail" && (
+                <div className="space-y-1 pt-1">
+                  <Label className="font-semibold text-rose-800 dark:text-rose-300">
+                    Mandatory Medical 2 Failure Remarks *
+                  </Label>
+                  <Input
+                    value={medical2Remarks}
+                    onChange={(e) => setMedical2Remarks(e.target.value)}
+                    placeholder="Provide medical clinical reason for failure..."
+                    className="border-rose-400 bg-white dark:bg-[#141418]"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="font-semibold">Departure Flight Number</Label>
                 <Input
-                  placeholder="e.g. ET-402 / SV-120"
                   value={depFlightNo}
                   onChange={(e) => setDepFlightNo(e.target.value)}
+                  placeholder="ET-402"
                 />
               </div>
               <div className="space-y-1">
@@ -662,49 +672,31 @@ export function ProcessingStreamsModal({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Departure Time</Label>
+                <Label className="font-semibold">Airport</Label>
                 <Input
-                  placeholder="09:30 AM"
-                  value={depTime}
-                  onChange={(e) => setDepTime(e.target.value)}
+                  value={depAirport}
+                  onChange={(e) => setDepAirport(e.target.value)}
+                  placeholder="Bole International Airport (ADD)"
                 />
               </div>
               <div className="space-y-1">
-                <Label className="font-semibold">Departure Airport</Label>
-                <Input
-                  placeholder="Bole International Airport (ADD)"
-                  value={depAirport}
-                  onChange={(e) => setDepAirport(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
                 <Label className="font-semibold">Destination City</Label>
                 <Input
-                  placeholder="Riyadh, Saudi Arabia"
                   value={depDestination}
                   onChange={(e) => setDepDestination(e.target.value)}
+                  placeholder="Riyadh, Saudi Arabia"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">Departure Confirmation Notes</Label>
-              <Textarea
-                placeholder="Candidate cleared through Addis Ababa Bole International Airport..."
-                value={depNotes}
-                onChange={(e) => setDepNotes(e.target.value)}
-                rows={2}
-              />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 type="button"
-                onClick={() => markDepartedMutation.mutate()}
-                disabled={isPending || applicant.applicant_state === "Departed"}
+                onClick={() => submitDepartureMutation.mutate()}
+                disabled={isPending || medical2Result === "Fail"}
                 className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold shadow-xs"
               >
-                {markDepartedMutation.isPending ? "Confirming Departure..." : "Confirm & Mark Departed"}
+                {submitDepartureMutation.isPending ? "Confirming Departure..." : "Verify Medical 2 & Mark Departed"}
               </Button>
             </div>
           </div>

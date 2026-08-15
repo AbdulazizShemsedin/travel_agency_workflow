@@ -39,16 +39,29 @@ export const COC_STATUS_OPTIONS = ["Pending", "Issued", "Not Started"] as const;
 
 export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 
-// Phone number regex: supports +251..., 09..., 07..., or standard international format with 9 to 18 digits/spaces/hyphens
+export const LANGUAGE_LEVEL_OPTIONS = ["None", "Basic", "Good", "Fluent"] as const;
+
+export const JOB_APPLIED_OPTIONS = [
+  "Domestic Worker",
+  "Housemaid",
+  "Hospitality & Service Specialist",
+  "Heavy Equipment Driver",
+  "General Caregiver",
+  "Electrician / Technician",
+  "Construction Assistant",
+  "Other",
+] as const;
+
+// Phone number regex: supports standard international or local Ethiopian numbers
 export const PHONE_REGEX = /^\+?[0-9\s\-()]{9,18}$/;
 
 // Passport regex: 1-2 letters + 6-8 digits (or 7-9 alphanumeric characters)
 export const PASSPORT_REGEX = /^[A-Z]{1,2}[0-9]{6,8}$|^[A-Z0-9]{7,9}$/;
 
-// Name regex: letters, spaces, hyphens, and apostrophes only
+// Name regex: letters, spaces, hyphens, and apostrophes
 export const NAME_REGEX = /^[a-zA-Z\s\-'.]+$/;
 
-// Helper to safely handle optional numeric fields without coercion errors on empty strings
+// Safe helper for optional numeric fields
 const optionalNumber = (schema: z.ZodNumber) =>
   z.preprocess((val) => {
     if (val === "" || val === null || val === undefined || Number.isNaN(val)) {
@@ -58,9 +71,9 @@ const optionalNumber = (schema: z.ZodNumber) =>
     return Number.isNaN(num) ? undefined : num;
   }, schema.optional());
 
-// Base schema for form state and draft validation
+// Base Applicant Schema
 export const baseApplicantSchema = z.object({
-  // Stage 1: Mandatory for Draft
+  // Stage 1: Mandatory for Draft (Draft Floor)
   first_name: z.string().trim().default(""),
   middle_name: z.string().trim().optional().or(z.literal("")),
   last_name: z.string().trim().default(""),
@@ -69,18 +82,23 @@ export const baseApplicantSchema = z.object({
   marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   children: z.preprocess(
     (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
-    z.number().int("Children must be a whole number").min(0, "Children count cannot be negative").max(25, "Please enter a valid number of children").default(0)
+    z.number().int("Children must be a whole number").min(0).max(25).default(0)
   ),
   nationality: z.string().trim().default("Ethiopia"),
   phone_number: z.string().trim().default(""),
   city: z.string().trim().default(""),
   country: z.string().trim().default("Ethiopia"),
 
-  // Stage 2: Registration Fields (optional for initial draft)
+  // Stage 2: Registration KYC & Medical Fields
   date_of_birth: z.string().optional().or(z.literal("")),
   passport_number: z.string().optional().or(z.literal("")),
+  passport_issue_date: z.string().optional().or(z.literal("")),
+  passport_expiry: z.string().optional().or(z.literal("")),
+  place_of_issue: z.string().trim().optional().or(z.literal("")),
+  job_applied: z.string().trim().optional().or(z.literal("")),
   highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
   labour_id: z.string().optional().or(z.literal("")),
+  national_id: z.string().optional().or(z.literal("")),
   contact_person_name: z.string().optional().or(z.literal("")),
   contact_person_phone: z.string().optional().or(z.literal("")),
   coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).default(""),
@@ -88,35 +106,44 @@ export const baseApplicantSchema = z.object({
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   medical_expiry_date: z.string().optional().or(z.literal("")),
 
-  // Stage 3: Strictly Optional Context Fields
+  // Photos & Attachments
+  profile_photo_url: z.string().optional().or(z.literal("")),
+  photo_passport: z.string().optional().or(z.literal("")),
+  photo_full_body: z.string().optional().or(z.literal("")),
+  passport_scan: z.string().optional().or(z.literal("")),
+
+  // Fees & Registration
+  fee_required: z.boolean().default(false).optional(),
+  registration_fee_amount: optionalNumber(z.number().min(0)),
+
+  // Stage 3: Optional Context Fields
   alternate_phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().trim().optional().or(z.literal("")),
   region: z.string().trim().optional().or(z.literal("")),
   sub_region: z.string().trim().optional().or(z.literal("")),
   address_line_1: z.string().trim().optional().or(z.literal("")),
-  national_id: z.string().trim().optional().or(z.literal("")),
-  passport_expiry: z.string().optional().or(z.literal("")),
   institution: z.string().trim().optional().or(z.literal("")),
   graduation_year: optionalNumber(
-    z.number().int("Graduation year must be a whole number").min(1950, "Graduation year cannot be earlier than 1950").max(new Date().getFullYear() + 1, "Graduation year cannot be in the future")
+    z.number().int().min(1950).max(new Date().getFullYear() + 1)
   ),
   current_employer: z.string().trim().optional().or(z.literal("")),
-  years_of_experience: optionalNumber(
-    z.number().min(0, "Years of experience cannot be negative").max(50, "Years of experience must be realistic")
-  ),
+  years_of_experience: optionalNumber(z.number().min(0).max(50)),
+  english_level: z.enum(LANGUAGE_LEVEL_OPTIONS).optional().or(z.literal("")),
+  arabic_level: z.enum(LANGUAGE_LEVEL_OPTIONS).optional().or(z.literal("")),
+  experience_country: z.string().trim().optional().or(z.literal("")),
+  experience_period: z.string().trim().optional().or(z.literal("")),
+  skill_cleaning: z.boolean().default(false).optional(),
+  skill_cooking: z.boolean().default(false).optional(),
+  skill_baby_care: z.boolean().default(false).optional(),
+  skill_elder_care: z.boolean().default(false).optional(),
+  skill_driving: z.boolean().default(false).optional(),
+  skill_sewing: z.boolean().default(false).optional(),
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),
-
-  // Visual/UI context fields
-  fee_required: z.boolean().default(false).optional(),
-  registration_fee_amount: optionalNumber(
-    z.number().min(0, "Fee amount cannot be negative")
-  ),
-  profile_photo_url: z.string().optional().or(z.literal("")),
 });
 
-// Stage 1 Schema: Strictly validates mandatory Draft requirements
+// Stage 1 Schema: Mandatory for Draft Floor
 export const stage1DraftSchema = baseApplicantSchema.extend({
   first_name: z
     .string({ required_error: "First Name is required" })
@@ -155,61 +182,40 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
 
   children: z.preprocess(
     (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
-    z.number().int("Children must be a whole number").min(0, "Children count cannot be negative").max(25, "Please enter a valid number of children")
+    z.number().int("Children count must be a number").min(0).max(25)
   ),
 
   nationality: z
     .string({ required_error: "Nationality is required" })
     .trim()
-    .min(2, "Nationality is required (e.g., Ethiopia)")
-    .max(60, "Nationality too long"),
+    .min(2, "Nationality is required (e.g. Ethiopia)")
+    .max(60),
 
   phone_number: z
     .string({ required_error: "Primary Phone Number is required" })
     .trim()
     .min(9, "Phone Number must be at least 9 digits")
     .max(18, "Phone Number cannot exceed 18 digits")
-    .regex(
-      PHONE_REGEX,
-      "Please enter a valid Phone Number (e.g., +251911223344 or 0911223344)"
-    ),
-
-  alternate_phone: z
-    .string()
-    .trim()
-    .refine((val) => !val || PHONE_REGEX.test(val), {
-      message: "Please enter a valid Alternate Phone Number (e.g. +251922334455)",
-    })
-    .optional()
-    .or(z.literal("")),
-
-  email: z
-    .string()
-    .trim()
-    .refine((val) => !val || z.string().email().safeParse(val).success, {
-      message: "Please enter a valid Email Address (e.g., applicant@example.com)",
-    })
-    .optional()
-    .or(z.literal("")),
+    .regex(PHONE_REGEX, "Please enter a valid Phone Number (e.g. +251911223344)"),
 
   city: z
     .string({ required_error: "City is required" })
     .trim()
-    .min(2, "City is required (e.g., Addis Ababa)")
-    .max(60, "City too long"),
+    .min(2, "City is required (e.g. Addis Ababa)")
+    .max(60),
 
   country: z
     .string({ required_error: "Country is required" })
     .trim()
-    .min(2, "Country is required (e.g., Ethiopia)")
-    .max(60, "Country too long"),
+    .min(2, "Country is required (e.g. Ethiopia)")
+    .max(60),
 });
 
-// Stage 2 Schema: Strictly validates all requirements for Registration
+// Stage 2 Schema: Strictly Validates All Requirements for Registration
 export const stage2RegistrationSchema = stage1DraftSchema
   .extend({
     date_of_birth: z
-      .string({ required_error: "Date of Birth is required" })
+      .string({ required_error: "Date of Birth is required for registration" })
       .min(1, "Date of Birth is required")
       .refine((val) => {
         if (!val) return false;
@@ -230,67 +236,30 @@ export const stage2RegistrationSchema = stage1DraftSchema
       }, "Applicant age must be 65 years or younger"),
 
     passport_number: z
-      .string({ required_error: "Passport Number is required" })
+      .string({ required_error: "Passport Number is required for registration" })
       .trim()
       .min(7, "Passport Number must be between 7 and 9 characters")
       .max(9, "Passport Number must not exceed 9 characters")
       .transform((val) => val.toUpperCase())
       .refine(
         (val) => PASSPORT_REGEX.test(val),
-        "Passport Number must be 7-9 alphanumeric characters with 1-2 leading letters (e.g. EP1234567)"
+        "Passport Number must be 7-9 alphanumeric characters (e.g. EP1234567)"
       ),
 
-    // passport_expiry is OPTIONAL in Stage 3 per spec; validate future date only if filled
     passport_expiry: z
-      .string()
-      .optional()
-      .or(z.literal(""))
+      .string({ required_error: "Passport Expiry Date is required for registration" })
+      .min(1, "Passport Expiry Date is required")
       .refine((val) => {
-        if (!val) return true;
+        if (!val) return false;
         const parsed = parseISO(val);
         return isValid(parsed) && isFuture(startOfDay(parsed));
-      }, "Passport Expiry Date must be a future date (cannot be expired)"),
+      }, "Passport Expiry Date must be a future date"),
 
     highest_education: z.enum(EDUCATION_OPTIONS, {
       errorMap: () => ({
         message: "Highest Education Level is required for registration",
       }),
     }),
-
-    labour_id: z
-      .string({ required_error: "Labour ID Number is required" })
-      .trim()
-      .min(3, "Labour ID Number must be at least 3 characters (e.g. LBR-998844)")
-      .max(30, "Labour ID too long"),
-
-    contact_person_name: z
-      .string({ required_error: "Emergency Contact Name is required" })
-      .trim()
-      .min(2, "Emergency Contact Name must be at least 2 characters")
-      .max(80, "Emergency Contact Name too long")
-      .regex(NAME_REGEX, "Emergency Contact Name can only contain letters, hyphens, and spaces"),
-
-    contact_person_phone: z
-      .string({ required_error: "Emergency Contact Phone is required" })
-      .trim()
-      .min(9, "Emergency Contact Phone must be at least 9 digits")
-      .max(18, "Emergency Contact Phone cannot exceed 18 digits")
-      .regex(
-        PHONE_REGEX,
-        "Please enter a valid Emergency Contact Phone Number (e.g., +251911889900)"
-      ),
-
-    coc_status: z.enum(COC_STATUS_OPTIONS, {
-      errorMap: () => ({ message: "COC Status is required for registration" }),
-    }),
-
-    exam_date: z
-      .string({ required_error: "COC Exam Date is required" })
-      .min(1, "COC Exam Date is required")
-      .refine((val) => {
-        if (!val) return false;
-        return isValid(parseISO(val));
-      }, "Please enter a valid COC Exam Date"),
 
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS, {
       errorMap: () => ({ message: "Medical Status is required for registration" }),
@@ -322,12 +291,14 @@ export function calculateRemainingDays(dateStr?: string | null): number | undefi
   return differenceInCalendarDays(startOfDay(parsed), today);
 }
 
+// Reactive expiry badge status aligned with Frappe 16-day watchdog threshold
 export function getExpiryBadgeStatus(days?: number): {
   label: string;
   variant: "success" | "warning" | "destructive" | "neutral";
   textClass: string;
   bgClass: string;
   borderClass: string;
+  isPulsing?: boolean;
 } {
   if (days === undefined) {
     return {
@@ -349,7 +320,7 @@ export function getExpiryBadgeStatus(days?: number): {
     };
   }
 
-  if (days >= 10) {
+  if (days > 16) {
     return {
       label: `${days} days remaining (Warning)`,
       variant: "warning",
@@ -361,11 +332,12 @@ export function getExpiryBadgeStatus(days?: number): {
 
   if (days > 0) {
     return {
-      label: `${days} days remaining (Urgent)`,
+      label: `${days} days remaining (Urgent Watchdog)`,
       variant: "destructive",
       textClass: "text-rose-700 dark:text-rose-400",
       bgClass: "bg-rose-50 dark:bg-rose-950/50",
       borderClass: "border-rose-200 dark:border-rose-800",
+      isPulsing: true,
     };
   }
 
@@ -375,6 +347,7 @@ export function getExpiryBadgeStatus(days?: number): {
     textClass: "text-rose-700 dark:text-rose-400",
     bgClass: "bg-rose-50 dark:bg-rose-950/50",
     borderClass: "border-rose-200 dark:border-rose-800",
+    isPulsing: true,
   };
 }
 

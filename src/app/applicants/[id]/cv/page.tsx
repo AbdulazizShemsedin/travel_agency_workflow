@@ -23,7 +23,7 @@ import {
   Loader2,
   FileText,
 } from "lucide-react";
-import { getApplicant, transitionToRequestPendingApi } from "@/lib/api/applicantApi";
+import { getApplicant, updateApplicantDraft } from "@/lib/api/applicantApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -40,7 +40,7 @@ export default function CandidateCvPreviewPage() {
   });
 
   const advanceToRequestPendingMutation = useMutation({
-    mutationFn: () => transitionToRequestPendingApi(applicantId),
+    mutationFn: () => updateApplicantDraft(applicantId, { applicant_state: "Request Pending" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });

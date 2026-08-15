@@ -46,8 +46,10 @@ function getStageBadgeVariant(stage: ApplicantState): {
       return { variant: "info", dotColor: "bg-blue-600" };
     case "Processing":
       return { variant: "info", dotColor: "bg-indigo-600" };
-    case "Embassy/Stamped":
-      return { variant: "purple", dotColor: "bg-purple-600" };
+    case "Stamped":
+      return { variant: "info", dotColor: "bg-teal-600" };
+    case "Ticketed":
+      return { variant: "purple", dotColor: "bg-indigo-600" };
     case "Departed":
       return { variant: "success", dotColor: "bg-emerald-600" };
     case "Draft":
