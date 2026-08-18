@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   UserCheck,
@@ -12,19 +12,10 @@ import {
   Building2,
   Check,
   Layers,
-  Sparkles,
   Loader2,
 } from "lucide-react";
 import { ProcessingRoleType, StreamAssignmentPayload } from "@/types/applicant";
-import { assignEmployeeApi } from "@/lib/api/applicantApi";
-
-const AGENCY_EMPLOYEES = [
-  { id: "EMP-001", name: "Sara Tefera", role: "LMS Documentation Specialist", roleType: "LMS" as const, email: "sara@agency.et" },
-  { id: "EMP-002", name: "Dawit Haile", role: "Injaz & Biometrics Officer", roleType: "Injaz" as const, email: "dawit@agency.et" },
-  { id: "EMP-003", name: "Tigist Bekele", role: "Wakala Payment Coordinator", roleType: "Wakala" as const, email: "tigist@agency.et" },
-  { id: "EMP-004", name: "Abebe Kebede", role: "Embassy Visa Stamping Liaison", roleType: "Embassy" as const, email: "abebe@agency.et" },
-  { id: "EMP-005", name: "Helen Wolde", role: "Flight Ticketing Agent", roleType: "Ticketing" as const, email: "helen@agency.et" },
-];
+import { assignEmployeeApi, getEmployeesList } from "@/lib/api/applicantApi";
 import {
   Dialog,
   DialogContent,
@@ -56,6 +47,11 @@ export function AssignEmployeeModal({
 }: AssignEmployeeModalProps) {
   const queryClient = useQueryClient();
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees"],
+    queryFn: getEmployeesList,
+  });
+
   // Mode Selection: Single Employee for All Processes, Dedicated Per-Process Employees, or Multiple Collaborating Employees
   const [assignmentMode, setAssignmentMode] = React.useState<AssignmentMode>("single_lead");
 
@@ -63,20 +59,25 @@ export function AssignEmployeeModal({
   const [selectedRoleType, setSelectedRoleType] = React.useState<ProcessingRoleType>(
     "All Roles / Operations Lead"
   );
-  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>(
-    AGENCY_EMPLOYEES[0]?.id || ""
-  );
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>("");
 
   // Mode 2: Multi-Process Staffing
-  const [lmsStaffId, setLmsStaffId] = React.useState<string>("EMP-002"); // Sara Mohammed
-  const [injazStaffId, setInjazStaffId] = React.useState<string>("EMP-003"); // Dawit Haile
-  const [wakalaStaffId, setWakalaStaffId] = React.useState<string>("EMP-004"); // Tigist Alemu
+  const [lmsStaffId, setLmsStaffId] = React.useState<string>("");
+  const [injazStaffId, setInjazStaffId] = React.useState<string>("");
+  const [wakalaStaffId, setWakalaStaffId] = React.useState<string>("");
 
   // Mode 3: Team Collaborative (Multiple employees to multiple applicants)
-  const [collaboratingIds, setCollaboratingIds] = React.useState<string[]>([
-    "EMP-001",
-    "EMP-002",
-  ]);
+  const [collaboratingIds, setCollaboratingIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (employees.length > 0) {
+      if (!selectedEmployeeId) setSelectedEmployeeId(employees[0].name);
+      if (!lmsStaffId) setLmsStaffId(employees[0].name);
+      if (!injazStaffId) setInjazStaffId(employees[0].name);
+      if (!wakalaStaffId) setWakalaStaffId(employees[0].name);
+      if (collaboratingIds.length === 0) setCollaboratingIds([employees[0].name]);
+    }
+  }, [employees, selectedEmployeeId, lmsStaffId, injazStaffId, wakalaStaffId, collaboratingIds]);
 
   const [notes, setNotes] = React.useState<string>("");
 
@@ -88,31 +89,32 @@ export function AssignEmployeeModal({
 
   const assignMutation = useMutation({
     mutationFn: async () => {
+      const getFormattedEmp = (idOrEmail: string) => {
+        const found = employees.find((e) => e.name === idOrEmail || e.email === idOrEmail);
+        if (found) {
+          return found.employee_name ? `${found.employee_name} (${found.email})` : found.email;
+        }
+        return idOrEmail;
+      };
+
       let roleType = "All Roles / Operations Lead";
-      let empId = selectedEmployeeId || "EMP-001";
-      let empIds: string[] = [empId];
+      let empId = getFormattedEmp(selectedEmployeeId || (employees[0]?.name || "Operations Lead"));
       let streamAssignments: any = null;
 
       if (assignmentMode === "single_lead") {
         roleType = selectedRoleType;
-        empId = selectedEmployeeId || "EMP-001";
-        empIds = [empId];
+        empId = getFormattedEmp(selectedEmployeeId || (employees[0]?.name || "Operations Lead"));
       } else if (assignmentMode === "multi_process") {
         roleType = "All Roles / Operations Lead";
-        const lmsEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === lmsStaffId);
-        const injazEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === injazStaffId);
-        const wakalaEmp = AGENCY_EMPLOYEES.find((e: any) => e.id === wakalaStaffId);
-
         streamAssignments = {
-          lms: lmsStaffId,
-          injaz: injazStaffId,
-          wakala: wakalaStaffId,
+          lms: getFormattedEmp(lmsStaffId || employees[0]?.name),
+          injaz: getFormattedEmp(injazStaffId || employees[0]?.name),
+          wakala: getFormattedEmp(wakalaStaffId || employees[0]?.name),
         };
-        empId = lmsStaffId || "EMP-002";
+        empId = getFormattedEmp(lmsStaffId || employees[0]?.name || "Operations Lead");
       } else if (assignmentMode === "team_collaborative") {
         roleType = "All Roles / Operations Lead";
-        empIds = collaboratingIds;
-        empId = collaboratingIds[0] || "EMP-001";
+        empId = getFormattedEmp(collaboratingIds[0] || (employees[0]?.name || "Operations Lead"));
       }
 
       return assignEmployeeApi(
@@ -273,12 +275,12 @@ export function AssignEmployeeModal({
                   Select Lead Employee
                 </Label>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {AGENCY_EMPLOYEES.map((emp: any) => {
-                    const isSelected = emp.id === selectedEmployeeId;
+                  {employees.map((emp) => {
+                    const isSelected = emp.name === selectedEmployeeId;
                     return (
                       <div
-                        key={emp.id}
-                        onClick={() => setSelectedEmployeeId(emp.id)}
+                        key={emp.name}
+                        onClick={() => setSelectedEmployeeId(emp.name)}
                         className={`flex cursor-pointer items-center justify-between rounded-lg border p-2 transition ${
                           isSelected
                             ? "border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 dark:border-emerald-700"
@@ -287,14 +289,14 @@ export function AssignEmployeeModal({
                       >
                         <div className="flex items-center gap-2">
                           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900 text-xs font-bold text-emerald-900 dark:text-emerald-300">
-                            {emp.name.split(" ").map((n: string) => n[0]).join("")}
+                            {emp.employee_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                           </div>
                           <div>
                             <span className="font-semibold text-slate-900 dark:text-white block">
-                              {emp.name}
+                              {emp.employee_name}
                             </span>
                             <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                              {emp.roleType} • {emp.email}
+                              {emp.role_type || "Operations"} • {emp.email}
                             </span>
                           </div>
                         </div>
@@ -324,9 +326,9 @@ export function AssignEmployeeModal({
                   onChange={(e) => setLmsStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {AGENCY_EMPLOYEES.map((e: any) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.role})
+                  {employees.map((e) => (
+                    <option key={e.name} value={e.name}>
+                      {e.employee_name} ({e.role})
                     </option>
                   ))}
                 </select>
@@ -342,9 +344,9 @@ export function AssignEmployeeModal({
                   onChange={(e) => setInjazStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {AGENCY_EMPLOYEES.map((e: any) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.role})
+                  {employees.map((e) => (
+                    <option key={e.name} value={e.name}>
+                      {e.employee_name} ({e.role})
                     </option>
                   ))}
                 </select>
@@ -360,9 +362,9 @@ export function AssignEmployeeModal({
                   onChange={(e) => setWakalaStaffId(e.target.value)}
                   className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
                 >
-                  {AGENCY_EMPLOYEES.map((e: any) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.role})
+                  {employees.map((e) => (
+                    <option key={e.name} value={e.name}>
+                      {e.employee_name} ({e.role})
                     </option>
                   ))}
                 </select>
@@ -383,24 +385,24 @@ export function AssignEmployeeModal({
                   size="sm"
                   onClick={() =>
                     setCollaboratingIds(
-                      collaboratingIds.length === AGENCY_EMPLOYEES.length
-                        ? [AGENCY_EMPLOYEES[0].id]
-                        : AGENCY_EMPLOYEES.map((e: any) => e.id)
+                      collaboratingIds.length === employees.length
+                        ? [employees[0]?.name].filter(Boolean)
+                        : employees.map((e) => e.name)
                     )
                   }
                   className="h-6 text-[11px] text-emerald-800 dark:text-emerald-400"
                 >
-                  {collaboratingIds.length === AGENCY_EMPLOYEES.length ? "Clear" : "Select All"}
+                  {collaboratingIds.length === employees.length ? "Clear" : "Select All"}
                 </Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {AGENCY_EMPLOYEES.map((emp: any) => {
-                  const isChecked = collaboratingIds.includes(emp.id);
+                {employees.map((emp) => {
+                  const isChecked = collaboratingIds.includes(emp.name);
                   return (
                     <div
-                      key={emp.id}
-                      onClick={() => toggleCollaborator(emp.id)}
+                      key={emp.name}
+                      onClick={() => toggleCollaborator(emp.name)}
                       className={`flex cursor-pointer items-center justify-between rounded-lg border p-2 transition ${
                         isChecked
                           ? "border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 dark:border-emerald-700"
@@ -416,10 +418,10 @@ export function AssignEmployeeModal({
                         />
                         <div>
                           <span className="font-semibold text-slate-900 dark:text-white block text-[11px]">
-                            {emp.name}
+                            {emp.employee_name}
                           </span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                            {emp.roleType}
+                            {emp.role_type || "Operations"} • {emp.email}
                           </span>
                         </div>
                       </div>

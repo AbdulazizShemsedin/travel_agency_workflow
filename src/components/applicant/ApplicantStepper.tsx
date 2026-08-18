@@ -11,11 +11,11 @@ export interface StepItem {
 }
 
 export const FORM_STEPS: StepItem[] = [
-  { id: 1, title: "Personal Info", subtitle: "Core identification & contact" },
-  { id: 2, title: "Education and Experience", subtitle: "Academic & work history" },
-  { id: 3, title: "Additional Form 1", subtitle: "Passport & emergency contact" },
-  { id: 4, title: "Additional Form 2", subtitle: "COC & medical validity" },
-  { id: 5, title: "Review", subtitle: "Verify & register applicant" },
+  { id: 1, title: "Personal Details", subtitle: "Core identification & contact" },
+  { id: 2, title: "Skills & Education", subtitle: "Skills matrix & qualifications" },
+  { id: 3, title: "Passport & Documents", subtitle: "Passport copy & ID documents" },
+  { id: 4, title: "Medical & Clearances", subtitle: "Medical fitness & COC certification" },
+  { id: 5, title: "Review & Confirmation", subtitle: "Verify details & submit" },
 ];
 
 interface ApplicantStepperProps {
@@ -98,9 +98,8 @@ export function ApplicantStepper({
                   <div
                     className={cn(
                       "hidden h-0.5 w-4 shrink-0 lg:block",
-                      isCompleted ? "bg-emerald-700" : "bg-slate-200"
+                      step.id < currentStep ? "bg-emerald-800" : "bg-slate-200"
                     )}
-                    aria-hidden="true"
                   />
                 )}
               </li>

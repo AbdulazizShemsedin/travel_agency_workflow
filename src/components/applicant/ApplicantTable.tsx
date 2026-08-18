@@ -241,7 +241,7 @@ export function ApplicantTable() {
               setSelectedStage(e.target.value);
               setCurrentPage(1);
             }}
-            className="h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs text-slate-700 dark:text-slate-200 shadow-xs focus:border-emerald-700 focus:outline-none cursor-pointer"
+            className="h-9.5 rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 text-xs text-slate-800 dark:text-zinc-200 shadow-xs focus:border-emerald-700 focus:outline-none cursor-pointer"
           >
             <option value="All">All Stages ({applicants.length})</option>
             <option value="Draft">Draft</option>
@@ -250,39 +250,11 @@ export function ApplicantTable() {
             <option value="Request Pending">Request Pending</option>
             <option value="Selected">Selected</option>
             <option value="Processing">Processing</option>
-            <option value="Embassy/Stamped">Embassy / Stamped</option>
+            <option value="Stamped">Stamped</option>
+            <option value="Ticketed">Ticketed</option>
             <option value="Departed">Departed</option>
+            <option value="Cancelled">Cancelled</option>
           </select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const dataStr =
-                "data:text/json;charset=utf-8," +
-                encodeURIComponent(JSON.stringify(filteredApplicants, null, 2));
-              const downloadAnchor = document.createElement("a");
-              downloadAnchor.setAttribute("href", dataStr);
-              downloadAnchor.setAttribute("download", "applicants_export.json");
-              document.body.appendChild(downloadAnchor);
-              downloadAnchor.click();
-              downloadAnchor.remove();
-            }}
-            className="text-xs text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-          >
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            Export
-          </Button>
-
-          <Link href="/applicants/new">
-            <Button
-              size="sm"
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-medium"
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              New Applicant
-            </Button>
-          </Link>
         </div>
       </div>
 

@@ -25,7 +25,6 @@ import {
   Plane,
   Fingerprint,
   Send,
-  Sparkles,
   ChevronRight,
   Eye,
   Phone,
@@ -165,7 +164,7 @@ export default function ApplicantDetailPage() {
       <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-8 text-center space-y-4">
         <h3 className="text-lg font-bold text-rose-800 dark:text-rose-300">Applicant Not Found</h3>
         <p className="text-xs text-rose-600 dark:text-rose-400">
-          The requested record ({applicantId}) does not exist in the database.
+          The requested record ({applicantId}) was not found in the records.
         </p>
         <Link href="/applicants">
           <Button variant="outline" size="sm">
@@ -450,18 +449,35 @@ export default function ApplicantDetailPage() {
                   Stage: Processing (Parallel LMS, Injaz, and Wakala Streams)
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
-                  Update clearance statuses. Once LMS is Issued and Wakala/Injaz are Completed, proceed to Visa Stamping.
+                  Update clearance statuses. Once LMS is Issued and Wakala/Injaz are Completed, proceed strictly to Visa Stamping.
                 </p>
               </div>
-              <Button
-                onClick={() => {
-                  setProcessingInitialTab("lms");
-                  setIsProcessingModalOpen(true);
-                }}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-              >
-                Open Clearance Portal
-              </Button>
+              <div className="flex items-center gap-2">
+                {applicant.lms_processing?.status === "Issued" &&
+                applicant.injaz_processing?.status === "Completed" &&
+                applicant.wakala_processing?.status === "Completed" && (
+                  <Button
+                    onClick={() => {
+                      setProcessingInitialTab("stamp");
+                      setIsProcessingModalOpen(true);
+                    }}
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
+                  >
+                    <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Proceed to Visa Stamping
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setProcessingInitialTab("lms");
+                    setIsProcessingModalOpen(true);
+                  }}
+                  className="text-xs border-slate-300 dark:border-[#26262d]"
+                >
+                  Manage Clearances
+                </Button>
+              </div>
             </div>
 
             {/* 3 Parallel Clearances Grid */}
@@ -476,7 +492,7 @@ export default function ApplicantDetailPage() {
                     {applicant.lms_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.lms_processing?.employee || "sara@agency.et"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.lms_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -500,7 +516,7 @@ export default function ApplicantDetailPage() {
                     {applicant.injaz_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.injaz_processing?.employee || "dawit@agency.et"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.injaz_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -524,7 +540,7 @@ export default function ApplicantDetailPage() {
                     {applicant.wakala_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.wakala_processing?.employee || "tigist@agency.et"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.wakala_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -726,7 +742,7 @@ export default function ApplicantDetailPage() {
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
               <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <HeartPulse className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                Medical & Compliance Watchdog
+                Medical & Compliance Expiry Monitor
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-3 text-xs">
@@ -752,12 +768,98 @@ export default function ApplicantDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Candidate Fees & Financials Ledger */}
+          {(() => {
+            const allFees = [
+              ...(applicant.lms_processing?.financials || []),
+              ...(applicant.injaz_processing?.financials || []),
+              ...(applicant.wakala_processing?.financials || []),
+              ...(applicant.dsr_stamp?.financials || []),
+              ...(applicant.departure_info?.financials || []),
+              ...(applicant.income_expense_logs || []),
+            ];
+            const candidateIncome = allFees
+              .filter((f: any) => f.transaction_type === "Income")
+              .reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
+            const candidateExpense = allFees
+              .filter((f: any) => f.transaction_type === "Expense")
+              .reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
+
+            return (
+              <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                      Candidate Fees & Expenses
+                    </CardTitle>
+                    <Badge variant={candidateExpense > 0 || candidateIncome > 0 ? "success" : "neutral"}>
+                      {allFees.length} Record{allFees.length === 1 ? "" : "s"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-[#16161b] border border-slate-200/60 dark:border-[#26262d]">
+                    <div>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Income</span>
+                      <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 font-mono">
+                        +${candidateIncome.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Expense</span>
+                      <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">
+                        -${candidateExpense.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {allFees.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500 italic py-1 text-center">
+                      No fees or clearance expenses recorded yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {allFees.map((fee: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2 rounded-md border border-slate-100 dark:border-[#222227] bg-white dark:bg-[#121215]"
+                        >
+                          <div className="space-y-0.5 max-w-[70%]">
+                            <p className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
+                              {fee.description || fee.source_doctype || "Clearance Fee"}
+                            </p>
+                            <p className="text-[10px] text-slate-400">
+                              {fee.date || "Today"} • {fee.source_doctype || "Clearance"}
+                            </p>
+                          </div>
+                          <span
+                            className={`font-mono font-bold text-xs ${
+                              fee.transaction_type === "Income"
+                                ? "text-emerald-700 dark:text-emerald-400"
+                                : "text-rose-600 dark:text-rose-400"
+                            }`}
+                          >
+                            {fee.transaction_type === "Income" ? "+" : "-"}${Number(fee.amount).toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       </div>
 
       {/* Contract Request WhatsApp Modal */}
       <ContractRequestModal
-        applicant={applicant}
+        applicant={{
+          ...applicant,
+          cv_record: applicant.cv_record || applicant.cv_record_data?.name || `CV-${applicant.name.replace("APP-", "")}`,
+        }}
         isOpen={isContractModalOpen}
         onClose={() => setIsContractModalOpen(false)}
       />

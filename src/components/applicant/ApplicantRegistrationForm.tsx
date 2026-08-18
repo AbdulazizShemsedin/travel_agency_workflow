@@ -12,6 +12,8 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
+  Save,
+  CheckCircle2,
 } from "lucide-react";
 import {
   BaseApplicantFormValues,
@@ -137,7 +139,9 @@ export function ApplicantRegistrationForm({
   const queryClient = useQueryClient();
 
   const [currentStep, setCurrentStep] = React.useState<number>(1);
-  const [maxReachedStep, setMaxReachedStep] = React.useState<number>(1);
+  const [maxReachedStep, setMaxReachedStep] = React.useState<number>(
+    existingApplicantId ? 5 : 1
+  );
   const [draftApplicantId, setDraftApplicantId] = React.useState<string | null>(
     existingApplicantId || null
   );
@@ -315,6 +319,31 @@ export function ApplicantRegistrationForm({
     },
   });
 
+  // DIRECT SAVE / UPDATE CHANGES (FOR EDIT MODE)
+  const saveChangesMutation = useMutation({
+    mutationFn: async () => {
+      if (!draftApplicantId) throw new Error("No applicant ID available to update.");
+      const formData = getValues();
+      return await updateApplicantDraft(draftApplicantId, formData);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", data.name] });
+      toast.success("Applicant changes saved successfully!", {
+        description: "All profile details and official CV have been updated.",
+      });
+      if (onSuccessRedirect && draftApplicantId) {
+        onSuccessRedirect(draftApplicantId);
+      }
+    },
+    onError: (error: unknown) => {
+      const err = error as ApiError;
+      toast.error("Failed to save changes", {
+        description: err.message || "Please check the entered values.",
+      });
+    },
+  });
+
   // 2. REGISTER APPLICANT MUTATION
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -446,6 +475,41 @@ export function ApplicantRegistrationForm({
 
   return (
     <div className="space-y-6">
+      {/* Edit Mode Top Banner */}
+      {existingApplicantId && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-950/30 p-3.5 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-xs">
+              <Save className="h-4 w-4" />
+            </span>
+            <div>
+              <div className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                Editing Applicant ({existingApplicantId})
+              </div>
+              <div className="text-[11px] text-emerald-800/80 dark:text-emerald-400">
+                You can switch between any step freely and save your changes at any time.
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => saveChangesMutation.mutate()}
+            disabled={saveChangesMutation.isPending}
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
+          >
+            {saveChangesMutation.isPending ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Changes...
+              </>
+            ) : (
+              <>
+                <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes Now
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* Stepper Header */}
       <ApplicantStepper
         currentStep={currentStep}
@@ -487,39 +551,60 @@ export function ApplicantRegistrationForm({
             )}
             {draftApplicantId && (
               <span className="hidden items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 sm:inline-flex">
-                Draft ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
+                ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Save Draft Action */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => saveDraftMutation.mutate()}
-              disabled={isSavingDraft || isRegistering}
-              className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium"
-            >
-              {isSavingDraft ? (
-                <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Saving Draft...
-                </>
-              ) : (
-                <>
-                  <Bookmark className="mr-1.5 h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Save Draft
-                </>
-              )}
-            </Button>
+            {/* If in edit mode, provide primary Save Changes button on EVERY step */}
+            {existingApplicantId ? (
+              <Button
+                type="button"
+                onClick={() => saveChangesMutation.mutate()}
+                disabled={saveChangesMutation.isPending}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
+              >
+                {saveChangesMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes
+                  </>
+                )}
+              </Button>
+            ) : (
+              /* Save Draft Action */
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => saveDraftMutation.mutate()}
+                disabled={isSavingDraft || isRegistering}
+                className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium"
+              >
+                {isSavingDraft ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Saving Draft...
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="mr-1.5 h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                    Save Draft
+                  </>
+                )}
+              </Button>
+            )}
 
             {/* Next or Register Action */}
             {currentStep < FORM_STEPS.length ? (
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-xs"
+                variant={existingApplicantId ? "outline" : "default"}
+                className={existingApplicantId ? "text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#26262d]" : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-xs"}
               >
                 Next Step
                 <ArrowRight className="ml-1.5 h-4 w-4" />

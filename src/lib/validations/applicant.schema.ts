@@ -120,11 +120,26 @@ export const baseApplicantSchema = z.object({
   photo_full_body: z.string().optional().or(z.literal("")),
   passport_scan: z.string().optional().or(z.literal("")),
 
-  // Fees & Registration
+  // Fees & Registration (Applicant Fee)
   fee_required: optionalBoolean,
   registration_fee_amount: optionalNumber(z.number().min(0)),
+  fee_type: z.enum(["Registration Fee", "Processing Fee", "Visa Fee", "Other"]).default("Registration Fee"),
+  fee_amount: optionalNumber(z.number().min(0)),
+  fee_direction: z.enum(["Income", "Expense"]).default("Income"),
+  fee_payment_date: z.string().optional().or(z.literal("")),
+  fee_expiry_date: z.string().optional().or(z.literal("")),
+  fee_status: z.enum(["Pending", "Paid", "Expired", "Refunded"]).default("Pending"),
+  fee_notes: z.string().optional().or(z.literal("")),
 
-  // Stage 3: Optional Context Fields
+  // Physical & CV Attributes
+  monthly_salary: z.string().trim().optional().or(z.literal("")),
+  height: z.string().trim().optional().or(z.literal("")),
+  weight: z.string().trim().optional().or(z.literal("")),
+  complexion: z.string().trim().optional().or(z.literal("")),
+  place_of_birth: z.string().trim().optional().or(z.literal("")),
+  leaving_town: z.string().trim().optional().or(z.literal("")),
+
+  // Stage 3: Optional Context & Skills Matrix Fields
   alternate_phone: z.string().trim().optional().or(z.literal("")),
   email: z.string().trim().optional().or(z.literal("")),
   region: z.string().trim().optional().or(z.literal("")),
@@ -136,16 +151,22 @@ export const baseApplicantSchema = z.object({
   ),
   current_employer: z.string().trim().optional().or(z.literal("")),
   years_of_experience: optionalNumber(z.number().min(0).max(50)),
-  english_level: z.enum(LANGUAGE_LEVEL_OPTIONS).optional().or(z.literal("")),
-  arabic_level: z.enum(LANGUAGE_LEVEL_OPTIONS).optional().or(z.literal("")),
+  english_level: z.string().optional().or(z.literal("")),
+  arabic_level: z.string().optional().or(z.literal("")),
   experience_country: z.string().trim().optional().or(z.literal("")),
   experience_period: z.string().trim().optional().or(z.literal("")),
-  skill_cleaning: optionalBoolean,
-  skill_cooking: optionalBoolean,
-  skill_baby_care: optionalBoolean,
-  skill_elder_care: optionalBoolean,
-  skill_driving: optionalBoolean,
-  skill_sewing: optionalBoolean,
+  skill_cleaning: z.union([z.boolean(), z.string()]).default(""),
+  skill_cooking: z.union([z.boolean(), z.string()]).default(""),
+  skill_washing: z.union([z.boolean(), z.string()]).default(""),
+  skill_ironing: z.union([z.boolean(), z.string()]).default(""),
+  skill_baby_sitting: z.union([z.boolean(), z.string()]).default(""),
+  skill_baby_care: z.union([z.boolean(), z.string()]).default(""),
+  skill_children_care: z.union([z.boolean(), z.string()]).default(""),
+  skill_arabic_cooking: z.union([z.boolean(), z.string()]).default(""),
+  skill_elder_care: z.union([z.boolean(), z.string()]).default(""),
+  skill_elderly_care: z.union([z.boolean(), z.string()]).default(""),
+  skill_driving: z.union([z.boolean(), z.string()]).default(""),
+  skill_sewing: z.union([z.boolean(), z.string()]).default(""),
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),
@@ -288,6 +309,10 @@ export const stage2RegistrationSchema = stage1DraftSchema
       }),
     }),
 
+    passport_scan: z
+      .string({ required_error: "Passport document scan is mandatory" })
+      .min(1, "Passport document scan is mandatory for CV generation"),
+
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS, {
       errorMap: () => ({ message: "Medical Status is required for registration" }),
     }),
@@ -359,7 +384,7 @@ export function getExpiryBadgeStatus(days?: number): {
 
   if (days > 0) {
     return {
-      label: `${days} days remaining (Urgent Watchdog)`,
+      label: `${days} days remaining (Expiring Soon)`,
       variant: "destructive",
       textClass: "text-rose-700 dark:text-rose-400",
       bgClass: "bg-rose-50 dark:bg-rose-950/50",

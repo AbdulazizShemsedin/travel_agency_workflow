@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   FileText,
-  Sparkles,
+  FileSearch,
   CheckCircle2,
   XCircle,
   Building2,
@@ -25,6 +25,7 @@ import {
 import {
   getApplicant,
   parseDossierFileApi,
+  approveDossierAndSelectApplicant,
 } from "@/lib/api/applicantApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -201,8 +202,11 @@ export default function ContractorDocPage() {
   const approveMutation = useMutation({
     mutationFn: async (approved: boolean) => {
       if (approved) {
-        const dossierName = `DOSSIER-${applicantId.replace("APP-", "")}`;
-        return await parseDossierFileApi(dossierName);
+        return await approveDossierAndSelectApplicant(applicantId, extractedData ? {
+          sponsor_name: extractedData.sponsor_name,
+          sponsor_id: extractedData.sponsor_id,
+          contractor_name: extractedData.contractor_name,
+        } : undefined);
       } else {
         setExtractedData(null);
         return null;
@@ -465,8 +469,8 @@ export default function ContractorDocPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Contractor Document AI Extractor
+                  <FileSearch className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                  Contractor Document Extractor
                 </CardTitle>
                 <Badge variant={extractedData ? "success" : "neutral"}>
                   {extractedData ? "Extracted" : "Pending Extraction"}
@@ -491,7 +495,7 @@ export default function ContractorDocPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-4 w-4 text-emerald-300" />
+                    <FileSearch className="mr-2 h-4 w-4 text-emerald-300" />
                     Extract Info from Document
                   </>
                 )}

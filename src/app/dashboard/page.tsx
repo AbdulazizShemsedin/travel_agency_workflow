@@ -10,28 +10,16 @@ import {
   Plane,
   AlertTriangle,
   ArrowRight,
-  TrendingUp,
-  ShieldAlert,
   Loader2,
-  Calendar,
-  Sparkles,
   Search,
-  Building2,
-  Fingerprint,
-  FileCheck2,
-  FileText,
   UserCheck,
-  Send,
-  DollarSign,
-  ChevronRight,
   PlusCircle,
-  ExternalLink,
+  ChevronRight,
   Activity,
-  ArrowUpRight,
   Check,
 } from "lucide-react";
 import { getApplicantsList } from "@/lib/api/applicantApi";
-import { calculateRemainingDays, getExpiryBadgeStatus } from "@/lib/validations/applicant.schema";
+import { calculateRemainingDays } from "@/lib/validations/applicant.schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +33,7 @@ export default function DashboardPage() {
     queryFn: getApplicantsList,
   });
 
-  // Calculate dynamic stats
+  // Calculate dynamic stats from real backend database
   const totalCount = applicants.length;
   const draftCount = applicants.filter((a) => a.applicant_state === "Draft").length;
   const registeredCount = applicants.filter((a) => a.applicant_state === "Registered").length;
@@ -68,17 +56,16 @@ export default function DashboardPage() {
     (a) => a.injaz_processing?.status === "Completed" || a.applicant_state === "Processing"
   ).length;
 
-  const inProgressCount =
-    applicants.filter(
-      (a) =>
-        a.applicant_state !== "Draft" &&
-        a.applicant_state !== "Departed" &&
-        a.applicant_state !== "Cancelled"
-    ).length;
+  const inProgressCount = applicants.filter(
+    (a) =>
+      a.applicant_state !== "Draft" &&
+      a.applicant_state !== "Departed" &&
+      a.applicant_state !== "Cancelled"
+  ).length;
 
   const completedCount = departedCount + stampedCount + ticketedCount;
 
-  // Real compliance & expiry alerts
+  // Real compliance & expiry alerts from real records only
   const realAlerts = React.useMemo(() => {
     const list: {
       id: string;
@@ -90,14 +77,13 @@ export default function DashboardPage() {
       days: number;
     }[] = [];
 
-    // Derive from live records
     applicants.forEach((a) => {
       if (a.passport_expiry) {
         const pDays = calculateRemainingDays(a.passport_expiry);
         if (pDays !== undefined && pDays <= 30) {
           list.push({
             id: `${a.name}-passport`,
-            name: a.full_name,
+            name: a.full_name || a.name,
             applicantName: a.name,
             type: "Passport",
             message: pDays <= 0 ? "Passport Expired" : `Passport expires in ${pDays} days`,
@@ -111,10 +97,10 @@ export default function DashboardPage() {
         if (mDays !== undefined && mDays <= 30) {
           list.push({
             id: `${a.name}-med`,
-            name: a.full_name,
+            name: a.full_name || a.name,
             applicantName: a.name,
             type: "Medical",
-            message: mDays <= 0 ? "Medical Check Expired" : `Medical Results pending expiry in ${mDays} days`,
+            message: mDays <= 0 ? "Medical Check Expired" : `Medical check expires in ${mDays} days`,
             severity: mDays <= 14 ? "URGENT" : "WARNING",
             days: mDays,
           });
@@ -122,85 +108,80 @@ export default function DashboardPage() {
       }
     });
 
-    // If no real alerts, provide the standardized Figma operational template items
-    if (list.length === 0) {
-      return [
-        {
-          id: "alert-1",
-          name: "Ahmed Muhammed",
-          applicantName: "AM-8921",
-          type: "Passport" as const,
-          message: "Passport expires in 2 days",
-          severity: "URGENT" as const,
-          days: 2,
-        },
-        {
-          id: "alert-2",
-          name: "Ali Ahmed",
-          applicantName: "MH-4432",
-          type: "Medical" as const,
-          message: "Medical Results pending expiry",
-          severity: "URGENT" as const,
-          days: 8,
-        },
-        {
-          id: "alert-3",
-          name: "Fatima Ali",
-          applicantName: "FZ-1092",
-          type: "Visa" as const,
-          message: "Visa expiring in 14 days",
-          severity: "WARNING" as const,
-          days: 14,
-        },
-      ];
-    }
-
     return list.sort((a, b) => a.days - b.days);
   }, [applicants]);
 
-  // Figma My Tasks list
-  const operationalTasks = [
-    {
-      id: "task-1",
-      title: "Assign Wakala Application",
-      candidate: "Ahmed Muhammed (Applicant)",
-      applicantId: "APP-2024-1250",
-      type: "Wakala",
-      badge: "WAKALA",
-    },
-    {
-      id: "task-2",
-      title: "Assign Registrar",
-      candidate: "Sara Kebede (Applicant)",
-      applicantId: "APP-2024-1249",
-      type: "Registrar",
-      badge: "DATA INPUT",
-    },
-    {
-      id: "task-3",
-      title: "Assign LMS officer",
-      candidate: "Samuel Abel (Applicant)",
-      applicantId: "APP-2024-1248",
-      type: "LMS",
-      badge: "LMS OFFICER",
-    },
-  ];
+  // Real operational tasks derived from database
+  const operationalTasks = React.useMemo(() => {
+    const tasks: {
+      id: string;
+      title: string;
+      candidate: string;
+      applicantId: string;
+      type: string;
+      badge: string;
+    }[] = [];
 
-  // Pipeline stages matching Figma workflow structure
+    // Applicants in Selected stage need officer assignment
+    applicants
+      .filter((a) => a.applicant_state === "Selected")
+      .forEach((a) => {
+        tasks.push({
+          id: `task-assign-${a.name}`,
+          title: "Assign Clearance Officers",
+          candidate: `${a.full_name || a.name} (Ready for staff assignment)`,
+          applicantId: a.name,
+          type: "Assignment",
+          badge: "ASSIGN OFFICERS",
+        });
+      });
+
+    // Applicants in Registered stage need CV generation
+    applicants
+      .filter((a) => a.applicant_state === "Registered")
+      .forEach((a) => {
+        tasks.push({
+          id: `task-cv-${a.name}`,
+          title: "Generate Bilateral CV",
+          candidate: `${a.full_name || a.name} (Registered & verified)`,
+          applicantId: a.name,
+          type: "CV",
+          badge: "GENERATE CV",
+        });
+      });
+
+    // Applicants in Draft stage need completion
+    applicants
+      .filter((a) => a.applicant_state === "Draft")
+      .forEach((a) => {
+        tasks.push({
+          id: `task-draft-${a.name}`,
+          title: "Complete KYC & Register",
+          candidate: `${a.full_name || a.name} (Draft incomplete)`,
+          applicantId: a.name,
+          type: "Registration",
+          badge: "COMPLETE DRAFT",
+        });
+      });
+
+    return tasks.slice(0, 5);
+  }, [applicants]);
+
+  // Pipeline stages with exact real counts from backend
   const pipelineStages = [
     {
       step: 1,
       title: "Data Input",
-      count: draftCount || 210,
+      count: draftCount,
       badge: "Draft",
       color: "border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161b] text-slate-800 dark:text-zinc-200",
-      accent: "bg-slate-400 dark:bg-zinc-500",
+      accent: "bg-slate-500",
       link: "/applicants?filter=Draft",
     },
     {
       step: 2,
       title: "CV Generated",
-      count: cvCount || 145,
+      count: cvCount,
       badge: "CV Ready",
       color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300",
       accent: "bg-purple-600",
@@ -208,8 +189,8 @@ export default function DashboardPage() {
     },
     {
       step: 3,
-      title: "Request / Contract",
-      count: requestCount || 89,
+      title: "Contract Request",
+      count: requestCount,
       badge: "Contract",
       color: "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-300",
       accent: "bg-amber-500",
@@ -218,7 +199,7 @@ export default function DashboardPage() {
     {
       step: 4,
       title: "Selected",
-      count: selectedCount || 312,
+      count: selectedCount,
       badge: "Selected",
       color: "border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300",
       accent: "bg-blue-600",
@@ -227,22 +208,22 @@ export default function DashboardPage() {
     {
       step: 5,
       title: "Processing",
-      count: processingCount || 430,
+      count: processingCount,
       badge: "Parallel Streams",
       color: "border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200",
       accent: "bg-emerald-700",
       isParent: true,
       subBranches: [
-        { name: "LMS", count: lmsActiveCount || 120, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
-        { name: "WAKALA", count: wakalaActiveCount || 210, color: "text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800" },
-        { name: "INJAZ", count: injazActiveCount || 100, color: "text-blue-700 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800" },
+        { name: "LMS", count: lmsActiveCount, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
+        { name: "WAKALA", count: wakalaActiveCount, color: "text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800" },
+        { name: "INJAZ", count: injazActiveCount, color: "text-blue-700 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800" },
       ],
       link: "/applicants?filter=Processing",
     },
     {
       step: 6,
       title: "Embassy Stamp",
-      count: stampedCount || 42,
+      count: stampedCount,
       badge: "Stamped",
       color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300",
       accent: "bg-teal-600",
@@ -251,7 +232,7 @@ export default function DashboardPage() {
     {
       step: 7,
       title: "Ticket Issued",
-      count: ticketedCount || 58,
+      count: ticketedCount,
       badge: "Ticketed",
       color: "border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-300",
       accent: "bg-indigo-600",
@@ -260,7 +241,7 @@ export default function DashboardPage() {
     {
       step: 8,
       title: "Departure",
-      count: departedCount || 34,
+      count: departedCount,
       badge: "Departed",
       color: "border-emerald-300 dark:border-emerald-700 bg-emerald-100/60 dark:bg-emerald-900/30 text-emerald-950 dark:text-emerald-200 font-bold",
       accent: "bg-emerald-800",
@@ -281,14 +262,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-16">
-      {/* Top Header & Fast Search matching Figma */}
+      {/* Top Header & Search */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Operations Dashboard
+            Dashboard
           </h1>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Real-time candidate pipeline, operational assignment workflows, and compliance alerts.
+            Real-time applicant pipeline and operational status across all workflow stages.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -299,7 +280,7 @@ export default function DashboardPage() {
               placeholder="Search applicants, ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 text-xs h-9 bg-white dark:bg-[#141418] border-slate-200 dark:border-[#26262d]"
+              className="pl-8 text-xs h-9.5 bg-white dark:bg-[#141418] border-slate-200 dark:border-[#26262d]"
             />
           </div>
           <Link href="/applicants/new">
@@ -311,7 +292,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 1. Top Stat Metric Cards matching Figma */}
+      {/* 1. Top Stat Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -328,10 +309,10 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {totalCount > 0 ? totalCount.toLocaleString() : "1,248"}
+                  {totalCount.toLocaleString()}
                 </div>
-                <p className="mt-1 flex items-center text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <TrendingUp className="mr-1 h-3.5 w-3.5" /> +97 this month
+                <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
+                  Total in system
                 </p>
               </>
             )}
@@ -353,12 +334,10 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {inProgressCount > 0 ? inProgressCount.toLocaleString() : "842"}
+                  {inProgressCount.toLocaleString()}
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-zinc-400">
-                  <span className="font-semibold text-amber-700 dark:text-amber-400">Wakala</span> •{" "}
-                  <span className="font-semibold text-blue-700 dark:text-blue-400">Injaz</span> •{" "}
-                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">LMS</span>
+                  <span>Registered & Processing</span>
                 </div>
               </>
             )}
@@ -368,7 +347,7 @@ export default function DashboardPage() {
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-              Completed
+              Completed / Cleared
             </CardDescription>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400">
               <CheckCircle2 className="h-4 w-4" />
@@ -380,10 +359,10 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {completedCount > 0 ? completedCount.toLocaleString() : "256"}
+                  {completedCount.toLocaleString()}
                 </div>
                 <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                  Cleared & ready for flight
+                  Stamped, ticketed or departed
                 </p>
               </>
             )}
@@ -393,7 +372,7 @@ export default function DashboardPage() {
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-              Departed this Mo.
+              Departed
             </CardDescription>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-400">
               <Plane className="h-4 w-4" />
@@ -405,10 +384,10 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {departedCount > 0 ? departedCount.toLocaleString() : "34"}
+                  {departedCount.toLocaleString()}
                 </div>
                 <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                  100% deployment arrival
+                  Overseas placement complete
                 </p>
               </>
             )}
@@ -416,8 +395,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 2. Figma Pipeline Overview Section (Matching Design Structure with Emerald/Dark Colors) */}
-      <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-sm overflow-hidden">
+      {/* 2. Pipeline Overview Section */}
+      <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs overflow-hidden">
         <CardHeader className="border-b border-slate-100 dark:border-[#222227] pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
@@ -426,26 +405,24 @@ export default function DashboardPage() {
                 Pipeline Overview
               </CardTitle>
               <CardDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                Complete 8-stage operational flow diagram with nested parallel LMS, Wakala, and Injaz streams.
+                Live candidate counts across all active recruitment stages.
               </CardDescription>
             </div>
             <Link href="/applicants">
               <Button variant="outline" size="sm" className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b]">
-                Manage All Candidates <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                View All Applicants <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Button>
             </Link>
           </div>
         </CardHeader>
 
         <CardContent className="p-6">
-          {/* Multi-Stage Step Ribbon Flow */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
-                className={`relative rounded-xl border p-4 transition-all duration-200 hover:shadow-md ${stage.color}`}
+                className={`relative rounded-xl border p-4 transition-all duration-200 hover:shadow-xs ${stage.color}`}
               >
-                {/* Step indicator top header */}
                 <div className="flex items-center justify-between mb-2">
                   <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                     <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold ${stage.accent}`}>
@@ -462,11 +439,10 @@ export default function DashboardPage() {
                   {stage.title}
                 </h4>
 
-                {/* Sub-branches for Processing stage */}
                 {stage.isParent && stage.subBranches ? (
                   <div className="mt-2 space-y-1.5 border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2">
                     <p className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase">
-                      Parallel Sub-Streams:
+                      Sub-Streams:
                     </p>
                     <div className="grid grid-cols-3 gap-1.5">
                       {stage.subBranches.map((sub) => (
@@ -497,22 +473,22 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Operational Grid: Expiry Alerts & My Tasks (Matching Figma Layout) */}
+      {/* 3. Expiry Alerts & Pending Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Figma Expiry Alerts Box */}
+        {/* Left Column: Expiry Alerts */}
         <div className="lg:col-span-6 space-y-4">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="h-4 w-4" />
                 </div>
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                    Expiry Alerts
+                    Document Expiry Warnings
                   </CardTitle>
                   <CardDescription className="text-[11px]">
-                    Actionable document and visa validity warnings.
+                    Passports and medical certificates expiring soon.
                   </CardDescription>
                 </div>
               </div>
@@ -521,44 +497,51 @@ export default function DashboardPage() {
               </Link>
             </CardHeader>
             <CardContent className="pt-4 space-y-3">
-              {realAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                        alert.severity === "URGENT"
-                          ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                          : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-                      }`}>
-                        {alert.severity}
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {alert.message}
-                      </span>
+              {realAlerts.length > 0 ? (
+                realAlerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                          alert.severity === "URGENT"
+                            ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                            : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                        }`}>
+                          {alert.severity}
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {alert.message}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Candidate: <strong className="text-slate-800 dark:text-zinc-200">{alert.name}</strong> • ID: <span className="font-mono">{alert.applicantName}</span>
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                      Candidate: <strong className="text-slate-800 dark:text-zinc-200">{alert.name}</strong> • ID: <span className="font-mono">{alert.applicantName}</span>
-                    </p>
+                    <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-semibold border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215]"
+                      >
+                        View Profile
+                      </Button>
+                    </Link>
                   </div>
-                  <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs font-semibold border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215] hover:bg-slate-100 dark:hover:bg-[#1e1e26]"
-                    >
-                      Resolve
-                    </Button>
-                  </Link>
+                ))
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
+                  <Check className="h-6 w-6 mx-auto mb-1 text-emerald-600 dark:text-emerald-400" />
+                  All candidate passports and medical checks are currently valid.
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Right Column: Figma My Tasks / Quick Assign Box */}
+        {/* Right Column: Pending Operational Tasks */}
         <div className="lg:col-span-6 space-y-4">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
@@ -568,58 +551,65 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                    My Tasks & Quick Assign
+                    Action Items & Tasks
                   </CardTitle>
                   <CardDescription className="text-[11px]">
-                    Pending staff assignments and operational queues.
+                    Applicants requiring next step action.
                   </CardDescription>
                 </div>
               </div>
-              <Link href="/employees" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-                View Staff
+              <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+                View All
               </Link>
             </CardHeader>
             <CardContent className="pt-4 space-y-3">
-              {operationalTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.5 font-bold text-[10px] text-emerald-900 dark:text-emerald-300">
-                        {task.badge}
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {task.title}
-                      </span>
+              {operationalTasks.length > 0 ? (
+                operationalTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.5 font-bold text-[10px] text-emerald-900 dark:text-emerald-300">
+                          {task.badge}
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {task.title}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        {task.candidate}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                      {task.candidate}
-                    </p>
+                    <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+                      >
+                        Open
+                      </Button>
+                    </Link>
                   </div>
-                  <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
-                    >
-                      Quick Assign
-                    </Button>
-                  </Link>
+                ))
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
+                  <Check className="h-6 w-6 mx-auto mb-1 text-emerald-600 dark:text-emerald-400" />
+                  No pending action items. All applicants are up to date.
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* 4. Live Recent Candidate Activity Stream */}
+      {/* 4. Live Recent Applicants Stream */}
       <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Activity className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-              Recent Candidate Activity Stream
+              Recent Applicants
             </CardTitle>
             <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
               View All Directory →
@@ -628,33 +618,39 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-slate-100 dark:divide-[#222227]">
-            {filteredApplicants.slice(0, 5).map((applicant) => (
-              <Link
-                key={applicant.name}
-                href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                className="flex items-center justify-between p-4 hover:bg-slate-50/80 dark:hover:bg-[#16161b] transition cursor-pointer text-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-[#1c1c22] font-bold text-slate-700 dark:text-zinc-300">
-                    {applicant.first_name?.[0]}
-                    {applicant.last_name?.[0]}
+            {filteredApplicants.length > 0 ? (
+              filteredApplicants.slice(0, 5).map((applicant) => (
+                <Link
+                  key={applicant.name}
+                  href={`/applicants/${encodeURIComponent(applicant.name)}`}
+                  className="flex items-center justify-between p-4 hover:bg-slate-50/80 dark:hover:bg-[#16161b] transition cursor-pointer text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-[#1c1c22] font-bold text-slate-700 dark:text-zinc-300">
+                      {applicant.first_name?.[0]}
+                      {applicant.last_name?.[0]}
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-slate-900 dark:text-white">
+                        {applicant.full_name || `${applicant.first_name} ${applicant.last_name}`}
+                      </h5>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        ID: <span className="font-mono">{applicant.name}</span> • Passport: <span className="font-mono">{applicant.passport_number || "Pending"}</span>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="font-bold text-slate-900 dark:text-white">
-                      {applicant.full_name || `${applicant.first_name} ${applicant.last_name}`}
-                    </h5>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                      ID: <span className="font-mono">{applicant.name}</span> • Passport: <span className="font-mono">{applicant.passport_number || "Pending"}</span>
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <Badge variant="default">{applicant.applicant_state}</Badge>
-                  <ChevronRight className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
-                </div>
-              </Link>
-            ))}
+                  <div className="flex items-center gap-3">
+                    <Badge variant="default">{applicant.applicant_state}</Badge>
+                    <ChevronRight className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-400 dark:text-zinc-500">
+                No applicants registered yet.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
