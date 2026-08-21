@@ -16,6 +16,8 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ const navItems = [
   { label: "Applicants", href: "/applicants", icon: Users },
   { label: "Employees", href: "/employees", icon: Briefcase },
   { label: "Contractors", href: "/contractors", icon: Building2 },
+  { label: "Complaints Desk", href: "/complaints", icon: AlertCircle },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Expenses/Income", href: "/expenses-income", icon: Receipt },
 ];
@@ -145,6 +148,24 @@ export function AppSidebar({
 
         {/* Bottom Section */}
         <div className="border-t border-slate-100 dark:border-[#222227] p-3 space-y-2">
+          <Link
+            href="/agent"
+            onClick={onCloseMobile}
+            title={isCollapsed ? "Agency Portal" : undefined}
+            className={cn(
+              "flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200/80 dark:border-emerald-800/80 px-2.5 py-2 text-xs font-semibold text-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition",
+              isCollapsed ? "justify-center px-1" : ""
+            )}
+          >
+            <Globe2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
+            {!isCollapsed && (
+              <div className="flex flex-1 items-center justify-between">
+                <span>Partner Agency Portal</span>
+                <ExternalLink className="h-3 w-3 text-emerald-600" />
+              </div>
+            )}
+          </Link>
+
           <Link
             href="/settings"
             onClick={onCloseMobile}

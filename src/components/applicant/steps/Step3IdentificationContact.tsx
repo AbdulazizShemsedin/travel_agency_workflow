@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { ShieldCheck, PhoneCall, Image as ImageIcon, Loader2, FileText, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, PhoneCall, Image as ImageIcon, Loader2, FileText, CheckCircle2, Sparkles, ScanLine } from "lucide-react";
 import { BaseApplicantFormValues, JOB_APPLIED_OPTIONS } from "@/lib/validations/applicant.schema";
-import { uploadFileApi } from "@/lib/api/applicantApi";
+import { uploadFileApi, scanPassportMRZApi } from "@/lib/api/applicantApi";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 interface Step3IdentificationContactProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,6 +28,8 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
   const passportScanValue = watch("passport_scan");
   const [passportScanPreview, setPassportScanPreview] = React.useState<string | null>(passportScanValue || null);
   const [isUploadingScan, setIsUploadingScan] = React.useState(false);
+  const [isScanningOCR, setIsScanningOCR] = React.useState(false);
+  const [ocrSuccessMsg, setOcrSuccessMsg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (passportScanValue) {
@@ -42,8 +45,10 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
       setIsUploadingScan(true);
 
       try {
+        let uploadedUrl = "";
         const res = await uploadFileApi(file, "Applicant", "", "passport_scan");
         if (res?.message?.file_url) {
+          uploadedUrl = res.message.file_url;
           setValue("passport_scan", res.message.file_url, { shouldDirty: true });
           setPassportScanPreview(res.message.file_url);
         } else {
@@ -53,6 +58,29 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
             setValue("passport_scan", base64, { shouldDirty: true });
           };
           reader.readAsDataURL(file);
+        }
+
+        // Trigger OCR extraction
+        setIsScanningOCR(true);
+        try {
+          const ocrRes = await scanPassportMRZApi({ file_url: uploadedUrl || localUrl });
+          if (ocrRes?.data) {
+            const d = ocrRes.data;
+            if (d.passport_number) setValue("passport_number", d.passport_number.toUpperCase(), { shouldDirty: true });
+            if (d.date_of_birth) setValue("date_of_birth", d.date_of_birth, { shouldDirty: true });
+            if (d.passport_expiry) setValue("passport_expiry", d.passport_expiry, { shouldDirty: true });
+            if (d.first_name && !watch("first_name")) setValue("first_name", d.first_name, { shouldDirty: true });
+            if (d.last_name && !watch("last_name")) setValue("last_name", d.last_name, { shouldDirty: true });
+            if (d.gender && !watch("gender")) setValue("gender", d.gender as "Male" | "Female", { shouldDirty: true });
+            if (d.nationality && !watch("nationality")) setValue("nationality", d.nationality, { shouldDirty: true });
+
+            setOcrSuccessMsg(`✓ Passport MRZ Scanned (${d.passport_number || "EP Verified"}). Demographics auto-populated.`);
+            setTimeout(() => setOcrSuccessMsg(null), 6000);
+          }
+        } catch {
+          // graceful fallback
+        } finally {
+          setIsScanningOCR(false);
         }
       } catch {
         const reader = new FileReader();
@@ -256,7 +284,21 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
                   <span>Passport scan attached</span>
                 </div>
               )}
+
+              {isScanningOCR && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-300 font-medium animate-pulse">
+                  <ScanLine className="h-4 w-4 text-emerald-600 animate-spin" />
+                  <span>Extracting MRZ OCR fields...</span>
+                </div>
+              )}
             </div>
+
+            {ocrSuccessMsg && (
+              <div className="mt-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 p-2.5 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{ocrSuccessMsg}</span>
+              </div>
+            )}
             {errors.passport_scan && (
               <p className="text-xs text-rose-600 dark:text-rose-400 mt-1.5">{errors.passport_scan.message}</p>
             )}

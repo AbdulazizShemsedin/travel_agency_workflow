@@ -659,7 +659,7 @@ export function ProcessingStreamsModal({
 
           {/* Sequential Workflow Tabs */}
           <div className="flex flex-wrap gap-1.5 pt-3">
-            {/* 1. LMS Tab */}
+            {/* 1. LMIS Tab */}
             <button
               type="button"
               onClick={() => setActiveTab("lms")}
@@ -670,7 +670,7 @@ export function ProcessingStreamsModal({
               }`}
             >
               <Plane className="h-3.5 w-3.5" />
-              LMS
+              LMIS
               {isLmsComplete && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
             </button>
 
@@ -762,12 +762,17 @@ export function ProcessingStreamsModal({
           </div>
         </DialogHeader>
 
-        {/* Tab 1: LMS Clearance */}
+        {/* Tab 1: LMIS Clearance */}
         {activeTab === "lms" && (
           <div className="space-y-4 py-2 text-xs">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-950/40 dark:border-emerald-800/60 p-3 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
+              <Plane className="h-4 w-4 text-emerald-700 shrink-0" />
+              <span><strong>LMIS Stage:</strong> Labor Market Information System electronic quota and work verification.</span>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="font-semibold">LMS Clearance Status</Label>
+                <Label className="font-semibold">LMIS Clearance Status</Label>
                 <select
                   value={lmsStatus}
                   onChange={(e) => setLmsStatus(e.target.value as "Pending" | "Issued" | "Rejected")}
@@ -806,7 +811,7 @@ export function ProcessingStreamsModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="font-semibold">LMS Issued Date</Label>
+                <Label className="font-semibold">LMIS Issued Date</Label>
                 <Input
                   type="date"
                   value={lmsIssuedOn}
@@ -815,17 +820,17 @@ export function ProcessingStreamsModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="font-semibold">Labor Permit / Document No</Label>
+                <Label className="font-semibold">LMIS Permit / Document No</Label>
                 <Input
                   value={additionalField1}
                   onChange={(e) => setAdditionalField1(e.target.value)}
-                  placeholder="LMS-PERMIT-88912"
+                  placeholder="LMIS-PERMIT-88912"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label className="font-semibold">LMS Processing Notes</Label>
+              <Label className="font-semibold">LMIS Processing Notes</Label>
               <Textarea
                 rows={2}
                 value={lmsNotes}
@@ -834,8 +839,8 @@ export function ProcessingStreamsModal({
               />
             </div>
 
-            {/* Applicant Fee for LMS */}
-            {renderApplicantFeeSection(lmsFee, setLmsFee, "LMS Processing")}
+            {/* Applicant Fee for LMIS */}
+            {renderApplicantFeeSection(lmsFee, setLmsFee, "LMIS Processing")}
 
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#222227]">
               {isLmsComplete && isInjazComplete && isWakalaComplete && !isStamped ? (
@@ -852,7 +857,7 @@ export function ProcessingStreamsModal({
                   disabled={isPending}
                   className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
                 >
-                  Save LMS Clearance
+                  Save LMIS Clearance
                 </Button>
               </div>
             </div>
@@ -959,6 +964,18 @@ export function ProcessingStreamsModal({
         {/* Tab 3: Wakala Authorization */}
         {activeTab === "wakala" && (
           <div className="space-y-4 py-2 text-xs">
+            {applicant.destination_country === "Kuwait" ? (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 dark:bg-sky-950/60 dark:border-sky-800 p-3 text-sky-900 dark:text-sky-200 text-xs">
+                <p className="font-semibold">Kuwait Corridor Notice:</p>
+                <p className="text-[11px] mt-0.5">Musaned electronic power of attorney is not required for Kuwait deployment. Wakala clearance can be marked completed directly.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50/70 dark:bg-[#16161b] p-3 text-slate-700 dark:text-zinc-300 text-xs">
+                <p className="font-semibold">Musaned Power of Attorney (Saudi Arabia):</p>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">Musaned is an external government portal. Ensure the candidate has been registered on Musaned externally before confirming Wakala payment.</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="font-semibold">Wakala Clearance Status</Label>

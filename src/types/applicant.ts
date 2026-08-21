@@ -252,6 +252,7 @@ export interface Applicant {
   passport_expiry?: string;
   place_of_issue?: string;
   job_applied?: string;
+  destination_country?: string;
   highest_education?: string;
   labour_id?: string;
   national_id?: string;
@@ -430,5 +431,142 @@ export interface CVRecord {
   financials?: IncomeExpenseLog[];
   creation?: string;
   modified?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 10. AGENCY PORTAL & CANDIDATE DISCOVERY TYPES
+// ---------------------------------------------------------------------------
+
+export interface PortalAvailableCandidate {
+  name: string; // e.g. "APP-00012"
+  applicant_id?: string;
+  full_name: string;
+  gender: "Male" | "Female" | string;
+  age: number;
+  date_of_birth?: string;
+  nationality: string;
+  destination_country: string;
+  job_applied: string;
+  monthly_salary?: number | string;
+  photo_passport?: string;
+  photo_full_body?: string;
+  skill_cleaning?: number | string | boolean;
+  skill_cooking?: number | string | boolean;
+  skill_arabic_cooking?: number | string | boolean;
+  skill_baby_sitting?: number | string | boolean;
+  skill_washing?: number | string | boolean;
+  skill_ironing?: number | string | boolean;
+  skill_elderly_care?: number | string | boolean;
+  experience_country?: string;
+  experience_period?: string;
+  religion?: string;
+  cv_file_url?: string;
+  selected_at?: string;
+  selected_by?: string;
+}
+
+export interface PortalSelectCandidateResponse {
+  status: "success" | "error";
+  applicant_id: string;
+  contractor: string;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// 11. FOREIGN AGENCY COMPLAINTS DESK TYPES
+// ---------------------------------------------------------------------------
+
+export type ComplaintSeverity = "Critical" | "High" | "Medium" | "Low";
+export type ComplaintStatus = "Open" | "In Progress" | "Resolved" | "Closed" | string;
+
+export interface AgencyComplaint {
+  name: string; // e.g. "COMP-00015"
+  contractor: string;
+  applicant: string;
+  full_name?: string;
+  passport_number?: string;
+  complaint_category:
+    | "Medical Refusal / Unfit on Arrival"
+    | "Refusal to Work / Runaway"
+    | "Worker Incompetence / Skill Mismatch"
+    | "Legal / Law Enforcement Violation"
+    | "Passport / Documentation Error"
+    | "Other";
+  severity: ComplaintSeverity;
+  status: ComplaintStatus;
+  days_unresolved?: number;
+  complaint_details: string;
+  attachment?: string;
+  resolution_notes?: string;
+  outcome?:
+    | "Returned / Free Replacement Required"
+    | "Resolved via Mediation"
+    | "Contract Terminated with Sponsor"
+    | "Worker Transferred"
+    | "Dismissed / Invalid Claim"
+    | string;
+  return_date?: string;
+  replacement_applicant?: string;
+  creation?: string;
+  modified?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 12. OPERATIONS & EXECUTIVE REPORTING TYPES
+// ---------------------------------------------------------------------------
+
+export interface OperationsSummaryResponse {
+  period?: {
+    from_date: string;
+    to_date: string;
+  };
+  intake: {
+    new_applicants: number;
+    standard: number;
+    muayena: number;
+    muslim: number;
+    non_muslim: number;
+    cvs_generated: number;
+    dossiers_created: number;
+  };
+  medical: {
+    fit: number;
+    unfit: number;
+  };
+  clearances: {
+    lms_issued: number;
+    stamped: number;
+    tickets_booked: number;
+    departed: number;
+  };
+  complaints: {
+    new_logged: number;
+    resolved: number;
+    open_backlog: number;
+  };
+  selections: {
+    selected_today: number;
+    ksa_pipeline: number;
+    kuwait_pipeline: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 13. PASSPORT MRZ OCR EXTRACTION TYPES
+// ---------------------------------------------------------------------------
+
+export interface PassportOCRResponse {
+  status: "success" | "error" | string;
+  data: {
+    passport_number?: string;
+    first_name?: string;
+    last_name?: string;
+    nationality?: string;
+    date_of_birth?: string;
+    gender?: "Male" | "Female" | string;
+    passport_expiry?: string;
+    raw_mrz?: string;
+  };
+  message?: string;
 }
 

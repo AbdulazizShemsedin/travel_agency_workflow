@@ -11,6 +11,11 @@ import {
   DSRTicket,
   DSRDeparture,
   AccountingSummaryResponse,
+  PortalAvailableCandidate,
+  PortalSelectCandidateResponse,
+  AgencyComplaint,
+  OperationsSummaryResponse,
+  PassportOCRResponse,
 } from "@/types/applicant";
 import { BaseApplicantFormValues } from "@/lib/validations/applicant.schema";
 
@@ -1399,4 +1404,170 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
   }
 
   return notifications.filter((n) => !dismissedIds.includes(n.id));
+}
+
+// ---------------------------------------------------------------------------
+// 10. CANDIDATE POOL & AGENT DISCOVERY APIS
+// ---------------------------------------------------------------------------
+
+export async function getPortalAvailableCandidates(filters?: {
+  contractor?: string;
+  destination_country?: string;
+  job_applied?: string;
+  religion?: string;
+  limit?: number;
+}): Promise<PortalAvailableCandidate[]> {
+  const params = new URLSearchParams();
+  if (filters?.contractor) params.append("contractor", filters.contractor);
+  if (filters?.destination_country) params.append("destination_country", filters.destination_country);
+  if (filters?.job_applied) params.append("job_applied", filters.job_applied);
+  if (filters?.religion) params.append("religion", filters.religion);
+  if (filters?.limit) params.append("limit", String(filters.limit));
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.get_portal_available_candidates${query}`
+  );
+  return handleApiResponse<PortalAvailableCandidate[]>(res);
+}
+
+export async function portalSelectCandidateApi(
+  applicantId: string,
+  contractor: string
+): Promise<PortalSelectCandidateResponse> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.portal_select_candidate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        applicant_id: applicantId,
+        contractor: contractor,
+      }),
+    }
+  );
+
+  if (res.status === 409) {
+    const error: ApiError = {
+      message: "This applicant is no longer available.",
+      statusCode: 409,
+    };
+    throw error;
+  }
+
+  return handleApiResponse<PortalSelectCandidateResponse>(res);
+}
+
+export async function portalReleaseCandidateApi(
+  applicantId: string,
+  contractor: string
+): Promise<{ message: string }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.portal_release_candidate",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        applicant_id: applicantId,
+        contractor: contractor,
+      }),
+    }
+  );
+  return handleApiResponse<{ message: string }>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 11. PASSPORT MRZ OCR AUTO-SCAN API
+// ---------------------------------------------------------------------------
+
+export async function scanPassportMRZApi(options: {
+  file_url?: string;
+  raw_mrz_text?: string;
+  applicant_name?: string;
+}): Promise<PassportOCRResponse> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.scan_and_populate_passport",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+    }
+  );
+  return handleApiResponse<PassportOCRResponse>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 12. FOREIGN AGENCY COMPLAINTS DESK APIS
+// ---------------------------------------------------------------------------
+
+export async function getAgencyComplaintsApi(filters?: {
+  tab?: "unresolved" | "new" | "resolved";
+  contractor?: string;
+}): Promise<AgencyComplaint[]> {
+  const params = new URLSearchParams();
+  if (filters?.tab) params.append("tab", filters.tab);
+  if (filters?.contractor) params.append("contractor", filters.contractor);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.get_agency_complaints${query}`
+  );
+  return handleApiResponse<AgencyComplaint[]>(res);
+}
+
+export async function submitAgencyComplaintApi(data: {
+  contractor: string;
+  applicant_search: string;
+  complaint_category: string;
+  severity: string;
+  complaint_details: string;
+  attachment?: string;
+  full_name?: string;
+}): Promise<any> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.submit_agency_complaint",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return handleApiResponse<any>(res);
+}
+
+export async function resolveAgencyComplaintApi(data: {
+  complaint_id: string;
+  outcome: string;
+  resolution_notes: string;
+  return_date?: string;
+  replacement_applicant?: string;
+}): Promise<any> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.resolve_agency_complaint",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return handleApiResponse<any>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 13. OPERATIONS & EXECUTIVE REPORTING APIS
+// ---------------------------------------------------------------------------
+
+export async function getOperationsSummaryApi(filters?: {
+  from_date?: string;
+  to_date?: string;
+}): Promise<OperationsSummaryResponse> {
+  const params = new URLSearchParams();
+  if (filters?.from_date) params.append("from_date", filters.from_date);
+  if (filters?.to_date) params.append("to_date", filters.to_date);
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.get_operations_summary${query}`
+  );
+  return handleApiResponse<OperationsSummaryResponse>(res);
 }

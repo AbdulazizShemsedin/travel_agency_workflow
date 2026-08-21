@@ -1,0 +1,158 @@
+"use client";
+
+import * as React from "react";
+import Image from "next/image";
+import {
+  MapPin,
+  Briefcase,
+  Clock,
+  Globe2,
+  Eye,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import { PortalAvailableCandidate } from "@/types/applicant";
+import { Button } from "@/components/ui/button";
+
+interface CandidateCardProps {
+  candidate: PortalAvailableCandidate;
+  onViewDetails: (candidate: PortalAvailableCandidate) => void;
+  onSelect: (candidate: PortalAvailableCandidate) => void;
+  isSelecting?: boolean;
+}
+
+export function CandidateCard({
+  candidate,
+  onViewDetails,
+  onSelect,
+  isSelecting = false,
+}: CandidateCardProps) {
+  const [passportImgError, setPassportImgError] = React.useState(false);
+  const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
+
+  // Fallback avatars if remote images fail
+  const defaultPassport = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
+  const defaultFullBody = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80";
+
+  const passportSrc = (!passportImgError && candidate.photo_passport) ? candidate.photo_passport : defaultPassport;
+  const fullBodySrc = (!fullBodyImgError && candidate.photo_full_body) ? candidate.photo_full_body : defaultFullBody;
+
+  return (
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs hover:shadow-md hover:border-emerald-700/40 dark:hover:border-emerald-500/30 transition-all duration-200">
+      {/* 1. Clean Two-Photo Area */}
+      <div className="relative grid grid-cols-2 gap-1.5 p-2.5 bg-slate-100/70 dark:bg-[#18181e]/60 border-b border-slate-100 dark:border-[#202026]">
+        {/* Formal Passport Photo */}
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-[#202028]">
+          <img
+            src={passportSrc}
+            alt={`${candidate.full_name} - Passport Photo`}
+            onError={() => setPassportImgError(true)}
+            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
+            loading="lazy"
+          />
+          <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white">
+            Formal
+          </div>
+        </div>
+
+        {/* Full-Body Photo */}
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-[#202028]">
+          <img
+            src={fullBodySrc}
+            alt={`${candidate.full_name} - Full Body Photo`}
+            onError={() => setFullBodyImgError(true)}
+            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
+            loading="lazy"
+          />
+          <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white">
+            Full Portrait
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Identity & Facts Section */}
+      <div className="flex flex-1 flex-col p-4">
+        {/* Name & Destination */}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1">
+              {candidate.full_name}
+            </h3>
+            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 mt-0.5">
+              {candidate.job_applied || "Housemaid"}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-[#1c1c22] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+            <Globe2 className="h-3 w-3 text-slate-500" />
+            <span>{candidate.destination_country || "GCC"}</span>
+          </div>
+        </div>
+
+        {/* Key Facts Grid */}
+        <div className="mt-3.5 grid grid-cols-2 gap-2.5 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span>Age: <strong className="text-slate-900 dark:text-white">{candidate.age} yrs</strong></span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{candidate.experience_period || "2 Years"}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-1.5 col-span-2">
+            <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">
+              Prior Work: <strong className="text-slate-900 dark:text-white">{candidate.experience_country || "First Time"}</strong>
+            </span>
+          </div>
+        </div>
+
+        {/* Religion & Salary Pill */}
+        <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
+          <span>Religion: <span className="font-medium text-slate-700 dark:text-zinc-300">{candidate.religion || "Muslim"}</span></span>
+          {candidate.monthly_salary ? (
+            <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono">
+              {candidate.monthly_salary} SAR/mo
+            </span>
+          ) : null}
+        </div>
+
+        {/* 3. Action Buttons */}
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-[#202026] flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onViewDetails(candidate)}
+            className="flex-1 text-xs font-semibold h-9 rounded-xl border-slate-200 dark:border-[#26262d] text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a20]"
+          >
+            <Eye className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+            View Details
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            disabled={isSelecting}
+            onClick={() => onSelect(candidate)}
+            className="flex-1 text-xs font-semibold h-9 rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-xs"
+          >
+            {isSelecting ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Reserving...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                Select Applicant
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
