@@ -21,8 +21,9 @@ export default function ExpensesIncomePage() {
     date: new Date().toISOString().split("T")[0],
   });
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading, isError, error } = useQuery({
     queryKey: ["accounting_summary"],
     queryFn: getAccountingSummaryApi,
   });
@@ -39,13 +40,18 @@ export default function ExpensesIncomePage() {
         applicant: "",
         date: new Date().toISOString().split("T")[0],
       });
-      setSuccessMessage("Financial transaction recorded successfully!");
+      setErrorMessage(null);
+      setSuccessMessage("Financial transaction recorded successfully in backend!");
       setTimeout(() => setSuccessMessage(null), 4000);
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.message || "Failed to record transaction on backend. Please verify your permissions and try again.");
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     if (!formData.amount || !formData.description) return;
     recordTxnMutation.mutate({
       transaction_type: formData.transaction_type,
@@ -84,6 +90,13 @@ export default function ExpensesIncomePage() {
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{successMessage}</span>
+        </div>
+      )}
+
+      {isError && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+          <TrendingDown className="h-4 w-4 text-rose-600 shrink-0" />
+          <span>Failed to load live backend accounting records: {(error as any)?.message || "Network/Server Error"}</span>
         </div>
       )}
 
@@ -252,6 +265,11 @@ export default function ExpensesIncomePage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3.5">
+              {errorMessage && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-2.5 text-xs text-rose-800 dark:text-rose-300">
+                  {errorMessage}
+                </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="txn_type" className="text-xs font-semibold">
                   Transaction Type <span className="text-rose-500">*</span>

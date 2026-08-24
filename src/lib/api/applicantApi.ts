@@ -7,6 +7,8 @@ import {
   LMSClearance,
   WakalaClearance,
   InjazClearance,
+  EmbassyClearance,
+  TelesignClearance,
   DSRStamp,
   DSRTicket,
   DSRDeparture,
@@ -16,6 +18,10 @@ import {
   AgencyComplaint,
   OperationsSummaryResponse,
   PassportOCRResponse,
+  AgencyContextResponse,
+  AgencyPipelineCandidate,
+  UnpaidCommissionSummary,
+  UnpaidCommissionCandidate,
 } from "@/types/applicant";
 import { BaseApplicantFormValues } from "@/lib/validations/applicant.schema";
 
@@ -152,14 +158,43 @@ async function handleApiResponse<T>(res: Response): Promise<T> {
 // 1. APPLICANT REST & LIFECYCLE RPCS
 // ---------------------------------------------------------------------------
 
+// Normalizer function to map frontend form values to Frappe DocType schema
+export function mapFormValuesToFrappeApplicant(
+  data: Partial<BaseApplicantFormValues> | Partial<Applicant> | Record<string, any>
+): Record<string, any> {
+  const payload: Record<string, any> = { ...data };
+
+  // Map contact fields to backend schema
+  if (data.contact_person_name && !payload.emergency_contact_name) {
+    payload.emergency_contact_name = data.contact_person_name;
+  }
+  if (data.contact_person_phone && !payload.emergency_contact_phone) {
+    payload.emergency_contact_phone = data.contact_person_phone;
+  }
+  if (data.address_line_1 && !payload.applicant_address) {
+    payload.applicant_address = data.address_line_1;
+  }
+
+  // Ensure defaults
+  if (!payload.applicant_type) {
+    payload.applicant_type = "Standard";
+  }
+  if (!payload.destination_country) {
+    payload.destination_country = "Saudi Arabia";
+  }
+
+  return payload;
+}
+
 // Create Draft: POST /api/resource/Applicant
 export async function createApplicantDraft(
   data: BaseApplicantFormValues
 ): Promise<Applicant> {
+  const payload = mapFormValuesToFrappeApplicant(data);
   const res = await fetch("/api/resource/Applicant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   return handleApiResponse<Applicant>(res);
 }
@@ -169,10 +204,11 @@ export async function updateApplicantDraft(
   applicantName: string,
   data: Partial<BaseApplicantFormValues> | Partial<Applicant>
 ): Promise<Applicant> {
+  const payload = mapFormValuesToFrappeApplicant(data);
   const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   return handleApiResponse<Applicant>(res);
 }
@@ -180,7 +216,11 @@ export async function updateApplicantDraft(
 // Get Single Applicant: GET /api/resource/Applicant/{id} with deep relational enrichment
 export async function getApplicant(applicantName: string): Promise<Applicant> {
   const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);
-  const app = await handleApiResponse<Applicant>(res);
+  let raw = await handleApiResponse<Applicant | Applicant[]>(res);
+  if (Array.isArray(raw)) {
+    raw = raw.find((a) => a.name === applicantName) || raw[0];
+  }
+  const app = raw as Applicant;
   if (!app) return app;
 
   try {
@@ -243,9 +283,10 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
         issued_on: lms.issued_on,
       };
     } else if (app.assigned_employee_id) {
+      const cleanId = String(app.name || "").replace("APP-", "");
       app.lms_processing = {
-        name: `LMS-${app.name.replace("APP-", "")}`,
-        applicant: app.name,
+        name: `LMS-${cleanId}`,
+        applicant: app.name || "",
         status: "Pending",
         employee: app.assigned_employee_id,
       };
@@ -262,9 +303,10 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
         employee: inj.employee || app.assigned_employee_id,
       };
     } else if (app.assigned_employee_id) {
+      const cleanId = String(app.name || "").replace("APP-", "");
       app.injaz_processing = {
-        name: `INJ-${app.name.replace("APP-", "")}`,
-        applicant: app.name,
+        name: `INJ-${cleanId}`,
+        applicant: app.name || "",
         status: "Pending",
         employee: app.assigned_employee_id,
       };
@@ -281,9 +323,10 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
         employee: wak.employee || app.assigned_employee_id,
       };
     } else if (app.assigned_employee_id) {
+      const cleanId = String(app.name || "").replace("APP-", "");
       app.wakala_processing = {
-        name: `WAK-${app.name.replace("APP-", "")}`,
-        applicant: app.name,
+        name: `WAK-${cleanId}`,
+        applicant: app.name || "",
         status: "Pending",
         employee: app.assigned_employee_id,
       };
@@ -342,27 +385,15 @@ export async function getApplicantsList(): Promise<Applicant[]> {
 export async function registerApplicant(
   applicantName: string
 ): Promise<{ message: string; applicant?: Applicant }> {
-  try {
-    const res = await fetch(
-      "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.register_applicant",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicant_name: applicantName }),
-      }
-    );
-    const result = await handleApiResponse<{ message: string; applicant?: Applicant }>(res);
-    return result;
-  } catch (err) {
-    // Direct sync fallback to ensure state transition in database
-    const updated = await updateApplicantDraft(applicantName, {
-      applicant_state: "Registered",
-      state_step: "2 of 9",
-      state_progress: 22.2,
-      registration_date: new Date().toISOString().split("T")[0],
-    });
-    return { message: "Applicant successfully registered!", applicant: updated };
-  }
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.register_applicant",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicant_name: applicantName }),
+    }
+  );
+  return handleApiResponse<{ message: string; applicant?: Applicant }>(res);
 }
 
 // RPC 2: Generate CV PDF (Stage 2 -> Stage 3)
@@ -452,7 +483,7 @@ export async function createContractor(data: Partial<Contractor>): Promise<Contr
   return handleApiResponse<Contractor>(res);
 }
 
-// Send Single Contract Request: Creates/updates Contract Request in Frappe, triggers send_contract_request RPC, and advances to Request Pending
+// Send Single Contract Request: Creates/updates Contract Request in Frappe and triggers send_contract_request RPC
 export async function sendContractRequestApi(
   applicantId: string,
   contractorName: string = "tutu"
@@ -464,14 +495,15 @@ export async function sendContractRequestApi(
     const appJson = await appRes.json();
     applicantData = appJson.data;
   } catch {
-    // fallback
+    // optional enrichment
   }
 
   // 2. Resolve CV Record for this applicant
   const cvRes = await fetch(`/api/resource/CV%20Record?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
   const cvData = await cvRes.json();
   const cvRecord = cvData.data?.[0];
-  let cvName = cvRecord?.name || `CV-${applicantId.replace("APP-", "")}`;
+  const cleanId = String(applicantId || "").replace("APP-", "");
+  let cvName = cvRecord?.name || `CV-${cleanId}`;
 
   // 3. Resolve Contractor details (phone, whatsapp)
   let contractorRecord: Contractor | null = null;
@@ -480,7 +512,7 @@ export async function sendContractRequestApi(
     const conJson = await conRes.json();
     contractorRecord = conJson.data;
   } catch {
-    // fallback
+    // optional enrichment
   }
 
   // 4. Check or create Contract Request
@@ -502,42 +534,28 @@ export async function sendContractRequestApi(
         created_date: new Date().toISOString().slice(0, 19).replace("T", " "),
       }),
     });
-    const createCrData = await createCr.json();
-    crName = createCrData.data?.name || `CR-${applicantId.replace("APP-", "")}`;
+    const createCrData = await handleApiResponse<any>(createCr);
+    crName = createCrData?.name || `CR-${cleanId}`;
   } else if (existingCr.contractor !== contractorName) {
     // Update contractor on existing CR if user selected a different contractor
-    await fetch(`/api/resource/Contract%20Request/${encodeURIComponent(crName)}`, {
+    const putRes = await fetch(`/api/resource/Contract%20Request/${encodeURIComponent(crName)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contractor: contractorName }),
     });
+    await handleApiResponse<any>(putRes);
   }
 
   // 5. Call the real Frappe Backend RPC method: send_contract_request
-  let rpcResult: any = null;
-  try {
-    const rpcRes = await fetch(
-      "/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.send_contract_request",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contract_request_name: crName }),
-      }
-    );
-    const json = await rpcRes.json();
-    if (json.message) {
-      rpcResult = json.message;
+  const rpcRes = await fetch(
+    "/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.send_contract_request",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contract_request_name: crName }),
     }
-  } catch (rpcErr) {
-    console.warn("Backend send_contract_request RPC warning:", rpcErr);
-  }
-
-  // 6. Update Applicant State in Frappe to "Request Pending" (Stage 4)
-  await updateApplicantDraft(applicantId, {
-    applicant_state: "Request Pending",
-    state_step: "4 of 9",
-    state_progress: 44.4,
-  });
+  );
+  const rpcResult = await handleApiResponse<any>(rpcRes);
 
   const whatsappPhone = contractorRecord?.whatsapp || contractorRecord?.phone || "+251940107716";
   const cleanPhone = whatsappPhone.replace(/[^0-9]/g, "");
@@ -595,84 +613,73 @@ export async function createApplicantDossier(data: Partial<ApplicantDossier>): P
 // Approve Dossier and advance to "Selected" (Stage 5)
 export async function approveDossierAndSelectApplicant(
   applicantId: string,
-  dossierDetails?: { sponsor_name?: string; sponsor_id?: string; visa_number?: string; contractor_name?: string }
+  dossierDetails?: { sponsor_name?: string; sponsor_id?: string; visa_number?: string; contractor_name?: string; salary?: number; job_title?: string }
 ): Promise<{ message: string }> {
   // 1. Resolve Contract Request & CV Record
   const crRes = await fetch(`/api/resource/Contract%20Request?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
   const crData = await crRes.json();
   const cr = crData.data?.[0];
-  const crName = cr?.name || `CR-${applicantId.replace("APP-", "")}`;
-  const cvRef = cr?.cv_reference || `CV-${applicantId.replace("APP-", "")}`;
+  const cleanId = String(applicantId || "").replace("APP-", "");
+  const crName = cr?.name || `CR-${cleanId}`;
+  const cvRef = cr?.cv_reference || `CV-${cleanId}`;
 
   // 2. Check if Dossier already exists for this applicant
   const dosCheck = await fetch(`/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
   const dosCheckData = await dosCheck.json();
   let dosName = dosCheckData.data?.[0]?.name;
 
-  const payload = {
+  const payload: Record<string, any> = {
     contract_request: crName,
     applicant: applicantId,
     cv_record: cvRef,
-    sponsor_name: dossierDetails?.sponsor_name || "Al-Amoudi Family",
-    sponsor_id: dossierDetails?.sponsor_id || "SP-99881",
-    visa_number: dossierDetails?.visa_number || "V-788910",
-    contractor_name: dossierDetails?.contractor_name || "tutu",
     is_parsed: 1,
+    approval_status: "Approved",
   };
 
+  if (dossierDetails?.sponsor_name) payload.sponsor_name = dossierDetails.sponsor_name;
+  if (dossierDetails?.sponsor_id) payload.sponsor_id = dossierDetails.sponsor_id;
+  if (dossierDetails?.visa_number) payload.visa_number = dossierDetails.visa_number;
+  if (dossierDetails?.contractor_name) payload.contractor_name = dossierDetails.contractor_name;
+  if (dossierDetails?.salary) payload.salary = dossierDetails.salary;
+  if (dossierDetails?.job_title) payload.job_title = dossierDetails.job_title;
+
   if (dosName) {
-    await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dosName)}`, {
+    const putRes = await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dosName)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    await handleApiResponse<any>(putRes);
   } else {
-    await fetch("/api/resource/Applicant Dossier", {
+    const postRes = await fetch("/api/resource/Applicant Dossier", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    await handleApiResponse<any>(postRes);
   }
 
-  // 3. Update Applicant State to "Selected" (Stage 5)
-  await updateApplicantDraft(applicantId, {
-    applicant_state: "Selected",
-    state_step: "5 of 9",
-    state_progress: 55.5,
-  });
+  // 3. Request backend recalculation of applicant state following dossier approval
+  try {
+    await recalculateApplicantStateApi(applicantId);
+  } catch {}
 
-  return { message: "Dossier confirmed! Candidate transitioned to Selected stage." };
+  return { message: "Dossier confirmed! Submitted to backend for validation." };
 }
 
 // Parse Dossier File RPC
 export async function parseDossierFileApi(
   dossierName: string
 ): Promise<ParseDossierResponse> {
-  try {
-    const res = await fetch(
-      "/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dossier_name: dossierName }),
-      }
-    );
-    return await handleApiResponse<ParseDossierResponse>(res);
-  } catch {
-    return {
-      message: {
-        status: "success",
-        message: "Dossier OCR extracted successfully",
-        extracted_data: {
-          contractor_name: "Al-Khaleej International Manpower Co. (Riyadh)",
-          sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
-          sponsor_id: "NAT-SA-10884920",
-          job_title: "Hospitality & Service Specialist",
-          salary: 2400,
-        },
-      },
-    };
-  }
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dossier_name: dossierName }),
+    }
+  );
+  return await handleApiResponse<ParseDossierResponse>(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +758,32 @@ export async function updateInjazClearanceApi(
   return handleApiResponse<InjazClearance>(res);
 }
 
+// Update Embassy Clearance
+export async function updateEmbassyClearanceApi(
+  name: string,
+  data: Partial<EmbassyClearance> & { financials?: any[] }
+): Promise<EmbassyClearance> {
+  const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleApiResponse<EmbassyClearance>(res);
+}
+
+// Update Telesign Clearance
+export async function updateTelesignClearanceApi(
+  name: string,
+  data: Partial<TelesignClearance>
+): Promise<TelesignClearance> {
+  const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleApiResponse<TelesignClearance>(res);
+}
+
 // Helper to get DSR name for an applicant
 async function resolveDsrForApplicant(applicantId: string): Promise<string> {
   let fullName = "";
@@ -812,24 +845,26 @@ export async function assignEmployeeApi(
   const wakalaEmp = streamAssignments?.wakala || employeeId;
 
   for (const id of applicantIds) {
-    const lmsClearance = { name: `LMS-${id.replace("APP-", "")}`, applicant: id, employee: lmsEmp, status: "Pending" as const };
-    const injazClearance = { name: `INJ-${id.replace("APP-", "")}`, applicant: id, employee: injazEmp, status: "Pending" as const };
-    const wakalaClearance = { name: `WAK-${id.replace("APP-", "")}`, applicant: id, employee: wakalaEmp, status: "Pending" as const };
+    const cleanId = String(id || "").replace("APP-", "");
+    const lmsClearance = { name: `LMS-${cleanId}`, applicant: id, employee: lmsEmp, status: "Pending" as const };
+    const injazClearance = { name: `INJ-${cleanId}`, applicant: id, employee: injazEmp, status: "Pending" as const };
+    const wakalaClearance = { name: `WAK-${cleanId}`, applicant: id, employee: wakalaEmp, status: "Pending" as const };
 
-    try { await updateLmsClearanceApi(`LMS-${id.replace("APP-", "")}`, lmsClearance); } catch {}
-    try { await updateInjazClearanceApi(`INJ-${id.replace("APP-", "")}`, injazClearance); } catch {}
-    try { await updateWakalaClearanceApi(`WAK-${id.replace("APP-", "")}`, wakalaClearance); } catch {}
+    try { await updateLmsClearanceApi(`LMS-${cleanId}`, lmsClearance); } catch {}
+    try { await updateInjazClearanceApi(`INJ-${cleanId}`, injazClearance); } catch {}
+    try { await updateWakalaClearanceApi(`WAK-${cleanId}`, wakalaClearance); } catch {}
 
     await updateApplicantDraft(id, {
-      applicant_state: "Processing",
-      state_step: "6 of 9",
-      state_progress: 66.6,
       assigned_employee_id: employeeId,
       assigned_role_type: roleType,
       lms_processing: lmsClearance,
       injaz_processing: injazClearance,
       wakala_processing: wakalaClearance,
     });
+
+    try {
+      await recalculateApplicantStateApi(id);
+    } catch {}
   }
   return { message: "Employees successfully assigned across clearances." };
 }
@@ -842,19 +877,6 @@ export async function assignEmployeeApi(
 export async function submitDsrStampApi(data: Partial<DSRStamp> & { financials?: any[] }): Promise<DSRStamp> {
   const applicantId = data.applicant || "";
   const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
-
-  // Sync DSR clearance statuses before stamping to pass backend validation
-  try {
-    await fetch(`/api/resource/DSR/${encodeURIComponent(dsrName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        lms_status: "Issued",
-        wakala_status: "Completed",
-        injaz_status: "Completed",
-      }),
-    });
-  } catch {}
 
   const payload: any = {
     dsr: dsrName,
@@ -872,32 +894,21 @@ export async function submitDsrStampApi(data: Partial<DSRStamp> & { financials?:
     body: JSON.stringify(payload),
   });
 
+  const result = await handleApiResponse<DSRStamp>(res);
+
   if (applicantId) {
-    await updateApplicantDraft(applicantId, {
-      applicant_state: "Stamped",
-      state_step: "7 of 9",
-      state_progress: 77.7,
-    });
+    try {
+      await recalculateApplicantStateApi(applicantId);
+    } catch {}
   }
 
-  return handleApiResponse<DSRStamp>(res);
+  return result;
 }
 
 // Create/Update DSR Ticket (Stage 7 -> Stage 8)
 export async function submitDsrTicketApi(data: Partial<DSRTicket>): Promise<DSRTicket> {
   const applicantId = data.applicant || "";
   const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
-
-  // Sync DSR stamp status before ticketing
-  try {
-    await fetch(`/api/resource/DSR/${encodeURIComponent(dsrName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        stamp_status: "Completed",
-      }),
-    });
-  } catch {}
 
   const res = await fetch("/api/resource/DSR Ticket", {
     method: "POST",
@@ -910,32 +921,21 @@ export async function submitDsrTicketApi(data: Partial<DSRTicket>): Promise<DSRT
     }),
   });
 
+  const result = await handleApiResponse<DSRTicket>(res);
+
   if (applicantId) {
-    await updateApplicantDraft(applicantId, {
-      applicant_state: "Ticketed",
-      state_step: "8 of 9",
-      state_progress: 88.8,
-    });
+    try {
+      await recalculateApplicantStateApi(applicantId);
+    } catch {}
   }
 
-  return handleApiResponse<DSRTicket>(res);
+  return result;
 }
 
 // Create/Update DSR Departure (Stage 8 -> Stage 9: 100%)
 export async function submitDsrDepartureApi(data: Partial<DSRDeparture> & { financials?: any[] }): Promise<DSRDeparture> {
   const applicantId = data.applicant || "";
   const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
-
-  // Sync DSR ticket status before departure
-  try {
-    await fetch(`/api/resource/DSR/${encodeURIComponent(dsrName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ticket_status: "Booked",
-      }),
-    });
-  } catch {}
 
   const payload: any = {
     dsr: dsrName,
@@ -954,15 +954,15 @@ export async function submitDsrDepartureApi(data: Partial<DSRDeparture> & { fina
     body: JSON.stringify(payload),
   });
 
+  const result = await handleApiResponse<DSRDeparture>(res);
+
   if (applicantId) {
-    await updateApplicantDraft(applicantId, {
-      applicant_state: "Departed",
-      state_step: "9 of 9",
-      state_progress: 100,
-    });
+    try {
+      await recalculateApplicantStateApi(applicantId);
+    } catch {}
   }
 
-  return handleApiResponse<DSRDeparture>(res);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -1083,75 +1083,281 @@ export async function getAccountingSummaryApi(): Promise<AccountingSummaryRespon
 }
 
 // ---------------------------------------------------------------------------
-// 8. EMPLOYEE DIRECTORY & FINANCIAL TRANSACTIONS
+// 8. EMPLOYEE / USER ADMINISTRATION SUITE (OFFICIAL BACKEND APIS)
 // ---------------------------------------------------------------------------
 
+export interface SystemRoleItem {
+  role_name: string;
+  label?: string;
+  description?: string;
+  is_custom?: number;
+}
+
+export interface SystemUserRecord {
+  name: string;
+  email: string;
+  first_name: string;
+  last_name?: string;
+  full_name: string;
+  phone?: string;
+  enabled: number | boolean;
+  user_type: string;
+  roles: string[];
+  contractor?: string | null;
+  last_login?: string;
+  creation?: string;
+}
+
+export interface SystemUsersListResponse {
+  message: {
+    users: SystemUserRecord[];
+    total: number;
+  };
+}
+
+export interface CreateSystemUserPayload {
+  email: string;
+  first_name: string;
+  last_name?: string;
+  phone?: string;
+  password?: string;
+  roles: string[];
+  contractor?: string | null;
+  user_type?: string;
+  send_welcome_email?: boolean;
+}
+
+export interface UpdateSystemUserPayload {
+  user: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  enabled?: number | boolean;
+  roles?: string[];
+  contractor?: string | null;
+}
+
+export interface SetUserPasswordPayload {
+  user: string;
+  new_password: string;
+  logout_all_sessions?: boolean;
+}
+
+export interface AssignUserRolesPayload {
+  user: string;
+  roles: string[];
+  replace?: boolean;
+}
+
+export interface ManageUserPermissionPayload {
+  action: "list" | "add" | "remove";
+  user: string;
+  for_value?: string;
+  allow?: string;
+  applicable_for?: string;
+}
+
+// 8.1 Get Available Curated Roles
+export async function getAvailableRolesApi(): Promise<SystemRoleItem[]> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.get_available_roles",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }
+  );
+  const json = await handleApiResponse<{ roles?: SystemRoleItem[] } | SystemRoleItem[]>(res);
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.roles)) return json.roles;
+  return [];
+}
+
+// 8.2 Get System Users List
+export async function getSystemUsersApi(params?: {
+  search?: string;
+  enabled?: number | boolean;
+  role?: string;
+  limit?: number;
+  start?: number;
+}): Promise<SystemUserRecord[]> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.get_system_users",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params || {}),
+    }
+  );
+  const json = await handleApiResponse<any>(res);
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.users)) return json.users;
+  if (Array.isArray(json?.message?.users)) return json.message.users;
+  return [];
+}
+
+// 8.3 Create System User with Password and Roles
+export async function createSystemUserApi(payload: CreateSystemUserPayload): Promise<SystemUserRecord> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.create_system_user",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await handleApiResponse<any>(res);
+  return json?.user || json?.message?.user || json?.data || json;
+}
+
+// 8.4 Update System User Profile & Status
+export async function updateSystemUserApi(payload: UpdateSystemUserPayload): Promise<SystemUserRecord> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.update_system_user",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await handleApiResponse<any>(res);
+  return json?.user || json?.message?.user || json;
+}
+
+// 8.5 Admin Reset User Password
+export async function setUserPasswordApi(payload: SetUserPasswordPayload): Promise<{ status: string; message: string }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.set_user_password",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  return handleApiResponse<{ status: string; message: string }>(res);
+}
+
+// 8.6 Assign / Replace User Roles
+export async function assignUserRolesApi(payload: AssignUserRolesPayload): Promise<{ status: string; roles: string[] }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.assign_user_roles",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  return handleApiResponse<{ status: string; roles: string[] }>(res);
+}
+
+// 8.7 Manage User Permissions
+export async function manageUserPermissionApi(payload: ManageUserPermissionPayload): Promise<any> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.manage_user_permission",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  return handleApiResponse<any>(res);
+}
+
+// 8.8 Get Single User Detail
+export async function getUserDetailApi(user: string): Promise<any> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.get_user_detail",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user }),
+    }
+  );
+  return handleApiResponse<any>(res);
+}
+
+// Backward-compatible employee models mapped to real backend users
 export interface EmployeeRecord {
   name: string;
   employee_name: string;
   role: string;
+  roles: string[];
   role_type: string;
   email: string;
   phone?: string;
   status: string;
+  enabled: boolean;
+  contractor?: string | null;
   creation?: string;
 }
 
 export async function getEmployeesList(): Promise<EmployeeRecord[]> {
   try {
-    const res = await fetch('/api/resource/User?fields=["name","email","first_name","last_name","full_name","role_profile_name","user_type","enabled","creation"]&limit_page_length=100');
-    const data = await res.json();
-    if (data.data && Array.isArray(data.data)) {
-      const activeUsers = data.data.filter((u: any) => u.name !== "Guest");
-      return activeUsers.map((u: any) => {
-        const displayName = u.full_name || [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email || u.name;
+    const users = await getSystemUsersApi();
+    if (Array.isArray(users) && users.length > 0) {
+      return users.map((u) => {
+        const primaryRole = u.roles?.[0] || "Operations Specialist";
         return {
-          name: u.name,
-          employee_name: displayName,
-          role: u.role_profile_name || "Operations Specialist",
-          role_type: u.role_profile_name ? (u.role_profile_name.includes("LMS") ? "LMS" : u.role_profile_name.includes("Injaz") ? "Injaz" : u.role_profile_name.includes("Wakala") ? "Wakala" : u.role_profile_name.includes("Embassy") ? "Embassy" : "Operations") : "Operations",
+          name: u.email || u.name,
+          employee_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
+          role: primaryRole,
+          roles: u.roles || [primaryRole],
+          role_type: primaryRole.includes("LMS")
+            ? "LMS"
+            : primaryRole.includes("Injaz")
+            ? "Injaz"
+            : primaryRole.includes("Wakala")
+            ? "Wakala"
+            : primaryRole.includes("Embassy")
+            ? "Embassy"
+            : "Operations",
           email: u.email || u.name,
-          phone: u.phone || u.mobile_no || "",
+          phone: u.phone || "",
           status: u.enabled ? "Active" : "Inactive",
+          enabled: Boolean(u.enabled),
+          contractor: u.contractor,
           creation: u.creation,
         };
       });
     }
   } catch (err) {
-    console.error("Failed to fetch users from server:", err);
+    console.error("Failed to fetch system users:", err);
   }
-
   return [];
 }
 
-export async function createEmployee(data: Partial<EmployeeRecord>): Promise<EmployeeRecord> {
+export async function createEmployee(data: Partial<EmployeeRecord> & { password?: string }): Promise<EmployeeRecord> {
   const email = data.email || `${(data.employee_name || "user").toLowerCase().replace(/\s+/g, ".")}@agency.et`;
-  const payload = {
-    email: email,
-    first_name: data.employee_name || "Staff Member",
-    send_welcome_email: 0,
-    user_type: "System User",
-    roles: [{ role: "System Manager" }],
-  };
+  const nameParts = (data.employee_name || "Staff Member").trim().split(" ");
+  const firstName = nameParts[0] || "Staff";
+  const lastName = nameParts.slice(1).join(" ") || "Member";
 
-  const res = await fetch("/api/resource/User", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+  const rawRoles = data.roles && data.roles.length > 0 ? data.roles : data.role ? [data.role] : ["LMS Employee"];
+
+  const created = await createSystemUserApi({
+    email,
+    first_name: firstName,
+    last_name: lastName,
+    phone: data.phone || "",
+    password: data.password || "InitialPass123!",
+    roles: rawRoles,
+    contractor: data.contractor || null,
+    user_type: "System User",
+    send_welcome_email: false,
   });
 
-  const saved = await res.json();
-  const u = saved.data || payload;
-
   return {
-    name: u.name || email,
-    employee_name: u.full_name || u.first_name || data.employee_name || "Staff Member",
-    role: data.role || "Operations Specialist",
-    role_type: data.role_type || "Operations",
-    email: u.email || email,
-    phone: data.phone || "",
-    status: "Active",
-    creation: new Date().toISOString(),
+    name: created.email || email,
+    employee_name: created.full_name || data.employee_name || firstName,
+    role: created.roles?.[0] || rawRoles[0],
+    roles: created.roles || rawRoles,
+    role_type: rawRoles[0] || "Operations",
+    email: created.email || email,
+    phone: created.phone || data.phone || "",
+    status: created.enabled ? "Active" : "Inactive",
+    enabled: Boolean(created.enabled),
+    contractor: created.contractor,
+    creation: created.creation || new Date().toISOString(),
   };
 }
 
@@ -1169,25 +1375,15 @@ export async function recordAccountingTransactionApi(data: {
     description: data.description,
     source_doctype: data.source_doctype || data.applicant || "General Agency Operation",
     date: data.date || new Date().toISOString().split("T")[0],
-    creation: new Date().toISOString(),
   };
 
-  try {
-    const res = await fetch("/api/resource/Income%20Expense%20Log", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) return await res.json();
-  } catch {}
+  const res = await fetch("/api/resource/Income%20Expense%20Log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-  if (typeof window !== "undefined") {
-    const existingTxns = JSON.parse(localStorage.getItem("app_accounting_txns") || "[]");
-    existingTxns.unshift(payload);
-    localStorage.setItem("app_accounting_txns", JSON.stringify(existingTxns));
-  }
-
-  return payload;
+  return handleApiResponse<any>(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -1425,25 +1621,134 @@ export async function getPortalAvailableCandidates(filters?: {
   if (filters?.limit) params.append("limit", String(filters.limit));
 
   const query = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(
-    `/api/method/applicant_processing.applicant_processing.api.get_portal_available_candidates${query}`
-  );
-  return handleApiResponse<PortalAvailableCandidate[]>(res);
+  let serverList: PortalAvailableCandidate[] = [];
+
+  try {
+    const res = await fetch(
+      `/api/method/applicant_processing.applicant_processing.api.get_portal_available_candidates${query}`
+    );
+    if (res.ok) {
+      serverList = await handleApiResponse<PortalAvailableCandidate[]>(res);
+    }
+  } catch (err) {
+    console.warn("get_portal_available_candidates RPC warning:", err);
+  }
+
+  if (Array.isArray(serverList) && serverList.length > 0) {
+    return serverList;
+  }
+
+  // Load registered applicants directly from official /api/resource/Applicant
+  // Strictly adhering to authoritative rule: applicant_state == "CV Generated" AND locked_contractor IS NULL
+  try {
+    const filterConditions: any[] = [
+      ["applicant_state", "=", "CV Generated"],
+    ];
+
+    const fields = encodeURIComponent(
+      JSON.stringify([
+        "name",
+        "full_name",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "gender",
+        "age",
+        "date_of_birth",
+        "nationality",
+        "destination_country",
+        "job_applied",
+        "monthly_salary",
+        "photo_passport",
+        "photo_full_body",
+        "skill_cleaning",
+        "skill_cooking",
+        "skill_arabic_cooking",
+        "skill_baby_sitting",
+        "skill_washing",
+        "skill_ironing",
+        "skill_elderly_care",
+        "experience_country",
+        "experience_period",
+        "religion",
+        "cv_file_url",
+        "applicant_state",
+        "selected_by",
+        "locked_contractor",
+      ])
+    );
+
+    const filterQuery = encodeURIComponent(JSON.stringify(filterConditions));
+    const res = await fetch(`/api/resource/Applicant?filters=${filterQuery}&fields=${fields}&limit_page_length=1000`);
+    if (res.ok) {
+      const data = await res.json();
+      const rawList: any[] = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+
+      let mapped: PortalAvailableCandidate[] = rawList
+        .filter((a) => !a.selected_by && !a.locked_contractor && a.applicant_state === "CV Generated")
+        .map((a) => ({
+          name: a.name,
+          applicant_id: a.name,
+          full_name: a.full_name || `${a.first_name || ""} ${a.middle_name || ""} ${a.last_name || ""}`.trim() || a.name,
+          gender: a.gender || "Female",
+          age: a.age || 25,
+          date_of_birth: a.date_of_birth,
+          nationality: a.nationality || "Ethiopia",
+          destination_country: a.destination_country || "Saudi Arabia",
+          job_applied: a.job_applied || "Housemaid",
+          monthly_salary: a.monthly_salary || 1200,
+          photo_passport: a.photo_passport || "",
+          photo_full_body: a.photo_full_body || "",
+          skill_cleaning: a.skill_cleaning === "YES" || a.skill_cleaning === 1 ? 1 : 0,
+          skill_cooking: a.skill_cooking === "YES" || a.skill_cooking === 1 ? 1 : 0,
+          skill_arabic_cooking: a.skill_arabic_cooking === "YES" || a.skill_arabic_cooking === 1 ? 1 : 0,
+          skill_baby_sitting: a.skill_baby_sitting === "YES" || a.skill_baby_sitting === 1 ? 1 : 0,
+          skill_washing: a.skill_washing === "YES" || a.skill_washing === 1 ? 1 : 0,
+          skill_ironing: a.skill_ironing === "YES" || a.skill_ironing === 1 ? 1 : 0,
+          skill_elderly_care: a.skill_elderly_care === "YES" || a.skill_elderly_care === 1 ? 1 : 0,
+          experience_country: a.experience_country || "First Time",
+          experience_period: a.experience_period || "None",
+          religion: a.religion || "Muslim",
+          cv_file_url: a.cv_file_url || "",
+          selected_by: a.selected_by,
+        }));
+
+      if (filters?.destination_country && filters.destination_country !== "All Countries") {
+        mapped = mapped.filter((c) => c.destination_country.toLowerCase() === filters.destination_country!.toLowerCase());
+      }
+      if (filters?.job_applied && filters.job_applied !== "All Jobs") {
+        mapped = mapped.filter((c) => c.job_applied.toLowerCase().includes(filters.job_applied!.toLowerCase()));
+      }
+      if (filters?.religion && filters.religion !== "All Religions") {
+        mapped = mapped.filter((c) => (c.religion || "").toLowerCase() === filters.religion!.toLowerCase());
+      }
+
+      if (filters?.limit) {
+        mapped = mapped.slice(0, filters.limit);
+      }
+
+      return mapped;
+    }
+  } catch (err) {
+    console.warn("getPortalAvailableCandidates resource fetch warning:", err);
+  }
+
+  return serverList;
 }
 
 export async function portalSelectCandidateApi(
   applicantId: string,
-  contractor: string
+  contractor?: string
 ): Promise<PortalSelectCandidateResponse> {
+  const payload: { applicant_id: string; contractor?: string } = { applicant_id: applicantId };
+  if (contractor) payload.contractor = contractor;
+
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.api.portal_select_candidate",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        applicant_id: applicantId,
-        contractor: contractor,
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
@@ -1458,19 +1763,79 @@ export async function portalSelectCandidateApi(
   return handleApiResponse<PortalSelectCandidateResponse>(res);
 }
 
+export async function getAgencyReservedCandidatesApi(contractor?: string): Promise<AgencyPipelineCandidate[]> {
+  try {
+    const pipeline = await getAgencyPipelineCandidatesApi({ stage: "Selected", limit: 100 });
+    if (Array.isArray(pipeline) && pipeline.length > 0) {
+      return pipeline;
+    }
+  } catch (err) {
+    console.warn("getAgencyPipelineCandidates warning for reserved stage:", err);
+  }
+
+  // Fallback to query official Applicant resource for Selected candidates
+  try {
+    const filters: any[] = [["applicant_state", "=", "Selected"]];
+    if (contractor) {
+      filters.push(["locked_contractor", "=", contractor]);
+    }
+    const fields = encodeURIComponent(
+      JSON.stringify([
+        "name",
+        "full_name",
+        "first_name",
+        "last_name",
+        "passport_number",
+        "job_applied",
+        "destination_country",
+        "photo_passport",
+        "cv_file_url",
+        "applicant_state",
+        "locked_contractor",
+        "creation",
+        "modified",
+      ])
+    );
+    const filterQuery = encodeURIComponent(JSON.stringify(filters));
+    const res = await fetch(`/api/resource/Applicant?filters=${filterQuery}&fields=${fields}&limit_page_length=100`);
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data.data) ? data.data : [];
+      return rawList.map((a: any) => ({
+        name: a.name,
+        applicant_id: a.name,
+        full_name: a.full_name || `${a.first_name || ""} ${a.last_name || ""}`.trim() || a.name,
+        passport_number: a.passport_number || "",
+        job_applied: a.job_applied || "Housemaid",
+        destination_country: a.destination_country || "Saudi Arabia",
+        photo_passport: a.photo_passport || "",
+        cv_file_url: a.cv_file_url || "",
+        applicant_state: a.applicant_state || "Selected",
+        contract_date: a.modified || a.creation || "",
+        sponsor_name: "",
+        visa_number: "",
+      }));
+    }
+  } catch (err) {
+    console.warn("getAgencyReservedCandidates resource fetch error:", err);
+  }
+
+  return [];
+}
+
 export async function portalReleaseCandidateApi(
   applicantId: string,
-  contractor: string
+  contractor?: string
 ): Promise<{ message: string }> {
+  const payload: { applicant_id: string; contractor?: string } = { applicant_id: applicantId };
+  if (contractor) payload.contractor = contractor;
+
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.api.portal_release_candidate",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        applicant_id: applicantId,
-        contractor: contractor,
-      }),
+      body: JSON.stringify(payload),
     }
   );
   return handleApiResponse<{ message: string }>(res);
@@ -1506,13 +1871,49 @@ export async function getAgencyComplaintsApi(filters?: {
 }): Promise<AgencyComplaint[]> {
   const params = new URLSearchParams();
   if (filters?.tab) params.append("tab", filters.tab);
-  if (filters?.contractor) params.append("contractor", filters.contractor);
+  if (filters?.contractor && filters.contractor !== "All Agencies") {
+    params.append("contractor", filters.contractor);
+  }
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(
     `/api/method/applicant_processing.applicant_processing.api.get_agency_complaints${query}`
   );
-  return handleApiResponse<AgencyComplaint[]>(res);
+
+  let allComplaints: AgencyComplaint[] = [];
+  if (res.ok) {
+    allComplaints = await handleApiResponse<AgencyComplaint[]>(res);
+  } else {
+    // If backend RPC is unavailable or returns an error, query the resource endpoint directly
+    try {
+      const resourceRes = await fetch(
+        `/api/resource/Agency%20Complaint?fields=["*"]&order_by=creation%20desc&limit_page_length=100`
+      );
+      if (resourceRes.ok) {
+        const json = await resourceRes.json();
+        allComplaints = json.data || [];
+      }
+    } catch {
+      allComplaints = [];
+    }
+  }
+
+  // Apply filters on genuine backend data
+  if (filters?.contractor && filters.contractor !== "All Agencies") {
+    allComplaints = allComplaints.filter((c) =>
+      c.contractor?.toLowerCase().includes(filters.contractor!.toLowerCase())
+    );
+  }
+
+  if (filters?.tab === "unresolved") {
+    allComplaints = allComplaints.filter((c) => c.status !== "Resolved" && c.status !== "Closed");
+  } else if (filters?.tab === "new") {
+    allComplaints = allComplaints.filter((c) => c.status === "Open");
+  } else if (filters?.tab === "resolved") {
+    allComplaints = allComplaints.filter((c) => c.status === "Resolved" || c.status === "Closed");
+  }
+
+  return allComplaints;
 }
 
 export async function submitAgencyComplaintApi(data: {
@@ -1524,14 +1925,20 @@ export async function submitAgencyComplaintApi(data: {
   attachment?: string;
   full_name?: string;
 }): Promise<any> {
+  const payload = {
+    ...data,
+    full_name: data.full_name || data.applicant_search,
+  };
+
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.api.submit_agency_complaint",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     }
   );
+
   return handleApiResponse<any>(res);
 }
 
@@ -1550,6 +1957,7 @@ export async function resolveAgencyComplaintApi(data: {
       body: JSON.stringify(data),
     }
   );
+
   return handleApiResponse<any>(res);
 }
 
@@ -1570,4 +1978,218 @@ export async function getOperationsSummaryApi(filters?: {
     `/api/method/applicant_processing.applicant_processing.api.get_operations_summary${query}`
   );
   return handleApiResponse<OperationsSummaryResponse>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 14. PIPELINE STATE RECOMPUTATION & WAKALA REMINDERS
+// ---------------------------------------------------------------------------
+
+export async function recalculateApplicantStateApi(
+  applicantName: string
+): Promise<{ message: string }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.recalculate_applicant_state",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicant_name: applicantName }),
+    }
+  );
+  return handleApiResponse<{ message: string }>(res);
+}
+
+export async function dispatchWakalaReminderApi(
+  dsrName: string,
+  channel: "whatsapp" | "push" | "both" = "both"
+): Promise<{ message: { status: string; message: string } }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.dispatch_wakala_reminder",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dsr_name: dsrName, channel }),
+    }
+  );
+  return handleApiResponse<{ message: { status: string; message: string } }>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 15. WEB PUSH NOTIFICATION SUBSCRIPTION APIS
+// ---------------------------------------------------------------------------
+
+export async function getVapidPublicKeyApi(): Promise<{
+  public_key: string;
+  enabled: number;
+}> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.utils.push_api.get_vapid_public_key"
+  );
+  return handleApiResponse<{ public_key: string; enabled: number }>(res);
+}
+
+export async function saveWebPushSubscriptionApi(data: {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string;
+}): Promise<{ status: string; message: string }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.utils.push_api.save_web_push_subscription",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  return handleApiResponse<{ status: string; message: string }>(res);
+}
+
+export async function sendTestWebPushApi(): Promise<{
+  status: string;
+  message: string;
+}> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.utils.push_api.send_test_web_push",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+  return handleApiResponse<{ status: string; message: string }>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 16. HEADLESS AGENCY PORTAL & COMMISSION INTEGRATION APIS
+// ---------------------------------------------------------------------------
+
+export async function getMyAgencyContextApi(): Promise<AgencyContextResponse> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.api.get_my_agency_context"
+  );
+  return handleApiResponse<AgencyContextResponse>(res);
+}
+
+export async function getAgencyCandidateDetailApi(
+  applicantId: string
+): Promise<PortalAvailableCandidate & Record<string, any>> {
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.get_agency_candidate_detail?applicant_id=${encodeURIComponent(applicantId)}`
+  );
+  return handleApiResponse<PortalAvailableCandidate & Record<string, any>>(res);
+}
+
+export async function getAgencyPipelineCandidatesApi(filters?: {
+  stage?: "all" | "Selected" | "Processing" | "Stamped" | "Ticketed" | "Departed" | string;
+  limit?: number;
+}): Promise<AgencyPipelineCandidate[]> {
+  const params = new URLSearchParams();
+  if (filters?.stage) params.append("stage", filters.stage);
+  if (filters?.limit) params.append("limit", String(filters.limit));
+
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}`
+  );
+  return handleApiResponse<AgencyPipelineCandidate[]>(res);
+}
+
+export async function getUnpaidCommissionSummaryApi(): Promise<UnpaidCommissionSummary> {
+  try {
+    const res = await fetch(
+      "/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_summary"
+    );
+    const data = await handleApiResponse<any>(res);
+    return (
+      data?.message ||
+      data?.data ||
+      data || { total_departed: 0, agreed_rate: 1500, total_outstanding: 0, currency: "SAR" }
+    );
+  } catch {
+    return { total_departed: 0, agreed_rate: 1500, total_outstanding: 0, currency: "SAR" };
+  }
+}
+
+export async function getUnpaidCommissionCandidatesListApi(
+  limit: number = 30
+): Promise<UnpaidCommissionCandidate[]> {
+  try {
+    const res = await fetch(
+      `/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_candidates_list?limit=${limit}`
+    );
+    const data = await handleApiResponse<any>(res);
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.message)) return data.message;
+    if (Array.isArray(data?.data)) return data.data;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export async function searchApplicantsForComplaintApi(
+  query: string
+): Promise<{ name: string; full_name: string; passport_number?: string; job_applied?: string; applicant_state?: string }[]> {
+  try {
+    const fields = encodeURIComponent(
+      JSON.stringify(["name", "full_name", "first_name", "middle_name", "last_name", "passport_number", "job_applied", "destination_country", "applicant_state"])
+    );
+    const res = await fetch(`/api/resource/Applicant?fields=${fields}&limit_page_length=1000`);
+    if (res.ok) {
+      const data = await res.json();
+      const rawList = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+      const q = (query || "").toLowerCase().trim();
+
+      const mapped = rawList.map((c: any) => ({
+        name: c.name,
+        full_name: c.full_name || `${c.first_name || ""} ${c.middle_name || ""} ${c.last_name || ""}`.trim() || c.name,
+        passport_number: c.passport_number || "",
+        job_applied: c.job_applied || "Housemaid",
+        destination_country: c.destination_country || "GCC",
+        applicant_state: c.applicant_state || "Registered",
+      }));
+
+      if (!q) return mapped;
+
+      return mapped.filter((c: any) => {
+        const fn = (c.full_name || "").toLowerCase();
+        const pn = (c.passport_number || "").toLowerCase();
+        const id = (c.name || "").toLowerCase();
+        const parts = fn.split(" ").filter(Boolean);
+        const firstName = parts[0] || "";
+        const lastName = parts[parts.length - 1] || "";
+        return (
+          id.includes(q) ||
+          fn.includes(q) ||
+          firstName.includes(q) ||
+          lastName.includes(q) ||
+          pn.includes(q)
+        );
+      });
+    }
+  } catch (err) {
+    console.warn("searchApplicantsForComplaintApi resource fetch warning:", err);
+  }
+
+  const res = await fetch(
+    `/api/method/applicant_processing.applicant_processing.api.search_applicants_for_complaint?query=${encodeURIComponent(query)}`
+  );
+  return handleApiResponse<{ name: string; full_name: string; passport_number?: string }[]>(res);
+}
+
+export async function subscribeWebPushApi(subscriptionData: {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}): Promise<{ status: string; message: string }> {
+  const res = await fetch(
+    "/api/method/applicant_processing.applicant_processing.utils.push_api.subscribe_web_push",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription_data: subscriptionData }),
+    }
+  );
+  return handleApiResponse<{ status: string; message: string }>(res);
 }

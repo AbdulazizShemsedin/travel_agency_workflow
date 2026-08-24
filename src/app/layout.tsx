@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import { AppLayoutClient } from "@/components/layout/AppLayoutClient";
 
 const hankenGrotesk = Hanken_Grotesk({
@@ -26,7 +27,9 @@ export default function RootLayout({
     <html lang="en" className={hankenGrotesk.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-slate-50 dark:bg-[#090d16] font-sans text-slate-900 dark:text-slate-100 antialiased">
         <QueryProvider>
-          <AppLayoutClient>{children}</AppLayoutClient>
+          <AuthProvider>
+            <AppLayoutClient>{children}</AppLayoutClient>
+          </AuthProvider>
         </QueryProvider>
       </body>
     </html>

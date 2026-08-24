@@ -37,13 +37,13 @@ export function CandidateDetailModal({
   onSelect,
   isSelecting = false,
 }: CandidateDetailModalProps) {
+  const [passportImgError, setPassportImgError] = React.useState(false);
+  const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
+
   if (!isOpen || !candidate) return null;
 
-  const defaultPassport = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
-  const defaultFullBody = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80";
-
-  const passportSrc = candidate.photo_passport || defaultPassport;
-  const fullBodySrc = candidate.photo_full_body || defaultFullBody;
+  const hasPassport = !passportImgError && Boolean(candidate.photo_passport);
+  const hasFullBody = !fullBodyImgError && Boolean(candidate.photo_full_body);
 
   const skills = [
     { label: "Cleaning & Housekeeping", value: candidate.skill_cleaning },
@@ -92,12 +92,20 @@ export function CandidateDetailModal({
           {/* Photos Area */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col items-center overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-slate-50 dark:bg-[#17171d] p-3">
-              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028]">
-                <img
-                  src={passportSrc}
-                  alt={`${candidate.full_name} Passport`}
-                  className="h-full w-full object-cover object-top"
-                />
+              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028] flex items-center justify-center">
+                {hasPassport ? (
+                  <img
+                    src={candidate.photo_passport}
+                    alt={`${candidate.full_name} Passport`}
+                    onError={() => setPassportImgError(true)}
+                    className="h-full w-full object-cover object-top"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center text-slate-400">
+                    <User className="h-12 w-12 stroke-[1.5] mb-2 opacity-60" />
+                    <span className="text-xs font-medium">Passport Photo Not Uploaded</span>
+                  </div>
+                )}
               </div>
               <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                 Official Formal Photo
@@ -105,12 +113,20 @@ export function CandidateDetailModal({
             </div>
 
             <div className="flex flex-col items-center overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-slate-50 dark:bg-[#17171d] p-3">
-              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028]">
-                <img
-                  src={fullBodySrc}
-                  alt={`${candidate.full_name} Full Body`}
-                  className="h-full w-full object-cover object-top"
-                />
+              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028] flex items-center justify-center">
+                {hasFullBody ? (
+                  <img
+                    src={candidate.photo_full_body}
+                    alt={`${candidate.full_name} Full Body`}
+                    onError={() => setFullBodyImgError(true)}
+                    className="h-full w-full object-cover object-top"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center text-slate-400">
+                    <User className="h-12 w-12 stroke-[1.5] mb-2 opacity-60" />
+                    <span className="text-xs font-medium">Full Portrait Not Uploaded</span>
+                  </div>
+                )}
               </div>
               <p className="mt-2 text-xs font-semibold text-slate-700 dark:text-zinc-300">
                 Full-Body Portrait
@@ -250,7 +266,7 @@ export function CandidateDetailModal({
             ) : (
               <>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                Select Applicant
+                Select & Reserve Candidate
               </>
             )}
           </Button>

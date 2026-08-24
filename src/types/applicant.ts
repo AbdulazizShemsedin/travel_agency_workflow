@@ -198,6 +198,29 @@ export interface DSRTicket {
   financials?: IncomeExpenseLog[];
 }
 
+export interface EmbassyClearance {
+  name?: string;
+  applicant: string;
+  status: "Pending" | "Submitted" | "Approved" | "Rejected";
+  submission_date?: string;
+  approval_date?: string;
+  visa_number?: string;
+  employee?: string;
+  notes?: string;
+  financials?: IncomeExpenseLog[];
+}
+
+export interface TelesignClearance {
+  name?: string;
+  applicant: string;
+  status: "Pending" | "Verified" | "Rejected";
+  verification_date?: string;
+  caller_agent?: string;
+  employee?: string;
+  audio_recording_url?: string;
+  notes?: string;
+}
+
 export interface DSRDeparture {
   name?: string;
   dsr?: string;
@@ -226,6 +249,7 @@ export interface DSR {
 
 export interface Applicant {
   name: string;
+  applicant_type?: "Standard" | "Muayena";
   first_name: string;
   middle_name?: string;
   last_name: string;
@@ -243,6 +267,7 @@ export interface Applicant {
   region?: string;
   sub_region?: string;
   address_line_1?: string;
+  applicant_address?: string;
 
   // Stage 2: Registration KYC & Medical
   date_of_birth?: string;
@@ -254,12 +279,20 @@ export interface Applicant {
   job_applied?: string;
   destination_country?: string;
   highest_education?: string;
+  education?: string;
   labour_id?: string;
   national_id?: string;
   place_of_birth?: string;
   leaving_town?: string;
   contact_person_name?: string;
   contact_person_phone?: string;
+  contact_person_relation?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_relationship?: string;
+  next_of_kin_name?: string;
+  next_of_kin_contact?: string;
+  next_of_kin_relationship?: string;
   coc_status?: string;
   exam_date?: string;
   exam_remaining_days?: number;
@@ -314,10 +347,12 @@ export interface Applicant {
   total_expense: number;
   net_balance: number;
 
-  // CV Record
+  // CV Record & Contractor Reservation
   cv_record?: string;
   cv_file_url?: string;
   cv_record_data?: CVRecord;
+  locked_contractor?: string | null;
+  selected_by?: string | null;
 
   // Cancellation metadata
   cancel_remarks?: string;
@@ -560,13 +595,89 @@ export interface PassportOCRResponse {
   data: {
     passport_number?: string;
     first_name?: string;
+    middle_name?: string;
     last_name?: string;
     nationality?: string;
     date_of_birth?: string;
     gender?: "Male" | "Female" | string;
     passport_expiry?: string;
+    passport_issue_date?: string;
+    place_of_issue?: string;
     raw_mrz?: string;
   };
   message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 14. AGENCY PORTAL CONTEXT & PIPELINE TYPES
+// ---------------------------------------------------------------------------
+
+export interface AgencyContextResponse {
+  user: string;
+  full_name: string;
+  roles: string[];
+  is_internal_staff: boolean;
+  contractor: {
+    name: string;
+    company_name: string;
+    country: string;
+    contact_person?: string;
+    phone?: string;
+    email?: string;
+    default_commission_amount?: number;
+    default_commission_currency?: string;
+    active_status?: number;
+  };
+  vapid_public_key?: string;
+  portal_stats?: {
+    available_candidates: number;
+    my_selected_candidates: number;
+    open_complaints: number;
+    contractor: string;
+  };
+}
+
+export interface AgencyPipelineCandidate {
+  name: string;
+  full_name: string;
+  gender: string;
+  age: number;
+  passport_number: string;
+  job_applied: string;
+  destination_country: string;
+  photo_passport?: string;
+  applicant_state: string;
+  dossier_name?: string;
+  sponsor_name?: string;
+  visa_number?: string;
+  contract_date?: string;
+  contract_duration?: string;
+  airline?: string;
+  flight_number?: string;
+  flight_date?: string;
+  route?: string;
+  ticket_status?: string;
+  departure_time?: string;
+  departure_status?: string;
+  cv_file_url?: string;
+}
+
+export interface UnpaidCommissionSummary {
+  total_departed: number;
+  agreed_rate: number;
+  total_outstanding: number;
+  currency: string;
+  contractor?: string;
+}
+
+export interface UnpaidCommissionCandidate {
+  name: string;
+  full_name: string;
+  passport_number: string;
+  departure_date: string;
+  destination_country: string;
+  sponsor_name?: string;
+  rate: number;
+  currency: string;
 }
 

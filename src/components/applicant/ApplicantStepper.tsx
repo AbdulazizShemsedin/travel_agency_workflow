@@ -11,9 +11,9 @@ export interface StepItem {
 }
 
 export const FORM_STEPS: StepItem[] = [
-  { id: 1, title: "Personal Details", subtitle: "Core identification & contact" },
+  { id: 1, title: "Personal Details", subtitle: "Passport OCR, personal bio & contact" },
   { id: 2, title: "Skills & Education", subtitle: "Skills matrix & qualifications" },
-  { id: 3, title: "Passport & Documents", subtitle: "Passport copy & ID documents" },
+  { id: 3, title: "Identification & Contacts", subtitle: "National ID, Labour ID & Emergency Contact" },
   { id: 4, title: "Medical & Clearances", subtitle: "Medical fitness & COC certification" },
   { id: 5, title: "Review & Confirmation", subtitle: "Verify details & submit" },
 ];

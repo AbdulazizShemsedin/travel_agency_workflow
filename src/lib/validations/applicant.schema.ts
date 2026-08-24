@@ -61,6 +61,18 @@ export const PASSPORT_REGEX = /^[A-Z]{1,2}[0-9]{6,8}$|^[A-Z0-9]{7,9}$/;
 // Name regex: letters, spaces, hyphens, and apostrophes
 export const NAME_REGEX = /^[a-zA-Z\s\-'.]+$/;
 
+export const APPLICANT_TYPE_OPTIONS = ["Standard", "Muayena"] as const;
+
+export const DESTINATION_COUNTRY_OPTIONS = [
+  "Saudi Arabia",
+  "Kuwait",
+  "United Arab Emirates",
+  "Qatar",
+  "Oman",
+  "Jordan",
+  "Other",
+] as const;
+
 // Safe helper for optional numeric fields
 const optionalNumber = (schema: z.ZodNumber) =>
   z.preprocess((val) => {
@@ -82,6 +94,7 @@ const optionalBoolean = z.preprocess((val) => {
 // Base Applicant Schema
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
+  applicant_type: z.enum(APPLICANT_TYPE_OPTIONS).default("Standard"),
   first_name: z.string().trim().default(""),
   middle_name: z.string().trim().optional().or(z.literal("")),
   last_name: z.string().trim().default(""),
@@ -93,6 +106,7 @@ export const baseApplicantSchema = z.object({
     z.number().int("Children must be a whole number").min(0).max(25).default(0)
   ),
   nationality: z.string().trim().default("Ethiopia"),
+  destination_country: z.string().trim().default("Saudi Arabia"),
   phone_number: z.string().trim().default(""),
   city: z.string().trim().default(""),
   country: z.string().trim().default("Ethiopia"),
@@ -109,9 +123,13 @@ export const baseApplicantSchema = z.object({
   national_id: z.string().optional().or(z.literal("")),
   contact_person_name: z.string().optional().or(z.literal("")),
   contact_person_phone: z.string().optional().or(z.literal("")),
+  emergency_contact_name: z.string().optional().or(z.literal("")),
+  emergency_contact_phone: z.string().optional().or(z.literal("")),
+  emergency_relationship: z.string().optional().or(z.literal("")),
   coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).default(""),
   exam_date: z.string().optional().or(z.literal("")),
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
+  medical_issue_date: z.string().optional().or(z.literal("")),
   medical_expiry_date: z.string().optional().or(z.literal("")),
 
   // Photos & Attachments
@@ -174,6 +192,15 @@ export const baseApplicantSchema = z.object({
 
 // Stage 1 Schema: Mandatory for Draft Floor
 export const stage1DraftSchema = baseApplicantSchema.extend({
+  applicant_type: z.enum(APPLICANT_TYPE_OPTIONS, {
+    errorMap: () => ({ message: "Please select an Applicant Type" }),
+  }).default("Standard"),
+
+  destination_country: z
+    .string()
+    .trim()
+    .default("Saudi Arabia"),
+
   first_name: z
     .string({ required_error: "First Name is required" })
     .trim()

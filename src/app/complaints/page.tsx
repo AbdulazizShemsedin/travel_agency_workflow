@@ -58,6 +58,7 @@ export default function AdminComplaintsPage() {
   });
 
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const { data: complaints = [], isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["admin-complaints", activeTab, contractorFilter],
@@ -79,9 +80,15 @@ export default function AdminComplaintsPage() {
     mutationFn: (data: typeof submitForm) => submitAgencyComplaintApi(data),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
       setIsSubmitModalOpen(false);
+      setErrorMessage(null);
       setToastMessage(res?.message?.message || "Complaint logged successfully.");
       setTimeout(() => setToastMessage(null), 5000);
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.message || "Failed to submit complaint. Please verify applicant exists.");
+      setTimeout(() => setErrorMessage(null), 6000);
     },
   });
 
@@ -89,9 +96,15 @@ export default function AdminComplaintsPage() {
     mutationFn: (data: typeof resolveForm & { complaint_id: string }) => resolveAgencyComplaintApi(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
       setSelectedComplaintForResolve(null);
+      setErrorMessage(null);
       setToastMessage("Complaint resolved and updated.");
       setTimeout(() => setToastMessage(null), 5000);
+    },
+    onError: (err: any) => {
+      setErrorMessage(err?.message || "Failed to resolve complaint on backend.");
+      setTimeout(() => setErrorMessage(null), 6000);
     },
   });
 
@@ -151,6 +164,16 @@ export default function AdminComplaintsPage() {
             <span>{toastMessage}</span>
           </div>
           <button onClick={() => setToastMessage(null)}>✕</button>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-900 dark:text-rose-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button onClick={() => setErrorMessage(null)}>✕</button>
         </div>
       )}
 
@@ -333,6 +356,127 @@ export default function AdminComplaintsPage() {
                 <Button type="button" variant="ghost" onClick={() => setSelectedComplaintForResolve(null)} className="text-xs">Cancel</Button>
                 <Button type="submit" disabled={resolveMutation.isPending} className="bg-emerald-800 text-white text-xs">
                   {resolveMutation.isPending ? "Resolving..." : "Confirm Resolution"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Log New Ticket Modal */}
+      {isSubmitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#121216] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#202026]">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300">
+                  <ShieldAlert className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Log Agency Dispute Ticket
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Internal Operations Desk
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsSubmitModalOpen(false)} className="text-slate-400">✕</button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!submitForm.applicant_search.trim()) return;
+                submitMutation.mutate(submitForm);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Foreign Partner Agency *</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                  value={submitForm.contractor}
+                  onChange={(e) => setSubmitForm({ ...submitForm, contractor: e.target.value })}
+                >
+                  <option value="Al-Amal Recruitment Riyadh">Al-Amal Recruitment Riyadh</option>
+                  <option value="Al-Khaleej International Manpower Co.">Al-Khaleej International Co.</option>
+                  <option value="Kuwait Manpower Bureau">Kuwait Manpower Bureau</option>
+                  <option value="Doha International Workforce">Doha International Workforce</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Candidate *</Label>
+                <select
+                  required
+                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                  value={submitForm.applicant_search}
+                  onChange={(e) => {
+                    const sel = applicants.find((a) => a.name === e.target.value);
+                    setSubmitForm({
+                      ...submitForm,
+                      applicant_search: e.target.value,
+                      full_name: sel ? (sel.full_name || sel.first_name) : "",
+                    });
+                  }}
+                >
+                  <option value="">-- Select Registered Applicant --</option>
+                  {applicants.map((a) => (
+                    <option key={a.name} value={a.name}>
+                      {a.full_name || a.first_name} ({a.name}) {a.passport_number ? `• ${a.passport_number}` : ""} - {a.applicant_state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Category *</Label>
+                  <select
+                    className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                    value={submitForm.complaint_category}
+                    onChange={(e) => setSubmitForm({ ...submitForm, complaint_category: e.target.value })}
+                  >
+                    <option value="Runaway">Runaway / Left Employer</option>
+                    <option value="Non-Performance">Non-Performance / Incompetence</option>
+                    <option value="Employer Abuse">Employer Abuse / Contract Violation</option>
+                    <option value="Medical">Medical / Failed Arrival Screening</option>
+                    <option value="Legal">Legal / Police Case</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Severity *</Label>
+                  <select
+                    className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                    value={submitForm.severity}
+                    onChange={(e) => setSubmitForm({ ...submitForm, severity: e.target.value as ComplaintSeverity })}
+                  >
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Dispute Details *</Label>
+                <Textarea
+                  required
+                  rows={3}
+                  placeholder="State the incident description, embassy reports, or sponsor claim..."
+                  value={submitForm.complaint_details}
+                  onChange={(e) => setSubmitForm({ ...submitForm, complaint_details: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-[#202026] flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setIsSubmitModalOpen(false)} className="text-xs">Cancel</Button>
+                <Button type="submit" disabled={submitMutation.isPending} className="bg-rose-800 text-white text-xs">
+                  {submitMutation.isPending ? "Logging..." : "Log Dispute Ticket"}
                 </Button>
               </div>
             </form>

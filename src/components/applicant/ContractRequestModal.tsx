@@ -108,7 +108,7 @@ export function ContractRequestModal({
       toast.success("Contract Request Dispatched Successfully!", {
         description: data.message.whatsapp_api_sent
           ? "CV PDF and demand request sent via Meta WhatsApp Cloud API."
-          : "Candidate transitioned to Request Pending stage.",
+          : (data.message.message || "Contract Request dispatched to contractor."),
       });
     },
     onError: (err: Error) => {
@@ -127,8 +127,9 @@ export function ContractRequestModal({
     }
   };
 
-  const applicantDisplayName = applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || applicant.name;
-  const cvRecordName = applicant.cv_record || applicant.cv_record_data?.name || `CV-${applicant.name.replace("APP-", "")}`;
+  const appName = applicant.name || (applicant as any)?.applicant_id || "Applicant";
+  const applicantDisplayName = applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || appName;
+  const cvRecordName = applicant.cv_record || applicant.cv_record_data?.name || `CV-${String(appName).replace("APP-", "")}`;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

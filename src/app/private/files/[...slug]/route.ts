@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 
-function getFrappeConfig() {
+function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
     "https://applicantprocessing-production.up.railway.app";
-  const key = process.env.FRAPPE_API_KEY || "a7b1bb5c2468fcf";
-  const secret = process.env.FRAPPE_API_SECRET || "00337e0b45c9cda";
+
+  const headers: Record<string, string> = {
+    Accept: "*/*",
+  };
+
+  const cookie = req.headers.get("cookie");
+  const authHeader = req.headers.get("authorization");
+
+  // Transparently forward authenticated session credentials
+  if (cookie) {
+    headers["Cookie"] = cookie;
+  }
+  if (authHeader) {
+    headers["Authorization"] = authHeader;
+  }
+
   return {
-    url,
-    headers: {
-      Authorization: `token ${key}:${secret}`,
-    },
+    url: url.replace(/\/$/, ""),
+    headers,
   };
 }
 
@@ -21,7 +33,7 @@ export async function GET(
 ) {
   const { slug } = await params;
   const filePath = slug.map(encodeURIComponent).join("/");
-  const config = getFrappeConfig();
+  const config = getFrappeConfig(req);
 
   try {
     const fileUrl = `${config.url}/private/files/${filePath}`;
@@ -30,21 +42,35 @@ export async function GET(
       cache: "no-store",
     });
 
-    if (!res.ok) {
-      return new NextResponse("File Not Found", { status: res.status });
+    if (res.ok) {
+      const contentType = res.headers.get("content-type") || "application/octet-stream";
+      const buffer = await res.arrayBuffer();
+
+      const response = new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+        },
+      });
+      const setCookie = res.headers.get("set-cookie");
+      if (setCookie) response.headers.set("set-cookie", setCookie);
+      return response;
     }
 
-    const contentType = res.headers.get("content-type") || "application/octet-stream";
-    const buffer = await res.arrayBuffer();
-
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-      },
-    });
+    // Return real backend error / status code (e.g. 403 Forbidden for unauthorized, 404 for missing)
+    const errorBody = await res.text().catch(() => "File Not Found");
+    const response = new NextResponse(errorBody || "File Not Found", { status: res.status });
+    const setCookie = res.headers.get("set-cookie");
+    if (setCookie) response.headers.set("set-cookie", setCookie);
+    return response;
   } catch (err: any) {
-    return new NextResponse(`File proxy error: ${err.message}`, { status: 500 });
+    return NextResponse.json(
+      {
+        exc_type: "BackendConnectionError",
+        message: `Unable to fetch private file from backend engine: ${err.message}`,
+      },
+      { status: 502 }
+    );
   }
 }

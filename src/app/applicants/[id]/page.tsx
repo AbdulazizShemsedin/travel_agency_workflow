@@ -55,7 +55,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
 import { ProcessingStreamsModal } from "@/components/applicant/ProcessingStreamsModal";
-import { ContractRequestModal } from "@/components/applicant/ContractRequestModal";
 import {
   Dialog,
   DialogContent,
@@ -89,7 +88,6 @@ export default function ApplicantDetailPage() {
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [isProcessingModalOpen, setIsProcessingModalOpen] = React.useState(false);
-  const [isContractModalOpen, setIsContractModalOpen] = React.useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
   const [cancelRemarks, setCancelRemarks] = React.useState("");
   const [processingInitialTab, setProcessingInitialTab] = React.useState<"lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure">("lms");
@@ -200,7 +198,7 @@ export default function ApplicantDetailPage() {
           </Link>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {applicant.full_name || `${applicant.first_name} ${applicant.last_name}`}
+              {applicant.full_name || [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ") || applicant.name}
             </h1>
             <Badge variant="default" className="text-xs">
               {currentStage}
@@ -211,7 +209,7 @@ export default function ApplicantDetailPage() {
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Applicant ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.name}</strong> • Registered on{" "}
-            {applicant.registration_date || "Draft"}
+            {applicant.registration_date || applicant.creation?.split(" ")[0] || "Draft"}
           </p>
         </div>
 
@@ -350,11 +348,11 @@ export default function ApplicantDetailPage() {
             >
               {generateCvMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Generating PDF...
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating CV...
                 </>
               ) : (
                 <>
-                  <FileText className="mr-1.5 h-4 w-4" /> Generate Bilateral CV
+                  <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
                 </>
               )}
             </Button>
@@ -366,24 +364,18 @@ export default function ApplicantDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Stage: CV Generated (Ready for Contractor Broadcast)
+                Stage: CV Generated (Available in Agent Portal)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Official CV PDF is generated. Send contract request via WhatsApp Cloud API to overseas partner agencies.
+                Candidate CV record is created and published. Overseas partner agencies can discover, select, and reserve this candidate via the Agent Portal.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}>
                 <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-                  <Eye className="mr-1.5 h-3.5 w-3.5" /> View CV Preview
+                  <Eye className="mr-1.5 h-3.5 w-3.5" /> View Official CV
                 </Button>
               </Link>
-              <Button
-                onClick={() => setIsContractModalOpen(true)}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-              >
-                <MessageSquare className="mr-1.5 h-3.5 w-3.5" /> Send Contract Request (WhatsApp)
-              </Button>
             </div>
           </div>
         )}
@@ -392,18 +384,21 @@ export default function ApplicantDetailPage() {
         {currentStage === "Request Pending" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Stage: Request Pending (Contractor Document Upload)
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600" />
+                Stage: Request Pending (Awaiting Foreign Contractor Selection)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Contract request sent. Upload and parse the signed contractor demand dossier to verify allocation.
+                Once the overseas contractor selects the candidate, upload and parse the contractor dossier.
               </p>
             </div>
-            <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-              <Button className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs">
-                <UploadCloud className="mr-1.5 h-4 w-4" /> Upload Contractor Dossier
-              </Button>
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                <Button className="bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold">
+                  <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload Contractor Dossier
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
 
@@ -411,82 +406,43 @@ export default function ApplicantDetailPage() {
         {currentStage === "Selected" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Stage: Selected (Ready for Processing & Staffing)
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                Stage: Selected (Ready for Processing Assignment)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Candidate approved by sponsor. Assign clearance officers or initiate parallel LMS, Wakala, and Injaz processing.
+                Candidate selected by sponsor. Assign internal staff to initiate LMS, Injaz, and Wakala clearances (Stage 6).
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setIsAssignModalOpen(true)}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-sm"
-              >
-                <UserCheck className="mr-1.5 h-4 w-4" /> Assign Clearance Officers
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setProcessingInitialTab("lms");
-                  setIsProcessingModalOpen(true);
-                }}
-                className="text-xs border-slate-300 dark:border-[#26262d]"
-              >
-                Manage Streams
-              </Button>
-            </div>
+            <Button
+              onClick={() => setIsAssignModalOpen(true)}
+              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+            >
+              <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Processing Staff
+            </Button>
           </div>
         )}
 
         {/* Stage 6: Processing (Parallel LMS, Injaz, Wakala) */}
         {currentStage === "Processing" && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-emerald-200/60 dark:border-emerald-800/60 pb-3">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Stage: Processing (Parallel LMS, Injaz, and Wakala Streams)
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                  Stage: Processing (Multi-Stream Clearances)
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
-                  Update clearance statuses. Once LMS is Issued and Wakala/Injaz are Completed, proceed strictly to Visa Stamping.
+                  Execute parallel clearance streams: LMS Clearance, Injaz/Teashir, and Wakala Authorization.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                {applicant.lms_processing?.status === "Issued" &&
-                applicant.injaz_processing?.status === "Completed" &&
-                applicant.wakala_processing?.status === "Completed" && (
-                  <Button
-                    onClick={() => {
-                      setProcessingInitialTab("stamp");
-                      setIsProcessingModalOpen(true);
-                    }}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
-                  >
-                    <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Proceed to Visa Stamping
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setProcessingInitialTab("lms");
-                    setIsProcessingModalOpen(true);
-                  }}
-                  className="text-xs border-slate-300 dark:border-[#26262d]"
-                >
-                  Manage Clearances
-                </Button>
-              </div>
             </div>
-
-            {/* 3 Parallel Clearances Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
               {/* LMS Clearance */}
               <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Plane className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> LMS Clearance
+                    <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> LMS Clearance
                   </span>
                   <Badge variant={applicant.lms_processing?.status === "Issued" ? "success" : "warning"}>
                     {applicant.lms_processing?.status || "Pending"}
@@ -635,6 +591,18 @@ export default function ApplicantDetailPage() {
             </CardHeader>
             <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
               <div>
+                <span className="text-slate-500 dark:text-zinc-400">First Name</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.first_name || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Middle / Father</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.middle_name || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Last Name / Grandfather</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.last_name || "N/A"}</p>
+              </div>
+              <div>
                 <span className="text-slate-500 dark:text-zinc-400">Gender</span>
                 <p className="font-semibold text-slate-900 dark:text-white">{applicant.gender || "N/A"}</p>
               </div>
@@ -652,11 +620,11 @@ export default function ApplicantDetailPage() {
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Primary Phone</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.phone_number}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.phone_number || "N/A"}</p>
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">City / Country</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.city}, {applicant.country}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.city ? `${applicant.city}, ${applicant.country || "Ethiopia"}` : (applicant.country || "Ethiopia")}</p>
               </div>
             </CardContent>
           </Card>
@@ -674,29 +642,91 @@ export default function ApplicantDetailPage() {
                 <p className="font-mono font-bold text-slate-900 dark:text-white">{applicant.passport_number || "N/A"}</p>
               </div>
               <div>
-                <span className="text-slate-500 dark:text-zinc-400">Passport Expiry</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.passport_expiry || "N/A"}</p>
+                <span className="text-slate-500 dark:text-zinc-400">Place of Issue</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.place_of_issue || "Addis Ababa"}</p>
               </div>
               <div>
-                <span className="text-slate-500 dark:text-zinc-400">Labour ID</span>
-                <p className="font-mono font-semibold text-slate-900 dark:text-white">{applicant.labour_id || "N/A"}</p>
+                <span className="text-slate-500 dark:text-zinc-400">Passport Issue Date</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.passport_issue_date || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Passport Expiry</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.passport_expiry || "N/A"}</p>
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Date of Birth</span>
                 <p className="font-semibold text-slate-900 dark:text-white">{applicant.date_of_birth || "N/A"}</p>
               </div>
               <div>
-                <span className="text-slate-500 dark:text-zinc-400">Job Applied</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.job_applied || "General"}</p>
+                <span className="text-slate-500 dark:text-zinc-400">National / Fayda ID</span>
+                <p className="font-mono font-semibold text-slate-900 dark:text-white">{applicant.national_id || "N/A"}</p>
               </div>
               <div>
-                <span className="text-slate-500 dark:text-zinc-400">Highest Education</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.highest_education || "N/A"}</p>
+                <span className="text-slate-500 dark:text-zinc-400">Labour ID</span>
+                <p className="font-mono font-semibold text-slate-900 dark:text-white">{applicant.labour_id || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Job Applied</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.job_applied || "House Maid / General"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Destination</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.destination_country || "Saudi Arabia"}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Card 3: Embedded Financial Sub-Table (IncomeExpenseLog) */}
+          {/* Card 3: Skills, Education & Experience */}
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <GraduationCap className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> Skills, Education & Experience
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Highest Education</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.highest_education || applicant.education || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">English Level</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.english_level || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Arabic Level</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.arabic_level || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Overseas Experience</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.experience_country ? `${applicant.experience_country} (${applicant.experience_period || "1"} yrs)` : "None / First Timer"}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Emergency Contacts & Next of Kin */}
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Phone className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> Emergency Reference & Next of Kin
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Contact Person</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_name || applicant.emergency_contact_name || applicant.next_of_kin_name || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Phone Number</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_phone || applicant.emergency_contact_phone || applicant.next_of_kin_contact || "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Relationship</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_relation || applicant.emergency_relationship || applicant.next_of_kin_relationship || "Relative"}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 5: Embedded Financial Sub-Table (IncomeExpenseLog) */}
           <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227] flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -705,7 +735,7 @@ export default function ApplicantDetailPage() {
               <div className="text-right text-xs">
                 <span className="text-slate-500 dark:text-zinc-400">Net: </span>
                 <strong className="font-mono text-emerald-700 dark:text-emerald-400">
-                  ${(applicant.total_income - applicant.total_expense).toLocaleString()}
+                  ${((Number(applicant.total_income) || 0) - (Number(applicant.total_expense) || 0)).toLocaleString()}
                 </strong>
               </div>
             </CardHeader>
@@ -722,7 +752,7 @@ export default function ApplicantDetailPage() {
                       </div>
                       <div className="text-right font-mono">
                         <strong className={log.transaction_type === "Income" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
-                          {log.transaction_type === "Income" ? "+" : "-"}${log.amount.toLocaleString()}
+                          {log.transaction_type === "Income" ? "+" : "-"}${Number(log.amount).toLocaleString()}
                         </strong>
                         <p className="text-[10px] text-slate-400 dark:text-zinc-500">{log.date}</p>
                       </div>
@@ -854,23 +884,17 @@ export default function ApplicantDetailPage() {
         </div>
       </div>
 
-      {/* Contract Request WhatsApp Modal */}
-      <ContractRequestModal
-        applicant={{
-          ...applicant,
-          cv_record: applicant.cv_record || applicant.cv_record_data?.name || `CV-${applicant.name.replace("APP-", "")}`,
-        }}
-        isOpen={isContractModalOpen}
-        onClose={() => setIsContractModalOpen(false)}
-      />
+
 
       {/* Assign Employee Modal */}
-      <AssignEmployeeModal
-        applicantIds={[applicant.name]}
-        applicantNames={[applicant.full_name]}
-        isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-      />
+      {applicant && (
+        <AssignEmployeeModal
+          applicantIds={[applicant.name || applicantId]}
+          applicantNames={[applicant.full_name || "Applicant"]}
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+        />
+      )}
 
       {/* Processing Streams Modal */}
       <ProcessingStreamsModal

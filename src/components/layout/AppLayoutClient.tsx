@@ -15,6 +15,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const isAgentRoute = pathname?.startsWith("/agent");
+  const isLoginRoute = pathname === "/login";
 
   // Load sidebar preference from localStorage
   React.useEffect(() => {
@@ -36,7 +37,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
     setIsMobileMenuOpen((prev) => !prev);
   };
 
-  if (isAgentRoute) {
+  if (isAgentRoute || isLoginRoute) {
     return <>{children}</>;
   }
 

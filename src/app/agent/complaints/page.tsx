@@ -14,24 +14,40 @@ import {
   RotateCcw,
   ShieldAlert,
   HelpCircle,
+  Search,
+  ChevronDown,
+  User,
+  Check,
 } from "lucide-react";
 import {
   getAgencyComplaintsApi,
   submitAgencyComplaintApi,
   resolveAgencyComplaintApi,
+  searchApplicantsForComplaintApi,
   uploadFileApi,
 } from "@/lib/api/applicantApi";
 import { AgencyComplaint, ComplaintSeverity } from "@/types/applicant";
-import { AgentLayout, MOCK_CONTRACTORS } from "@/components/agent/AgentLayout";
+import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function AgentComplaintsPage() {
   const queryClient = useQueryClient();
-  const [activeContractor, setActiveContractor] = React.useState(MOCK_CONTRACTORS[0].name);
+  const { authUser, agencyContext } = useAuth();
+  const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
+  const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
+
+  React.useEffect(() => {
+    if (defaultContractor && !activeContractor) {
+      setActiveContractor(defaultContractor);
+    }
+  }, [defaultContractor, activeContractor]);
+
+  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
   const [activeTab, setActiveTab] = React.useState<"unresolved" | "new" | "resolved">("unresolved");
 
   // Submit Modal State
@@ -39,13 +55,45 @@ export default function AgentComplaintsPage() {
   const [formData, setFormData] = React.useState({
     applicant_search: "",
     full_name: "",
-    complaint_category: "Medical Refusal / Unfit on Arrival",
+    complaint_category: "Medical",
     severity: "High" as ComplaintSeverity,
     complaint_details: "",
     attachment: "",
   });
+  const [isCandidateDropdownOpen, setIsCandidateDropdownOpen] = React.useState(false);
+  const [candidateSearchQuery, setCandidateSearchQuery] = React.useState("");
   const [isUploadingAttachment, setIsUploadingAttachment] = React.useState(false);
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+  const [formError, setFormError] = React.useState<string | null>(null);
+
+  // Fetch all registered candidates for searchable dropdown
+  const { data: allAvailableCandidates = [] } = useQuery({
+    queryKey: ["all-agency-candidates", activeContractor],
+    queryFn: () => searchApplicantsForComplaintApi(""),
+  });
+
+  // Dynamic filter by first name, last name, full name, or ID
+  const filteredCandidateOptions = React.useMemo(() => {
+    if (!candidateSearchQuery.trim()) return allAvailableCandidates;
+    const q = candidateSearchQuery.toLowerCase().trim();
+    return allAvailableCandidates.filter((c) => {
+      const fullName = (c.full_name || "").toLowerCase();
+      const parts = fullName.split(" ").filter(Boolean);
+      const firstName = parts[0] || "";
+      const lastName = parts[parts.length - 1] || "";
+      const middleName = parts.length > 2 ? parts.slice(1, -1).join(" ") : "";
+      const pass = (c.passport_number || "").toLowerCase();
+
+      return (
+        c.name.toLowerCase().includes(q) ||
+        fullName.includes(q) ||
+        firstName.includes(q) ||
+        lastName.includes(q) ||
+        middleName.includes(q) ||
+        pass.includes(q)
+      );
+    });
+  }, [allAvailableCandidates, candidateSearchQuery]);
 
   // Query Complaints
   const {
@@ -54,11 +102,11 @@ export default function AgentComplaintsPage() {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["agency-complaints", activeTab, activeContractor],
+    queryKey: ["agency-complaints", activeTab, effectiveContractor],
     queryFn: () =>
       getAgencyComplaintsApi({
         tab: activeTab,
-        contractor: activeContractor,
+        contractor: effectiveContractor,
       }),
   });
 
@@ -66,7 +114,7 @@ export default function AgentComplaintsPage() {
   const submitMutation = useMutation({
     mutationFn: (data: typeof formData) =>
       submitAgencyComplaintApi({
-        contractor: activeContractor,
+        contractor: effectiveContractor,
         applicant_search: data.applicant_search,
         complaint_category: data.complaint_category,
         severity: data.severity,
@@ -76,11 +124,13 @@ export default function AgentComplaintsPage() {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
       setIsSubmitModalOpen(false);
+      setFormError(null);
       setFormData({
         applicant_search: "",
         full_name: "",
-        complaint_category: "Medical Refusal / Unfit on Arrival",
+        complaint_category: "Medical",
         severity: "High",
         complaint_details: "",
         attachment: "",
@@ -88,19 +138,28 @@ export default function AgentComplaintsPage() {
       setToastMessage(res?.message?.message || "Complaint submitted successfully.");
       setTimeout(() => setToastMessage(null), 5000);
     },
+    onError: (err: any) => {
+      setFormError(
+        err?.message ||
+        `Applicant "${formData.applicant_search}" could not be validated. Complaints can only be filed for registered applicants.`
+      );
+    },
   });
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsUploadingAttachment(true);
+      setFormError(null);
       try {
         const res = await uploadFileApi(file, "Agency Complaint", "", "attachment");
         if (res?.message?.file_url) {
           setFormData((prev) => ({ ...prev, attachment: res.message.file_url }));
+        } else {
+          throw new Error("No file URL returned from server.");
         }
-      } catch {
-        setFormData((prev) => ({ ...prev, attachment: `/files/${file.name}` }));
+      } catch (err: any) {
+        setFormError(err?.message || "Failed to upload attachment file to server. Please try again.");
       } finally {
         setIsUploadingAttachment(false);
       }
@@ -310,34 +369,148 @@ export default function AgentComplaintsPage() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!formData.applicant_search || !formData.complaint_details) return;
+                  if (!formData.applicant_search.trim()) {
+                    setFormError("Please enter or select a registered candidate.");
+                    return;
+                  }
+                  if (!formData.complaint_details.trim()) {
+                    setFormError("Please provide incident details.");
+                    return;
+                  }
                   submitMutation.mutate(formData);
                 }}
                 className="space-y-4 text-xs"
               >
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Applicant ID or Passport Number *</Label>
-                  <Input
-                    required
-                    placeholder="e.g. APP-00012 or EP1234567"
-                    value={formData.applicant_search}
-                    onChange={(e) => setFormData({ ...formData, applicant_search: e.target.value })}
-                  />
+                {/* Form Error Banner */}
+                {formError && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/60 dark:border-rose-800 p-3 text-xs text-rose-900 dark:text-rose-200 flex items-start gap-2.5 shadow-xs">
+                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-bold">Validation Error</p>
+                      <p className="text-[11px] text-rose-800 dark:text-rose-300 mt-0.5">{formError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5 relative">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Select Applicant *</Label>
+                    <span className="text-[10px] text-slate-400">Search by first/last name or pick from list</span>
+                  </div>
+
+                  {formData.applicant_search && formData.full_name ? (
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-950/40 dark:border-emerald-800">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-800 text-white font-bold text-xs">
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs text-emerald-950 dark:text-emerald-200">{formData.full_name}</p>
+                          <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
+                            {formData.applicant_search}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, applicant_search: "", full_name: "" }));
+                          setIsCandidateDropdownOpen(true);
+                        }}
+                        className="h-7 text-[11px] rounded-lg border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200"
+                      >
+                        Change Candidate
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsCandidateDropdownOpen(!isCandidateDropdownOpen)}
+                        className="w-full h-10 px-3 flex items-center justify-between rounded-xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] text-xs text-slate-700 dark:text-zinc-200 hover:border-emerald-600 transition text-left shadow-xs"
+                      >
+                        <span className="text-slate-400">
+                          Click to choose candidate or search by first/last name...
+                        </span>
+                        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isCandidateDropdownOpen ? "rotate-180" : ""}`} />
+                      </button>
+
+                      {isCandidateDropdownOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#15151a] p-2.5 shadow-2xl space-y-2">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                              autoFocus
+                              placeholder="Type first name, last name, or ID..."
+                              value={candidateSearchQuery}
+                              onChange={(e) => setCandidateSearchQuery(e.target.value)}
+                              className="h-8 pl-8 text-xs rounded-lg bg-slate-50 dark:bg-[#1a1a22] border-slate-200 dark:border-[#26262f]"
+                            />
+                          </div>
+
+                          <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-[#202028] rounded-lg">
+                            {filteredCandidateOptions.length === 0 ? (
+                              <div className="p-4 text-center text-[11px] text-slate-400">
+                                No registered applicants match &quot;{candidateSearchQuery}&quot;
+                              </div>
+                            ) : (
+                              filteredCandidateOptions.map((cand) => (
+                                <button
+                                  key={cand.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      applicant_search: cand.name,
+                                      full_name: cand.full_name,
+                                    }));
+                                    setIsCandidateDropdownOpen(false);
+                                    setCandidateSearchQuery("");
+                                    setFormError(null);
+                                  }}
+                                  className="w-full text-left p-2.5 hover:bg-slate-100 dark:hover:bg-[#1f1f26] rounded-lg transition flex items-center justify-between text-xs group"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-[#22222a] text-slate-600 dark:text-zinc-300 font-bold text-[10px]">
+                                      <User className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400">
+                                        {cand.full_name}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 font-mono">
+                                        {cand.name} {cand.passport_number ? `• ${cand.passport_number}` : ""}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                                    Select →
+                                  </span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Complaint Category *</Label>
+                    <Label className="text-xs font-semibold">Dispute Category *</Label>
                     <select
                       className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs text-slate-800 dark:text-zinc-200"
                       value={formData.complaint_category}
                       onChange={(e) => setFormData({ ...formData, complaint_category: e.target.value })}
                     >
-                      <option value="Medical Refusal / Unfit on Arrival">Medical Refusal / Unfit on Arrival</option>
-                      <option value="Refusal to Work / Runaway">Refusal to Work / Runaway</option>
-                      <option value="Worker Incompetence / Skill Mismatch">Worker Incompetence / Skill Mismatch</option>
-                      <option value="Legal / Law Enforcement Violation">Legal / Law Enforcement Violation</option>
-                      <option value="Passport / Documentation Error">Passport / Documentation Error</option>
+                      <option value="Runaway">Runaway / Left Employer</option>
+                      <option value="Non-Performance">Non-Performance / Incompetence</option>
+                      <option value="Employer Abuse">Employer Abuse / Contract Violation</option>
+                      <option value="Medical">Medical / Failed Arrival Screening</option>
+                      <option value="Legal">Legal / Police Case</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
@@ -349,7 +522,7 @@ export default function AgentComplaintsPage() {
                       value={formData.severity}
                       onChange={(e) => setFormData({ ...formData, severity: e.target.value as ComplaintSeverity })}
                     >
-                      <option value="Critical">Critical (Immediate 24h Action)</option>
+                      <option value="Critical">Critical (Immediate Action)</option>
                       <option value="High">High Priority</option>
                       <option value="Medium">Medium</option>
                       <option value="Low">Low</option>

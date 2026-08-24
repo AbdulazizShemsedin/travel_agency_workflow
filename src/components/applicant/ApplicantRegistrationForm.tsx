@@ -44,10 +44,15 @@ import {
 } from "@/components/ui/dialog";
 
 const FIELD_TO_STEP_MAP: Record<string, number> = {
-  // Step 1: Personal Info & Basic Contacts
+  // Step 1: Personal Info, Passport & Basic Contacts
   first_name: 1,
   middle_name: 1,
   last_name: 1,
+  passport_number: 1,
+  date_of_birth: 1,
+  passport_expiry: 1,
+  passport_issue_date: 1,
+  place_of_issue: 1,
   gender: 1,
   religion: 1,
   marital_status: 1,
@@ -82,21 +87,12 @@ const FIELD_TO_STEP_MAP: Record<string, number> = {
   skill_driving: 2,
   skill_sewing: 2,
 
-  // Step 3: Identification, Passport & Photos
-  date_of_birth: 3,
+  // Step 3: Identification & Emergency Contacts
   national_id: 3,
-  passport_number: 3,
-  passport_issue_date: 3,
-  passport_expiry: 3,
-  place_of_issue: 3,
   job_applied: 3,
   labour_id: 3,
   contact_person_name: 3,
   contact_person_phone: 3,
-  profile_photo_url: 3,
-  photo_passport: 3,
-  photo_full_body: 3,
-  passport_scan: 3,
 
   // Step 4: Medical & COC
   coc_status: 4,
@@ -156,6 +152,7 @@ export function ApplicantRegistrationForm({
   const form = useForm<BaseApplicantFormValues>({
     mode: "onBlur",
     defaultValues: {
+      applicant_type: (initialData?.applicant_type as any) || "Standard",
       first_name: initialData?.first_name || "",
       middle_name: initialData?.middle_name || "",
       last_name: initialData?.last_name || "",
@@ -164,6 +161,7 @@ export function ApplicantRegistrationForm({
       marital_status: initialData?.marital_status || "",
       children: initialData?.children ?? 0,
       nationality: initialData?.nationality || "Ethiopia",
+      destination_country: initialData?.destination_country || "Saudi Arabia",
       phone_number: initialData?.phone_number || "",
       alternate_phone: initialData?.alternate_phone || "",
       email: initialData?.email || "",
@@ -187,6 +185,9 @@ export function ApplicantRegistrationForm({
       national_id: initialData?.national_id || "",
       contact_person_name: initialData?.contact_person_name || "",
       contact_person_phone: initialData?.contact_person_phone || "",
+      emergency_contact_name: initialData?.emergency_contact_name || "",
+      emergency_contact_phone: initialData?.emergency_contact_phone || "",
+      emergency_relationship: initialData?.emergency_relationship || "",
       coc_status: initialData?.coc_status || "",
       exam_date: initialData?.exam_date || "",
       medical_status: initialData?.medical_status || "",
@@ -409,11 +410,14 @@ export function ApplicantRegistrationForm({
       return await generateCV(draftApplicantId);
     },
     onSuccess: (data) => {
-      const fileUrl = data.message?.file_url || "/mock_docs/sample_cv.pdf";
-      setGeneratedCvUrl(fileUrl);
+      const fileUrl = data.message?.file_url;
+      if (fileUrl) {
+        setGeneratedCvUrl(fileUrl);
+        setIsCvPreviewOpen(true);
+      }
       setApplicantState("CV Generated");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      setIsCvPreviewOpen(true);
+      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
       toast.success(data.message?.message || "CV PDF generated successfully!");
     },
     onError: (error: unknown) => {

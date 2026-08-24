@@ -49,6 +49,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { can } from "@/lib/auth/permissions";
 
 interface ProcessingStreamsModalProps {
   applicant: Applicant;
@@ -75,7 +77,24 @@ export function ProcessingStreamsModal({
   initialTab = "lms",
 }: ProcessingStreamsModalProps) {
   const queryClient = useQueryClient();
+  const { authUser } = useAuth();
   const [activeTab, setActiveTab] = React.useState<"lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure">(initialTab);
+
+  // Exact capability evaluation via centralized auth layer against canonical backend roles
+  const canEditLms = can(authUser, "editLms");
+  const canEditInjaz = can(authUser, "editInjaz");
+  const canEditWakala = can(authUser, "editWakala");
+  const canEditStamp = can(authUser, "createStamp");
+  const canEditTicket = can(authUser, "createTicket");
+  const canEditDeparture = can(authUser, "createDeparture");
+
+  const isCurrentTabEditable =
+    (activeTab === "lms" && canEditLms) ||
+    (activeTab === "injaz" && canEditInjaz) ||
+    (activeTab === "wakala" && canEditWakala) ||
+    (activeTab === "stamp" && canEditStamp) ||
+    (activeTab === "ticket" && canEditTicket) ||
+    (activeTab === "departure" && canEditDeparture);
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees"],
@@ -252,7 +271,8 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const res = await updateLmsClearanceApi(applicant.lms_processing?.name || `LMS-${applicant.name.replace("APP-", "")}`, {
+      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
+      const res = await updateLmsClearanceApi(applicant.lms_processing?.name || `LMS-${appNameStr.replace("APP-", "")}`, {
         applicant: applicant.name,
         status: lmsStatus,
         employee: cleanEmp(lmsEmployee),
@@ -306,7 +326,8 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const res = await updateInjazClearanceApi(applicant.injaz_processing?.name || `INJ-${applicant.name.replace("APP-", "")}`, {
+      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
+      const res = await updateInjazClearanceApi(applicant.injaz_processing?.name || `INJ-${appNameStr.replace("APP-", "")}`, {
         applicant: applicant.name,
         status: injazStatus,
         employee: cleanEmp(injazEmployee),
@@ -357,7 +378,8 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const res = await updateWakalaClearanceApi(applicant.wakala_processing?.name || `WAK-${applicant.name.replace("APP-", "")}`, {
+      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
+      const res = await updateWakalaClearanceApi(applicant.wakala_processing?.name || `WAK-${appNameStr.replace("APP-", "")}`, {
         applicant: applicant.name,
         status: wakalaStatus,
         employee: cleanEmp(wakalaEmployee),
@@ -762,6 +784,15 @@ export function ProcessingStreamsModal({
           </div>
         </DialogHeader>
 
+        {!isCurrentTabEditable && (
+          <div className="rounded-xl border border-amber-300 dark:border-amber-900/70 bg-amber-50/80 dark:bg-amber-950/40 p-2.5 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Read-Only View:</strong> Your assigned role does not grant edit permissions for the <strong>{activeTab.toUpperCase()}</strong> stream. You can review current clearance records and audit data.
+            </span>
+          </div>
+        )}
+
         {/* Tab 1: LMIS Clearance */}
         {activeTab === "lms" && (
           <div className="space-y-4 py-2 text-xs">
@@ -854,7 +885,7 @@ export function ProcessingStreamsModal({
                 <Button
                   type="button"
                   onClick={() => updateLmsMutation.mutate()}
-                  disabled={isPending}
+                  disabled={isPending || !canEditLms}
                   className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
                 >
                   Save LMIS Clearance
@@ -946,13 +977,12 @@ export function ProcessingStreamsModal({
 
             {/* Applicant Fee for Injaz / Teashir */}
             {renderApplicantFeeSection(injazFee, setInjazFee, "Injaz & Biometrics")}
-
             <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#222227]">
               <span className="text-slate-400 text-[11px]">Save changes to update record</span>
               <Button
                 type="button"
                 onClick={() => updateInjazMutation.mutate()}
-                disabled={isPending}
+                disabled={isPending || !canEditInjaz}
                 className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
               >
                 Save Injaz Clearance
@@ -985,7 +1015,7 @@ export function ProcessingStreamsModal({
                   className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5 text-xs"
                 >
                   <option value="Pending">Pending</option>
-                  <option value="Completed">Completed (Authorization Confirmed)</option>
+                  <option value="Completed">Completed</option>
                 </select>
               </div>
 
@@ -1016,7 +1046,7 @@ export function ProcessingStreamsModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="font-semibold">Wakala Number / Code</Label>
+                <Label className="font-semibold">Wakala Authorization No</Label>
                 <Input
                   value={wakalaNumber}
                   onChange={(e) => setWakalaNumber(e.target.value)}
@@ -1025,26 +1055,17 @@ export function ProcessingStreamsModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="font-semibold">Sponsor Auth Code</Label>
+                <Label className="font-semibold">Sponsor Auth Code / ID</Label>
                 <Input
                   value={sponsorAuthCode}
                   onChange={(e) => setSponsorAuthCode(e.target.value)}
                   placeholder="SP-99182"
                 />
               </div>
-
-              <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold">Foreign Partner Agency</Label>
-                <Input
-                  value={foreignAgencyName}
-                  onChange={(e) => setForeignAgencyName(e.target.value)}
-                  placeholder="Al-Qureshi Recruitment Agency"
-                />
-              </div>
             </div>
 
             <div className="space-y-1">
-              <Label className="font-semibold">Wakala Notes</Label>
+              <Label className="font-semibold">Wakala Processing Notes</Label>
               <Textarea
                 rows={2}
                 value={wakalaNotes}
@@ -1061,7 +1082,7 @@ export function ProcessingStreamsModal({
               <Button
                 type="button"
                 onClick={() => updateWakalaMutation.mutate()}
-                disabled={isPending}
+                disabled={isPending || !canEditWakala}
                 className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
               >
                 Save Wakala Clearance
@@ -1130,7 +1151,7 @@ export function ProcessingStreamsModal({
               <Button
                 type="button"
                 onClick={() => submitStampMutation.mutate()}
-                disabled={isPending || !isProcessingCompleted}
+                disabled={isPending || !isProcessingCompleted || !canEditStamp}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
               >
                 Confirm Visa Stamp & Advance to Stamped
@@ -1205,7 +1226,7 @@ export function ProcessingStreamsModal({
               <Button
                 type="button"
                 onClick={() => submitTicketMutation.mutate()}
-                disabled={isPending || !isStamped}
+                disabled={isPending || !isStamped || !canEditTicket}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
               >
                 Issue Flight Ticket & Advance to Ticketed
@@ -1294,7 +1315,7 @@ export function ProcessingStreamsModal({
               <Button
                 type="button"
                 onClick={() => submitDepartureMutation.mutate()}
-                disabled={isPending || !isTicketed || medical2Result === "Fail"}
+                disabled={isPending || !isTicketed || medical2Result === "Fail" || !canEditDeparture}
                 className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold"
               >
                 Finalize Departure Clearance (100% Complete)

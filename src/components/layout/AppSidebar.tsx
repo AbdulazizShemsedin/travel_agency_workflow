@@ -14,22 +14,29 @@ import {
   Settings,
   Globe2,
   X,
-  PanelLeftClose,
-  PanelLeftOpen,
   AlertCircle,
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { PermissionAction } from "@/lib/auth/permissions";
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Applicants", href: "/applicants", icon: Users },
-  { label: "Employees", href: "/employees", icon: Briefcase },
-  { label: "Contractors", href: "/contractors", icon: Building2 },
-  { label: "Complaints Desk", href: "/complaints", icon: AlertCircle },
-  { label: "Reports", href: "/reports", icon: BarChart3 },
-  { label: "Expenses/Income", href: "/expenses-income", icon: Receipt },
+interface NavItemConfig {
+  label: string;
+  href: string;
+  icon: any;
+  action: PermissionAction;
+}
+
+const navItems: NavItemConfig[] = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard" },
+  { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants" },
+  { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers" },
+  { label: "Contractors", href: "/contractors", icon: Building2, action: "manageContractors" },
+  { label: "Complaints Desk", href: "/complaints", icon: AlertCircle, action: "manageComplaints" },
+  { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports" },
+  { label: "Expenses/Income", href: "/expenses-income", icon: Receipt, action: "viewFinance" },
 ];
 
 interface AppSidebarProps {
@@ -46,6 +53,16 @@ export function AppSidebar({
   onToggleCollapse,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { user, authUser, can, roles } = useAuth();
+
+  // If user is authenticated, filter nav items based on verified backend roles
+  const visibleNavItems = React.useMemo(() => {
+    if (!user) return navItems; // Unauthenticated shows default preview
+    return navItems.filter((item) => can(item.action));
+  }, [user, can]);
+
+  const canRegister = !user || can("registerApplicant");
+  const canAccessAgentPortal = !user || can("accessAgentPortal") || roles.includes("Foreign Agency");
 
   return (
     <>
@@ -96,24 +113,26 @@ export function AppSidebar({
         </div>
 
         {/* Primary Action: Add Applicant Button */}
-        <div className="p-3">
-          <Link href="/applicants/new" onClick={onCloseMobile}>
-            <Button
-              className={cn(
-                "w-full justify-center gap-2 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-medium text-xs",
-                isCollapsed ? "px-0" : ""
-              )}
-              title={isCollapsed ? "Add Applicant" : undefined}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              {!isCollapsed && <span>Add Applicant</span>}
-            </Button>
-          </Link>
-        </div>
+        {canRegister && (
+          <div className="p-3">
+            <Link href="/applicants/new" onClick={onCloseMobile}>
+              <Button
+                className={cn(
+                  "w-full justify-center gap-2 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-medium text-xs",
+                  isCollapsed ? "px-0" : ""
+                )}
+                title={isCollapsed ? "Add Applicant" : undefined}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                {!isCollapsed && <span>Add Applicant</span>}
+              </Button>
+            </Link>
+          </div>
+        )}
 
-        {/* Navigation Links */}
+        {/* Navigation Links (Role-Aware) */}
         <nav className="flex-1 space-y-1 px-2.5 py-2 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               item.href === "/applicants"
@@ -148,23 +167,25 @@ export function AppSidebar({
 
         {/* Bottom Section */}
         <div className="border-t border-slate-100 dark:border-[#222227] p-3 space-y-2">
-          <Link
-            href="/agent"
-            onClick={onCloseMobile}
-            title={isCollapsed ? "Agency Portal" : undefined}
-            className={cn(
-              "flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200/80 dark:border-emerald-800/80 px-2.5 py-2 text-xs font-semibold text-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition",
-              isCollapsed ? "justify-center px-1" : ""
-            )}
-          >
-            <Globe2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
-            {!isCollapsed && (
-              <div className="flex flex-1 items-center justify-between">
-                <span>Partner Agency Portal</span>
-                <ExternalLink className="h-3 w-3 text-emerald-600" />
-              </div>
-            )}
-          </Link>
+          {canAccessAgentPortal && (
+            <Link
+              href="/agent"
+              onClick={onCloseMobile}
+              title={isCollapsed ? "Agency Portal" : undefined}
+              className={cn(
+                "flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200/80 dark:border-emerald-800/80 px-2.5 py-2 text-xs font-semibold text-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition",
+                isCollapsed ? "justify-center px-1" : ""
+              )}
+            >
+              <Globe2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400 shrink-0" />
+              {!isCollapsed && (
+                <div className="flex flex-1 items-center justify-between">
+                  <span>Partner Agency Portal</span>
+                  <ExternalLink className="h-3 w-3 text-emerald-600" />
+                </div>
+              )}
+            </Link>
+          )}
 
           <Link
             href="/settings"
@@ -180,26 +201,56 @@ export function AppSidebar({
           </Link>
 
           {/* User Card */}
-          <div
-            className={cn(
-              "flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50/80 dark:bg-[#141418] p-2",
-              isCollapsed ? "justify-center p-1.5" : ""
-            )}
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              OP
-            </div>
-            {!isCollapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
-                  Operations Lead
-                </p>
-                <p className="truncate text-[10px] text-slate-500 dark:text-zinc-400">
-                  operations@agency.et
-                </p>
+          {user ? (
+            <div
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50/80 dark:bg-[#141418] p-2",
+                isCollapsed ? "justify-center p-1.5" : ""
+              )}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
+                {(authUser?.full_name || user).slice(0, 2)}
               </div>
-            )}
-          </div>
+              {!isCollapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
+                    {authUser?.full_name || user}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {roles.slice(0, 2).map((r) => (
+                      <span key={r} className="truncate text-[9px] font-medium text-emerald-800 dark:text-emerald-400">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              onClick={onCloseMobile}
+              title={isCollapsed ? "Sign In" : undefined}
+              className={cn(
+                "flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50 dark:bg-[#141418] p-2 hover:bg-slate-100 dark:hover:bg-[#1c1c22] transition",
+                isCollapsed ? "justify-center p-1.5" : ""
+              )}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-zinc-300">
+                ?
+              </div>
+              {!isCollapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    Sign In
+                  </p>
+                  <p className="truncate text-[10px] text-slate-500 dark:text-zinc-400">
+                    Authenticate Session
+                  </p>
+                </div>
+              )}
+            </Link>
+          )}
         </div>
       </aside>
     </>

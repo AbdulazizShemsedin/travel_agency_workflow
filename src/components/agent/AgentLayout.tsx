@@ -17,21 +17,21 @@ import {
   Sparkles,
   ShoppingBag,
   ExternalLink,
+  Plane,
+  Receipt,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/components/providers/AuthProvider";
 
-export const MOCK_CONTRACTORS = [
-  { id: "con-1", name: "Al-Amal Recruitment Riyadh", country: "Saudi Arabia", quota: "45 Allocated" },
-  { id: "con-2", name: "Al-Khaleej International Manpower Co.", country: "Saudi Arabia", quota: "60 Allocated" },
-  { id: "con-3", name: "Kuwait Manpower Bureau", country: "Kuwait", quota: "30 Allocated" },
-  { id: "con-4", name: "Doha International Workforce", country: "Qatar", quota: "25 Allocated" },
-];
+import { getContractorsList } from "@/lib/api/applicantApi";
+import { Contractor } from "@/types/applicant";
 
 interface AgentLayoutProps {
   children: React.ReactNode;
   activeContractor: string;
-  onContractorChange: (contractor: string) => void;
+  onContractorChange?: (contractor: string) => void;
   selectedCount?: number;
 }
 
@@ -44,6 +44,32 @@ export function AgentLayout({
   const pathname = usePathname();
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [isAgencyDropdownOpen, setIsAgencyDropdownOpen] = React.useState(false);
+  const [contractorsList, setContractorsList] = React.useState<Contractor[]>([]);
+  const { user, authUser, agencyContext, logout } = useAuth();
+
+  const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
+  const currentAgencyDisplay =
+    agencyContext?.contractor?.company_name ||
+    agencyContext?.contractor?.name ||
+    authUser?.contractor ||
+    activeContractor ||
+    "Authorized Partner";
+
+  React.useEffect(() => {
+    // Only load contractor list for internal staff who have permission to switch view
+    if (!isAgencyUser) {
+      getContractorsList()
+        .then((list) => {
+          if (Array.isArray(list) && list.length > 0) {
+            setContractorsList(list);
+            if (!activeContractor && onContractorChange) {
+              onContractorChange(list[0].name || list[0].company_name || "");
+            }
+          }
+        })
+        .catch((err) => console.warn("Failed to load contractors list:", err));
+    }
+  }, [isAgencyUser, activeContractor, onContractorChange]);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -63,13 +89,16 @@ export function AgentLayout({
   };
 
   const navItems = [
-    { label: "Applicant Discovery", href: "/agent", icon: Users },
+    { label: "Candidate Marketplace", href: "/agent", icon: Users },
+    { label: "My Reserved Candidates", href: "/agent/reserved", icon: CheckCircle2 },
+    { label: "Live Pipeline Tracker", href: "/agent/pipeline", icon: Plane },
+    { label: "Commission & Statements", href: "/agent/commission", icon: Receipt },
     { label: "Complaints & Guarantee", href: "/agent/complaints", icon: AlertCircle },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#09090c] text-slate-900 dark:text-zinc-100 flex flex-col font-sans">
-      {/* Top Banner: Temporary Agency Portal Disclaimer & Quick Switcher */}
+      {/* Top Banner */}
       <div className="bg-emerald-950 text-emerald-100 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -78,47 +107,54 @@ export function AgentLayout({
           </span>
           <span className="hidden sm:inline text-emerald-300/80">|</span>
           <span className="hidden sm:inline text-[11px] text-emerald-300/80">
-            Dedicated candidate selection & dispute management environment
+            Dedicated candidate selection & Musaned contract processing
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Agency Context Switcher */}
-          <div className="relative">
-            <button
-              onClick={() => setIsAgencyDropdownOpen(!isAgencyDropdownOpen)}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-900 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 border border-emerald-700/60 transition"
-            >
-              <Building2 className="h-3 w-3 text-emerald-400" />
-              <span>Agency: <strong>{activeContractor}</strong></span>
-              <ChevronDown className="h-3 w-3 text-emerald-400" />
-            </button>
+          {/* Agency Context Switcher (Only visible for internal admin testing) */}
+          {!isAgencyUser && contractorsList.length > 0 && onContractorChange ? (
+            <div className="relative">
+              <button
+                onClick={() => setIsAgencyDropdownOpen(!isAgencyDropdownOpen)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-900/80 hover:bg-emerald-900 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 border border-emerald-700/60 transition"
+              >
+                <Building2 className="h-3 w-3 text-emerald-400" />
+                <span>Agency: <strong>{currentAgencyDisplay}</strong></span>
+                <ChevronDown className="h-3 w-3 text-emerald-400" />
+              </button>
 
-            {isAgencyDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 w-64 rounded-xl border border-slate-200 dark:border-[#222229] bg-white dark:bg-[#15151a] p-1.5 shadow-xl z-50 text-slate-800 dark:text-zinc-200">
-                <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">
-                  Switch Partner Context
+              {isAgencyDropdownOpen && (
+                <div className="absolute right-0 top-full mt-1 w-64 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-[#222229] bg-white dark:bg-[#15151a] p-1.5 shadow-xl z-50 text-slate-800 dark:text-zinc-200">
+                  <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">
+                    Real Backend Contractors
+                  </div>
+                  {contractorsList.map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() => {
+                        onContractorChange(c.name);
+                        setIsAgencyDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex flex-col transition ${
+                        activeContractor === c.name
+                          ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-950 dark:text-emerald-300 font-bold"
+                          : "hover:bg-slate-100 dark:hover:bg-[#1f1f26]"
+                      }`}
+                    >
+                      <span className="line-clamp-1">{c.company_name || c.name}</span>
+                      <span className="text-[10px] text-slate-400 dark:text-zinc-500">{c.country || "Saudi Arabia"}</span>
+                    </button>
+                  ))}
                 </div>
-                {MOCK_CONTRACTORS.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      onContractorChange(c.name);
-                      setIsAgencyDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex flex-col transition ${
-                      activeContractor === c.name
-                        ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-950 dark:text-emerald-300 font-bold"
-                        : "hover:bg-slate-100 dark:hover:bg-[#1f1f26]"
-                    }`}
-                  >
-                    <span className="line-clamp-1">{c.name}</span>
-                    <span className="text-[10px] text-slate-400 dark:text-zinc-500">{c.country} • {c.quota}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-lg bg-emerald-900/60 px-2.5 py-1 text-[11px] font-semibold text-emerald-200 border border-emerald-700/40">
+              <Building2 className="h-3 w-3 text-emerald-400" />
+              <span>Agency: <strong>{currentAgencyDisplay}</strong></span>
+            </div>
+          )}
 
           <Link
             href="/applicants"
@@ -143,7 +179,7 @@ export function AgentLayout({
                 Global Talent Portal
               </h1>
               <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                Foreign Partner Gateway
+                {currentAgencyDisplay}
               </p>
             </div>
           </Link>
@@ -192,6 +228,19 @@ export function AgentLayout({
           >
             {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
+
+          {/* Sign Out Button */}
+          {user && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logout()}
+              className="h-9 text-xs rounded-xl border-slate-200 dark:border-[#26262f] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+            >
+              <LogOut className="h-3.5 w-3.5 mr-1" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          )}
         </div>
       </header>
 

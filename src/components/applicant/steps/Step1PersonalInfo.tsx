@@ -2,14 +2,19 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS } from "@/lib/validations/applicant.schema";
-import { uploadFileApi } from "@/lib/api/applicantApi";
+import { uploadFileApi, scanPassportMRZApi } from "@/lib/api/applicantApi";
+import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Step1PersonalInfoProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,11 +32,25 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   const feeRequired = watch("fee_required");
   const profilePhotoValue = watch("profile_photo_url") || watch("photo_passport");
   const fullBodyPhotoValue = watch("photo_full_body");
+  const passportScanValue = watch("passport_scan");
 
   const [photoPreview, setPhotoPreview] = React.useState<string | null>(profilePhotoValue || null);
   const [fullBodyPreview, setFullBodyPreview] = React.useState<string | null>(fullBodyPhotoValue || null);
+  const [passportScanPreview, setPassportScanPreview] = React.useState<string | null>(passportScanValue || null);
   const [isUploadingPassport, setIsUploadingPassport] = React.useState(false);
   const [isUploadingFullBody, setIsUploadingFullBody] = React.useState(false);
+  const [isScanningOCR, setIsScanningOCR] = React.useState(false);
+  const [ocrSuccessData, setOcrSuccessData] = React.useState<any | null>(null);
+
+  // MRZ Review Dialog State
+  const [isOcrReviewOpen, setIsOcrReviewOpen] = React.useState(false);
+  const [pendingOcrData, setPendingOcrData] = React.useState<any | null>(null);
+
+  // Manual MRZ Dialog State
+  const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
+  const [mrzInputText, setMrzInputText] = React.useState(
+    ""
+  );
 
   React.useEffect(() => {
     if (profilePhotoValue && !photoPreview) {
@@ -45,10 +64,146 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     }
   }, [fullBodyPhotoValue, fullBodyPreview]);
 
+  React.useEffect(() => {
+    if (passportScanValue && !passportScanPreview) {
+      setPassportScanPreview(passportScanValue);
+    }
+  }, [passportScanValue, passportScanPreview]);
+
+  const handleApplyOcrData = (d: any) => {
+    if (!d) return;
+    if (d.first_name) {
+      setValue("first_name", d.first_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.middle_name) {
+      setValue("middle_name", d.middle_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.last_name) {
+      setValue("last_name", d.last_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.passport_number) {
+      setValue("passport_number", d.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.date_of_birth) {
+      setValue("date_of_birth", d.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.gender) {
+      setValue("gender", d.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.nationality) {
+      setValue("nationality", d.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.passport_expiry) {
+      setValue("passport_expiry", d.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      const parts = d.passport_expiry.split("-");
+      if (parts.length === 3) {
+        const expY = parseInt(parts[0], 10);
+        if (!isNaN(expY)) {
+          const issueY = expY - 5;
+          const calcIssueDate = `${issueY}-${parts[1]}-${parts[2]}`;
+          setValue("passport_issue_date", calcIssueDate, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        }
+      }
+    }
+    if (d.passport_issue_date) {
+      setValue("passport_issue_date", d.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (d.place_of_issue) {
+      setValue("place_of_issue", d.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+
+    setOcrSuccessData(d);
+    setIsOcrReviewOpen(false);
+  };
+
+  // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend RPC)
+  const handlePassportAutoScan = async (file: File) => {
+    if (!file) return;
+    const localUrl = URL.createObjectURL(file);
+    setPassportScanPreview(localUrl);
+    if (!photoPreview) setPhotoPreview(localUrl);
+    setIsScanningOCR(true);
+
+    try {
+      // 1. Send real HTTP POST to /api/method/upload_file
+      let uploadedUrl = "";
+      try {
+        const uploadRes = await uploadFileApi(file, "Applicant", "", "passport_scan");
+        if (uploadRes?.message?.file_url) {
+          uploadedUrl = uploadRes.message.file_url;
+          setValue("passport_scan", uploadRes.message.file_url, { shouldDirty: true, shouldValidate: true });
+          setValue("photo_passport", uploadRes.message.file_url, { shouldDirty: true, shouldValidate: true });
+        }
+      } catch (e) {
+        console.warn("File upload to server error:", e);
+      }
+
+      // 2. Perform optical extraction from file
+      let localMrzText = "";
+      try {
+        const opticalResult = await performOpticalPassportOCR(file);
+        if (opticalResult?.raw_mrz) {
+          localMrzText = opticalResult.raw_mrz;
+          setMrzInputText(opticalResult.raw_mrz);
+        }
+      } catch {}
+
+      // 3. Send real HTTP POST to /api/method/applicant_processing...scan_and_populate_passport
+      const ocrRes = await scanPassportMRZApi({
+        file_url: uploadedUrl || "",
+        raw_mrz_text: localMrzText || mrzInputText,
+      });
+
+      if (ocrRes?.data) {
+        const d = ocrRes.data;
+        setPendingOcrData(d);
+        setIsOcrReviewOpen(true);
+      }
+    } catch (err: any) {
+      console.warn("Backend scan_and_populate_passport error:", err);
+    } finally {
+      setIsScanningOCR(false);
+    }
+  };
+
+  const handleParseMrzText = async () => {
+    if (!mrzInputText.trim()) return;
+    setIsScanningOCR(true);
+    try {
+      const parsed = parseMRZText(mrzInputText.trim());
+      if (parsed) {
+        if (parsed.first_name) setValue("first_name", parsed.first_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.middle_name) setValue("middle_name", parsed.middle_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.last_name) setValue("last_name", parsed.last_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.passport_number) setValue("passport_number", parsed.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.date_of_birth) setValue("date_of_birth", parsed.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.gender) setValue("gender", parsed.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.nationality) setValue("nationality", parsed.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        if (parsed.passport_expiry) {
+          setValue("passport_expiry", parsed.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+          if (parsed.passport_issue_date) {
+            setValue("passport_issue_date", parsed.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+          }
+        }
+        if (parsed.place_of_issue) {
+          setValue("place_of_issue", parsed.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        } else {
+          setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        }
+
+        setOcrSuccessData(parsed);
+        setIsMrzDialogOpen(false);
+      }
+    } catch (err) {
+      console.warn("Manual MRZ decode warning:", err);
+    } finally {
+      setIsScanningOCR(false);
+    }
+  };
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Local immediate preview - guaranteed to show instantly
       const localUrl = URL.createObjectURL(file);
       setPhotoPreview(localUrl);
       setIsUploadingPassport(true);
@@ -114,141 +269,314 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      {/* Left Column: Photo Uploads & Fee Settings */}
-      <div className="space-y-6 lg:col-span-4">
-        {/* Passport / Portrait Photo Card */}
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-              Candidate Photo (Passport Size)
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Clear face photo for CV and profile.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center pt-2">
-            <label
-              htmlFor="profile-photo-upload"
-              className="group relative flex h-36 w-36 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
-            >
-              {isUploadingPassport ? (
-                <div className="flex flex-col items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
-                  <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
-                </div>
-              ) : photoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photoPreview}
-                  alt="Profile headshot"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-4 text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
-                    <Camera className="h-5 w-5 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
-                  </div>
-                  <span className="mt-2 text-xs font-medium text-slate-600 dark:text-zinc-300">
-                    Upload Photo
+    <div className="space-y-6">
+      {/* 1. TOP HERO SECTION: PASSPORT FAST SCAN & AUTO-POPULATION */}
+      <Card className="border-2 border-dashed border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 dark:border-emerald-500/30 overflow-hidden">
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-md">
+                <ScanLine className="h-6 w-6 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Passport Quick-Scan & Auto-Fill (OCR)
+                  </h3>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                    <Sparkles className="h-3 w-3" /> Auto-Population Enabled
                   </span>
                 </div>
-              )}
-              <input
-                id="profile-photo-upload"
-                type="file"
-                accept="image/png, image/jpeg, image/webp"
-                className="sr-only"
-                onChange={handlePhotoUpload}
-                disabled={isUploadingPassport}
-              />
-            </label>
-            <p className="mt-3 text-center text-xs text-slate-500 dark:text-zinc-400">
-              JPG, PNG format (passport photo)
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Full Body Photo Card */}
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-              Full Body Photo (CV Page 2)
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Full length portrait required for employer CV.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center pt-2">
-            <label
-              htmlFor="fullbody-photo-upload"
-              className="group relative flex h-40 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
-            >
-              {isUploadingFullBody ? (
-                <div className="flex flex-col items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
-                  <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
-                </div>
-              ) : fullBodyPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={fullBodyPreview}
-                  alt="Full body photo"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-3 text-center">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
-                    <ImageIcon className="h-4 w-4 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
-                  </div>
-                  <span className="mt-2 text-[11px] font-medium text-slate-600 dark:text-zinc-300">
-                    Full Body
-                  </span>
-                </div>
-              )}
-              <input
-                id="fullbody-photo-upload"
-                type="file"
-                accept="image/png, image/jpeg, image/webp"
-                className="sr-only"
-                onChange={handleFullBodyUpload}
-                disabled={isUploadingFullBody}
-              />
-            </label>
-            <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
-              Standing full-body portrait
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Application Settings Card */}
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-              Application Settings
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Registration fee options.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="fee_required" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Fee Required
-                </Label>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  Registration fee required for applicant
+                <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
+                  Upload candidate passport image or paste the 2 MRZ code lines. The system will automatically decode MRZ and populate First Name, Last Name, Passport #, Date of Birth, Gender, and Expiry Date.
                 </p>
               </div>
-              <Switch
-                id="fee_required"
-                checked={feeRequired}
-                onCheckedChange={(checked) =>
-                  setValue("fee_required", checked, { shouldDirty: true })
-                }
-              />
             </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full md:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsMrzDialogOpen(true)}
+                className="text-xs font-semibold border-emerald-300 text-emerald-900 dark:text-emerald-300 hover:bg-emerald-100/50"
+              >
+                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                Paste MRZ Text
+              </Button>
+
+              <label
+                htmlFor="passport-auto-scan-input"
+                className="flex items-center justify-center gap-2 cursor-pointer rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white px-4 py-2 text-xs font-bold shadow-md transition hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {isScanningOCR ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Decoding MRZ...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="h-4 w-4" />
+                    <span>Upload Passport Scan</span>
+                  </>
+                )}
+                <input
+                  id="passport-auto-scan-input"
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  className="sr-only"
+                  disabled={isScanningOCR}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handlePassportAutoScan(f);
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Extracted Data Confirmation Banner */}
+          {ocrSuccessData && (
+            <div className="mt-4 pt-3.5 border-t border-emerald-200/60 dark:border-emerald-900/40 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5 mr-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Extracted & Auto-Filled:
+              </span>
+              {ocrSuccessData.first_name && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Name: <strong>{ocrSuccessData.first_name} {ocrSuccessData.last_name || ""}</strong>
+                </span>
+              )}
+              {ocrSuccessData.passport_number && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200 font-mono">
+                  Passport: <strong>{ocrSuccessData.passport_number}</strong>
+                </span>
+              )}
+              {ocrSuccessData.date_of_birth && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  DOB: <strong>{ocrSuccessData.date_of_birth}</strong>
+                </span>
+              )}
+              {ocrSuccessData.gender && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Gender: <strong>{ocrSuccessData.gender}</strong>
+                </span>
+              )}
+              {ocrSuccessData.passport_expiry && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Expiry: <strong>{ocrSuccessData.passport_expiry}</strong>
+                </span>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Interactive MRZ OCR Review Dialog */}
+      <Dialog open={isOcrReviewOpen} onOpenChange={setIsOcrReviewOpen}>
+        <DialogContent className="sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Review Extracted Passport Details
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              The backend decoded the following passport information. Review the values below before applying them to the form.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingOcrData && (
+            <div className="space-y-3 py-2 text-xs">
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#16161b]">
+                <div>
+                  <span className="text-[11px] text-slate-500 block">First Name:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.first_name || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Last Name:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.last_name || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Passport Number:</span>
+                  <strong className="font-mono text-emerald-800 dark:text-emerald-300">{pendingOcrData.passport_number || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Date of Birth:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.date_of_birth || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Gender:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.gender || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Nationality:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.nationality || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Passport Expiry:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.passport_expiry || "—"}</strong>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Place of Issue:</span>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.place_of_issue || "Addis Ababa"}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOcrReviewOpen(false)}
+              className="text-xs"
+            >
+              Cancel / Edit Manually
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleApplyOcrData(pendingOcrData)}
+              className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-bold"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+              Apply Extracted Data to Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left Column: Photo Uploads & Fee Settings */}
+        <div className="space-y-6 lg:col-span-4">
+          {/* Passport / Portrait Photo Card */}
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
+                Candidate Photo (Passport Size)
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                Clear face photo for CV and profile.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center pt-2">
+              <label
+                htmlFor="profile-photo-upload"
+                className="group relative flex h-36 w-36 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
+              >
+                {isUploadingPassport ? (
+                  <div className="flex flex-col items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
+                    <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
+                  </div>
+                ) : photoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photoPreview}
+                    alt="Profile headshot"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-4 text-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
+                      <Camera className="h-5 w-5 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
+                    </div>
+                    <span className="mt-2 text-xs font-medium text-slate-600 dark:text-zinc-300">
+                      Upload Photo
+                    </span>
+                  </div>
+                )}
+                <input
+                  id="profile-photo-upload"
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="sr-only"
+                  onChange={handlePhotoUpload}
+                  disabled={isUploadingPassport}
+                />
+              </label>
+              <p className="mt-3 text-center text-xs text-slate-500 dark:text-zinc-400">
+                JPG, PNG format (passport photo)
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Full Body Photo Card */}
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
+                Full Body Photo (CV Page 2)
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                Full length portrait required for employer CV.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center pt-2">
+              <label
+                htmlFor="fullbody-photo-upload"
+                className="group relative flex h-40 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
+              >
+                {isUploadingFullBody ? (
+                  <div className="flex flex-col items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
+                    <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
+                  </div>
+                ) : fullBodyPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={fullBodyPreview}
+                    alt="Full body photo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-3 text-center">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
+                      <ImageIcon className="h-4 w-4 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
+                    </div>
+                    <span className="mt-2 text-[11px] font-medium text-slate-600 dark:text-zinc-300">
+                      Full Body
+                    </span>
+                  </div>
+                )}
+                <input
+                  id="fullbody-photo-upload"
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  className="sr-only"
+                  onChange={handleFullBodyUpload}
+                  disabled={isUploadingFullBody}
+                />
+              </label>
+              <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
+                Standing full-body portrait
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Application Settings Card */}
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
+                Application Settings
+              </CardTitle>
+              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                Registration fee options.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="fee_required" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Fee Required
+                  </Label>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    Registration fee required for applicant
+                  </p>
+                </div>
+                <Switch
+                  id="fee_required"
+                  checked={feeRequired}
+                  onCheckedChange={(checked) =>
+                    setValue("fee_required", checked, { shouldDirty: true })
+                  }
+                />
+              </div>
 
             {feeRequired && (
               <div className="space-y-3 rounded-lg border border-emerald-100 dark:border-emerald-950/60 bg-emerald-50/30 dark:bg-emerald-950/20 p-3">
@@ -371,6 +699,44 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
           </CardHeader>
 
           <CardContent className="space-y-5">
+            {/* Applicant Type Selection (Standard vs Muayena) */}
+            <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#16161b] p-3.5 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <Label className="text-xs font-bold text-slate-900 dark:text-white">
+                    Applicant Deployment Type <span className="text-rose-500">*</span>
+                  </Label>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    Select Standard agency recruitment or Muayena (direct candidate allocation).
+                  </p>
+                </div>
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-white dark:bg-[#121215]">
+                  <button
+                    type="button"
+                    onClick={() => setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true })}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                      watch("applicant_type") === "Standard" || !watch("applicant_type")
+                        ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true })}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
+                      watch("applicant_type") === "Muayena"
+                        ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
+                    }`}
+                  >
+                    Muayena
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Full Name Row */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
@@ -412,6 +778,83 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 {errors.last_name && (
                   <p className="text-xs text-rose-600 dark:text-rose-400">{errors.last_name.message}</p>
                 )}
+              </div>
+            </div>
+
+            {/* Official Passport & Identity Details (Direct Form Inputs) */}
+            <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10 p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300">
+                  Passport & Demographics (Auto-Extracted / Editable)
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="passport_number" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Passport Number <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="passport_number"
+                    placeholder="e.g., EP1234567"
+                    {...register("passport_number")}
+                    className={errors.passport_number ? "border-rose-500 font-mono uppercase font-bold" : "font-mono uppercase font-bold text-slate-900 dark:text-white"}
+                  />
+                  {errors.passport_number && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_number.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="date_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Date of Birth <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="date_of_birth"
+                    type="date"
+                    {...register("date_of_birth")}
+                    className={errors.date_of_birth ? "border-rose-500" : ""}
+                  />
+                  {errors.date_of_birth && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.date_of_birth.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="passport_expiry" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Passport Expiry Date
+                  </Label>
+                  <Input
+                    id="passport_expiry"
+                    type="date"
+                    {...register("passport_expiry")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="place_of_issue" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Place of Issue
+                  </Label>
+                  <Input
+                    id="place_of_issue"
+                    placeholder="e.g., Addis Ababa"
+                    {...register("place_of_issue")}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Passport Issue Date
+                  </Label>
+                  <Input
+                    id="passport_issue_date"
+                    type="date"
+                    {...register("passport_issue_date")}
+                  />
+                </div>
               </div>
             </div>
 
@@ -636,6 +1079,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
           </CardContent>
         </Card>
       </div>
+    </div>
     </div>
   );
 }

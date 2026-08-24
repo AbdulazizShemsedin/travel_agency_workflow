@@ -22,17 +22,28 @@ import {
   ApiError,
 } from "@/lib/api/applicantApi";
 import { PortalAvailableCandidate } from "@/types/applicant";
-import { AgentLayout, MOCK_CONTRACTORS } from "@/components/agent/AgentLayout";
+import { AgentLayout } from "@/components/agent/AgentLayout";
 import { CandidateCard } from "@/components/agent/CandidateCard";
 import { CandidateDetailModal } from "@/components/agent/CandidateDetailModal";
 import { CandidateFilters } from "@/components/agent/CandidateFilters";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function AgentDiscoveryPage() {
   const queryClient = useQueryClient();
+  const { authUser, agencyContext } = useAuth();
 
-  // Contractor context
-  const [activeContractor, setActiveContractor] = React.useState(MOCK_CONTRACTORS[0].name);
+  // Contractor context: authoritative from auth, with state for internal staff switching
+  const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
+  const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
+
+  React.useEffect(() => {
+    if (defaultContractor && !activeContractor) {
+      setActiveContractor(defaultContractor);
+    }
+  }, [defaultContractor, activeContractor]);
+
+  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
 
   // Filters State
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -62,14 +73,14 @@ export default function AgentDiscoveryPage() {
   } = useQuery({
     queryKey: [
       "portal-available-candidates",
-      activeContractor,
+      effectiveContractor,
       destinationCountry,
       jobApplied,
       religion,
     ],
     queryFn: () =>
       getPortalAvailableCandidates({
-        contractor: activeContractor,
+        contractor: effectiveContractor,
         destination_country: destinationCountry !== "All Countries" ? destinationCountry : undefined,
         job_applied: jobApplied !== "All Jobs" ? jobApplied : undefined,
         religion: religion !== "All Religions" ? religion : undefined,
@@ -98,7 +109,7 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
-      return await portalSelectCandidateApi(candidate.name, activeContractor);
+      return await portalSelectCandidateApi(candidate.name, effectiveContractor);
     },
     onSuccess: (res, candidate) => {
       setSelectingCandidateId(null);
@@ -110,12 +121,15 @@ export default function AgentDiscoveryPage() {
       }
 
       setSuccessToast(
-        `✓ Applicant ${candidate.full_name} (${candidate.name}) reserved successfully for ${activeContractor}. Dossier created.`
+        `✓ Applicant ${candidate.full_name} (${candidate.name}) reserved successfully. State advanced to Selected.`
       );
       setTimeout(() => setSuccessToast(null), 6000);
 
       // Invalidate queries to refresh background
       queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
     },
     onError: (err: ApiError | any, candidate) => {
       setSelectingCandidateId(null);

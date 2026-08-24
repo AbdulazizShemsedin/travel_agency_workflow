@@ -26,6 +26,7 @@ import {
   getApplicant,
   parseDossierFileApi,
   approveDossierAndSelectApplicant,
+  uploadFileApi,
 } from "@/lib/api/applicantApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ export default function ContractorDocPage() {
     size: number;
     type: string;
     previewUrl: string;
+    fileObject?: File;
   } | null>(null);
 
   const [isDragOver, setIsDragOver] = React.useState(false);
@@ -72,17 +74,17 @@ export default function ContractorDocPage() {
         name: applicant.contractor_doc.file_name,
         size: 245000,
         type: applicant.contractor_doc.file_name.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
-        previewUrl: applicant.contractor_doc.file_attachment || "/mock_docs/contractor_demand.pdf",
+        previewUrl: applicant.contractor_doc.file_attachment || "",
       });
     }
 
     if (applicant?.contractor_doc?.parsed_at) {
       setExtractedData({
-        contractor_name: applicant.contractor_doc.contractor_name || "Al-Khaleej Manpower Services",
-        sponsor_name: applicant.contractor_doc.sponsor_name || "Sheikh Fahad Abdullah Al-Ghamdi",
-        sponsor_id: applicant.contractor_doc.sponsor_id || "NAT-SA-10884920",
-        job_title: applicant.contractor_doc.job_title || "Hospitality & Service Specialist",
-        salary: applicant.contractor_doc.salary || 2400,
+        contractor_name: applicant.contractor_doc.contractor_name || "",
+        sponsor_name: applicant.contractor_doc.sponsor_name || "",
+        sponsor_id: applicant.contractor_doc.sponsor_id || "",
+        job_title: applicant.contractor_doc.job_title || "",
+        salary: applicant.contractor_doc.salary || 0,
         selection_status: (applicant.contractor_doc.selection_status as "Selected") || "Selected",
       });
     }
@@ -106,6 +108,7 @@ export default function ContractorDocPage() {
         size: file.size,
         type: file.type,
         previewUrl: resultUrl,
+        fileObject: file,
       });
       setExtractedData(null);
       toast.success("Document Uploaded from PC", {
@@ -141,17 +144,6 @@ export default function ContractorDocPage() {
     setIsDragOver(false);
   };
 
-  const handleLoadSampleDoc = () => {
-    setUploadedFile({
-      name: "Visa_Demand_Allotment_Contract.pdf",
-      size: 184500,
-      type: "application/pdf",
-      previewUrl: "/mock_docs/contractor_demand.pdf",
-    });
-    setExtractedData(null);
-    toast.info("Sample Contractor Demand Letter Loaded");
-  };
-
   const handleRemoveFile = () => {
     setUploadedFile(null);
     setExtractedData(null);
@@ -161,41 +153,94 @@ export default function ContractorDocPage() {
     toast.info("Uploaded document cleared.");
   };
 
-  // Trigger OCR extraction on the uploaded file via parse_dossier_file RPC
-  const handleExtractInfo = () => {
+  // Trigger OCR extraction on the uploaded file via real parse_dossier_file RPC
+  const handleExtractInfo = async () => {
     if (!uploadedFile) {
       toast.error("No Document Available", {
-        description: "Please upload a contractor document from your PC or load a sample document first.",
+        description: "Please upload a contractor document from your PC.",
       });
       return;
     }
 
     setIsExtracting(true);
-    setTimeout(async () => {
-      try {
-        const dossierName = `DOSSIER-${applicantId.replace("APP-", "")}`;
-        const res = await parseDossierFileApi(dossierName);
-        const parsed = {
-          contractor_name: "Al-Khaleej International Manpower Co. (Riyadh)",
-          sponsor_name: "Sheikh Fahad Abdullah Al-Ghamdi",
-          sponsor_id: "NAT-SA-10884920",
-          job_title: "Hospitality & Service Specialist",
-          salary: 2400,
-          selection_status: "Selected" as const,
-        };
-        setExtractedData(parsed);
-        setIsExtracting(false);
+    try {
+      // 1. Resolve or create Applicant Dossier in Frappe
+      let dossierName = applicant?.contractor_doc?.name || `DOSSIER-${applicantId.replace("APP-", "")}`;
 
-        queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
-        queryClient.invalidateQueries({ queryKey: ["applicants"] });
-        toast.success("Dossier Parsed Successfully!", {
-          description: "Candidate allocation details extracted and ready for confirmation.",
+      const checkDos = await fetch(`/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
+      const checkDosJson = await checkDos.json();
+      const existingDos = checkDosJson.data?.[0];
+
+      if (!existingDos) {
+        const createDosRes = await fetch("/api/resource/Applicant Dossier", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            applicant: applicantId,
+            file_name: uploadedFile.name,
+            approval_status: "Pending",
+          }),
         });
-      } catch (err) {
-        setIsExtracting(false);
-        console.error(err);
+        const createDosJson = await createDosRes.json();
+        if (createDosJson.data?.name) {
+          dossierName = createDosJson.data.name;
+        }
+      } else {
+        dossierName = existingDos.name;
       }
-    }, 1200);
+
+      // 2. Upload file attachment if a new file was uploaded from PC
+      if (uploadedFile.fileObject) {
+        try {
+          const uploadRes = await uploadFileApi(uploadedFile.fileObject, "Applicant Dossier", dossierName, "file_attachment");
+          if (uploadRes?.message?.file_url) {
+            await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dossierName)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ file_attachment: uploadRes.message.file_url, file_name: uploadedFile.name }),
+            });
+          }
+        } catch (uploadErr) {
+          console.warn("File attachment upload warning:", uploadErr);
+        }
+      }
+
+      // 3. Invoke real backend parse_dossier_file RPC
+      const res = await parseDossierFileApi(dossierName);
+
+      // 4. Fetch refreshed dossier data from backend
+      const refreshedDos = await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dossierName)}`);
+      const refreshedDosJson = await refreshedDos.json();
+      const docData = refreshedDosJson?.data || {};
+
+      const extData = typeof res?.message === "object" ? res?.message?.extracted_data : null;
+
+      const parsed = {
+        contractor_name: extData?.contractor_name || docData.contractor_name || applicant?.locked_contractor || "",
+        sponsor_name: extData?.sponsor_name || docData.sponsor_name || "",
+        sponsor_id: extData?.sponsor_id || docData.sponsor_id || "",
+        job_title: extData?.job_title || docData.job_title || applicant?.job_applied || "",
+        salary: extData?.salary || Number(docData.salary) || Number(applicant?.monthly_salary) || 0,
+        selection_status: (docData.selection_status as "Selected") || "Selected",
+      };
+
+      setExtractedData(parsed);
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
+      toast.success("Dossier Parsed Successfully!", {
+        description: typeof res?.message === "string" ? res.message : "Candidate allocation details extracted and ready for confirmation.",
+      });
+    } catch (err: any) {
+      console.error("Dossier parsing error:", err);
+      setExtractedData(null);
+      toast.error("Extraction Failed", {
+        description: err.message || "Failed to parse dossier document. Please check the file and try again.",
+      });
+    } finally {
+      setIsExtracting(false);
+    }
   };
 
   // Approval Mutation
@@ -206,6 +251,8 @@ export default function ContractorDocPage() {
           sponsor_name: extractedData.sponsor_name,
           sponsor_id: extractedData.sponsor_id,
           contractor_name: extractedData.contractor_name,
+          salary: extractedData.salary,
+          job_title: extractedData.job_title,
         } : undefined);
       } else {
         setExtractedData(null);
@@ -223,7 +270,7 @@ export default function ContractorDocPage() {
       } else {
         setExtractedData(null);
         toast.warning("Extracted information rejected.", {
-          description: "Candidate remains in Request Pending. You can re-extract or upload a revised document.",
+          description: "Candidate remains in current stage. You can re-extract or upload a revised document.",
         });
       }
     },
@@ -294,17 +341,6 @@ export default function ContractorDocPage() {
             <FileUp className="mr-1.5 h-4 w-4 text-emerald-800 dark:text-emerald-400" />
             Upload Document from PC
           </Button>
-          {!uploadedFile && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleLoadSampleDoc}
-              className="text-xs border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] hover:bg-slate-50 dark:hover:bg-[#1c1c22]"
-            >
-              Use Sample Letter
-            </Button>
-          )}
         </div>
       </div>
 
@@ -357,65 +393,42 @@ export default function ContractorDocPage() {
                     />
                   </div>
                 ) : (
-                  // PDF Official Document Render Container
-                  <div className="w-full max-w-lg bg-white dark:bg-[#121215] p-8 rounded-lg shadow-md border border-slate-300 dark:border-[#26262d] space-y-6 text-xs text-slate-800 dark:text-zinc-200 animate-in fade-in duration-200">
-                    {/* Official Letterhead */}
-                    <div className="border-b-2 border-emerald-900 dark:border-emerald-500 pb-4 flex justify-between items-start">
-                      <div>
-                        <h3 className="font-black text-sm text-emerald-950 dark:text-emerald-300 uppercase">
-                          Al-Khaleej Manpower Recruitment
-                        </h3>
-                        <p className="text-[10px] text-slate-500 dark:text-zinc-400">
-                          Commercial Registration No: 1010-884920 • Riyadh, Kingdom of Saudi Arabia
-                        </p>
-                      </div>
-                      <Building2 className="h-7 w-7 text-emerald-800 dark:text-emerald-400" />
-                    </div>
-
-                    {/* Demand Reference */}
-                    <div className="bg-slate-50 dark:bg-[#16161b] p-3 rounded border border-slate-200 dark:border-[#26262d] flex justify-between text-[11px]">
-                      <span><strong>Reference No:</strong> KSA-DEM-2026-991</span>
-                      <span><strong>Issue Date:</strong> {new Date().toISOString().split("T")[0]}</span>
-                    </div>
-
-                    {/* Letter Body */}
-                    <div className="space-y-3 leading-relaxed text-xs">
-                      <p>
-                        <strong>To:</strong> Ministry of Labour & Travel Agency Workflow Office
-                      </p>
-                      <p>
-                        We hereby confirm that the foreign candidate below has been selected and approved for overseas employment under the quota visa demand:
-                      </p>
-
-                      <div className="bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3.5 rounded-lg space-y-1.5 font-medium">
-                        <p><strong>Candidate Full Name:</strong> {applicant.full_name}</p>
-                        <p><strong>Passport Number:</strong> {applicant.passport_number || "EP1234567"}</p>
-                        <p><strong>Approved Sponsor / Employer:</strong> Sheikh Fahad Abdullah Al-Ghamdi</p>
-                        <p><strong>Sponsor Civil ID:</strong> NAT-SA-10884920</p>
-                        <p><strong>Designated Profession:</strong> Hospitality & Service Specialist</p>
-                        <p><strong>Basic Monthly Salary:</strong> 2,400 SAR + Accommodation & Medical</p>
-                        <p className="text-emerald-800 dark:text-emerald-300 font-bold">
-                          <strong>Selection Outcome:</strong> SELECTED & ALLOCATED
-                        </p>
-                      </div>
-
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Please proceed with Injaz biometrics submission, Wakala authorization, and ministry departure clearance.
-                      </p>
-                    </div>
-
-                    {/* Signature Block */}
-                    <div className="pt-4 border-t border-slate-200 dark:border-[#26262d] flex justify-between items-end text-[11px]">
-                      <div>
-                        <p className="font-bold text-slate-900 dark:text-white">Authorized Officer Seal</p>
-                        <p className="text-slate-500 dark:text-zinc-400">Foreign Manpower Division</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="inline-block border-2 border-emerald-800 dark:border-emerald-500 text-emerald-800 dark:text-emerald-400 font-bold text-[10px] px-2.5 py-1 rounded rotate-[-4deg] uppercase">
-                          Official Verified Stamp
+                  // PDF / Document Viewer
+                  <div className="w-full h-full min-h-[500px] flex flex-col items-center justify-center p-4 bg-white dark:bg-[#121215] rounded-lg border border-slate-300 dark:border-[#26262d] shadow-sm">
+                    {uploadedFile.previewUrl.startsWith("http") || uploadedFile.previewUrl.startsWith("blob:") || uploadedFile.previewUrl.startsWith("data:") ? (
+                      <object
+                        data={uploadedFile.previewUrl}
+                        type="application/pdf"
+                        className="w-full h-[520px] rounded"
+                      >
+                        <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                          <FileText className="h-16 w-16 text-emerald-800 dark:text-emerald-400" />
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{uploadedFile.name}</h4>
+                            <p className="text-xs text-slate-500 mt-1">PDF document loaded ({(uploadedFile.size / 1024).toFixed(1)} KB)</p>
+                          </div>
+                          {uploadedFile.previewUrl && (
+                            <a
+                              href={uploadedFile.previewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>Open PDF in New Tab</span>
+                            </a>
+                          )}
+                        </div>
+                      </object>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
+                        <FileText className="h-16 w-16 text-emerald-800 dark:text-emerald-400" />
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 dark:text-white">{uploadedFile.name}</h4>
+                          <p className="text-xs text-slate-500 mt-1">Ready for backend OCR parsing</p>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )
               ) : (

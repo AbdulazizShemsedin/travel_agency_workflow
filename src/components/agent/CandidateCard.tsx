@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Loader2,
   Sparkles,
+  User,
+  ImageOff,
 } from "lucide-react";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
@@ -31,40 +33,53 @@ export function CandidateCard({
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
 
-  // Fallback avatars if remote images fail
-  const defaultPassport = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
-  const defaultFullBody = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80";
-
-  const passportSrc = (!passportImgError && candidate.photo_passport) ? candidate.photo_passport : defaultPassport;
-  const fullBodySrc = (!fullBodyImgError && candidate.photo_full_body) ? candidate.photo_full_body : defaultFullBody;
+  const hasPassport = !passportImgError && Boolean(candidate.photo_passport);
+  const hasFullBody = !fullBodyImgError && Boolean(candidate.photo_full_body);
 
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs hover:shadow-md hover:border-emerald-700/40 dark:hover:border-emerald-500/30 transition-all duration-200">
+    <div
+      onClick={() => onViewDetails(candidate)}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs hover:shadow-lg hover:-translate-y-0.5 hover:border-emerald-700/50 dark:hover:border-emerald-500/40 transition-all duration-200 cursor-pointer"
+    >
       {/* 1. Clean Two-Photo Area */}
       <div className="relative grid grid-cols-2 gap-1.5 p-2.5 bg-slate-100/70 dark:bg-[#18181e]/60 border-b border-slate-100 dark:border-[#202026]">
         {/* Formal Passport Photo */}
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-[#202028]">
-          <img
-            src={passportSrc}
-            alt={`${candidate.full_name} - Passport Photo`}
-            onError={() => setPassportImgError(true)}
-            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
-            loading="lazy"
-          />
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200/80 dark:bg-[#202028] flex items-center justify-center">
+          {hasPassport ? (
+            <img
+              src={candidate.photo_passport}
+              alt={`${candidate.full_name} - Passport Photo`}
+              onError={() => setPassportImgError(true)}
+              className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-3 text-center text-slate-400 dark:text-zinc-500">
+              <User className="h-8 w-8 stroke-[1.5] mb-1 opacity-60" />
+              <span className="text-[10px] font-medium">Passport Photo</span>
+            </div>
+          )}
           <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white">
             Formal
           </div>
         </div>
 
         {/* Full-Body Photo */}
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200 dark:bg-[#202028]">
-          <img
-            src={fullBodySrc}
-            alt={`${candidate.full_name} - Full Body Photo`}
-            onError={() => setFullBodyImgError(true)}
-            className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
-            loading="lazy"
-          />
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200/80 dark:bg-[#202028] flex items-center justify-center">
+          {hasFullBody ? (
+            <img
+              src={candidate.photo_full_body}
+              alt={`${candidate.full_name} - Full Body Photo`}
+              onError={() => setFullBodyImgError(true)}
+              className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-3 text-center text-slate-400 dark:text-zinc-500">
+              <User className="h-8 w-8 stroke-[1.5] mb-1 opacity-60" />
+              <span className="text-[10px] font-medium">Full Portrait</span>
+            </div>
+          )}
           <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white">
             Full Portrait
           </div>
@@ -76,7 +91,7 @@ export function CandidateCard({
         {/* Name & Destination */}
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
               {candidate.full_name}
             </h3>
             <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 mt-0.5">
@@ -125,7 +140,10 @@ export function CandidateCard({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onViewDetails(candidate)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewDetails(candidate);
+            }}
             className="flex-1 text-xs font-semibold h-9 rounded-xl border-slate-200 dark:border-[#26262d] text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a20]"
           >
             <Eye className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
@@ -136,7 +154,10 @@ export function CandidateCard({
             type="button"
             size="sm"
             disabled={isSelecting}
-            onClick={() => onSelect(candidate)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(candidate);
+            }}
             className="flex-1 text-xs font-semibold h-9 rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-xs"
           >
             {isSelecting ? (
@@ -147,7 +168,7 @@ export function CandidateCard({
             ) : (
               <>
                 <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Select Applicant
+                Select & Reserve Candidate
               </>
             )}
           </Button>

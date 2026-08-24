@@ -93,6 +93,9 @@ export function Step5Review({
                 >
                   {applicantState}
                 </Badge>
+                <span className="rounded-md bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  {values.applicant_type || "Standard"}
+                </span>
                 {draftApplicantId && (
                   <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">
                     {draftApplicantId}
@@ -101,7 +104,7 @@ export function Step5Review({
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 {values.phone_number || "No phone"} • {values.email || "No email"} • {values.city || "No city"},{" "}
-                {values.country || "No country"}
+                {values.country || "No country"} • Target: {values.destination_country || "Saudi Arabia"}
               </p>
             </div>
           </div>
