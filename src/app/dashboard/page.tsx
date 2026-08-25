@@ -38,7 +38,6 @@ export default function DashboardPage() {
   const draftCount = applicants.filter((a) => a.applicant_state === "Draft").length;
   const registeredCount = applicants.filter((a) => a.applicant_state === "Registered").length;
   const cvCount = applicants.filter((a) => a.applicant_state === "CV Generated").length;
-  const requestCount = applicants.filter((a) => a.applicant_state === "Request Pending").length;
   const selectedCount = applicants.filter((a) => a.applicant_state === "Selected").length;
   const processingCount = applicants.filter((a) => a.applicant_state === "Processing").length;
   const stampedCount = applicants.filter((a) => a.applicant_state === "Stamped").length;
@@ -189,15 +188,6 @@ export default function DashboardPage() {
     },
     {
       step: 3,
-      title: "Contract Request",
-      count: requestCount,
-      badge: "Contract",
-      color: "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-300",
-      accent: "bg-amber-500",
-      link: "/applicants?filter=Request Pending",
-    },
-    {
-      step: 4,
       title: "Selected",
       count: selectedCount,
       badge: "Selected",
@@ -206,7 +196,7 @@ export default function DashboardPage() {
       link: "/applicants?filter=Selected",
     },
     {
-      step: 5,
+      step: 4,
       title: "Processing",
       count: processingCount,
       badge: "Parallel Streams",
@@ -221,30 +211,30 @@ export default function DashboardPage() {
       link: "/applicants?filter=Processing",
     },
     {
-      step: 6,
+      step: 5,
       title: "Embassy Stamp",
       count: stampedCount,
-      badge: "Stamped",
+      badge: "Visa Issued",
       color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300",
       accent: "bg-teal-600",
       link: "/applicants?filter=Stamped",
     },
     {
-      step: 7,
-      title: "Ticket Issued",
+      step: 6,
+      title: "Ticket Booked",
       count: ticketedCount,
-      badge: "Ticketed",
+      badge: "Flight Ticket",
       color: "border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-300",
       accent: "bg-indigo-600",
       link: "/applicants?filter=Ticketed",
     },
     {
-      step: 8,
-      title: "Departure",
+      step: 7,
+      title: "Departed",
       count: departedCount,
-      badge: "Departed",
-      color: "border-emerald-300 dark:border-emerald-700 bg-emerald-100/60 dark:bg-emerald-900/30 text-emerald-950 dark:text-emerald-200 font-bold",
-      accent: "bg-emerald-800",
+      badge: "Deployed",
+      color: "border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300",
+      accent: "bg-emerald-700",
       link: "/applicants?filter=Departed",
     },
   ];
@@ -269,7 +259,7 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Real-time applicant pipeline and operational status across all workflow stages.
+            Live applicant pipeline and operational status across all workflow stages.
           </p>
         </div>
         <div className="flex items-center gap-3">

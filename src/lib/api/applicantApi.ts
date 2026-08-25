@@ -164,6 +164,46 @@ export function mapFormValuesToFrappeApplicant(
 ): Record<string, any> {
   const payload: Record<string, any> = { ...data };
 
+  // Ensure photo fields are mapped to canonical Frappe schema
+  if (data.profile_photo_url && !payload.photo_passport) {
+    payload.photo_passport = data.profile_photo_url;
+  }
+  if (data.photo_passport && !payload.profile_photo_url) {
+    payload.profile_photo_url = data.photo_passport;
+  }
+
+  // Ensure passport scan / copy fields are mapped to canonical Frappe schema
+  if (data.passport_scan) {
+    payload.passport_scan = data.passport_scan;
+    payload.passport_copy = data.passport_scan;
+    payload.passport_image = data.passport_scan;
+    payload.passport_file = data.passport_scan;
+    payload.passport_doc = data.passport_scan;
+    payload.passport_attachment = data.passport_scan;
+  }
+  if ((data as any).passport_copy && !payload.passport_scan) {
+    payload.passport_scan = (data as any).passport_copy;
+    payload.passport_copy = (data as any).passport_copy;
+    payload.passport_image = (data as any).passport_copy;
+  }
+
+  // Strip base64 data URLs if any (Frappe Attach Image requires /files/... URL)
+  if (payload.photo_passport && typeof payload.photo_passport === "string" && payload.photo_passport.startsWith("data:")) {
+    delete payload.photo_passport;
+  }
+  if (payload.profile_photo_url && typeof payload.profile_photo_url === "string" && payload.profile_photo_url.startsWith("data:")) {
+    delete payload.profile_photo_url;
+  }
+  if (payload.photo_full_body && typeof payload.photo_full_body === "string" && payload.photo_full_body.startsWith("data:")) {
+    delete payload.photo_full_body;
+  }
+  if (payload.passport_scan && typeof payload.passport_scan === "string" && payload.passport_scan.startsWith("data:")) {
+    delete payload.passport_scan;
+  }
+  if (payload.passport_copy && typeof payload.passport_copy === "string" && payload.passport_copy.startsWith("data:")) {
+    delete payload.passport_copy;
+  }
+
   // Map contact fields to backend schema
   if (data.contact_person_name && !payload.emergency_contact_name) {
     payload.emergency_contact_name = data.contact_person_name;
@@ -254,83 +294,142 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
     const dosData = await dosRes.json();
     if (dosData.data && dosData.data.length > 0) {
       const dos = dosData.data[0];
+      const attachmentUrl = dos.attached_file || dos.file_attachment || "";
+      const rawFileName = dos.file_name || (attachmentUrl ? attachmentUrl.split("/").pop() : "Contractor_Demand_Dossier.pdf");
       app.contractor_doc = {
         name: dos.name,
         applicant: dos.applicant,
         contract_request: dos.contract_request,
-        contractor_name: dos.contractor_name,
+        contractor_name: dos.contractor_name || dos.contractor,
+        contract_number: dos.contract_number || dos.contract_no,
+        visa_number: dos.visa_number || dos.visa_no,
         sponsor_name: dos.sponsor_name,
         sponsor_id: dos.sponsor_id,
-        job_title: dos.job_title || "Hospitality & Domestic Specialist",
-        salary: dos.amount_detail || 1200,
+        sponsor_phone: dos.sponsor_phone,
+        job_title: dos.job_title || app.job_applied,
+        salary: dos.salary || dos.amount_detail || (app.monthly_salary ? Number(app.monthly_salary) : 0),
+        currency: dos.currency || "SAR",
+        contract_period: dos.contract_period,
+        destination_city: dos.destination_city || app.city,
+        destination_country: dos.destination_country || app.destination_country,
         selection_status: dos.is_parsed ? "Selected" : "Pending",
         parsed_at: dos.creation,
-        file_name: dos.attached_file ? dos.attached_file.split("/").pop() : "Contractor_Demand_Dossier.pdf",
-        file_attachment: dos.attached_file,
+        file_name: rawFileName,
+        file_attachment: attachmentUrl,
+        attached_file: attachmentUrl,
+        approval_status: dos.approval_status || (dos.is_parsed ? "Approved" : "Pending"),
+        notes: dos.notes,
       };
     }
 
     // Enrich with Clearances (LMS, Injaz, Wakala)
-    const lmsRes = await fetch(`/api/resource/LMS%20Clearance?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const lmsData = await lmsRes.json();
-    if (lmsData.data && lmsData.data.length > 0) {
-      const lms = lmsData.data[0];
-      app.lms_processing = {
-        name: lms.name,
-        applicant: app.name,
-        status: lms.status,
-        employee: lms.employee || app.assigned_employee_id,
-        issued_on: lms.issued_on,
-      };
-    } else if (app.assigned_employee_id) {
-      const cleanId = String(app.name || "").replace("APP-", "");
-      app.lms_processing = {
-        name: `LMS-${cleanId}`,
-        applicant: app.name || "",
-        status: "Pending",
-        employee: app.assigned_employee_id,
-      };
-    }
+    const clearanceFullName = app.full_name || [app.first_name, app.middle_name, app.last_name].filter(Boolean).join(" ");
+    
+    // 1. LMS Clearance
+    try {
+      let lmsDoc: any = null;
+      const lmsResApp = await fetch(`/api/resource/LMS%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+      if (lmsResApp.ok) {
+        const lmsJsonApp = await lmsResApp.json();
+        if (lmsJsonApp.data && lmsJsonApp.data.length > 0) {
+          lmsDoc = lmsJsonApp.data[0];
+        }
+      }
+      if (!lmsDoc && clearanceFullName) {
+        const lmsResName = await fetch(`/api/resource/LMS%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+        if (lmsResName.ok) {
+          const lmsJsonName = await lmsResName.json();
+          if (lmsJsonName.data && lmsJsonName.data.length > 0) {
+            lmsDoc = lmsJsonName.data[0];
+          }
+        }
+      }
+      if (lmsDoc) {
+        app.lms_processing = {
+          name: lmsDoc.name,
+          applicant: app.name,
+          status: lmsDoc.status || "Pending",
+          employee: lmsDoc.employee || (app.assigned_role_type === "LMS Employee" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
+          issued_on: lmsDoc.issued_on,
+          ticket_pnr: lmsDoc.ticket_pnr,
+          flight_number: lmsDoc.flight_number,
+          departure_date: lmsDoc.departure_date,
+          destination: lmsDoc.destination,
+          additional_field_1: lmsDoc.additional_field_1,
+          additional_field_2: lmsDoc.additional_field_2,
+          notes: lmsDoc.notes,
+        };
+      }
+    } catch {}
 
-    const injRes = await fetch(`/api/resource/Injaz%20Clearance?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const injData = await injRes.json();
-    if (injData.data && injData.data.length > 0) {
-      const inj = injData.data[0];
-      app.injaz_processing = {
-        name: inj.name,
-        applicant: app.name,
-        status: inj.status,
-        employee: inj.employee || app.assigned_employee_id,
-      };
-    } else if (app.assigned_employee_id) {
-      const cleanId = String(app.name || "").replace("APP-", "");
-      app.injaz_processing = {
-        name: `INJ-${cleanId}`,
-        applicant: app.name || "",
-        status: "Pending",
-        employee: app.assigned_employee_id,
-      };
-    }
+    // 2. Injaz Clearance
+    try {
+      let injDoc: any = null;
+      const injResApp = await fetch(`/api/resource/Injaz%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+      if (injResApp.ok) {
+        const injJsonApp = await injResApp.json();
+        if (injJsonApp.data && injJsonApp.data.length > 0) {
+          injDoc = injJsonApp.data[0];
+        }
+      }
+      if (!injDoc && clearanceFullName) {
+        const injResName = await fetch(`/api/resource/Injaz%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+        if (injResName.ok) {
+          const injJsonName = await injResName.json();
+          if (injJsonName.data && injJsonName.data.length > 0) {
+            injDoc = injJsonName.data[0];
+          }
+        }
+      }
+      if (injDoc) {
+        app.injaz_processing = {
+          name: injDoc.name,
+          applicant: app.name,
+          status: injDoc.status || "Pending",
+          employee: injDoc.employee || (app.assigned_role_type === "Injaz Officer" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
+          injaz_app_no: injDoc.injaz_app_no,
+          teashir_fee: injDoc.teashir_fee,
+          biometrics_date: injDoc.biometrics_date,
+          biometrics_center: injDoc.biometrics_center,
+          notes: injDoc.notes,
+        };
+      }
+    } catch {}
 
-    const wakRes = await fetch(`/api/resource/Wakala%20Clearance?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const wakData = await wakRes.json();
-    if (wakData.data && wakData.data.length > 0) {
-      const wak = wakData.data[0];
-      app.wakala_processing = {
-        name: wak.name,
-        applicant: app.name,
-        status: wak.status,
-        employee: wak.employee || app.assigned_employee_id,
-      };
-    } else if (app.assigned_employee_id) {
-      const cleanId = String(app.name || "").replace("APP-", "");
-      app.wakala_processing = {
-        name: `WAK-${cleanId}`,
-        applicant: app.name || "",
-        status: "Pending",
-        employee: app.assigned_employee_id,
-      };
-    }
+    // 3. Wakala Clearance
+    try {
+      let wakDoc: any = null;
+      const wakResApp = await fetch(`/api/resource/Wakala%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+      if (wakResApp.ok) {
+        const wakJsonApp = await wakResApp.json();
+        if (wakJsonApp.data && wakJsonApp.data.length > 0) {
+          wakDoc = wakJsonApp.data[0];
+        }
+      }
+      if (!wakDoc && clearanceFullName) {
+        const wakResName = await fetch(`/api/resource/Wakala%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
+        if (wakResName.ok) {
+          const wakJsonName = await wakResName.json();
+          if (wakJsonName.data && wakJsonName.data.length > 0) {
+            wakDoc = wakJsonName.data[0];
+          }
+        }
+      }
+      if (wakDoc) {
+        app.wakala_processing = {
+          name: wakDoc.name,
+          applicant: app.name,
+          status: wakDoc.status || "Pending",
+          employee: wakDoc.employee || (app.assigned_role_type === "Wakala Officer" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
+          wakala_number: wakDoc.wakala_number,
+          sponsor_auth_code: wakDoc.sponsor_auth_code,
+          foreign_agency_name: wakDoc.foreign_agency_name,
+          started_on: wakDoc.started_on,
+          completed_on: wakDoc.completed_on,
+          notes: wakDoc.notes,
+        };
+      }
+    } catch {}
 
     // Enrich with DSR Stamp, Ticket, Departure
     const stampRes = await fetch(`/api/resource/DSR%20Stamp?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
@@ -377,7 +476,34 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
 
 // List Applicants: GET /api/resource/Applicant
 export async function getApplicantsList(): Promise<Applicant[]> {
-  const res = await fetch("/api/resource/Applicant");
+  const fields = [
+    "name",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "full_name",
+    "gender",
+    "nationality",
+    "phone_number",
+    "city",
+    "country",
+    "date_of_birth",
+    "passport_number",
+    "passport_expiry",
+    "job_applied",
+    "destination_country",
+    "applicant_state",
+    "medical_status",
+    "medical_expiry_date",
+    "coc_status",
+    "photo_passport",
+    "creation",
+    "modified",
+  ];
+  const fieldParam = encodeURIComponent(JSON.stringify(fields));
+  const res = await fetch(
+    `/api/resource/Applicant?fields=${fieldParam}&limit_page_length=0&order_by=creation desc`
+  );
   return handleApiResponse<Applicant[]>(res);
 }
 
@@ -400,6 +526,53 @@ export async function registerApplicant(
 export async function generateCV(
   applicantName: string
 ): Promise<CVGenerationResponse> {
+  // Pre-sync passport scan, profile photo, and full body photo to Applicant & CV Record
+  try {
+    const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);
+    if (appRes.ok) {
+      const appJson = await appRes.json();
+      const appData = appJson.data;
+      const passportScanUrl = appData?.passport_scan || appData?.passport_copy || appData?.passport_image;
+      const photoPassportUrl = appData?.photo_passport || appData?.profile_photo_url;
+      const fullBodyUrl = appData?.photo_full_body;
+
+      // Update Applicant if fields need normalization
+      if (passportScanUrl && (!appData.passport_scan || !appData.passport_copy)) {
+        await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            passport_scan: passportScanUrl,
+            passport_copy: passportScanUrl,
+            passport_image: passportScanUrl,
+          }),
+        });
+      }
+
+      // Update CV Record if present
+      const cvRes = await fetch(
+        `/api/resource/CV%20Record?filters=[["applicant","=","${encodeURIComponent(applicantName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (cvRes.ok) {
+        const cvData = await cvRes.json();
+        if (cvData.data && cvData.data.length > 0) {
+          const cvName = cvData.data[0].name;
+          await fetch(`/api/resource/CV%20Record/${encodeURIComponent(cvName)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              passport_scan: passportScanUrl,
+              photo_passport: photoPassportUrl,
+              photo_full_body: fullBodyUrl,
+            }),
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("CV pre-generation sync warning:", e);
+  }
+
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.generate_cv",
     {
@@ -610,13 +783,30 @@ export async function createApplicantDossier(data: Partial<ApplicantDossier>): P
   return handleApiResponse<ApplicantDossier>(res);
 }
 
-// Approve Dossier and advance to "Selected" (Stage 5)
+// Approve Dossier and advance to "Selected" (Stage 4)
 export async function approveDossierAndSelectApplicant(
   applicantId: string,
-  dossierDetails?: { sponsor_name?: string; sponsor_id?: string; visa_number?: string; contractor_name?: string; salary?: number; job_title?: string }
+  dossierDetails?: {
+    sponsor_name?: string;
+    sponsor_id?: string;
+    sponsor_phone?: string;
+    contract_number?: string;
+    visa_number?: string;
+    contractor_name?: string;
+    salary?: number;
+    currency?: string;
+    job_title?: string;
+    destination_city?: string;
+    destination_country?: string;
+    contract_period?: string;
+  }
 ): Promise<{ message: string }> {
   // 1. Resolve Contract Request & CV Record
-  const crRes = await fetch(`/api/resource/Contract%20Request?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
+  const crRes = await fetch(
+    `/api/resource/Contract%20Request?filters=[["applicant","=","${encodeURIComponent(
+      applicantId
+    )}"]]&fields=["*"]`
+  );
   const crData = await crRes.json();
   const cr = crData.data?.[0];
   const cleanId = String(applicantId || "").replace("APP-", "");
@@ -624,7 +814,11 @@ export async function approveDossierAndSelectApplicant(
   const cvRef = cr?.cv_reference || `CV-${cleanId}`;
 
   // 2. Check if Dossier already exists for this applicant
-  const dosCheck = await fetch(`/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]`);
+  const dosCheck = await fetch(
+    `/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(
+      applicantId
+    )}"]]&fields=["*"]`
+  );
   const dosCheckData = await dosCheck.json();
   let dosName = dosCheckData.data?.[0]?.name;
 
@@ -638,10 +832,16 @@ export async function approveDossierAndSelectApplicant(
 
   if (dossierDetails?.sponsor_name) payload.sponsor_name = dossierDetails.sponsor_name;
   if (dossierDetails?.sponsor_id) payload.sponsor_id = dossierDetails.sponsor_id;
+  if (dossierDetails?.sponsor_phone) payload.sponsor_phone = dossierDetails.sponsor_phone;
+  if (dossierDetails?.contract_number) payload.contract_number = dossierDetails.contract_number;
   if (dossierDetails?.visa_number) payload.visa_number = dossierDetails.visa_number;
   if (dossierDetails?.contractor_name) payload.contractor_name = dossierDetails.contractor_name;
   if (dossierDetails?.salary) payload.salary = dossierDetails.salary;
+  if (dossierDetails?.currency) payload.currency = dossierDetails.currency;
   if (dossierDetails?.job_title) payload.job_title = dossierDetails.job_title;
+  if (dossierDetails?.destination_city) payload.destination_city = dossierDetails.destination_city;
+  if (dossierDetails?.destination_country) payload.destination_country = dossierDetails.destination_country;
+  if (dossierDetails?.contract_period) payload.contract_period = dossierDetails.contract_period;
 
   if (dosName) {
     const putRes = await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dosName)}`, {
@@ -658,6 +858,24 @@ export async function approveDossierAndSelectApplicant(
     });
     await handleApiResponse<any>(postRes);
   }
+
+  // Also sync extracted sponsor & contract fields directly to Applicant
+  try {
+    await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        applicant_state: "Selected",
+        state_step: "4 of 8",
+        state_progress: 50.0,
+        sponsor_name: dossierDetails?.sponsor_name,
+        sponsor_id: dossierDetails?.sponsor_id,
+        visa_number: dossierDetails?.visa_number,
+        contract_number: dossierDetails?.contract_number,
+        monthly_salary: dossierDetails?.salary,
+      }),
+    });
+  } catch {}
 
   // 3. Request backend recalculation of applicant state following dossier approval
   try {
@@ -686,76 +904,305 @@ export async function parseDossierFileApi(
 // 4. CLEARANCES (LMS, WAKALA, INJAZ) (Stage 5 -> Stage 6)
 // ---------------------------------------------------------------------------
 
+// Helper to find existing clearance document name in Frappe
 async function resolveClearanceDocName(
-  doctype: "LMS Clearance" | "Injaz Clearance" | "Wakala Clearance",
+  doctype: string,
   applicantIdOrName: string,
   providedName: string
 ): Promise<string> {
+  // 1. If a specific document name was provided, verify if it exists on backend
   if (providedName && !providedName.includes("APP-")) {
-    return providedName;
+    try {
+      const checkRes = await fetch(
+        `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(providedName)}`
+      );
+      if (checkRes.ok) {
+        return providedName;
+      }
+    } catch {}
   }
+
+  // 2. Search by applicant ID
+  if (applicantIdOrName && applicantIdOrName.startsWith("APP-")) {
+    try {
+      const resApp = await fetch(
+        `/api/resource/${encodeURIComponent(doctype)}?filters=[["applicant","=","${encodeURIComponent(applicantIdOrName)}"]]&fields=["name"]&order_by=creation%20desc&limit_page_length=1`
+      );
+      if (resApp.ok) {
+        const jsonApp = await resApp.json();
+        if (jsonApp.data && jsonApp.data.length > 0) {
+          return jsonApp.data[0].name;
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Search by candidate full_name
   try {
     let fullName = applicantIdOrName;
-    if (applicantIdOrName.startsWith("APP-")) {
+    if (applicantIdOrName && applicantIdOrName.startsWith("APP-")) {
       const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantIdOrName)}`);
       if (appRes.ok) {
         const appJson = await appRes.json();
-        fullName = appJson.data?.full_name || appJson.data?.first_name || applicantIdOrName;
+        fullName =
+          appJson.data?.full_name ||
+          [appJson.data?.first_name, appJson.data?.last_name].filter(Boolean).join(" ") ||
+          applicantIdOrName;
       }
     }
-    const res = await fetch(
-      `/api/resource/${encodeURIComponent(doctype)}?filters=[["full_name","=","${encodeURIComponent(fullName)}"]]&fields=["name"]`
-    );
-    if (res.ok) {
-      const json = await res.json();
-      if (json.data && json.data.length > 0) {
-        return json.data[0].name;
+    if (fullName) {
+      const resName = await fetch(
+        `/api/resource/${encodeURIComponent(doctype)}?filters=[["full_name","=","${encodeURIComponent(fullName)}"]]&fields=["name"]&order_by=creation%20desc&limit_page_length=1`
+      );
+      if (resName.ok) {
+        const jsonName = await resName.json();
+        if (jsonName.data && jsonName.data.length > 0) {
+          return jsonName.data[0].name;
+        }
       }
     }
   } catch {}
-  return providedName;
+
+  return "";
 }
 
-// Update LMS Clearance
+// Helper to set or create a clearance document and persist employee assignment
+async function setOrInitClearanceEmployee(
+  doctype: "LMS Clearance" | "Injaz Clearance" | "Wakala Clearance",
+  applicantId: string,
+  fullName: string,
+  employee: string
+): Promise<void> {
+  if (!employee) return;
+  const existingDocName = await resolveClearanceDocName(doctype, applicantId, "");
+  if (existingDocName) {
+    await fetch(`/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(existingDocName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employee, status: "Pending" }),
+    });
+  } else {
+    await fetch(`/api/resource/${encodeURIComponent(doctype)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        applicant: applicantId,
+        full_name: fullName || applicantId,
+        employee: employee,
+        status: "Pending",
+      }),
+    });
+  }
+}
+
+// Helper to get or create DSR deployment record for an applicant
+export async function getOrCreateDsrForApplicant(
+  applicantId: string,
+  fullName?: string,
+  passportNo?: string
+): Promise<string> {
+  // 1. Check existing DSR match for THIS candidate
+  const existing = await resolveDsrForApplicant(applicantId);
+  if (existing) {
+    return existing;
+  }
+
+  // 2. Check by exact full_name match
+  if (fullName) {
+    try {
+      const dsrRes = await fetch(
+        `/api/resource/DSR?filters=[["full_name","=","${encodeURIComponent(fullName)}"]]&fields=["name"]`
+      );
+      if (dsrRes.ok) {
+        const dsrJson = await dsrRes.json();
+        if (dsrJson.data && dsrJson.data.length > 0) {
+          return dsrJson.data[0].name;
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Resolve or create Applicant Dossier (mandatory link for DSR in Frappe)
+  let dossierName = "";
+  try {
+    const dosRes = await fetch(
+      `/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["name"]&limit_page_length=1`
+    );
+    if (dosRes.ok) {
+      const dosData = await dosRes.json();
+      if (dosData.data && dosData.data.length > 0) {
+        dossierName = dosData.data[0].name;
+      }
+    }
+  } catch {}
+
+  if (!dossierName) {
+    try {
+      const createDosRes = await fetch("/api/resource/Applicant Dossier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicant: applicantId,
+          full_name: fullName || applicantId,
+          status: "Draft",
+        }),
+      });
+      if (createDosRes.ok) {
+        const createDosData = await createDosRes.json();
+        dossierName = createDosData.data?.name || "";
+      }
+    } catch {}
+  }
+
+  // 4. Create real dedicated DSR record in Frappe with dossier link
+  try {
+    const dsrPayload: Record<string, any> = {
+      applicant: applicantId,
+      full_name: fullName || applicantId,
+      passport_number: passportNo || "",
+      status: "Active",
+    };
+    if (dossierName) {
+      dsrPayload.applicant_dossier = dossierName;
+    }
+
+    const createRes = await fetch("/api/resource/DSR", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dsrPayload),
+    });
+    if (createRes.ok) {
+      const createData = await createRes.json();
+      if (createData.data?.name) return createData.data.name;
+    }
+  } catch {}
+
+  return "";
+}
+
+// Update or Create LMS Clearance
 export async function updateLmsClearanceApi(
   name: string,
-  data: Partial<LMSClearance> & { financials?: any[] }
+  data: Partial<LMSClearance> & { full_name?: string; financials?: any[] }
 ): Promise<LMSClearance> {
-  const docName = await resolveClearanceDocName("LMS Clearance", data.applicant || name, name);
-  const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(docName)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleApiResponse<LMSClearance>(res);
+  const docName = await resolveClearanceDocName("LMS Clearance", data.full_name || data.applicant || name, name);
+  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
+  const payload = { ...data, dsr: dsr || undefined };
+
+  if (docName) {
+    const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(docName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<LMSClearance>(res);
+  } else {
+    const res = await fetch("/api/resource/LMS Clearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if ((res.status === 403 || res.status === 417) && data.applicant) {
+      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stream_lms_employee: data.employee,
+          lms_status: data.status,
+          ticket_pnr: data.ticket_pnr,
+          flight_number: data.flight_number,
+          departure_date: data.departure_date,
+          destination: data.destination,
+          notes: data.notes,
+        }),
+      });
+      return { name: `LMS-${data.applicant}`, ...data } as LMSClearance;
+    }
+    return handleApiResponse<LMSClearance>(res);
+  }
 }
 
-// Update Wakala Clearance
+// Update or Create Wakala Clearance
 export async function updateWakalaClearanceApi(
   name: string,
-  data: Partial<WakalaClearance> & { financials?: any[] }
+  data: Partial<WakalaClearance> & { full_name?: string; financials?: any[] }
 ): Promise<WakalaClearance> {
-  const docName = await resolveClearanceDocName("Wakala Clearance", data.applicant || name, name);
-  const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(docName)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleApiResponse<WakalaClearance>(res);
+  const docName = await resolveClearanceDocName("Wakala Clearance", data.full_name || data.applicant || name, name);
+  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
+  const payload = { ...data, dsr: dsr || undefined };
+
+  if (docName) {
+    const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(docName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<WakalaClearance>(res);
+  } else {
+    const res = await fetch("/api/resource/Wakala Clearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if ((res.status === 403 || res.status === 417) && data.applicant) {
+      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stream_wakala_employee: data.employee,
+          wakala_status: data.status,
+          wakala_number: data.wakala_number,
+          sponsor_auth_code: data.sponsor_auth_code,
+          foreign_agency_name: data.foreign_agency_name,
+          notes: data.notes,
+        }),
+      });
+      return { name: `WAK-${data.applicant}`, ...data } as WakalaClearance;
+    }
+    return handleApiResponse<WakalaClearance>(res);
+  }
 }
 
-// Update Injaz Clearance
+// Update or Create Injaz Clearance
 export async function updateInjazClearanceApi(
   name: string,
-  data: Partial<InjazClearance> & { financials?: any[] }
+  data: Partial<InjazClearance> & { full_name?: string; financials?: any[] }
 ): Promise<InjazClearance> {
-  const docName = await resolveClearanceDocName("Injaz Clearance", data.applicant || name, name);
-  const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(docName)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleApiResponse<InjazClearance>(res);
+  const docName = await resolveClearanceDocName("Injaz Clearance", data.full_name || data.applicant || name, name);
+  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
+  const payload = { ...data, dsr: dsr || undefined };
+
+  if (docName) {
+    const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(docName)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<InjazClearance>(res);
+  } else {
+    const res = await fetch("/api/resource/Injaz Clearance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if ((res.status === 403 || res.status === 417) && data.applicant) {
+      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stream_injaz_employee: data.employee,
+          injaz_status: data.status,
+          injaz_app_no: data.injaz_app_no,
+          teashir_fee: data.teashir_fee,
+          biometrics_date: data.biometrics_date,
+          biometrics_center: data.biometrics_center,
+          notes: data.notes,
+        }),
+      });
+      return { name: `INJ-${data.applicant}`, ...data } as InjazClearance;
+    }
+    return handleApiResponse<InjazClearance>(res);
+  }
 }
 
 // Update Embassy Clearance
@@ -801,71 +1248,108 @@ async function resolveDsrForApplicant(applicantId: string): Promise<string> {
   const dsrData = await dsrRes.json();
   const allDsrs: any[] = dsrData.data || [];
 
-  // Match 1: By applicant full name
-  if (fullName) {
-    const matchedByName = allDsrs.find(
-      (d) =>
-        d.full_name &&
-        (d.full_name.toLowerCase().trim() === fullName.toLowerCase().trim() ||
-          fullName.toLowerCase().includes(d.full_name.toLowerCase()) ||
-          d.full_name.toLowerCase().includes(fullName.toLowerCase()))
-    );
-    if (matchedByName) return matchedByName.name;
-  }
-
-  // Match 2: By passport number
-  if (passportNo) {
-    const matchedByPassport = allDsrs.find(
-      (d) => d.passport_number && d.passport_number.trim() === passportNo.trim()
-    );
-    if (matchedByPassport) return matchedByPassport.name;
-  }
-
-  // Match 3: By applicant ID or dossier reference
+  // Match 1: By applicant ID or foreign key
   const matchedById = allDsrs.find(
     (d) =>
+      d.applicant === applicantId ||
       d.name === applicantId ||
       d.name?.includes(applicantId.replace("APP-", "")) ||
       d.applicant_dossier?.includes(applicantId.replace("APP-", ""))
   );
   if (matchedById) return matchedById.name;
 
-  return allDsrs[allDsrs.length - 1]?.name || `DSR-00001`;
+  // Match 2: By exact candidate full name
+  if (fullName && fullName.trim()) {
+    const matchedByName = allDsrs.find(
+      (d) =>
+        d.full_name &&
+        d.full_name.toLowerCase().trim() === fullName.toLowerCase().trim()
+    );
+    if (matchedByName) return matchedByName.name;
+  }
+
+  // Match 3: By passport number
+  if (passportNo && passportNo.trim()) {
+    const matchedByPassport = allDsrs.find(
+      (d) => d.passport_number && d.passport_number.trim() === passportNo.trim()
+    );
+    if (matchedByPassport) return matchedByPassport.name;
+  }
+
+  return "";
 }
 
-// Assign Employee to Clearances & Advance to Processing (Stage 6)
+// Assign Employee to Clearances & Advance to Processing via backend recalculation
 export async function assignEmployeeApi(
   applicantIds: string[],
   roleType: string,
   employeeId: string,
   streamAssignments?: { lms?: string; injaz?: string; wakala?: string }
 ): Promise<{ message: string }> {
-  const lmsEmp = streamAssignments?.lms || employeeId;
-  const injazEmp = streamAssignments?.injaz || employeeId;
-  const wakalaEmp = streamAssignments?.wakala || employeeId;
+  const lmsEmp = streamAssignments?.lms || (roleType === "All Roles / Operations Lead" || roleType === "LMS Employee" ? employeeId : "");
+  const injazEmp = streamAssignments?.injaz || (roleType === "All Roles / Operations Lead" || roleType === "Injaz Officer" ? employeeId : "");
+  const wakalaEmp = streamAssignments?.wakala || (roleType === "All Roles / Operations Lead" || roleType === "Wakala Officer" ? employeeId : "");
 
   for (const id of applicantIds) {
-    const cleanId = String(id || "").replace("APP-", "");
-    const lmsClearance = { name: `LMS-${cleanId}`, applicant: id, employee: lmsEmp, status: "Pending" as const };
-    const injazClearance = { name: `INJ-${cleanId}`, applicant: id, employee: injazEmp, status: "Pending" as const };
-    const wakalaClearance = { name: `WAK-${cleanId}`, applicant: id, employee: wakalaEmp, status: "Pending" as const };
+    let fullName = "";
+    try {
+      const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(id)}`);
+      if (appRes.ok) {
+        const appJson = await appRes.json();
+        fullName =
+          appJson.data?.full_name ||
+          [appJson.data?.first_name, appJson.data?.last_name].filter(Boolean).join(" ");
+      }
+    } catch {}
 
-    try { await updateLmsClearanceApi(`LMS-${cleanId}`, lmsClearance); } catch {}
-    try { await updateInjazClearanceApi(`INJ-${cleanId}`, injazClearance); } catch {}
-    try { await updateWakalaClearanceApi(`WAK-${cleanId}`, wakalaClearance); } catch {}
+    // 1. Create or update dedicated clearances for each stream in Frappe backend
+    if (lmsEmp) {
+      try {
+        await setOrInitClearanceEmployee("LMS Clearance", id, fullName, lmsEmp);
+      } catch (e) {
+        console.warn("LMS clearance assignment warning:", e);
+      }
+    }
 
-    await updateApplicantDraft(id, {
-      assigned_employee_id: employeeId,
-      assigned_role_type: roleType,
-      lms_processing: lmsClearance,
-      injaz_processing: injazClearance,
-      wakala_processing: wakalaClearance,
-    });
+    if (injazEmp) {
+      try {
+        await setOrInitClearanceEmployee("Injaz Clearance", id, fullName, injazEmp);
+      } catch (e) {
+        console.warn("Injaz clearance assignment warning:", e);
+      }
+    }
 
+    if (wakalaEmp) {
+      try {
+        await setOrInitClearanceEmployee("Wakala Clearance", id, fullName, wakalaEmp);
+      } catch (e) {
+        console.warn("Wakala clearance assignment warning:", e);
+      }
+    }
+
+    // 2. Persist operational lead assignment on Applicant (NO hardcoded applicant_state / progress)
+    try {
+      const updateRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assigned_employee_id: employeeId,
+          assigned_role_type: roleType,
+        }),
+      });
+      await handleApiResponse(updateRes);
+    } catch (appUpdateErr) {
+      console.warn("Applicant assignment update warning:", appUpdateErr);
+    }
+
+    // 3. Trigger authoritative backend lifecycle recalculation
     try {
       await recalculateApplicantStateApi(id);
-    } catch {}
+    } catch (recalcErr) {
+      console.warn("Backend state recalculation warning:", recalcErr);
+    }
   }
+
   return { message: "Employees successfully assigned across clearances." };
 }
 
@@ -971,16 +1455,18 @@ export async function submitDsrDepartureApi(data: Partial<DSRDeparture> & { fina
 
 export async function uploadFileApi(
   file: File,
-  doctype: string = "Applicant",
-  docname: string = "",
-  fieldname: string = "file_attachment",
-  isPrivate: boolean = true
+  doctype?: string,
+  docname?: string,
+  fieldname?: string,
+  isPrivate: boolean = false
 ): Promise<{ message: { file_url: string; name: string } }> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("doctype", doctype);
-  formData.append("docname", docname);
-  formData.append("fieldname", fieldname);
+  if (doctype && docname) {
+    formData.append("doctype", doctype);
+    formData.append("docname", docname);
+    if (fieldname) formData.append("fieldname", fieldname);
+  }
   formData.append("is_private", isPrivate ? "1" : "0");
 
   const res = await fetch("/api/method/upload_file", {
@@ -1412,8 +1898,8 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
 
   try {
     const [appRes, dosRes, dsrRes] = await Promise.all([
-      fetch('/api/resource/Applicant?fields=["name","full_name","first_name","applicant_state","passport_expiry","medical_expiry","medical_status","coc_status","creation"]&limit_page_length=100'),
-      fetch('/api/resource/Applicant%20Dossier?fields=["name","applicant","contractor_name","sponsor_name","job_title","creation"]&limit_page_length=50'),
+      fetch('/api/resource/Applicant?fields=["name","full_name","first_name","applicant_state","passport_expiry","medical_expiry_date","medical_status","coc_status","creation"]&limit_page_length=100'),
+      fetch('/api/resource/Applicant%20Dossier?fields=["name","applicant","contractor_name","sponsor_name","creation"]&limit_page_length=50'),
       fetch('/api/resource/DSR?fields=["name","full_name","lms_status","wakala_status","injaz_status","stamp_status","ticket_status","departure_status"]&limit_page_length=50'),
     ]);
 
@@ -1478,14 +1964,14 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
       }
 
       // Medical Expiry Check
-      if (app.medical_expiry) {
-        const medDate = new Date(app.medical_expiry);
+      if (app.medical_expiry_date) {
+        const medDate = new Date(app.medical_expiry_date);
         const diffDays = Math.round((medDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays <= 15 && diffDays >= 0) {
           notifications.push({
             id: `med-urgent-${app.name}`,
             title: `Urgent: GAMCA Medical Lab Expiring (${diffDays} days)`,
-            description: `${name}'s GAMCA medical certificate will expire on ${app.medical_expiry}. Complete biometrics or re-test.`,
+            description: `${name}'s GAMCA medical certificate will expire on ${app.medical_expiry_date}. Complete biometrics or re-test.`,
             category: "compliance",
             severity: "urgent",
             timestamp: "Action Required",
@@ -1498,7 +1984,7 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
           notifications.push({
             id: `med-expired-${app.name}`,
             title: `Medical Certificate Expired`,
-            description: `${name}'s lab fitness certificate expired on ${app.medical_expiry}. Re-examination required.`,
+            description: `${name}'s lab fitness certificate expired on ${app.medical_expiry_date}. Re-examination required.`,
             category: "compliance",
             severity: "urgent",
             timestamp: "Compliance Alert",
@@ -1586,7 +2072,7 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
       notifications.push({
         id: `dossier-${dos.name}`,
         title: `Contractor Demand: ${dos.contractor_name || "Partner"}`,
-        description: `Candidate selected for ${dos.job_title || "Hospitality Specialist"} (Sponsor: ${dos.sponsor_name || "Authorized Sponsor"}).`,
+        description: `Candidate selected (Sponsor: ${dos.sponsor_name || "Authorized Sponsor"}).`,
         category: "dossier",
         severity: "info",
         timestamp: dos.creation ? dos.creation.split(" ")[0] : "Recent",
@@ -2083,8 +2569,12 @@ export async function getAgencyPipelineCandidatesApi(filters?: {
   limit?: number;
 }): Promise<AgencyPipelineCandidate[]> {
   const params = new URLSearchParams();
-  if (filters?.stage) params.append("stage", filters.stage);
-  if (filters?.limit) params.append("limit", String(filters.limit));
+  if (filters?.stage && filters.stage !== "all") {
+    params.append("stage", filters.stage);
+  }
+  if (filters?.limit) {
+    params.append("limit", String(filters.limit));
+  }
 
   const query = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(

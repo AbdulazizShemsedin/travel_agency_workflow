@@ -40,8 +40,6 @@ function getStageBadgeVariant(stage: ApplicantState): {
       return { variant: "success", dotColor: "bg-emerald-600" };
     case "CV Generated":
       return { variant: "purple", dotColor: "bg-purple-600" };
-    case "Request Pending":
-      return { variant: "warning", dotColor: "bg-amber-500" };
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
     case "Processing":
@@ -247,7 +245,6 @@ export function ApplicantTable() {
             <option value="Draft">Draft</option>
             <option value="Registered">Registered</option>
             <option value="CV Generated">CV Generated</option>
-            <option value="Request Pending">Request Pending</option>
             <option value="Selected">Selected</option>
             <option value="Processing">Processing</option>
             <option value="Stamped">Stamped</option>
@@ -400,8 +397,9 @@ export function ApplicantTable() {
                               )}
 
                               {/* 4. Contractor Doc Option */}
-                              {(applicant.applicant_state === "Request Pending" ||
-                                applicant.applicant_state === "Selected") && (
+                              {(applicant.applicant_state === "CV Generated" ||
+                                applicant.applicant_state === "Selected" ||
+                                applicant.applicant_state === "Processing") && (
                                 <Link
                                   href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
                                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"

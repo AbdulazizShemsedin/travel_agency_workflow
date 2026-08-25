@@ -22,6 +22,7 @@ import {
   UserCheck,
   UploadCloud,
   FileCheck2,
+  FileUp,
   Plane,
   Fingerprint,
   Send,
@@ -70,7 +71,6 @@ const CANONICAL_STAGES = [
   "Draft",
   "Registered",
   "CV Generated",
-  "Request Pending",
   "Selected",
   "Processing",
   "Stamped",
@@ -96,6 +96,7 @@ export default function ApplicantDetailPage() {
     data: applicant,
     isLoading,
     isError,
+    refetch,
   } = useQuery({
     queryKey: ["applicant", applicantId],
     queryFn: () => getApplicant(applicantId),
@@ -185,6 +186,13 @@ export default function ApplicantDetailPage() {
   const currentStage = applicant.applicant_state || "Draft";
   const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
 
+  const isContractDocApproved = Boolean(
+    applicant.contractor_doc &&
+    (applicant.contractor_doc.approval_status === "Approved" ||
+     applicant.contractor_doc.selection_status === "Selected" ||
+     applicant.contractor_doc.parsed_at)
+  );
+
   return (
     <div className="space-y-6 pb-20">
       {/* Top Breadcrumb & Actions Bar */}
@@ -237,6 +245,13 @@ export default function ApplicantDetailPage() {
               Cancel Process
             </Button>
           )}
+
+          <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+            <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+              <FileUp className="mr-1.5 h-3.5 w-3.5" />
+              Contract Dossier (PyMuPDF)
+            </Button>
+          </Link>
 
           <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
             <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
@@ -371,6 +386,11 @@ export default function ApplicantDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
+                  <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload & Parse Musaned Contract
+                </Button>
+              </Link>
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}>
                 <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
                   <Eye className="mr-1.5 h-3.5 w-3.5" /> View Official CV
@@ -380,46 +400,43 @@ export default function ApplicantDetailPage() {
           </div>
         )}
 
-        {/* Stage 4: Request Pending */}
-        {currentStage === "Request Pending" && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Clock className="h-4 w-4 text-amber-600" />
-                Stage: Request Pending (Awaiting Foreign Contractor Selection)
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Once the overseas contractor selects the candidate, upload and parse the contractor dossier.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                <Button className="bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold">
-                  <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload Contractor Dossier
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Stage 5: Selected */}
+        {/* Stage 4: Selected */}
         {currentStage === "Selected" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                Stage: Selected (Ready for Processing Assignment)
+                Stage: Selected {isContractDocApproved ? "(Contract Approved — Ready for Staff Assignment)" : "(Prerequisite: Contract Document Approval Required)"}
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Candidate selected by sponsor. Assign internal staff to initiate LMS, Injaz, and Wakala clearances (Stage 6).
+                {isContractDocApproved
+                  ? "Contract document verified & approved. Assign internal processing staff to initiate LMS, Injaz, and Wakala clearances (Stage 6)."
+                  : "A verified contractor demand or employment contract must be uploaded and approved before assigning internal processing staff."}
               </p>
             </div>
-            <Button
-              onClick={() => setIsAssignModalOpen(true)}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-            >
-              <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Processing Staff
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {isContractDocApproved ? (
+                <>
+                  <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                    <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
+                      <FileText className="mr-1.5 h-3.5 w-3.5" /> View / Update Contract
+                    </Button>
+                  </Link>
+                  <Button
+                    onClick={() => setIsAssignModalOpen(true)}
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
+                  >
+                    <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Processing Staff
+                  </Button>
+                </>
+              ) : (
+                <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                  <Button className="bg-amber-800 hover:bg-amber-900 dark:bg-amber-700 dark:hover:bg-amber-600 text-white text-xs font-semibold shadow-xs">
+                    <FileUp className="mr-1.5 h-3.5 w-3.5" /> Upload & Approve Contract Document
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
         )}
 
@@ -448,7 +465,7 @@ export default function ApplicantDetailPage() {
                     {applicant.lms_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.lms_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.lms_processing?.employee || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -472,7 +489,7 @@ export default function ApplicantDetailPage() {
                     {applicant.injaz_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.injaz_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.injaz_processing?.employee || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -496,7 +513,7 @@ export default function ApplicantDetailPage() {
                     {applicant.wakala_processing?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.wakala_processing?.employee || applicant.assigned_employee_id || "Unassigned"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.wakala_processing?.employee || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -893,6 +910,7 @@ export default function ApplicantDetailPage() {
           applicantNames={[applicant.full_name || "Applicant"]}
           isOpen={isAssignModalOpen}
           onClose={() => setIsAssignModalOpen(false)}
+          onSuccess={() => refetch()}
         />
       )}
 

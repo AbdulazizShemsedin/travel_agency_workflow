@@ -43,27 +43,40 @@ export default function ReportsPage() {
   const isLoading = isApplicantsLoading || isOpsLoading || isAccLoading;
 
   const total = applicants.length;
+  const standardCount = applicants.filter((a) => a.applicant_type === "Standard" || !a.applicant_type).length;
+  const muayenaCount = applicants.filter((a) => a.applicant_type === "Muayena").length;
   const registered = applicants.filter((a) => a.applicant_state === "Registered").length;
   const cvGenerated = applicants.filter((a) => a.applicant_state === "CV Generated").length;
   const processing = applicants.filter((a) => a.applicant_state === "Processing").length;
   const stamped = applicants.filter((a) => a.applicant_state === "Stamped").length;
   const ticketed = applicants.filter((a) => a.applicant_state === "Ticketed").length;
   const departed = applicants.filter((a) => a.applicant_state === "Departed").length;
+  const selected = applicants.filter((a) => a.applicant_state === "Selected").length;
+  const ksaCount = applicants.filter((a) => (a.destination_country || "").toLowerCase().includes("saudi")).length;
+  const otherCountryCount = total - ksaCount;
 
   const ops = operations || {
     intake: {
-      new_applicants: 24,
-      standard: 18,
-      muayena: 6,
-      muslim: 20,
-      non_muslim: 4,
-      cvs_generated: 22,
-      dossiers_created: 15,
+      new_applicants: total,
+      standard: standardCount,
+      muayena: muayenaCount,
+      muslim: applicants.filter((a) => (a.religion || "").toLowerCase() === "muslim").length,
+      non_muslim: applicants.filter((a) => a.religion && (a.religion || "").toLowerCase() !== "muslim").length,
+      cvs_generated: cvGenerated,
+      dossiers_created: selected + processing + stamped + ticketed + departed,
     },
-    medical: { fit: 19, unfit: 2 },
-    clearances: { lms_issued: 14, stamped: 11, tickets_booked: 8, departed: 6 },
-    complaints: { new_logged: 1, resolved: 2, open_backlog: 3 },
-    selections: { selected_today: 12, ksa_pipeline: 9, kuwait_pipeline: 3 },
+    medical: {
+      fit: applicants.filter((a) => a.medical_status === "FIT").length,
+      unfit: applicants.filter((a) => a.medical_status === "UNFIT").length,
+    },
+    clearances: {
+      lms_issued: applicants.filter((a) => a.lms_processing?.status === "Issued").length,
+      stamped: stamped,
+      tickets_booked: ticketed,
+      departed: departed,
+    },
+    complaints: { new_logged: 0, resolved: 0, open_backlog: 0 },
+    selections: { selected_today: selected, ksa_pipeline: ksaCount, kuwait_pipeline: otherCountryCount },
   };
 
   return (
@@ -75,7 +88,7 @@ export default function ReportsPage() {
             Operations & Executive Reporting
           </h2>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Real-time pipeline metrics across intake, GAMCA medical fitness, LMIS clearances, departures, and partner agency dispute resolution.
+            Live pipeline metrics across intake, GAMCA medical fitness, LMIS clearances, departures, and partner agency dispute resolution.
           </p>
         </div>
       </div>
@@ -220,21 +233,21 @@ export default function ReportsPage() {
                   <div className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60">
                     <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-semibold">Total Income</span>
                     <p className="text-base font-bold text-emerald-900 dark:text-emerald-200 font-mono mt-0.5">
-                      ${accounting?.total_income?.toLocaleString() || "450,000"}
+                      ${accounting?.total_income ? accounting.total_income.toLocaleString() : "0"}
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60">
                     <span className="text-[11px] text-rose-800 dark:text-rose-300 font-semibold">Total Expenses</span>
                     <p className="text-base font-bold text-rose-900 dark:text-rose-200 font-mono mt-0.5">
-                      ${accounting?.total_expense?.toLocaleString() || "210,000"}
+                      ${accounting?.total_expense ? accounting.total_expense.toLocaleString() : "0"}
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60">
                     <span className="text-[11px] text-blue-800 dark:text-blue-300 font-semibold">Net Profit</span>
                     <p className="text-base font-bold text-blue-900 dark:text-blue-200 font-mono mt-0.5">
-                      ${accounting?.net_balance?.toLocaleString() || "240,000"}
+                      ${accounting?.net_balance ? accounting.net_balance.toLocaleString() : "0"}
                     </p>
                   </div>
                 </div>
@@ -242,15 +255,21 @@ export default function ReportsPage() {
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#18181e] text-xs space-y-1">
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Applicant Registration Fees:</span>
-                    <span className="font-mono font-bold">$120,000</span>
+                    <span className="font-mono font-bold">
+                      ${(accounting?.by_stage?.find((s) => s.stage === "Applicant Registration")?.income || 0).toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Wakala Authorizations:</span>
-                    <span className="font-mono font-bold">$180,000</span>
+                    <span className="font-mono font-bold">
+                      ${(accounting?.by_stage?.find((s) => s.stage === "Wakala")?.income || 0).toLocaleString()}
+                    </span>
                   </div>
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Visa Stamping & DSR:</span>
-                    <span className="font-mono font-bold">$150,000</span>
+                    <span className="font-mono font-bold">
+                      ${(accounting?.by_stage?.find((s) => s.stage === "DSR Stamp")?.income || 0).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               </CardContent>

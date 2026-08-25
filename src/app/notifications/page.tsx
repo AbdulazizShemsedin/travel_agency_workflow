@@ -109,7 +109,7 @@ export default function NotificationsPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Real-time compliance alerts, expiry warnings, contractor demands, and stage progress from Frappe backend.
+            Live compliance alerts, expiry warnings, contractor demands, and stage progress from Frappe backend.
           </p>
         </div>
 

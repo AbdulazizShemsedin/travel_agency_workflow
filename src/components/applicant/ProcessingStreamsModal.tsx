@@ -114,7 +114,7 @@ export function ProcessingStreamsModal({
     (applicant.lms_processing?.status as "Pending" | "Issued" | "Rejected") || "Issued"
   );
   const [lmsEmployee, setLmsEmployee] = React.useState(
-    applicant.lms_processing?.employee || defaultEmp
+    applicant.lms_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "LMS Employee" ? applicant.assigned_employee_id || "" : "")
   );
   const [lmsIssuedOn, setLmsIssuedOn] = React.useState(applicant.lms_processing?.issued_on || new Date().toISOString().split("T")[0]);
   const [ticketPnr, setTicketPnr] = React.useState(applicant.lms_processing?.ticket_pnr || "");
@@ -140,7 +140,7 @@ export function ProcessingStreamsModal({
     (applicant.injaz_processing?.status as "Pending" | "Completed") || "Completed"
   );
   const [injazEmployee, setInjazEmployee] = React.useState(
-    applicant.injaz_processing?.employee || defaultEmp
+    applicant.injaz_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "Injaz Officer" ? applicant.assigned_employee_id || "" : "")
   );
   const [injazAppNo, setInjazAppNo] = React.useState(applicant.injaz_processing?.injaz_app_no || "E-9918241");
   const [teashirFee, setTeashirFee] = React.useState(applicant.injaz_processing?.teashir_fee ?? 140);
@@ -163,7 +163,7 @@ export function ProcessingStreamsModal({
     (applicant.wakala_processing?.status as "Pending" | "Completed") || "Completed"
   );
   const [wakalaEmployee, setWakalaEmployee] = React.useState(
-    applicant.wakala_processing?.employee || defaultEmp
+    applicant.wakala_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "Wakala Officer" ? applicant.assigned_employee_id || "" : "")
   );
   const [startedOn, setStartedOn] = React.useState(applicant.wakala_processing?.started_on || new Date().toISOString().split("T")[0]);
   const [completedOn, setCompletedOn] = React.useState(applicant.wakala_processing?.completed_on || new Date().toISOString().split("T")[0]);
@@ -271,8 +271,12 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
-      const res = await updateLmsClearanceApi(applicant.lms_processing?.name || `LMS-${appNameStr.replace("APP-", "")}`, {
+      const candFullName =
+        applicant.full_name ||
+        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
+
+      const res = await updateLmsClearanceApi(applicant.lms_processing?.name || "", {
+        full_name: candFullName,
         applicant: applicant.name,
         status: lmsStatus,
         employee: cleanEmp(lmsEmployee),
@@ -291,7 +295,7 @@ export function ProcessingStreamsModal({
         await recordAccountingTransactionApi({
           transaction_type: lmsFee.direction,
           amount: Number(lmsFee.amount),
-          description: `${lmsFee.type} (LMS) - ${applicant.full_name} (${applicant.name})`,
+          description: `${lmsFee.type} (LMS) - ${candFullName} (${applicant.name})`,
           applicant: applicant.name,
           date: lmsFee.paymentDate,
           source_doctype: "LMS Clearance",
@@ -326,8 +330,12 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
-      const res = await updateInjazClearanceApi(applicant.injaz_processing?.name || `INJ-${appNameStr.replace("APP-", "")}`, {
+      const candFullName =
+        applicant.full_name ||
+        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
+
+      const res = await updateInjazClearanceApi(applicant.injaz_processing?.name || "", {
+        full_name: candFullName,
         applicant: applicant.name,
         status: injazStatus,
         employee: cleanEmp(injazEmployee),
@@ -343,7 +351,7 @@ export function ProcessingStreamsModal({
         await recordAccountingTransactionApi({
           transaction_type: injazFee.direction,
           amount: Number(injazFee.amount),
-          description: `${injazFee.type} (Injaz/Teashir) - ${applicant.full_name} (${applicant.name})`,
+          description: `${injazFee.type} (Injaz/Teashir) - ${candFullName} (${applicant.name})`,
           applicant: applicant.name,
           date: injazFee.paymentDate,
           source_doctype: "Injaz Clearance",
@@ -378,8 +386,12 @@ export function ProcessingStreamsModal({
             ]
           : undefined;
 
-      const appNameStr = String(applicant?.name || (applicant as any)?.applicant_id || "");
-      const res = await updateWakalaClearanceApi(applicant.wakala_processing?.name || `WAK-${appNameStr.replace("APP-", "")}`, {
+      const candFullName =
+        applicant.full_name ||
+        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
+
+      const res = await updateWakalaClearanceApi(applicant.wakala_processing?.name || "", {
+        full_name: candFullName,
         applicant: applicant.name,
         status: wakalaStatus,
         employee: cleanEmp(wakalaEmployee),

@@ -260,7 +260,7 @@ export function ContractRequestModal({
 
               <p className="text-[11px] text-slate-700 dark:text-zinc-300 leading-relaxed">
                 {apiResponseDetails?.whatsapp_api_message ||
-                  `Contract Request dispatched for ${applicantDisplayName} to ${activeContractor?.company_name || activeContractor?.name}. Stage updated to Request Pending.`}
+                  `Contract Request dispatched for ${applicantDisplayName} to ${activeContractor?.company_name || activeContractor?.name}. Candidate CV record linked.`}
               </p>
 
               <div className="pt-1 flex flex-col sm:flex-row gap-2">
@@ -281,7 +281,7 @@ export function ContractRequestModal({
                 Automated Recruitment Workflow
               </span>
               <p>
-                Sending will automatically attach candidate CV record <strong>{cvRecordName}</strong>, record the dispatch in Frappe database, advance state to <strong>Request Pending</strong>, and generate a verified WhatsApp direct link.
+                Sending will automatically attach candidate CV record <strong>{cvRecordName}</strong>, record the dispatch in Frappe database, notify partner agency, and generate a verified WhatsApp direct link.
               </p>
             </div>
           )}

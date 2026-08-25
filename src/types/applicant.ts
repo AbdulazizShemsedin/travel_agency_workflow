@@ -1,9 +1,8 @@
-// Canonical 9-stage progression + Cancelled matching Frappe v15 Backend
+// Canonical 8-stage progression + Cancelled matching Frappe v15 Backend
 export type ApplicantState =
   | "Draft"
   | "Registered"
   | "CV Generated"
-  | "Request Pending"
   | "Selected"
   | "Processing"
   | "Stamped"
@@ -15,7 +14,6 @@ export const CANONICAL_STATES: ApplicantState[] = [
   "Draft",
   "Registered",
   "CV Generated",
-  "Request Pending",
   "Selected",
   "Processing",
   "Stamped",
@@ -27,24 +25,22 @@ export const STATE_STEP_MAP: Record<ApplicantState, number> = {
   Draft: 1,
   Registered: 2,
   "CV Generated": 3,
-  "Request Pending": 4,
-  Selected: 5,
-  Processing: 6,
-  Stamped: 7,
-  Ticketed: 8,
-  Departed: 9,
+  Selected: 4,
+  Processing: 5,
+  Stamped: 6,
+  Ticketed: 7,
+  Departed: 8,
   Cancelled: 0,
 };
 
 export const STATE_PROGRESS_MAP: Record<ApplicantState, number> = {
-  Draft: 11.1,
-  Registered: 22.2,
-  "CV Generated": 33.3,
-  "Request Pending": 44.4,
-  Selected: 55.6,
-  Processing: 66.7,
-  Stamped: 77.8,
-  Ticketed: 88.9,
+  Draft: 12.5,
+  Registered: 25.0,
+  "CV Generated": 37.5,
+  Selected: 50.0,
+  Processing: 62.5,
+  Stamped: 75.0,
+  Ticketed: 87.5,
   Departed: 100.0,
   Cancelled: 0.0,
 };
@@ -114,12 +110,20 @@ export interface ApplicantDossier {
   applicant: string;
   contract_request?: string;
   file_attachment?: string;
+  attached_file?: string;
   file_name?: string;
   contractor_name?: string;
+  contract_number?: string;
+  visa_number?: string;
   sponsor_name?: string;
   sponsor_id?: string;
+  sponsor_phone?: string;
   job_title?: string;
   salary?: number;
+  currency?: string;
+  contract_period?: string;
+  destination_city?: string;
+  destination_country?: string;
   selection_status?: string;
   parsed_at?: string;
   approval_status?: "Pending" | "Approved" | "Rejected";

@@ -153,8 +153,9 @@ export default function AgentComplaintsPage() {
       setFormError(null);
       try {
         const res = await uploadFileApi(file, "Agency Complaint", "", "attachment");
-        if (res?.message?.file_url) {
-          setFormData((prev) => ({ ...prev, attachment: res.message.file_url }));
+        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        if (fileUrl) {
+          setFormData((prev) => ({ ...prev, attachment: fileUrl }));
         } else {
           throw new Error("No file URL returned from server.");
         }

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 interface Step1PersonalInfoProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,48 +117,41 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     setIsOcrReviewOpen(false);
   };
 
-  // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend RPC)
+  // Main Passport MRZ Auto-Scan Handler (Dispatches directly to Backend Python OCR)
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
     const localUrl = URL.createObjectURL(file);
     setPassportScanPreview(localUrl);
-    if (!photoPreview) setPhotoPreview(localUrl);
     setIsScanningOCR(true);
 
     try {
-      // 1. Send real HTTP POST to /api/method/upload_file
+      // 1. Upload original passport scan file to Frappe
       let uploadedUrl = "";
       try {
         const uploadRes = await uploadFileApi(file, "Applicant", "", "passport_scan");
-        if (uploadRes?.message?.file_url) {
-          uploadedUrl = uploadRes.message.file_url;
-          setValue("passport_scan", uploadRes.message.file_url, { shouldDirty: true, shouldValidate: true });
-          setValue("photo_passport", uploadRes.message.file_url, { shouldDirty: true, shouldValidate: true });
+        const fileUrl = (uploadRes as any)?.file_url || (uploadRes as any)?.message?.file_url || "";
+        if (fileUrl) {
+          uploadedUrl = fileUrl;
+          setValue("passport_scan", fileUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("passport_copy" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
         }
       } catch (e) {
         console.warn("File upload to server error:", e);
       }
 
-      // 2. Perform optical extraction from file
-      let localMrzText = "";
-      try {
-        const opticalResult = await performOpticalPassportOCR(file);
-        if (opticalResult?.raw_mrz) {
-          localMrzText = opticalResult.raw_mrz;
-          setMrzInputText(opticalResult.raw_mrz);
+      // 2. Dispatch ONLY file_url to backend Python OCR engine (passporteye / mrz)
+      if (uploadedUrl) {
+        const ocrRes = await scanPassportMRZApi({
+          file_url: uploadedUrl,
+        });
+
+        const d = (ocrRes as any)?.data || (ocrRes as any)?.message?.data || ocrRes;
+        if (d && (d.passport_number || d.first_name || d.last_name || d.date_of_birth)) {
+          // Show review dialog so user can confirm before applying
+          setPendingOcrData(d);
+          setIsOcrReviewOpen(true);
         }
-      } catch {}
-
-      // 3. Send real HTTP POST to /api/method/applicant_processing...scan_and_populate_passport
-      const ocrRes = await scanPassportMRZApi({
-        file_url: uploadedUrl || "",
-        raw_mrz_text: localMrzText || mrzInputText,
-      });
-
-      if (ocrRes?.data) {
-        const d = ocrRes.data;
-        setPendingOcrData(d);
-        setIsOcrReviewOpen(true);
       }
     } catch (err: any) {
       console.warn("Backend scan_and_populate_passport error:", err);
@@ -210,26 +204,16 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
 
       try {
         const res = await uploadFileApi(file, "Applicant", "", "photo_passport");
-        if (res?.message?.file_url) {
-          setValue("profile_photo_url", res.message.file_url, { shouldDirty: true });
-          setValue("photo_passport", res.message.file_url, { shouldDirty: true });
+        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        if (fileUrl) {
+          setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("photo_passport", fileUrl, { shouldDirty: true, shouldValidate: true });
         } else {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setValue("profile_photo_url", base64, { shouldDirty: true });
-            setValue("photo_passport", base64, { shouldDirty: true });
-          };
-          reader.readAsDataURL(file);
+          toast.error("Failed to obtain server file URL for photo. Please retry.");
         }
-      } catch {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          setValue("profile_photo_url", base64, { shouldDirty: true });
-          setValue("photo_passport", base64, { shouldDirty: true });
-        };
-        reader.readAsDataURL(file);
+      } catch (err: any) {
+        console.warn("Photo upload error:", err);
+        toast.error("Photo upload failed: " + (err?.message || "Please try again."));
       } finally {
         setIsUploadingPassport(false);
       }
@@ -245,23 +229,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
 
       try {
         const res = await uploadFileApi(file, "Applicant", "", "photo_full_body");
-        if (res?.message?.file_url) {
-          setValue("photo_full_body", res.message.file_url, { shouldDirty: true });
+        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        if (fileUrl) {
+          setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });
         } else {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setValue("photo_full_body", base64, { shouldDirty: true });
-          };
-          reader.readAsDataURL(file);
+          toast.error("Failed to obtain server file URL for full-body photo. Please retry.");
         }
-      } catch {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result as string;
-          setValue("photo_full_body", base64, { shouldDirty: true });
-        };
-        reader.readAsDataURL(file);
+      } catch (err: any) {
+        console.warn("Full body photo upload error:", err);
+        toast.error("Full-body photo upload failed: " + (err?.message || "Please try again."));
       } finally {
         setIsUploadingFullBody(false);
       }
