@@ -14,6 +14,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getNotificationsList } from "@/lib/api/applicantApi";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
 
 interface AppNavbarProps {
   isSidebarCollapsed?: boolean;
@@ -88,16 +89,6 @@ export function AppNavbar({
             )}
           </Button>
         )}
-
-        {/* Global Search Bar */}
-        <div className="relative hidden sm:block w-72 lg:w-96">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
-          <Input
-            type="search"
-            placeholder="Search candidates, passport, sponsor ID..."
-            className="h-8 pl-8 pr-3 text-xs bg-slate-50 dark:bg-[#141418] border-slate-200/80 dark:border-[#26262d] rounded-lg focus-visible:ring-emerald-800 dark:focus-visible:ring-emerald-500"
-          />
-        </div>
       </div>
 
       {/* Right Actions: Dark Mode & Notifications & User */}
@@ -116,6 +107,9 @@ export function AppNavbar({
             <Moon className="h-4 w-4 text-slate-600 animate-in spin-in-180 duration-200" />
           )}
         </Button>
+
+        {/* Push Notifications Toggle Button */}
+        <PushNotificationToggle />
 
         {/* Top-Right Notifications Button with Popover */}
         <Popover>

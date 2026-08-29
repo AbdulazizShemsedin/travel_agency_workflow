@@ -70,9 +70,6 @@ export default function ContractorsPage() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Foreign Contractors & Agencies
           </h2>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Manage certified foreign recruitment agencies, quota allocations, and contract demand letters.
-          </p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
@@ -84,7 +81,6 @@ export default function ContractorsPage() {
 
       {successMessage && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
@@ -114,8 +110,7 @@ export default function ContractorsPage() {
                   <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                     <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-zinc-200">{c.name}</td>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Building2 className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+                      <div className="font-semibold text-slate-900 dark:text-white">
                         {c.company_name || c.name}
                       </div>
                       {c.email && <span className="text-[10px] text-slate-400 dark:text-zinc-500">{c.email}</span>}
@@ -145,14 +140,8 @@ export default function ContractorsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b] p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-[#222227]">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  <Building2 className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Add Contractor Agency</h3>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">Register certified foreign partner agency</p>
-                </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Add Contractor Agency</h3>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}

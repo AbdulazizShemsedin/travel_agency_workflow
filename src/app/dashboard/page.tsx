@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Loader2,
-  Search,
   UserCheck,
   PlusCircle,
   ChevronRight,
@@ -23,11 +22,8 @@ import { calculateRemainingDays } from "@/lib/validations/applicant.schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 export default function DashboardPage() {
-  const [searchQuery, setSearchQuery] = React.useState("");
-
   const { data: applicants = [], isLoading } = useQuery({
     queryKey: ["applicants"],
     queryFn: getApplicantsList,
@@ -45,15 +41,9 @@ export default function DashboardPage() {
   const departedCount = applicants.filter((a) => a.applicant_state === "Departed").length;
 
   // Sub-stream breakdown for parallel Processing stage
-  const lmsActiveCount = applicants.filter(
-    (a) => a.lms_processing?.status === "Issued" || a.applicant_state === "Processing"
-  ).length;
-  const wakalaActiveCount = applicants.filter(
-    (a) => a.wakala_processing?.status === "Completed" || a.applicant_state === "Processing"
-  ).length;
-  const injazActiveCount = applicants.filter(
-    (a) => a.injaz_processing?.status === "Completed" || a.applicant_state === "Processing"
-  ).length;
+  const lmsActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
+  const wakalaActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
+  const injazActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
 
   const inProgressCount = applicants.filter(
     (a) =>
@@ -62,7 +52,7 @@ export default function DashboardPage() {
       a.applicant_state !== "Cancelled"
   ).length;
 
-  const completedCount = departedCount + stampedCount + ticketedCount;
+  const completedCount = stampedCount + ticketedCount;
 
   // Real compliance & expiry alerts from real records only
   const realAlerts = React.useMemo(() => {
@@ -239,40 +229,16 @@ export default function DashboardPage() {
     },
   ];
 
-  const filteredApplicants = applicants.filter((a) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      a.full_name?.toLowerCase().includes(q) ||
-      a.name?.toLowerCase().includes(q) ||
-      a.passport_number?.toLowerCase().includes(q) ||
-      a.phone_number?.includes(q)
-    );
-  });
-
   return (
     <div className="space-y-6 pb-16">
-      {/* Top Header & Search */}
+      {/* Top Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Dashboard
           </h1>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Live applicant pipeline and operational status across all workflow stages.
-          </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative w-64 hidden md:block">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-zinc-500" />
-            <Input
-              type="text"
-              placeholder="Search applicants, ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 text-xs h-9.5 bg-white dark:bg-[#141418] border-slate-200 dark:border-[#26262d]"
-            />
-          </div>
           <Link href="/applicants/new">
             <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs">
               <PlusCircle className="mr-1.5 h-4 w-4" />
@@ -297,14 +263,9 @@ export default function DashboardPage() {
             {isLoading ? (
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             ) : (
-              <>
-                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {totalCount.toLocaleString()}
-                </div>
-                <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                  Total in system
-                </p>
-              </>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {totalCount.toLocaleString()}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -322,14 +283,9 @@ export default function DashboardPage() {
             {isLoading ? (
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             ) : (
-              <>
-                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {inProgressCount.toLocaleString()}
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-zinc-400">
-                  <span>Registered & Processing</span>
-                </div>
-              </>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {inProgressCount.toLocaleString()}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -347,14 +303,9 @@ export default function DashboardPage() {
             {isLoading ? (
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             ) : (
-              <>
-                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {completedCount.toLocaleString()}
-                </div>
-                <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                  Stamped, ticketed or departed
-                </p>
-              </>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {completedCount.toLocaleString()}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -372,14 +323,9 @@ export default function DashboardPage() {
             {isLoading ? (
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             ) : (
-              <>
-                <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
-                  {departedCount.toLocaleString()}
-                </div>
-                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                  Overseas placement complete
-                </p>
-              </>
+              <div className="text-2xl font-black text-slate-900 dark:text-white font-mono">
+                {departedCount.toLocaleString()}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -390,13 +336,9 @@ export default function DashboardPage() {
         <CardHeader className="border-b border-slate-100 dark:border-[#222227] pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Activity className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+              <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
                 Pipeline Overview
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                Live candidate counts across all active recruitment stages.
-              </CardDescription>
             </div>
             <Link href="/applicants">
               <Button variant="outline" size="sm" className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b]">
@@ -469,18 +411,10 @@ export default function DashboardPage() {
         <div className="lg:col-span-6 space-y-4">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-                  <AlertTriangle className="h-4 w-4" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                    Document Expiry Warnings
-                  </CardTitle>
-                  <CardDescription className="text-[11px]">
-                    Passports and medical certificates expiring soon.
-                  </CardDescription>
-                </div>
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                  Document Expiry Warnings
+                </CardTitle>
               </div>
               <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
                 View All
@@ -523,7 +457,6 @@ export default function DashboardPage() {
                 ))
               ) : (
                 <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
-                  <Check className="h-6 w-6 mx-auto mb-1 text-emerald-600 dark:text-emerald-400" />
                   All candidate passports and medical checks are currently valid.
                 </div>
               )}
@@ -535,18 +468,10 @@ export default function DashboardPage() {
         <div className="lg:col-span-6 space-y-4">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400">
-                  <UserCheck className="h-4 w-4" />
-                </div>
-                <div>
-                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                    Action Items & Tasks
-                  </CardTitle>
-                  <CardDescription className="text-[11px]">
-                    Applicants requiring next step action.
-                  </CardDescription>
-                </div>
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                  Action Items & Tasks
+                </CardTitle>
               </div>
               <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
                 View All
@@ -584,7 +509,6 @@ export default function DashboardPage() {
                 ))
               ) : (
                 <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
-                  <Check className="h-6 w-6 mx-auto mb-1 text-emerald-600 dark:text-emerald-400" />
                   No pending action items. All applicants are up to date.
                 </div>
               )}
@@ -597,8 +521,7 @@ export default function DashboardPage() {
       <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+            <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
               Recent Applicants
             </CardTitle>
             <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
@@ -608,8 +531,8 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-slate-100 dark:divide-[#222227]">
-            {filteredApplicants.length > 0 ? (
-              filteredApplicants.slice(0, 5).map((applicant) => (
+            {applicants.length > 0 ? (
+              applicants.slice(0, 5).map((applicant) => (
                 <Link
                   key={applicant.name}
                   href={`/applicants/${encodeURIComponent(applicant.name)}`}

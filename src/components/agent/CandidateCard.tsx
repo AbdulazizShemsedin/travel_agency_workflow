@@ -105,28 +105,31 @@ export function CandidateCard({
         </div>
 
         {/* Key Facts Grid */}
-        <div className="mt-3.5 grid grid-cols-2 gap-2.5 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
+        <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
             <span>Age: <strong className="text-slate-900 dark:text-white">{candidate.age} yrs</strong></span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{candidate.experience_period || "2 Years"}</strong></span>
+            <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Muslim"}</strong></span>
           </div>
 
-          <div className="flex items-center gap-1.5 col-span-2">
+          <div className="flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">
-              Prior Work: <strong className="text-slate-900 dark:text-white">{candidate.experience_country || "First Time"}</strong>
-            </span>
+            <span className="truncate">Birthplace: <strong className="text-slate-900 dark:text-white">{candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{candidate.experience_period || candidate.experience_country || "First Time"}</strong></span>
           </div>
         </div>
 
-        {/* Religion & Salary Pill */}
-        <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400">
-          <span>Religion: <span className="font-medium text-slate-700 dark:text-zinc-300">{candidate.religion || "Muslim"}</span></span>
+        {/* Prior Work & Salary Row */}
+        <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
+          <span>Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{candidate.experience_country || "First Time"}</strong></span>
           {candidate.monthly_salary ? (
             <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono">
               {candidate.monthly_salary} SAR/mo

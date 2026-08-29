@@ -30,7 +30,7 @@ import { toast } from "sonner";
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = React.useState<
-    "all" | "compliance" | "workflow" | "dossier"
+    "all" | "compliance" | "workflow" | "dossier" | "complaints"
   >("all");
 
   const {
@@ -80,8 +80,12 @@ export default function NotificationsPage() {
   const complianceCount = notifications.filter((n) => n.category === "compliance").length;
   const workflowCount = notifications.filter((n) => n.category === "workflow").length;
   const dossierCount = notifications.filter((n) => n.category === "dossier").length;
+  const complaintsCount = notifications.filter((n) => n.category === "complaints").length;
 
   const getCategoryIcon = (category: string, severity: string) => {
+    if (category === "complaints") {
+      return <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />;
+    }
     if (category === "compliance") {
       return severity === "urgent" ? (
         <ShieldAlert className="h-4 w-4 text-rose-600 dark:text-rose-400" />
@@ -245,6 +249,16 @@ export default function NotificationsPage() {
           }`}
         >
           Contractor Demands ({dossierCount})
+        </button>
+        <button
+          onClick={() => setActiveFilter("complaints")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeFilter === "complaints"
+              ? "bg-rose-900 text-white dark:bg-rose-700"
+              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
+          }`}
+        >
+          Complaints & Disputes ({complaintsCount})
         </button>
       </div>
 

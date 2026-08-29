@@ -1,8 +1,10 @@
-// Canonical 8-stage progression + Cancelled matching Frappe v15 Backend
+// Canonical 10-state progression + Cancelled
+// Authoritative source: backend-contract/doctypes/Applicant.json field "applicant_state"
 export type ApplicantState =
   | "Draft"
   | "Registered"
   | "CV Generated"
+  | "Request Pending"
   | "Selected"
   | "Processing"
   | "Stamped"
@@ -10,10 +12,12 @@ export type ApplicantState =
   | "Departed"
   | "Cancelled";
 
+// Ordered progression stages (excluding Cancelled)
 export const CANONICAL_STATES: ApplicantState[] = [
   "Draft",
   "Registered",
   "CV Generated",
+  "Request Pending",
   "Selected",
   "Processing",
   "Stamped",
@@ -25,45 +29,27 @@ export const STATE_STEP_MAP: Record<ApplicantState, number> = {
   Draft: 1,
   Registered: 2,
   "CV Generated": 3,
-  Selected: 4,
-  Processing: 5,
-  Stamped: 6,
-  Ticketed: 7,
-  Departed: 8,
+  "Request Pending": 4,
+  Selected: 5,
+  Processing: 6,
+  Stamped: 7,
+  Ticketed: 8,
+  Departed: 9,
   Cancelled: 0,
 };
 
 export const STATE_PROGRESS_MAP: Record<ApplicantState, number> = {
-  Draft: 12.5,
-  Registered: 25.0,
-  "CV Generated": 37.5,
-  Selected: 50.0,
-  Processing: 62.5,
-  Stamped: 75.0,
-  Ticketed: 87.5,
-  Departed: 100.0,
-  Cancelled: 0.0,
+  Draft: 11,
+  Registered: 22,
+  "CV Generated": 33,
+  "Request Pending": 44,
+  Selected: 55,
+  Processing: 66,
+  Stamped: 77,
+  Ticketed: 88,
+  Departed: 100,
+  Cancelled: 0,
 };
-
-export type StreamStatus = "Pending" | "In Progress" | "Completed" | "Issued" | "Rejected";
-
-export type ProcessingRoleType =
-  | "All Roles / Operations Lead"
-  | "LMS Officer"
-  | "Injaz Officer"
-  | "Wakala Admin"
-  | "Embassy Liaison";
-
-export interface StreamAssignmentPayload {
-  applicant_names: string[];
-  role_type?: ProcessingRoleType;
-  employee_id?: string;
-  stream_assignments?: {
-    lms?: string;
-    injaz?: string;
-    wakala?: string;
-  };
-}
 
 export interface IncomeExpenseLog {
   name?: string;
@@ -88,6 +74,8 @@ export interface Contractor {
   whatsapp_phone?: string;
   active_status?: number;
   status?: "Active" | "Inactive";
+  default_commission_amount?: number;
+  default_commission_currency?: string;
   notes?: string;
 }
 
@@ -105,150 +93,229 @@ export interface ContractRequest {
   notes?: string;
 }
 
+// Authoritative: backend-contract/doctypes/Applicant_Dossier.json
 export interface ApplicantDossier {
   name: string;
   applicant: string;
   contract_request?: string;
-  file_attachment?: string;
+  contract_status?: string;
+  destination_country?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  nationality?: string;
+  passport_number?: string;
+  cv_record?: string;
+  cv_status?: string;
   attached_file?: string;
-  file_name?: string;
-  contractor_name?: string;
+  is_parsed?: number;
   contract_number?: string;
   visa_number?: string;
-  sponsor_name?: string;
-  sponsor_id?: string;
-  sponsor_phone?: string;
-  job_title?: string;
+  contract_date?: string;
+  contract_end_date?: string;
+  contract_duration?: string;
+  contract_period?: string;
+  amount_detail?: number;
   salary?: number;
   currency?: string;
-  contract_period?: string;
+  sponsor_name?: string;
+  sponsor_id?: string;
+  telephone?: string;
+  sponsor_phone?: string;
+  employer_street?: string;
+  employer_city?: string;
   destination_city?: string;
-  destination_country?: string;
+  employer_mobile?: string;
+  contractor_name?: string;
+  recruiting_agency_license?: string;
+  agency?: string;
+  profession?: string;
+  job_title?: string;
+  working_place?: string;
+  period_of_employment?: string;
+  status?: "Draft" | "Submitted" | "Approved" | "Rejected" | "Cancelled";
+  approval_status?: "Pending" | "Approved" | "Rejected";
   selection_status?: string;
   parsed_at?: string;
-  approval_status?: "Pending" | "Approved" | "Rejected";
+  file_attachment?: string;
+  file_name?: string;
   notes?: string;
 }
 
+// Authoritative: backend-contract/doctypes/LMS_Clearance.json
 export interface LMSClearance {
   name: string;
-  dsr?: string;
-  applicant: string;
+  dsr: string;
+  applicant_dossier?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
   status: "Pending" | "Issued" | "Rejected";
-  employee?: string;
   issued_on?: string;
-  ticket_pnr?: string;
-  flight_number?: string;
-  departure_date?: string;
-  destination?: string;
-  additional_field_1?: string;
-  additional_field_2?: string;
-  notes?: string;
+  employee?: string;
+  missing_data_requested?: number;
+  missing_data_type?: string;
+  missing_data_requested_at?: string;
+  missing_data_status?: "Pending" | "Received";
+  missing_data_notes?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/Wakala_Clearance.json
 export interface WakalaClearance {
   name: string;
-  dsr?: string;
-  applicant: string;
+  dsr: string;
+  applicant_dossier?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
   status: "Pending" | "Completed";
   employee?: string;
-  wakala_number?: string;
-  sponsor_auth_code?: string;
-  foreign_agency_name?: string;
-  started_on?: string;
-  completed_on?: string;
-  request_payment?: boolean;
-  request_via?: "WhatsApp" | "Email" | "SMS";
-  payment_amount?: number;
-  notes?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/Injaz_Clearance.json
 export interface InjazClearance {
   name: string;
-  dsr?: string;
-  applicant: string;
+  dsr: string;
+  applicant_dossier?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
   status: "Pending" | "Completed";
   employee?: string;
-  injaz_app_no?: string;
-  teashir_fee?: number;
-  biometrics_date?: string;
-  biometrics_center?: string;
-  notes?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/DSR_Stamp.json
 export interface DSRStamp {
   name?: string;
-  dsr?: string;
-  applicant: string;
-  visa_number?: string;
-  stamped_date?: string;
-  embassy_reference?: string;
-  notes?: string;
+  dsr: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  status: "Pending" | "Completed";
+  stamp_number: string;
+  stamp_date: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/DSR_Ticket.json
 export interface DSRTicket {
   name?: string;
-  dsr?: string;
-  applicant: string;
-  ticket_pnr?: string;
-  flight_number?: string;
-  departure_date?: string;
-  destination?: string;
-  notes?: string;
+  dsr: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  status: "Pending" | "Booked" | "Cancelled";
+  ticket_number: string;
+  ticket_details?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/Embassy_Clearance.json
 export interface EmbassyClearance {
   name?: string;
-  applicant: string;
+  dsr: string;
+  applicant_dossier?: string;
+  destination_country?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
   status: "Pending" | "Submitted" | "Approved" | "Rejected";
   submission_date?: string;
   approval_date?: string;
-  visa_number?: string;
+  fee_status?: "Unpaid" | "Paid";
+  fee_amount?: number;
+  fee_currency?: string;
+  receipt_no?: string;
+  payment_date?: string;
   employee?: string;
-  notes?: string;
+  remarks?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/Telesign_Clearance.json
 export interface TelesignClearance {
   name?: string;
-  applicant: string;
-  status: "Pending" | "Verified" | "Rejected";
-  verification_date?: string;
-  caller_agent?: string;
+  dsr: string;
+  applicant_dossier?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  status: "Pending" | "In Progress" | "Authenticated" | "Completed" | "Failed";
   employee?: string;
-  audio_recording_url?: string;
-  notes?: string;
+  financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/DSR_Departure.json
 export interface DSRDeparture {
   name?: string;
-  dsr?: string;
-  applicant: string;
-  flight_number?: string;
-  departure_date?: string;
-  departure_time?: string;
-  airport?: string;
-  destination_city?: string;
-  medical_2_result?: "Pass" | "Fail";
-  medical_2_remarks?: string;
-  notes?: string;
+  dsr: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  status: "Pending" | "Departed" | "Cancelled";
+  departure_time: string;
+  medical_2_result?: "Pass" | "Fail" | "";
+  medical_2_date?: string;
+  medical_2_remark?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
+// Authoritative: backend-contract/doctypes/DSR.json
 export interface DSR {
   name: string;
-  applicant: string;
-  dossier?: string;
-  status: "Active" | "Stamped" | "Ticketed" | "Departed" | "Cancelled";
-  lms_clearance?: string;
-  wakala_clearance?: string;
-  injaz_clearance?: string;
+  applicant_dossier: string;
+  destination_country?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  sponsor_name?: string;
+  contractor_name?: string;
+  agency?: string;
+  // Progress status fields (read-only)
+  lms_status?: string;
+  wakala_status?: string;
+  injaz_status?: string;
+  telesign_status?: string;
+  embassy_status?: string;
+  stamp_status?: string;
+  ticket_status?: string;
+  departure_status?: string;
+  // Manager override
+  manager_override?: number;
+  override_by?: string;
+  override_at?: string;
+  override_reason?: string;
   financials?: IncomeExpenseLog[];
+  creation?: string;
+  modified?: string;
 }
 
 export interface Applicant {
@@ -322,18 +389,18 @@ export interface Applicant {
   arabic_level?: string;
   experience_country?: string;
   experience_period?: string;
-  skill_cleaning?: boolean | string;
-  skill_cooking?: boolean | string;
-  skill_washing?: boolean | string;
-  skill_ironing?: boolean | string;
-  skill_baby_sitting?: boolean | string;
-  skill_baby_care?: boolean | string;
-  skill_children_care?: boolean | string;
-  skill_arabic_cooking?: boolean | string;
-  skill_elder_care?: boolean | string;
-  skill_elderly_care?: boolean | string;
-  skill_driving?: boolean | string;
-  skill_sewing?: boolean | string;
+  skill_cleaning?: boolean | string | number;
+  skill_cooking?: boolean | string | number;
+  skill_washing?: boolean | string | number;
+  skill_ironing?: boolean | string | number;
+  skill_baby_sitting?: boolean | string | number;
+  skill_baby_care?: boolean | string | number;
+  skill_children_care?: boolean | string | number;
+  skill_arabic_cooking?: boolean | string | number;
+  skill_elder_care?: boolean | string | number;
+  skill_elderly_care?: boolean | string | number;
+  skill_driving?: boolean | string | number;
+  skill_sewing?: boolean | string | number;
   remarks?: string;
   medical_remarks?: string;
   education_remarks?: string;
@@ -341,6 +408,13 @@ export interface Applicant {
   // Financial & Registration Fees
   fee_required?: boolean;
   registration_fee_amount?: number;
+
+  // Musaned Pre-Registration (Saudi Corridor Requirement)
+  is_uploaded_to_musaned?: number | boolean;
+  musaned_reference_no?: string;
+  musaned_status?: "Not Registered" | "Pending Verification" | "Registered" | "Rejected";
+  musaned_uploaded_at?: string;
+  musaned_registered_by?: string;
 
   // State Machine & Accounting
   applicant_state: ApplicantState;
@@ -363,24 +437,12 @@ export interface Applicant {
   cancelled_at?: string;
   cancelled_by?: string;
 
-  // Assigned employee compatibility
-  assigned_role_type?: string;
-  assigned_employee_id?: string;
-  assigned_employee_name?: string;
-  assigned_at?: string;
-
   // Financial logs
   income_expense_logs?: IncomeExpenseLog[];
 
-  // Linked clearances and entities
+  // Linked entities (read via separate API calls, NOT embedded on Applicant)
   contract_request?: ContractRequest;
-  lms_processing?: LMSClearance;
-  wakala_processing?: WakalaClearance;
-  injaz_processing?: InjazClearance;
   contractor_doc?: ApplicantDossier;
-  dsr_stamp?: DSRStamp;
-  dsr_ticket?: DSRTicket;
-  departure_info?: DSRDeparture;
 
   // Timestamps
   creation?: string;
@@ -496,9 +558,15 @@ export interface PortalAvailableCandidate {
   skill_washing?: number | string | boolean;
   skill_ironing?: number | string | boolean;
   skill_elderly_care?: number | string | boolean;
+  skill_driving?: number | string | boolean;
   experience_country?: string;
   experience_period?: string;
   religion?: string;
+  place_of_birth?: string;
+  leaving_town?: string;
+  marital_status?: string;
+  complexion?: string;
+  passport_number?: string;
   cv_file_url?: string;
   selected_at?: string;
   selected_by?: string;
@@ -515,35 +583,62 @@ export interface PortalSelectCandidateResponse {
 // 11. FOREIGN AGENCY COMPLAINTS DESK TYPES
 // ---------------------------------------------------------------------------
 
-export type ComplaintSeverity = "Critical" | "High" | "Medium" | "Low";
-export type ComplaintStatus = "Open" | "In Progress" | "Resolved" | "Closed" | string;
+export const COMPLAINT_CATEGORIES = [
+  "Salary Delay / Non-Payment",
+  "Food & Nutrition",
+  "Living Conditions / Accommodation",
+  "Physical / Verbal Abuse",
+  "Excessive Work Hours / Overwork",
+  "Medical Illness",
+  "Runaway / Refusal to Work",
+  "Repatriation Request",
+  "Other",
+] as const;
+
+export type ComplaintCategory = (typeof COMPLAINT_CATEGORIES)[number] | string;
+export const COMPLAINT_SEVERITIES = [
+  "Normal",
+  "High",
+  "Critical / Emergency",
+] as const;
+
+export type ComplaintSeverity = (typeof COMPLAINT_SEVERITIES)[number] | string;
+
+export const COMPLAINT_STATUSES = [
+  "Open",
+  "Under Investigation",
+  "Resolved",
+  "Returned / Free Replacement Required",
+  "Escalated to MoL / Embassy",
+  "Dismissed / Closed",
+] as const;
+
+export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number] | string;
+
+export const COMPLAINT_OUTCOMES = [
+  "Resolved",
+  "Returned / Free Replacement Required",
+  "Escalated",
+  "Dismissed",
+] as const;
+
+export type ComplaintOutcome = (typeof COMPLAINT_OUTCOMES)[number] | string;
 
 export interface AgencyComplaint {
-  name: string; // e.g. "COMP-00015"
+  name: string; // e.g. "CMP-00001"
   contractor: string;
   applicant: string;
   full_name?: string;
   passport_number?: string;
-  complaint_category:
-    | "Medical Refusal / Unfit on Arrival"
-    | "Refusal to Work / Runaway"
-    | "Worker Incompetence / Skill Mismatch"
-    | "Legal / Law Enforcement Violation"
-    | "Passport / Documentation Error"
-    | "Other";
+  complaint_category: ComplaintCategory;
   severity: ComplaintSeverity;
   status: ComplaintStatus;
   days_unresolved?: number;
   complaint_details: string;
   attachment?: string;
+  assigned_officer?: string;
   resolution_notes?: string;
-  outcome?:
-    | "Returned / Free Replacement Required"
-    | "Resolved via Mediation"
-    | "Contract Terminated with Sponsor"
-    | "Worker Transferred"
-    | "Dismissed / Invalid Claim"
-    | string;
+  outcome?: ComplaintOutcome;
   return_date?: string;
   replacement_applicant?: string;
   creation?: string;
@@ -664,6 +759,7 @@ export interface AgencyPipelineCandidate {
   departure_time?: string;
   departure_status?: string;
   cv_file_url?: string;
+  contractor?: string;
 }
 
 export interface UnpaidCommissionSummary {
@@ -683,5 +779,56 @@ export interface UnpaidCommissionCandidate {
   sponsor_name?: string;
   rate: number;
   currency: string;
+}
+
+export interface CommissionLedgerItem {
+  name: string;
+  full_name: string;
+  passport_number: string;
+  job_applied: string;
+  destination_country: string;
+  contractor: string;
+  contractor_name?: string;
+  applicant_state: string;
+  departure_date?: string;
+  flight_number?: string;
+  commission_status: "Pending" | "Invoiced" | "Paid" | "Waived" | "Disputed" | string;
+  commission_amount: number;
+  commission_currency: string;
+  commission_paid_date?: string;
+  commission_batch_ref?: string;
+  is_replacement?: number | boolean;
+  religion?: string;
+  place_of_birth?: string;
+  marital_status?: string;
+  gender?: string;
+  creation?: string;
+}
+
+export interface CommissionSummaryStats {
+  total_departed: number;
+  total_outstanding_amount: number;
+  total_paid_amount: number;
+  currency: string;
+  total_contractors_count: number;
+  unpaid_count: number;
+  paid_count: number;
+}
+
+// Authoritative Musaned Payload & Response Interfaces
+export interface UpdateMusanedStatusPayload {
+  applicant: string;
+  is_uploaded_to_musaned?: number | boolean;
+  musaned_reference_no?: string;
+  musaned_status?: "Not Registered" | "Pending Verification" | "Registered" | "Rejected";
+}
+
+export interface UpdateMusanedStatusResponse {
+  status?: string;
+  message?: string;
+  musaned_uploaded_at?: string;
+  musaned_registered_by?: string;
+  can_generate_cv?: boolean;
+  applicant?: Partial<Applicant>;
 }
 

@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
-  ArrowRight,
   Bookmark,
   FileCheck2,
   FileText,
@@ -14,6 +13,13 @@ import {
   AlertTriangle,
   Save,
   CheckCircle2,
+  Download,
+  ExternalLink,
+  User,
+  GraduationCap,
+  ShieldCheck,
+  HeartPulse,
+  Sparkles,
 } from "lucide-react";
 import {
   BaseApplicantFormValues,
@@ -25,15 +31,15 @@ import {
   updateApplicantDraft,
   registerApplicant,
   generateCV,
+  getApplicant,
   ApiError,
 } from "@/lib/api/applicantApi";
-import { ApplicantStepper, FORM_STEPS } from "./ApplicantStepper";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
 import { Step2EducationExperience } from "./steps/Step2EducationExperience";
 import { Step3IdentificationContact } from "./steps/Step3IdentificationContact";
 import { Step4CocMedical } from "./steps/Step4CocMedical";
-import { Step5Review } from "./steps/Step5Review";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -43,106 +49,33 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const FIELD_TO_STEP_MAP: Record<string, number> = {
-  // Step 1: Personal Info, Passport & Basic Contacts
-  first_name: 1,
-  middle_name: 1,
-  last_name: 1,
-  passport_number: 1,
-  date_of_birth: 1,
-  passport_expiry: 1,
-  passport_issue_date: 1,
-  place_of_issue: 1,
-  gender: 1,
-  religion: 1,
-  marital_status: 1,
-  children: 1,
-  nationality: 1,
-  phone_number: 1,
-  alternate_phone: 1,
-  email: 1,
-  city: 1,
-  country: 1,
-  region: 1,
-  sub_region: 1,
-  address_line_1: 1,
-  fee_required: 1,
-  registration_fee_amount: 1,
-
-  // Step 2: Education, Skills & Experience
-  highest_education: 2,
-  institution: 2,
-  graduation_year: 2,
-  current_employer: 2,
-  years_of_experience: 2,
-  education_remarks: 2,
-  english_level: 2,
-  arabic_level: 2,
-  experience_country: 2,
-  experience_period: 2,
-  skill_cleaning: 2,
-  skill_cooking: 2,
-  skill_baby_care: 2,
-  skill_elder_care: 2,
-  skill_driving: 2,
-  skill_sewing: 2,
-
-  // Step 3: Identification & Emergency Contacts
-  national_id: 3,
-  job_applied: 3,
-  labour_id: 3,
-  contact_person_name: 3,
-  contact_person_phone: 3,
-
-  // Step 4: Medical & COC
-  coc_status: 4,
-  exam_date: 4,
-  medical_status: 4,
-  medical_expiry_date: 4,
-  medical_remarks: 4,
-  remarks: 4,
-};
-
-const STEP_FIELDS_MAP: Record<number, (keyof BaseApplicantFormValues)[]> = {
-  1: [
-    "first_name",
-    "last_name",
-    "gender",
-    "religion",
-    "marital_status",
-    "children",
-    "nationality",
-    "phone_number",
-    "city",
-    "country",
-  ],
-  2: [],
-  3: [],
-  4: [],
-};
-
 interface ApplicantRegistrationFormProps {
   initialData?: Partial<BaseApplicantFormValues>;
   existingApplicantId?: string;
   onSuccessRedirect?: (applicantId: string) => void;
 }
 
+const SECTIONS = [
+  { id: "section-personal", label: "1. Personal & Passport", icon: User },
+  { id: "section-education", label: "2. Education & Skills", icon: GraduationCap },
+  { id: "section-identification", label: "3. ID & Contacts", icon: ShieldCheck },
+  { id: "section-medical", label: "4. Medical & COC", icon: HeartPulse },
+];
+
 export function ApplicantRegistrationForm({
   initialData,
   existingApplicantId,
   onSuccessRedirect,
 }: ApplicantRegistrationFormProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [currentStep, setCurrentStep] = React.useState<number>(1);
-  const [maxReachedStep, setMaxReachedStep] = React.useState<number>(
-    existingApplicantId ? 5 : 1
-  );
   const [draftApplicantId, setDraftApplicantId] = React.useState<string | null>(
     existingApplicantId || null
   );
   const [applicantState, setApplicantState] = React.useState<string>("Draft");
   const [generatedCvUrl, setGeneratedCvUrl] = React.useState<string | null>(null);
+  const [activeSection, setActiveSection] = React.useState<string>("section-personal");
 
   // Dialog state
   const [isConfirmRegisterOpen, setIsConfirmRegisterOpen] = React.useState(false);
@@ -175,19 +108,111 @@ export function ApplicantRegistrationForm({
       passport_issue_date: initialData?.passport_issue_date || "",
       passport_expiry: initialData?.passport_expiry || "",
       place_of_issue: initialData?.place_of_issue || "",
-      job_applied: initialData?.job_applied || "",
+      job_applied: initialData?.job_applied || "House worker",
       highest_education: initialData?.highest_education || "",
       institution: initialData?.institution || "",
       graduation_year: initialData?.graduation_year ?? undefined,
       current_employer: initialData?.current_employer || "",
       years_of_experience: initialData?.years_of_experience ?? undefined,
+      english_level: initialData?.english_level || "",
+      arabic_level: initialData?.arabic_level || "",
+      experience_country: initialData?.experience_country || "",
+      experience_period: initialData?.experience_period || "",
+      monthly_salary: initialData?.monthly_salary || "1000",
+      complexion: initialData?.complexion || "Fair",
+      skill_cleaning:
+        initialData?.skill_cleaning !== undefined
+          ? initialData.skill_cleaning === 1 ||
+            initialData.skill_cleaning === "1" ||
+            initialData.skill_cleaning === "YES" ||
+            initialData.skill_cleaning === true
+            ? 1
+            : 0
+          : initialData?.job_applied?.toLowerCase().includes("driver")
+          ? 0
+          : 1,
+      skill_cooking:
+        initialData?.skill_cooking === 1 ||
+        initialData?.skill_cooking === "1" ||
+        initialData?.skill_cooking === "YES" ||
+        initialData?.skill_cooking === true
+          ? 1
+          : 0,
+      skill_washing:
+        initialData?.skill_washing !== undefined
+          ? initialData.skill_washing === 1 ||
+            initialData.skill_washing === "1" ||
+            initialData.skill_washing === "YES" ||
+            initialData.skill_washing === true
+            ? 1
+            : 0
+          : initialData?.job_applied?.toLowerCase().includes("driver")
+          ? 0
+          : 1,
+      skill_ironing:
+        initialData?.skill_ironing === 1 ||
+        initialData?.skill_ironing === "1" ||
+        initialData?.skill_ironing === "YES" ||
+        initialData?.skill_ironing === true
+          ? 1
+          : 0,
+      skill_baby_sitting:
+        initialData?.skill_baby_sitting === 1 ||
+        initialData?.skill_baby_sitting === "1" ||
+        initialData?.skill_baby_sitting === "YES" ||
+        initialData?.skill_baby_sitting === true
+          ? 1
+          : 0,
+      skill_children_care:
+        initialData?.skill_children_care === 1 ||
+        initialData?.skill_children_care === "1" ||
+        initialData?.skill_children_care === "YES" ||
+        initialData?.skill_children_care === true
+          ? 1
+          : 0,
+      skill_arabic_cooking:
+        initialData?.skill_arabic_cooking === 1 ||
+        initialData?.skill_arabic_cooking === "1" ||
+        initialData?.skill_arabic_cooking === "YES" ||
+        initialData?.skill_arabic_cooking === true
+          ? 1
+          : 0,
+      skill_sewing:
+        initialData?.skill_sewing === 1 ||
+        initialData?.skill_sewing === "1" ||
+        initialData?.skill_sewing === "YES" ||
+        initialData?.skill_sewing === true
+          ? 1
+          : 0,
+      skill_elderly_care:
+        initialData?.skill_elderly_care === 1 ||
+        initialData?.skill_elderly_care === "1" ||
+        initialData?.skill_elderly_care === "YES" ||
+        initialData?.skill_elderly_care === true
+          ? 1
+          : 0,
+      skill_driving:
+        initialData?.skill_driving !== undefined
+          ? initialData.skill_driving === 1 ||
+            initialData.skill_driving === "1" ||
+            initialData.skill_driving === "YES" ||
+            initialData.skill_driving === true
+            ? 1
+            : 0
+          : initialData?.job_applied?.toLowerCase().includes("driver")
+          ? 1
+          : 0,
       labour_id: initialData?.labour_id || "",
       national_id: initialData?.national_id || "",
-      contact_person_name: initialData?.contact_person_name || "",
+      contact_person_name:
+        initialData?.contact_person_name ||
+        (initialData?.applicant_type === "Muayena" ? "Muayena" : ""),
       contact_person_phone: initialData?.contact_person_phone || "",
       emergency_contact_name: initialData?.emergency_contact_name || "",
       emergency_contact_phone: initialData?.emergency_contact_phone || "",
-      emergency_relationship: initialData?.emergency_relationship || "",
+      emergency_relationship:
+        initialData?.emergency_relationship ||
+        (initialData?.applicant_type === "Muayena" ? "Muayena / Sponsor" : ""),
       coc_status: initialData?.coc_status || "",
       exam_date: initialData?.exam_date || "",
       medical_status: initialData?.medical_status || "",
@@ -204,7 +229,7 @@ export function ApplicantRegistrationForm({
     },
   });
 
-  const { getValues, trigger, setError, clearErrors, reset } = form;
+  const { getValues, setError, clearErrors, reset } = form;
 
   React.useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
@@ -218,56 +243,40 @@ export function ApplicantRegistrationForm({
     }
   }, [initialData, existingApplicantId]);
 
-  const navigateToStepWithError = (targetStep: number, fieldName?: string) => {
-    setCurrentStep(targetStep);
-    setMaxReachedStep((prev) => Math.max(prev, targetStep));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-
+  // Smooth scroll directly to input element on error
+  const scrollToFieldWithError = (fieldName?: string) => {
+    if (!fieldName) return;
     setTimeout(() => {
-      if (fieldName) {
-        const el =
-          document.getElementById(fieldName) ||
-          document.querySelector(`[name="${fieldName}"]`) ||
-          document.getElementById(`field-${fieldName}`);
+      const el =
+        document.getElementById(fieldName) ||
+        document.querySelector(`[name="${fieldName}"]`) ||
+        document.getElementById(`field-${fieldName}`);
 
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-          (el as HTMLElement).focus?.();
-          el.classList.add("ring-4", "ring-rose-500", "ring-offset-2", "transition-all", "duration-500");
-          setTimeout(() => {
-            el.classList.remove("ring-4", "ring-rose-500", "ring-offset-2");
-          }, 3500);
-        }
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        (el as HTMLElement).focus?.();
+        el.classList.add("ring-4", "ring-rose-500", "ring-offset-2", "transition-all", "duration-500");
+        setTimeout(() => {
+          el.classList.remove("ring-4", "ring-rose-500", "ring-offset-2");
+        }, 3500);
       }
-    }, 200);
+    }, 150);
   };
 
-  const handleStepChange = (targetStep: number) => {
-    setCurrentStep(targetStep);
-    if (targetStep > maxReachedStep) {
-      setMaxReachedStep(targetStep);
-    }
-  };
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const el = document.getElementById(sectionId);
+    if (el) {
+      const offset = 80;
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = el.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
 
-  const handleNextStep = async () => {
-    if (currentStep === 1) {
-      const step1Fields = STEP_FIELDS_MAP[1];
-      const isValid = await trigger(step1Fields);
-      if (!isValid) {
-        toast.error("Please complete the required personal information fields.");
-        return;
-      }
-    }
-    if (currentStep < FORM_STEPS.length) {
-      handleStepChange(currentStep + 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 1) {
-      handleStepChange(currentStep - 1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
     }
   };
 
@@ -290,9 +299,7 @@ export function ApplicantRegistrationForm({
 
         const firstError = validation.error.errors[0];
         const errorField = firstError?.path[0] as string;
-        const targetStep = (errorField && FIELD_TO_STEP_MAP[errorField]) || 1;
-
-        navigateToStepWithError(targetStep, errorField);
+        scrollToFieldWithError(errorField);
 
         throw new Error(firstError?.message || "Please complete required Stage 1 draft fields.");
       }
@@ -364,9 +371,7 @@ export function ApplicantRegistrationForm({
 
         const firstError = validation.error.errors[0];
         const firstField = firstError?.path[0] as string;
-        const targetStep = (firstField && FIELD_TO_STEP_MAP[firstField]) || 1;
-
-        navigateToStepWithError(targetStep, firstField);
+        scrollToFieldWithError(firstField);
 
         throw new Error(firstError?.message || "Please complete all registration requirements.");
       }
@@ -407,17 +412,28 @@ export function ApplicantRegistrationForm({
   const generateCvMutation = useMutation({
     mutationFn: async () => {
       if (!draftApplicantId) throw new Error("No applicant ID available.");
+      const formData = getValues();
+      if (formData && Object.keys(formData).length > 0) {
+        await updateApplicantDraft(draftApplicantId, formData);
+      }
       return await generateCV(draftApplicantId);
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const fileUrl = data.message?.file_url;
       if (fileUrl) {
         setGeneratedCvUrl(fileUrl);
         setIsCvPreviewOpen(true);
       }
-      setApplicantState("CV Generated");
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
+      await queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      await queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
+      try {
+        if (draftApplicantId) {
+          const refreshed = await getApplicant(draftApplicantId);
+          if (refreshed?.applicant_state) {
+            setApplicantState(refreshed.applicant_state);
+          }
+        }
+      } catch {}
       toast.success(data.message?.message || "CV PDF generated successfully!");
     },
     onError: (error: unknown) => {
@@ -445,26 +461,30 @@ export function ApplicantRegistrationForm({
 
       const firstError = validation.error.errors[0];
       const errorField = firstError?.path[0] as string;
-      const targetStep = (errorField && FIELD_TO_STEP_MAP[errorField]) || 1;
 
-      // Automatically navigate to the step with error and focus
-      navigateToStepWithError(targetStep, errorField);
+      scrollToFieldWithError(errorField);
 
       const fieldTitle = errorField
-        ? errorField.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+        ? errorField
+            .split("_")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ")
         : "Field";
 
       toast.error("Registration Requirements Incomplete", {
-        description: `Please check "${fieldTitle}": ${firstError?.message || "Please complete this field"}. We've opened Step ${targetStep} for you.`,
+        description: `Please check "${fieldTitle}": ${
+          firstError?.message || "Please complete this field"
+        }.`,
         duration: 6000,
       });
       return;
     }
 
     if (formData.medical_status === "UNFIT") {
-      navigateToStepWithError(4, "medical_status");
+      scrollToFieldWithError("medical_status");
       toast.error("Medical Status is UNFIT", {
-        description: "Applicant cannot be registered while medical status is UNFIT. Please update once cleared.",
+        description:
+          "Applicant cannot be registered while medical status is UNFIT. Please update once cleared.",
       });
       return;
     }
@@ -491,7 +511,7 @@ export function ApplicantRegistrationForm({
                 Editing Applicant ({existingApplicantId})
               </div>
               <div className="text-[11px] text-emerald-800/80 dark:text-emerald-400">
-                You can switch between any step freely and save your changes at any time.
+                All sections are available on this page. Update any field and save your changes.
               </div>
             </div>
           </div>
@@ -507,61 +527,222 @@ export function ApplicantRegistrationForm({
               </>
             ) : (
               <>
-                <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes Now
+                <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes
               </>
             )}
           </Button>
         </div>
       )}
 
-      {/* Stepper Header */}
-      <ApplicantStepper
-        currentStep={currentStep}
-        onStepClick={handleStepChange}
-        maxCompletedStep={maxReachedStep}
-      />
+      {/* Sticky Section Quick-Jump Bar */}
+      <div className="sticky top-2 z-20 w-full overflow-x-auto rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-2 shadow-xs backdrop-blur-md">
+        <div className="flex items-center gap-1.5 min-w-max">
+          {SECTIONS.map((sec) => {
+            const Icon = sec.icon;
+            const isActive = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => scrollToSection(sec.id)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  isActive
+                    ? "bg-emerald-900 text-white shadow-xs"
+                    : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{sec.label}</span>
+              </button>
+            );
+          })}
 
-      {/* Main Step Form Body */}
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-6">
-        {currentStep === 1 && <Step1PersonalInfo form={form} />}
-        {currentStep === 2 && <Step2EducationExperience form={form} />}
-        {currentStep === 3 && <Step3IdentificationContact form={form} />}
-        {currentStep === 4 && <Step4CocMedical form={form} />}
-        {currentStep === 5 && (
-          <Step5Review
-            form={form}
-            onNavigateToStep={handleStepChange}
-            draftApplicantId={draftApplicantId}
-            applicantState={applicantState}
-            onGenerateCV={() => generateCvMutation.mutate()}
-            isGeneratingCV={generateCvMutation.isPending}
-            cvUrl={generatedCvUrl}
-          />
+          {draftApplicantId && (
+            <div className="ml-auto pl-3 flex items-center gap-2 border-l border-slate-200 dark:border-[#222227]">
+              <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
+                ID: <strong className="text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                  isRegistered
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                }`}
+              >
+                {applicantState}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Single Vertical Form Body */}
+      <form onSubmit={(e) => e.preventDefault()} className="space-y-10">
+        {/* Section 1: Personal & Passport */}
+        <section id="section-personal" className="scroll-mt-20 space-y-4">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
+              1
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Personal & Passport Information
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Passport OCR extraction, bio data, and official residential address.
+              </p>
+            </div>
+          </div>
+          <Step1PersonalInfo form={form} />
+        </section>
+
+        {/* Section 2: Education & Skills */}
+        <section id="section-education" className="scroll-mt-20 space-y-4">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
+              2
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Education, Experience & Skills Matrix
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Academic qualifications, overseas experience, language proficiencies, and domestic skills.
+              </p>
+            </div>
+          </div>
+          <Step2EducationExperience form={form} />
+        </section>
+
+        {/* Section 3: National ID & Contacts */}
+        <section id="section-identification" className="scroll-mt-20 space-y-4">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
+              3
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                National Identification & Emergency Contacts
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Fayda / National ID, Ministry Labour ID, target profession, and emergency next of kin.
+              </p>
+            </div>
+          </div>
+          <Step3IdentificationContact form={form} />
+        </section>
+
+        {/* Section 4: Medical & COC */}
+        <section id="section-medical" className="scroll-mt-20 space-y-4">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
+              4
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Medical Fitness & COC Certification
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                GAMCA laboratory medical fitness result and Ministry COC examination certificate.
+              </p>
+            </div>
+          </div>
+          <Step4CocMedical form={form} />
+        </section>
+
+        {/* Section 5: CV & Document Actions (When ID exists or registered) */}
+        {draftApplicantId && (
+          <section id="section-cv" className="scroll-mt-20 space-y-4">
+            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
+                5
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Official CV & Bilateral Documents
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Compile and generate standardized bilingual CV for international recruitment partner discovery.
+                </p>
+              </div>
+            </div>
+
+            <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
+                    <FileCheck2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                    Bilingual International Recruitment CV
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    Compiled directly by the backend engine with photo, passport details, skill ratings, and medical clearance.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    onClick={() => generateCvMutation.mutate()}
+                    disabled={generateCvMutation.isPending}
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
+                  >
+                    {generateCvMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Generating CV...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Generate Official CV
+                      </>
+                    )}
+                  </Button>
+
+                  {generatedCvUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCvPreviewOpen(true)}
+                      className="text-xs font-semibold text-slate-700 dark:text-zinc-300"
+                    >
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                      Preview PDF
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </section>
         )}
 
-        {/* Bottom Action Toolbar */}
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-md backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            {currentStep > 1 && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handlePrevStep}
-                className="text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#26262d]"
-              >
-                <ArrowLeft className="mr-1.5 h-4 w-4" />
-                Previous Step
-              </Button>
-            )}
-            {draftApplicantId && (
-              <span className="hidden items-center gap-1 text-xs text-slate-500 dark:text-zinc-400 sm:inline-flex">
-                ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
+        {/* Sticky Bottom Action Toolbar */}
+        <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            {draftApplicantId ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 dark:text-zinc-400">
+                  Record ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
+                </span>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    isRegistered
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                  }`}
+                >
+                  {applicantState}
+                </span>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-500 dark:text-zinc-400">
+                New Applicant Registration Form
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* If in edit mode, provide primary Save Changes button on EVERY step */}
+          <div className="flex items-center gap-2.5">
+            {/* If in edit mode, provide Save Changes button */}
             {existingApplicantId ? (
               <Button
                 type="button"
@@ -586,54 +767,42 @@ export function ApplicantRegistrationForm({
                 variant="outline"
                 onClick={() => saveDraftMutation.mutate()}
                 disabled={isSavingDraft || isRegistering}
-                className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium"
+                className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium text-xs shadow-xs"
               >
                 {isSavingDraft ? (
                   <>
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     Saving Draft...
                   </>
                 ) : (
                   <>
-                    <Bookmark className="mr-1.5 h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                    Save Draft
+                    <Bookmark className="mr-1.5 h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+                    Save as Draft
                   </>
                 )}
               </Button>
             )}
 
-            {/* Next or Register Action */}
-            {currentStep < FORM_STEPS.length ? (
+            {/* Register Applicant Action */}
+            {!isRegistered && (
               <Button
                 type="button"
-                onClick={handleNextStep}
-                variant={existingApplicantId ? "outline" : "default"}
-                className={existingApplicantId ? "text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#26262d]" : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-xs"}
+                onClick={handleRegisterClick}
+                disabled={isRegistering || isSavingDraft || isMedicalUnfit}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
               >
-                Next Step
-                <ArrowRight className="ml-1.5 h-4 w-4" />
+                {isRegistering ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Registering...
+                  </>
+                ) : (
+                  <>
+                    <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
+                    Register Applicant
+                  </>
+                )}
               </Button>
-            ) : (
-              !isRegistered && (
-                <Button
-                  type="button"
-                  onClick={handleRegisterClick}
-                  disabled={isRegistering || isSavingDraft || isMedicalUnfit}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium shadow-sm"
-                >
-                  {isRegistering ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      Registering...
-                    </>
-                  ) : (
-                    <>
-                      <FileCheck2 className="mr-1.5 h-4 w-4" />
-                      Register Applicant
-                    </>
-                  )}
-                </Button>
-              )
             )}
           </div>
         </div>
@@ -674,7 +843,7 @@ export function ApplicantRegistrationForm({
               type="button"
               variant="outline"
               onClick={() => setIsConfirmRegisterOpen(false)}
-              className="dark:border-[#26262d]"
+              className="dark:border-[#26262d] text-xs"
             >
               Cancel
             </Button>
@@ -682,7 +851,7 @@ export function ApplicantRegistrationForm({
               type="button"
               onClick={() => registerMutation.mutate()}
               disabled={isRegistering}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
             >
               {isRegistering ? (
                 <>
@@ -697,85 +866,58 @@ export function ApplicantRegistrationForm({
         </DialogContent>
       </Dialog>
 
-      {/* Generated CV Preview Modal */}
+      {/* Official Backend Generated CV Preview Modal */}
       <Dialog open={isCvPreviewOpen} onOpenChange={setIsCvPreviewOpen}>
-        <DialogContent className="sm:max-w-2xl bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-              <FileText className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-              Standardized Candidate CV
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
-              Generated candidate CV record for {form.getValues("first_name")} {form.getValues("last_name")}.
-            </DialogDescription>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] flex flex-col p-6">
+          <DialogHeader className="pb-2 border-b border-slate-100 dark:border-[#202026]">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+                  <FileCheck2 className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
+                  Official Backend Generated Candidate CV
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
+                  Official bilateral recruitment CV compiled and formatted by the backend processing engine.
+                </DialogDescription>
+              </div>
+              {generatedCvUrl && (
+                <a
+                  href={generatedCvUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-800 text-white text-xs font-semibold hover:bg-emerald-900 transition"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download PDF
+                </a>
+              )}
+            </div>
           </DialogHeader>
 
-          <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-slate-50 dark:bg-[#16161b] p-6">
-            <div className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#121215] p-6 rounded-lg shadow-xs space-y-4">
-              <div className="border-b border-slate-200 dark:border-[#222227] pb-4 flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    {form.getValues("first_name")} {form.getValues("middle_name")} {form.getValues("last_name")}
-                  </h3>
-                  <p className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
-                    {form.getValues("highest_education")} • {form.getValues("nationality")}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 font-mono text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                    {draftApplicantId}
-                  </span>
-                  <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1">Status: Registered</p>
-                </div>
+          <div className="flex-1 min-h-[60vh] py-4">
+            {generatedCvUrl ? (
+              <iframe
+                src={generatedCvUrl}
+                className="w-full h-full min-h-[60vh] rounded-lg border border-slate-200 dark:border-[#202026]"
+                title="Candidate CV Preview"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+                No CV file URL available.
               </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <h5 className="font-semibold text-slate-700 dark:text-zinc-300">Contact</h5>
-                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("phone_number")}</p>
-                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("email") || "No email"}</p>
-                  <p className="text-slate-600 dark:text-zinc-400">{form.getValues("city")}, {form.getValues("country")}</p>
-                </div>
-                <div>
-                  <h5 className="font-semibold text-slate-700 dark:text-zinc-300">Identification</h5>
-                  <p className="text-slate-600 dark:text-zinc-400">Passport: {form.getValues("passport_number")}</p>
-                  <p className="text-slate-600 dark:text-zinc-400">Labour ID: {form.getValues("labour_id")}</p>
-                  <p className="text-slate-600 dark:text-zinc-400">COC: {form.getValues("coc_status")}</p>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-100 dark:border-[#222227] pt-3 text-xs">
-                <h5 className="font-semibold text-slate-700 dark:text-zinc-300 mb-1">Education & Experience</h5>
-                <p className="text-slate-600 dark:text-zinc-400">
-                  {form.getValues("highest_education")} from {form.getValues("institution") || "N/A"}{" "}
-                  {form.getValues("graduation_year") ? `(${form.getValues("graduation_year")})` : ""}
-                </p>
-                {form.getValues("years_of_experience") ? (
-                  <p className="text-slate-600 dark:text-zinc-400 mt-1">
-                    {form.getValues("years_of_experience")} years at {form.getValues("current_employer") || "Previous Employer"}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+            )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t border-slate-100 dark:border-[#202026]">
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsCvPreviewOpen(false)}
+              className="text-xs"
             >
               Close
             </Button>
-            {generatedCvUrl && (
-              <a
-                href={generatedCvUrl}
-                download
-                className="inline-flex items-center justify-center rounded-lg bg-emerald-900 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-950"
-              >
-                Download PDF
-              </a>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

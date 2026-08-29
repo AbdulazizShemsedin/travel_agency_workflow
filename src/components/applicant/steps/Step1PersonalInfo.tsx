@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileApi, scanPassportMRZApi } from "@/lib/api/applicantApi";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 
+import { ImageCropModal } from "@/components/ui/ImageCropModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -43,15 +44,24 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   const [isScanningOCR, setIsScanningOCR] = React.useState(false);
   const [ocrSuccessData, setOcrSuccessData] = React.useState<any | null>(null);
 
+  // Cropper Modal State
+  const [cropModalState, setCropModalState] = React.useState<{
+    open: boolean;
+    file: File | null;
+    type: "passport" | "portrait" | "fullbody";
+  }>({
+    open: false,
+    file: null,
+    type: "passport",
+  });
+
   // MRZ Review Dialog State
   const [isOcrReviewOpen, setIsOcrReviewOpen] = React.useState(false);
   const [pendingOcrData, setPendingOcrData] = React.useState<any | null>(null);
 
   // Manual MRZ Dialog State
   const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
-  const [mrzInputText, setMrzInputText] = React.useState(
-    ""
-  );
+  const [mrzInputText, setMrzInputText] = React.useState("");
 
   React.useEffect(() => {
     if (profilePhotoValue && !photoPreview) {
@@ -115,9 +125,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
 
     setOcrSuccessData(d);
     setIsOcrReviewOpen(false);
+    toast.success("Passport data applied to registration form!");
   };
 
-  // Main Passport MRZ Auto-Scan Handler (Dispatches directly to Backend Python OCR)
+  // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend Python OCR and/or Client OCR)
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
     const localUrl = URL.createObjectURL(file);
@@ -125,7 +136,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     setIsScanningOCR(true);
 
     try {
-      // 1. Upload original passport scan file to Frappe
+      // 1. Upload passport scan file to Frappe
       let uploadedUrl = "";
       try {
         const uploadRes = await uploadFileApi(file, "Applicant", "", "passport_scan");
@@ -140,21 +151,42 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         console.warn("File upload to server error:", e);
       }
 
-      // 2. Dispatch ONLY file_url to backend Python OCR engine (passporteye / mrz)
+      // 2. Dispatch file_url to backend Python OCR engine
+      let extractedData: any = null;
       if (uploadedUrl) {
-        const ocrRes = await scanPassportMRZApi({
-          file_url: uploadedUrl,
-        });
+        try {
+          const ocrRes = await scanPassportMRZApi({
+            file_url: uploadedUrl,
+          });
 
-        const d = (ocrRes as any)?.data || (ocrRes as any)?.message?.data || ocrRes;
-        if (d && (d.passport_number || d.first_name || d.last_name || d.date_of_birth)) {
-          // Show review dialog so user can confirm before applying
-          setPendingOcrData(d);
-          setIsOcrReviewOpen(true);
+          const d = (ocrRes as any)?.data || (ocrRes as any)?.message?.data || ocrRes;
+          if (d && (d.passport_number || d.first_name || d.last_name || d.date_of_birth)) {
+            extractedData = d;
+          }
+        } catch (backendErr) {
+          console.warn("Backend OCR parse error:", backendErr);
         }
       }
+
+      // 3. If backend didn't return complete data, execute client-side OCR fallback
+      if (!extractedData) {
+        const clientOcr = await performOpticalPassportOCR(file);
+        if (clientOcr && (clientOcr.passport_number || clientOcr.first_name || clientOcr.date_of_birth)) {
+          extractedData = clientOcr;
+        }
+      }
+
+      if (extractedData) {
+        // Show review dialog so user can confirm before applying
+        setPendingOcrData(extractedData);
+        setIsOcrReviewOpen(true);
+        toast.success("Passport extracted successfully! Review and apply data.");
+      } else {
+        toast.info("Passport scan attached. You can fill or edit registration fields.");
+      }
     } catch (err: any) {
-      console.warn("Backend scan_and_populate_passport error:", err);
+      console.warn("Passport scan processing warning:", err);
+      toast.error("Passport processing warning: " + (err?.message || "Please check details."));
     } finally {
       setIsScanningOCR(false);
     }
@@ -187,6 +219,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
 
         setOcrSuccessData(parsed);
         setIsMrzDialogOpen(false);
+        toast.success("MRZ text parsed and filled successfully!");
       }
     } catch (err) {
       console.warn("Manual MRZ decode warning:", err);
@@ -195,8 +228,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handlePhotoUpload = async (file: File) => {
     if (file) {
       const localUrl = URL.createObjectURL(file);
       setPhotoPreview(localUrl);
@@ -208,6 +240,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         if (fileUrl) {
           setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
           setValue("photo_passport", fileUrl, { shouldDirty: true, shouldValidate: true });
+          toast.success("Portrait photo uploaded successfully!");
         } else {
           toast.error("Failed to obtain server file URL for photo. Please retry.");
         }
@@ -220,8 +253,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     }
   };
 
-  const handleFullBodyUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFullBodyUpload = async (file: File) => {
     if (file) {
       const localUrl = URL.createObjectURL(file);
       setFullBodyPreview(localUrl);
@@ -232,6 +264,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
         if (fileUrl) {
           setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });
+          toast.success("Full body photo uploaded successfully!");
         } else {
           toast.error("Failed to obtain server file URL for full-body photo. Please retry.");
         }
@@ -266,6 +299,12 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
                   Upload candidate passport image or paste the 2 MRZ code lines. The system will automatically decode MRZ and populate First Name, Last Name, Passport #, Date of Birth, Gender, and Expiry Date.
                 </p>
+                <div className="flex items-start sm:items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1.5 mt-1 max-w-2xl">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
+                  <span>
+                    <strong>Important Note:</strong> Data extraction may not produce accurate results if the passport photo is blurry, dark, rotated, or low quality. Please review and verify all auto-filled fields before proceeding.
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -303,7 +342,14 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   disabled={isScanningOCR}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) handlePassportAutoScan(f);
+                    if (f) {
+                      setCropModalState({
+                        open: true,
+                        file: f,
+                        type: "passport",
+                      });
+                      e.target.value = "";
+                    }
                   }}
                 />
               </label>
@@ -427,9 +473,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
                 Candidate Photo (Passport Size)
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Clear face photo for CV and profile.
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center pt-2">
               <label
@@ -463,7 +506,17 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   type="file"
                   accept="image/png, image/jpeg, image/webp"
                   className="sr-only"
-                  onChange={handlePhotoUpload}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setCropModalState({
+                        open: true,
+                        file: f,
+                        type: "portrait",
+                      });
+                      e.target.value = "";
+                    }
+                  }}
                   disabled={isUploadingPassport}
                 />
               </label>
@@ -479,9 +532,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
                 Full Body Photo (CV Page 2)
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Full length portrait required for employer CV.
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center pt-2">
               <label
@@ -515,7 +565,17 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   type="file"
                   accept="image/png, image/jpeg, image/webp"
                   className="sr-only"
-                  onChange={handleFullBodyUpload}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setCropModalState({
+                        open: true,
+                        file: f,
+                        type: "fullbody",
+                      });
+                      e.target.value = "";
+                    }
+                  }}
                   disabled={isUploadingFullBody}
                 />
               </label>
@@ -531,9 +591,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
                 Application Settings
               </CardTitle>
-              <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Registration fee options.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3">
@@ -664,12 +721,9 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">
                   Personal Information
                 </CardTitle>
-                <CardDescription className="mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                  Enter candidate details as written on their official passport and ID.
-                </CardDescription>
               </div>
-              <span className="rounded-md bg-emerald-50 dark:bg-emerald-950 px-2 py-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                Step 1 • Basic Details
+              <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Personal & Passport Information
               </span>
             </div>
           </CardHeader>
@@ -689,7 +743,13 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-white dark:bg-[#121215]">
                   <button
                     type="button"
-                    onClick={() => setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true })}
+                    onClick={() => {
+                      setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
+                      if (watch("contact_person_name") === "Muayena") {
+                        setValue("contact_person_name", "", { shouldDirty: true });
+                        setValue("emergency_relationship", "", { shouldDirty: true });
+                      }
+                    }}
                     className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
                       watch("applicant_type") === "Standard" || !watch("applicant_type")
                         ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
@@ -700,7 +760,14 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true })}
+                    onClick={() => {
+                      setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
+                      const currentContact = watch("contact_person_name");
+                      if (!currentContact || currentContact === "") {
+                        setValue("contact_person_name", "Muayena", { shouldDirty: true });
+                        setValue("emergency_relationship", "Muayena / Sponsor", { shouldDirty: true });
+                      }
+                    }}
                     className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
                       watch("applicant_type") === "Muayena"
                         ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
@@ -731,14 +798,18 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="middle_name" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                  Middle Name / Father Name
+                <Label htmlFor="middle_name" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                  Father Name (Middle Name) <span className="text-rose-500">*</span>
                 </Label>
                 <Input
                   id="middle_name"
                   placeholder="e.g., Bekele"
                   {...register("middle_name")}
+                  className={errors.middle_name ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
+                {errors.middle_name && (
+                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.middle_name.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -799,37 +870,49 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="passport_expiry" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Passport Expiry Date
+                    Passport Expiry Date <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="passport_expiry"
                     type="date"
                     {...register("passport_expiry")}
+                    className={errors.passport_expiry ? "border-rose-500" : ""}
                   />
+                  {errors.passport_expiry && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_expiry.message}</p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="place_of_issue" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Place of Issue
+                  <Label htmlFor="place_of_issue" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Place of Issue <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="place_of_issue"
                     placeholder="e.g., Addis Ababa"
                     {...register("place_of_issue")}
+                    className={errors.place_of_issue ? "border-rose-500" : ""}
                   />
+                  {errors.place_of_issue && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_issue.message}</p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Passport Issue Date
+                  <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Passport Issue Date <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="passport_issue_date"
                     type="date"
                     {...register("passport_issue_date")}
+                    className={errors.passport_issue_date ? "border-rose-500" : ""}
                   />
+                  {errors.passport_issue_date && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_issue_date.message}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -985,7 +1068,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-3">
                 Home Address & Location
               </h4>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="country" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Country <span className="text-rose-500">*</span>
@@ -1015,20 +1098,24 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     <p className="text-xs text-rose-600 dark:text-rose-400">{errors.city.message}</p>
                   )}
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Place of Birth <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="place_of_birth"
+                    placeholder="e.g., Oromia, Amhara"
+                    {...register("place_of_birth")}
+                    className={errors.place_of_birth ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  />
+                  {errors.place_of_birth && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_birth.message}</p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="region" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Region / State
-                  </Label>
-                  <Input
-                    id="region"
-                    placeholder="e.g., Oromia, Amhara"
-                    {...register("region")}
-                  />
-                </div>
-
                 <div className="space-y-1.5">
                   <Label htmlFor="sub_region" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                     Sub-City / Zone / Woreda
@@ -1039,23 +1126,62 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     {...register("sub_region")}
                   />
                 </div>
-              </div>
 
-              <div className="mt-4 space-y-1.5">
-                <Label htmlFor="address_line_1" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                  Address Line
-                </Label>
-                <Input
-                  id="address_line_1"
-                  placeholder="Street address or house number"
-                  {...register("address_line_1")}
-                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="address_line_1" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Address Line
+                  </Label>
+                  <Input
+                    id="address_line_1"
+                    placeholder="Street address or house number"
+                    {...register("address_line_1")}
+                  />
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
+
+    {/* Universal Document Preview & Cropper Modal */}
+    <ImageCropModal
+      open={cropModalState.open}
+      onOpenChange={(open) => setCropModalState((prev) => ({ ...prev, open }))}
+      imageFile={cropModalState.file}
+      title={
+        cropModalState.type === "passport"
+          ? "Passport Scan Preview & Cropper"
+          : cropModalState.type === "portrait"
+          ? "Candidate Portrait Photo Preview & Cropper"
+          : "Full Body Photo Preview & Cropper"
+      }
+      description={
+        cropModalState.type === "passport"
+          ? "Preview, rotate, or crop the passport / MRZ zone. Note: Ensure the image is sharp, clear, and well-aligned for accurate data extraction."
+          : cropModalState.type === "portrait"
+          ? "Preview, rotate, or crop candidate face portrait (passport photo size)."
+          : "Preview, rotate, or crop candidate standing full-body portrait."
+      }
+      confirmLabel={
+        cropModalState.type === "passport"
+          ? "Apply & Extract Info"
+          : "Confirm & Set Photo"
+      }
+      cropMode={cropModalState.type}
+      defaultAspectRatio={
+        cropModalState.type === "portrait" ? 1 : cropModalState.type === "passport" ? 1.4 : null
+      }
+      onConfirm={async (resultFile) => {
+        if (cropModalState.type === "passport") {
+          await handlePassportAutoScan(resultFile);
+        } else if (cropModalState.type === "portrait") {
+          await handlePhotoUpload(resultFile);
+        } else if (cropModalState.type === "fullbody") {
+          await handleFullBodyUpload(resultFile);
+        }
+      }}
+    />
     </div>
   );
 }

@@ -135,18 +135,11 @@ export function CandidateDetailModal({
           </div>
 
           {/* Key Qualifications & Profile Attributes */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Age / DOB</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
                 {candidate.age} yrs {candidate.date_of_birth ? `(${candidate.date_of_birth})` : ""}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
-              <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Nationality</span>
-              <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                {candidate.nationality || "Ethiopia"}
               </p>
             </div>
 
@@ -158,6 +151,20 @@ export function CandidateDetailModal({
             </div>
 
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Place of Birth</span>
+              <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 truncate">
+                {candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Nationality</span>
+              <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                {candidate.nationality || "Ethiopia"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3 col-span-2 sm:col-span-1">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Monthly Salary</span>
               <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400 mt-0.5 font-mono">
                 {candidate.monthly_salary || 1200} SAR

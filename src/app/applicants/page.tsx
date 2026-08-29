@@ -12,9 +12,6 @@ export default function ApplicantsPage() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
             Applicants
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage candidates, registration drafts, and processing pipelines.
-          </p>
         </div>
         <Link href="/applicants/new">
           <Button className="bg-emerald-900 hover:bg-emerald-950 text-white shadow-sm font-medium">

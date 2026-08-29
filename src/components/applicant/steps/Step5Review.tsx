@@ -340,18 +340,52 @@ export function Step5Review({
               <span className="font-medium text-slate-900">{values.institution || "—"}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">Graduation Year:</span>
-              <span className="font-medium text-slate-900">{values.graduation_year || "—"}</span>
+              <span className="text-slate-500">Languages:</span>
+              <span className="font-medium text-slate-900">
+                English: {values.english_level || "None"} • Arabic: {values.arabic_level || "None"}
+              </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">Current Employer:</span>
-              <span className="font-medium text-slate-900">{values.current_employer || "—"}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-slate-500">Years of Experience:</span>
+              <span className="text-slate-500">Overseas Experience:</span>
               <span className="font-medium text-slate-900">
-                {values.years_of_experience ? `${values.years_of_experience} yrs` : "—"}
+                {values.experience_country ? `${values.experience_country} (${values.experience_period || "1"} yrs)` : "None / First Timer"}
               </span>
+            </div>
+            <div className="pt-2">
+              <span className="text-slate-500 block mb-1.5 font-semibold">Selected Skills:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "Cooking", val: values.skill_cooking },
+                  { label: "Cleaning", val: values.skill_cleaning },
+                  { label: "Washing", val: values.skill_washing },
+                  { label: "Ironing", val: values.skill_ironing },
+                  { label: "Baby Sitting", val: values.skill_baby_sitting },
+                  { label: "Children Care", val: values.skill_children_care },
+                  { label: "Arabic Cooking", val: values.skill_arabic_cooking },
+                  { label: "Sewing", val: values.skill_sewing },
+                  { label: "Elderly Care", val: values.skill_elderly_care },
+                ].filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true).length > 0 ? (
+                  [
+                    { label: "Cooking", val: values.skill_cooking },
+                    { label: "Cleaning", val: values.skill_cleaning },
+                    { label: "Washing", val: values.skill_washing },
+                    { label: "Ironing", val: values.skill_ironing },
+                    { label: "Baby Sitting", val: values.skill_baby_sitting },
+                    { label: "Children Care", val: values.skill_children_care },
+                    { label: "Arabic Cooking", val: values.skill_arabic_cooking },
+                    { label: "Sewing", val: values.skill_sewing },
+                    { label: "Elderly Care", val: values.skill_elderly_care },
+                  ]
+                    .filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true)
+                    .map(s => (
+                      <span key={s.label} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        ✓ {s.label}
+                      </span>
+                    ))
+                ) : (
+                  <span className="text-slate-400 italic">No skills selected</span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

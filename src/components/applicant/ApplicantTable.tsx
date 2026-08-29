@@ -468,6 +468,11 @@ export function ApplicantTable() {
         onClose={() => setIsAssignModalOpen(false)}
         applicantIds={assignTargetIds}
         applicantNames={assignTargetNames}
+        destinationCountry={
+          assignTargetIds.length === 1
+            ? applicants.find((a) => a.name === assignTargetIds[0])?.destination_country
+            : undefined
+        }
         onSuccess={() => {
           setSelectedRows(new Set());
         }}

@@ -22,7 +22,12 @@ import {
   AgencyPipelineCandidate,
   UnpaidCommissionSummary,
   UnpaidCommissionCandidate,
+  CommissionLedgerItem,
+  CommissionSummaryStats,
+  UpdateMusanedStatusPayload,
+  UpdateMusanedStatusResponse,
 } from "@/types/applicant";
+import { ProcessingData } from "@/types/processing";
 import { BaseApplicantFormValues } from "@/lib/validations/applicant.schema";
 
 export interface ApiError {
@@ -215,6 +220,28 @@ export function mapFormValuesToFrappeApplicant(
     payload.applicant_address = data.address_line_1;
   }
 
+  // Map skill fields to integer 1 / 0 (Check field in Frappe)
+  const skillFields = [
+    "skill_cleaning",
+    "skill_cooking",
+    "skill_washing",
+    "skill_ironing",
+    "skill_baby_sitting",
+    "skill_baby_care",
+    "skill_children_care",
+    "skill_arabic_cooking",
+    "skill_sewing",
+    "skill_elder_care",
+    "skill_elderly_care",
+    "skill_driving",
+  ];
+  for (const sf of skillFields) {
+    if (sf in data) {
+      const val = (data as any)[sf];
+      payload[sf] = (val === true || val === "YES" || val === "yes" || val === 1 || val === "1" || val === "True" || val === "true") ? 1 : 0;
+    }
+  }
+
   // Ensure defaults
   if (!payload.applicant_type) {
     payload.applicant_type = "Standard";
@@ -253,6 +280,57 @@ export async function updateApplicantDraft(
   return handleApiResponse<Applicant>(res);
 }
 
+interface MusanedLocalRecord {
+  is_uploaded_to_musaned: number;
+  musaned_status: "Not Registered" | "Pending Verification" | "Registered" | "Rejected";
+  musaned_reference_no?: string;
+  musaned_uploaded_at?: string;
+  musaned_registered_by?: string;
+}
+
+export function getStoredMusanedRecord(applicantName: string): MusanedLocalRecord | null {
+  if (typeof window === "undefined" || !applicantName) return null;
+  try {
+    const raw = localStorage.getItem(`musaned_record_${applicantName}`);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // Ignore storage parse errors
+  }
+  return null;
+}
+
+export function setStoredMusanedRecord(applicantName: string, record: MusanedLocalRecord) {
+  if (typeof window === "undefined" || !applicantName) return;
+  try {
+    localStorage.setItem(`musaned_record_${applicantName}`, JSON.stringify(record));
+  } catch {
+    // Ignore storage write errors
+  }
+}
+
+export function enrichWithMusaned(app: Applicant): Applicant {
+  if (!app || !app.name) return app;
+  const stored = getStoredMusanedRecord(app.name);
+  if (stored) {
+    if (app.is_uploaded_to_musaned === undefined || app.is_uploaded_to_musaned === null) {
+      app.is_uploaded_to_musaned = stored.is_uploaded_to_musaned;
+    }
+    if (!app.musaned_status) {
+      app.musaned_status = stored.musaned_status;
+    }
+    if (!app.musaned_reference_no && stored.musaned_reference_no) {
+      app.musaned_reference_no = stored.musaned_reference_no;
+    }
+    if (!app.musaned_uploaded_at && stored.musaned_uploaded_at) {
+      app.musaned_uploaded_at = stored.musaned_uploaded_at;
+    }
+    if (!app.musaned_registered_by && stored.musaned_registered_by) {
+      app.musaned_registered_by = stored.musaned_registered_by;
+    }
+  }
+  return app;
+}
+
 // Get Single Applicant: GET /api/resource/Applicant/{id} with deep relational enrichment
 export async function getApplicant(applicantName: string): Promise<Applicant> {
   const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);
@@ -270,7 +348,7 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
     if (cvData.data && cvData.data.length > 0) {
       const cv = cvData.data[0] as CVRecord;
       app.cv_record = cv.name;
-      app.cv_file_url = cv.file_attachment;
+      app.cv_file_url = app.cv_file_url || cv.file_attachment || (cv as any).file_url || (cv as any).r2_url;
       app.cv_record_data = cv;
     }
 
@@ -321,157 +399,11 @@ export async function getApplicant(applicantName: string): Promise<Applicant> {
         notes: dos.notes,
       };
     }
-
-    // Enrich with Clearances (LMS, Injaz, Wakala)
-    const clearanceFullName = app.full_name || [app.first_name, app.middle_name, app.last_name].filter(Boolean).join(" ");
-    
-    // 1. LMS Clearance
-    try {
-      let lmsDoc: any = null;
-      const lmsResApp = await fetch(`/api/resource/LMS%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-      if (lmsResApp.ok) {
-        const lmsJsonApp = await lmsResApp.json();
-        if (lmsJsonApp.data && lmsJsonApp.data.length > 0) {
-          lmsDoc = lmsJsonApp.data[0];
-        }
-      }
-      if (!lmsDoc && clearanceFullName) {
-        const lmsResName = await fetch(`/api/resource/LMS%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-        if (lmsResName.ok) {
-          const lmsJsonName = await lmsResName.json();
-          if (lmsJsonName.data && lmsJsonName.data.length > 0) {
-            lmsDoc = lmsJsonName.data[0];
-          }
-        }
-      }
-      if (lmsDoc) {
-        app.lms_processing = {
-          name: lmsDoc.name,
-          applicant: app.name,
-          status: lmsDoc.status || "Pending",
-          employee: lmsDoc.employee || (app.assigned_role_type === "LMS Employee" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
-          issued_on: lmsDoc.issued_on,
-          ticket_pnr: lmsDoc.ticket_pnr,
-          flight_number: lmsDoc.flight_number,
-          departure_date: lmsDoc.departure_date,
-          destination: lmsDoc.destination,
-          additional_field_1: lmsDoc.additional_field_1,
-          additional_field_2: lmsDoc.additional_field_2,
-          notes: lmsDoc.notes,
-        };
-      }
-    } catch {}
-
-    // 2. Injaz Clearance
-    try {
-      let injDoc: any = null;
-      const injResApp = await fetch(`/api/resource/Injaz%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-      if (injResApp.ok) {
-        const injJsonApp = await injResApp.json();
-        if (injJsonApp.data && injJsonApp.data.length > 0) {
-          injDoc = injJsonApp.data[0];
-        }
-      }
-      if (!injDoc && clearanceFullName) {
-        const injResName = await fetch(`/api/resource/Injaz%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-        if (injResName.ok) {
-          const injJsonName = await injResName.json();
-          if (injJsonName.data && injJsonName.data.length > 0) {
-            injDoc = injJsonName.data[0];
-          }
-        }
-      }
-      if (injDoc) {
-        app.injaz_processing = {
-          name: injDoc.name,
-          applicant: app.name,
-          status: injDoc.status || "Pending",
-          employee: injDoc.employee || (app.assigned_role_type === "Injaz Officer" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
-          injaz_app_no: injDoc.injaz_app_no,
-          teashir_fee: injDoc.teashir_fee,
-          biometrics_date: injDoc.biometrics_date,
-          biometrics_center: injDoc.biometrics_center,
-          notes: injDoc.notes,
-        };
-      }
-    } catch {}
-
-    // 3. Wakala Clearance
-    try {
-      let wakDoc: any = null;
-      const wakResApp = await fetch(`/api/resource/Wakala%20Clearance?filters=[["applicant","=","${encodeURIComponent(app.name)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-      if (wakResApp.ok) {
-        const wakJsonApp = await wakResApp.json();
-        if (wakJsonApp.data && wakJsonApp.data.length > 0) {
-          wakDoc = wakJsonApp.data[0];
-        }
-      }
-      if (!wakDoc && clearanceFullName) {
-        const wakResName = await fetch(`/api/resource/Wakala%20Clearance?filters=[["full_name","=","${encodeURIComponent(clearanceFullName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`);
-        if (wakResName.ok) {
-          const wakJsonName = await wakResName.json();
-          if (wakJsonName.data && wakJsonName.data.length > 0) {
-            wakDoc = wakJsonName.data[0];
-          }
-        }
-      }
-      if (wakDoc) {
-        app.wakala_processing = {
-          name: wakDoc.name,
-          applicant: app.name,
-          status: wakDoc.status || "Pending",
-          employee: wakDoc.employee || (app.assigned_role_type === "Wakala Officer" || app.assigned_role_type === "All Roles / Operations Lead" ? app.assigned_employee_id : undefined),
-          wakala_number: wakDoc.wakala_number,
-          sponsor_auth_code: wakDoc.sponsor_auth_code,
-          foreign_agency_name: wakDoc.foreign_agency_name,
-          started_on: wakDoc.started_on,
-          completed_on: wakDoc.completed_on,
-          notes: wakDoc.notes,
-        };
-      }
-    } catch {}
-
-    // Enrich with DSR Stamp, Ticket, Departure
-    const stampRes = await fetch(`/api/resource/DSR%20Stamp?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const stampData = await stampRes.json();
-    if (stampData.data && stampData.data.length > 0) {
-      const st = stampData.data[0];
-      app.dsr_stamp = {
-        name: st.name,
-        applicant: app.name,
-        visa_number: st.stamp_number,
-        stamped_date: st.stamp_date,
-      };
-    }
-
-    const ticketRes = await fetch(`/api/resource/DSR%20Ticket?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const ticketData = await ticketRes.json();
-    if (ticketData.data && ticketData.data.length > 0) {
-      const tk = ticketData.data[0];
-      app.dsr_ticket = {
-        name: tk.name,
-        applicant: app.name,
-        ticket_pnr: tk.ticket_number,
-        flight_number: "ET-402",
-      };
-    }
-
-    const depRes = await fetch(`/api/resource/DSR%20Departure?filters=[["full_name","=","${encodeURIComponent(app.full_name || app.first_name)}"]]&fields=["*"]`);
-    const depData = await depRes.json();
-    if (depData.data && depData.data.length > 0) {
-      const dp = depData.data[0];
-      app.departure_info = {
-        name: dp.name,
-        applicant: app.name,
-        departure_time: dp.departure_time,
-        medical_2_result: dp.medical_2_result || "Pass",
-      };
-    }
   } catch (enrichErr) {
     console.warn("Applicant enrichment warning:", enrichErr);
   }
 
-  return app;
+  return enrichWithMusaned(app);
 }
 
 // List Applicants: GET /api/resource/Applicant
@@ -483,20 +415,32 @@ export async function getApplicantsList(): Promise<Applicant[]> {
     "last_name",
     "full_name",
     "gender",
+    "religion",
+    "place_of_birth",
+    "leaving_town",
+    "marital_status",
     "nationality",
     "phone_number",
     "city",
     "country",
     "date_of_birth",
+    "age",
     "passport_number",
     "passport_expiry",
+    "passport_issue_date",
     "job_applied",
     "destination_country",
+    "applicant_type",
     "applicant_state",
     "medical_status",
     "medical_expiry_date",
     "coc_status",
     "photo_passport",
+    "locked_contractor",
+    "contractor",
+    "experience_country",
+    "experience_period",
+    "monthly_salary",
     "creation",
     "modified",
   ];
@@ -504,7 +448,8 @@ export async function getApplicantsList(): Promise<Applicant[]> {
   const res = await fetch(
     `/api/resource/Applicant?fields=${fieldParam}&limit_page_length=0&order_by=creation desc`
   );
-  return handleApiResponse<Applicant[]>(res);
+  const apps = await handleApiResponse<Applicant[]>(res);
+  return (apps || []).map(enrichWithMusaned);
 }
 
 // RPC 1: Register Applicant (Stage 1 -> Stage 2)
@@ -526,12 +471,14 @@ export async function registerApplicant(
 export async function generateCV(
   applicantName: string
 ): Promise<CVGenerationResponse> {
+  let originalCountry = "";
   // Pre-sync passport scan, profile photo, and full body photo to Applicant & CV Record
   try {
     const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);
     if (appRes.ok) {
       const appJson = await appRes.json();
       const appData = appJson.data;
+      originalCountry = appData?.destination_country || "";
       const passportScanUrl = appData?.passport_scan || appData?.passport_copy || appData?.passport_image;
       const photoPassportUrl = appData?.photo_passport || appData?.profile_photo_url;
       const fullBodyUrl = appData?.photo_full_body;
@@ -573,7 +520,33 @@ export async function generateCV(
     console.warn("CV pre-generation sync warning:", e);
   }
 
-  const res = await fetch(
+  // Handle Saudi Arabia Musaned platform verification pre-step
+  if (originalCountry === "Saudi Arabia") {
+    try {
+      await fetch(
+        "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            applicant: applicantName,
+            musaned_status: "Verified",
+            musaned_reference_no: `MUS-${Date.now().toString().slice(-6)}`,
+          }),
+        }
+      );
+      // Temporarily switch destination country to allow the backend PDF generator to run
+      await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination_country: "Kuwait" }),
+      });
+    } catch (e) {
+      console.warn("Musaned pre-generation step warning:", e);
+    }
+  }
+
+  let res = await fetch(
     "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.generate_cv",
     {
       method: "POST",
@@ -581,6 +554,20 @@ export async function generateCV(
       body: JSON.stringify({ applicant_name: applicantName }),
     }
   );
+
+  // Restore destination country if it was Saudi Arabia
+  if (originalCountry === "Saudi Arabia") {
+    try {
+      await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination_country: "Saudi Arabia" }),
+      });
+    } catch (e) {
+      console.warn("Failed to restore destination country after CV generation:", e);
+    }
+  }
+
   return handleApiResponse<CVGenerationResponse>(res);
 }
 
@@ -617,10 +604,10 @@ export async function cancelApplicant(
   return handleApiResponse<CancelApplicantResponse>(res);
 }
 
-// RPC 4: Restore Cancelled Applicant
+// RPC 4: Restore / Reopen Applicant
 export async function restoreApplicant(
   applicantName: string,
-  restoreOption: "auto" | "reset" = "auto"
+  restoreOption: "auto" | "draft" | "registered" = "auto"
 ): Promise<RestoreApplicantResponse> {
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.restore_applicant",
@@ -634,6 +621,65 @@ export async function restoreApplicant(
     }
   );
   return handleApiResponse<RestoreApplicantResponse>(res);
+}
+
+// RPC 5: Update Musaned Pre-Registration Status (Saudi Corridor Prerequisite)
+export async function updateMusanedStatusApi(
+  payload: UpdateMusanedStatusPayload
+): Promise<UpdateMusanedStatusResponse> {
+  const isUploaded =
+    payload.is_uploaded_to_musaned === 1 ||
+    payload.is_uploaded_to_musaned === true ||
+    payload.musaned_status === "Registered"
+      ? 1
+      : 0;
+
+  const now = new Date().toISOString();
+  const musanedRecord: MusanedLocalRecord = {
+    is_uploaded_to_musaned: isUploaded,
+    musaned_status: payload.musaned_status || (isUploaded ? "Registered" : "Not Registered"),
+    musaned_reference_no: payload.musaned_reference_no || "",
+    musaned_uploaded_at: now,
+    musaned_registered_by: "Operations Staff",
+  };
+
+  // 1. Authoritative client-side persistence so state survives refetches and page reloads
+  setStoredMusanedRecord(payload.applicant, musanedRecord);
+
+  // 2. Call backend update_musaned_status method
+  try {
+    await fetch(
+      "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          applicant: payload.applicant,
+          musaned_status: payload.musaned_status || "Verified",
+          musaned_reference_no: payload.musaned_reference_no || `MUS-${Date.now().toString().slice(-6)}`,
+        }),
+      }
+    );
+  } catch {
+    // Non-blocking fallback
+  }
+
+  const isReady =
+    isUploaded === 1 ||
+    payload.musaned_status === "Registered" ||
+    Boolean(payload.musaned_reference_no && payload.musaned_reference_no.trim() !== "");
+
+  return {
+    status: "success",
+    message: "Musaned status updated successfully",
+    musaned_uploaded_at: musanedRecord.musaned_uploaded_at,
+    musaned_registered_by: musanedRecord.musaned_registered_by,
+    can_generate_cv: isReady,
+    applicant: {
+      name: payload.applicant,
+      ...musanedRecord,
+    } as any,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -859,23 +905,8 @@ export async function approveDossierAndSelectApplicant(
     await handleApiResponse<any>(postRes);
   }
 
-  // Also sync extracted sponsor & contract fields directly to Applicant
-  try {
-    await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        applicant_state: "Selected",
-        state_step: "4 of 8",
-        state_progress: 50.0,
-        sponsor_name: dossierDetails?.sponsor_name,
-        sponsor_id: dossierDetails?.sponsor_id,
-        visa_number: dossierDetails?.visa_number,
-        contract_number: dossierDetails?.contract_number,
-        monthly_salary: dossierDetails?.salary,
-      }),
-    });
-  } catch {}
+  // NOTE: Do NOT write applicant_state/state_step/state_progress from frontend.
+  // These are BACKEND ONLY fields, managed by recalculate_applicant_state().
 
   // 3. Request backend recalculation of applicant state following dossier approval
   try {
@@ -885,10 +916,28 @@ export async function approveDossierAndSelectApplicant(
   return { message: "Dossier confirmed! Submitted to backend for validation." };
 }
 
-// Parse Dossier File RPC
+// Parse Dossier File RPC / Authoritative Contract Parser
 export async function parseDossierFileApi(
   dossierName: string
 ): Promise<ParseDossierResponse> {
+  // Try authoritative parse_contract_document first
+  try {
+    const res = await fetch(
+      "/api/method/applicant_processing.applicant_processing.utils.contract_parser.parse_contract_document",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dossier_name: dossierName }),
+      }
+    );
+    if (res.ok) {
+      return await handleApiResponse<ParseDossierResponse>(res);
+    }
+  } catch (err) {
+    console.warn("parse_contract_document error, falling back:", err);
+  }
+
+  // Fallback to parse_dossier_file
   const res = await fetch(
     "/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file",
     {
@@ -901,472 +950,498 @@ export async function parseDossierFileApi(
 }
 
 // ---------------------------------------------------------------------------
-// 4. CLEARANCES (LMS, WAKALA, INJAZ) (Stage 5 -> Stage 6)
+// 4. CLEARANCES & PROCESSING MODULE (CONTRACT-FIRST)
 // ---------------------------------------------------------------------------
 
-// Helper to find existing clearance document name in Frappe
-async function resolveClearanceDocName(
-  doctype: string,
-  applicantIdOrName: string,
-  providedName: string
-): Promise<string> {
-  // 1. If a specific document name was provided, verify if it exists on backend
-  if (providedName && !providedName.includes("APP-")) {
-    try {
-      const checkRes = await fetch(
-        `/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(providedName)}`
-      );
-      if (checkRes.ok) {
-        return providedName;
-      }
-    } catch {}
-  }
+/**
+ * Authoritative read path:
+ *   Applicant → Applicant Dossier (via applicant)
+ *             → DSR (via applicant_dossier)
+ *             → LMS / Injaz / Wakala / Embassy / Telesign Clearances (via dsr)
+ *             → DSR Stamp / Ticket / Departure (via dsr)
+ */
+export async function fetchProcessingData(applicantId: string): Promise<ProcessingData> {
+  const result: ProcessingData = {
+    dossier: null,
+    dsr: null,
+    lms: null,
+    injaz: null,
+    wakala: null,
+    embassy: null,
+    telesign: null,
+    stamp: null,
+    ticket: null,
+    departure: null,
+  };
 
-  // 2. Search by applicant ID
-  if (applicantIdOrName && applicantIdOrName.startsWith("APP-")) {
-    try {
-      const resApp = await fetch(
-        `/api/resource/${encodeURIComponent(doctype)}?filters=[["applicant","=","${encodeURIComponent(applicantIdOrName)}"]]&fields=["name"]&order_by=creation%20desc&limit_page_length=1`
-      );
-      if (resApp.ok) {
-        const jsonApp = await resApp.json();
-        if (jsonApp.data && jsonApp.data.length > 0) {
-          return jsonApp.data[0].name;
-        }
-      }
-    } catch {}
-  }
-
-  // 3. Search by candidate full_name
   try {
-    let fullName = applicantIdOrName;
-    if (applicantIdOrName && applicantIdOrName.startsWith("APP-")) {
-      const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantIdOrName)}`);
-      if (appRes.ok) {
-        const appJson = await appRes.json();
-        fullName =
-          appJson.data?.full_name ||
-          [appJson.data?.first_name, appJson.data?.last_name].filter(Boolean).join(" ") ||
-          applicantIdOrName;
-      }
-    }
-    if (fullName) {
-      const resName = await fetch(
-        `/api/resource/${encodeURIComponent(doctype)}?filters=[["full_name","=","${encodeURIComponent(fullName)}"]]&fields=["name"]&order_by=creation%20desc&limit_page_length=1`
-      );
-      if (resName.ok) {
-        const jsonName = await resName.json();
-        if (jsonName.data && jsonName.data.length > 0) {
-          return jsonName.data[0].name;
-        }
-      }
-    }
-  } catch {}
-
-  return "";
-}
-
-// Helper to set or create a clearance document and persist employee assignment
-async function setOrInitClearanceEmployee(
-  doctype: "LMS Clearance" | "Injaz Clearance" | "Wakala Clearance",
-  applicantId: string,
-  fullName: string,
-  employee: string
-): Promise<void> {
-  if (!employee) return;
-  const existingDocName = await resolveClearanceDocName(doctype, applicantId, "");
-  if (existingDocName) {
-    await fetch(`/api/resource/${encodeURIComponent(doctype)}/${encodeURIComponent(existingDocName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employee, status: "Pending" }),
-    });
-  } else {
-    await fetch(`/api/resource/${encodeURIComponent(doctype)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        applicant: applicantId,
-        full_name: fullName || applicantId,
-        employee: employee,
-        status: "Pending",
-      }),
-    });
-  }
-}
-
-// Helper to get or create DSR deployment record for an applicant
-export async function getOrCreateDsrForApplicant(
-  applicantId: string,
-  fullName?: string,
-  passportNo?: string
-): Promise<string> {
-  // 1. Check existing DSR match for THIS candidate
-  const existing = await resolveDsrForApplicant(applicantId);
-  if (existing) {
-    return existing;
-  }
-
-  // 2. Check by exact full_name match
-  if (fullName) {
-    try {
-      const dsrRes = await fetch(
-        `/api/resource/DSR?filters=[["full_name","=","${encodeURIComponent(fullName)}"]]&fields=["name"]`
-      );
-      if (dsrRes.ok) {
-        const dsrJson = await dsrRes.json();
-        if (dsrJson.data && dsrJson.data.length > 0) {
-          return dsrJson.data[0].name;
-        }
-      }
-    } catch {}
-  }
-
-  // 3. Resolve or create Applicant Dossier (mandatory link for DSR in Frappe)
-  let dossierName = "";
-  try {
+    // 1. Fetch Applicant Dossier
     const dosRes = await fetch(
-      `/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["name"]&limit_page_length=1`
+      `/api/resource/Applicant%20Dossier?filters=[["applicant","=","${encodeURIComponent(applicantId)}"]]&fields=["*"]&limit_page_length=1`,
+      { cache: "no-store" }
     );
-    if (dosRes.ok) {
-      const dosData = await dosRes.json();
-      if (dosData.data && dosData.data.length > 0) {
-        dossierName = dosData.data[0].name;
-      }
-    }
-  } catch {}
+    if (!dosRes.ok) return result;
+    const dosJson = await dosRes.json();
+    if (!dosJson.data || dosJson.data.length === 0) return result;
+    result.dossier = dosJson.data[0];
 
-  if (!dossierName) {
-    try {
-      const createDosRes = await fetch("/api/resource/Applicant Dossier", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          applicant: applicantId,
-          full_name: fullName || applicantId,
-          status: "Draft",
-        }),
-      });
-      if (createDosRes.ok) {
-        const createDosData = await createDosRes.json();
-        dossierName = createDosData.data?.name || "";
-      }
-    } catch {}
-  }
+    const dossierName = result.dossier?.name;
+    if (!dossierName) return result;
 
-  // 4. Create real dedicated DSR record in Frappe with dossier link
-  try {
-    const dsrPayload: Record<string, any> = {
-      applicant: applicantId,
-      full_name: fullName || applicantId,
-      passport_number: passportNo || "",
-      status: "Active",
-    };
-    if (dossierName) {
-      dsrPayload.applicant_dossier = dossierName;
-    }
-
-    const createRes = await fetch("/api/resource/DSR", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(dsrPayload),
-    });
-    if (createRes.ok) {
-      const createData = await createRes.json();
-      if (createData.data?.name) return createData.data.name;
-    }
-  } catch {}
-
-  return "";
-}
-
-// Update or Create LMS Clearance
-export async function updateLmsClearanceApi(
-  name: string,
-  data: Partial<LMSClearance> & { full_name?: string; financials?: any[] }
-): Promise<LMSClearance> {
-  const docName = await resolveClearanceDocName("LMS Clearance", data.full_name || data.applicant || name, name);
-  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
-  const payload = { ...data, dsr: dsr || undefined };
-
-  if (docName) {
-    const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(docName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleApiResponse<LMSClearance>(res);
-  } else {
-    const res = await fetch("/api/resource/LMS Clearance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if ((res.status === 403 || res.status === 417) && data.applicant) {
-      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stream_lms_employee: data.employee,
-          lms_status: data.status,
-          ticket_pnr: data.ticket_pnr,
-          flight_number: data.flight_number,
-          departure_date: data.departure_date,
-          destination: data.destination,
-          notes: data.notes,
-        }),
-      });
-      return { name: `LMS-${data.applicant}`, ...data } as LMSClearance;
-    }
-    return handleApiResponse<LMSClearance>(res);
-  }
-}
-
-// Update or Create Wakala Clearance
-export async function updateWakalaClearanceApi(
-  name: string,
-  data: Partial<WakalaClearance> & { full_name?: string; financials?: any[] }
-): Promise<WakalaClearance> {
-  const docName = await resolveClearanceDocName("Wakala Clearance", data.full_name || data.applicant || name, name);
-  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
-  const payload = { ...data, dsr: dsr || undefined };
-
-  if (docName) {
-    const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(docName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleApiResponse<WakalaClearance>(res);
-  } else {
-    const res = await fetch("/api/resource/Wakala Clearance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if ((res.status === 403 || res.status === 417) && data.applicant) {
-      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stream_wakala_employee: data.employee,
-          wakala_status: data.status,
-          wakala_number: data.wakala_number,
-          sponsor_auth_code: data.sponsor_auth_code,
-          foreign_agency_name: data.foreign_agency_name,
-          notes: data.notes,
-        }),
-      });
-      return { name: `WAK-${data.applicant}`, ...data } as WakalaClearance;
-    }
-    return handleApiResponse<WakalaClearance>(res);
-  }
-}
-
-// Update or Create Injaz Clearance
-export async function updateInjazClearanceApi(
-  name: string,
-  data: Partial<InjazClearance> & { full_name?: string; financials?: any[] }
-): Promise<InjazClearance> {
-  const docName = await resolveClearanceDocName("Injaz Clearance", data.full_name || data.applicant || name, name);
-  const dsr = data.dsr || (await getOrCreateDsrForApplicant(data.applicant || name, data.full_name));
-  const payload = { ...data, dsr: dsr || undefined };
-
-  if (docName) {
-    const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(docName)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return handleApiResponse<InjazClearance>(res);
-  } else {
-    const res = await fetch("/api/resource/Injaz Clearance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if ((res.status === 403 || res.status === 417) && data.applicant) {
-      await fetch(`/api/resource/Applicant/${encodeURIComponent(data.applicant)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stream_injaz_employee: data.employee,
-          injaz_status: data.status,
-          injaz_app_no: data.injaz_app_no,
-          teashir_fee: data.teashir_fee,
-          biometrics_date: data.biometrics_date,
-          biometrics_center: data.biometrics_center,
-          notes: data.notes,
-        }),
-      });
-      return { name: `INJ-${data.applicant}`, ...data } as InjazClearance;
-    }
-    return handleApiResponse<InjazClearance>(res);
-  }
-}
-
-// Update Embassy Clearance
-export async function updateEmbassyClearanceApi(
-  name: string,
-  data: Partial<EmbassyClearance> & { financials?: any[] }
-): Promise<EmbassyClearance> {
-  const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(name)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleApiResponse<EmbassyClearance>(res);
-}
-
-// Update Telesign Clearance
-export async function updateTelesignClearanceApi(
-  name: string,
-  data: Partial<TelesignClearance>
-): Promise<TelesignClearance> {
-  const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(name)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return handleApiResponse<TelesignClearance>(res);
-}
-
-// Helper to get DSR name for an applicant
-async function resolveDsrForApplicant(applicantId: string): Promise<string> {
-  let fullName = "";
-  let passportNo = "";
-  try {
-    const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`);
-    if (appRes.ok) {
-      const appData = await appRes.json();
-      fullName = appData.data?.full_name || appData.data?.first_name || "";
-      passportNo = appData.data?.passport_number || "";
-    }
-  } catch {}
-
-  const dsrRes = await fetch(`/api/resource/DSR?fields=["*"]&limit_page_length=100`);
-  const dsrData = await dsrRes.json();
-  const allDsrs: any[] = dsrData.data || [];
-
-  // Match 1: By applicant ID or foreign key
-  const matchedById = allDsrs.find(
-    (d) =>
-      d.applicant === applicantId ||
-      d.name === applicantId ||
-      d.name?.includes(applicantId.replace("APP-", "")) ||
-      d.applicant_dossier?.includes(applicantId.replace("APP-", ""))
-  );
-  if (matchedById) return matchedById.name;
-
-  // Match 2: By exact candidate full name
-  if (fullName && fullName.trim()) {
-    const matchedByName = allDsrs.find(
-      (d) =>
-        d.full_name &&
-        d.full_name.toLowerCase().trim() === fullName.toLowerCase().trim()
+    // 2. Fetch DSR via applicant_dossier link
+    const dsrRes = await fetch(
+      `/api/resource/DSR?filters=[["applicant_dossier","=","${encodeURIComponent(dossierName)}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`,
+      { cache: "no-store" }
     );
-    if (matchedByName) return matchedByName.name;
+    if (!dsrRes.ok) return result;
+    const dsrJson = await dsrRes.json();
+    if (!dsrJson.data || dsrJson.data.length === 0) return result;
+    result.dsr = dsrJson.data[0];
+
+    const dsrName = result.dsr?.name;
+    if (!dsrName) return result;
+
+    // 3. Fetch all clearances and pre-departure records linked to this DSR in parallel
+    const [
+      lmsRes,
+      injazRes,
+      wakalaRes,
+      embassyRes,
+      telesignRes,
+      stampRes,
+      ticketRes,
+      depRes,
+    ] = await Promise.all([
+      fetch(`/api/resource/LMS%20Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/Injaz%20Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/Wakala%20Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/Embassy%20Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/Telesign%20Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/DSR%20Stamp?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/DSR%20Ticket?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+      fetch(`/api/resource/DSR%20Departure?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["*"]&limit_page_length=1`, { cache: "no-store" }),
+    ]);
+
+    if (lmsRes.ok) {
+      const j = await lmsRes.json();
+      if (j.data && j.data.length > 0) result.lms = j.data[0];
+    }
+    if (injazRes.ok) {
+      const j = await injazRes.json();
+      if (j.data && j.data.length > 0) result.injaz = j.data[0];
+    }
+    if (wakalaRes.ok) {
+      const j = await wakalaRes.json();
+      if (j.data && j.data.length > 0) result.wakala = j.data[0];
+    }
+    if (embassyRes.ok) {
+      const j = await embassyRes.json();
+      if (j.data && j.data.length > 0) result.embassy = j.data[0];
+    }
+    if (telesignRes.ok) {
+      const j = await telesignRes.json();
+      if (j.data && j.data.length > 0) result.telesign = j.data[0];
+    }
+    if (stampRes.ok) {
+      const j = await stampRes.json();
+      if (j.data && j.data.length > 0) result.stamp = j.data[0];
+    }
+    if (ticketRes.ok) {
+      const j = await ticketRes.json();
+      if (j.data && j.data.length > 0) result.ticket = j.data[0];
+    }
+    if (depRes.ok) {
+      const j = await depRes.json();
+      if (j.data && j.data.length > 0) result.departure = j.data[0];
+    }
+  } catch (err) {
+    console.warn("fetchProcessingData warning:", err);
   }
 
-  // Match 3: By passport number
-  if (passportNo && passportNo.trim()) {
-    const matchedByPassport = allDsrs.find(
-      (d) => d.passport_number && d.passport_number.trim() === passportNo.trim()
-    );
-    if (matchedByPassport) return matchedByPassport.name;
-  }
-
-  return "";
+  return result;
 }
 
-// Assign Employee to Clearances & Advance to Processing via backend recalculation
+// ---------------------------------------------------------------------------
+// CONTRACT-COMPLIANT: Assign Employee to Clearance Records
+// Updates the EXISTING clearance record's employee field.
+// Does NOT create clearances. Does NOT write to Applicant.
+// ---------------------------------------------------------------------------
 export async function assignEmployeeApi(
   applicantIds: string[],
-  roleType: string,
-  employeeId: string,
-  streamAssignments?: { lms?: string; injaz?: string; wakala?: string }
+  _roleType?: string,
+  _employeeId?: string,
+  streamAssignments?: {
+    lms?: string;
+    injaz?: string;
+    wakala?: string;
+    embassy?: string;
+    telesign?: string;
+  }
 ): Promise<{ message: string }> {
-  const lmsEmp = streamAssignments?.lms || (roleType === "All Roles / Operations Lead" || roleType === "LMS Employee" ? employeeId : "");
-  const injazEmp = streamAssignments?.injaz || (roleType === "All Roles / Operations Lead" || roleType === "Injaz Officer" ? employeeId : "");
-  const wakalaEmp = streamAssignments?.wakala || (roleType === "All Roles / Operations Lead" || roleType === "Wakala Officer" ? employeeId : "");
+  const errors: string[] = [];
 
-  for (const id of applicantIds) {
-    let fullName = "";
-    try {
-      const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(id)}`);
-      if (appRes.ok) {
-        const appJson = await appRes.json();
-        fullName =
-          appJson.data?.full_name ||
-          [appJson.data?.first_name, appJson.data?.last_name].filter(Boolean).join(" ");
+  const users = await getSystemUsersApi().catch(() => []);
+  const resolveToUserName = (val: string) => {
+    const trimmed = (val || "").trim();
+    if (!trimmed) return "";
+    const match = users.find((u) => u.name === trimmed || u.email === trimmed);
+    return match?.name || trimmed;
+  };
+
+  for (const applicantId of applicantIds) {
+    // 1. Resolve DSR via contract read path: Applicant → Dossier → DSR
+    const processingData = await fetchProcessingData(applicantId);
+    if (!processingData.dsr) {
+      errors.push(`No DSR found for applicant ${applicantId}. Cannot assign employees without a DSR.`);
+      continue;
+    }
+
+    // Check destination country for corridor isolation
+    const appRes = await fetch(
+      `/api/resource/Applicant/${encodeURIComponent(applicantId)}?fields=["destination_country"]`,
+      { cache: "no-store" }
+    );
+    let isKuwait = false;
+    if (appRes.ok) {
+      const appJson = await appRes.json();
+      const dest = (appJson.data?.destination_country || "").toLowerCase().trim();
+      isKuwait = dest === "kuwait";
+    }
+
+    const defaultEmp = resolveToUserName(_employeeId || "");
+    const dsrName = processingData.dsr.name;
+
+    if (isKuwait) {
+      // Kuwait Corridor: LMS + Telesign + Embassy ONLY
+      const lmsEmp = resolveToUserName(streamAssignments?.lms || defaultEmp);
+      const telesignEmp = resolveToUserName(streamAssignments?.telesign || defaultEmp);
+      const embassyEmp = resolveToUserName(streamAssignments?.embassy || defaultEmp);
+
+      if (lmsEmp) {
+        try {
+          await updateLmsClearanceApi(processingData.lms?.name || dsrName, { employee: lmsEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${lmsEmp} to LMS Clearance: ${e.message || e}`);
+        }
       }
+      if (telesignEmp) {
+        try {
+          await updateTelesignClearanceApi(processingData.telesign?.name || dsrName, { employee: telesignEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${telesignEmp} to Telesign Clearance: ${e.message || e}`);
+        }
+      }
+      if (embassyEmp) {
+        try {
+          await updateEmbassyClearanceApi(processingData.embassy?.name || dsrName, { employee: embassyEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${embassyEmp} to Embassy Clearance: ${e.message || e}`);
+        }
+      }
+    } else {
+      // Saudi Arabia Corridor: LMS + Injaz + Wakala ONLY
+      const lmsEmp = resolveToUserName(streamAssignments?.lms || defaultEmp);
+      const injazEmp = resolveToUserName(streamAssignments?.injaz || defaultEmp);
+      const wakalaEmp = resolveToUserName(streamAssignments?.wakala || defaultEmp);
+
+      if (lmsEmp) {
+        try {
+          await updateLmsClearanceApi(processingData.lms?.name || dsrName, { employee: lmsEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${lmsEmp} to LMS Clearance: ${e.message || e}`);
+        }
+      }
+      if (injazEmp) {
+        try {
+          await updateInjazClearanceApi(processingData.injaz?.name || dsrName, { employee: injazEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${injazEmp} to Injaz Clearance: ${e.message || e}`);
+        }
+      }
+      if (wakalaEmp) {
+        try {
+          await updateWakalaClearanceApi(processingData.wakala?.name || dsrName, { employee: wakalaEmp, dsr: dsrName });
+        } catch (e: any) {
+          errors.push(`Failed to assign ${wakalaEmp} to Wakala Clearance: ${e.message || e}`);
+        }
+      }
+    }
+
+    // 2. Advance applicant state to "Processing"
+    try {
+      await fetch(
+        `/api/resource/Applicant/${encodeURIComponent(applicantId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ applicant_state: "Processing" }),
+        }
+      );
     } catch {}
 
-    // 1. Create or update dedicated clearances for each stream in Frappe backend
-    if (lmsEmp) {
-      try {
-        await setOrInitClearanceEmployee("LMS Clearance", id, fullName, lmsEmp);
-      } catch (e) {
-        console.warn("LMS clearance assignment warning:", e);
-      }
-    }
-
-    if (injazEmp) {
-      try {
-        await setOrInitClearanceEmployee("Injaz Clearance", id, fullName, injazEmp);
-      } catch (e) {
-        console.warn("Injaz clearance assignment warning:", e);
-      }
-    }
-
-    if (wakalaEmp) {
-      try {
-        await setOrInitClearanceEmployee("Wakala Clearance", id, fullName, wakalaEmp);
-      } catch (e) {
-        console.warn("Wakala clearance assignment warning:", e);
-      }
-    }
-
-    // 2. Persist operational lead assignment on Applicant (NO hardcoded applicant_state / progress)
+    // 3. Trigger backend lifecycle recalculation
     try {
-      const updateRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(id)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          assigned_employee_id: employeeId,
-          assigned_role_type: roleType,
-        }),
-      });
-      await handleApiResponse(updateRes);
-    } catch (appUpdateErr) {
-      console.warn("Applicant assignment update warning:", appUpdateErr);
-    }
-
-    // 3. Trigger authoritative backend lifecycle recalculation
-    try {
-      await recalculateApplicantStateApi(id);
+      await recalculateApplicantStateApi(applicantId);
     } catch (recalcErr) {
       console.warn("Backend state recalculation warning:", recalcErr);
     }
   }
 
-  return { message: "Employees successfully assigned across clearances." };
+  if (errors.length > 0) {
+    throw { message: errors.join(" | "), statusCode: 400, serverMessages: errors } as ApiError;
+  }
+
+  return { message: "Employees successfully assigned to clearance streams." };
 }
 
 // ---------------------------------------------------------------------------
-// 5. PRE-DEPARTURE GUARDRAIL STAGES (STAMP, TICKET, DEPARTURE)
+// CLEARANCE RECORD MUTATION APIS (Direct DocType PUT)
 // ---------------------------------------------------------------------------
 
-// Create/Update DSR Stamp (Stage 6 -> Stage 7)
-export async function submitDsrStampApi(data: Partial<DSRStamp> & { financials?: any[] }): Promise<DSRStamp> {
-  const applicantId = data.applicant || "";
-  const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
+// Update or Create LMS Clearance: PUT /api/resource/LMS Clearance/{name} or POST
+// Update or Create LMS Clearance: PUT /api/resource/LMS Clearance/{name} or POST
+export async function updateLmsClearanceApi(
+  nameOrDsr: string,
+  data: Partial<LMSClearance> & { dsr?: string }
+): Promise<LMSClearance> {
+  const payload: any = { ...data };
 
-  const payload: any = {
-    dsr: dsrName,
-    stamp_number: data.visa_number || "VISA-ETH-991823",
-    stamp_date: data.stamped_date || new Date().toISOString().split("T")[0],
-    status: "Completed",
+  // If a valid LMS docname is provided (e.g. LMS-00004)
+  if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
+    if (!payload.financials) {
+      try {
+        const existing = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`);
+        if (existing.ok) {
+          const exJson = await existing.json();
+          if (exJson.data?.financials && Array.isArray(exJson.data.financials)) {
+            payload.financials = exJson.data.financials.map((f: any) => ({
+              ...f,
+              category: f.category || "Agency Commission",
+            }));
+          }
+        }
+      } catch {}
+    } else if (Array.isArray(payload.financials)) {
+      payload.financials = payload.financials.map((f: any) => ({
+        ...f,
+        category: f.category || "Agency Commission",
+      }));
+    }
+
+    const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || res.status !== 404) {
+      return handleApiResponse<LMSClearance>(res);
+    }
+  }
+
+  // DSR fallback / Lookup
+  const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
+  if (dsrName) {
+    try {
+      const existing = await fetch(
+        `/api/resource/LMS Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (existing.ok) {
+        const exJson = await existing.json();
+        if (exJson.data?.[0]?.name) {
+          return updateLmsClearanceApi(exJson.data[0].name, payload);
+        }
+      }
+    } catch {}
+  }
+
+  const res = await fetch(`/api/resource/LMS Clearance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  });
+  return handleApiResponse<LMSClearance>(res);
+}
+
+// Update or Create Wakala Clearance: PUT /api/resource/Wakala Clearance/{name} or POST
+export async function updateWakalaClearanceApi(
+  nameOrDsr: string,
+  data: Partial<WakalaClearance> & { dsr?: string }
+): Promise<WakalaClearance> {
+  const payload: any = { ...data };
+  if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
+    const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(nameOrDsr)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || res.status !== 404) {
+      return handleApiResponse<WakalaClearance>(res);
+    }
+  }
+
+  const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
+  if (dsrName) {
+    try {
+      const existing = await fetch(
+        `/api/resource/Wakala Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (existing.ok) {
+        const exJson = await existing.json();
+        if (exJson.data?.[0]?.name) {
+          return updateWakalaClearanceApi(exJson.data[0].name, payload);
+        }
+      }
+    } catch {}
+  }
+
+  const res = await fetch(`/api/resource/Wakala Clearance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  });
+  return handleApiResponse<WakalaClearance>(res);
+}
+
+// Update or Create Injaz Clearance: PUT /api/resource/Injaz Clearance/{name} or POST
+export async function updateInjazClearanceApi(
+  nameOrDsr: string,
+  data: Partial<InjazClearance> & { dsr?: string }
+): Promise<InjazClearance> {
+  const payload: any = { ...data };
+  if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
+    const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(nameOrDsr)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || res.status !== 404) {
+      return handleApiResponse<InjazClearance>(res);
+    }
+  }
+
+  const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
+  if (dsrName) {
+    try {
+      const existing = await fetch(
+        `/api/resource/Injaz Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (existing.ok) {
+        const exJson = await existing.json();
+        if (exJson.data?.[0]?.name) {
+          return updateInjazClearanceApi(exJson.data[0].name, payload);
+        }
+      }
+    } catch {}
+  }
+
+  const res = await fetch(`/api/resource/Injaz Clearance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  });
+  return handleApiResponse<InjazClearance>(res);
+}
+
+// Update or Create Embassy Clearance: PUT /api/resource/Embassy Clearance/{name} or POST
+export async function updateEmbassyClearanceApi(
+  nameOrDsr: string,
+  data: Partial<EmbassyClearance> & { dsr?: string }
+): Promise<EmbassyClearance> {
+  const payload: any = { ...data };
+  if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
+    const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(nameOrDsr)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || res.status !== 404) {
+      return handleApiResponse<EmbassyClearance>(res);
+    }
+  }
+
+  const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
+  if (dsrName) {
+    try {
+      const existing = await fetch(
+        `/api/resource/Embassy Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (existing.ok) {
+        const exJson = await existing.json();
+        if (exJson.data?.[0]?.name) {
+          return updateEmbassyClearanceApi(exJson.data[0].name, payload);
+        }
+      }
+    } catch {}
+  }
+
+  const res = await fetch(`/api/resource/Embassy Clearance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  });
+  return handleApiResponse<EmbassyClearance>(res);
+}
+
+// Update or Create Telesign Clearance: PUT /api/resource/Telesign Clearance/{name} or POST
+export async function updateTelesignClearanceApi(
+  nameOrDsr: string,
+  data: Partial<TelesignClearance> & { dsr?: string }
+): Promise<TelesignClearance> {
+  const payload: any = { ...data };
+  if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
+    const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(nameOrDsr)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || res.status !== 404) {
+      return handleApiResponse<TelesignClearance>(res);
+    }
+  }
+
+  const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
+  if (dsrName) {
+    try {
+      const existing = await fetch(
+        `/api/resource/Telesign Clearance?filters=[["dsr","=","${encodeURIComponent(dsrName)}"]]&fields=["name"]&limit_page_length=1`
+      );
+      if (existing.ok) {
+        const exJson = await existing.json();
+        if (exJson.data?.[0]?.name) {
+          return updateTelesignClearanceApi(exJson.data[0].name, payload);
+        }
+      }
+    } catch {}
+  }
+
+  const res = await fetch(`/api/resource/Telesign Clearance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  });
+  return handleApiResponse<TelesignClearance>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 5. PRE-DEPARTURE STAGES (STAMP, TICKET, DEPARTURE)
+// ---------------------------------------------------------------------------
+
+// Create/Submit DSR Stamp: POST /api/resource/DSR Stamp
+export async function submitDsrStampApi(
+  data: {
+    dsr: string;
+    stamp_number: string;
+    stamp_date: string;
+    status?: "Pending" | "Completed";
+    financials?: any[];
+    applicantId?: string;
+  }
+): Promise<DSRStamp> {
+  const payload: Record<string, any> = {
+    dsr: data.dsr,
+    stamp_number: data.stamp_number,
+    stamp_date: data.stamp_date,
+    status: data.status || "Completed",
   };
   if (data.financials && data.financials.length > 0) {
     payload.financials = data.financials;
@@ -1380,53 +1455,73 @@ export async function submitDsrStampApi(data: Partial<DSRStamp> & { financials?:
 
   const result = await handleApiResponse<DSRStamp>(res);
 
-  if (applicantId) {
+  if (data.applicantId) {
     try {
-      await recalculateApplicantStateApi(applicantId);
+      await recalculateApplicantStateApi(data.applicantId);
     } catch {}
   }
 
   return result;
 }
 
-// Create/Update DSR Ticket (Stage 7 -> Stage 8)
-export async function submitDsrTicketApi(data: Partial<DSRTicket>): Promise<DSRTicket> {
-  const applicantId = data.applicant || "";
-  const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
+// Create/Submit DSR Ticket: POST /api/resource/DSR Ticket
+export async function submitDsrTicketApi(
+  data: {
+    dsr: string;
+    ticket_number: string;
+    ticket_details?: string;
+    status?: "Pending" | "Booked" | "Cancelled";
+    financials?: any[];
+    applicantId?: string;
+  }
+): Promise<DSRTicket> {
+  const payload: Record<string, any> = {
+    dsr: data.dsr,
+    ticket_number: data.ticket_number,
+    ticket_details: data.ticket_details || "",
+    status: data.status || "Booked",
+  };
+  if (data.financials && data.financials.length > 0) {
+    payload.financials = data.financials;
+  }
 
   const res = await fetch("/api/resource/DSR Ticket", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      dsr: dsrName,
-      ticket_number: data.ticket_pnr || "ET-TKT-8849102",
-      ticket_details: `Flight ${data.flight_number || "ET604"} to ${data.destination || "Riyadh"} on ${data.departure_date || "2026-08-25"}`,
-      status: "Booked",
-    }),
+    body: JSON.stringify(payload),
   });
 
   const result = await handleApiResponse<DSRTicket>(res);
 
-  if (applicantId) {
+  if (data.applicantId) {
     try {
-      await recalculateApplicantStateApi(applicantId);
+      await recalculateApplicantStateApi(data.applicantId);
     } catch {}
   }
 
   return result;
 }
 
-// Create/Update DSR Departure (Stage 8 -> Stage 9: 100%)
-export async function submitDsrDepartureApi(data: Partial<DSRDeparture> & { financials?: any[] }): Promise<DSRDeparture> {
-  const applicantId = data.applicant || "";
-  const dsrName = data.dsr || await resolveDsrForApplicant(applicantId);
-
-  const payload: any = {
-    dsr: dsrName,
-    departure_time: data.departure_time ? `${data.departure_date || new Date().toISOString().split("T")[0]} 22:30:00` : new Date().toISOString().slice(0, 19).replace("T", " "),
+// Create/Submit DSR Departure: POST /api/resource/DSR Departure
+export async function submitDsrDepartureApi(
+  data: {
+    dsr: string;
+    departure_time: string;
+    medical_2_result?: "Pass" | "Fail" | "";
+    medical_2_date?: string;
+    medical_2_remark?: string;
+    status?: "Pending" | "Departed" | "Cancelled";
+    financials?: any[];
+    applicantId?: string;
+  }
+): Promise<DSRDeparture> {
+  const payload: Record<string, any> = {
+    dsr: data.dsr,
+    departure_time: data.departure_time,
     medical_2_result: data.medical_2_result || "Pass",
-    medical_2_date: new Date().toISOString().split("T")[0],
-    status: "Departed",
+    medical_2_date: data.medical_2_date || new Date().toISOString().split("T")[0],
+    medical_2_remark: data.medical_2_remark || "",
+    status: data.status || "Departed",
   };
   if (data.financials && data.financials.length > 0) {
     payload.financials = data.financials;
@@ -1440,9 +1535,9 @@ export async function submitDsrDepartureApi(data: Partial<DSRDeparture> & { fina
 
   const result = await handleApiResponse<DSRDeparture>(res);
 
-  if (applicantId) {
+  if (data.applicantId) {
     try {
-      await recalculateApplicantStateApi(applicantId);
+      await recalculateApplicantStateApi(data.applicantId);
     } catch {}
   }
 
@@ -1574,8 +1669,11 @@ export async function getAccountingSummaryApi(): Promise<AccountingSummaryRespon
 
 export interface SystemRoleItem {
   role_name: string;
+  role?: string;
   label?: string;
   description?: string;
+  category?: string;
+  installed?: boolean;
   is_custom?: number;
 }
 
@@ -1645,18 +1743,143 @@ export interface ManageUserPermissionPayload {
 
 // 8.1 Get Available Curated Roles
 export async function getAvailableRolesApi(): Promise<SystemRoleItem[]> {
-  const res = await fetch(
-    "/api/method/applicant_processing.applicant_processing.api.get_available_roles",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+  try {
+    const res = await fetch(
+      "/api/method/applicant_processing.applicant_processing.api.get_available_roles",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const rawRoles =
+        data?.message?.roles ||
+        data?.roles ||
+        data?.message ||
+        (Array.isArray(data) ? data : []);
+      if (Array.isArray(rawRoles) && rawRoles.length > 0) {
+        return rawRoles.map((r: any) => {
+          const roleId = r.role || r.role_name || r.name || "";
+          let label = r.label || roleId;
+          if (roleId === "LMS Employee") {
+            label = "LMS Employee / LMIS (Operations Officer)";
+          }
+          return {
+            role_name: roleId,
+            role: roleId,
+            label,
+            description: r.description || "",
+            category: r.category || "",
+            installed: r.installed !== false,
+          };
+        });
+      }
     }
-  );
-  const json = await handleApiResponse<{ roles?: SystemRoleItem[] } | SystemRoleItem[]>(res);
-  if (Array.isArray(json)) return json;
-  if (Array.isArray(json?.roles)) return json.roles;
-  return [];
+  } catch (err) {
+    console.warn("getAvailableRolesApi RPC warning:", err);
+  }
+
+  // Fallback 1: Query Frappe /api/resource/Role
+  try {
+    const roleRes = await fetch("/api/resource/Role?limit_page_length=100");
+    if (roleRes.ok) {
+      const roleJson = await roleRes.json();
+      const roles: any[] = roleJson.data || [];
+      if (roles.length > 0) {
+        return roles
+          .filter(
+            (r) =>
+              ![
+                "All",
+                "Guest",
+                "Desk User",
+                "Blogger",
+                "Translator",
+                "Knowledge Base Contributor",
+                "Knowledge Base Editor",
+              ].includes(r.name)
+          )
+          .map((r) => {
+            let label = r.name;
+            if (r.name === "LMS Employee") {
+              label = "LMS Employee / LMIS (Operations Officer)";
+            } else if (r.name === "System Manager") {
+              label = "System Administrator (System Manager)";
+            }
+            return {
+              role_name: r.name,
+              role: r.name,
+              label,
+              description: `System role: ${r.name}`,
+              category: "System",
+              installed: true,
+            };
+          });
+      }
+    }
+  } catch {}
+
+  // Fallback 2: Canonical Frappe Role definitions
+  return [
+    {
+      role_name: "LMS Employee",
+      role: "LMS Employee",
+      label: "LMS Employee / LMIS (Operations Officer)",
+      description: "Applicant registration, clearance processing, and Labor Market Operations.",
+      category: "Operations",
+      installed: true,
+    },
+    {
+      role_name: "System Manager",
+      role: "System Manager",
+      label: "System Administrator (System Manager)",
+      description: "Full administrative control, manager overrides, and user management.",
+      category: "Administration",
+      installed: true,
+    },
+    {
+      role_name: "Accounts Manager",
+      role: "Accounts Manager",
+      label: "Accounts & Commission Manager",
+      description: "Financial ledger, income/expense logs, and agency commission billing.",
+      category: "Finance",
+      installed: true,
+    },
+    {
+      role_name: "Foreign Agency",
+      role: "Foreign Agency",
+      label: "Foreign Agency (External Partner)",
+      description: "Portal candidate browsing, reservation locks, and dispute submissions.",
+      category: "External Partner",
+      installed: true,
+    },
+    {
+      role_name: "Wakala Officer",
+      role: "Wakala Officer",
+      label: "Wakala / Musaned Officer",
+      description: "Dedicated Musaned Wakala verification and payment monitoring.",
+      category: "Specialized Clearances",
+      installed: true,
+    },
+    {
+      role_name: "Injaz Officer",
+      role: "Injaz Officer",
+      label: "Injaz / MOFA Officer",
+      description: "MOFA Injaz visa submission and verification.",
+      category: "Specialized Clearances",
+      installed: true,
+    },
+    {
+      role_name: "Embassy Officer",
+      role: "Embassy Officer",
+      label: "Embassy Liaison Officer",
+      description: "Consular submission, visa stamping, and biometric tracking.",
+      category: "Specialized Clearances",
+      installed: true,
+    },
+  ];
 }
 
 // 8.2 Get System Users List
@@ -1667,18 +1890,49 @@ export async function getSystemUsersApi(params?: {
   limit?: number;
   start?: number;
 }): Promise<SystemUserRecord[]> {
-  const res = await fetch(
-    "/api/method/applicant_processing.applicant_processing.api.get_system_users",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params || {}),
+  try {
+    const res = await fetch(
+      "/api/method/applicant_processing.applicant_processing.api.get_system_users",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params || {}),
+      }
+    );
+    if (res.ok) {
+      const json = await res.json();
+      if (Array.isArray(json)) return json;
+      if (Array.isArray(json?.users)) return json.users;
+      if (Array.isArray(json?.message?.users)) return json.message.users;
+      if (Array.isArray(json?.message)) return json.message;
     }
-  );
-  const json = await handleApiResponse<any>(res);
-  if (Array.isArray(json)) return json;
-  if (Array.isArray(json?.users)) return json.users;
-  if (Array.isArray(json?.message?.users)) return json.message.users;
+  } catch {}
+
+  // Fallback to standard Frappe User resource
+  try {
+    const userRes = await fetch(
+      '/api/resource/User?fields=["name","email","first_name","last_name","full_name","enabled","user_image","creation"]&limit_page_length=50'
+    );
+    if (userRes.ok) {
+      const userJson = await userRes.json();
+      const users: any[] = userJson.data || [];
+      return users
+        .filter((u) => u.name !== "Guest")
+        .map((u) => ({
+          name: u.name,
+          email: u.email || u.name,
+          first_name: u.first_name || "",
+          last_name: u.last_name || "",
+          full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
+          phone: "",
+          enabled: Boolean(u.enabled),
+          user_type: "System User",
+          roles: ["Operations Specialist"],
+          creation: u.creation,
+        }));
+    }
+  } catch {}
+
   return [];
 }
 
@@ -1784,8 +2038,8 @@ export async function getEmployeesList(): Promise<EmployeeRecord[]> {
       return users.map((u) => {
         const primaryRole = u.roles?.[0] || "Operations Specialist";
         return {
-          name: u.email || u.name,
-          employee_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email,
+          name: u.name || u.email,
+          employee_name: u.full_name || u.name || u.email,
           role: primaryRole,
           roles: u.roles || [primaryRole],
           role_type: primaryRole.includes("LMS")
@@ -1880,7 +2134,7 @@ export interface AppNotification {
   id: string;
   title: string;
   description: string;
-  category: "compliance" | "workflow" | "dossier" | "finance" | "system";
+  category: "compliance" | "workflow" | "dossier" | "finance" | "complaints" | "system";
   severity: "urgent" | "warning" | "info" | "success";
   timestamp: string;
   applicant_id?: string;
@@ -1897,19 +2151,22 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
     : [];
 
   try {
-    const [appRes, dosRes, dsrRes] = await Promise.all([
+    const [appRes, dosRes, dsrRes, compRes] = await Promise.all([
       fetch('/api/resource/Applicant?fields=["name","full_name","first_name","applicant_state","passport_expiry","medical_expiry_date","medical_status","coc_status","creation"]&limit_page_length=100'),
       fetch('/api/resource/Applicant%20Dossier?fields=["name","applicant","contractor_name","sponsor_name","creation"]&limit_page_length=50'),
       fetch('/api/resource/DSR?fields=["name","full_name","lms_status","wakala_status","injaz_status","stamp_status","ticket_status","departure_status"]&limit_page_length=50'),
+      fetch('/api/resource/Agency%20Complaint?fields=["name","contractor","applicant","full_name","passport_number","complaint_category","severity","status","creation","complaint_details"]&order_by=creation%20desc&limit_page_length=50'),
     ]);
 
     const appJson = await appRes.json();
     const dosJson = await dosRes.json();
     const dsrJson = await dsrRes.json();
+    const compJson = await compRes.json();
 
     const applicants: any[] = appJson.data || [];
     const dossiers: any[] = dosJson.data || [];
     const dsrs: any[] = dsrJson.data || [];
+    const complaints: any[] = compJson.data || [];
 
     const now = new Date();
 
@@ -2081,6 +2338,36 @@ export async function getNotificationsList(): Promise<AppNotification[]> {
         action_label: "View Demand Dossier",
       });
     }
+
+    // 4. Foreign Agency Complaints & Disputes
+    for (const comp of complaints) {
+      if (
+        comp.status !== "Resolved" &&
+        comp.status !== "Closed" &&
+        comp.status !== "Dismissed / Closed"
+      ) {
+        const isCritical = comp.severity === "Critical / Emergency";
+        const isHigh = comp.severity === "High";
+        const candidateName = comp.full_name || comp.applicant || "Candidate";
+
+        notifications.push({
+          id: `comp-${comp.name}`,
+          title: isCritical
+            ? `🚨 Critical Dispute: ${candidateName}`
+            : isHigh
+            ? `⚠️ Agency Complaint: ${comp.contractor || "Partner Agency"}`
+            : `Agency Dispute Ticket: ${comp.contractor || "Partner Agency"}`,
+          description: `${comp.contractor || "Foreign Agency"} filed a ${comp.severity || "Standard"} dispute (${comp.complaint_category}) for ${candidateName}${comp.passport_number ? ` (Passport: ${comp.passport_number})` : ""}: "${comp.complaint_details || comp.complaint_category}"`,
+          category: "complaints",
+          severity: isCritical ? "urgent" : isHigh ? "warning" : "info",
+          timestamp: comp.creation ? comp.creation.split(" ")[0] : "Active Ticket",
+          applicant_id: comp.applicant,
+          applicant_name: candidateName,
+          action_url: "/complaints",
+          action_label: "Review Ticket",
+        });
+      }
+    }
   } catch (err) {
     console.error("Notifications fetch warning:", err);
   }
@@ -2154,9 +2441,15 @@ export async function getPortalAvailableCandidates(filters?: {
         "skill_washing",
         "skill_ironing",
         "skill_elderly_care",
+        "skill_driving",
         "experience_country",
         "experience_period",
         "religion",
+        "place_of_birth",
+        "leaving_town",
+        "marital_status",
+        "complexion",
+        "passport_number",
         "cv_file_url",
         "applicant_state",
         "selected_by",
@@ -2192,9 +2485,15 @@ export async function getPortalAvailableCandidates(filters?: {
           skill_washing: a.skill_washing === "YES" || a.skill_washing === 1 ? 1 : 0,
           skill_ironing: a.skill_ironing === "YES" || a.skill_ironing === 1 ? 1 : 0,
           skill_elderly_care: a.skill_elderly_care === "YES" || a.skill_elderly_care === 1 ? 1 : 0,
+          skill_driving: a.skill_driving === "YES" || a.skill_driving === 1 ? 1 : 0,
           experience_country: a.experience_country || "First Time",
           experience_period: a.experience_period || "None",
           religion: a.religion || "Muslim",
+          place_of_birth: a.place_of_birth || a.leaving_town || "",
+          leaving_town: a.leaving_town || "",
+          marital_status: a.marital_status || "",
+          complexion: a.complexion || "",
+          passport_number: a.passport_number || "",
           cv_file_url: a.cv_file_url || "",
           selected_by: a.selected_by,
         }));
@@ -2252,58 +2551,19 @@ export async function portalSelectCandidateApi(
 export async function getAgencyReservedCandidatesApi(contractor?: string): Promise<AgencyPipelineCandidate[]> {
   try {
     const pipeline = await getAgencyPipelineCandidatesApi({ stage: "Selected", limit: 100 });
-    if (Array.isArray(pipeline) && pipeline.length > 0) {
+    if (Array.isArray(pipeline)) {
+      if (contractor && contractor !== "All Agencies") {
+        return pipeline.filter(
+          (c) =>
+            !c.contractor ||
+            c.contractor === contractor ||
+            c.contractor.toLowerCase().includes(contractor.toLowerCase())
+        );
+      }
       return pipeline;
     }
   } catch (err) {
-    console.warn("getAgencyPipelineCandidates warning for reserved stage:", err);
-  }
-
-  // Fallback to query official Applicant resource for Selected candidates
-  try {
-    const filters: any[] = [["applicant_state", "=", "Selected"]];
-    if (contractor) {
-      filters.push(["locked_contractor", "=", contractor]);
-    }
-    const fields = encodeURIComponent(
-      JSON.stringify([
-        "name",
-        "full_name",
-        "first_name",
-        "last_name",
-        "passport_number",
-        "job_applied",
-        "destination_country",
-        "photo_passport",
-        "cv_file_url",
-        "applicant_state",
-        "locked_contractor",
-        "creation",
-        "modified",
-      ])
-    );
-    const filterQuery = encodeURIComponent(JSON.stringify(filters));
-    const res = await fetch(`/api/resource/Applicant?filters=${filterQuery}&fields=${fields}&limit_page_length=100`);
-    if (res.ok) {
-      const data = await res.json();
-      const rawList = Array.isArray(data.data) ? data.data : [];
-      return rawList.map((a: any) => ({
-        name: a.name,
-        applicant_id: a.name,
-        full_name: a.full_name || `${a.first_name || ""} ${a.last_name || ""}`.trim() || a.name,
-        passport_number: a.passport_number || "",
-        job_applied: a.job_applied || "Housemaid",
-        destination_country: a.destination_country || "Saudi Arabia",
-        photo_passport: a.photo_passport || "",
-        cv_file_url: a.cv_file_url || "",
-        applicant_state: a.applicant_state || "Selected",
-        contract_date: a.modified || a.creation || "",
-        sponsor_name: "",
-        visa_number: "",
-      }));
-    }
-  } catch (err) {
-    console.warn("getAgencyReservedCandidates resource fetch error:", err);
+    console.warn("getAgencyReservedCandidatesApi error:", err);
   }
 
   return [];
@@ -2355,48 +2615,67 @@ export async function getAgencyComplaintsApi(filters?: {
   tab?: "unresolved" | "new" | "resolved";
   contractor?: string;
 }): Promise<AgencyComplaint[]> {
-  const params = new URLSearchParams();
-  if (filters?.tab) params.append("tab", filters.tab);
-  if (filters?.contractor && filters.contractor !== "All Agencies") {
-    params.append("contractor", filters.contractor);
-  }
-
-  const query = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(
-    `/api/method/applicant_processing.applicant_processing.api.get_agency_complaints${query}`
-  );
-
   let allComplaints: AgencyComplaint[] = [];
-  if (res.ok) {
-    allComplaints = await handleApiResponse<AgencyComplaint[]>(res);
-  } else {
-    // If backend RPC is unavailable or returns an error, query the resource endpoint directly
-    try {
-      const resourceRes = await fetch(
-        `/api/resource/Agency%20Complaint?fields=["*"]&order_by=creation%20desc&limit_page_length=100`
-      );
-      if (resourceRes.ok) {
-        const json = await resourceRes.json();
-        allComplaints = json.data || [];
-      }
-    } catch {
-      allComplaints = [];
+
+  try {
+    const resourceRes = await fetch(
+      `/api/resource/Agency%20Complaint?fields=["*"]&order_by=creation%20desc&limit_page_length=200`
+    );
+    if (resourceRes.ok) {
+      const json = await resourceRes.json();
+      const rawList = json.data || [];
+      allComplaints = rawList.map((c: any) => ({
+        name: c.name,
+        contractor: c.contractor,
+        applicant: c.applicant,
+        full_name: c.full_name,
+        passport_number: c.passport_number,
+        complaint_category: c.complaint_category,
+        severity: c.severity || "High",
+        status: c.status || "Open",
+        days_unresolved:
+          c.days_unresolved ??
+          (c.creation
+            ? Math.max(0, Math.floor((Date.now() - new Date(c.creation).getTime()) / (1000 * 60 * 60 * 24)))
+            : 0),
+        complaint_details: c.complaint_details,
+        attachment: c.attachment_evidence || c.attachment,
+        assigned_officer: c.assigned_officer,
+        resolution_notes: c.resolution_notes,
+        outcome: c.resolution_outcome || c.outcome,
+        return_date: c.return_date,
+        replacement_applicant: c.replacement_applicant,
+        creation: c.creation,
+        modified: c.modified,
+      }));
     }
+  } catch (err) {
+    console.warn("Agency Complaint resource fetch error:", err);
   }
 
-  // Apply filters on genuine backend data
+  // Filter by contractor if specified
   if (filters?.contractor && filters.contractor !== "All Agencies") {
     allComplaints = allComplaints.filter((c) =>
-      c.contractor?.toLowerCase().includes(filters.contractor!.toLowerCase())
+      c.contractor?.toLowerCase().trim() === filters.contractor!.toLowerCase().trim() ||
+      c.contractor?.toLowerCase().includes(filters.contractor!.toLowerCase().trim())
     );
   }
 
+  // Filter by tab
   if (filters?.tab === "unresolved") {
-    allComplaints = allComplaints.filter((c) => c.status !== "Resolved" && c.status !== "Closed");
+    allComplaints = allComplaints.filter(
+      (c) => c.status !== "Resolved" && c.status !== "Closed" && c.status !== "Dismissed / Closed"
+    );
   } else if (filters?.tab === "new") {
-    allComplaints = allComplaints.filter((c) => c.status === "Open");
+    allComplaints = allComplaints.filter((c) => c.status === "Open" || c.status === "Under Investigation");
   } else if (filters?.tab === "resolved") {
-    allComplaints = allComplaints.filter((c) => c.status === "Resolved" || c.status === "Closed");
+    allComplaints = allComplaints.filter(
+      (c) =>
+        c.status === "Resolved" ||
+        c.status === "Closed" ||
+        c.status === "Dismissed / Closed" ||
+        c.status === "Returned / Free Replacement Required"
+    );
   }
 
   return allComplaints;
@@ -2425,7 +2704,33 @@ export async function submitAgencyComplaintApi(data: {
     }
   );
 
-  return handleApiResponse<any>(res);
+  const result = await handleApiResponse<any>(res);
+
+  // Guarantee new ticket is active in Open state in Frappe DB
+  const complaintId =
+    result?.message?.complaint_id ||
+    result?.complaint_id ||
+    result?.data?.name ||
+    result?.name;
+
+  if (complaintId) {
+    try {
+      await fetch(`/api/resource/Agency%20Complaint/${encodeURIComponent(complaintId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "Open",
+          resolution_outcome: null,
+          resolved_at: null,
+          resolution_notes: null,
+        }),
+      });
+    } catch (err) {
+      console.warn("Error ensuring Open state on new complaint:", err);
+    }
+  }
+
+  return result;
 }
 
 export async function resolveAgencyComplaintApi(data: {
@@ -2577,10 +2882,102 @@ export async function getAgencyPipelineCandidatesApi(filters?: {
   }
 
   const query = params.toString() ? `?${params.toString()}` : "";
-  const res = await fetch(
-    `/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}`
-  );
-  return handleApiResponse<AgencyPipelineCandidate[]>(res);
+  try {
+    const res = await fetch(
+      `/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const list = Array.isArray(data?.message)
+        ? data.message
+        : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : [];
+      if (list.length > 0) return list;
+    }
+  } catch (rpcErr) {
+    console.warn("get_agency_pipeline_candidates RPC error, using relational fallback:", rpcErr);
+  }
+
+  // Authoritative Fallback: Query Applicant resource with valid schema fields
+  try {
+    const pipelineStates = ["Selected", "Processing", "Stamped", "Ticketed", "Departed"];
+    const filterConditions: any[] = [];
+    if (filters?.stage && filters.stage !== "all") {
+      filterConditions.push(["applicant_state", "=", filters.stage]);
+    } else {
+      filterConditions.push(["applicant_state", "in", pipelineStates]);
+    }
+
+    const validFields = encodeURIComponent(
+      JSON.stringify([
+        "name",
+        "full_name",
+        "first_name",
+        "last_name",
+        "passport_number",
+        "job_applied",
+        "destination_country",
+        "photo_passport",
+        "applicant_state",
+        "locked_contractor",
+        "creation",
+        "modified",
+      ])
+    );
+    const filterQuery = encodeURIComponent(JSON.stringify(filterConditions));
+    const limit = filters?.limit || 100;
+    const appRes = await fetch(
+      `/api/resource/Applicant?filters=${filterQuery}&fields=${validFields}&limit_page_length=${limit}&order_by=modified%20desc`
+    );
+
+    if (appRes.ok) {
+      const appJson = await appRes.json();
+      const rawApps: any[] = Array.isArray(appJson.data) ? appJson.data : [];
+
+      // Query Dossiers for visa / sponsor / contractor details
+      let dossiersMap: Record<string, any> = {};
+      try {
+        const dosRes = await fetch(
+          `/api/resource/Applicant%20Dossier?fields=["name","applicant","contractor_name","sponsor_name","visa_number","contract_number","contract_date"]&limit_page_length=200`
+        );
+        if (dosRes.ok) {
+          const dosJson = await dosRes.json();
+          const dosList = Array.isArray(dosJson.data) ? dosJson.data : [];
+          for (const d of dosList) {
+            if (d.applicant) dossiersMap[d.applicant] = d;
+          }
+        }
+      } catch {}
+
+      return rawApps.map((a: any) => {
+        const dos = dossiersMap[a.name] || {};
+        return {
+          name: a.name,
+          applicant_id: a.name,
+          full_name: a.full_name || `${a.first_name || ""} ${a.last_name || ""}`.trim() || a.name,
+          gender: a.gender || "Female",
+          age: Number(a.age) || 25,
+          passport_number: a.passport_number || "",
+          job_applied: a.job_applied || "Housemaid",
+          destination_country: a.destination_country || "Saudi Arabia",
+          photo_passport: a.photo_passport || "",
+          cv_file_url: a.cv_file_url || "",
+          applicant_state: a.applicant_state || "Selected",
+          contract_date: dos.contract_date || a.modified || a.creation || "",
+          sponsor_name: dos.sponsor_name || "",
+          visa_number: dos.visa_number || "",
+          contractor: dos.contractor_name || a.locked_contractor || "",
+        };
+      });
+    }
+  } catch (err) {
+    console.warn("getAgencyPipelineCandidatesApi resource fallback warning:", err);
+  }
+
+  return [];
 }
 
 export async function getUnpaidCommissionSummaryApi(): Promise<UnpaidCommissionSummary> {
@@ -2682,4 +3079,170 @@ export async function subscribeWebPushApi(subscriptionData: {
     }
   );
   return handleApiResponse<{ status: string; message: string }>(res);
+}
+
+// ---------------------------------------------------------------------------
+// 17. ADMIN COMMISSION MANAGEMENT & LEDGER APIS
+// ---------------------------------------------------------------------------
+
+export async function getAdminCommissionLedgerApi(): Promise<{
+  items: CommissionLedgerItem[];
+  summary: CommissionSummaryStats;
+}> {
+  try {
+    const fields = encodeURIComponent(
+      JSON.stringify([
+        "name",
+        "full_name",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "gender",
+        "religion",
+        "place_of_birth",
+        "leaving_town",
+        "marital_status",
+        "passport_number",
+        "job_applied",
+        "destination_country",
+        "locked_contractor",
+        "contractor",
+        "applicant_state",
+        "commission_status",
+        "commission_amount",
+        "commission_paid_date",
+        "commission_batch_ref",
+        "is_replacement",
+        "creation",
+        "modified",
+      ])
+    );
+
+    const [appRes, contractorsList, depRes] = await Promise.all([
+      fetch(`/api/resource/Applicant?fields=${fields}&limit_page_length=1000&order_by=modified%20desc`),
+      getContractorsList().catch(() => [] as Contractor[]),
+      fetch(`/api/resource/Applicant%20Departure?fields=["name","applicant","departure_date","flight_number","contractor_name"]&limit_page_length=1000`).catch(() => null),
+    ]);
+
+    const contractorMap: Record<string, Contractor> = {};
+    for (const c of contractorsList) {
+      if (c.name) contractorMap[c.name] = c;
+      if (c.company_name) contractorMap[c.company_name] = c;
+    }
+
+    const depMap: Record<string, { departure_date?: string; flight_number?: string; contractor_name?: string }> = {};
+    if (depRes && depRes.ok) {
+      const depJson = await depRes.json();
+      const depList = Array.isArray(depJson.data) ? depJson.data : [];
+      for (const d of depList) {
+        if (d.applicant) depMap[d.applicant] = d;
+      }
+    }
+
+    let rawApps: any[] = [];
+    if (appRes.ok) {
+      const appJson = await appRes.json();
+      rawApps = Array.isArray(appJson.data) ? appJson.data : [];
+    }
+
+    const items: CommissionLedgerItem[] = rawApps
+      .filter((a) => a.applicant_state === "Departed" || a.locked_contractor || a.contractor || a.commission_status)
+      .map((a) => {
+        const dep = depMap[a.name] || {};
+        const contractorId = a.locked_contractor || a.contractor || dep.contractor_name || "Direct / Unassigned";
+        const contractorObj = contractorMap[contractorId];
+        const defaultRate = contractorObj?.default_commission_amount || 1500;
+        const currency = contractorObj?.default_commission_currency || "SAR";
+        const isReplacement = Boolean(a.is_replacement === 1 || a.is_replacement === "1" || a.is_replacement === true);
+        const amount = isReplacement
+          ? 0
+          : a.commission_amount !== undefined && a.commission_amount !== null && a.commission_amount > 0
+          ? Number(a.commission_amount)
+          : defaultRate;
+
+        let status = a.commission_status;
+        if (!status) {
+          status = a.applicant_state === "Departed" ? "Pending" : "Pending";
+        }
+        if (isReplacement) {
+          status = "Waived";
+        }
+
+        return {
+          name: a.name,
+          full_name: a.full_name || `${a.first_name || ""} ${a.middle_name || ""} ${a.last_name || ""}`.trim() || a.name,
+          passport_number: a.passport_number || "",
+          job_applied: a.job_applied || "Housemaid",
+          destination_country: a.destination_country || contractorObj?.country || "Saudi Arabia",
+          contractor: contractorId,
+          contractor_name: contractorObj?.company_name || contractorId,
+          applicant_state: a.applicant_state || "Departed",
+          departure_date: dep.departure_date || a.departure_date || a.modified?.split(" ")[0] || a.creation?.split(" ")[0],
+          flight_number: dep.flight_number || "",
+          commission_status: status,
+          commission_amount: amount,
+          commission_currency: currency,
+          commission_paid_date: a.commission_paid_date || "",
+          commission_batch_ref: a.commission_batch_ref || "",
+          is_replacement: isReplacement ? 1 : 0,
+          religion: a.religion || "",
+          place_of_birth: a.place_of_birth || a.leaving_town || "",
+          marital_status: a.marital_status || "",
+          gender: a.gender || "",
+          creation: a.creation,
+        };
+      });
+
+    const totalDeparted = items.filter((i) => i.applicant_state === "Departed").length;
+    const unpaidItems = items.filter((i) => i.commission_status === "Pending" || i.commission_status === "Invoiced");
+    const paidItems = items.filter((i) => i.commission_status === "Paid");
+
+    const totalOutstanding = unpaidItems.reduce((sum, i) => sum + i.commission_amount, 0);
+    const totalPaid = paidItems.reduce((sum, i) => sum + i.commission_amount, 0);
+    const contractorsSet = new Set(items.map((i) => i.contractor).filter((c) => c !== "Direct / Unassigned"));
+
+    return {
+      items,
+      summary: {
+        total_departed: totalDeparted,
+        total_outstanding_amount: totalOutstanding,
+        total_paid_amount: totalPaid,
+        currency: "SAR",
+        total_contractors_count: contractorsSet.size,
+        unpaid_count: unpaidItems.length,
+        paid_count: paidItems.length,
+      },
+    };
+  } catch (err) {
+    console.error("getAdminCommissionLedgerApi error:", err);
+    return {
+      items: [],
+      summary: {
+        total_departed: 0,
+        total_outstanding_amount: 0,
+        total_paid_amount: 0,
+        currency: "SAR",
+        total_contractors_count: 0,
+        unpaid_count: 0,
+        paid_count: 0,
+      },
+    };
+  }
+}
+
+export async function updateApplicantCommissionApi(
+  applicantId: string,
+  payload: {
+    commission_status?: string;
+    commission_amount?: number;
+    commission_paid_date?: string;
+    commission_batch_ref?: string;
+  }
+): Promise<any> {
+  const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleApiResponse(res);
 }

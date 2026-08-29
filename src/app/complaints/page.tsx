@@ -16,15 +16,24 @@ import {
   UserCheck,
   Building2,
   Filter,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   getAgencyComplaintsApi,
   submitAgencyComplaintApi,
   resolveAgencyComplaintApi,
   getApplicantsList,
+  getContractorsList,
   uploadFileApi,
 } from "@/lib/api/applicantApi";
-import { AgencyComplaint, ComplaintSeverity } from "@/types/applicant";
+import {
+  AgencyComplaint,
+  ComplaintSeverity,
+  ComplaintCategory,
+  COMPLAINT_CATEGORIES,
+  COMPLAINT_SEVERITIES,
+  COMPLAINT_OUTCOMES,
+} from "@/types/applicant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,25 +42,43 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function AdminComplaintsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = React.useState<"unresolved" | "new" | "resolved">("unresolved");
+  const [activeTab, setActiveTab] = React.useState<"unresolved" | "resolved">("unresolved");
   const [contractorFilter, setContractorFilter] = React.useState("All Agencies");
+  const [categoryFilter, setCategoryFilter] = React.useState("All Categories");
+  const [severityFilter, setSeverityFilter] = React.useState("All Severities");
+  const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest" | "severity" | "sla">("newest");
+
+  const { data: contractors = [] } = useQuery({
+    queryKey: ["contractors"],
+    queryFn: getContractorsList,
+  });
 
   // Submit Modal
   const [isSubmitModalOpen, setIsSubmitModalOpen] = React.useState(false);
   const [submitForm, setSubmitForm] = React.useState({
-    contractor: "Al-Amal Recruitment Riyadh",
+    contractor: "",
     applicant_search: "",
     full_name: "",
-    complaint_category: "Medical Refusal / Unfit on Arrival",
+    complaint_category: COMPLAINT_CATEGORIES[0] as ComplaintCategory,
     severity: "High" as ComplaintSeverity,
     complaint_details: "",
     attachment: "",
   });
 
+  // Auto-set contractor default once loaded
+  React.useEffect(() => {
+    if (!submitForm.contractor && contractors.length > 0) {
+      setSubmitForm((prev) => ({
+        ...prev,
+        contractor: prev.contractor || contractors[0]?.name || "",
+      }));
+    }
+  }, [contractors, submitForm.contractor]);
+
   // Resolve Modal
   const [selectedComplaintForResolve, setSelectedComplaintForResolve] = React.useState<AgencyComplaint | null>(null);
   const [resolveForm, setResolveForm] = React.useState({
-    outcome: "Returned / Free Replacement Required",
+    outcome: COMPLAINT_OUTCOMES[0] as string,
     resolution_notes: "",
     replacement_applicant: "",
     return_date: new Date().toISOString().split("T")[0],
@@ -69,6 +96,52 @@ export default function AdminComplaintsPage() {
       }),
   });
 
+  // Client-side filtering & sorting
+  const filteredAndSortedComplaints = React.useMemo(() => {
+    let list = [...complaints];
+
+    // Filter by Category
+    if (categoryFilter !== "All Categories") {
+      list = list.filter((c) => c.complaint_category === categoryFilter);
+    }
+
+    // Filter by Severity
+    if (severityFilter !== "All Severities") {
+      list = list.filter((c) => c.severity === severityFilter);
+    }
+
+    // Sort Order
+    list.sort((a, b) => {
+      if (sortOrder === "newest") {
+        const timeA = a.creation ? new Date(a.creation).getTime() : 0;
+        const timeB = b.creation ? new Date(b.creation).getTime() : 0;
+        return timeB - timeA;
+      }
+      if (sortOrder === "oldest") {
+        const timeA = a.creation ? new Date(a.creation).getTime() : 0;
+        const timeB = b.creation ? new Date(b.creation).getTime() : 0;
+        return timeA - timeB;
+      }
+      if (sortOrder === "severity") {
+        const weight: Record<string, number> = {
+          "Critical / Emergency": 3,
+          "Critical": 3,
+          "High": 2,
+          "Normal": 1,
+          "Medium": 1,
+          "Low": 0,
+        };
+        return (weight[b.severity] || 0) - (weight[a.severity] || 0);
+      }
+      if (sortOrder === "sla") {
+        return (b.days_unresolved || 0) - (a.days_unresolved || 0);
+      }
+      return 0;
+    });
+
+    return list;
+  }, [complaints, categoryFilter, severityFilter, sortOrder]);
+
   const { data: applicants = [] } = useQuery({
     queryKey: ["applicants"],
     queryFn: getApplicantsList,
@@ -83,6 +156,15 @@ export default function AdminComplaintsPage() {
       queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
       setIsSubmitModalOpen(false);
       setErrorMessage(null);
+      setSubmitForm({
+        contractor: contractors[0]?.name || "",
+        applicant_search: "",
+        full_name: "",
+        complaint_category: COMPLAINT_CATEGORIES[0] as ComplaintCategory,
+        severity: "High" as ComplaintSeverity,
+        complaint_details: "",
+        attachment: "",
+      });
       setToastMessage(res?.message?.message || "Complaint logged successfully.");
       setTimeout(() => setToastMessage(null), 5000);
     },
@@ -110,14 +192,16 @@ export default function AdminComplaintsPage() {
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
+      case "Critical / Emergency":
       case "Critical":
-        return <Badge variant="destructive">Critical</Badge>;
+        return <Badge variant="destructive">Critical / Emergency</Badge>;
       case "High":
         return <Badge variant="warning">High</Badge>;
+      case "Normal":
       case "Medium":
-        return <Badge variant="outline" className="text-amber-700 dark:text-amber-300 border-amber-300">Medium</Badge>;
+      case "Low":
       default:
-        return <Badge variant="outline">Standard</Badge>;
+        return <Badge variant="outline">Normal</Badge>;
     }
   };
 
@@ -129,9 +213,6 @@ export default function AdminComplaintsPage() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Agency Complaints & Dispute Desk
           </h2>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Overseas partner disputes, 90-day bilateral replacement guarantees, arrival medical rejections, and legal claims.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -160,7 +241,6 @@ export default function AdminComplaintsPage() {
       {toastMessage && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>{toastMessage}</span>
           </div>
           <button onClick={() => setToastMessage(null)}>✕</button>
@@ -170,54 +250,100 @@ export default function AdminComplaintsPage() {
       {errorMessage && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-900 dark:text-rose-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
             <span>{errorMessage}</span>
           </div>
           <button onClick={() => setErrorMessage(null)}>✕</button>
         </div>
       )}
 
-      {/* Filter & Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-[#222228] pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("unresolved")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
-              activeTab === "unresolved" ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            Unresolved Backlog
-          </button>
-          <button
-            onClick={() => setActiveTab("new")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
-              activeTab === "new" ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            New Tickets
-          </button>
-          <button
-            onClick={() => setActiveTab("resolved")}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
-              activeTab === "resolved" ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            Resolved & Replaced
-          </button>
-        </div>
+      {/* Filter & Tabs Toolbar */}
+      <div className="space-y-3 border-b border-slate-200 dark:border-[#222228] pb-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Tabs */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab("unresolved")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                activeTab === "unresolved" ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+              }`}
+            >
+              Unresolved Backlog ({complaints.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("resolved")}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                activeTab === "resolved" ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs" : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+              }`}
+            >
+              Resolved & Replaced
+            </button>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-slate-400" />
-          <select
-            value={contractorFilter}
-            onChange={(e) => setContractorFilter(e.target.value)}
-            className="h-8 rounded-lg border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#141418] px-2 text-xs text-slate-800 dark:text-zinc-200"
-          >
-            <option value="All Agencies">All Foreign Agencies</option>
-            <option value="Al-Amal Recruitment Riyadh">Al-Amal Recruitment Riyadh</option>
-            <option value="Al-Khaleej International Manpower Co.">Al-Khaleej International Co.</option>
-            <option value="Kuwait Manpower Bureau">Kuwait Manpower Bureau</option>
-          </select>
+          {/* Filters & Sorting */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Agency Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+              <select
+                value={contractorFilter}
+                onChange={(e) => setContractorFilter(e.target.value)}
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+              >
+                <option value="All Agencies">All Foreign Agencies</option>
+                {contractors.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.company_name || c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+              >
+                <option value="All Categories">All Categories</option>
+                {COMPLAINT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Severity Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+              >
+                <option value="All Severities">All Severities</option>
+                {COMPLAINT_SEVERITIES.map((sev) => (
+                  <option key={sev} value={sev}>
+                    {sev}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sort Order */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as any)}
+                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+              >
+                <option value="newest">Most Recent First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="severity">Severity: Highest First</option>
+                <option value="sla">Longest Unresolved SLA</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -228,9 +354,9 @@ export default function AdminComplaintsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
             <span className="ml-2 text-xs text-slate-500">Loading complaints...</span>
           </div>
-        ) : complaints.length === 0 ? (
+        ) : filteredAndSortedComplaints.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400">
-            No complaints found in this category.
+            No complaints found matching your active filters.
           </div>
         ) : (
           <table className="w-full text-left text-xs">
@@ -241,12 +367,12 @@ export default function AdminComplaintsPage() {
                 <th className="px-4 py-3.5">Applicant / Passport</th>
                 <th className="px-4 py-3.5">Category & Details</th>
                 <th className="px-4 py-3.5">Severity</th>
-                <th className="px-4 py-3.5">Status</th>
+                <th className="px-4 py-3.5">{activeTab === "resolved" ? "Outcome" : "SLA / Age"}</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-              {complaints.map((c) => (
+              {filteredAndSortedComplaints.map((c) => (
                 <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                   <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{c.name}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800 dark:text-zinc-200">{c.contractor}</td>
@@ -260,18 +386,29 @@ export default function AdminComplaintsPage() {
                   </td>
                   <td className="px-4 py-3">{getSeverityBadge(c.severity)}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      c.status === "Resolved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                    }`}>
-                      {c.status}
-                    </span>
+                    {activeTab === "resolved" ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        ✓ {c.outcome || c.status}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
+                          {c.creation ? c.creation.split(" ")[0] : "Recent"}
+                        </span>
+                        {c.days_unresolved !== undefined && c.days_unresolved > 0 && (
+                          <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-semibold">
+                            ⏱ {c.days_unresolved}d unresolved
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {c.status !== "Resolved" ? (
                       <Button
                         size="sm"
                         onClick={() => setSelectedComplaintForResolve(c)}
-                        className="h-7 text-[11px] bg-emerald-800 hover:bg-emerald-900 text-white font-semibold rounded-lg"
+                        className="h-7 text-[11px] bg-emerald-800 hover:bg-emerald-900 text-white font-semibold rounded-lg shadow-xs"
                       >
                         Resolve Ticket
                       </Button>
@@ -315,11 +452,11 @@ export default function AdminComplaintsPage() {
                   value={resolveForm.outcome}
                   onChange={(e) => setResolveForm({ ...resolveForm, outcome: e.target.value })}
                 >
-                  <option value="Returned / Free Replacement Required">Returned / Free Replacement Required</option>
-                  <option value="Resolved via Mediation">Resolved via Mediation</option>
-                  <option value="Contract Terminated with Sponsor">Contract Terminated with Sponsor</option>
-                  <option value="Worker Transferred">Worker Transferred</option>
-                  <option value="Dismissed / Invalid Claim">Dismissed / Invalid Claim</option>
+                  {COMPLAINT_OUTCOMES.map((outcome) => (
+                    <option key={outcome} value={outcome}>
+                      {outcome}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -399,10 +536,11 @@ export default function AdminComplaintsPage() {
                   value={submitForm.contractor}
                   onChange={(e) => setSubmitForm({ ...submitForm, contractor: e.target.value })}
                 >
-                  <option value="Al-Amal Recruitment Riyadh">Al-Amal Recruitment Riyadh</option>
-                  <option value="Al-Khaleej International Manpower Co.">Al-Khaleej International Co.</option>
-                  <option value="Kuwait Manpower Bureau">Kuwait Manpower Bureau</option>
-                  <option value="Doha International Workforce">Doha International Workforce</option>
+                  {contractors.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.company_name || c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -414,10 +552,12 @@ export default function AdminComplaintsPage() {
                   value={submitForm.applicant_search}
                   onChange={(e) => {
                     const sel = applicants.find((a) => a.name === e.target.value);
+                    const candidateContractor = (sel as any)?.contractor || sel?.locked_contractor || sel?.selected_by;
                     setSubmitForm({
                       ...submitForm,
                       applicant_search: e.target.value,
                       full_name: sel ? (sel.full_name || sel.first_name) : "",
+                      contractor: candidateContractor || submitForm.contractor || contractors[0]?.name || "",
                     });
                   }}
                 >
@@ -438,12 +578,11 @@ export default function AdminComplaintsPage() {
                     value={submitForm.complaint_category}
                     onChange={(e) => setSubmitForm({ ...submitForm, complaint_category: e.target.value })}
                   >
-                    <option value="Runaway">Runaway / Left Employer</option>
-                    <option value="Non-Performance">Non-Performance / Incompetence</option>
-                    <option value="Employer Abuse">Employer Abuse / Contract Violation</option>
-                    <option value="Medical">Medical / Failed Arrival Screening</option>
-                    <option value="Legal">Legal / Police Case</option>
-                    <option value="Other">Other</option>
+                    {COMPLAINT_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -454,10 +593,11 @@ export default function AdminComplaintsPage() {
                     value={submitForm.severity}
                     onChange={(e) => setSubmitForm({ ...submitForm, severity: e.target.value as ComplaintSeverity })}
                   >
-                    <option value="Critical">Critical</option>
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
+                    {COMPLAINT_SEVERITIES.map((sev) => (
+                      <option key={sev} value={sev}>
+                        {sev}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

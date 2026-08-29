@@ -10,30 +10,42 @@ import {
   Send,
   CheckCircle2,
   Clock,
-  DollarSign,
   AlertTriangle,
-  Play,
-  Share2,
   ShieldCheck,
   Ticket,
   HeartPulse,
   Lock,
-  ArrowRight,
   User,
   Calendar,
   FileText,
   FileCheck2,
-  Receipt,
+  PhoneCall,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Applicant } from "@/types/applicant";
 import {
+  ProcessingData,
+  ProcessingStream,
+  LMSClearanceRecord,
+  InjazClearanceRecord,
+  WakalaClearanceRecord,
+  EmbassyClearanceRecord,
+  TelesignClearanceRecord,
+  DSRStampRecord,
+  DSRTicketRecord,
+  DSRDepartureRecord,
+} from "@/types/processing";
+import {
+  fetchProcessingData,
   updateLmsClearanceApi,
   updateWakalaClearanceApi,
   updateInjazClearanceApi,
+  updateEmbassyClearanceApi,
+  updateTelesignClearanceApi,
   submitDsrStampApi,
   submitDsrTicketApi,
   submitDsrDepartureApi,
-  recordAccountingTransactionApi,
   getEmployeesList,
 } from "@/lib/api/applicantApi";
 import {
@@ -48,7 +60,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { can } from "@/lib/auth/permissions";
 
@@ -56,18 +67,7 @@ interface ProcessingStreamsModalProps {
   applicant: Applicant;
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure";
-}
-
-interface FeeState {
-  required: boolean;
-  type: "Registration Fee" | "Processing Fee" | "Visa Fee" | "Other";
-  amount: number;
-  direction: "Income" | "Expense";
-  status: "Pending" | "Paid" | "Expired" | "Refunded";
-  paymentDate: string;
-  expiryDate: string;
-  notes: string;
+  initialTab?: ProcessingStream;
 }
 
 export function ProcessingStreamsModal({
@@ -78,1263 +78,1196 @@ export function ProcessingStreamsModal({
 }: ProcessingStreamsModalProps) {
   const queryClient = useQueryClient();
   const { authUser } = useAuth();
-  const [activeTab, setActiveTab] = React.useState<"lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure">(initialTab);
+  const [activeTab, setActiveTab] = React.useState<ProcessingStream>(initialTab);
 
-  // Exact capability evaluation via centralized auth layer against canonical backend roles
-  const canEditLms = can(authUser, "editLms");
-  const canEditInjaz = can(authUser, "editInjaz");
-  const canEditWakala = can(authUser, "editWakala");
-  const canEditStamp = can(authUser, "createStamp");
-  const canEditTicket = can(authUser, "createTicket");
-  const canEditDeparture = can(authUser, "createDeparture");
+  // Sync initial tab when changed
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
-  const isCurrentTabEditable =
-    (activeTab === "lms" && canEditLms) ||
-    (activeTab === "injaz" && canEditInjaz) ||
-    (activeTab === "wakala" && canEditWakala) ||
-    (activeTab === "stamp" && canEditStamp) ||
-    (activeTab === "ticket" && canEditTicket) ||
-    (activeTab === "departure" && canEditDeparture);
+  // Fetch processing hierarchy: Applicant -> Dossier -> DSR -> Clearances
+  const {
+    data: processingData,
+    isLoading: isProcessingLoading,
+    refetch: refetchProcessing,
+  } = useQuery<ProcessingData>({
+    queryKey: ["processing", applicant.name],
+    queryFn: () => fetchProcessingData(applicant.name),
+    enabled: isOpen && !!applicant.name,
+  });
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees"],
     queryFn: getEmployeesList,
   });
 
-  const getEmpLabel = (emp: any) =>
-    emp.employee_name ? `${emp.employee_name} (${emp.email || emp.name})` : emp.name;
+  // Permission evaluation based on canonical RBAC
+  const canEditLms = can(authUser, "editLms");
+  const canEditInjaz = can(authUser, "editInjaz");
+  const canEditWakala = can(authUser, "editWakala");
+  const canEditEmbassy = can(authUser, "editEmbassy");
+  const canEditTelesign = can(authUser, "editTelesign");
+  const canEditStamp = can(authUser, "createStamp");
+  const canEditTicket = can(authUser, "createTicket");
+  const canEditDeparture = can(authUser, "createDeparture");
 
-  // Default fallback from applicant or first employee
-  const defaultEmp =
-    applicant.assigned_employee_id ||
-    (employees.length > 0 ? getEmpLabel(employees[0]) : "");
+  // Invalidate queries helper
+  const handleMutationSuccess = (msg: string) => {
+    toast.success(msg);
+    queryClient.invalidateQueries({ queryKey: ["processing", applicant.name] });
+    queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
+    queryClient.invalidateQueries({ queryKey: ["applicants"] });
+  };
 
-  // LMS form state
-  const [lmsStatus, setLmsStatus] = React.useState<"Pending" | "Issued" | "Rejected">(
-    (applicant.lms_processing?.status as "Pending" | "Issued" | "Rejected") || "Issued"
-  );
-  const [lmsEmployee, setLmsEmployee] = React.useState(
-    applicant.lms_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "LMS Employee" ? applicant.assigned_employee_id || "" : "")
-  );
-  const [lmsIssuedOn, setLmsIssuedOn] = React.useState(applicant.lms_processing?.issued_on || new Date().toISOString().split("T")[0]);
-  const [ticketPnr, setTicketPnr] = React.useState(applicant.lms_processing?.ticket_pnr || "");
-  const [flightNumber, setFlightNumber] = React.useState(applicant.lms_processing?.flight_number || "");
-  const [departureDate, setDepartureDate] = React.useState(applicant.lms_processing?.departure_date || "");
-  const [destination, setDestination] = React.useState(applicant.lms_processing?.destination || "Riyadh (RUH)");
-  const [additionalField1, setAdditionalField1] = React.useState(applicant.lms_processing?.additional_field_1 || "");
-  const [additionalField2, setAdditionalField2] = React.useState(applicant.lms_processing?.additional_field_2 || "");
-  const [lmsNotes, setLmsNotes] = React.useState(applicant.lms_processing?.notes || "");
-  const [lmsFee, setLmsFee] = React.useState<FeeState>({
-    required: false,
-    type: "Processing Fee",
-    amount: 100,
-    direction: "Expense",
-    status: "Paid",
-    paymentDate: new Date().toISOString().split("T")[0],
-    expiryDate: "",
-    notes: "Ministry LMS document processing fee",
-  });
-
-  // Injaz form state
-  const [injazStatus, setInjazStatus] = React.useState<"Pending" | "Completed">(
-    (applicant.injaz_processing?.status as "Pending" | "Completed") || "Completed"
-  );
-  const [injazEmployee, setInjazEmployee] = React.useState(
-    applicant.injaz_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "Injaz Officer" ? applicant.assigned_employee_id || "" : "")
-  );
-  const [injazAppNo, setInjazAppNo] = React.useState(applicant.injaz_processing?.injaz_app_no || "E-9918241");
-  const [teashirFee, setTeashirFee] = React.useState(applicant.injaz_processing?.teashir_fee ?? 140);
-  const [biometricsDate, setBiometricsDate] = React.useState(applicant.injaz_processing?.biometrics_date || new Date().toISOString().split("T")[0]);
-  const [biometricsCenter, setBiometricsCenter] = React.useState(applicant.injaz_processing?.biometrics_center || "Teashir VFS Global Addis Ababa");
-  const [injazNotes, setInjazNotes] = React.useState(applicant.injaz_processing?.notes || "");
-  const [injazFee, setInjazFee] = React.useState<FeeState>({
-    required: true,
-    type: "Processing Fee",
-    amount: 140,
-    direction: "Expense",
-    status: "Paid",
-    paymentDate: new Date().toISOString().split("T")[0],
-    expiryDate: "",
-    notes: "Teashir VFS biometrics enrollment fee",
-  });
-
-  // Wakala form state
-  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Completed">(
-    (applicant.wakala_processing?.status as "Pending" | "Completed") || "Completed"
-  );
-  const [wakalaEmployee, setWakalaEmployee] = React.useState(
-    applicant.wakala_processing?.employee || (applicant.assigned_role_type === "All Roles / Operations Lead" || applicant.assigned_role_type === "Wakala Officer" ? applicant.assigned_employee_id || "" : "")
-  );
-  const [startedOn, setStartedOn] = React.useState(applicant.wakala_processing?.started_on || new Date().toISOString().split("T")[0]);
-  const [completedOn, setCompletedOn] = React.useState(applicant.wakala_processing?.completed_on || new Date().toISOString().split("T")[0]);
-  const [requestPayment, setRequestPayment] = React.useState<boolean>(applicant.wakala_processing?.request_payment ?? true);
-  const [requestVia, setRequestVia] = React.useState<"WhatsApp" | "Email" | "SMS">(applicant.wakala_processing?.request_via || "WhatsApp");
-  const [paymentAmount, setPaymentAmount] = React.useState<number>(applicant.wakala_processing?.payment_amount ?? 500);
-  const [wakalaNumber, setWakalaNumber] = React.useState(applicant.wakala_processing?.wakala_number || "WAK-9921448");
-  const [sponsorAuthCode, setSponsorAuthCode] = React.useState(applicant.wakala_processing?.sponsor_auth_code || "SP-99182");
-  const [foreignAgencyName, setForeignAgencyName] = React.useState(applicant.wakala_processing?.foreign_agency_name || "Al-Qureshi Recruitment Agency");
-  const [wakalaNotes, setWakalaNotes] = React.useState(applicant.wakala_processing?.notes || "");
-  const [wakalaFee, setWakalaFee] = React.useState<FeeState>({
-    required: true,
-    type: "Processing Fee",
-    amount: 500,
-    direction: "Income",
-    status: "Paid",
-    paymentDate: new Date().toISOString().split("T")[0],
-    expiryDate: "",
-    notes: "Wakala Power of Attorney authorization payment",
-  });
-
-  // Visa Stamp state (Stage 7)
-  const [visaNumber, setVisaNumber] = React.useState(applicant.dsr_stamp?.visa_number || "VISA-ETH-9921448");
-  const [stampedDate, setStampedDate] = React.useState(applicant.dsr_stamp?.stamped_date || new Date().toISOString().split("T")[0]);
-  const [embassyReference, setEmbassyReference] = React.useState(applicant.dsr_stamp?.embassy_reference || "EMB-ETH-2026-881");
-  const [stampNotes, setStampNotes] = React.useState(applicant.dsr_stamp?.notes || "");
-  const [stampFee, setStampFee] = React.useState<FeeState>({
-    required: false,
-    type: "Visa Fee",
-    amount: 250,
-    direction: "Expense",
-    status: "Paid",
-    paymentDate: new Date().toISOString().split("T")[0],
-    expiryDate: "",
-    notes: "Embassy Visa endorsement stamping fee",
-  });
-
-  // Flight Ticket state (Stage 8)
-  const [ticketPnrFinal, setTicketPnrFinal] = React.useState(applicant.dsr_ticket?.ticket_pnr || "ET-TKT-88392");
-  const [flightNoFinal, setFlightNoFinal] = React.useState(applicant.dsr_ticket?.flight_number || "ET604");
-  const [ticketDepDate, setTicketDepDate] = React.useState(applicant.dsr_ticket?.departure_date || new Date().toISOString().split("T")[0]);
-  const [ticketDestination, setTicketDestination] = React.useState(applicant.dsr_ticket?.destination || "Riyadh (RUH)");
-  const [ticketNotes, setTicketNotes] = React.useState(applicant.dsr_ticket?.notes || "");
-
-  // Pre-Departure Medical 2 & Departure state (Stage 9)
-  const [depFlightNo, setDepFlightNo] = React.useState(applicant.departure_info?.flight_number || "ET604");
-  const [depDate, setDepDate] = React.useState(applicant.departure_info?.departure_date || new Date().toISOString().split("T")[0]);
-  const [depTime, setDepTime] = React.useState(applicant.departure_info?.departure_time || "22:30:00");
-  const [depAirport, setDepAirport] = React.useState(applicant.departure_info?.airport || "Bole International Airport (ADD)");
-  const [depDestination, setDepDestination] = React.useState(applicant.departure_info?.destination_city || "Riyadh, Saudi Arabia");
-  const [medical2Result, setMedical2Result] = React.useState<"Pass" | "Fail">(applicant.departure_info?.medical_2_result || "Pass");
-  const [medical2Remarks, setMedical2Remarks] = React.useState(applicant.departure_info?.medical_2_remarks || "Candidate cleared fit for flight");
-  const [depNotes, setDepNotes] = React.useState(applicant.departure_info?.notes || "");
-  const [departureFee, setDepartureFee] = React.useState<FeeState>({
-    required: false,
-    type: "Other",
-    amount: 75,
-    direction: "Expense",
-    status: "Paid",
-    paymentDate: new Date().toISOString().split("T")[0],
-    expiryDate: "",
-    notes: "Airport clearance and ground logistics expense",
-  });
+  // ---------------------------------------------------------------------------
+  // 1. LMS Stream State & Mutation
+  // ---------------------------------------------------------------------------
+  const [lmsStatus, setLmsStatus] = React.useState<"Pending" | "Issued" | "Rejected">("Pending");
+  const [lmsEmployee, setLmsEmployee] = React.useState("");
+  const [lmsIssuedOn, setLmsIssuedOn] = React.useState("");
+  const [missingDataRequested, setMissingDataRequested] = React.useState(false);
+  const [missingDataType, setMissingDataType] = React.useState("");
+  const [missingDataStatus, setMissingDataStatus] = React.useState<"Pending" | "Received">("Pending");
+  const [missingDataNotes, setMissingDataNotes] = React.useState("");
 
   React.useEffect(() => {
-    setActiveTab(initialTab);
-    const assigned = applicant.assigned_employee_id || (employees.length > 0 ? getEmpLabel(employees[0]) : "");
-    if (assigned) {
-      setLmsEmployee(applicant.lms_processing?.employee || assigned);
-      setInjazEmployee(applicant.injaz_processing?.employee || assigned);
-      setWakalaEmployee(applicant.wakala_processing?.employee || assigned);
+    if (processingData?.lms) {
+      setLmsStatus(processingData.lms.status || "Pending");
+      setLmsEmployee(processingData.lms.employee || "");
+      setLmsIssuedOn(processingData.lms.issued_on || "");
+      setMissingDataRequested(Boolean(processingData.lms.missing_data_requested));
+      setMissingDataType(processingData.lms.missing_data_type || "");
+      setMissingDataStatus(processingData.lms.missing_data_status || "Pending");
+      setMissingDataNotes(processingData.lms.missing_data_notes || "");
     }
-  }, [initialTab, applicant, isOpen, employees]);
+  }, [processingData?.lms]);
 
-  // Clearance completion evaluation
-  const isLmsComplete = lmsStatus === "Issued" || applicant.lms_processing?.status === "Issued";
-  const isInjazComplete = injazStatus === "Completed" || applicant.injaz_processing?.status === "Completed";
-  const isWakalaComplete = wakalaStatus === "Completed" || applicant.wakala_processing?.status === "Completed";
-  const isProcessingCompleted = (isLmsComplete && isInjazComplete && isWakalaComplete) || ["Stamped", "Ticketed", "Departed"].includes(applicant.applicant_state || "");
-  const isStamped = ["Stamped", "Ticketed", "Departed"].includes(applicant.applicant_state || "");
-  const isTicketed = ["Ticketed", "Departed"].includes(applicant.applicant_state || "");
-
-  const cleanEmp = (emp: string) => {
-    if (!emp) return emp;
-    const match = emp.match(/\(([^)]+@[^)]+)\)/);
-    if (match) return match[1].trim();
-    const emailMatch = emp.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if (emailMatch) return emailMatch[0].trim();
-    return emp.trim();
-  };
-
-  // Update LMS Clearance via REST PUT
-  const updateLmsMutation = useMutation({
+  const lmsMutation = useMutation({
     mutationFn: async () => {
-      const financialsPayload =
-        lmsFee.required && lmsFee.amount > 0
-          ? [
-              {
-                transaction_type: lmsFee.direction,
-                amount: Number(lmsFee.amount),
-                date: lmsFee.paymentDate || new Date().toISOString().split("T")[0],
-                description: `${lmsFee.type} (LMS) - ${applicant.full_name} (${applicant.name})`,
-                source_doctype: "LMS Clearance",
-              },
-            ]
-          : undefined;
-
-      const candFullName =
-        applicant.full_name ||
-        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
-
-      const res = await updateLmsClearanceApi(applicant.lms_processing?.name || "", {
-        full_name: candFullName,
-        applicant: applicant.name,
+      const docName = processingData?.lms?.name || processingData?.dsr?.name;
+      if (!docName) {
+        throw new Error("DSR record does not exist on backend for this candidate.");
+      }
+      return updateLmsClearanceApi(docName, {
         status: lmsStatus,
-        employee: cleanEmp(lmsEmployee),
-        issued_on: lmsStatus === "Issued" ? lmsIssuedOn : undefined,
-        ticket_pnr: ticketPnr,
-        flight_number: flightNumber,
-        departure_date: departureDate,
-        destination,
-        additional_field_1: additionalField1,
-        additional_field_2: additionalField2,
-        notes: lmsNotes,
-        financials: financialsPayload,
+        employee: lmsEmployee || undefined,
+        issued_on: lmsStatus === "Issued" ? lmsIssuedOn || new Date().toISOString().split("T")[0] : undefined,
+        missing_data_requested: missingDataRequested ? 1 : 0,
+        missing_data_type: missingDataType || undefined,
+        missing_data_status: missingDataStatus,
+        missing_data_notes: missingDataNotes || undefined,
+        dsr: processingData?.dsr?.name,
       });
-
-      if (lmsFee.required && lmsFee.amount > 0) {
-        await recordAccountingTransactionApi({
-          transaction_type: lmsFee.direction,
-          amount: Number(lmsFee.amount),
-          description: `${lmsFee.type} (LMS) - ${candFullName} (${applicant.name})`,
-          applicant: applicant.name,
-          date: lmsFee.paymentDate,
-          source_doctype: "LMS Clearance",
-        });
-      }
-
-      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("LMS Clearance & Fee Record Updated");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("LMS Update failed", { description: err.message }),
+    onSuccess: () => handleMutationSuccess("LMS Clearance updated successfully."),
+    onError: (err: any) => toast.error(err.message || "Failed to update LMS Clearance."),
   });
 
-  // Update Injaz Clearance via REST PUT
-  const updateInjazMutation = useMutation({
+  // ---------------------------------------------------------------------------
+  // 2. Injaz Stream State & Mutation
+  // ---------------------------------------------------------------------------
+  const [injazStatus, setInjazStatus] = React.useState<"Pending" | "Completed">("Pending");
+  const [injazEmployee, setInjazEmployee] = React.useState("");
+
+  React.useEffect(() => {
+    if (processingData?.injaz) {
+      setInjazStatus(processingData.injaz.status || "Pending");
+      setInjazEmployee(processingData.injaz.employee || "");
+    }
+  }, [processingData?.injaz]);
+
+  const injazMutation = useMutation({
     mutationFn: async () => {
-      const financialsPayload =
-        injazFee.required && injazFee.amount > 0
-          ? [
-              {
-                transaction_type: injazFee.direction,
-                amount: Number(injazFee.amount),
-                date: injazFee.paymentDate || new Date().toISOString().split("T")[0],
-                description: `${injazFee.type} (Injaz/Teashir) - ${applicant.full_name} (${applicant.name})`,
-                source_doctype: "Injaz Clearance",
-              },
-            ]
-          : undefined;
-
-      const candFullName =
-        applicant.full_name ||
-        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
-
-      const res = await updateInjazClearanceApi(applicant.injaz_processing?.name || "", {
-        full_name: candFullName,
-        applicant: applicant.name,
+      const docName = processingData?.injaz?.name || processingData?.dsr?.name;
+      if (!docName) {
+        throw new Error("DSR record does not exist on backend for this candidate.");
+      }
+      return updateInjazClearanceApi(docName, {
         status: injazStatus,
-        employee: cleanEmp(injazEmployee),
-        injaz_app_no: injazAppNo,
-        teashir_fee: Number(teashirFee),
-        biometrics_date: biometricsDate,
-        biometrics_center: biometricsCenter,
-        notes: injazNotes,
-        financials: financialsPayload,
+        employee: injazEmployee || undefined,
+        dsr: processingData?.dsr?.name,
       });
-
-      if (injazFee.required && injazFee.amount > 0) {
-        await recordAccountingTransactionApi({
-          transaction_type: injazFee.direction,
-          amount: Number(injazFee.amount),
-          description: `${injazFee.type} (Injaz/Teashir) - ${candFullName} (${applicant.name})`,
-          applicant: applicant.name,
-          date: injazFee.paymentDate,
-          source_doctype: "Injaz Clearance",
-        });
-      }
-
-      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("Injaz & Biometrics Clearance Updated");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("Injaz Update failed", { description: err.message }),
+    onSuccess: () => handleMutationSuccess("Injaz Clearance updated successfully."),
+    onError: (err: any) => toast.error(err.message || "Failed to update Injaz Clearance."),
   });
 
-  // Update Wakala Clearance via REST PUT
-  const updateWakalaMutation = useMutation({
+  // ---------------------------------------------------------------------------
+  // 3. Wakala Stream State & Mutation
+  // ---------------------------------------------------------------------------
+  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Completed">("Pending");
+  const [wakalaEmployee, setWakalaEmployee] = React.useState("");
+
+  React.useEffect(() => {
+    if (processingData?.wakala) {
+      setWakalaStatus(processingData.wakala.status || "Pending");
+      setWakalaEmployee(processingData.wakala.employee || "");
+    }
+  }, [processingData?.wakala]);
+
+  const wakalaMutation = useMutation({
     mutationFn: async () => {
-      const financialsPayload =
-        wakalaFee.required && wakalaFee.amount > 0
-          ? [
-              {
-                transaction_type: wakalaFee.direction,
-                amount: Number(wakalaFee.amount),
-                date: wakalaFee.paymentDate || new Date().toISOString().split("T")[0],
-                description: `${wakalaFee.type} (Wakala Payment) - ${applicant.full_name} (${applicant.name})`,
-                source_doctype: "Wakala Clearance",
-              },
-            ]
-          : undefined;
-
-      const candFullName =
-        applicant.full_name ||
-        [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ");
-
-      const res = await updateWakalaClearanceApi(applicant.wakala_processing?.name || "", {
-        full_name: candFullName,
-        applicant: applicant.name,
+      const docName = processingData?.wakala?.name || processingData?.dsr?.name;
+      if (!docName) {
+        throw new Error("DSR record does not exist on backend for this candidate.");
+      }
+      return updateWakalaClearanceApi(docName, {
         status: wakalaStatus,
-        employee: cleanEmp(wakalaEmployee),
-        started_on: startedOn,
-        completed_on: wakalaStatus === "Completed" ? (completedOn || new Date().toISOString().split("T")[0]) : completedOn,
-        request_payment: requestPayment,
-        request_via: requestVia,
-        payment_amount: Number(paymentAmount),
-        wakala_number: wakalaNumber,
-        sponsor_auth_code: sponsorAuthCode,
-        foreign_agency_name: foreignAgencyName,
-        notes: wakalaNotes,
-        financials: financialsPayload,
+        employee: wakalaEmployee || undefined,
+        dsr: processingData?.dsr?.name,
       });
-
-      if (wakalaFee.required && wakalaFee.amount > 0) {
-        await recordAccountingTransactionApi({
-          transaction_type: wakalaFee.direction,
-          amount: Number(wakalaFee.amount),
-          description: `${wakalaFee.type} (Wakala Payment) - ${applicant.full_name} (${applicant.name})`,
-          applicant: applicant.name,
-          date: wakalaFee.paymentDate,
-          source_doctype: "Wakala Clearance",
-        });
-      }
-
-      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("Wakala Authorization Clearance Updated");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("Wakala Update failed", { description: err.message }),
+    onSuccess: () => handleMutationSuccess("Wakala Clearance updated successfully."),
+    onError: (err: any) => toast.error(err.message || "Failed to update Wakala Clearance."),
   });
 
-  // Submit Visa Stamp (Stage 7)
-  const submitStampMutation = useMutation({
-    mutationFn: async () => {
-      const financialsPayload =
-        stampFee.required && stampFee.amount > 0
-          ? [
-              {
-                transaction_type: stampFee.direction,
-                amount: Number(stampFee.amount),
-                date: stampFee.paymentDate || new Date().toISOString().split("T")[0],
-                description: `${stampFee.type} (Embassy Visa) - ${applicant.full_name} (${applicant.name})`,
-                source_doctype: "DSR Stamp",
-              },
-            ]
-          : undefined;
+  // ---------------------------------------------------------------------------
+  // 4. Embassy Stream State & Mutation
+  // ---------------------------------------------------------------------------
+  const [embassyStatus, setEmbassyStatus] = React.useState<"Pending" | "Submitted" | "Approved" | "Rejected">("Pending");
+  const [embassyEmployee, setEmbassyEmployee] = React.useState("");
+  const [embassySubDate, setEmbassySubDate] = React.useState("");
+  const [embassyAppDate, setEmbassyAppDate] = React.useState("");
+  const [feeStatus, setFeeStatus] = React.useState<"Unpaid" | "Paid">("Unpaid");
+  const [feeAmount, setFeeAmount] = React.useState<number>(0);
+  const [feeCurrency, setFeeCurrency] = React.useState("KWD");
+  const [receiptNo, setReceiptNo] = React.useState("");
+  const [paymentDate, setPaymentDate] = React.useState("");
+  const [embassyRemarks, setEmbassyRemarks] = React.useState("");
 
-      const res = await submitDsrStampApi({
-        applicant: applicant.name,
-        visa_number: visaNumber,
-        stamped_date: stampedDate,
-        embassy_reference: embassyReference,
-        notes: stampNotes,
-        financials: financialsPayload,
+  React.useEffect(() => {
+    if (processingData?.embassy) {
+      setEmbassyStatus(processingData.embassy.status || "Pending");
+      setEmbassyEmployee(processingData.embassy.employee || "");
+      setEmbassySubDate(processingData.embassy.submission_date || "");
+      setEmbassyAppDate(processingData.embassy.approval_date || "");
+      setFeeStatus(processingData.embassy.fee_status || "Unpaid");
+      setFeeAmount(processingData.embassy.fee_amount || 0);
+      setFeeCurrency(processingData.embassy.fee_currency || "KWD");
+      setReceiptNo(processingData.embassy.receipt_no || "");
+      setPaymentDate(processingData.embassy.payment_date || "");
+      setEmbassyRemarks(processingData.embassy.remarks || "");
+    }
+  }, [processingData?.embassy]);
+
+  const embassyMutation = useMutation({
+    mutationFn: async () => {
+      const docName = processingData?.embassy?.name || processingData?.dsr?.name;
+      if (!docName) {
+        throw new Error("DSR record does not exist on backend for this candidate.");
+      }
+      return updateEmbassyClearanceApi(docName, {
+        status: embassyStatus,
+        employee: embassyEmployee || undefined,
+        submission_date: embassySubDate || undefined,
+        approval_date: embassyAppDate || undefined,
+        fee_status: feeStatus,
+        fee_amount: feeAmount,
+        fee_currency: feeCurrency,
+        receipt_no: receiptNo || undefined,
+        payment_date: paymentDate || undefined,
+        remarks: embassyRemarks || undefined,
+        dsr: processingData?.dsr?.name,
       });
-
-      if (stampFee.required && stampFee.amount > 0) {
-        await recordAccountingTransactionApi({
-          transaction_type: stampFee.direction,
-          amount: Number(stampFee.amount),
-          description: `${stampFee.type} (Embassy Visa) - ${applicant.full_name} (${applicant.name})`,
-          applicant: applicant.name,
-          date: stampFee.paymentDate,
-          source_doctype: "DSR Stamp",
-        });
-      }
-
-      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("Visa Stamp Confirmed! Candidate transitioned to Stamped.");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("Stamp submission failed", { description: err.message }),
+    onSuccess: () => handleMutationSuccess("Embassy Clearance updated successfully."),
+    onError: (err: any) => toast.error(err.message || "Failed to update Embassy Clearance."),
   });
 
-  // Submit Flight Ticket (Stage 8)
-  const submitTicketMutation = useMutation({
-    mutationFn: () =>
-      submitDsrTicketApi({
-        applicant: applicant.name,
-        ticket_pnr: ticketPnrFinal,
-        flight_number: flightNoFinal,
-        departure_date: ticketDepDate,
-        destination: ticketDestination,
-        notes: ticketNotes,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("Flight Ticket Issued! Candidate transitioned to Ticketed.");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("Ticketing failed", { description: err.message }),
-  });
+  // ---------------------------------------------------------------------------
+  // 5. Telesign Stream State & Mutation
+  // ---------------------------------------------------------------------------
+  const [telesignStatus, setTelesignStatus] = React.useState<"Pending" | "In Progress" | "Authenticated" | "Completed" | "Failed">("Pending");
+  const [telesignEmployee, setTelesignEmployee] = React.useState("");
 
-  // Submit Departure & Pre-Departure Medical 2 (Stage 9)
-  const submitDepartureMutation = useMutation({
+  React.useEffect(() => {
+    if (processingData?.telesign) {
+      setTelesignStatus(processingData.telesign.status || "Pending");
+      setTelesignEmployee(processingData.telesign.employee || "");
+    }
+  }, [processingData?.telesign]);
+
+  const telesignMutation = useMutation({
     mutationFn: async () => {
-      const financialsPayload =
-        departureFee.required && departureFee.amount > 0
-          ? [
-              {
-                transaction_type: departureFee.direction,
-                amount: Number(departureFee.amount),
-                date: departureFee.paymentDate || new Date().toISOString().split("T")[0],
-                description: `${departureFee.type} (Departure Logistics) - ${applicant.full_name} (${applicant.name})`,
-                source_doctype: "DSR Departure",
-              },
-            ]
-          : undefined;
+      const docName = processingData?.telesign?.name || processingData?.dsr?.name;
+      if (!docName) {
+        throw new Error("DSR record does not exist on backend for this candidate.");
+      }
+      return updateTelesignClearanceApi(docName, {
+        status: telesignStatus,
+        employee: telesignEmployee || undefined,
+        dsr: processingData?.dsr?.name,
+      });
+    },
+    onSuccess: () => handleMutationSuccess("Telesign Clearance updated successfully."),
+    onError: (err: any) => toast.error(err.message || "Failed to update Telesign Clearance."),
+  });
 
-      const res = await submitDsrDepartureApi({
-        applicant: applicant.name,
-        departure_date: depDate,
-        departure_time: depTime,
-        airport: depAirport,
-        destination_city: depDestination,
+  // ---------------------------------------------------------------------------
+  // 6. DSR Stamp State & Mutation
+  // ---------------------------------------------------------------------------
+  const [stampNumber, setStampNumber] = React.useState("");
+  const [stampDate, setStampDate] = React.useState("");
+  const [stampStatus, setStampStatus] = React.useState<"Pending" | "Completed">("Completed");
+
+  React.useEffect(() => {
+    if (processingData?.stamp) {
+      setStampNumber(processingData.stamp.stamp_number || "");
+      setStampDate(processingData.stamp.stamp_date || "");
+      setStampStatus(processingData.stamp.status || "Completed");
+    } else {
+      setStampNumber(processingData?.dossier?.visa_number || "");
+      setStampDate(new Date().toISOString().split("T")[0]);
+      setStampStatus("Completed");
+    }
+  }, [processingData?.stamp, processingData?.dossier]);
+
+  const stampMutation = useMutation({
+    mutationFn: async () => {
+      if (!processingData?.dsr?.name) {
+        throw new Error("DSR record does not exist for this candidate.");
+      }
+      if (!stampNumber.trim()) {
+        throw new Error("Visa stamp number is required.");
+      }
+      return submitDsrStampApi({
+        dsr: processingData.dsr.name,
+        stamp_number: stampNumber.trim(),
+        stamp_date: stampDate || new Date().toISOString().split("T")[0],
+        status: stampStatus,
+        applicantId: applicant.name,
+      });
+    },
+    onSuccess: () => handleMutationSuccess("Visa Stamp record submitted."),
+    onError: (err: any) => toast.error(err.message || "Failed to submit Visa Stamp."),
+  });
+
+  // ---------------------------------------------------------------------------
+  // 7. DSR Ticket State & Mutation
+  // ---------------------------------------------------------------------------
+  const [ticketNumber, setTicketNumber] = React.useState("");
+  const [ticketDetails, setTicketDetails] = React.useState("");
+  const [ticketStatus, setTicketStatus] = React.useState<"Pending" | "Booked" | "Cancelled">("Booked");
+
+  React.useEffect(() => {
+    if (processingData?.ticket) {
+      setTicketNumber(processingData.ticket.ticket_number || "");
+      setTicketDetails(processingData.ticket.ticket_details || "");
+      setTicketStatus(processingData.ticket.status || "Booked");
+    } else {
+      setTicketNumber("");
+      setTicketDetails(`Flight to ${processingData?.dsr?.destination_country || applicant.destination_country || "Saudi Arabia"}`);
+      setTicketStatus("Booked");
+    }
+  }, [processingData?.ticket, processingData?.dsr, applicant.destination_country]);
+
+  const ticketMutation = useMutation({
+    mutationFn: async () => {
+      if (!processingData?.dsr?.name) {
+        throw new Error("DSR record does not exist for this candidate.");
+      }
+      if (!ticketNumber.trim()) {
+        throw new Error("Ticket PNR / number is required.");
+      }
+      return submitDsrTicketApi({
+        dsr: processingData.dsr.name,
+        ticket_number: ticketNumber.trim(),
+        ticket_details: ticketDetails,
+        status: ticketStatus,
+        applicantId: applicant.name,
+      });
+    },
+    onSuccess: () => handleMutationSuccess("Flight Ticket record submitted."),
+    onError: (err: any) => toast.error(err.message || "Failed to submit Flight Ticket."),
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. DSR Departure State & Mutation
+  // ---------------------------------------------------------------------------
+  const [departureTime, setDepartureTime] = React.useState("");
+  const [medical2Result, setMedical2Result] = React.useState<"Pass" | "Fail" | "">("Pass");
+  const [medical2Date, setMedical2Date] = React.useState("");
+  const [medical2Remark, setMedical2Remark] = React.useState("");
+  const [departureStatus, setDepartureStatus] = React.useState<"Pending" | "Departed" | "Cancelled">("Departed");
+
+  React.useEffect(() => {
+    if (processingData?.departure) {
+      setDepartureTime(processingData.departure.departure_time || "");
+      setMedical2Result(processingData.departure.medical_2_result || "Pass");
+      setMedical2Date(processingData.departure.medical_2_date || "");
+      setMedical2Remark(processingData.departure.medical_2_remark || "");
+      setDepartureStatus(processingData.departure.status || "Departed");
+    } else {
+      setDepartureTime(new Date().toISOString().slice(0, 16));
+      setMedical2Result("Pass");
+      setMedical2Date(new Date().toISOString().split("T")[0]);
+      setDepartureStatus("Departed");
+    }
+  }, [processingData?.departure]);
+
+  const departureMutation = useMutation({
+    mutationFn: async () => {
+      if (!processingData?.dsr?.name) {
+        throw new Error("DSR record does not exist for this candidate.");
+      }
+      if (!departureTime) {
+        throw new Error("Departure date and time is required.");
+      }
+      return submitDsrDepartureApi({
+        dsr: processingData.dsr.name,
+        departure_time: departureTime.includes(":") && departureTime.length === 16 ? `${departureTime}:00` : departureTime,
         medical_2_result: medical2Result,
-        medical_2_remarks: medical2Remarks,
-        notes: depNotes,
-        financials: financialsPayload,
+        medical_2_date: medical2Date || new Date().toISOString().split("T")[0],
+        medical_2_remark: medical2Remark,
+        status: departureStatus,
+        applicantId: applicant.name,
       });
-
-      if (departureFee.required && departureFee.amount > 0) {
-        await recordAccountingTransactionApi({
-          transaction_type: departureFee.direction,
-          amount: Number(departureFee.amount),
-          description: `${departureFee.type} (Departure Logistics) - ${applicant.full_name} (${applicant.name})`,
-          applicant: applicant.name,
-          date: departureFee.paymentDate,
-          source_doctype: "DSR Departure",
-        });
-      }
-
-      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
-      toast.success("Departure Clearance Confirmed! Candidate 100% Completed.");
-      onClose();
-    },
-    onError: (err: Error) => toast.error("Departure failed", { description: err.message }),
+    onSuccess: () => handleMutationSuccess("Departure confirmation submitted. Candidate marked 100% completed."),
+    onError: (err: any) => toast.error(err.message || "Failed to submit Departure record."),
   });
 
-  const isPending =
-    updateLmsMutation.isPending ||
-    updateInjazMutation.isPending ||
-    updateWakalaMutation.isPending ||
-    submitStampMutation.isPending ||
-    submitTicketMutation.isPending ||
-    submitDepartureMutation.isPending;
-
-  // Reusable Fee Section Renderer for Frappe "Applicant Fee" DocType
-  const renderApplicantFeeSection = (
-    state: FeeState,
-    setState: React.Dispatch<React.SetStateAction<FeeState>>,
-    stageLabel: string
-  ) => {
-    return (
-      <div className="rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label className="text-xs font-semibold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
-              <Receipt className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-              {stageLabel} Fee Required?
-            </Label>
-            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-              Record fee into accounting cashflow for this stage
-            </p>
-          </div>
-          <Switch
-            checked={state.required}
-            onCheckedChange={(checked) => setState((prev) => ({ ...prev, required: checked }))}
-          />
-        </div>
-
-        {state.required && (
-          <div className="pt-2 border-t border-slate-200 dark:border-[#26262d] space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Fee Type</Label>
-                <select
-                  value={state.type}
-                  onChange={(e) => setState((prev) => ({ ...prev, type: e.target.value as any }))}
-                  className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215] px-2 text-xs text-slate-900 dark:text-slate-100"
-                >
-                  <option value="Registration Fee">Registration Fee</option>
-                  <option value="Processing Fee">Processing Fee</option>
-                  <option value="Visa Fee">Visa Fee</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Amount ($ USD) *</Label>
-                <div className="relative">
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
-                    <DollarSign className="h-3.5 w-3.5 text-slate-400" />
-                  </div>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={state.amount}
-                    onChange={(e) => setState((prev) => ({ ...prev, amount: Number(e.target.value) }))}
-                    className="h-8 pl-7 text-xs bg-white dark:bg-[#121215]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Direction</Label>
-                <select
-                  value={state.direction}
-                  onChange={(e) => setState((prev) => ({ ...prev, direction: e.target.value as any }))}
-                  className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215] px-2 text-xs text-slate-900 dark:text-slate-100"
-                >
-                  <option value="Expense">Expense (Agency Paid)</option>
-                  <option value="Income">Income (Agency Received)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Payment Status</Label>
-                <select
-                  value={state.status}
-                  onChange={(e) => setState((prev) => ({ ...prev, status: e.target.value as any }))}
-                  className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215] px-2 text-xs text-slate-900 dark:text-slate-100"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Paid">Paid</option>
-                  <option value="Expired">Expired</option>
-                  <option value="Refunded">Refunded</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Payment Date</Label>
-                <Input
-                  type="date"
-                  value={state.paymentDate}
-                  onChange={(e) => setState((prev) => ({ ...prev, paymentDate: e.target.value }))}
-                  className="h-8 text-xs bg-white dark:bg-[#121215]"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Fee Notes & Remarks</Label>
-              <Input
-                value={state.notes}
-                onChange={(e) => setState((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Reference # or receipt details..."
-                className="h-8 text-xs bg-white dark:bg-[#121215]"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  // Helpers
+  const getStatusBadge = (status?: string) => {
+    const s = (status || "Pending").toLowerCase();
+    if (["completed", "issued", "approved", "booked", "departed", "authenticated"].includes(s)) {
+      return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">{status}</Badge>;
+    }
+    if (["rejected", "failed", "cancelled"].includes(s)) {
+      return <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20">{status}</Badge>;
+    }
+    if (["submitted", "in progress"].includes(s)) {
+      return <Badge className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">{status}</Badge>;
+    }
+    return <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-500/30">{status || "Pending"}</Badge>;
   };
+
+  const tabs: { key: ProcessingStream; label: string; icon: React.ReactNode; recordStatus?: string; isEditable: boolean }[] = [
+    {
+      key: "lms",
+      label: "LMS Labor",
+      icon: <Building2 className="w-4 h-4" />,
+      recordStatus: processingData?.lms?.status,
+      isEditable: canEditLms,
+    },
+    {
+      key: "injaz",
+      label: "Injaz Biometrics",
+      icon: <Fingerprint className="w-4 h-4" />,
+      recordStatus: processingData?.injaz?.status,
+      isEditable: canEditInjaz,
+    },
+    {
+      key: "wakala",
+      label: "Wakala Sponsor",
+      icon: <Send className="w-4 h-4" />,
+      recordStatus: processingData?.wakala?.status,
+      isEditable: canEditWakala,
+    },
+    {
+      key: "embassy",
+      label: "Embassy Consular",
+      icon: <ShieldCheck className="w-4 h-4" />,
+      recordStatus: processingData?.embassy?.status,
+      isEditable: canEditEmbassy,
+    },
+    {
+      key: "telesign",
+      label: "Telesign Calling",
+      icon: <PhoneCall className="w-4 h-4" />,
+      recordStatus: processingData?.telesign?.status,
+      isEditable: canEditTelesign,
+    },
+    {
+      key: "stamp",
+      label: "Visa Stamping",
+      icon: <FileCheck2 className="w-4 h-4" />,
+      recordStatus: processingData?.stamp?.status,
+      isEditable: canEditStamp,
+    },
+    {
+      key: "ticket",
+      label: "Flight Ticket",
+      icon: <Ticket className="w-4 h-4" />,
+      recordStatus: processingData?.ticket?.status,
+      isEditable: canEditTicket,
+    },
+    {
+      key: "departure",
+      label: "Pre-Departure",
+      icon: <Plane className="w-4 h-4" />,
+      recordStatus: processingData?.departure?.status,
+      isEditable: canEditDeparture,
+    },
+  ];
+
+  const hasDsr = Boolean(processingData?.dsr);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
-        <DialogHeader className="border-b border-slate-100 dark:border-[#222227] pb-3">
-          <div className="flex items-center justify-between">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl">
+        {/* Header */}
+        <div className="p-6 border-b border-border/60 bg-muted/20">
+          <div className="flex items-start justify-between">
+            <div>
+              <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2.5">
+                <Plane className="w-5 h-5 text-primary" />
+                Processing Streams & Deployments
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-sm text-muted-foreground">
+                Manage parallel clearance streams (LMS, Injaz, Wakala, Embassy, Telesign) and deployment guardrails for{" "}
+                <span className="font-semibold text-foreground">{applicant.full_name}</span> ({applicant.name})
+              </DialogDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchProcessing()}
+              disabled={isProcessingLoading}
+              className="gap-1.5 text-xs h-8"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isProcessingLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {/* DSR Status Indicator Bar */}
+          <div className="mt-4 p-3 rounded-lg border bg-card/60 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                <FileCheck2 className="h-4 w-4" />
-              </div>
-              <div>
-                <DialogTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                  Clearance & Placement Portal
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                  {applicant.name} — {applicant.full_name} ({applicant.applicant_state || "Processing"})
-                </DialogDescription>
-              </div>
+              <span className="text-muted-foreground">Dossier:</span>
+              <span className="font-mono font-medium">{processingData?.dossier?.name || "None"}</span>
             </div>
-            <Badge variant="success">{applicant.applicant_state || "Processing"}</Badge>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">DSR:</span>
+              <span className="font-mono font-medium">{processingData?.dsr?.name || "Not initialized"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Pipeline State:</span>
+              <Badge variant="info" className="font-semibold">
+                {applicant.applicant_state}
+              </Badge>
+            </div>
           </div>
+        </div>
 
-          {/* Sequential Workflow Tabs */}
-          <div className="flex flex-wrap gap-1.5 pt-3">
-            {/* 1. LMIS Tab */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("lms")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "lms"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              <Plane className="h-3.5 w-3.5" />
-              LMIS
-              {isLmsComplete && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-            </button>
-
-            {/* 2. Injaz Tab */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("injaz")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "injaz"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              <Fingerprint className="h-3.5 w-3.5" />
-              Injaz
-              {isInjazComplete && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-            </button>
-
-            {/* 3. Wakala Tab */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("wakala")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "wakala"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              Wakala
-              {isWakalaComplete && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-            </button>
-
-            {/* 4. Visa Stamp Tab (Strictly after Processing) */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("stamp")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "stamp"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              {!isProcessingCompleted ? (
-                <Lock className="h-3 w-3 text-slate-400" />
-              ) : (
-                <ShieldCheck className="h-3.5 w-3.5" />
-              )}
-              Visa Stamp
-              {isStamped && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-            </button>
-
-            {/* 5. Flight Ticket Tab (Strictly after Stamped) */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("ticket")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "ticket"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              {!isStamped ? (
-                <Lock className="h-3 w-3 text-slate-400" />
-              ) : (
-                <Ticket className="h-3.5 w-3.5" />
-              )}
-              Flight Ticket
-              {isTicketed && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
-            </button>
-
-            {/* 6. Pre-Departure Tab (Strictly after Ticketed) */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("departure")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeTab === "departure"
-                  ? "bg-emerald-900 text-white"
-                  : "bg-slate-100 dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-[#26262d]"
-              }`}
-            >
-              {!isTicketed ? (
-                <Lock className="h-3 w-3 text-slate-400" />
-              ) : (
-                <HeartPulse className="h-3.5 w-3.5" />
-              )}
-              Pre-Departure
-            </button>
-          </div>
-        </DialogHeader>
-
-        {!isCurrentTabEditable && (
-          <div className="rounded-xl border border-amber-300 dark:border-amber-900/70 bg-amber-50/80 dark:bg-amber-950/40 p-2.5 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2">
-            <Lock className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
-            <span>
-              <strong>Read-Only View:</strong> Your assigned role does not grant edit permissions for the <strong>{activeTab.toUpperCase()}</strong> stream. You can review current clearance records and audit data.
-            </span>
+        {/* Missing DSR Alert */}
+        {!hasDsr && !isProcessingLoading && (
+          <div className="mx-6 mt-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <h4 className="font-semibold text-amber-700 dark:text-amber-300">DSR Record Not Found</h4>
+              <p className="text-amber-600/90 dark:text-amber-400/90 text-xs mt-1">
+                Processing streams are automatically initialized once an Applicant Dossier is confirmed for a candidate in the <strong>Selected</strong> stage. You can still view current configuration below.
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Tab 1: LMIS Clearance */}
-        {activeTab === "lms" && (
-          <div className="space-y-4 py-2 text-xs">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 dark:bg-emerald-950/40 dark:border-emerald-800/60 p-3 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
-              <Plane className="h-4 w-4 text-emerald-700 shrink-0" />
-              <span><strong>LMIS Stage:</strong> Labor Market Information System electronic quota and work verification.</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">LMIS Clearance Status</Label>
-                <select
-                  value={lmsStatus}
-                  onChange={(e) => setLmsStatus(e.target.value as "Pending" | "Issued" | "Rejected")}
-                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5 text-xs"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Issued">Issued (Labor Ministry Approved)</option>
-                  <option value="Rejected">Rejected</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Assigned Clearance Staff</Label>
-                {employees.length > 0 ? (
-                  <select
-                    value={lmsEmployee}
-                    onChange={(e) => setLmsEmployee(e.target.value)}
-                    className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 text-xs text-slate-900 dark:text-slate-100"
-                  >
-                    {employees.map((emp) => {
-                      const val = getEmpLabel(emp);
-                      return (
-                        <option key={emp.name} value={val}>
-                          {val}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <Input
-                    value={lmsEmployee}
-                    onChange={(e) => setLmsEmployee(e.target.value)}
-                    placeholder="Assigned staff..."
+        {/* Tab Navigation */}
+        <div className="px-6 pt-4 border-b border-border/40 overflow-x-auto flex gap-1 scrollbar-none">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium rounded-t-lg transition-all border-b-2 whitespace-nowrap ${
+                  isActive
+                    ? "border-primary text-primary bg-primary/5 font-semibold"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.recordStatus && (
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      ["completed", "issued", "approved", "booked", "departed"].includes(tab.recordStatus.toLowerCase())
+                        ? "bg-emerald-500"
+                        : ["rejected", "failed", "cancelled"].includes(tab.recordStatus.toLowerCase())
+                        ? "bg-rose-500"
+                        : "bg-amber-500"
+                    }`}
                   />
                 )}
-              </div>
+              </button>
+            );
+          })}
+        </div>
 
-              <div className="space-y-1">
-                <Label className="font-semibold">LMIS Issued Date</Label>
-                <Input
-                  type="date"
-                  value={lmsIssuedOn}
-                  onChange={(e) => setLmsIssuedOn(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">LMIS Permit / Document No</Label>
-                <Input
-                  value={additionalField1}
-                  onChange={(e) => setAdditionalField1(e.target.value)}
-                  placeholder="LMIS-PERMIT-88912"
-                />
-              </div>
+        {/* Tab Body */}
+        <div className="p-6">
+          {isProcessingLoading ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm font-medium">Fetching authoritative clearance records from backend...</p>
             </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">LMIS Processing Notes</Label>
-              <Textarea
-                rows={2}
-                value={lmsNotes}
-                onChange={(e) => setLmsNotes(e.target.value)}
-                placeholder="Notes on Ministry approval..."
-              />
-            </div>
-
-            {/* Applicant Fee for LMIS */}
-            {renderApplicantFeeSection(lmsFee, setLmsFee, "LMIS Processing")}
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#222227]">
-              {isLmsComplete && isInjazComplete && isWakalaComplete && !isStamped ? (
-                <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1 text-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> All clearances ready for Visa Stamp
-                </span>
-              ) : (
-                <span className="text-slate-400 text-[11px]">Save changes to update record</span>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={() => updateLmsMutation.mutate()}
-                  disabled={isPending || !canEditLms}
-                  className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
-                >
-                  Save LMIS Clearance
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 2: Injaz & Biometrics */}
-        {activeTab === "injaz" && (
-          <div className="space-y-4 py-2 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">Injaz Clearance Status</Label>
-                <select
-                  value={injazStatus}
-                  onChange={(e) => setInjazStatus(e.target.value as "Pending" | "Completed")}
-                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5 text-xs"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Completed">Completed (Biometrics Passed)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Assigned Clearance Staff</Label>
-                {employees.length > 0 ? (
-                  <select
-                    value={injazEmployee}
-                    onChange={(e) => setInjazEmployee(e.target.value)}
-                    className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 text-xs text-slate-900 dark:text-slate-100"
-                  >
-                    {employees.map((emp) => {
-                      const val = getEmpLabel(emp);
-                      return (
-                        <option key={emp.name} value={val}>
-                          {val}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <Input
-                    value={injazEmployee}
-                    onChange={(e) => setInjazEmployee(e.target.value)}
-                    placeholder="Assigned staff..."
-                  />
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Injaz Application No (E-Number)</Label>
-                <Input
-                  value={injazAppNo}
-                  onChange={(e) => setInjazAppNo(e.target.value)}
-                  placeholder="E-9918241"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Teashir Biometrics Date</Label>
-                <Input
-                  type="date"
-                  value={biometricsDate}
-                  onChange={(e) => setBiometricsDate(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold">Biometrics Center</Label>
-                <Input
-                  value={biometricsCenter}
-                  onChange={(e) => setBiometricsCenter(e.target.value)}
-                  placeholder="Teashir VFS Global Addis Ababa"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">Injaz Processing Notes</Label>
-              <Textarea
-                rows={2}
-                value={injazNotes}
-                onChange={(e) => setInjazNotes(e.target.value)}
-                placeholder="Biometrics verification remarks..."
-              />
-            </div>
-
-            {/* Applicant Fee for Injaz / Teashir */}
-            {renderApplicantFeeSection(injazFee, setInjazFee, "Injaz & Biometrics")}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <span className="text-slate-400 text-[11px]">Save changes to update record</span>
-              <Button
-                type="button"
-                onClick={() => updateInjazMutation.mutate()}
-                disabled={isPending || !canEditInjaz}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
-              >
-                Save Injaz Clearance
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 3: Wakala Authorization */}
-        {activeTab === "wakala" && (
-          <div className="space-y-4 py-2 text-xs">
-            {applicant.destination_country === "Kuwait" ? (
-              <div className="rounded-xl border border-sky-200 bg-sky-50 dark:bg-sky-950/60 dark:border-sky-800 p-3 text-sky-900 dark:text-sky-200 text-xs">
-                <p className="font-semibold">Kuwait Corridor Notice:</p>
-                <p className="text-[11px] mt-0.5">Musaned electronic power of attorney is not required for Kuwait deployment. Wakala clearance can be marked completed directly.</p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50/70 dark:bg-[#16161b] p-3 text-slate-700 dark:text-zinc-300 text-xs">
-                <p className="font-semibold">Musaned Power of Attorney (Saudi Arabia):</p>
-                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">Musaned is an external government portal. Ensure the candidate has been registered on Musaned externally before confirming Wakala payment.</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">Wakala Clearance Status</Label>
-                <select
-                  value={wakalaStatus}
-                  onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "Completed")}
-                  className="w-full rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 py-1.5 text-xs"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Assigned Clearance Staff</Label>
-                {employees.length > 0 ? (
-                  <select
-                    value={wakalaEmployee}
-                    onChange={(e) => setWakalaEmployee(e.target.value)}
-                    className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 text-xs text-slate-900 dark:text-slate-100"
-                  >
-                    {employees.map((emp) => {
-                      const val = getEmpLabel(emp);
-                      return (
-                        <option key={emp.name} value={val}>
-                          {val}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : (
-                  <Input
-                    value={wakalaEmployee}
-                    onChange={(e) => setWakalaEmployee(e.target.value)}
-                    placeholder="Assigned staff..."
-                  />
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Wakala Authorization No</Label>
-                <Input
-                  value={wakalaNumber}
-                  onChange={(e) => setWakalaNumber(e.target.value)}
-                  placeholder="WAK-9921448"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="font-semibold">Sponsor Auth Code / ID</Label>
-                <Input
-                  value={sponsorAuthCode}
-                  onChange={(e) => setSponsorAuthCode(e.target.value)}
-                  placeholder="SP-99182"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="font-semibold">Wakala Processing Notes</Label>
-              <Textarea
-                rows={2}
-                value={wakalaNotes}
-                onChange={(e) => setWakalaNotes(e.target.value)}
-                placeholder="Power of attorney details..."
-              />
-            </div>
-
-            {/* Applicant Fee for Wakala */}
-            {renderApplicantFeeSection(wakalaFee, setWakalaFee, "Wakala Power of Attorney")}
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <span className="text-slate-400 text-[11px]">Save changes to update record</span>
-              <Button
-                type="button"
-                onClick={() => updateWakalaMutation.mutate()}
-                disabled={isPending || !canEditWakala}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs"
-              >
-                Save Wakala Clearance
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 4: Visa Stamp (Stage 7 - Guardrail Enforced) */}
-        {activeTab === "stamp" && (
-          <div className="space-y-4 py-2 text-xs">
-            {!isProcessingCompleted ? (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3.5 text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Lock className="h-4 w-4 text-amber-600" /> Clearance Stage In Progress
-                </p>
-                <p className="text-[11px]">
-                  Visa Stamping is strictly allowed only after LMS, Injaz, and Wakala clearances have all been completed and approved.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-xs text-emerald-900 dark:text-emerald-300">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4" /> Clearances Verified
-                </p>
-                <p className="text-[11px] mt-0.5">
-                  LMS, Wakala, and Injaz are confirmed. Enter the issued visa details below to advance candidate to Stamped.
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">Issued Visa Number *</Label>
-                <Input
-                  value={visaNumber}
-                  onChange={(e) => setVisaNumber(e.target.value)}
-                  placeholder="VISA-ETH-9921448"
-                  disabled={!isProcessingCompleted}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Stamped Date *</Label>
-                <Input
-                  type="date"
-                  value={stampedDate}
-                  onChange={(e) => setStampedDate(e.target.value)}
-                  disabled={!isProcessingCompleted}
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label className="font-semibold">Embassy Reference Code</Label>
-                <Input
-                  value={embassyReference}
-                  onChange={(e) => setEmbassyReference(e.target.value)}
-                  placeholder="EMB-ETH-2026-881"
-                  disabled={!isProcessingCompleted}
-                />
-              </div>
-            </div>
-
-            {/* Applicant Fee for Visa / Embassy */}
-            {renderApplicantFeeSection(stampFee, setStampFee, "Embassy Visa Stamping")}
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                type="button"
-                onClick={() => submitStampMutation.mutate()}
-                disabled={isPending || !isProcessingCompleted || !canEditStamp}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-              >
-                Confirm Visa Stamp & Advance to Stamped
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 5: Flight Ticket (Stage 8 - Guardrail Enforced) */}
-        {activeTab === "ticket" && (
-          <div className="space-y-4 py-2 text-xs">
-            {!isStamped ? (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3.5 text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Lock className="h-4 w-4 text-amber-600" /> Visa Stamping Required
-                </p>
-                <p className="text-[11px]">
-                  Flight Ticket booking is strictly allowed only after the Visa Stamp has been confirmed.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 text-xs text-emerald-900 dark:text-emerald-300">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4" /> Visa Stamp Verified
-                </p>
-                <p className="text-[11px] mt-0.5">
-                  Visa is endorsed. Enter flight reservation and airline e-ticket details below.
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">Airline Ticket Number / PNR *</Label>
-                <Input
-                  value={ticketPnrFinal}
-                  onChange={(e) => setTicketPnrFinal(e.target.value)}
-                  placeholder="ET-TKT-88392"
-                  disabled={!isStamped}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Flight Number *</Label>
-                <Input
-                  value={flightNoFinal}
-                  onChange={(e) => setFlightNoFinal(e.target.value)}
-                  placeholder="ET604"
-                  disabled={!isStamped}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Departure Date *</Label>
-                <Input
-                  type="date"
-                  value={ticketDepDate}
-                  onChange={(e) => setTicketDepDate(e.target.value)}
-                  disabled={!isStamped}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Destination City *</Label>
-                <Input
-                  value={ticketDestination}
-                  onChange={(e) => setTicketDestination(e.target.value)}
-                  placeholder="Riyadh (RUH)"
-                  disabled={!isStamped}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                type="button"
-                onClick={() => submitTicketMutation.mutate()}
-                disabled={isPending || !isStamped || !canEditTicket}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-              >
-                Issue Flight Ticket & Advance to Ticketed
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Tab 6: Pre-Departure Medical 2 & Final Departure (Stage 9 - Guardrail Enforced) */}
-        {activeTab === "departure" && (
-          <div className="space-y-4 py-2 text-xs">
-            {!isTicketed ? (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 p-3.5 text-xs text-amber-800 dark:text-amber-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Lock className="h-4 w-4 text-amber-600" /> Flight Ticket Required
-                </p>
-                <p className="text-[11px]">
-                  Departure clearance is strictly allowed only after the Flight Ticket has been issued.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
-                    <HeartPulse className="h-4 w-4 text-emerald-600" />
-                    Pre-Departure Medical 2 Check (Strict Guardrail)
-                  </span>
-                  <select
-                    value={medical2Result}
-                    onChange={(e) => setMedical2Result(e.target.value as "Pass" | "Fail")}
-                    className="rounded-md border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-[#16161b] px-2 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300"
-                  >
-                    <option value="Pass">Pass (Cleared for Flight)</option>
-                    <option value="Fail">Fail (Departure Blocked)</option>
-                  </select>
+          ) : (
+            <>
+              {/* Read-Only Banner for Unprivileged Users */}
+              {!tabs.find((t) => t.key === activeTab)?.isEditable && (
+                <div className="mb-4 p-2.5 rounded-lg border border-border/60 bg-muted/30 flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-amber-500" />
+                    <span>You have read-only access to this clearance stream.</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">Read Only</Badge>
                 </div>
-                <Input
-                  value={medical2Remarks}
-                  onChange={(e) => setMedical2Remarks(e.target.value)}
-                  placeholder="Final medical examination remarks..."
-                />
-              </div>
-            )}
+              )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="font-semibold">Departure Date</Label>
-                <Input
-                  type="date"
-                  value={depDate}
-                  onChange={(e) => setDepDate(e.target.value)}
-                  disabled={!isTicketed}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Departure Time</Label>
-                <Input
-                  value={depTime}
-                  onChange={(e) => setDepTime(e.target.value)}
-                  placeholder="22:30:00"
-                  disabled={!isTicketed}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Departure Airport</Label>
-                <Input
-                  value={depAirport}
-                  onChange={(e) => setDepAirport(e.target.value)}
-                  disabled={!isTicketed}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="font-semibold">Destination City</Label>
-                <Input
-                  value={depDestination}
-                  onChange={(e) => setDepDestination(e.target.value)}
-                  disabled={!isTicketed}
-                />
-              </div>
-            </div>
+              {/* 1. LMS CLEARANCE TAB */}
+              {activeTab === "lms" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <Building2 className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">LMS Labor Clearance</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.lms?.name || "Not created"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.lms?.status)}
+                  </div>
 
-            {/* Applicant Fee for Departure */}
-            {renderApplicantFeeSection(departureFee, setDepartureFee, "Pre-Departure Logistics")}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lms-status" className="text-xs font-medium">Clearance Status</Label>
+                      <select
+                        id="lms-status"
+                        value={lmsStatus}
+                        onChange={(e) => setLmsStatus(e.target.value as any)}
+                        disabled={!canEditLms || lmsMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Issued">Issued</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                type="button"
-                onClick={() => submitDepartureMutation.mutate()}
-                disabled={isPending || !isTicketed || medical2Result === "Fail" || !canEditDeparture}
-                className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold"
-              >
-                Finalize Departure Clearance (100% Complete)
-              </Button>
-            </div>
-          </div>
-        )}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lms-employee" className="text-xs font-medium">Assigned Officer</Label>
+                      <select
+                        id="lms-employee"
+                        value={lmsEmployee}
+                        onChange={(e) => setLmsEmployee(e.target.value)}
+                        disabled={!canEditLms || lmsMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {employees.map((emp: any) => (
+                          <option key={emp.name} value={emp.name}>
+                            {emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lms-issued-on" className="text-xs font-medium">Issued On Date</Label>
+                      <Input
+                        id="lms-issued-on"
+                        type="date"
+                        value={lmsIssuedOn}
+                        onChange={(e) => setLmsIssuedOn(e.target.value)}
+                        disabled={!canEditLms || lmsMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Missing Data Request Section */}
+                  <div className="p-4 rounded-lg border border-border/60 bg-muted/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="missing-data-toggle" className="text-xs font-semibold">
+                        Request Missing Document / Medical Data
+                      </Label>
+                      <input
+                        id="missing-data-toggle"
+                        type="checkbox"
+                        checked={missingDataRequested}
+                        onChange={(e) => setMissingDataRequested(e.target.checked)}
+                        disabled={!canEditLms || lmsMutation.isPending}
+                        className="w-4 h-4 rounded text-primary"
+                      />
+                    </div>
+
+                    {missingDataRequested && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Missing Data Type</Label>
+                          <Input
+                            placeholder="e.g. Passport Photo, Blood Test"
+                            value={missingDataType}
+                            onChange={(e) => setMissingDataType(e.target.value)}
+                            disabled={!canEditLms || lmsMutation.isPending}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Missing Data Status</Label>
+                          <select
+                            value={missingDataStatus}
+                            onChange={(e) => setMissingDataStatus(e.target.value as any)}
+                            disabled={!canEditLms || lmsMutation.isPending}
+                            className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                          >
+                            <option value="Pending">Pending</option>
+                            <option value="Received">Received</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2 space-y-1.5">
+                          <Label className="text-xs">Notes / Requirements</Label>
+                          <Textarea
+                            placeholder="Provide details for recruiter..."
+                            value={missingDataNotes}
+                            onChange={(e) => setMissingDataNotes(e.target.value)}
+                            disabled={!canEditLms || lmsMutation.isPending}
+                            className="text-xs min-h-[60px]"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {canEditLms && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => lmsMutation.mutate()}
+                        disabled={lmsMutation.isPending || (!processingData?.lms?.name && !processingData?.dsr?.name)}
+                        className="gap-2"
+                      >
+                        {lmsMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Save LMS Clearance
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. INJAZ CLEARANCE TAB */}
+              {activeTab === "injaz" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <Fingerprint className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Injaz Biometrics Clearance</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.injaz?.name || "Not created"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.injaz?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="injaz-status" className="text-xs font-medium">Injaz Status</Label>
+                      <select
+                        id="injaz-status"
+                        value={injazStatus}
+                        onChange={(e) => setInjazStatus(e.target.value as any)}
+                        disabled={!canEditInjaz || injazMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="injaz-employee" className="text-xs font-medium">Assigned Injaz Officer</Label>
+                      <select
+                        id="injaz-employee"
+                        value={injazEmployee}
+                        onChange={(e) => setInjazEmployee(e.target.value)}
+                        disabled={!canEditInjaz || injazMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {employees.map((emp: any) => (
+                          <option key={emp.name} value={emp.name}>
+                            {emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {canEditInjaz && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => injazMutation.mutate()}
+                        disabled={injazMutation.isPending || (!processingData?.injaz?.name && !processingData?.dsr?.name)}
+                        className="gap-2"
+                      >
+                        {injazMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Save Injaz Clearance
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 3. WAKALA CLEARANCE TAB */}
+              {activeTab === "wakala" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <Send className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Wakala Sponsor Clearance</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.wakala?.name || "Not created"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.wakala?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="wakala-status" className="text-xs font-medium">Wakala Status</Label>
+                      <select
+                        id="wakala-status"
+                        value={wakalaStatus}
+                        onChange={(e) => setWakalaStatus(e.target.value as any)}
+                        disabled={!canEditWakala || wakalaMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="wakala-employee" className="text-xs font-medium">Assigned Wakala Officer</Label>
+                      <select
+                        id="wakala-employee"
+                        value={wakalaEmployee}
+                        onChange={(e) => setWakalaEmployee(e.target.value)}
+                        disabled={!canEditWakala || wakalaMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {employees.map((emp: any) => (
+                          <option key={emp.name} value={emp.name}>
+                            {emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {canEditWakala && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => wakalaMutation.mutate()}
+                        disabled={wakalaMutation.isPending || (!processingData?.wakala?.name && !processingData?.dsr?.name)}
+                        className="gap-2"
+                      >
+                        {wakalaMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Save Wakala Clearance
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 4. EMBASSY CLEARANCE TAB */}
+              {activeTab === "embassy" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Embassy Clearance</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.embassy?.name || "Not created"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.embassy?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="embassy-status" className="text-xs font-medium">Embassy Status</Label>
+                      <select
+                        id="embassy-status"
+                        value={embassyStatus}
+                        onChange={(e) => setEmbassyStatus(e.target.value as any)}
+                        disabled={!canEditEmbassy || embassyMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="embassy-employee" className="text-xs font-medium">Assigned Officer</Label>
+                      <select
+                        id="embassy-employee"
+                        value={embassyEmployee}
+                        onChange={(e) => setEmbassyEmployee(e.target.value)}
+                        disabled={!canEditEmbassy || embassyMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {employees.map((emp: any) => (
+                          <option key={emp.name} value={emp.name}>
+                            {emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="embassy-sub-date" className="text-xs font-medium">Submission Date</Label>
+                      <Input
+                        id="embassy-sub-date"
+                        type="date"
+                        value={embassySubDate}
+                        onChange={(e) => setEmbassySubDate(e.target.value)}
+                        disabled={!canEditEmbassy || embassyMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="embassy-app-date" className="text-xs font-medium">Approval Date</Label>
+                      <Input
+                        id="embassy-app-date"
+                        type="date"
+                        value={embassyAppDate}
+                        onChange={(e) => setEmbassyAppDate(e.target.value)}
+                        disabled={!canEditEmbassy || embassyMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Consular Fees */}
+                  <div className="p-4 rounded-lg border bg-muted/10 space-y-3">
+                    <div className="text-xs font-semibold">Consular Fees & Payment</div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Fee Status</Label>
+                        <select
+                          value={feeStatus}
+                          onChange={(e) => setFeeStatus(e.target.value as any)}
+                          disabled={!canEditEmbassy || embassyMutation.isPending}
+                          className="w-full h-8 rounded border bg-background px-2 text-xs"
+                        >
+                          <option value="Unpaid">Unpaid</option>
+                          <option value="Paid">Paid</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Fee Amount</Label>
+                        <Input
+                          type="number"
+                          value={feeAmount}
+                          onChange={(e) => setFeeAmount(Number(e.target.value))}
+                          disabled={!canEditEmbassy || embassyMutation.isPending}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Currency</Label>
+                        <select
+                          value={feeCurrency}
+                          onChange={(e) => setFeeCurrency(e.target.value)}
+                          disabled={!canEditEmbassy || embassyMutation.isPending}
+                          className="w-full h-8 rounded border bg-background px-2 text-xs"
+                        >
+                          <option value="KWD">KWD</option>
+                          <option value="SAR">SAR</option>
+                          <option value="USD">USD</option>
+                          <option value="ETB">ETB</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {canEditEmbassy && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => embassyMutation.mutate()}
+                        disabled={embassyMutation.isPending || (!processingData?.embassy?.name && !processingData?.dsr?.name)}
+                        className="gap-2"
+                      >
+                        {embassyMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Save Embassy Clearance
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 5. TELESIGN CLEARANCE TAB */}
+              {activeTab === "telesign" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <PhoneCall className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Telesign Calling Clearance</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.telesign?.name || "Not created"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.telesign?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="telesign-status" className="text-xs font-medium">Telesign Status</Label>
+                      <select
+                        id="telesign-status"
+                        value={telesignStatus}
+                        onChange={(e) => setTelesignStatus(e.target.value as any)}
+                        disabled={!canEditTelesign || telesignMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Authenticated">Authenticated</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Failed">Failed</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="telesign-employee" className="text-xs font-medium">Assigned Telesign Officer</Label>
+                      <select
+                        id="telesign-employee"
+                        value={telesignEmployee}
+                        onChange={(e) => setTelesignEmployee(e.target.value)}
+                        disabled={!canEditTelesign || telesignMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="">-- Unassigned --</option>
+                        {employees.map((emp: any) => (
+                          <option key={emp.name} value={emp.name}>
+                            {emp.employee_name ? `${emp.employee_name} (${emp.name})` : emp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {canEditTelesign && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => telesignMutation.mutate()}
+                        disabled={telesignMutation.isPending || (!processingData?.telesign?.name && !processingData?.dsr?.name)}
+                        className="gap-2"
+                      >
+                        {telesignMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Save Telesign Clearance
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 6. VISA STAMPING TAB */}
+              {activeTab === "stamp" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <FileCheck2 className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Visa Stamping (Stage 7)</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.stamp?.name || "Not submitted"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.stamp?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="stamp-number" className="text-xs font-medium">Visa Stamp Number</Label>
+                      <Input
+                        id="stamp-number"
+                        placeholder="e.g. VISA-ETH-991823"
+                        value={stampNumber}
+                        onChange={(e) => setStampNumber(e.target.value)}
+                        disabled={!canEditStamp || stampMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="stamp-date" className="text-xs font-medium">Stamped Date</Label>
+                      <Input
+                        id="stamp-date"
+                        type="date"
+                        value={stampDate}
+                        onChange={(e) => setStampDate(e.target.value)}
+                        disabled={!canEditStamp || stampMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {canEditStamp && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => stampMutation.mutate()}
+                        disabled={stampMutation.isPending || !hasDsr}
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        {stampMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Submit Visa Stamp
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 7. FLIGHT TICKET TAB */}
+              {activeTab === "ticket" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <Ticket className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Flight Ticket Booking (Stage 8)</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.ticket?.name || "Not submitted"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.ticket?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ticket-number" className="text-xs font-medium">Ticket / PNR Number</Label>
+                      <Input
+                        id="ticket-number"
+                        placeholder="e.g. ET-TKT-8849102"
+                        value={ticketNumber}
+                        onChange={(e) => setTicketNumber(e.target.value)}
+                        disabled={!canEditTicket || ticketMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ticket-details" className="text-xs font-medium">Ticket / Flight Details</Label>
+                      <Input
+                        id="ticket-details"
+                        placeholder="e.g. Flight ET604 to Riyadh"
+                        value={ticketDetails}
+                        onChange={(e) => setTicketDetails(e.target.value)}
+                        disabled={!canEditTicket || ticketMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {canEditTicket && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => ticketMutation.mutate()}
+                        disabled={ticketMutation.isPending || !hasDsr}
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        {ticketMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Submit Flight Ticket
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 8. DEPARTURE TAB */}
+              {activeTab === "departure" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="flex items-center gap-2.5">
+                      <Plane className="w-5 h-5 text-primary" />
+                      <div>
+                        <div className="text-sm font-semibold">Pre-Departure & Departure (Stage 9 - 100%)</div>
+                        <div className="text-xs text-muted-foreground">Doc: {processingData?.departure?.name || "Not submitted"}</div>
+                      </div>
+                    </div>
+                    {getStatusBadge(processingData?.departure?.status)}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="departure-time" className="text-xs font-medium">Departure Date & Time</Label>
+                      <Input
+                        id="departure-time"
+                        type="datetime-local"
+                        value={departureTime}
+                        onChange={(e) => setDepartureTime(e.target.value)}
+                        disabled={!canEditDeparture || departureMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="med2-result" className="text-xs font-medium">Pre-Departure Medical (Medical 2)</Label>
+                      <select
+                        id="med2-result"
+                        value={medical2Result}
+                        onChange={(e) => setMedical2Result(e.target.value as any)}
+                        disabled={!canEditDeparture || departureMutation.isPending}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                      >
+                        <option value="Pass">Pass (FIT)</option>
+                        <option value="Fail">Fail (UNFIT)</option>
+                        <option value="">Pending</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="med2-date" className="text-xs font-medium">Medical 2 Date</Label>
+                      <Input
+                        id="med2-date"
+                        type="date"
+                        value={medical2Date}
+                        onChange={(e) => setMedical2Date(e.target.value)}
+                        disabled={!canEditDeparture || departureMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="med2-remark" className="text-xs font-medium">Medical Remarks</Label>
+                      <Input
+                        id="med2-remark"
+                        placeholder="e.g. Fit for travel"
+                        value={medical2Remark}
+                        onChange={(e) => setMedical2Remark(e.target.value)}
+                        disabled={!canEditDeparture || departureMutation.isPending}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {canEditDeparture && (
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        onClick={() => departureMutation.mutate()}
+                        disabled={departureMutation.isPending || !hasDsr}
+                        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
+                      >
+                        {departureMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Confirm Final Departure (100% Complete)
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

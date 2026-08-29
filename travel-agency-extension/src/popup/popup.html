@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Agency Assistant</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Travel Agency</h1>
+          <span class="badge">Assistant</span>
+        </div>
+      </div>
+      <div class="status-indicator" id="status-indicator" title="Extension Ready"></div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="popup-body">
+      <!-- Loading State -->
+      <div id="loading-state" class="state-panel loading-panel">
+        <div class="spinner"></div>
+        <p>Checking candidate storage...</p>
+      </div>
+
+      <!-- Empty State (No Applicant Selected) -->
+      <div id="empty-state" class="state-panel empty-panel" style="display: none;">
+        <div class="empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <line x1="17" x2="22" y1="11" y2="11"/>
+          </svg>
+        </div>
+        <h2>No applicant selected</h2>
+        <p class="empty-desc">
+          Open a candidate record in the Travel Agency application and click <strong>"Send to Extension"</strong> to load their profile.
+        </p>
+      </div>
+
+      <!-- Active Selected Applicant State -->
+      <div id="selected-state" class="state-panel selected-panel" style="display: none;">
+        <div class="active-badge">
+          <span class="pulse-dot"></span>
+          <span>Active Candidate in Memory</span>
+        </div>
+
+        <div class="applicant-card">
+          <div class="card-header">
+            <div class="avatar" id="applicant-avatar">AA</div>
+            <div class="name-block">
+              <h2 id="applicant-fullname">—</h2>
+              <span class="applicant-id" id="applicant-id">APP-XXXXX</span>
+            </div>
+          </div>
+
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="detail-label">Passport #</span>
+              <span class="detail-value font-mono" id="applicant-passport">—</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Destination</span>
+              <span class="detail-value" id="applicant-destination">—</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Position</span>
+              <span class="detail-value" id="applicant-job">—</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Place of Birth</span>
+              <span class="detail-value" id="applicant-pob">—</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Religion</span>
+              <span class="detail-value" id="applicant-religion">—</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Status</span>
+              <span class="detail-value" id="applicant-state">—</span>
+            </div>
+          </div>
+
+          <div class="timestamp-row">
+            <span>Loaded: <span id="applicant-timestamp">—</span></span>
+          </div>
+        </div>
+
+        <!-- Action Button Toolbar -->
+        <div class="action-toolbar">
+          <button type="button" id="btn-clear" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+            </svg>
+            <span>Clear Memory</span>
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span class="version-text">v1.0.0 (Phase 1 Foundation)</span>
+      <span class="security-text">🔒 Local Storage Only</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

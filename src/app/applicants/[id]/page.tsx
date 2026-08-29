@@ -39,6 +39,7 @@ import {
   RotateCcw,
   Plus,
   Ticket,
+  XCircle,
 } from "lucide-react";
 import {
   getApplicant,
@@ -46,16 +47,20 @@ import {
   generateCV,
   cancelApplicant,
   restoreApplicant,
+  fetchProcessingData,
 } from "@/lib/api/applicantApi";
+import { ProcessingStream } from "@/types/processing";
 import {
   calculateRemainingDays,
   getExpiryBadgeStatus,
 } from "@/lib/validations/applicant.schema";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
 import { ProcessingStreamsModal } from "@/components/applicant/ProcessingStreamsModal";
+import { MusanedVerificationModal } from "@/components/applicant/MusanedVerificationModal";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +76,7 @@ const CANONICAL_STAGES = [
   "Draft",
   "Registered",
   "CV Generated",
+  "Request Pending",
   "Selected",
   "Processing",
   "Stamped",
@@ -89,8 +95,9 @@ export default function ApplicantDetailPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [isProcessingModalOpen, setIsProcessingModalOpen] = React.useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
+  const [isMusanedModalOpen, setIsMusanedModalOpen] = React.useState(false);
   const [cancelRemarks, setCancelRemarks] = React.useState("");
-  const [processingInitialTab, setProcessingInitialTab] = React.useState<"lms" | "injaz" | "wakala" | "stamp" | "ticket" | "departure">("lms");
+  const [processingInitialTab, setProcessingInitialTab] = React.useState<ProcessingStream>("lms");
 
   const {
     data: applicant,
@@ -100,6 +107,12 @@ export default function ApplicantDetailPage() {
   } = useQuery({
     queryKey: ["applicant", applicantId],
     queryFn: () => getApplicant(applicantId),
+    enabled: !!applicantId,
+  });
+
+  const { data: processingData, refetch: refetchProcessing } = useQuery({
+    queryKey: ["processing", applicantId],
+    queryFn: () => fetchProcessingData(applicantId),
     enabled: !!applicantId,
   });
 
@@ -153,21 +166,21 @@ export default function ApplicantDetailPage() {
     return (
       <div className="flex h-96 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-800 dark:text-emerald-400" />
-        <span className="ml-2 text-sm text-slate-600 dark:text-zinc-300">Loading applicant details...</span>
+        <span className="ml-2 text-sm text-slate-600 dark:text-zinc-300">Loading Applicant Details...</span>
       </div>
     );
   }
 
   if (isError || !applicant) {
     return (
-      <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-8 text-center space-y-4">
-        <h3 className="text-lg font-bold text-rose-800 dark:text-rose-300">Applicant Not Found</h3>
-        <p className="text-xs text-rose-600 dark:text-rose-400">
-          The requested record ({applicantId}) was not found in the records.
+      <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/40 p-6 text-center">
+        <h3 className="text-base font-semibold text-rose-800 dark:text-rose-300">Applicant Record Not Found</h3>
+        <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+          The requested applicant profile could not be loaded from Frappe backend.
         </p>
-        <Link href="/applicants">
+        <Link href="/applicants" className="mt-4 inline-block">
           <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Applicants Directory
+            <ArrowLeft className="mr-1 h-4 w-4" /> Back to Applicants
           </Button>
         </Link>
       </div>
@@ -183,8 +196,35 @@ export default function ApplicantDetailPage() {
   const passDays = calculateRemainingDays(applicant.passport_expiry);
   const passStatus = getExpiryBadgeStatus(passDays);
 
+  // Authoritative State Machine Resolution
   const currentStage = applicant.applicant_state || "Draft";
   const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
+
+  const destination = (applicant.destination_country || "").trim().toLowerCase();
+  const isKuwaitApplicant = destination === "kuwait";
+  const isSaudiApplicant =
+    destination === "saudi arabia" ||
+    destination === "saudi" ||
+    destination === "ksa" ||
+    (!destination && !isKuwaitApplicant);
+
+  const isPostCvStage = [
+    "CV Generated",
+    "Request Pending",
+    "Selected",
+    "Processing",
+    "Stamped",
+    "Ticketed",
+    "Departed",
+  ].includes(currentStage);
+
+  const isMusanedReady =
+    !isSaudiApplicant ||
+    isPostCvStage ||
+    applicant.is_uploaded_to_musaned === 1 ||
+    applicant.is_uploaded_to_musaned === true ||
+    applicant.musaned_status === "Registered" ||
+    Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
 
   const isContractDocApproved = Boolean(
     applicant.contractor_doc &&
@@ -245,6 +285,28 @@ export default function ApplicantDetailPage() {
               Cancel Process
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await sendApplicantToExtension(applicant);
+                if (res.success) {
+                  toast.success(`Candidate ${applicant.name} sent to Travel Agency Assistant extension!`);
+                } else {
+                  toast.error(res.error || "Could not send to extension. Make sure extension is installed.");
+                }
+              } catch (err: any) {
+                toast.error(err?.message || "Failed to communicate with extension.");
+              }
+            }}
+            className="text-xs border-emerald-300 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-100/60 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/30"
+            title="Send candidate profile into browser extension memory"
+          >
+            <Send className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+            Send to Extension
+          </Button>
 
           <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
             <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
@@ -349,28 +411,76 @@ export default function ApplicantDetailPage() {
         {currentStage === "Registered" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Stage: Registered (Ready for CV Generation)
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                {isSaudiApplicant ? (
+                  isMusanedReady ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                      Stage: Registered (Musaned Verified — Ready for CV Generation)
+                    </>
+                  ) : (
+                    <>
+                      <Building2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                      Stage: Registered (Prerequisite: Musaned Pre-Registration Required)
+                    </>
+                  )
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                    Stage: Registered (Ready for CV Generation — {applicant.destination_country || "Kuwait"})
+                  </>
+                )}
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                All Stage 2 KYC and Medical requirements are verified. Generate the standardized bilateral recruitment CV.
+                {isSaudiApplicant
+                  ? isMusanedReady
+                    ? `Musaned Reference: ${applicant.musaned_reference_no || "Verified"}. Requirements met to generate the bilateral recruitment CV.`
+                    : "All Stage 2 KYC is complete. Domestic worker pre-registration on Musaned must be confirmed before bilateral CV generation."
+                  : `All Stage 2 KYC and Medical requirements are verified for ${applicant.destination_country || "Kuwait"}. Generate the recruitment CV.`}
               </p>
             </div>
-            <Button
-              onClick={() => generateCvMutation.mutate()}
-              disabled={generateCvMutation.isPending}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-            >
-              {generateCvMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating CV...
-                </>
-              ) : (
-                <>
-                  <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
-                </>
+            <div className="flex flex-wrap items-center gap-2">
+              {isSaudiApplicant && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMusanedModalOpen(true)}
+                  className={`text-xs ${
+                    !isMusanedReady
+                      ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-300 font-semibold"
+                      : "border-slate-300 dark:border-[#26262d]"
+                  }`}
+                >
+                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                  {isMusanedReady ? "View / Edit Musaned" : "Confirm Musaned Registration"}
+                </Button>
               )}
-            </Button>
+
+              <Button
+                onClick={() => generateCvMutation.mutate()}
+                disabled={generateCvMutation.isPending || (isSaudiApplicant && !isMusanedReady)}
+                className={`${
+                  isSaudiApplicant && !isMusanedReady
+                    ? "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                    : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+                } text-xs font-semibold`}
+                title={
+                  isSaudiApplicant && !isMusanedReady
+                    ? "Musaned registration required for Saudi corridor"
+                    : "Generate bilateral recruitment CV"
+                }
+              >
+                {generateCvMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating CV...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -378,14 +488,42 @@ export default function ApplicantDetailPage() {
         {currentStage === "CV Generated" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
                 Stage: CV Generated (Available in Agent Portal)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Candidate CV record is created and published. Overseas partner agencies can discover, select, and reserve this candidate via the Agent Portal.
+                {isSaudiApplicant ? (
+                  <>
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-400">
+                      Musaned verified before CV generation
+                    </span>
+                    {applicant.musaned_reference_no ? (
+                      <>
+                        {" "}• Ref: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.musaned_reference_no}</strong>
+                      </>
+                    ) : null}
+                    . Candidate is published and eligible for overseas Agent Portal discovery and selection.
+                  </>
+                ) : (
+                  <>
+                    Candidate CV record is created and published for {applicant.destination_country || "Kuwait"}. Overseas partner agencies can discover, select, and reserve this candidate via the Agent Portal.
+                  </>
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {isSaudiApplicant && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMusanedModalOpen(true)}
+                  className="text-xs border-slate-300 dark:border-[#26262d]"
+                >
+                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                  View Musaned Record
+                </Button>
+              )}
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
                 <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
                   <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload & Parse Musaned Contract
@@ -441,31 +579,50 @@ export default function ApplicantDetailPage() {
         )}
 
         {/* Stage 6: Processing (Parallel LMS, Injaz, Wakala) */}
-        {currentStage === "Processing" && (
+        {(currentStage === "Processing" ||
+          (currentStage === "Selected" &&
+            Boolean(
+              processingData?.dsr &&
+                (processingData.lms?.employee ||
+                  processingData.injaz?.employee ||
+                  processingData.wakala?.employee ||
+                  processingData.telesign?.employee ||
+                  processingData.embassy?.employee)
+            ))) && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: Processing (Multi-Stream Clearances)
+                  Stage: Processing ({isKuwaitApplicant ? "Kuwait Work Permit & Visa" : "Multi-Stream Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
-                  Execute parallel clearance streams: LMS Clearance, Injaz/Teashir, and Wakala Authorization.
+                  {isKuwaitApplicant
+                    ? "Execute Kuwait Ministry Work Permit and Overseas Placement processing."
+                    : "Execute parallel clearance streams: LMS Clearance, Injaz/Teashir, and Wakala Authorization."}
                 </p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAssignModalOpen(true)}
+                className="text-xs border-slate-300 dark:border-[#26262d] shrink-0"
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Reassign / Update Staff
+              </Button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className={`grid grid-cols-1 ${isKuwaitApplicant ? "sm:grid-cols-1 max-w-md" : "sm:grid-cols-3"} gap-3 pt-2`}>
               {/* LMS Clearance */}
               <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> LMS Clearance
+                    <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {isKuwaitApplicant ? "Kuwait LMS Permit & Visa" : "LMS Clearance"}
                   </span>
-                  <Badge variant={applicant.lms_processing?.status === "Issued" ? "success" : "warning"}>
-                    {applicant.lms_processing?.status || "Pending"}
+                  <Badge variant={processingData?.lms?.status === "Issued" ? "success" : "warning"}>
+                    {processingData?.lms?.status || "Pending"}
                   </Badge>
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.lms_processing?.employee || "Unassigned"}</p>
+                <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.lms?.employee || "Unassigned"}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -479,53 +636,58 @@ export default function ApplicantDetailPage() {
                 </Button>
               </div>
 
-              {/* Injaz Clearance */}
-              <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Fingerprint className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Injaz Clearance
-                  </span>
-                  <Badge variant={applicant.injaz_processing?.status === "Completed" ? "success" : "warning"}>
-                    {applicant.injaz_processing?.status || "Pending"}
-                  </Badge>
-                </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.injaz_processing?.employee || "Unassigned"}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setProcessingInitialTab("injaz");
-                    setIsProcessingModalOpen(true);
-                  }}
-                  className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
-                >
-                  Manage Injaz
-                </Button>
-              </div>
+              {/* Saudi Specific Clearances: Injaz & Wakala */}
+              {!isKuwaitApplicant && (
+                <>
+                  {/* Injaz Clearance */}
+                  <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Fingerprint className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Injaz Clearance
+                      </span>
+                      <Badge variant={processingData?.injaz?.status === "Completed" ? "success" : "warning"}>
+                        {processingData?.injaz?.status || "Pending"}
+                      </Badge>
+                    </div>
+                    <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.injaz?.employee || "Unassigned"}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setProcessingInitialTab("injaz");
+                        setIsProcessingModalOpen(true);
+                      }}
+                      className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
+                    >
+                      Manage Injaz
+                    </Button>
+                  </div>
 
-              {/* Wakala Clearance */}
-              <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Wakala Clearance
-                  </span>
-                  <Badge variant={applicant.wakala_processing?.status === "Completed" ? "success" : "warning"}>
-                    {applicant.wakala_processing?.status || "Pending"}
-                  </Badge>
-                </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {applicant.wakala_processing?.employee || "Unassigned"}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setProcessingInitialTab("wakala");
-                    setIsProcessingModalOpen(true);
-                  }}
-                  className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
-                >
-                  Manage Wakala
-                </Button>
-              </div>
+                  {/* Wakala Clearance */}
+                  <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Wakala Clearance
+                      </span>
+                      <Badge variant={processingData?.wakala?.status === "Completed" ? "success" : "warning"}>
+                        {processingData?.wakala?.status || "Pending"}
+                      </Badge>
+                    </div>
+                    <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.wakala?.employee || "Unassigned"}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setProcessingInitialTab("wakala");
+                        setIsProcessingModalOpen(true);
+                      }}
+                      className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
+                    >
+                      Manage Wakala
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -700,22 +862,61 @@ export default function ApplicantDetailPage() {
                 <GraduationCap className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> Skills, Education & Experience
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">Highest Education</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.highest_education || applicant.education || "N/A"}</p>
+            <CardContent className="pt-4 space-y-4 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <span className="text-slate-500 dark:text-zinc-400">Highest Education</span>
+                  <p className="font-semibold text-slate-900 dark:text-white">{applicant.highest_education || applicant.education || "N/A"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-zinc-400">English Level</span>
+                  <p className="font-semibold text-slate-900 dark:text-white">{applicant.english_level || "N/A"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-zinc-400">Arabic Level</span>
+                  <p className="font-semibold text-slate-900 dark:text-white">{applicant.arabic_level || "N/A"}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-zinc-400">Overseas Experience</span>
+                  <p className="font-semibold text-slate-900 dark:text-white">{applicant.experience_country ? `${applicant.experience_country} (${applicant.experience_period || "1"} yrs)` : "None / First Timer"}</p>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">English Level</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.english_level || "N/A"}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">Arabic Level</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.arabic_level || "N/A"}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">Overseas Experience</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.experience_country ? `${applicant.experience_country} (${applicant.experience_period || "1"} yrs)` : "None / First Timer"}</p>
+
+              <div className="border-t border-slate-100 dark:border-[#222227] pt-3">
+                <span className="text-slate-500 dark:text-zinc-400 block mb-1.5 font-semibold">Practical Skills:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "Cooking", val: applicant.skill_cooking },
+                    { label: "Cleaning", val: applicant.skill_cleaning },
+                    { label: "Washing", val: applicant.skill_washing },
+                    { label: "Ironing", val: applicant.skill_ironing },
+                    { label: "Baby Sitting", val: applicant.skill_baby_sitting },
+                    { label: "Children Care", val: applicant.skill_children_care },
+                    { label: "Arabic Cooking", val: applicant.skill_arabic_cooking },
+                    { label: "Sewing", val: applicant.skill_sewing },
+                    { label: "Elderly Care", val: applicant.skill_elderly_care },
+                  ].filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true).length > 0 ? (
+                    [
+                      { label: "Cooking", val: applicant.skill_cooking },
+                      { label: "Cleaning", val: applicant.skill_cleaning },
+                      { label: "Washing", val: applicant.skill_washing },
+                      { label: "Ironing", val: applicant.skill_ironing },
+                      { label: "Baby Sitting", val: applicant.skill_baby_sitting },
+                      { label: "Children Care", val: applicant.skill_children_care },
+                      { label: "Arabic Cooking", val: applicant.skill_arabic_cooking },
+                      { label: "Sewing", val: applicant.skill_sewing },
+                      { label: "Elderly Care", val: applicant.skill_elderly_care },
+                    ]
+                      .filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true)
+                      .map(s => (
+                        <span key={s.label} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          ✓ {s.label}
+                        </span>
+                      ))
+                  ) : (
+                    <span className="text-slate-400 italic">No skills registered</span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -785,6 +986,77 @@ export default function ApplicantDetailPage() {
 
         {/* Right Column: Medical Watchdog Badges & Compliance Summary */}
         <div className="space-y-6 lg:col-span-4">
+          {/* Musaned Compliance Card */}
+          {isSaudiApplicant && (
+            <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+              <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                    Musaned Compliance
+                  </CardTitle>
+                  {isMusanedReady || isPostCvStage ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 text-[10px] flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Registered
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {applicant.musaned_status || "Not Registered"}
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3 text-xs">
+                {isPostCvStage && (
+                  <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2.5 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px] text-emerald-900 dark:text-emerald-300 flex items-start gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Musaned verified before CV generation.</strong>
+                      <p className="mt-0.5 text-[10px] text-emerald-800 dark:text-emerald-300 leading-tight">
+                        Prerequisite fulfilled. Candidate is eligible for overseas Agent Portal discovery.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-zinc-400">Musaned Status</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {applicant.musaned_status || (applicant.is_uploaded_to_musaned ? "Registered" : isPostCvStage ? "Registered" : "Not Registered")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 dark:text-zinc-400">Reference No</span>
+                  <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                    {applicant.musaned_reference_no || (isPostCvStage ? "Verified" : "Not Recorded")}
+                  </span>
+                </div>
+                {applicant.musaned_uploaded_at && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">Registration Date</span>
+                    <span className="text-slate-700 dark:text-zinc-300">
+                      {new Date(applicant.musaned_uploaded_at).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {applicant.musaned_registered_by && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">Registered By</span>
+                    <span className="text-slate-700 dark:text-zinc-300 font-medium">{applicant.musaned_registered_by}</span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMusanedModalOpen(true)}
+                  className="w-full mt-2 text-xs border-slate-300 dark:border-[#26262d]"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                  {isMusanedReady || isPostCvStage ? "View / Edit Musaned Record" : "Confirm Musaned Registration"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
               <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -819,11 +1091,12 @@ export default function ApplicantDetailPage() {
           {/* Candidate Fees & Financials Ledger */}
           {(() => {
             const allFees = [
-              ...(applicant.lms_processing?.financials || []),
-              ...(applicant.injaz_processing?.financials || []),
-              ...(applicant.wakala_processing?.financials || []),
-              ...(applicant.dsr_stamp?.financials || []),
-              ...(applicant.departure_info?.financials || []),
+              ...(processingData?.lms?.financials || []),
+              ...(processingData?.injaz?.financials || []),
+              ...(processingData?.wakala?.financials || []),
+              ...(processingData?.embassy?.financials || []),
+              ...(processingData?.stamp?.financials || []),
+              ...(processingData?.departure?.financials || []),
               ...(applicant.income_expense_logs || []),
             ];
             const candidateIncome = allFees
@@ -908,9 +1181,13 @@ export default function ApplicantDetailPage() {
         <AssignEmployeeModal
           applicantIds={[applicant.name || applicantId]}
           applicantNames={[applicant.full_name || "Applicant"]}
+          destinationCountry={applicant.destination_country}
           isOpen={isAssignModalOpen}
           onClose={() => setIsAssignModalOpen(false)}
-          onSuccess={() => refetch()}
+          onSuccess={() => {
+            refetch();
+            refetchProcessing();
+          }}
         />
       )}
 
@@ -957,6 +1234,16 @@ export default function ApplicantDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Musaned Pre-Registration Modal */}
+      {isSaudiApplicant && (
+        <MusanedVerificationModal
+          applicant={applicant}
+          isOpen={isMusanedModalOpen}
+          onClose={() => setIsMusanedModalOpen(false)}
+          onSuccess={() => refetch()}
+        />
+      )}
     </div>
   );
 }

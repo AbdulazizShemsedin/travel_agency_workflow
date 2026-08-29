@@ -18,6 +18,9 @@ import {
   ChevronDown,
   User,
   Check,
+  Filter,
+  ArrowUpDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   getAgencyComplaintsApi,
@@ -26,7 +29,13 @@ import {
   searchApplicantsForComplaintApi,
   uploadFileApi,
 } from "@/lib/api/applicantApi";
-import { AgencyComplaint, ComplaintSeverity } from "@/types/applicant";
+import {
+  AgencyComplaint,
+  ComplaintSeverity,
+  ComplaintCategory,
+  COMPLAINT_CATEGORIES,
+  COMPLAINT_SEVERITIES,
+} from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,14 +57,17 @@ export default function AgentComplaintsPage() {
   }, [defaultContractor, activeContractor]);
 
   const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
-  const [activeTab, setActiveTab] = React.useState<"unresolved" | "new" | "resolved">("unresolved");
+  const [activeTab, setActiveTab] = React.useState<"unresolved" | "resolved">("unresolved");
+  const [categoryFilter, setCategoryFilter] = React.useState<string>("All Categories");
+  const [severityFilter, setSeverityFilter] = React.useState<string>("All Severities");
+  const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest" | "severity" | "sla">("newest");
 
   // Submit Modal State
   const [isSubmitModalOpen, setIsSubmitModalOpen] = React.useState(false);
   const [formData, setFormData] = React.useState({
     applicant_search: "",
     full_name: "",
-    complaint_category: "Medical",
+    complaint_category: COMPLAINT_CATEGORIES[0] as ComplaintCategory,
     severity: "High" as ComplaintSeverity,
     complaint_details: "",
     attachment: "",
@@ -110,6 +122,52 @@ export default function AgentComplaintsPage() {
       }),
   });
 
+  // Client-side filtering & sorting
+  const filteredAndSortedComplaints = React.useMemo(() => {
+    let list = [...complaints];
+
+    // Filter by Category
+    if (categoryFilter !== "All Categories") {
+      list = list.filter((c) => c.complaint_category === categoryFilter);
+    }
+
+    // Filter by Severity
+    if (severityFilter !== "All Severities") {
+      list = list.filter((c) => c.severity === severityFilter);
+    }
+
+    // Sort order
+    list.sort((a, b) => {
+      if (sortOrder === "newest") {
+        const timeA = a.creation ? new Date(a.creation).getTime() : 0;
+        const timeB = b.creation ? new Date(b.creation).getTime() : 0;
+        return timeB - timeA;
+      }
+      if (sortOrder === "oldest") {
+        const timeA = a.creation ? new Date(a.creation).getTime() : 0;
+        const timeB = b.creation ? new Date(b.creation).getTime() : 0;
+        return timeA - timeB;
+      }
+      if (sortOrder === "severity") {
+        const weight: Record<string, number> = {
+          "Critical / Emergency": 3,
+          "Critical": 3,
+          "High": 2,
+          "Normal": 1,
+          "Medium": 1,
+          "Low": 0,
+        };
+        return (weight[b.severity] || 0) - (weight[a.severity] || 0);
+      }
+      if (sortOrder === "sla") {
+        return (b.days_unresolved || 0) - (a.days_unresolved || 0);
+      }
+      return 0;
+    });
+
+    return list;
+  }, [complaints, categoryFilter, severityFilter, sortOrder]);
+
   // Submit Mutation
   const submitMutation = useMutation({
     mutationFn: (data: typeof formData) =>
@@ -130,7 +188,7 @@ export default function AgentComplaintsPage() {
       setFormData({
         applicant_search: "",
         full_name: "",
-        complaint_category: "Medical",
+        complaint_category: COMPLAINT_CATEGORIES[0],
         severity: "High",
         complaint_details: "",
         attachment: "",
@@ -169,14 +227,16 @@ export default function AgentComplaintsPage() {
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
+      case "Critical / Emergency":
       case "Critical":
-        return <Badge variant="destructive">Critical SLA</Badge>;
+        return <Badge variant="destructive">Critical / Emergency</Badge>;
       case "High":
         return <Badge variant="warning">High Priority</Badge>;
+      case "Normal":
       case "Medium":
-        return <Badge variant="outline" className="text-amber-700 dark:text-amber-300 border-amber-300">Medium</Badge>;
+      case "Low":
       default:
-        return <Badge variant="outline">Standard</Badge>;
+        return <Badge variant="outline">Normal</Badge>;
     }
   };
 
@@ -236,38 +296,84 @@ export default function AgentComplaintsPage() {
           </div>
         )}
 
-        {/* Multi-Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#222228] pb-2">
-          <button
-            onClick={() => setActiveTab("unresolved")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
-              activeTab === "unresolved"
-                ? "bg-emerald-800 text-white shadow-xs"
-                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            🚨 Unresolved Backlog ({complaints.filter((c) => c.status !== "Resolved").length})
-          </button>
-          <button
-            onClick={() => setActiveTab("new")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
-              activeTab === "new"
-                ? "bg-emerald-800 text-white shadow-xs"
-                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            ⚡ New Tickets
-          </button>
-          <button
-            onClick={() => setActiveTab("resolved")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
-              activeTab === "resolved"
-                ? "bg-emerald-800 text-white shadow-xs"
-                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-            }`}
-          >
-            ✓ Resolved / Replaced
-          </button>
+        {/* Multi-Tab Navigation & Filter/Sort Toolbar */}
+        <div className="space-y-3 border-b border-slate-200 dark:border-[#222228] pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab("unresolved")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
+                  activeTab === "unresolved"
+                    ? "bg-emerald-800 text-white shadow-xs"
+                    : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+                }`}
+              >
+                🚨 Unresolved Backlog ({complaints.length})
+              </button>
+              <button
+                onClick={() => setActiveTab("resolved")}
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition ${
+                  activeTab === "resolved"
+                    ? "bg-emerald-800 text-white shadow-xs"
+                    : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+                }`}
+              >
+                ✓ Resolved / Replaced
+              </button>
+            </div>
+
+            {/* Quick Sort & Filters Toolbar */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Category Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+                <Filter className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+                >
+                  <option value="All Categories">All Categories</option>
+                  {COMPLAINT_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Severity Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+                <ShieldAlert className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value)}
+                  className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+                >
+                  <option value="All Severities">All Severities</option>
+                  {COMPLAINT_SEVERITIES.map((sev) => (
+                    <option key={sev} value={sev}>
+                      {sev}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sort Dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
+                <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as any)}
+                  className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
+                >
+                  <option value="newest">Most Recent First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="severity">Severity: Highest First</option>
+                  <option value="sla">Longest Unresolved SLA</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Complaints Listing Table */}
@@ -277,17 +383,17 @@ export default function AgentComplaintsPage() {
               <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
               <span className="ml-2 text-xs text-slate-500">Loading complaints desk...</span>
             </div>
-          ) : complaints.length === 0 ? (
+          ) : filteredAndSortedComplaints.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-16 text-center">
               <CheckCircle2 className="h-10 w-10 text-emerald-600/40 dark:text-emerald-400/40 mb-2" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Complaints Found</h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                There are currently no tickets in this tab for {activeContractor}.
+                There are currently no tickets matching your active filters for {activeContractor}.
               </p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-[#202026]">
-              {complaints.map((c) => (
+              {filteredAndSortedComplaints.map((c) => (
                 <div
                   key={c.name}
                   className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-[#16161c]/70 transition"
@@ -332,13 +438,11 @@ export default function AgentComplaintsPage() {
                         Attachment
                       </a>
                     )}
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      c.status === "Resolved"
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                        : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                    }`}>
-                      {c.status}
-                    </span>
+                    {c.status === "Resolved" && (
+                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        ✓ {c.status}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -507,12 +611,11 @@ export default function AgentComplaintsPage() {
                       value={formData.complaint_category}
                       onChange={(e) => setFormData({ ...formData, complaint_category: e.target.value })}
                     >
-                      <option value="Runaway">Runaway / Left Employer</option>
-                      <option value="Non-Performance">Non-Performance / Incompetence</option>
-                      <option value="Employer Abuse">Employer Abuse / Contract Violation</option>
-                      <option value="Medical">Medical / Failed Arrival Screening</option>
-                      <option value="Legal">Legal / Police Case</option>
-                      <option value="Other">Other</option>
+                      {COMPLAINT_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -523,10 +626,11 @@ export default function AgentComplaintsPage() {
                       value={formData.severity}
                       onChange={(e) => setFormData({ ...formData, severity: e.target.value as ComplaintSeverity })}
                     >
-                      <option value="Critical">Critical (Immediate Action)</option>
-                      <option value="High">High Priority</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
+                      {COMPLAINT_SEVERITIES.map((sev) => (
+                        <option key={sev} value={sev}>
+                          {sev}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

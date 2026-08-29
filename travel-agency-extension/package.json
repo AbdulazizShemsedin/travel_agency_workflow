@@ -1,0 +1,19 @@
+{
+  "name": "travel-agency-extension",
+  "version": "1.0.0",
+  "description": "Travel Agency Browser Assistant - Manifest V3 Extension for Chrome, Edge, and Safari",
+  "main": "dist/background/serviceWorker.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "watch": "node build.mjs --watch"
+  },
+  "keywords": ["travel-agency", "chrome-extension", "manifest-v3", "edge-extension"],
+  "author": "Travel Agency Engineering",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}

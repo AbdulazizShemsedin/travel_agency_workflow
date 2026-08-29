@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://applicantprocessing-production.up.railway.app";
+    "https://applicantprocessing-production-e2e7.up.railway.app";
 
   const headers: Record<string, string> = {
     Accept: "*/*",
@@ -19,12 +19,30 @@ function getFrappeConfig(req: NextRequest) {
   }
   if (authHeader) {
     headers["Authorization"] = authHeader;
+  } else if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
+    headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
   }
 
   return {
     url: url.replace(/\/$/, ""),
     headers,
   };
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2): Promise<Response> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      return res;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 export async function GET(
@@ -37,7 +55,7 @@ export async function GET(
 
   try {
     const fileUrl = `${config.url}/private/files/${filePath}`;
-    const res = await fetch(fileUrl, {
+    const res = await fetchWithRetry(fileUrl, {
       headers: config.headers,
       cache: "no-store",
     });

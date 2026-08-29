@@ -203,9 +203,6 @@ export default function EmployeesPage() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             User & Employee Directory
           </h2>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Manage system accounts, multi-role privileges, password security, and operational staff.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -478,12 +475,18 @@ export default function EmployeesPage() {
                   Assign System Roles (Multi-Role Support) *
                 </Label>
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b]">
-                  {availableRoles.length > 0 ? (
+                  {isRolesLoading ? (
+                    <div className="col-span-2 flex items-center justify-center gap-2 text-slate-500 dark:text-zinc-400 py-4 text-xs">
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                      Loading system roles...
+                    </div>
+                  ) : availableRoles.length > 0 ? (
                     availableRoles.map((role) => {
-                      const isSelected = formData.roles.includes(role.role_name);
+                      const roleKey = role.role_name || (role as any).role || "";
+                      const isSelected = formData.roles.includes(roleKey);
                       return (
                         <label
-                          key={role.role_name}
+                          key={roleKey}
                           className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition text-[11px] ${
                             isSelected
                               ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold"
@@ -493,11 +496,11 @@ export default function EmployeesPage() {
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => handleRoleToggle(role.role_name)}
+                            onChange={() => handleRoleToggle(roleKey)}
                             className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                           />
                           <div>
-                            <div>{role.label || role.role_name}</div>
+                            <div>{role.label || roleKey}</div>
                             {role.description && (
                               <div className="text-[9px] text-slate-400 font-normal leading-tight">
                                 {role.description}
@@ -508,8 +511,8 @@ export default function EmployeesPage() {
                       );
                     })
                   ) : (
-                    <div className="col-span-2 text-center text-slate-400 py-2">
-                      Loading available roles...
+                    <div className="col-span-2 text-center text-slate-400 py-2 text-xs">
+                      No roles available
                     </div>
                   )}
                 </div>
@@ -529,11 +532,11 @@ export default function EmployeesPage() {
                   type="submit"
                   size="sm"
                   disabled={createUserMutation.isPending}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 shadow-sm"
                 >
                   {createUserMutation.isPending ? (
                     <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Creating User...
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Creating...
                     </>
                   ) : (
                     "Create User Profile"
@@ -642,27 +645,39 @@ export default function EmployeesPage() {
             </p>
 
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs">
-              {availableRoles.map((role) => {
-                const isSelected = assignedRoles.includes(role.role_name);
-                return (
-                  <label
-                    key={role.role_name}
-                    className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition text-[11px] ${
-                      isSelected
-                        ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold"
-                        : "hover:bg-slate-100 dark:hover:bg-[#1e1e24] text-slate-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleEditRoleToggle(role.role_name)}
-                      className="mt-0.5 rounded text-emerald-600"
-                    />
-                    <span>{role.label || role.role_name}</span>
-                  </label>
-                );
-              })}
+              {isRolesLoading ? (
+                <div className="col-span-2 flex items-center justify-center gap-2 text-slate-500 dark:text-zinc-400 py-4 text-xs">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  Loading system roles...
+                </div>
+              ) : availableRoles.length > 0 ? (
+                availableRoles.map((role) => {
+                  const roleKey = role.role_name || (role as any).role || "";
+                  const isSelected = assignedRoles.includes(roleKey);
+                  return (
+                    <label
+                      key={roleKey}
+                      className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition text-[11px] ${
+                        isSelected
+                          ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold"
+                          : "hover:bg-slate-100 dark:hover:bg-[#1e1e24] text-slate-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleEditRoleToggle(roleKey)}
+                        className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>{role.label || roleKey}</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="col-span-2 text-center text-slate-400 py-2 text-xs">
+                  No roles available
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-[#222227]">

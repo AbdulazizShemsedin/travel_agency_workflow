@@ -19,9 +19,6 @@ export default function NewApplicantPage() {
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               New Applicant
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Fill in candidate details to save as a Draft or complete registration requirements.
-            </p>
           </div>
           <Link
             href="/applicants"

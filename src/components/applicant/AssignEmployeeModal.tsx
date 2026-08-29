@@ -14,7 +14,6 @@ import {
   Layers,
   Loader2,
 } from "lucide-react";
-import { ProcessingRoleType, StreamAssignmentPayload } from "@/types/applicant";
 import { assignEmployeeApi, getEmployeesList } from "@/lib/api/applicantApi";
 import {
   Dialog,
@@ -33,6 +32,7 @@ interface AssignEmployeeModalProps {
   onClose: () => void;
   applicantIds: string[];
   applicantNames?: string[];
+  destinationCountry?: string;
   onSuccess?: () => void;
 }
 
@@ -43,9 +43,12 @@ export function AssignEmployeeModal({
   onClose,
   applicantIds,
   applicantNames = [],
+  destinationCountry,
   onSuccess,
 }: AssignEmployeeModalProps) {
   const queryClient = useQueryClient();
+
+  const isKuwait = (destinationCountry || "").toLowerCase().trim() === "kuwait";
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees"],
@@ -56,15 +59,19 @@ export function AssignEmployeeModal({
   const [assignmentMode, setAssignmentMode] = React.useState<AssignmentMode>("single_lead");
 
   // Mode 1: Single Lead
-  const [selectedRoleType, setSelectedRoleType] = React.useState<ProcessingRoleType>(
+  const [selectedRoleType, setSelectedRoleType] = React.useState<string>(
     "All Roles / Operations Lead"
   );
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>("");
 
   // Mode 2: Multi-Process Staffing
   const [lmsStaffId, setLmsStaffId] = React.useState<string>("");
+  // Saudi streams
   const [injazStaffId, setInjazStaffId] = React.useState<string>("");
   const [wakalaStaffId, setWakalaStaffId] = React.useState<string>("");
+  // Kuwait streams
+  const [telesignStaffId, setTelesignStaffId] = React.useState<string>("");
+  const [embassyStaffId, setEmbassyStaffId] = React.useState<string>("");
 
   // Mode 3: Team Collaborative (Multiple employees to multiple applicants)
   const [collaboratingIds, setCollaboratingIds] = React.useState<string[]>([]);
@@ -75,9 +82,11 @@ export function AssignEmployeeModal({
       if (!lmsStaffId) setLmsStaffId(employees[0].name);
       if (!injazStaffId) setInjazStaffId(employees[0].name);
       if (!wakalaStaffId) setWakalaStaffId(employees[0].name);
+      if (!telesignStaffId) setTelesignStaffId(employees[0].name);
+      if (!embassyStaffId) setEmbassyStaffId(employees[0].name);
       if (collaboratingIds.length === 0) setCollaboratingIds([employees[0].name]);
     }
-  }, [employees, selectedEmployeeId, lmsStaffId, injazStaffId, wakalaStaffId, collaboratingIds]);
+  }, [employees, selectedEmployeeId, lmsStaffId, injazStaffId, wakalaStaffId, telesignStaffId, embassyStaffId, collaboratingIds]);
 
   const [notes, setNotes] = React.useState<string>("");
 
@@ -90,31 +99,78 @@ export function AssignEmployeeModal({
   const assignMutation = useMutation({
     mutationFn: async () => {
       const getFormattedEmp = (idOrEmail: string) => {
+        if (!idOrEmail) return "";
         const found = employees.find((e) => e.name === idOrEmail || e.email === idOrEmail);
-        if (found) {
-          return found.employee_name ? `${found.employee_name} (${found.email})` : found.email;
+        if (found && found.name) {
+          return found.name;
         }
         return idOrEmail;
       };
 
+      const defaultLead = getFormattedEmp(selectedEmployeeId || employees[0]?.name || "Administrator");
       let roleType = "All Roles / Operations Lead";
-      let empId = getFormattedEmp(selectedEmployeeId || (employees[0]?.name || "Operations Lead"));
+      let empId = defaultLead;
       let streamAssignments: any = null;
 
       if (assignmentMode === "single_lead") {
         roleType = selectedRoleType;
-        empId = getFormattedEmp(selectedEmployeeId || (employees[0]?.name || "Operations Lead"));
+        empId = defaultLead;
+        if (isKuwait) {
+          // Kuwait Corridor: LMS + Telesign + Embassy ONLY
+          streamAssignments = {
+            lms: defaultLead,
+            telesign: defaultLead,
+            embassy: defaultLead,
+          };
+        } else {
+          // Saudi Arabia Corridor: LMS + Injaz + Wakala ONLY
+          streamAssignments = {
+            lms: defaultLead,
+            injaz: defaultLead,
+            wakala: defaultLead,
+          };
+        }
       } else if (assignmentMode === "multi_process") {
         roleType = "All Roles / Operations Lead";
-        streamAssignments = {
-          lms: getFormattedEmp(lmsStaffId || employees[0]?.name),
-          injaz: getFormattedEmp(injazStaffId || employees[0]?.name),
-          wakala: getFormattedEmp(wakalaStaffId || employees[0]?.name),
-        };
-        empId = getFormattedEmp(lmsStaffId || employees[0]?.name || "Operations Lead");
+        const lms = getFormattedEmp(lmsStaffId || defaultLead);
+        if (isKuwait) {
+          // Kuwait Corridor: LMS + Telesign + Embassy ONLY
+          const telesign = getFormattedEmp(telesignStaffId || defaultLead);
+          const embassy = getFormattedEmp(embassyStaffId || defaultLead);
+          streamAssignments = {
+            lms,
+            telesign,
+            embassy,
+          };
+          empId = lms || defaultLead;
+        } else {
+          // Saudi Arabia Corridor: LMS + Injaz + Wakala ONLY
+          const injaz = getFormattedEmp(injazStaffId || defaultLead);
+          const wakala = getFormattedEmp(wakalaStaffId || defaultLead);
+          streamAssignments = {
+            lms,
+            injaz,
+            wakala,
+          };
+          empId = lms || defaultLead;
+        }
       } else if (assignmentMode === "team_collaborative") {
         roleType = "All Roles / Operations Lead";
-        empId = getFormattedEmp(collaboratingIds[0] || (employees[0]?.name || "Operations Lead"));
+        const teamLead = getFormattedEmp(collaboratingIds[0] || defaultLead);
+        empId = teamLead;
+        if (isKuwait) {
+          streamAssignments = {
+            lms: teamLead,
+            telesign: teamLead,
+            embassy: teamLead,
+          };
+        } else {
+          streamAssignments = {
+            lms: teamLead,
+            injaz: teamLead,
+            wakala: teamLead,
+          };
+        }
       }
 
       return assignEmployeeApi(
@@ -125,10 +181,18 @@ export function AssignEmployeeModal({
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
       applicantIds.forEach((id) => {
+        queryClient.setQueryData(["applicant", id], (prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            applicant_state: "Processing",
+          };
+        });
         queryClient.invalidateQueries({ queryKey: ["applicant", id] });
+        queryClient.invalidateQueries({ queryKey: ["processing", id] });
       });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
       toast.success("Employee Assignment Confirmed", {
         description: `Successfully assigned ${applicantIds.length} applicant(s). Candidates are now in Processing stage.`,
       });
@@ -146,10 +210,12 @@ export function AssignEmployeeModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
             <UserCheck className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-            Assign Processing Staff & Pipeline Workflows
+            Assign Processing Staff ({isKuwait ? "Kuwait Corridor" : "Saudi Arabia Corridor"})
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
-            Configure single employee, multi-process delegation, or multi-employee collaborative staffing for selected candidate(s).
+            {isKuwait
+              ? "Configure staff assignment for Kuwait processing streams: LMS Permit & Visa, Telesign, and Embassy clearance."
+              : "Configure staff assignment for Saudi processing streams: LMS Permit, Injaz/Teashir, and Wakala authorization."}
           </DialogDescription>
         </DialogHeader>
 
@@ -161,7 +227,7 @@ export function AssignEmployeeModal({
                 Target Selected Candidate{applicantIds.length > 1 ? "s" : ""} ({applicantIds.length}):
               </span>
               <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                Selected Stage
+                {isKuwait ? "Kuwait Corridor" : "Saudi Corridor"}
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2 max-h-20 overflow-y-auto">
@@ -200,7 +266,7 @@ export function AssignEmployeeModal({
                   )}
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                  1 employee handles all processes for applicant(s).
+                  1 employee handles all corridor clearance streams.
                 </p>
               </button>
 
@@ -222,7 +288,9 @@ export function AssignEmployeeModal({
                   )}
                 </div>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                  Dedicated staff for LMS, Injaz, and Wakala streams.
+                  {isKuwait
+                    ? "Dedicated staff for LMS, Telesign, and Embassy streams."
+                    : "Dedicated staff for LMS, Injaz, and Wakala streams."}
                 </p>
               </button>
 
@@ -260,13 +328,22 @@ export function AssignEmployeeModal({
                 <select
                   id="single_role"
                   value={selectedRoleType}
-                  onChange={(e) => setSelectedRoleType(e.target.value as ProcessingRoleType)}
+                  onChange={(e) => setSelectedRoleType(e.target.value)}
                   className="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs text-slate-900 dark:text-slate-100 shadow-xs"
                 >
                   <option value="All Roles / Operations Lead">All Roles / Operations Lead</option>
                   <option value="LMS Officer">LMS Officer</option>
-                  <option value="Injaz Officer">Injaz Officer</option>
-                  <option value="Wakala Admin">Wakala Admin</option>
+                  {isKuwait ? (
+                    <>
+                      <option value="Telesign Officer">Telesign Officer</option>
+                      <option value="Embassy Officer">Embassy Officer</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Injaz Officer">Injaz Officer</option>
+                      <option value="Wakala Admin">Wakala Admin</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -296,7 +373,7 @@ export function AssignEmployeeModal({
                               {emp.employee_name}
                             </span>
                             <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                              {emp.role_type || "Operations"} • {emp.email}
+                              {emp.role_type || "Operations"} • {emp.name}
                             </span>
                           </div>
                         </div>
@@ -313,13 +390,13 @@ export function AssignEmployeeModal({
           {assignmentMode === "multi_process" && (
             <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900">
               <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                Assign Specialized Staff per Process Stream
+                Assign Specialized Staff per Process Stream ({isKuwait ? "Kuwait Corridor" : "Saudi Arabia Corridor"})
               </h4>
 
-              {/* 1. LMS & Ticket Staff */}
+              {/* 1. LMS Permit & Visa */}
               <div className="space-y-1">
                 <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
-                  <Plane className="h-3.5 w-3.5 text-emerald-700" /> LMS & Departure Ticket Specialist
+                  <Plane className="h-3.5 w-3.5 text-emerald-700" /> {isKuwait ? "Kuwait LMS Permit & Visa Specialist" : "LMS & Departure Ticket Specialist"}
                 </Label>
                 <select
                   value={lmsStaffId}
@@ -334,41 +411,84 @@ export function AssignEmployeeModal({
                 </select>
               </div>
 
-              {/* 2. Injaz & Teashir Staff */}
-              <div className="space-y-1">
-                <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
-                  <Fingerprint className="h-3.5 w-3.5 text-blue-600" /> Injaz & Teashir Biometrics Specialist
-                </Label>
-                <select
-                  value={injazStaffId}
-                  onChange={(e) => setInjazStaffId(e.target.value)}
-                  className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
-                >
-                  {employees.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.employee_name} ({e.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Corridor Specific Streams */}
+              {isKuwait ? (
+                <>
+                  {/* Kuwait 2. Telesign Verification */}
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                      <Fingerprint className="h-3.5 w-3.5 text-purple-600" /> Telesign / Ministry Verification Specialist
+                    </Label>
+                    <select
+                      value={telesignStaffId}
+                      onChange={(e) => setTelesignStaffId(e.target.value)}
+                      className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      {employees.map((e) => (
+                        <option key={e.name} value={e.name}>
+                          {e.employee_name} ({e.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* 3. Wakala Admin */}
-              <div className="space-y-1">
-                <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
-                  <Building2 className="h-3.5 w-3.5 text-amber-600" /> Wakala Foreign Agency Administrator
-                </Label>
-                <select
-                  value={wakalaStaffId}
-                  onChange={(e) => setWakalaStaffId(e.target.value)}
-                  className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
-                >
-                  {employees.map((e) => (
-                    <option key={e.name} value={e.name}>
-                      {e.employee_name} ({e.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {/* Kuwait 3. Embassy Clearance */}
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                      <Building2 className="h-3.5 w-3.5 text-blue-600" /> Embassy / Consulate Clearance Officer
+                    </Label>
+                    <select
+                      value={embassyStaffId}
+                      onChange={(e) => setEmbassyStaffId(e.target.value)}
+                      className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      {employees.map((e) => (
+                        <option key={e.name} value={e.name}>
+                          {e.employee_name} ({e.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Saudi 2. Injaz & Teashir Staff */}
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                      <Fingerprint className="h-3.5 w-3.5 text-blue-600" /> Injaz & Teashir Biometrics Specialist
+                    </Label>
+                    <select
+                      value={injazStaffId}
+                      onChange={(e) => setInjazStaffId(e.target.value)}
+                      className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      {employees.map((e) => (
+                        <option key={e.name} value={e.name}>
+                          {e.employee_name} ({e.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Saudi 3. Wakala Admin */}
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                      <Building2 className="h-3.5 w-3.5 text-amber-600" /> Wakala Foreign Agency Administrator
+                    </Label>
+                    <select
+                      value={wakalaStaffId}
+                      onChange={(e) => setWakalaStaffId(e.target.value)}
+                      className="w-full h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      {employees.map((e) => (
+                        <option key={e.name} value={e.name}>
+                          {e.employee_name} ({e.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

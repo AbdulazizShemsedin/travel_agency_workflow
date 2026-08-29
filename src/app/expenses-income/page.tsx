@@ -74,9 +74,6 @@ export default function ExpensesIncomePage() {
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Expenses and Income
           </h2>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Operational cashflow, registration fee deposits, medical lab costs, visa stamping, and flight tickets.
-          </p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
@@ -88,14 +85,12 @@ export default function ExpensesIncomePage() {
 
       {successMessage && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
 
       {isError && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
-          <TrendingDown className="h-4 w-4 text-rose-600 shrink-0" />
           <span>Failed to load live backend accounting records: {(error as any)?.message || "Network/Server Error"}</span>
         </div>
       )}
@@ -103,42 +98,51 @@ export default function ExpensesIncomePage() {
       {/* Top 3 KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
               Total Income
             </CardDescription>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400">
+              <TrendingUp className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               ${totalIncome.toLocaleString()}
             </div>
-            <p className="mt-1 flex items-center text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-              <TrendingUp className="mr-1 h-3.5 w-3.5" /> Total candidate fees collected
+            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
+              Total candidate fees collected
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
               Total Expenses
             </CardDescription>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-400">
+              <TrendingDown className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
               ${totalExpense.toLocaleString()}
             </div>
-            <p className="mt-1 flex items-center text-xs text-rose-600 dark:text-rose-400 font-medium">
-              <TrendingDown className="mr-1 h-3.5 w-3.5" /> Medical, visa and flight costs
+            <p className="mt-1 text-xs text-rose-600 dark:text-rose-400 font-medium">
+              Medical, visa and flight costs
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-xs font-semibold uppercase tracking-wider text-emerald-900 dark:text-emerald-300">
               Net Balance
             </CardDescription>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+              <DollarSign className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-200 font-mono">

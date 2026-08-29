@@ -364,8 +364,8 @@ Nudges the partner agency via WhatsApp and Desktop Web Push to finalize Musaned 
         "applicant": "APP-00012",
         "full_name": "Fatima Zahra",
         "passport_number": "EP1234567",
-        "complaint_category": "Medical Refusal / Unfit on Arrival",
-        "severity": "Critical",
+        "complaint_category": "Medical Illness",
+        "severity": "Critical / Emergency",
         "status": "Open",
         "days_unresolved": 12,
         "complaint_details": "Worker failed secondary medical check at Riyadh clinic.",
@@ -384,7 +384,7 @@ Nudges the partner agency via WhatsApp and Desktop Web Push to finalize Musaned 
   {
     "contractor": "Al-Amal Recruitment Riyadh",
     "applicant_search": "EP1234567",
-    "complaint_category": "Refusal to Work / Runaway",
+    "complaint_category": "Runaway / Refusal to Work",
     "severity": "High",
     "complaint_details": "Candidate refused domestic tasks after 3 days.",
     "attachment": "/files/incident_report.pdf"

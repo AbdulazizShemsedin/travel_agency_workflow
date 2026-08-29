@@ -51,21 +51,13 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
       <Card className="border-slate-200/80">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <Award className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Certificate of Competence (COC)
-                </CardTitle>
-                <CardDescription className="mt-0.5">
-                  Professional competency exam scheduling and certification status.
-                </CardDescription>
-              </div>
+            <div>
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                Certificate of Competence (COC)
+              </CardTitle>
             </div>
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 border border-amber-200">
-              Stage 2 • Required for Registration
+            <span className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
+              Optional
             </span>
           </div>
         </CardHeader>
@@ -73,15 +65,16 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="coc_status" className="text-xs font-semibold text-slate-800">
-                COC Status <span className="text-amber-600 font-bold">*</span>
+              <Label htmlFor="coc_status" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                COC Status <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Select
                 id="coc_status"
-                placeholder="Select COC Status"
+                placeholder="Select COC Status (Optional)"
                 {...register("coc_status")}
                 error={!!errors.coc_status}
               >
+                <option value="">Select COC Status (Optional)</option>
                 {COC_STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
                     {status}
@@ -95,8 +88,8 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="exam_date" className="text-xs font-semibold text-slate-800">
-                  COC Exam Date <span className="text-amber-600 font-bold">*</span>
+                <Label htmlFor="exam_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                  COC Exam Date <span className="text-slate-400 font-normal">(Optional)</span>
                 </Label>
                 {examDate && (
                   <span
@@ -125,21 +118,13 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
       <Card className="border-slate-200/80">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-700 border border-rose-200">
-                <HeartPulse className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  Medical Assessment & Expiration
-                </CardTitle>
-                <CardDescription className="mt-0.5">
-                  Health verification status and medical certificate validity.
-                </CardDescription>
-              </div>
+            <div>
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                Medical Assessment & Expiration
+              </CardTitle>
             </div>
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 border border-amber-200">
-              Stage 2 • Required for Registration
+            <span className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
+              Optional
             </span>
           </div>
         </CardHeader>
@@ -164,15 +149,16 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="medical_status" className="text-xs font-semibold text-slate-800">
-                Medical Status <span className="text-amber-600 font-bold">*</span>
+              <Label htmlFor="medical_status" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                Medical Status <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Select
                 id="medical_status"
-                placeholder="Select Medical Status"
+                placeholder="Select Medical Status (Optional)"
                 {...register("medical_status")}
                 error={!!errors.medical_status || medicalStatus === "UNFIT"}
               >
+                <option value="">Select Medical Status (Optional)</option>
                 {MEDICAL_STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
                     {status}
@@ -186,8 +172,8 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="medical_expiry_date" className="text-xs font-semibold text-slate-800">
-                  Medical Expiration Date <span className="text-amber-600 font-bold">*</span>
+                <Label htmlFor="medical_expiry_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                  Medical Expiration Date <span className="text-slate-400 font-normal">(Optional)</span>
                 </Label>
                 {medicalExpiryDate && (
                   <span

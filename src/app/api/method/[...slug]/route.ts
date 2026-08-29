@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://applicantprocessing-production.up.railway.app";
+    "https://applicantprocessing-production-e2e7.up.railway.app";
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -19,12 +19,38 @@ function getFrappeConfig(req: NextRequest) {
   }
   if (authHeader) {
     headers["Authorization"] = authHeader;
+  } else if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
+    const hasValidUserSession = Boolean(
+      cookie &&
+      cookie.includes("sid=") &&
+      !cookie.includes("sid=Guest") &&
+      !cookie.includes("sid=;")
+    );
+    if (!hasValidUserSession) {
+      headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
+    }
   }
 
   return {
     url: url.replace(/\/$/, ""),
     headers,
   };
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2): Promise<Response> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      return res;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 export async function POST(
@@ -41,7 +67,7 @@ export async function POST(
     // Handle multipart file upload transparently
     if (contentType.includes("multipart/form-data") || methodPath === "upload_file") {
       const formData = await req.formData();
-      const res = await fetch(`${config.url}/api/method/${methodPath}`, {
+      const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}`, {
         method: "POST",
         headers: config.headers,
         body: formData,
@@ -67,7 +93,7 @@ export async function POST(
       "Content-Type": "application/json",
     };
 
-    const res = await fetch(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
+    const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
       method: "POST",
       headers: forwardHeaders,
       body: bodyText || "{}",
@@ -98,7 +124,7 @@ export async function GET(
   const config = getFrappeConfig(req);
 
   try {
-    const res = await fetch(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
+    const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
       method: "GET",
       headers: config.headers,
       cache: "no-store",

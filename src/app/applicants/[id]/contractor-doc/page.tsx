@@ -31,6 +31,7 @@ import {
   parseDossierFileApi,
   approveDossierAndSelectApplicant,
   uploadFileApi,
+  generateCV,
 } from "@/lib/api/applicantApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -390,38 +391,95 @@ export default function ContractorDocPage() {
       } else {
         // Resolve or create Contract Request foreign link if needed
         let crName = applicant?.contract_request?.name || "";
-        const contractorName =
-          formData.contractor_name ||
-          applicant?.locked_contractor ||
-          (applicant as any)?.contractor_name ||
-          "Al-Amal Recruitment Riyadh";
+
+        // 1. Dynamically resolve valid Contractor from Frappe DB
+        let validContractor = "";
+        try {
+          const contrRes = await fetch('/api/resource/Contractor?fields=["name","company_name"]&limit_page_length=20');
+          if (contrRes.ok) {
+            const contrJson = await contrRes.json();
+            const contrList: Array<{ name: string; company_name?: string }> = contrJson.data || [];
+            if (contrList.length > 0) {
+              const matched = contrList.find(
+                (c) =>
+                  c.name === formData.contractor_name ||
+                  c.company_name === formData.contractor_name ||
+                  c.name === applicant?.locked_contractor ||
+                  c.company_name === applicant?.locked_contractor
+              );
+              validContractor = matched?.name || contrList[0].name;
+            }
+          }
+        } catch {}
+
+        // Fallback: If no Contractor exists on backend DB, create initial standard Contractor
+        if (!validContractor) {
+          try {
+            const initialContrRes = await fetch("/api/resource/Contractor", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                company_name: formData.contractor_name || "Al-Umal Recruitment",
+                country: "Saudi Arabia",
+                status: "Active",
+              }),
+            });
+            if (initialContrRes.ok) {
+              const initialContrJson = await initialContrRes.json();
+              validContractor = initialContrJson.data?.name || "Al-Umal Recruitment";
+            }
+          } catch {}
+        }
 
         if (!crName) {
           try {
             const crRes = await fetch(
               `/api/resource/Contract%20Request?filters=[["applicant","=","${encodeURIComponent(
                 applicantId
-              )}"]]&fields=["*"]`
+              )}"]]&fields=["*"]&order_by=creation%20desc&limit_page_length=1`
             );
             const crJson = await crRes.json();
             crName = crJson.data?.[0]?.name || "";
 
             if (!crName) {
-              const newCrRes = await fetch("/api/resource/Contract Request", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  applicant: applicantId,
-                  contractor: contractorName,
-                  cv_reference:
-                    applicant?.cv_record || `CV-${applicantId.replace("APP-", "")}`,
-                  status: "Sent",
-                  created_date: new Date().toISOString().slice(0, 19).replace("T", " "),
-                }),
-              });
-              if (newCrRes.ok) {
-                const newCrJson = await newCrRes.json();
-                crName = newCrJson.data?.name || "";
+              // Resolve latest valid CV Record for applicant
+              let validCv = applicant?.cv_record || "";
+              if (!validCv) {
+                const cvRes = await fetch(
+                  `/api/resource/CV%20Record?filters=[["applicant","=","${encodeURIComponent(
+                    applicantId
+                  )}"]]&fields=["name"]&order_by=creation%20desc&limit_page_length=1`
+                );
+                if (cvRes.ok) {
+                  const cvJson = await cvRes.json();
+                  validCv = cvJson.data?.[0]?.name || "";
+                }
+              }
+
+              // If applicant has no CV Record yet, generate one first
+              if (!validCv) {
+                try {
+                  const genCvRes = await generateCV(applicantId);
+                  validCv = genCvRes.message?.cv_record || "";
+                } catch {}
+              }
+
+              if (validCv && validContractor) {
+                const newCrRes = await fetch("/api/resource/Contract Request", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    applicant: applicantId,
+                    contractor: validContractor,
+                    cv_reference: validCv,
+                    status: "Sent",
+                    created_date: new Date().toISOString().slice(0, 19).replace("T", " "),
+                  }),
+                });
+                if (newCrRes.ok) {
+                  const newCrJson = await newCrRes.json();
+                  crName = newCrJson.data?.name || "";
+                }
               }
             }
           } catch {}
@@ -433,8 +491,6 @@ export default function ContractorDocPage() {
           body: JSON.stringify({
             applicant: applicantId,
             contract_request: crName || undefined,
-            contractor: contractorName,
-            contractor_name: contractorName,
             attached_file: fileUrl || undefined,
             file_attachment: fileUrl || undefined,
             file_name: uploadedFile.name,
@@ -449,6 +505,12 @@ export default function ContractorDocPage() {
         } else {
           const errText = await createDosRes.text();
           console.warn("Applicant Dossier POST response:", errText);
+          let errMsg = "Failed to create Applicant Dossier";
+          try {
+            const errObj = JSON.parse(errText);
+            errMsg = errObj.message || errObj.exception || errMsg;
+          } catch {}
+          throw new Error(`Could not initialize Applicant Dossier record in Frappe: ${errMsg}`);
         }
       }
 
@@ -458,7 +520,7 @@ export default function ContractorDocPage() {
         );
       }
 
-      // 3. Invoke real backend parse_dossier_file RPC
+      // 3. Invoke real backend contract parser RPC
       const res = await parseDossierFileApi(dossierName);
 
       // 4. Fetch refreshed dossier data from backend
@@ -473,7 +535,7 @@ export default function ContractorDocPage() {
 
       const extData =
         typeof res?.message === "object"
-          ? (res?.message as any)?.extracted_data || (res?.message as any)?.data || res?.message
+          ? (res?.message as any)?.data || (res?.message as any)?.extracted_data || res?.message
           : null;
 
       // Extract real visa number without confirmation text
@@ -495,6 +557,8 @@ export default function ContractorDocPage() {
       setFormData((prev) => ({
         contractor_name:
           extData?.contractor_name ||
+          extData?.recruiting_agency_name ||
+          extData?.agency ||
           docData.contractor_name ||
           docData.contractor ||
           prev.contractor_name ||
@@ -513,6 +577,7 @@ export default function ContractorDocPage() {
         visa_number: extractedVisa || prev.visa_number || "",
         sponsor_name:
           extData?.sponsor_name ||
+          extData?.employer_name ||
           docData.sponsor_name ||
           stringParsed.sponsor_name ||
           prev.sponsor_name ||
@@ -521,6 +586,7 @@ export default function ContractorDocPage() {
         sponsor_id:
           extData?.sponsor_id ||
           extData?.sponsor_nid ||
+          extData?.employer_id ||
           docData.sponsor_id ||
           stringParsed.sponsor_id ||
           prev.sponsor_id ||
@@ -528,12 +594,16 @@ export default function ContractorDocPage() {
           "",
         sponsor_phone:
           extData?.sponsor_phone ||
+          extData?.employer_mobile ||
+          extData?.employer_telephone ||
+          extData?.telephone ||
           docData.sponsor_phone ||
           prev.sponsor_phone ||
           (applicant as any)?.sponsor_phone ||
           "",
         destination_city:
           extData?.destination_city ||
+          extData?.employer_city ||
           extData?.city ||
           docData.destination_city ||
           docData.city ||
@@ -557,6 +627,8 @@ export default function ContractorDocPage() {
           "",
         salary:
           Number(extData?.salary) ||
+          Number(extData?.monthly_salary) ||
+          Number(extData?.amount_detail) ||
           Number(docData.salary) ||
           Number(docData.amount_detail) ||
           Number(stringParsed.salary) ||
@@ -570,12 +642,14 @@ export default function ContractorDocPage() {
           prev.currency ||
           "SAR",
         contract_period:
+          extData?.contract_duration ||
           extData?.contract_period ||
           extData?.duration ||
           docData.contract_period ||
           prev.contract_period ||
           "",
         candidate_name:
+          extData?.applicant_name ||
           extData?.candidate_name ||
           extData?.full_name ||
           docData.candidate_name ||

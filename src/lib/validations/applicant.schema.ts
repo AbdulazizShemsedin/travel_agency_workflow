@@ -42,11 +42,13 @@ export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 export const LANGUAGE_LEVEL_OPTIONS = ["None", "Basic", "Good", "Fluent"] as const;
 
 export const JOB_APPLIED_OPTIONS = [
-  "Domestic Worker",
+  "House worker",
   "Housemaid",
-  "Hospitality & Service Specialist",
+  "Domestic Worker",
+  "Driver",
   "Heavy Equipment Driver",
   "General Caregiver",
+  "Hospitality & Service Specialist",
   "Electrician / Technician",
   "Construction Assistant",
   "Other",
@@ -117,7 +119,7 @@ export const baseApplicantSchema = z.object({
   passport_issue_date: z.string().optional().or(z.literal("")),
   passport_expiry: z.string().optional().or(z.literal("")),
   place_of_issue: z.string().trim().optional().or(z.literal("")),
-  job_applied: z.string().trim().optional().or(z.literal("")),
+  job_applied: z.string().trim().default("House worker"),
   highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
   labour_id: z.string().optional().or(z.literal("")),
   national_id: z.string().optional().or(z.literal("")),
@@ -150,10 +152,10 @@ export const baseApplicantSchema = z.object({
   fee_notes: z.string().optional().or(z.literal("")),
 
   // Physical & CV Attributes
-  monthly_salary: z.string().trim().optional().or(z.literal("")),
+  monthly_salary: z.string().trim().default("1000"),
   height: z.string().trim().optional().or(z.literal("")),
   weight: z.string().trim().optional().or(z.literal("")),
-  complexion: z.string().trim().optional().or(z.literal("")),
+  complexion: z.string().trim().default("Fair"),
   place_of_birth: z.string().trim().optional().or(z.literal("")),
   leaving_town: z.string().trim().optional().or(z.literal("")),
 
@@ -173,18 +175,18 @@ export const baseApplicantSchema = z.object({
   arabic_level: z.string().optional().or(z.literal("")),
   experience_country: z.string().trim().optional().or(z.literal("")),
   experience_period: z.string().trim().optional().or(z.literal("")),
-  skill_cleaning: z.union([z.boolean(), z.string()]).default(""),
-  skill_cooking: z.union([z.boolean(), z.string()]).default(""),
-  skill_washing: z.union([z.boolean(), z.string()]).default(""),
-  skill_ironing: z.union([z.boolean(), z.string()]).default(""),
-  skill_baby_sitting: z.union([z.boolean(), z.string()]).default(""),
-  skill_baby_care: z.union([z.boolean(), z.string()]).default(""),
-  skill_children_care: z.union([z.boolean(), z.string()]).default(""),
-  skill_arabic_cooking: z.union([z.boolean(), z.string()]).default(""),
-  skill_elder_care: z.union([z.boolean(), z.string()]).default(""),
-  skill_elderly_care: z.union([z.boolean(), z.string()]).default(""),
-  skill_driving: z.union([z.boolean(), z.string()]).default(""),
-  skill_sewing: z.union([z.boolean(), z.string()]).default(""),
+  skill_cleaning: z.union([z.boolean(), z.string(), z.number()]).default(1),
+  skill_cooking: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_washing: z.union([z.boolean(), z.string(), z.number()]).default(1),
+  skill_ironing: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_baby_sitting: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_baby_care: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_children_care: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_arabic_cooking: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_elder_care: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_elderly_care: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_driving: z.union([z.boolean(), z.string(), z.number()]).default(0),
+  skill_sewing: z.union([z.boolean(), z.string(), z.number()]).default(0),
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),
@@ -209,13 +211,11 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
     .regex(NAME_REGEX, "First Name can only contain letters, hyphens, and spaces"),
 
   middle_name: z
-    .string()
+    .string({ required_error: "Father Name (Middle Name) is required" })
     .trim()
-    .refine((val) => !val || (NAME_REGEX.test(val) && val.length <= 50), {
-      message: "Middle Name can only contain letters, hyphens, and spaces",
-    })
-    .optional()
-    .or(z.literal("")),
+    .min(2, "Father Name must be at least 2 characters")
+    .max(50, "Father Name must not exceed 50 characters")
+    .regex(NAME_REGEX, "Father Name can only contain letters, hyphens, and spaces"),
 
   last_name: z
     .string({ required_error: "Last Name is required" })
@@ -336,25 +336,55 @@ export const stage2RegistrationSchema = stage1DraftSchema
       }),
     }),
 
+    english_level: z
+      .string({ required_error: "English Level is required for registration" })
+      .min(1, "English Level is required"),
+
+    arabic_level: z
+      .string({ required_error: "Arabic Level is required for registration" })
+      .min(1, "Arabic Level is required"),
+
+    height: z
+      .string({ required_error: "Height is required for registration" })
+      .trim()
+      .min(1, "Height is required (e.g. 160 CM)"),
+
+    weight: z
+      .string({ required_error: "Weight is required for registration" })
+      .trim()
+      .min(1, "Weight is required (e.g. 55 KG)"),
+
+    complexion: z
+      .string({ required_error: "Complexion is required for registration" })
+      .trim()
+      .min(1, "Complexion is required"),
+
+    place_of_birth: z
+      .string({ required_error: "Place of Birth is required for registration" })
+      .trim()
+      .min(2, "Place of Birth is required (e.g. Addis Ababa)"),
+
+    monthly_salary: z
+      .string({ required_error: "Monthly Salary is required for registration" })
+      .trim()
+      .min(1, "Monthly Salary is required"),
+
     passport_scan: z
       .string({ required_error: "Passport document scan is mandatory" })
       .min(1, "Passport document scan is mandatory for CV generation"),
 
-    medical_status: z.enum(MEDICAL_STATUS_OPTIONS, {
-      errorMap: () => ({ message: "Medical Status is required for registration" }),
-    }),
+    medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
     medical_expiry_date: z
-      .string({
-        required_error: "Medical Expiration Date is required",
-      })
-      .min(1, "Medical Expiration Date is required")
+      .string()
+      .optional()
+      .or(z.literal(""))
       .refine((val) => {
-        if (!val) return false;
+        if (!val) return true;
         return isValid(parseISO(val));
       }, "Please enter a valid Medical Expiration Date"),
   })
-  .refine((data) => data.medical_status !== "UNFIT", {
+  .refine((data) => !data.medical_status || data.medical_status !== "UNFIT", {
     message: "Applicant cannot be registered while medical status is UNFIT.",
     path: ["medical_status"],
   });
