@@ -14,21 +14,39 @@ export interface ExtensionApplicantPayload {
   passportNumber?: string;
   passportExpiry?: string;
   passportIssueDate?: string;
+  placeOfIssue?: string;
+  nationalId?: string;
+  labourId?: string;
   destinationCountry?: string;
   applicantState?: string;
   applicantType?: string;
   jobApplied?: string;
+  visaType?: string;
   gender?: string;
   dateOfBirth?: string;
   age?: number | string;
   religion?: string;
   placeOfBirth?: string;
+  leavingTown?: string;
   maritalStatus?: string;
+  nationality?: string;
+  email?: string;
   phone?: string;
+  alternatePhone?: string;
   city?: string;
   country?: string;
+  addressLine1?: string;
   medicalStatus?: string;
   photoUrl?: string;
+  monthlySalary?: number | string;
+  salaryCurrency?: string;
+  contractPeriod?: string;
+  sponsorName?: string;
+  sponsorId?: string;
+  sponsorPhone?: string;
+  visaNumber?: string;
+  contractNumber?: string;
+  contractorName?: string;
   selectedAt?: string;
 }
 
@@ -41,27 +59,49 @@ const EVENT_EXTENSION_READY = "TRAVEL_AGENCY_EXTENSION_READY";
 /**
  * Checks if the Travel Agency browser extension is installed and active in the user's browser.
  */
-export function isExtensionInstalled(timeoutMs: number = 300): Promise<boolean> {
-  if (typeof window === "undefined") return Promise.resolve(false);
+export function isExtensionInstalled(timeoutMs: number = 400): Promise<boolean> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.resolve(false);
+  }
+
+  // Fast synchronous check via DOM marker attribute set by content script
+  if (document.documentElement.getAttribute("data-travel-agency-extension-ready") === "true") {
+    return Promise.resolve(true);
+  }
 
   return new Promise((resolve) => {
     let resolved = false;
 
+    const cleanup = () => {
+      window.removeEventListener("message", handleMessage);
+      document.removeEventListener(EVENT_EXTENSION_READY, handleCustomEvent);
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === EVENT_EXTENSION_READY) {
         resolved = true;
-        window.removeEventListener("message", handleMessage);
+        cleanup();
         resolve(true);
       }
     };
 
+    const handleCustomEvent = () => {
+      resolved = true;
+      cleanup();
+      resolve(true);
+    };
+
     window.addEventListener("message", handleMessage);
+    document.addEventListener(EVENT_EXTENSION_READY, handleCustomEvent);
+
+    // Ping extension
     window.postMessage({ type: EVENT_CHECK_INSTALLED }, "*");
+    document.dispatchEvent(new CustomEvent(EVENT_CHECK_INSTALLED));
 
     setTimeout(() => {
       if (!resolved) {
-        window.removeEventListener("message", handleMessage);
-        resolve(false);
+        cleanup();
+        resolve(document.documentElement.getAttribute("data-travel-agency-extension-ready") === "true");
       }
     }, timeoutMs);
   });
@@ -73,52 +113,88 @@ export function isExtensionInstalled(timeoutMs: number = 300): Promise<boolean> 
 export function sendApplicantToExtension(
   applicant: Applicant | ExtensionApplicantPayload
 ): Promise<{ success: boolean; error?: string }> {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return Promise.resolve({ success: false, error: "Window is not available (SSR context)." });
   }
 
+  const rawApp = applicant as any;
+  const appId = rawApp.name || rawApp.applicantId || "APP-UNKNOWN";
+  const firstName = rawApp.first_name || rawApp.firstName || "";
+  const middleName = rawApp.middle_name || rawApp.middleName || "";
+  const lastName = rawApp.last_name || rawApp.lastName || "";
+  const fullName =
+    rawApp.full_name ||
+    rawApp.fullName ||
+    `${firstName} ${middleName} ${lastName}`.trim() ||
+    appId;
+
+  const defaultEmail = `${(firstName || "candidate").toLowerCase().replace(/[^a-z0-9]/g, "")}.${appId.toLowerCase().replace(/[^a-z0-9]/g, "")}@agencyportal.com`;
+
   const payload: ExtensionApplicantPayload = {
-    applicantId: (applicant as any).name || (applicant as any).applicantId,
-    fullName:
-      (applicant as any).full_name ||
-      (applicant as any).fullName ||
-      `${(applicant as any).first_name || ""} ${(applicant as any).middle_name || ""} ${(applicant as any).last_name || ""}`.trim() ||
-      (applicant as any).name ||
-      "Unknown Candidate",
-    firstName: (applicant as any).first_name,
-    middleName: (applicant as any).middle_name,
-    lastName: (applicant as any).last_name,
-    passportNumber: (applicant as any).passport_number || (applicant as any).passportNumber,
-    passportExpiry: (applicant as any).passport_expiry || (applicant as any).passportExpiry,
-    passportIssueDate: (applicant as any).passport_issue_date || (applicant as any).passportIssueDate,
-    destinationCountry: (applicant as any).destination_country || (applicant as any).destinationCountry,
-    applicantState: (applicant as any).applicant_state || (applicant as any).applicantState,
-    applicantType: (applicant as any).applicant_type || (applicant as any).applicantType,
-    jobApplied: (applicant as any).job_applied || (applicant as any).jobApplied,
-    gender: (applicant as any).gender,
-    dateOfBirth: (applicant as any).date_of_birth || (applicant as any).dateOfBirth,
-    age: (applicant as any).age,
-    religion: (applicant as any).religion,
-    placeOfBirth: (applicant as any).place_of_birth || (applicant as any).leaving_town || (applicant as any).placeOfBirth,
-    maritalStatus: (applicant as any).marital_status || (applicant as any).maritalStatus,
-    phone: (applicant as any).phone_number || (applicant as any).phone,
-    city: (applicant as any).city,
-    country: (applicant as any).country,
-    medicalStatus: (applicant as any).medical_status || (applicant as any).medicalStatus,
-    photoUrl: (applicant as any).photo_passport || (applicant as any).profile_photo_url || (applicant as any).photoUrl,
+    applicantId: appId,
+    fullName,
+    firstName,
+    middleName,
+    lastName,
+    passportNumber: rawApp.passport_number || rawApp.passportNumber || "",
+    passportExpiry: rawApp.passport_expiry || rawApp.passportExpiry || "",
+    passportIssueDate: rawApp.passport_issue_date || rawApp.passportIssueDate || "",
+    placeOfIssue: rawApp.place_of_issue || rawApp.placeOfIssue || rawApp.city || "Addis Ababa",
+    nationalId: rawApp.national_id || rawApp.nationalId || rawApp.labour_id || rawApp.passport_number || "",
+    labourId: rawApp.labour_id || rawApp.labourId || "",
+    destinationCountry: rawApp.destination_country || rawApp.destinationCountry || "Saudi Arabia",
+    applicantState: rawApp.applicant_state || rawApp.applicantState || "Active",
+    applicantType: rawApp.applicant_type || rawApp.applicantType || "Standard",
+    jobApplied: rawApp.job_applied || rawApp.jobApplied || "Housemaid",
+    visaType: rawApp.visa_type || rawApp.visaType || "Work",
+    gender: rawApp.gender || "Female",
+    dateOfBirth: rawApp.date_of_birth || rawApp.dateOfBirth || "",
+    age: rawApp.age || 25,
+    religion: rawApp.religion || "Muslim",
+    placeOfBirth: rawApp.place_of_birth || rawApp.leaving_town || rawApp.placeOfBirth || rawApp.city || "Addis Ababa",
+    leavingTown: rawApp.leaving_town || rawApp.leavingTown || rawApp.city || "",
+    maritalStatus: rawApp.marital_status || rawApp.maritalStatus || "Single",
+    nationality: rawApp.nationality || rawApp.country || "Ethiopia",
+    email: rawApp.email || rawApp.emailAddress || defaultEmail,
+    phone: rawApp.phone_number || rawApp.phone || "+251911223344",
+    alternatePhone: rawApp.alternate_phone || rawApp.alternatePhone || "",
+    city: rawApp.city || "Addis Ababa",
+    country: rawApp.country || "Ethiopia",
+    addressLine1: rawApp.address_line_1 || rawApp.addressLine1 || rawApp.applicant_address || "",
+    medicalStatus: rawApp.medical_status || rawApp.medicalStatus || "FIT",
+    photoUrl: rawApp.photo_passport || rawApp.profile_photo_url || rawApp.photoUrl || "",
+    monthlySalary: rawApp.monthly_salary || rawApp.monthlySalary || (rawApp.contractor_doc?.salary) || 1200,
+    salaryCurrency: rawApp.salary_currency || rawApp.salaryCurrency || (rawApp.contractor_doc?.currency) || "SAR",
+    contractPeriod: rawApp.contract_period || rawApp.contractPeriod || (rawApp.contractor_doc?.contract_period) || "2 Years",
+    sponsorName: rawApp.contractor_doc?.sponsor_name || rawApp.sponsor_name || rawApp.sponsorName || "",
+    sponsorId: rawApp.contractor_doc?.sponsor_id || rawApp.sponsor_id || rawApp.sponsorId || "",
+    sponsorPhone: rawApp.contractor_doc?.sponsor_phone || rawApp.sponsor_phone || rawApp.sponsorPhone || "",
+    visaNumber: rawApp.contractor_doc?.visa_number || rawApp.visa_number || rawApp.visaNumber || "",
+    contractNumber: rawApp.contractor_doc?.contract_number || rawApp.contract_number || rawApp.contractNumber || "",
+    contractorName: rawApp.contractor_doc?.contractor_name || rawApp.locked_contractor || rawApp.contractor || rawApp.contractorName || "",
     selectedAt: new Date().toISOString(),
   };
+
+  // Always back up into localStorage for instant cross-tab access
+  try {
+    localStorage.setItem("travel_agency_selected_applicant", JSON.stringify(payload));
+  } catch {}
 
   return new Promise((resolve) => {
     let resolved = false;
 
+    const cleanup = () => {
+      window.removeEventListener("message", handleMessage);
+      document.removeEventListener(EVENT_APPLICANT_SAVED, handleCustomEvent);
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (
         event.data?.type === EVENT_APPLICANT_SAVED &&
-        event.data?.applicantId === payload.applicantId
+        (event.data?.applicantId === payload.applicantId || !event.data?.applicantId)
       ) {
         resolved = true;
-        window.removeEventListener("message", handleMessage);
+        cleanup();
         resolve({
           success: Boolean(event.data.success),
           error: event.data.error,
@@ -126,9 +202,21 @@ export function sendApplicantToExtension(
       }
     };
 
-    window.addEventListener("message", handleMessage);
+    const handleCustomEvent = (e: any) => {
+      if (e.detail?.applicantId === payload.applicantId || !e.detail?.applicantId) {
+        resolved = true;
+        cleanup();
+        resolve({
+          success: Boolean(e.detail?.success ?? true),
+          error: e.detail?.error,
+        });
+      }
+    };
 
-    // Send payload to content script bridge
+    window.addEventListener("message", handleMessage);
+    document.addEventListener(EVENT_APPLICANT_SAVED, handleCustomEvent);
+
+    // 1. PostMessage
     window.postMessage(
       {
         type: EVENT_SELECT_APPLICANT,
@@ -137,16 +225,23 @@ export function sendApplicantToExtension(
       "*"
     );
 
-    // Fallback timeout in case extension is not installed
+    // 2. CustomEvent
+    document.dispatchEvent(
+      new CustomEvent(EVENT_SELECT_APPLICANT, {
+        detail: { applicant: payload },
+      })
+    );
+
+    // Fallback timeout in case extension is not loaded in this browser session
     setTimeout(() => {
       if (!resolved) {
-        window.removeEventListener("message", handleMessage);
+        cleanup();
         resolve({
           success: false,
-          error: "Extension not detected. Please make sure Travel Agency Assistant is installed and active.",
+          error: "Extension not detected. Please make sure Travel Agency Assistant is loaded in your browser via chrome://extensions (or edge://extensions) and this page is refreshed.",
         });
       }
-    }, 1500);
+    }, 1800);
   });
 }
 
@@ -154,10 +249,16 @@ export function sendApplicantToExtension(
  * Clears the active applicant from the extension.
  */
 export function clearExtensionApplicant(): Promise<boolean> {
-  if (typeof window === "undefined") return Promise.resolve(false);
+  if (typeof window === "undefined" || typeof document === "undefined") return Promise.resolve(false);
+
+  try {
+    localStorage.removeItem("travel_agency_selected_applicant");
+  } catch {}
 
   return new Promise((resolve) => {
     window.postMessage({ type: EVENT_CLEAR_APPLICANT }, "*");
+    document.dispatchEvent(new CustomEvent(EVENT_CLEAR_APPLICANT));
     setTimeout(() => resolve(true), 150);
   });
 }
+

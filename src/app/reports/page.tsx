@@ -41,6 +41,7 @@ import {
   Briefcase,
   UserCheck,
   Sparkles,
+  CreditCard,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -73,8 +74,12 @@ import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { exportToCSV, exportToPrintPDF, ExportColumn } from "@/lib/utils/reportExport";
 import { Applicant, CommissionLedgerItem, AgencyComplaint, Contractor } from "@/types/applicant";
+import { LMISReportView } from "@/components/reports/LMISReportView";
+import { InjazReportView } from "@/components/reports/InjazReportView";
+import { EmbassyReportView } from "@/components/reports/EmbassyReportView";
+import { DepartureReportView } from "@/components/reports/DepartureReportView";
 
-type ReportTab = "overview" | "stage" | "commission" | "departed";
+type ReportTab = "overview" | "stage" | "commission" | "departed" | "lmis" | "injaz" | "embassy" | "departure";
 type PeriodPreset = "today" | "week" | "month" | "all" | "custom";
 
 const STAGE_ORDER = [
@@ -943,7 +948,7 @@ export default function ReportsPage() {
         <div>
           <h3 className="text-base font-bold text-rose-900 dark:text-rose-300">Access Restricted</h3>
           <p className="text-xs text-rose-700 dark:text-rose-400 mt-1 max-w-md">
-            The Executive Reports Workspace is restricted to authorized internal administrators and managers.
+            The Reports Workspace is restricted to authorized internal staff and administrators.
           </p>
         </div>
         <Link href="/dashboard">
@@ -951,6 +956,54 @@ export default function ReportsPage() {
             Return to Dashboard
           </Button>
         </Link>
+      </div>
+    );
+  }
+
+  // User Role Resolution & Dedicated Workspace Views
+  const userRoles = (currentUser?.roles || []).map((r: any) =>
+    (typeof r === "string" ? r : r.role || "").toLowerCase().trim()
+  );
+  const emailOrName = (currentUser?.email || currentUser?.full_name || "").toLowerCase().trim();
+  const isAdmin =
+    emailOrName === "administrator" ||
+    emailOrName.startsWith("admin") ||
+    userRoles.some((r: string) => r === "system manager" || r === "administrator" || r === "agency admin");
+
+  const isLmisOnly = !isAdmin && userRoles.some((r: string) => r.includes("lms") || r.includes("lmis") || r.includes("clearance"));
+  const isInjazOnly = !isAdmin && !isLmisOnly && userRoles.some((r: string) => r.includes("injaz") || r.includes("teshir") || r.includes("te'shir"));
+  const isEmbassyOnly = !isAdmin && !isLmisOnly && !isInjazOnly && userRoles.some((r: string) => r.includes("embassy") || r.includes("wakala"));
+  const isDepartureOnly = !isAdmin && !isLmisOnly && !isInjazOnly && !isEmbassyOnly && userRoles.some((r: string) => r.includes("ticket") || r.includes("departure"));
+
+  // Specialized Single-Role Views
+  if (isLmisOnly) {
+    return (
+      <div className="space-y-6 pb-20">
+        <LMISReportView />
+      </div>
+    );
+  }
+
+  if (isInjazOnly) {
+    return (
+      <div className="space-y-6 pb-20">
+        <InjazReportView />
+      </div>
+    );
+  }
+
+  if (isEmbassyOnly) {
+    return (
+      <div className="space-y-6 pb-20">
+        <EmbassyReportView />
+      </div>
+    );
+  }
+
+  if (isDepartureOnly) {
+    return (
+      <div className="space-y-6 pb-20">
+        <DepartureReportView />
       </div>
     );
   }
@@ -1149,10 +1202,64 @@ export default function ReportsPage() {
           }`}
         >
           <Plane className="h-4 w-4" />
-          <span>D. Departed & After-Process</span>
+          <span>D. Departed & Warranty</span>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
             {departedCandidates.length}
           </Badge>
+        </button>
+
+        <div className="h-5 w-[1px] bg-slate-200 dark:bg-[#282830] mx-1 shrink-0" />
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("lmis")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === "lmis"
+              ? "bg-emerald-800 text-white shadow-xs"
+              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181f]"
+          }`}
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          <span>LMIS Clearance</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("injaz")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === "injaz"
+              ? "bg-emerald-800 text-white shadow-xs"
+              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181f]"
+          }`}
+        >
+          <CreditCard className="h-4 w-4" />
+          <span>Te'shir / Injaz</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("embassy")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === "embassy"
+              ? "bg-emerald-800 text-white shadow-xs"
+              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181f]"
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          <span>Embassy / Wakala</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("departure")}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === "departure"
+              ? "bg-emerald-800 text-white shadow-xs"
+              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181f]"
+          }`}
+        >
+          <Plane className="h-4 w-4" />
+          <span>Ticket & Departure</span>
         </button>
       </div>
 
@@ -2723,6 +2830,42 @@ export default function ReportsPage() {
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TAB E: LMIS CLEARANCE REPORT */}
+      {/* --------------------------------------------------------------------- */}
+      {!isLoading && activeTab === "lmis" && (
+        <div className="animate-in fade-in duration-200">
+          <LMISReportView />
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TAB F: TE'SHIR / INJAZ REPORT */}
+      {/* --------------------------------------------------------------------- */}
+      {!isLoading && activeTab === "injaz" && (
+        <div className="animate-in fade-in duration-200">
+          <InjazReportView />
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TAB G: EMBASSY / WAKALA REPORT */}
+      {/* --------------------------------------------------------------------- */}
+      {!isLoading && activeTab === "embassy" && (
+        <div className="animate-in fade-in duration-200">
+          <EmbassyReportView />
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* TAB H: TICKET & DEPARTURE REPORT */}
+      {/* --------------------------------------------------------------------- */}
+      {!isLoading && activeTab === "departure" && (
+        <div className="animate-in fade-in duration-200">
+          <DepartureReportView />
         </div>
       )}
     </div>

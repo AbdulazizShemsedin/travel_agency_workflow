@@ -185,6 +185,13 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Clearance Officer",
     "Accounts Manager",
     "LMS Employee",
+    "Injaz Officer",
+    "Wakala Officer",
+    "Embassy Officer",
+    "Departure Officer",
+    "Ticket Officer",
+    "Recruiter",
+    "Applicant Viewer",
   ],
   manageContractors: [
     "System Manager",

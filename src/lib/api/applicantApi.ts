@@ -436,8 +436,9 @@ export async function getApplicantsList(): Promise<Applicant[]> {
     "medical_expiry_date",
     "coc_status",
     "photo_passport",
+    "photo_full_body",
+    "passport_scan",
     "locked_contractor",
-    "contractor",
     "experience_country",
     "experience_period",
     "monthly_salary",
@@ -2450,9 +2451,7 @@ export async function getPortalAvailableCandidates(filters?: {
         "marital_status",
         "complexion",
         "passport_number",
-        "cv_file_url",
         "applicant_state",
-        "selected_by",
         "locked_contractor",
       ])
     );
@@ -3106,13 +3105,11 @@ export async function getAdminCommissionLedgerApi(): Promise<{
         "job_applied",
         "destination_country",
         "locked_contractor",
-        "contractor",
         "applicant_state",
         "commission_status",
         "commission_amount",
         "commission_paid_date",
         "commission_batch_ref",
-        "is_replacement",
         "creation",
         "modified",
       ])
@@ -3246,3 +3243,267 @@ export async function updateApplicantCommissionApi(
   });
   return handleApiResponse(res);
 }
+
+// ---------------------------------------------------------------------------
+// OPERATIONAL WORKSPACE DATA ACCESS (Excel-Like Tables + Drawer Hub)
+// ---------------------------------------------------------------------------
+import type { WorkspaceApplicantRow, OperationalStreamType } from "@/types/workspace";
+
+export async function fetchOperationalWorkspaceData(
+  streamType: OperationalStreamType,
+  corridorFilter?: string
+): Promise<WorkspaceApplicantRow[]> {
+  try {
+    // 1. Fetch Applicants (using standard robust getApplicantsList)
+    const applicants = await getApplicantsList();
+
+    // Helper for safe query with encoded field params
+    const safeFetchResource = async (doctype: string): Promise<any[]> => {
+      try {
+        const fields = encodeURIComponent(JSON.stringify(["*"]));
+        const res = await fetch(
+          `/api/resource/${encodeURIComponent(doctype)}?fields=${fields}&limit_page_length=0&order_by=modified%20desc`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) return [];
+        const json = await res.json();
+        return Array.isArray(json.data) ? json.data : [];
+      } catch (e) {
+        console.warn(`Failed to fetch ${doctype}:`, e);
+        return [];
+      }
+    };
+
+    // 2. Fetch Dossiers, DSRs, and stream records in parallel
+    const [
+      dossiers,
+      dsrs,
+      lmsRecords,
+      injazRecords,
+      wakalaRecords,
+      embassyRecords,
+      stampRecords,
+      ticketRecords,
+      depRecords,
+    ] = await Promise.all([
+      safeFetchResource("Applicant Dossier"),
+      safeFetchResource("DSR"),
+      safeFetchResource("LMS Clearance"),
+      safeFetchResource("Injaz Clearance"),
+      safeFetchResource("Wakala Clearance"),
+      safeFetchResource("Embassy Clearance"),
+      safeFetchResource("DSR Stamp"),
+      safeFetchResource("DSR Ticket"),
+      safeFetchResource("DSR Departure"),
+    ]);
+
+    // Build multi-key lookup maps for dossiers
+    const dossierByAppId = new Map<string, ApplicantDossier>();
+    const dossierByPassport = new Map<string, ApplicantDossier>();
+    const dossierByName = new Map<string, ApplicantDossier>();
+
+    for (const d of dossiers) {
+      if (d.applicant) dossierByAppId.set(d.applicant.toLowerCase().trim(), d);
+      if (d.passport_number) dossierByPassport.set(d.passport_number.toLowerCase().trim(), d);
+      if (d.full_name) dossierByName.set(d.full_name.toLowerCase().trim(), d);
+    }
+
+    // Build lookup maps for DSRs
+    const dsrByDossier = new Map<string, any>();
+    const dsrByPassport = new Map<string, any>();
+    for (const dsr of dsrs) {
+      if (dsr.applicant_dossier) dsrByDossier.set(dsr.applicant_dossier.toLowerCase().trim(), dsr);
+      if (dsr.passport_number) dsrByPassport.set(dsr.passport_number.toLowerCase().trim(), dsr);
+    }
+
+    // Helper map indexer by dsr, applicant_dossier, and passport_number
+    const indexRecords = (arr: any[]) => {
+      const byDsr = new Map<string, any>();
+      const byDossier = new Map<string, any>();
+      const byPassport = new Map<string, any>();
+      for (const item of arr) {
+        if (item.dsr) byDsr.set(String(item.dsr).toLowerCase().trim(), item);
+        if (item.applicant_dossier) byDossier.set(String(item.applicant_dossier).toLowerCase().trim(), item);
+        if (item.passport_number) byPassport.set(String(item.passport_number).toLowerCase().trim(), item);
+      }
+      return { byDsr, byDossier, byPassport };
+    };
+
+    const lmsIdx = indexRecords(lmsRecords);
+    const injazIdx = indexRecords(injazRecords);
+    const wakalaIdx = indexRecords(wakalaRecords);
+    const embassyIdx = indexRecords(embassyRecords);
+    const stampIdx = indexRecords(stampRecords);
+    const ticketIdx = indexRecords(ticketRecords);
+    const depIdx = indexRecords(depRecords);
+
+    // 4. Assemble Rows
+    const rows: WorkspaceApplicantRow[] = [];
+
+    for (const applicant of applicants) {
+      const dest = applicant.destination_country || "Saudi Arabia";
+
+      // Corridor filtering
+      if (corridorFilter && corridorFilter !== "All" && dest.toLowerCase() !== corridorFilter.toLowerCase()) {
+        continue;
+      }
+
+      // Role-specific corridor isolation
+      if (streamType === "injaz" || streamType === "wakala") {
+        // Injaz & Wakala are Saudi Arabia only
+        if (dest.toLowerCase() === "kuwait") continue;
+      }
+
+      const appIdKey = applicant.name.toLowerCase().trim();
+      const passportKey = (applicant.passport_number || "").toLowerCase().trim();
+      const nameKey = (applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`).toLowerCase().trim();
+
+      const dossier =
+        dossierByAppId.get(appIdKey) ||
+        (passportKey ? dossierByPassport.get(passportKey) : undefined) ||
+        (nameKey ? dossierByName.get(nameKey) : undefined) ||
+        null;
+
+      const dossierKey = dossier ? dossier.name.toLowerCase().trim() : "";
+      const dsr = dossierKey ? dsrByDossier.get(dossierKey) : (passportKey ? dsrByPassport.get(passportKey) : undefined);
+      const dsrKey = dsr ? dsr.name.toLowerCase().trim() : "";
+
+      const getRec = (idx: { byDsr: Map<string, any>; byDossier: Map<string, any>; byPassport: Map<string, any> }) => {
+        if (dsrKey && idx.byDsr.has(dsrKey)) return idx.byDsr.get(dsrKey);
+        if (dossierKey && idx.byDossier.has(dossierKey)) return idx.byDossier.get(dossierKey);
+        if (passportKey && idx.byPassport.has(passportKey)) return idx.byPassport.get(passportKey);
+        return null;
+      };
+
+      const lmsRec = getRec(lmsIdx);
+      const injazRec = getRec(injazIdx);
+      const wakalaRec = getRec(wakalaIdx);
+      const embassyRec = getRec(embassyIdx);
+      const stampRec = getRec(stampIdx);
+      const ticketRec = getRec(ticketIdx);
+      const depRec = getRec(depIdx);
+
+      // Contract date & elapsed duration calculation (DATEDIF)
+      const rawContractDate =
+        (dossier as any)?.contract_date ||
+        (dossier as any)?.creation?.split(" ")[0] ||
+        (applicant.creation ? String(applicant.creation).split(" ")[0] : "");
+
+      let contractDate = rawContractDate ? rawContractDate.split(" ")[0] : "";
+      let duration = 0;
+      if (contractDate) {
+        const cd = new Date(contractDate);
+        if (!isNaN(cd.getTime())) {
+          const diffMs = Date.now() - cd.getTime();
+          duration = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+        }
+      }
+
+      // Medical dates and remaining countdown calculation
+      const medicalDate = (applicant as any).medical_date || applicant.medical_expiry_date || undefined;
+      const medicalExpiryDate = applicant.medical_expiry_date || (medicalDate ? new Date(new Date(medicalDate).getTime() + 90 * 24 * 3600 * 1000).toISOString().split("T")[0] : undefined);
+
+      let medicalRemaining = "—";
+      if (medicalExpiryDate) {
+        const exp = new Date(medicalExpiryDate);
+        if (!isNaN(exp.getTime())) {
+          const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          medicalRemaining = `${diffDays}DAYS LEFT`;
+        }
+      } else if (medicalDate) {
+        const exp = new Date(new Date(medicalDate).getTime() + 90 * 24 * 3600 * 1000);
+        const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        medicalRemaining = `${diffDays}DAYS LEFT`;
+      }
+
+      // Injaz payment & appointment date
+      const injazPayment =
+        injazRec?.status === "Completed" || (injazRec as any)?.payment_status === "Paid"
+          ? "PAID"
+          : "UNPAID";
+
+      const appointmentDate = (injazRec as any)?.appointment_date || (injazRec as any)?.issued_on || "";
+
+      // Contact & Remark normalization
+      const contact =
+        lmsRec?.employee ||
+        injazRec?.employee ||
+        embassyRec?.employee ||
+        wakalaRec?.employee ||
+        applicant.phone_number ||
+        "—";
+
+      const remark =
+        lmsRec?.missing_data_notes ||
+        (embassyRec as any)?.remark ||
+        (injazRec as any)?.remark ||
+        (dossier as any)?.notes ||
+        "";
+
+      const wakalaStatus = wakalaRec?.status || dsr?.wakala_status || (dossier?.contractor_name ? "Authorized" : "Pending");
+      const embassyStatus = stampRec?.status === "Completed" ? "Approved" : (embassyRec?.status || dsr?.embassy_status || "Pending");
+      const lmisStatus = lmsRec?.status || dsr?.lms_status || "Pending";
+      const ticketStatus = ticketRec?.status || dsr?.ticket_status || (ticketRec?.ticket_number ? "Booked" : "Pending");
+      const ticketNumber = ticketRec?.ticket_number || "—";
+      const laborId = (dossier as any)?.contract_number || applicant.name;
+
+      const row: WorkspaceApplicantRow = {
+        applicantId: applicant.name,
+        applicant,
+        dossier: dossier || null,
+        dsrName: dsr?.name || undefined,
+        destinationCountry: dest,
+        fullName: applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || applicant.name,
+        passportNumber: applicant.passport_number || "—",
+        phone: applicant.phone_number || undefined,
+        medicalStatus: applicant.medical_status || "Pending",
+        medicalDate,
+        medicalExpiryDate,
+        jobApplied: applicant.job_applied || "Housemaid",
+        lockedContractor: (applicant as any).locked_contractor || (dossier as any)?.contractor_name || undefined,
+        sponsorName: dossier?.sponsor_name || dsr?.sponsor_name || undefined,
+        sponsorId: dossier?.sponsor_id || undefined,
+        visaNumber: dossier?.visa_number || undefined,
+        contractNumber: (dossier as any)?.contract_number || undefined,
+        contractIssueDate: contractDate || undefined,
+        salary: (dossier as any)?.salary || (dossier as any)?.amount_detail || undefined,
+        contractPeriod: (dossier as any)?.contract_period || (dossier as any)?.contract_duration || undefined,
+
+        // Sheet normalized properties
+        laborId,
+        contractDate,
+        duration,
+        medicalRemaining,
+        injazPayment,
+        appointmentDate,
+        contact,
+        remark,
+        wakalaStatus,
+        embassyStatus,
+        telephone: (dossier as any)?.telephone || applicant.phone_number || "—",
+        company: (dossier as any)?.contractor_name || applicant.locked_contractor || "—",
+        lmisStatus,
+        issueDate: lmsRec?.issued_on || undefined,
+        ticketStatus,
+        ticketNumber,
+
+        // Clearances
+        lms: lmsRec,
+        injaz: injazRec,
+        wakala: wakalaRec,
+        embassy: embassyRec,
+        stamp: stampRec,
+        ticket: ticketRec,
+        departure: depRec,
+      };
+
+      rows.push(row);
+    }
+
+    return rows;
+  } catch (err) {
+    console.error("fetchOperationalWorkspaceData error:", err);
+    return [];
+  }
+}
+

@@ -23,26 +23,28 @@
   },
   "permissions": [
     "contextMenus",
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "content_scripts": [
     {
       "matches": [
-        "http://localhost:*/*",
-        "http://127.0.0.1:*/*",
-        "https://*.travelagency.com/*"
+        "<all_urls>"
       ],
       "js": [
         "content/bridgeContent.js"
       ],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "externally_connectable": {
     "matches": [
-      "http://localhost:*/*",
-      "http://127.0.0.1:*/*",
-      "https://*.travelagency.com/*"
+      "<all_urls>"
     ]
   }
 }

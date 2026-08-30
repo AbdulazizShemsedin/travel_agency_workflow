@@ -43,7 +43,7 @@
         </div>
         <h2>No applicant selected</h2>
         <p class="empty-desc">
-          Open a candidate record in the Travel Agency application and click <strong>"Send to Extension"</strong> to load their profile.
+          Open an applicant profile in the Travel Agency web app and click <strong>"Send to Extension"</strong> to enable form autofill and cross-site actions.
         </p>
       </div>
 
@@ -54,39 +54,67 @@
           <span>Active Candidate in Memory</span>
         </div>
 
+        <!-- Autofill Status Feedback Banner -->
+        <div id="autofill-banner" class="autofill-banner" style="display: none;">
+          <span id="autofill-banner-text">Autofilled successfully!</span>
+        </div>
+
         <div class="applicant-card">
           <div class="card-header">
             <div class="avatar" id="applicant-avatar">AA</div>
             <div class="name-block">
-              <h2 id="applicant-fullname">—</h2>
+              <div class="name-copy-wrap">
+                <h2 id="applicant-fullname">—</h2>
+                <button type="button" class="btn-copy-mini" id="copy-name" title="Copy Full Name">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+              </div>
               <span class="applicant-id" id="applicant-id">APP-XXXXX</span>
             </div>
           </div>
 
           <div class="details-grid">
             <div class="detail-item">
-              <span class="detail-label">Passport #</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Passport #</span>
+                <button type="button" class="btn-copy-mini" id="copy-passport" title="Copy Passport Number">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+              </div>
               <span class="detail-value font-mono" id="applicant-passport">—</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Destination</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Destination</span>
+              </div>
               <span class="detail-value" id="applicant-destination">—</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Position</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Position</span>
+              </div>
               <span class="detail-value" id="applicant-job">—</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Place of Birth</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Place of Birth</span>
+              </div>
               <span class="detail-value" id="applicant-pob">—</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Religion</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Religion</span>
+              </div>
               <span class="detail-value" id="applicant-religion">—</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Status</span>
-              <span class="detail-value" id="applicant-state">—</span>
+              <div class="detail-label-row">
+                <span class="detail-label">Date of Birth</span>
+                <button type="button" class="btn-copy-mini" id="copy-dob" title="Copy Date of Birth">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </button>
+              </div>
+              <span class="detail-value font-mono" id="applicant-dob">—</span>
             </div>
           </div>
 
@@ -97,13 +125,20 @@
 
         <!-- Action Button Toolbar -->
         <div class="action-toolbar">
-          <button type="button" id="btn-clear" class="btn btn-secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button type="button" id="btn-autofill" class="btn btn-primary" title="Autofill matching form fields on the active browser tab">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <span>Autofill Current Form</span>
+          </button>
+
+          <button type="button" id="btn-clear" class="btn btn-secondary" title="Clear applicant from memory">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 6h18"/>
               <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
               <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
             </svg>
-            <span>Clear Memory</span>
+            <span>Clear</span>
           </button>
         </div>
       </div>
@@ -111,8 +146,8 @@
 
     <!-- Footer -->
     <footer class="popup-footer">
-      <span class="version-text">v1.0.0 (Phase 1 Foundation)</span>
-      <span class="security-text">🔒 Local Storage Only</span>
+      <span class="version-text">v1.1.0 • Form Autofill Ready</span>
+      <span class="security-text">🔒 Local Storage</span>
     </footer>
   </div>
 

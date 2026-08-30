@@ -12,21 +12,39 @@ export interface SelectedApplicant {
   passportNumber?: string;
   passportExpiry?: string;
   passportIssueDate?: string;
+  placeOfIssue?: string;
+  nationalId?: string;
+  labourId?: string;
   destinationCountry?: string;
   applicantState?: string;
   applicantType?: string;
   jobApplied?: string;
+  visaType?: string;
   gender?: "Female" | "Male" | string;
   dateOfBirth?: string;
   age?: number | string;
   religion?: string;
   placeOfBirth?: string;
+  leavingTown?: string;
   maritalStatus?: string;
+  nationality?: string;
+  email?: string;
   phone?: string;
+  alternatePhone?: string;
   city?: string;
   country?: string;
+  addressLine1?: string;
   medicalStatus?: string;
   photoUrl?: string;
+  monthlySalary?: number | string;
+  salaryCurrency?: string;
+  contractPeriod?: string;
+  sponsorName?: string;
+  sponsorId?: string;
+  sponsorPhone?: string;
+  visaNumber?: string;
+  contractNumber?: string;
+  contractorName?: string;
   selectedAt: string; // ISO 8601 timestamp
 }
 

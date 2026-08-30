@@ -9,8 +9,10 @@ import {
   clearSelectedApplicant,
 } from "../lib/storage";
 import { validateSelectedApplicant } from "../lib/validator";
+import { executeAutofill } from "../lib/autofillEngine";
 
 const MENU_ROOT_ID = "travel_agency_assistant_root";
+const MENU_AUTOFILL_ID = "travel_agency_autofill_applicant";
 const MENU_SHOW_ID = "travel_agency_show_applicant";
 const MENU_CLEAR_ID = "travel_agency_clear_applicant";
 
@@ -22,6 +24,13 @@ function initContextMenus() {
     chrome.contextMenus.create({
       id: MENU_ROOT_ID,
       title: "Travel Agency Assistant",
+      contexts: ["all"],
+    });
+
+    chrome.contextMenus.create({
+      id: MENU_AUTOFILL_ID,
+      parentId: MENU_ROOT_ID,
+      title: "⚡ Autofill Candidate into Form",
       contexts: ["all"],
     });
 
@@ -64,7 +73,22 @@ chrome.runtime.onStartup.addListener(() => {
  * Context Menu Click Handler
  */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === MENU_SHOW_ID) {
+  if (info.menuItemId === MENU_AUTOFILL_ID) {
+    const applicant = await getSelectedApplicant();
+    if (!applicant) {
+      chrome.action.setBadgeText({ text: "!" });
+      chrome.action.setBadgeBackgroundColor({ color: "#e11d48" });
+      setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2500);
+      return;
+    }
+    if (tab?.id) {
+      chrome.scripting?.executeScript({
+        target: { tabId: tab.id },
+        func: executeAutofill,
+        args: [applicant],
+      }).catch((err) => console.error("Context menu autofill error:", err));
+    }
+  } else if (info.menuItemId === MENU_SHOW_ID) {
     const applicant = await getSelectedApplicant();
     if (applicant) {
       // Visible confirmation via temporary action badge text
