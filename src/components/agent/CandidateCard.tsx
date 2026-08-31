@@ -106,28 +106,20 @@ export function CandidateCard({
 
         {/* Key Facts Grid */}
         {(() => {
-          const rawPeriod = candidate.experience_period?.trim();
-          const rawCountry = candidate.experience_country?.trim();
-          const hasPeriod = Boolean(
-            rawPeriod &&
-            rawPeriod !== "None" &&
-            rawPeriod !== "0" &&
-            rawPeriod.toLowerCase() !== "first time" &&
-            rawPeriod.toLowerCase() !== "first time applicant"
-          );
-          const hasCountry = Boolean(
+          const rawPeriod = candidate.experience_period?.trim() || "";
+          const rawCountry = candidate.experience_country?.trim() || "";
+          const isExperienced = Boolean(
             rawCountry &&
+            rawCountry !== "" &&
+            rawCountry.toLowerCase() !== "none" &&
             rawCountry.toLowerCase() !== "first time" &&
             rawCountry.toLowerCase() !== "first time applicant" &&
-            rawCountry.toLowerCase() !== "none"
+            rawCountry.toLowerCase() !== "overseas"
           );
-          const isExperienced = hasPeriod || hasCountry;
           const expDisplay = isExperienced
-            ? (hasCountry && hasPeriod ? `${rawCountry} (${rawPeriod})` : hasPeriod ? rawPeriod : `${rawCountry} Exp`)
+            ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? `${rawCountry} (${rawPeriod})` : `${rawCountry} Exp`)
             : "First Time";
-          const priorWorkDisplay = isExperienced
-            ? (hasCountry ? rawCountry : `Experienced (${rawPeriod})`)
-            : "First Time Applicant";
+          const priorWorkDisplay = isExperienced ? rawCountry : "First Time Applicant";
 
           return (
             <>

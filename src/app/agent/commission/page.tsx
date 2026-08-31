@@ -66,9 +66,9 @@ export default function AgentCommissionPage() {
   };
 
   const excelExportUrl =
-    "/api/method/applicant_processing.applicant_processing.utils.commission_export.export_unpaid_commission_report?export_format=excel&limit=100";
+    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
   const pdfExportUrl =
-    "/api/method/applicant_processing.applicant_processing.utils.commission_export.export_unpaid_commission_report?export_format=pdf&limit=100";
+    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
 
   return (
     <AgentLayout

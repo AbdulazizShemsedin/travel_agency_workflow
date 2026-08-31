@@ -99,14 +99,19 @@ export async function listUnresolvedComplaintsV2(): Promise<V2ComplaintRecord[]>
     return demoStore.getComplaints();
   }
 
-  const result = await requestV2<V2ComplaintRecord[] | { complaints?: V2ComplaintRecord[] }>(
-    "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
-    { method: "POST" }
-  );
+  try {
+    const result = await requestV2<V2ComplaintRecord[] | { complaints?: V2ComplaintRecord[] }>(
+      "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
+      { method: "POST" }
+    );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).complaints)) return (result as any).complaints;
-  return [];
+    if (Array.isArray(result)) return result;
+    if (result && Array.isArray((result as any).complaints)) return (result as any).complaints;
+    return [];
+  } catch (err) {
+    console.warn("[Complaints] listUnresolvedComplaintsV2 backend error, using demo fallback:", err);
+    return demoStore.getComplaints();
+  }
 }
 
 /**

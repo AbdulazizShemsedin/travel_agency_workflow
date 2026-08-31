@@ -179,27 +179,19 @@ export function CandidateDetailModal({
               Prior Overseas Work Experience
             </h4>
             {(() => {
-              const rawPeriod = candidate.experience_period?.trim();
-              const rawCountry = candidate.experience_country?.trim();
-              const hasPeriod = Boolean(
-                rawPeriod &&
-                rawPeriod !== "None" &&
-                rawPeriod !== "0" &&
-                rawPeriod.toLowerCase() !== "first time" &&
-                rawPeriod.toLowerCase() !== "first time applicant"
-              );
-              const hasCountry = Boolean(
+              const rawPeriod = candidate.experience_period?.trim() || "";
+              const rawCountry = candidate.experience_country?.trim() || "";
+              const isExperienced = Boolean(
                 rawCountry &&
+                rawCountry !== "" &&
+                rawCountry.toLowerCase() !== "none" &&
                 rawCountry.toLowerCase() !== "first time" &&
                 rawCountry.toLowerCase() !== "first time applicant" &&
-                rawCountry.toLowerCase() !== "none"
+                rawCountry.toLowerCase() !== "overseas"
               );
-              const isExperienced = hasPeriod || hasCountry;
-              const countryDisplay = isExperienced
-                ? (hasCountry ? rawCountry : "Overseas")
-                : "None / First Time Applicant";
+              const countryDisplay = isExperienced ? rawCountry : "None / First Time Applicant";
               const durationDisplay = isExperienced
-                ? (hasPeriod ? rawPeriod : "Experienced")
+                ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? rawPeriod : `${(candidate as any).years_of_experience || 1} years`)
                 : "None";
 
               return (

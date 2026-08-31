@@ -203,37 +203,42 @@ export async function listApplicantsV2(
     return demoStore.getApplicants();
   }
 
-  const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
-  const result = await requestV2<V2ApplicantDetails[] | { applicants?: V2ApplicantDetails[] }>(
-    "/api/method/agency_tracking.applicant_api.list_applicants",
-    {
-      method: "POST",
-      body: {
-        ...(filtersParam ? { filters: filtersParam } : {}),
-        limit_page_length: limitPageLength,
-        order_by: orderBy,
-      },
-    }
-  );
+  try {
+    const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
+    const result = await requestV2<V2ApplicantDetails[] | { applicants?: V2ApplicantDetails[] }>(
+      "/api/method/agency_tracking.applicant_api.list_applicants",
+      {
+        method: "POST",
+        body: {
+          ...(filtersParam ? { filters: filtersParam } : {}),
+          limit_page_length: limitPageLength,
+          order_by: orderBy,
+        },
+      }
+    );
 
-  const rawList = Array.isArray(result)
-    ? result
-    : result && Array.isArray((result as any).applicants)
-    ? (result as any).applicants
-    : [];
+    const rawList = Array.isArray(result)
+      ? result
+      : result && Array.isArray((result as any).applicants)
+      ? (result as any).applicants
+      : [];
 
-  return rawList.map((item: V2ApplicantDetails) => {
-    if (item.status && !item.applicant_state) {
-      item.applicant_state = item.status;
-    }
-    if (item.target_job && !item.job_applied) {
-      item.job_applied = item.target_job;
-    }
-    if (item.photograph && !item.photo_passport) {
-      item.photo_passport = item.photograph;
-    }
-    return item;
-  });
+    return rawList.map((item: V2ApplicantDetails) => {
+      if (item.status && !item.applicant_state) {
+        item.applicant_state = item.status;
+      }
+      if (item.target_job && !item.job_applied) {
+        item.job_applied = item.target_job;
+      }
+      if (item.photograph && !item.photo_passport) {
+        item.photo_passport = item.photograph;
+      }
+      return item;
+    });
+  } catch (err) {
+    console.warn("[Applicants] listApplicantsV2 backend error, using demo fallback:", err);
+    return demoStore.getApplicants();
+  }
 }
 
 /**

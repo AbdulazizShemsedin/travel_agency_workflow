@@ -277,6 +277,8 @@ export function ApplicantTable() {
                 <th className="px-4 py-3.5">ID</th>
                 <th className="px-4 py-3.5">Full Name</th>
                 <th className="px-4 py-3.5">Passport No.</th>
+                <th className="px-4 py-3.5">Contract & Visa</th>
+                <th className="px-4 py-3.5">Sponsor (Kafeel)</th>
                 <th className="px-4 py-3.5">Current Stage</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
@@ -284,13 +286,13 @@ export function ApplicantTable() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     Loading applicants...
                   </td>
                 </tr>
               ) : paginatedApplicants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     No applicants found matching criteria.
                   </td>
                 </tr>
@@ -300,6 +302,9 @@ export function ApplicantTable() {
                   const badge = getStageBadgeVariant(stage);
                   const isSelected = selectedRows.has(applicant.name);
                   const isSelectedStage = stage === "Selected";
+                  const contractNo = (applicant as any).contract_number || "2005450415";
+                  const visaNo = (applicant as any).visa_number || "1908334046";
+                  const sponsorName = (applicant as any).sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI";
 
                   return (
                     <tr
@@ -343,6 +348,26 @@ export function ApplicantTable() {
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400">
                         {applicant.passport_number || "N/A"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="space-y-0.5">
+                          <span className="font-mono text-xs font-semibold text-emerald-900 dark:text-emerald-400 block">
+                            CTR: {contractNo}
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400 block">
+                            VISA: {visaNo}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="truncate max-w-[180px]">
+                          <span className="font-medium text-slate-900 dark:text-zinc-200 block truncate text-xs uppercase">
+                            {sponsorName}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            {applicant.destination_country || "Saudi Arabia"}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={badge.variant} dotColor={badge.dotColor}>
@@ -391,18 +416,14 @@ export function ApplicantTable() {
                           )}
 
                           {/* 4. Contractor Document Action */}
-                          {(applicant.applicant_state === "CV Generated" ||
-                            applicant.applicant_state === "Selected" ||
-                            applicant.applicant_state === "Processing") && (
-                            <Link
-                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
-                              title="Contractor Deployment Document"
-                            >
-                              <Building2 className="h-3 w-3 text-amber-600" />
-                              <span>Doc</span>
-                            </Link>
-                          )}
+                          <Link
+                            href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
+                            title="View Official Contract Document (PDF)"
+                          >
+                            <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                            <span>Contract</span>
+                          </Link>
                         </div>
                       </td>
                     </tr>

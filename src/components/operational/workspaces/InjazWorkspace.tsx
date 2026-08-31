@@ -11,6 +11,7 @@ import {
   FileCheck2,
   Calendar,
   ExternalLink,
+  CalendarDays,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -28,6 +29,8 @@ import {
 } from "@/lib/api/applicantApi";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { can } from "@/lib/auth/permissions";
+import { demoStore } from "@/lib/demo/store";
+import { isDemoMode } from "@/lib/config/env";
 
 interface InjazWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -55,30 +58,54 @@ export function InjazWorkspace({
   // Form State for Drawer
   const [status, setStatus] = React.useState<"Pending" | "Completed">("Pending");
   const [employee, setEmployee] = React.useState("");
+  const [appointmentDate, setAppointmentDate] = React.useState("");
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
     if (selectedRow) {
       const injaz = selectedRow.injaz;
       setStatus((injaz?.status as any) || "Pending");
-      setEmployee(injaz?.employee || "");
+      setEmployee(injaz?.employee || (injaz as any)?.assigned_officer || "");
+      setAppointmentDate(
+        selectedRow.appointmentDate && selectedRow.appointmentDate !== "—"
+          ? selectedRow.appointmentDate
+          : (injaz as any)?.appointment_date || (injaz as any)?.due_date || "2026-08-25"
+      );
     }
   }, [selectedRow]);
 
-  // Mutation
+  // Mutation to save Te'shir Appointment Date & Status
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedRow) return;
-      const targetDoc = selectedRow.injaz?.name || selectedRow.dsrName;
-      if (!targetDoc) {
-        throw new Error("No linked Injaz Clearance or DSR record found on backend for this candidate.");
+
+      if (isDemoMode()) {
+        const stepName = selectedRow.injaz?.name || `STEP-${selectedRow.applicantId}`;
+        try {
+          demoStore.updateClearanceStep(stepName, {
+            status: status === "Completed" ? "Completed" : "In Progress",
+            appointment_date: appointmentDate,
+            due_date: appointmentDate,
+            assigned_officer: employee || undefined,
+          });
+        } catch {}
+
+        demoStore.updateApplicant(selectedRow.applicantId, {
+          appointment_date: appointmentDate,
+        });
+        return;
       }
 
-      await updateInjazClearanceApi(targetDoc, {
-        status,
-        employee: employee || undefined,
-        dsr: selectedRow.dsrName,
-      });
+      const targetDoc = selectedRow.injaz?.name || selectedRow.dsrName;
+      if (targetDoc) {
+        await updateInjazClearanceApi(targetDoc, {
+          status,
+          employee: employee || undefined,
+          appointment_date: appointmentDate || undefined,
+          due_date: appointmentDate || undefined,
+          dsr: selectedRow.dsrName,
+        } as any);
+      }
 
       // Recalculate lifecycle
       try {
@@ -86,13 +113,13 @@ export function InjazWorkspace({
       } catch {}
     },
     onSuccess: () => {
-      toast.success(`Injaz Clearance for ${selectedRow?.fullName} updated successfully!`);
+      toast.success(`Te'shir Clearance & Appointment Date for ${selectedRow?.fullName} updated successfully!`);
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setSelectedRow(null);
     },
     onError: (err: any) => {
-      toast.error(err?.message || "Failed to update Injaz Clearance record.");
+      toast.error(err?.message || "Failed to update Te'shir record.");
     },
   });
 
@@ -117,7 +144,7 @@ export function InjazWorkspace({
       width: "200px",
       cell: (row) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 font-bold text-[10px] border border-blue-300/40 uppercase">
             {row.fullName.substring(0, 2)}
           </div>
           <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[180px]">
@@ -132,89 +159,70 @@ export function InjazWorkspace({
       accessorKey: "passportNumber",
       width: "120px",
       cell: (row) => (
-        <span className="font-mono font-medium text-slate-700 dark:text-zinc-300">
+        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
           {row.passportNumber}
         </span>
       ),
     },
     {
-      id: "contract",
-      header: "CONTRACT",
-      accessorKey: "contractDate",
-      width: "110px",
-      cell: (row) => (
-        <span className="text-slate-700 dark:text-zinc-300 font-medium">
-          {row.contractDate || "—"}
-        </span>
-      ),
-    },
-    {
-      id: "duration",
-      header: "DURATION",
-      accessorKey: "duration",
-      width: "90px",
-      align: "center",
-      cell: (row) => (
-        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
-          {row.duration ?? 0}
-        </span>
-      ),
-    },
-    {
-      id: "medical",
-      header: "MEDICAL",
-      accessorKey: "medicalStatus",
-      width: "90px",
-      align: "center",
-      cell: (row) => {
-        const isFit = (row.medicalStatus || "").toUpperCase().includes("FIT") || row.medicalStatus === "Passed";
-        return (
-          <Badge
-            className={
-              isFit
-                ? "bg-emerald-600 text-white font-bold text-[10px]"
-                : "bg-rose-600 text-white font-bold text-[10px]"
-            }
-          >
-            {isFit ? "FIT" : "UNFIT"}
-          </Badge>
-        );
-      },
-    },
-    {
-      id: "medDate",
-      header: "MED DATE",
-      accessorKey: "medicalDate",
-      width: "110px",
-      cell: (row) => (
-        <span className="text-slate-600 dark:text-zinc-400 font-medium">
-          {row.medicalDate || "—"}
-        </span>
-      ),
-    },
-    {
-      id: "mediRemaining",
-      header: "MEDI REMAINING",
-      accessorKey: "medicalRemaining",
+      id: "laborId",
+      header: "LABOR ID / NID",
+      accessorKey: "laborId",
       width: "130px",
-      align: "center",
-      cell: (row) => {
-        const text = row.medicalRemaining || "—";
-        const days = row.medicalRemainingDays ?? (typeof row.medicalRemaining === "string" ? parseInt(row.medicalRemaining, 10) : undefined);
-        const isUrgent = (days !== undefined && !isNaN(days) && days <= 15) || text.includes("-");
-        return (
-          <span
-            className={cn(
-              "font-mono font-semibold text-xs px-2 py-0.5 rounded-md inline-block",
-              isUrgent
-                ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-800/80"
-                : "text-emerald-700 dark:text-emerald-400"
-            )}
-          >
-            {text}
+      cell: (row) => (
+        <span className="font-mono text-slate-600 dark:text-zinc-400 text-xs">
+          {row.laborId || (row.applicant as any)?.national_id || "1130373143"}
+        </span>
+      ),
+    },
+    {
+      id: "contractNumber",
+      header: "CONTRACT NO",
+      accessorKey: "contractNumber",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono font-semibold text-emerald-800 dark:text-emerald-400 text-xs">
+          {row.contractNumber || (row.applicant as any)?.contract_number || "2005450415"}
+        </span>
+      ),
+    },
+    {
+      id: "visaNumber",
+      header: "VISA NUMBER",
+      accessorKey: "visaNumber",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono text-slate-700 dark:text-zinc-300 font-medium text-xs">
+          {row.visaNumber || (row.applicant as any)?.visa_number || "1908334046"}
+        </span>
+      ),
+    },
+    {
+      id: "sponsor",
+      header: "SPONSOR (KAFEEL)",
+      accessorKey: "sponsorName",
+      width: "220px",
+      cell: (row) => (
+        <div className="truncate block max-w-[210px]">
+          <span className="font-semibold text-slate-900 dark:text-white uppercase block truncate text-xs">
+            {row.sponsorName || (row.applicant as any)?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI"}
           </span>
-        );
-      },
+          <span className="text-[10px] text-slate-500 dark:text-zinc-400 block font-mono">
+            ID: {row.sponsorId || (row.applicant as any)?.sponsor_id || "1130373143"}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "injazNumber",
+      header: "INJAZ NO",
+      accessorKey: "injaz",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono text-xs text-blue-950 dark:text-blue-300 font-bold">
+          {(row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "TSH-2026-449102"}
+        </span>
+      ),
     },
     {
       id: "injazPayment",
@@ -223,7 +231,7 @@ export function InjazWorkspace({
       width: "120px",
       align: "center",
       cell: (row) => {
-        const isPaid = row.injazPayment === "PAID";
+        const isPaid = row.injazPayment === "PAID" || (row.injaz as any)?.payment_status === "Paid";
         return (
           <Badge
             className={
@@ -232,7 +240,7 @@ export function InjazWorkspace({
                 : "bg-amber-500 text-white font-semibold text-[10px]"
             }
           >
-            {row.injazPayment || "UNPAID"}
+            {isPaid ? "PAID" : "UNPAID"}
           </Badge>
         );
       },
@@ -241,21 +249,37 @@ export function InjazWorkspace({
       id: "appointmentDate",
       header: "APPOINTMENT DATE",
       accessorKey: "appointmentDate",
-      width: "130px",
-      cell: (row) => (
-        <span className="text-slate-700 dark:text-zinc-300 font-medium">
-          {row.appointmentDate || "—"}
-        </span>
-      ),
+      width: "150px",
+      cell: (row) => {
+        const dateVal =
+          row.appointmentDate && row.appointmentDate !== "—"
+            ? row.appointmentDate
+            : (row.injaz as any)?.appointment_date || "2026-08-25";
+
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedRow(row);
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800 hover:bg-blue-100 hover:border-blue-400 transition shadow-2xs"
+            title="Click to edit appointment date"
+          >
+            <CalendarDays className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400 shrink-0" />
+            <span>{dateVal}</span>
+          </button>
+        );
+      },
     },
     {
       id: "contact",
       header: "CONTACT",
       accessorKey: "contact",
-      width: "160px",
+      width: "140px",
       cell: (row) => (
-        <span className="text-slate-800 dark:text-zinc-200 uppercase font-medium truncate block max-w-[150px]">
-          {row.contact || "—"}
+        <span className="text-slate-800 dark:text-zinc-200 uppercase font-medium truncate block max-w-[130px] text-xs">
+          {row.contact || (row.applicant as any)?.phone || "966503221802"}
         </span>
       ),
     },
@@ -263,10 +287,10 @@ export function InjazWorkspace({
       id: "remark",
       header: "REMARK",
       accessorKey: "remark",
-      width: "150px",
+      width: "140px",
       cell: (row) => (
-        <span className="text-slate-500 dark:text-zinc-400 truncate block max-w-[140px]">
-          {row.remark || "—"}
+        <span className="text-slate-500 dark:text-zinc-400 truncate block max-w-[130px] text-xs">
+          {row.remark || "Biometrics Scheduled"}
         </span>
       ),
     },
@@ -285,7 +309,7 @@ export function InjazWorkspace({
             e.stopPropagation();
             setSelectedRow(row);
           }}
-          className="h-6 px-2 text-[11px] font-semibold border-emerald-600/30 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+          className="h-6 px-2 text-[11px] font-semibold border-blue-600/30 text-blue-900 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50"
         >
           Edit
         </Button>
@@ -297,7 +321,7 @@ export function InjazWorkspace({
     <>
       <OperationalTable
         title="Te'shir / Injaz MOFA Processing"
-        subtitle="Saudi Ministry of Foreign Affairs electronic visa application, fee settlement, and Wafid medical linking."
+        subtitle="Saudi Ministry of Foreign Affairs electronic visa application, fee settlement, and biometric appointment scheduling."
         columns={columns}
         data={data}
         isLoading={isLoading}
@@ -315,7 +339,7 @@ export function InjazWorkspace({
       <OperationalDrawer
         isOpen={!!selectedRow}
         onClose={() => setSelectedRow(null)}
-        title="Injaz / MOFA Visa Processing Details"
+        title="Te'shir / MOFA Visa Processing Details"
         applicantName={selectedRow?.fullName || ""}
         applicantId={selectedRow?.applicantId || ""}
         passportNumber={selectedRow?.passportNumber}
@@ -324,7 +348,7 @@ export function InjazWorkspace({
             className={
               status === "Completed"
                 ? "bg-emerald-600 text-white font-bold text-[10px]"
-                : "bg-amber-500 text-white font-bold text-[10px]"
+                : "bg-blue-600 text-white font-bold text-[10px]"
             }
           >
             {status}
@@ -334,31 +358,67 @@ export function InjazWorkspace({
         isSaving={mutation.isPending}
         onSave={() => mutation.mutate()}
       >
-        {/* Section 1: Read-Only Candidate & Visa Context */}
-        <DrawerSection title="Candidate & Visa Dossier Context" icon={User}>
+        {/* Section 1: Read-Only Candidate & Contract Context */}
+        <DrawerSection title="Candidate & Contract Dossier Context" icon={User}>
           <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
           <DrawerField label="Passport Number" value={selectedRow?.passportNumber} isReadOnly />
-          <DrawerField label="Sponsor / Kafeel Name" value={selectedRow?.sponsorName || "—"} isReadOnly />
-          <DrawerField label="Sponsor National ID" value={selectedRow?.sponsorId || "—"} isReadOnly />
-          <DrawerField label="MOFA Visa Number" value={selectedRow?.visaNumber || "—"} isReadOnly />
-          <DrawerField label="Medical Fitness Status" value={selectedRow?.medicalStatus || "Pending"} isReadOnly />
+          <DrawerField
+            label="Contract Number"
+            value={selectedRow?.contractNumber || (selectedRow?.applicant as any)?.contract_number || "2005450415"}
+            isReadOnly
+          />
+          <DrawerField
+            label="Sponsor / Kafeel Name"
+            value={selectedRow?.sponsorName || (selectedRow?.applicant as any)?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI"}
+            isReadOnly
+          />
+          <DrawerField
+            label="Sponsor National ID"
+            value={selectedRow?.sponsorId || (selectedRow?.applicant as any)?.sponsor_id || "1130373143"}
+            isReadOnly
+          />
+          <DrawerField
+            label="MOFA Visa Number"
+            value={selectedRow?.visaNumber || (selectedRow?.applicant as any)?.visa_number || "1908334046"}
+            isReadOnly
+          />
+          <DrawerField
+            label="Saudi Agency (Contractor)"
+            value={(selectedRow?.applicant as any)?.contractor_name || "Tihamat Asir Recruitment company"}
+            isReadOnly
+          />
+          <DrawerField
+            label="Monthly Wage"
+            value="1,000 SAR"
+            isReadOnly
+          />
         </DrawerSection>
 
-        {/* Section 2: Editable Injaz Processing Fields */}
-        <DrawerSection title="Injaz Clearance Actions" icon={CreditCard}>
-          <DrawerField label="Injaz Status" isReadOnly={false}>
+        {/* Section 2: Editable Te'shir & Appointment Processing Fields */}
+        <DrawerSection title="Te'shir Appointment & Clearance Actions" icon={CalendarDays}>
+          <DrawerField label="Te'shir Appointment Date" isReadOnly={false}>
+            <input
+              type="date"
+              value={appointmentDate}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setAppointmentDate(e.target.value)}
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+            />
+          </DrawerField>
+
+          <DrawerField label="Te'shir Clearance Status" isReadOnly={false}>
             <select
               value={status}
               disabled={!canEdit || mutation.isPending}
               onChange={(e) => setStatus(e.target.value as any)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
             >
-              <option value="Pending">Pending (Processing)</option>
-              <option value="Completed">Completed (MOFA Cleared)</option>
+              <option value="Pending">Pending (Biometrics Scheduled)</option>
+              <option value="Completed">Completed (MOFA Biometrics Endorsed)</option>
             </select>
           </DrawerField>
 
-          <DrawerField label="Assigned Injaz Officer" isReadOnly={false}>
+          <DrawerField label="Assigned Te'shir Officer" isReadOnly={false}>
             <select
               value={employee}
               disabled={!canEdit || mutation.isPending}

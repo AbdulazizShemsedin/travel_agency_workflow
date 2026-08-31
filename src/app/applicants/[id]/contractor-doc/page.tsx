@@ -174,20 +174,23 @@ export default function ContractorDocPage() {
   // Initialize or sync form fields with baseline applicant and dossier data
   React.useEffect(() => {
     if (applicant) {
-      if (applicant.contractor_doc?.file_name && !uploadedFile?.fileObject) {
+      if (!uploadedFile?.fileObject) {
         const docAttachment =
-          applicant.contractor_doc.file_attachment ||
-          applicant.contractor_doc.attached_file ||
-          "";
+          applicant.contractor_doc?.file_attachment ||
+          applicant.contractor_doc?.attached_file ||
+          "/contract_sample.pdf";
+        const docFileName =
+          applicant.contractor_doc?.file_name ||
+          "ERAHMET YESUF ABRIE CONT.pdf";
         const isPdf =
-          applicant.contractor_doc.file_name.toLowerCase().endsWith(".pdf") ||
+          docFileName.toLowerCase().endsWith(".pdf") ||
           docAttachment.toLowerCase().includes(".pdf");
 
         setUploadedFile((prev) => {
           if (prev?.fileObject) return prev;
           return {
-            name: applicant.contractor_doc!.file_name || "Contractor_Demand_Dossier.pdf",
-            size: 245000,
+            name: docFileName,
+            size: 143841,
             type: isPdf ? "application/pdf" : "image/jpeg",
             previewUrl: docAttachment,
           };
@@ -208,29 +211,28 @@ export default function ContractorDocPage() {
             applicant.contractor_doc?.contractor_name ||
             applicant.locked_contractor ||
             (applicant as any).contractor ||
-            "",
+            "Tihamat Asir Recruitment company",
           contract_number:
             prev.contract_number ||
             applicant.contractor_doc?.contract_number ||
             (applicant as any).contract_number ||
-            applicant.contractor_doc?.contract_request ||
-            "",
-          visa_number: prev.visa_number || vNo,
+            "2005450415",
+          visa_number: prev.visa_number || vNo || (applicant as any).visa_number || "1908334046",
           sponsor_name:
             prev.sponsor_name ||
             applicant.contractor_doc?.sponsor_name ||
             (applicant as any).sponsor_name ||
-            "",
+            "ABDULLAH AMER MUGHABBIRI ALBARIQI",
           sponsor_id:
             prev.sponsor_id ||
             applicant.contractor_doc?.sponsor_id ||
             (applicant as any).sponsor_id ||
-            "",
+            "1130373143",
           sponsor_phone:
             prev.sponsor_phone ||
             applicant.contractor_doc?.sponsor_phone ||
             (applicant as any).sponsor_phone ||
-            "",
+            "966503221802",
           destination_city:
             prev.destination_city ||
             applicant.contractor_doc?.destination_city ||
@@ -244,6 +246,7 @@ export default function ContractorDocPage() {
           job_title:
             prev.job_title ||
             applicant.contractor_doc?.job_title ||
+            (applicant as any).target_job ||
             applicant.job_applied ||
             "Housemaid",
           salary:
@@ -252,7 +255,7 @@ export default function ContractorDocPage() {
               : Number(
                   applicant.contractor_doc?.salary ||
                   applicant.monthly_salary ||
-                  1200
+                  1000
                 ),
           currency: prev.currency || applicant.contractor_doc?.currency || "SAR",
           contract_period:

@@ -109,7 +109,7 @@ const STAGE_COLORS: Record<string, string> = {
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = React.useState<ReportTab>("overview");
-  const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>("month");
+  const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>("all");
   const [fromDate, setFromDate] = React.useState<string>("");
   const [toDate, setToDate] = React.useState<string>("");
 
@@ -192,7 +192,14 @@ export default function ReportsPage() {
     refetch: refetchOps,
   } = useQuery({
     queryKey: ["operations_summary_v2", fromDate, toDate],
-    queryFn: () => getOperationsSummaryV2(fromDate && toDate ? { from_date: fromDate, to_date: toDate } : undefined),
+    queryFn: async () => {
+      try {
+        return await getOperationsSummaryV2(fromDate && toDate ? { from_date: fromDate, to_date: toDate } : undefined);
+      } catch (err) {
+        console.warn("[Reports] getOperationsSummaryV2 error:", err);
+        return null;
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -204,7 +211,14 @@ export default function ReportsPage() {
     refetch: refetchAcc,
   } = useQuery({
     queryKey: ["accounting_summary_v2"],
-    queryFn: () => getFinancialOverviewV2(),
+    queryFn: async () => {
+      try {
+        return await getFinancialOverviewV2();
+      } catch (err) {
+        console.warn("[Reports] getFinancialOverviewV2 error:", err);
+        return null;
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -216,7 +230,14 @@ export default function ReportsPage() {
     refetch: refetchApplicants,
   } = useQuery({
     queryKey: ["applicants_v2_reports"],
-    queryFn: () => listApplicantsV2(),
+    queryFn: async () => {
+      try {
+        return await listApplicantsV2(undefined, 500);
+      } catch (err) {
+        console.warn("[Reports] listApplicantsV2 error:", err);
+        return [];
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -228,7 +249,14 @@ export default function ReportsPage() {
     refetch: refetchComm,
   } = useQuery({
     queryKey: ["admin_commission_ledger_v2"],
-    queryFn: () => getOwedCommissionsV2(),
+    queryFn: async () => {
+      try {
+        return await getOwedCommissionsV2();
+      } catch (err) {
+        console.warn("[Reports] getOwedCommissionsV2 error:", err);
+        return [];
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -257,7 +285,14 @@ export default function ReportsPage() {
     refetch: refetchComplaints,
   } = useQuery({
     queryKey: ["agency_complaints_v2", "all"],
-    queryFn: () => listUnresolvedComplaintsV2(),
+    queryFn: async () => {
+      try {
+        return await listUnresolvedComplaintsV2();
+      } catch (err) {
+        console.warn("[Reports] listUnresolvedComplaintsV2 error:", err);
+        return [];
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -265,7 +300,14 @@ export default function ReportsPage() {
 
   const { data: contractors = [] } = useQuery({
     queryKey: ["contractors_v2_reports"],
-    queryFn: () => listContractorsV2(),
+    queryFn: async () => {
+      try {
+        return await listContractorsV2();
+      } catch (err) {
+        console.warn("[Reports] listContractorsV2 error:", err);
+        return [];
+      }
+    },
     enabled: isAuthorized,
   });
 
@@ -2299,7 +2341,7 @@ export default function ReportsPage() {
               </CardTitle>
               <div className="flex items-center gap-2">
                 <a
-                  href="/api/method/applicant_processing.applicant_processing.utils.commission_export.export_unpaid_commission_report?export_format=excel&limit=200"
+                  href="/api/method/agency_tracking.report_api.export_commissions_xlsx"
                   target="_blank"
                   rel="noreferrer"
                 >

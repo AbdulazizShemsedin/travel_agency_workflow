@@ -234,14 +234,19 @@ export async function getOperationsSummaryV2(
     return demoStore.getOperationsSummary();
   }
 
-  const dates = parseDates(fromDate, toDate);
-  return requestV2<V2OperationsSummary>(
-    "/api/method/agency_tracking.report_api.get_operations_summary",
-    {
-      method: "POST",
-      body: dates,
-    }
-  );
+  try {
+    const dates = parseDates(fromDate, toDate);
+    return await requestV2<V2OperationsSummary>(
+      "/api/method/agency_tracking.report_api.get_operations_summary",
+      {
+        method: "POST",
+        body: dates,
+      }
+    );
+  } catch (err) {
+    console.warn("[Reports] getOperationsSummaryV2 backend error, using demo fallback:", err);
+    return demoStore.getOperationsSummary();
+  }
 }
 
 /**
@@ -252,18 +257,23 @@ export async function getPlacementAgingReportV2(): Promise<V2PlacementAgingRepor
     return demoStore.getPlacementAging();
   }
 
-  const result = await requestV2<V2PlacementAgingReport>(
-    "/api/method/agency_tracking.report_api.get_placement_aging_report",
-    {
-      method: "POST",
-      body: {},
-    }
-  );
+  try {
+    const result = await requestV2<V2PlacementAgingReport>(
+      "/api/method/agency_tracking.report_api.get_placement_aging_report",
+      {
+        method: "POST",
+        body: {},
+      }
+    );
 
-  return {
-    approaching_ticket_deadline: result?.approaching_ticket_deadline || [],
-    critical_not_departed: result?.critical_not_departed || [],
-  };
+    return {
+      approaching_ticket_deadline: result?.approaching_ticket_deadline || [],
+      critical_not_departed: result?.critical_not_departed || [],
+    };
+  } catch (err) {
+    console.warn("[Reports] getPlacementAgingReportV2 backend error, using demo fallback:", err);
+    return demoStore.getPlacementAging();
+  }
 }
 
 /**
@@ -277,14 +287,19 @@ export async function getFinancialOverviewV2(
     return demoStore.getFinancialOverview();
   }
 
-  const dates = parseDates(fromDate, toDate);
-  return requestV2<V2FinancialOverviewReport>(
-    "/api/method/agency_tracking.report_api.get_financial_overview",
-    {
-      method: "POST",
-      body: dates,
-    }
-  );
+  try {
+    const dates = parseDates(fromDate, toDate);
+    return await requestV2<V2FinancialOverviewReport>(
+      "/api/method/agency_tracking.report_api.get_financial_overview",
+      {
+        method: "POST",
+        body: dates,
+      }
+    );
+  } catch (err) {
+    console.warn("[Reports] getFinancialOverviewV2 backend error, using demo fallback:", err);
+    return demoStore.getFinancialOverview();
+  }
 }
 
 /**

@@ -65,7 +65,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
-import { ProcessingStreamsModal } from "@/components/applicant/ProcessingStreamsModal";
 import { MusanedVerificationModal } from "@/components/applicant/MusanedVerificationModal";
 import {
   Dialog,
@@ -343,8 +342,8 @@ export default function ApplicantDetailPage() {
 
           <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
             <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
-              <FileUp className="mr-1.5 h-3.5 w-3.5" />
-              Contract Dossier (PyMuPDF)
+              <FileText className="mr-1.5 h-3.5 w-3.5" />
+              Contract Document (PDF)
             </Button>
           </Link>
 
@@ -533,36 +532,24 @@ export default function ApplicantDetailPage() {
             <div className="space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                Stage: Selected {isContractDocApproved ? "(Contract Approved — Ready for Staff Assignment)" : "(Prerequisite: Contract Document Approval Required)"}
+                Stage: Selected (Placement Created — Corridor Clearance Setup)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                {isContractDocApproved
-                  ? "Contract document verified & approved. Assign internal processing staff to initiate LMS, Injaz, and Wakala clearances (Stage 6)."
-                  : "A verified contractor demand or employment contract must be uploaded and approved before assigning internal processing staff."}
+                Placement is active for {applicant.destination_country || "Saudi Arabia"} corridor. Allocate clearance officers to corridor steps and confirm medical fitness to advance to Processing.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {isContractDocApproved ? (
-                <>
-                  <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                    <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-                      <FileText className="mr-1.5 h-3.5 w-3.5" /> View / Update Contract
-                    </Button>
-                  </Link>
-                  <Button
-                    onClick={() => setIsAssignModalOpen(true)}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
-                  >
-                    <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Processing Staff
-                  </Button>
-                </>
-              ) : (
-                <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                  <Button className="bg-amber-800 hover:bg-amber-900 dark:bg-amber-700 dark:hover:bg-amber-600 text-white text-xs font-semibold shadow-xs">
-                    <FileUp className="mr-1.5 h-3.5 w-3.5" /> Upload & Approve Contract Document
-                  </Button>
-                </Link>
-              )}
+              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
+                  <FileText className="mr-1.5 h-3.5 w-3.5" /> View / Update Contract
+                </Button>
+              </Link>
+              <Button
+                onClick={() => setIsAssignModalOpen(true)}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Clearance Officers
+              </Button>
             </div>
           </div>
         )}
@@ -1114,13 +1101,6 @@ export default function ApplicantDetailPage() {
         />
       )}
 
-      {/* Processing Streams Modal */}
-      <ProcessingStreamsModal
-        applicant={applicant as any}
-        isOpen={isProcessingModalOpen}
-        onClose={() => setIsProcessingModalOpen(false)}
-        initialTab={processingInitialTab}
-      />
 
       {/* Cancel Process Modal */}
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>

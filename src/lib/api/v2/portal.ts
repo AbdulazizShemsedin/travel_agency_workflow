@@ -70,19 +70,34 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
     const candidates = demoStore.getApplicants().filter(
       (a) => (a.applicant_state === "CV Generated" || a.applicant_state === "Registered") && !a.active_placement
     );
-    return candidates.map((a) => ({
-      name: a.name,
-      applicant_name: a.full_name || a.first_name,
-      full_name: a.full_name || a.first_name,
-      gender: a.gender,
-      age: a.age,
-      nationality: a.nationality || "Ethiopian",
-      job_applied: a.target_job,
-      destination_country: a.destination_country,
-      photo_passport: a.photo_url || "/placeholder-user.jpg",
-      religion: a.religion,
-      experience_period: `${a.experience_years || 0} years`,
-    }));
+    return candidates.map((a) => {
+      const expCountry = (a.experience_country || "").trim();
+      const hasExp = Boolean(
+        expCountry &&
+        expCountry.toLowerCase() !== "none" &&
+        expCountry.toLowerCase() !== "first time" &&
+        expCountry.toLowerCase() !== "first time applicant" &&
+        expCountry.toLowerCase() !== "overseas"
+      );
+
+      return {
+        name: a.name,
+        applicant_name: a.full_name || a.first_name,
+        full_name: a.full_name || a.first_name,
+        gender: a.gender,
+        age: a.age,
+        nationality: a.nationality || "Ethiopian",
+        job_applied: a.target_job,
+        destination_country: a.destination_country,
+        photo_passport: a.photo_url || "/placeholder-user.jpg",
+        religion: a.religion,
+        place_of_birth: a.place_of_birth || a.leaving_town || "Ethiopia",
+        monthly_salary: a.monthly_salary || 1000,
+        experience_country: hasExp ? expCountry : "",
+        experience_period: hasExp ? (a.experience_period || `${a.years_of_experience || 1} years`) : "",
+        years_of_experience: hasExp ? (a.years_of_experience || 1) : 0,
+      };
+    });
   }
 
   const result = await requestV2<V2PortalCandidate[] | { candidates?: V2PortalCandidate[] }>(

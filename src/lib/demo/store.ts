@@ -37,6 +37,40 @@ import {
   DEMO_OPERATIONS_SUMMARY,
   DEMO_PLACEMENT_AGING,
 } from "./reports";
+import { DEMO_USERS } from "./users";
+
+export interface DemoSystemUserRecord {
+  name: string;
+  email: string;
+  first_name: string;
+  last_name?: string;
+  full_name: string;
+  phone?: string;
+  enabled: number | boolean;
+  user_type: string;
+  roles: string[];
+  contractor?: string | null;
+  last_login?: string;
+  creation?: string;
+}
+
+const INITIAL_DEMO_USERS: DemoSystemUserRecord[] = Object.entries(DEMO_USERS).map(([key, u]) => {
+  const parts = u.full_name.split(" ");
+  const firstName = parts[0] || u.full_name;
+  const lastName = parts.slice(1).join(" ") || "";
+  return {
+    name: u.email,
+    email: u.email,
+    first_name: firstName,
+    last_name: lastName,
+    full_name: u.full_name,
+    phone: "+251 91 123 4567",
+    enabled: 1,
+    user_type: "System User",
+    roles: [...u.roles],
+    creation: "2026-01-15 09:00:00",
+  };
+});
 
 class DemoStore {
   private applicants: V2ApplicantDetails[] = [...DEMO_APPLICANTS];
@@ -46,6 +80,7 @@ class DemoStore {
   private complaints: V2ComplaintRecord[] = [...DEMO_COMPLAINTS];
   private owedCommissions: V2OwedCommissionItem[] = [...DEMO_OWED_COMMISSIONS];
   private commissionBatches: V2CommissionBatch[] = [...DEMO_COMMISSION_BATCHES];
+  private users: DemoSystemUserRecord[] = [...INITIAL_DEMO_USERS];
   private isLoadedFromStorage = false;
 
   constructor() {
@@ -56,13 +91,46 @@ class DemoStore {
     if (typeof window === "undefined") return;
     try {
       const storedApps = localStorage.getItem("V2_DEMO_APPLICANTS");
-      if (storedApps) this.applicants = JSON.parse(storedApps);
+      if (storedApps) {
+        const parsed = JSON.parse(storedApps);
+        this.applicants = parsed.map((a: any) => ({
+          contract_number: "2005450415",
+          visa_number: "1908334046",
+          sponsor_name: "ABDULLAH AMER MUGHABBIRI ALBARIQI",
+          sponsor_id: "1130373143",
+          sponsor_phone: "966503221802",
+          destination_city: "Riyadh",
+          contractor_name: "Tihamat Asir Recruitment company",
+          contract_signed_date: "2026-08-13",
+          appointment_date: "2026-08-25",
+          ...a,
+        }));
+      }
 
       const storedPlc = localStorage.getItem("V2_DEMO_PLACEMENTS");
-      if (storedPlc) this.placements = JSON.parse(storedPlc);
+      if (storedPlc) {
+        const parsedPlc = JSON.parse(storedPlc);
+        this.placements = parsedPlc.map((p: any) => ({
+          contract_number: "2005450415",
+          visa_number: "1908334046",
+          employer_name: "ABDULLAH AMER MUGHABBIRI ALBARIQI",
+          employer_national_id: "1130373143",
+          employer_phone: "966503221802",
+          contractor_name: "Tihamat Asir Recruitment company",
+          contract_signed_date: "2026-08-13",
+          appointment_date: "2026-08-25",
+          ...p,
+        }));
+      }
 
       const storedSteps = localStorage.getItem("V2_DEMO_STEPS");
-      if (storedSteps) this.clearanceSteps = JSON.parse(storedSteps);
+      if (storedSteps) {
+        const parsedSteps = JSON.parse(storedSteps);
+        this.clearanceSteps = parsedSteps.map((s: any) => ({
+          appointment_date: s.appointment_date || "2026-08-25",
+          ...s,
+        }));
+      }
 
       const storedComps = localStorage.getItem("V2_DEMO_COMPLAINTS");
       if (storedComps) this.complaints = JSON.parse(storedComps);
@@ -72,6 +140,9 @@ class DemoStore {
 
       const storedComm = localStorage.getItem("V2_DEMO_COMMISSIONS");
       if (storedComm) this.owedCommissions = JSON.parse(storedComm);
+
+      const storedUsers = localStorage.getItem("V2_DEMO_USERS");
+      if (storedUsers) this.users = JSON.parse(storedUsers);
 
       this.isLoadedFromStorage = true;
     } catch (e) {
@@ -88,6 +159,7 @@ class DemoStore {
       localStorage.setItem("V2_DEMO_COMPLAINTS", JSON.stringify(this.complaints));
       localStorage.setItem("V2_DEMO_CONTRACTORS", JSON.stringify(this.contractors));
       localStorage.setItem("V2_DEMO_COMMISSIONS", JSON.stringify(this.owedCommissions));
+      localStorage.setItem("V2_DEMO_USERS", JSON.stringify(this.users));
     } catch (e) {
       console.warn("DemoStore save storage warning:", e);
     }
@@ -98,6 +170,7 @@ class DemoStore {
     this.placements = [...DEMO_PLACEMENTS];
     this.clearanceSteps = [...DEMO_CLEARANCE_STEPS];
     this.contractors = [...DEMO_CONTRACTORS];
+    this.users = [...INITIAL_DEMO_USERS];
     this.complaints = [...DEMO_COMPLAINTS];
     this.owedCommissions = [...DEMO_OWED_COMMISSIONS];
     this.commissionBatches = [...DEMO_COMMISSION_BATCHES];
@@ -549,6 +622,104 @@ class DemoStore {
 
   public getStaffPerformance(): V2StaffPerformanceItem[] {
     return [...DEMO_STAFF_PERFORMANCE];
+  }
+
+  // --- SYSTEM USERS & ROLES ---
+  public getUsers(params?: { search?: string; role?: string; enabled?: number | boolean }): DemoSystemUserRecord[] {
+    return this.users.filter((u) => {
+      if (params?.search) {
+        const q = params.search.toLowerCase();
+        const matchName = (u.full_name || "").toLowerCase().includes(q);
+        const matchEmail = (u.email || "").toLowerCase().includes(q);
+        if (!matchName && !matchEmail) return false;
+      }
+      if (params?.role && params.role !== "All" && !u.roles.includes(params.role)) {
+        return false;
+      }
+      if (params?.enabled !== undefined && u.enabled !== params.enabled && Number(u.enabled) !== Number(params.enabled)) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  public createUser(payload: {
+    email: string;
+    first_name: string;
+    last_name?: string;
+    phone?: string;
+    password?: string;
+    roles: string[];
+    contractor?: string | null;
+    user_type?: string;
+  }): DemoSystemUserRecord {
+    const fullName = `${payload.first_name || ""} ${payload.last_name || ""}`.trim() || payload.first_name || "New User";
+    const existing = this.users.find((u) => u.email.toLowerCase() === payload.email.toLowerCase());
+    if (existing) {
+      existing.first_name = payload.first_name || existing.first_name;
+      existing.last_name = payload.last_name || existing.last_name;
+      existing.full_name = fullName;
+      existing.phone = payload.phone || existing.phone;
+      existing.roles = payload.roles && payload.roles.length > 0 ? payload.roles : existing.roles;
+      existing.contractor = payload.contractor !== undefined ? payload.contractor : existing.contractor;
+      this.saveStorage();
+      return existing;
+    }
+
+    const newUser: DemoSystemUserRecord = {
+      name: payload.email,
+      email: payload.email,
+      first_name: payload.first_name,
+      last_name: payload.last_name || "",
+      full_name: fullName,
+      phone: payload.phone || "+251 91 000 0000",
+      enabled: 1,
+      user_type: payload.user_type || "System User",
+      roles: payload.roles && payload.roles.length > 0 ? payload.roles : ["Registrar"],
+      contractor: payload.contractor || null,
+      creation: new Date().toISOString().replace("T", " ").substring(0, 19),
+    };
+    this.users.unshift(newUser);
+    this.saveStorage();
+    return newUser;
+  }
+
+  public updateUser(payload: {
+    user: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    enabled?: number | boolean;
+    roles?: string[];
+    contractor?: string | null;
+  }): DemoSystemUserRecord {
+    const user = this.users.find((u) => u.email.toLowerCase() === payload.user.toLowerCase() || u.name.toLowerCase() === payload.user.toLowerCase());
+    if (!user) throw new Error(`User ${payload.user} not found`);
+
+    if (payload.first_name !== undefined) user.first_name = payload.first_name;
+    if (payload.last_name !== undefined) user.last_name = payload.last_name;
+    user.full_name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.name;
+    if (payload.phone !== undefined) user.phone = payload.phone;
+    if (payload.enabled !== undefined) user.enabled = payload.enabled;
+    if (payload.roles !== undefined) user.roles = payload.roles;
+    if (payload.contractor !== undefined) user.contractor = payload.contractor;
+
+    this.saveStorage();
+    return user;
+  }
+
+  public setUserPassword(payload: { user: string; new_password: string }): { status: string; message: string } {
+    return { status: "success", message: `Password updated successfully for ${payload.user}` };
+  }
+
+  public assignUserRoles(payload: { user: string; roles: string[]; replace?: boolean }): { status: string; roles: string[] } {
+    const user = this.users.find((u) => u.email.toLowerCase() === payload.user.toLowerCase() || u.name.toLowerCase() === payload.user.toLowerCase());
+    if (user) {
+      user.roles = payload.replace ? payload.roles : Array.from(new Set([...user.roles, ...payload.roles]));
+      this.saveStorage();
+      return { status: "success", roles: user.roles };
+    }
+    return { status: "success", roles: payload.roles };
   }
 
   public getPlacementAging(): V2PlacementAgingReport {
