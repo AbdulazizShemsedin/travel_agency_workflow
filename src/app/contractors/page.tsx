@@ -3,7 +3,11 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Building2, Loader2, X, CheckCircle2, Globe, Phone, Mail, User } from "lucide-react";
-import { getContractorsList, createContractor } from "@/lib/api/applicantApi";
+import {
+  listContractorsV2,
+  createContractorV2,
+  V2ContractorItem,
+} from "@/lib/api/v2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,14 +29,23 @@ export default function ContractorsPage() {
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   const { data: contractors = [], isLoading } = useQuery({
-    queryKey: ["contractors"],
-    queryFn: getContractorsList,
+    queryKey: ["contractors_v2_page"],
+    queryFn: () => listContractorsV2(),
   });
 
   const addContractorMutation = useMutation({
-    mutationFn: (data: Partial<Contractor>) => createContractor(data),
-    onSuccess: (newCon) => {
-      queryClient.invalidateQueries({ queryKey: ["contractors"] });
+    mutationFn: (data: any) =>
+      createContractorV2({
+        company_name: data.company_name,
+        country: data.country,
+        contact_person: data.contact_person,
+        phone: data.phone,
+        whatsapp: data.whatsapp,
+        email: data.email,
+        notes: data.notes,
+      }),
+    onSuccess: (newCon: any) => {
+      queryClient.invalidateQueries({ queryKey: ["contractors_v2_page"] });
       setIsAddModalOpen(false);
       setFormData({
         company_name: "",
@@ -43,7 +56,7 @@ export default function ContractorsPage() {
         email: "",
         notes: "",
       });
-      setSuccessMessage(`Contractor ${newCon.company_name || newCon.name} registered successfully!`);
+      setSuccessMessage(`Contractor ${newCon?.company_name || newCon?.name || "Agency"} registered successfully!`);
       setTimeout(() => setSuccessMessage(null), 4000);
     },
   });

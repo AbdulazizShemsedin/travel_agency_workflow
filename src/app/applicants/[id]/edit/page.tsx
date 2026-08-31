@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
-import { getApplicant } from "@/lib/api/applicantApi";
+import { getApplicantV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { Button } from "@/components/ui/button";
 
@@ -15,9 +15,9 @@ export default function EditApplicantPage() {
   const rawId = params?.id;
   const applicantId = typeof rawId === "string" ? decodeURIComponent(rawId) : Array.isArray(rawId) ? decodeURIComponent(rawId[0]) : "";
 
-  const { data: applicant, isLoading, isError } = useQuery({
+  const { data: applicant, isLoading, isError } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
-    queryFn: () => getApplicant(applicantId),
+    queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 

@@ -22,6 +22,9 @@
  */
 
 import { requestV2 } from "./client";
+import { isDemoMode } from "@/lib/config/env";
+import { demoStore } from "@/lib/demo/store";
+import { DEMO_FX_RATES } from "@/lib/demo/finance";
 
 export type V2SupportedCurrency = "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR";
 
@@ -44,23 +47,36 @@ export interface V2OwedCommissionItem {
   transaction_name?: string;
   applicant?: string;
   applicant_name?: string;
+  full_name?: string;
   contractor: string;
-  destination_country: string;
+  contractor_name?: string;
+  destination_country?: string;
   amount: number;
+  commission_amount?: number;
   currency: string;
+  status?: string;
   departure_date?: string;
   flight_number?: string;
+  batch?: string;
+  creation?: string;
   [key: string]: any;
 }
 
 export interface V2CommissionBatch {
   name: string;
   contractor: string;
-  destination_country: string;
+  destination_country?: string;
   total_amount: number;
   currency: string;
   status: "Draft" | "Settled" | "Unmatched" | string;
   settlement_reference?: string;
+  items?: Array<{
+    transaction_name?: string;
+    amount?: number;
+    currency?: string;
+    applicant?: string;
+    applicant_name?: string;
+  }>;
   creation?: string;
   [key: string]: any;
 }
@@ -75,6 +91,10 @@ export async function logStageExpenseV2(
   placement?: string,
   stageLoggedAt?: string
 ): Promise<{ name?: string; message?: string }> {
+  if (isDemoMode()) {
+    return { name: `TXN-${Date.now()}`, message: "Expense logged to ledger" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_expense",
     {
@@ -100,6 +120,10 @@ export async function logStageIncomeV2(
   placement?: string,
   stageLoggedAt?: string
 ): Promise<{ name?: string; message?: string }> {
+  if (isDemoMode()) {
+    return { name: `TXN-${Date.now()}`, message: "Income logged to ledger" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_income",
     {
@@ -116,11 +140,15 @@ export async function logStageIncomeV2(
 }
 
 /**
- * Approves a Pending transaction (Finance Manager / Admin).
+ * Approves a Pending transaction (Finance Manager / Admin only).
  */
 export async function approveTransactionV2(
   transactionName: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return { message: "Transaction approved" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.approve_transaction",
     {
@@ -131,12 +159,16 @@ export async function approveTransactionV2(
 }
 
 /**
- * Rejects a Pending transaction.
+ * Rejects a Pending transaction with mandatory remark.
  */
 export async function rejectTransactionV2(
   transactionName: string,
   rejectionReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return { message: "Transaction rejected" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.reject_transaction",
     {
@@ -156,6 +188,10 @@ export async function voidTransactionV2(
   transactionName: string,
   voidReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return { message: "Transaction voided" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.void_transaction",
     {
@@ -175,6 +211,10 @@ export async function getFxRateV2(
   currency: V2SupportedCurrency,
   asOfDate?: string
 ): Promise<{ rate?: number; currency: string; message?: any }> {
+  if (isDemoMode()) {
+    return { rate: DEMO_FX_RATES[currency] || 1.0, currency };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.get_fx_rate",
     {
@@ -195,6 +235,10 @@ export async function setFxRateV2(
   rateToBirr: number,
   rateDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return { message: `FX rate for ${currency} set to ${rateToBirr}` };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.set_fx_rate",
     {
@@ -212,19 +256,23 @@ export async function setFxRateV2(
  * Lists a contractor's owed (unbatched, Approved) commissions.
  */
 export async function getOwedCommissionsV2(
-  contractor: string,
-  destinationCountry: string,
+  contractor?: string,
+  destinationCountry?: string,
   order: "oldest" | "newest" = "oldest"
 ): Promise<V2OwedCommissionItem[]> {
+  if (isDemoMode()) {
+    return demoStore.getOwedCommissions(contractor, destinationCountry);
+  }
+
+  const body: Record<string, any> = { order };
+  if (contractor) body.contractor = contractor;
+  if (destinationCountry) body.destination_country = destinationCountry;
+
   const result = await requestV2<V2OwedCommissionItem[] | { items?: V2OwedCommissionItem[] }>(
     "/api/method/agency_tracking.finance_api.get_owed_commissions",
     {
       method: "POST",
-      body: {
-        contractor,
-        destination_country: destinationCountry,
-        order,
-      },
+      body,
     }
   );
 
@@ -241,6 +289,17 @@ export async function createCommissionBatchV2(
   destinationCountry: string,
   transactionNames?: string[]
 ): Promise<V2CommissionBatch> {
+  if (isDemoMode()) {
+    return {
+      name: `BATCH-2026-${Math.floor(100 + Math.random() * 900)}`,
+      contractor,
+      destination_country: destinationCountry,
+      total_amount: 7000,
+      currency: destinationCountry.includes("Kuwait") ? "KWD" : "SAR",
+      status: "Draft",
+    };
+  }
+
   return requestV2<V2CommissionBatch>(
     "/api/method/agency_tracking.finance_api.create_commission_batch",
     {
@@ -263,6 +322,10 @@ export async function settleBatchV2(
   batchName: string,
   settlementReference: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return demoStore.settleBatch(batchName, settlementReference);
+  }
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.settle_batch",
     {
@@ -324,66 +387,54 @@ export async function manuallyMatchLineV2(
   );
 }
 
+
+
 /**
- * Exports commission records as a binary .xlsx / CSV file.
+ * Marks specific Commission Batch Items paid (partial settlement).
  */
-export async function exportCommissionsXlsxV2(params?: {
-  contractor?: string;
-  destination_country?: string;
-  from_date?: string;
-  to_date?: string;
-}): Promise<Blob> {
+export async function settleBatchItemsV2(
+  itemNames: string[]
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.settle_batch_items",
+    {
+      method: "POST",
+      body: { item_names: JSON.stringify(itemNames) },
+    }
+  );
+}
+
+/**
+ * Uploads a paid-applicants list (CSV or PDF) and fuzzy-matches against a commission batch.
+ */
+export async function uploadBatchPaymentProofV2(
+  batchName: string,
+  fileUrl: string
+): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        file_url: fileUrl,
+      },
+    }
+  );
+}
+
+/**
+ * Renders a Commission Batch invoice PDF on demand.
+ */
+export async function getBatchInvoicePdfV2(
+  batchName: string
+): Promise<Blob> {
   return requestV2<Blob>(
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
     {
       method: "POST",
-      body: params || {},
+      body: { batch_name: batchName },
     }
   );
 }
 
-/**
- * Approved transaction totals grouped by destination country.
- */
-export async function getCostBreakdownReportV2(
-  fromDate: string,
-  toDate: string
-): Promise<any> {
-  return requestV2(
-    "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
-    {
-      method: "POST",
-      body: { from_date: fromDate, to_date: toDate },
-    }
-  );
-}
-
-/**
- * Per-employee net expense + approval/rejection rates.
- */
-export async function getEmployeeFinancialReportV2(
-  fromDate: string,
-  toDate: string
-): Promise<any> {
-  return requestV2(
-    "/api/method/agency_tracking.report_api.get_employee_financial_report",
-    {
-      method: "POST",
-      body: { from_date: fromDate, to_date: toDate },
-    }
-  );
-}
-
-/**
- * Lists every Pending Applicant Transaction, oldest-first.
- */
-export async function getPendingApprovalQueueV2(): Promise<V2TransactionRecord[]> {
-  const result = await requestV2<V2TransactionRecord[] | { transactions?: V2TransactionRecord[] }>(
-    "/api/method/agency_tracking.report_api.get_pending_approval_queue",
-    { method: "POST" }
-  );
-
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).transactions)) return (result as any).transactions;
-  return [];
-}

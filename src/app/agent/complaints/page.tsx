@@ -23,12 +23,12 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import {
-  getAgencyComplaintsApi,
-  submitAgencyComplaintApi,
-  resolveAgencyComplaintApi,
-  searchApplicantsForComplaintApi,
-  uploadFileApi,
-} from "@/lib/api/applicantApi";
+  listUnresolvedComplaintsV2,
+  createComplaintV2,
+  uploadFileV2,
+  listPlacementsV2,
+  V2ComplaintItem,
+} from "@/lib/api/v2";
 import {
   AgencyComplaint,
   ComplaintSeverity,
@@ -78,18 +78,18 @@ export default function AgentComplaintsPage() {
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
   const [formError, setFormError] = React.useState<string | null>(null);
 
-  // Fetch all registered candidates for searchable dropdown
+  // Fetch all placements for searchable dropdown
   const { data: allAvailableCandidates = [] } = useQuery({
-    queryKey: ["all-agency-candidates", activeContractor],
-    queryFn: () => searchApplicantsForComplaintApi(""),
+    queryKey: ["all-agency-placements", activeContractor],
+    queryFn: () => listPlacementsV2(),
   });
 
   // Dynamic filter by first name, last name, full name, or ID
   const filteredCandidateOptions = React.useMemo(() => {
     if (!candidateSearchQuery.trim()) return allAvailableCandidates;
     const q = candidateSearchQuery.toLowerCase().trim();
-    return allAvailableCandidates.filter((c) => {
-      const fullName = (c.full_name || "").toLowerCase();
+    return (allAvailableCandidates as any[]).filter((c) => {
+      const fullName = (c.full_name || c.applicant_name || "").toLowerCase();
       const parts = fullName.split(" ").filter(Boolean);
       const firstName = parts[0] || "";
       const lastName = parts[parts.length - 1] || "";
@@ -98,6 +98,7 @@ export default function AgentComplaintsPage() {
 
       return (
         c.name.toLowerCase().includes(q) ||
+        (c.applicant && c.applicant.toLowerCase().includes(q)) ||
         fullName.includes(q) ||
         firstName.includes(q) ||
         lastName.includes(q) ||
@@ -115,20 +116,16 @@ export default function AgentComplaintsPage() {
     isRefetching,
   } = useQuery({
     queryKey: ["agency-complaints", activeTab, effectiveContractor],
-    queryFn: () =>
-      getAgencyComplaintsApi({
-        tab: activeTab,
-        contractor: effectiveContractor,
-      }),
+    queryFn: () => listUnresolvedComplaintsV2(),
   });
 
   // Client-side filtering & sorting
   const filteredAndSortedComplaints = React.useMemo(() => {
-    let list = [...complaints];
+    let list = (complaints as any[]);
 
     // Filter by Category
     if (categoryFilter !== "All Categories") {
-      list = list.filter((c) => c.complaint_category === categoryFilter);
+      list = list.filter((c) => c.complaint_category === categoryFilter || c.category === categoryFilter);
     }
 
     // Filter by Severity
@@ -148,20 +145,6 @@ export default function AgentComplaintsPage() {
         const timeB = b.creation ? new Date(b.creation).getTime() : 0;
         return timeA - timeB;
       }
-      if (sortOrder === "severity") {
-        const weight: Record<string, number> = {
-          "Critical / Emergency": 3,
-          "Critical": 3,
-          "High": 2,
-          "Normal": 1,
-          "Medium": 1,
-          "Low": 0,
-        };
-        return (weight[b.severity] || 0) - (weight[a.severity] || 0);
-      }
-      if (sortOrder === "sla") {
-        return (b.days_unresolved || 0) - (a.days_unresolved || 0);
-      }
       return 0;
     });
 
@@ -170,16 +153,14 @@ export default function AgentComplaintsPage() {
 
   // Submit Mutation
   const submitMutation = useMutation({
-    mutationFn: (data: typeof formData) =>
-      submitAgencyComplaintApi({
-        contractor: effectiveContractor,
-        applicant_search: data.applicant_search,
-        complaint_category: data.complaint_category,
-        severity: data.severity,
-        complaint_details: data.complaint_details,
-        attachment: data.attachment,
-        full_name: data.full_name,
-      }),
+    mutationFn: async (data: typeof formData) => {
+      const placementTarget = data.applicant_search;
+      return await createComplaintV2(
+        placementTarget,
+        `[${data.complaint_category} - ${data.severity}] ${data.complaint_details}`,
+        "Working Abroad"
+      );
+    },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
       queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
@@ -193,13 +174,13 @@ export default function AgentComplaintsPage() {
         complaint_details: "",
         attachment: "",
       });
-      setToastMessage(res?.message?.message || "Complaint submitted successfully.");
+      setToastMessage(res?.message || "Complaint submitted successfully.");
       setTimeout(() => setToastMessage(null), 5000);
     },
     onError: (err: any) => {
       setFormError(
         err?.message ||
-        `Applicant "${formData.applicant_search}" could not be validated. Complaints can only be filed for registered applicants.`
+        `Placement "${formData.applicant_search}" could not be validated. Complaints can only be filed for active placements.`
       );
     },
   });
@@ -210,8 +191,8 @@ export default function AgentComplaintsPage() {
       setIsUploadingAttachment(true);
       setFormError(null);
       try {
-        const res = await uploadFileApi(file, "Agency Complaint", "", "attachment");
-        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        const res = await uploadFileV2(file, true, "Agency Complaint");
+        const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setFormData((prev) => ({ ...prev, attachment: fileUrl }));
         } else {

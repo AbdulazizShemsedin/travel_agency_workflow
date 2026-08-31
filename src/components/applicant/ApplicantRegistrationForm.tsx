@@ -27,13 +27,13 @@ import {
   stage2RegistrationSchema,
 } from "@/lib/validations/applicant.schema";
 import {
-  createApplicantDraft,
-  updateApplicantDraft,
-  registerApplicant,
-  generateCV,
-  getApplicant,
-  ApiError,
-} from "@/lib/api/applicantApi";
+  createApplicantV2,
+  updateApplicantV2,
+  registerApplicantV2,
+  generateCvV2,
+  getApplicantV2,
+  ApiV2Error,
+} from "@/lib/api/v2";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
 import { Step2EducationExperience } from "./steps/Step2EducationExperience";
 import { Step3IdentificationContact } from "./steps/Step3IdentificationContact";
@@ -304,22 +304,32 @@ export function ApplicantRegistrationForm({
         throw new Error(firstError?.message || "Please complete required Stage 1 draft fields.");
       }
 
+      const payload = {
+        ...formData,
+        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+        gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
+        nationality: formData.nationality || "Ethiopia",
+        entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
+        destination_country: formData.destination_country || "Saudi Arabia",
+      };
+
       if (draftApplicantId) {
-        return await updateApplicantDraft(draftApplicantId, formData);
+        return await updateApplicantV2(draftApplicantId, payload);
       } else {
-        return await createApplicantDraft(formData);
+        return await createApplicantV2(payload);
       }
     },
     onSuccess: (data) => {
-      setDraftApplicantId(data.name);
-      setApplicantState(data.applicant_state || "Draft");
+      const savedName = data.name || draftApplicantId;
+      if (savedName) setDraftApplicantId(savedName);
+      setApplicantState(data.status || data.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(`Draft Saved Successfully (ID: ${data.name})`, {
+      toast.success(`Draft Saved Successfully (ID: ${savedName || ""})`, {
         description: "Applicant record saved. You can continue editing or return later.",
       });
     },
     onError: (error: unknown) => {
-      const err = error as ApiError;
+      const err = error as ApiV2Error;
       toast.error("Cannot Save Draft", {
         description: err.message || "Please fill in all Stage 1 required fields.",
         duration: 5000,
@@ -332,11 +342,15 @@ export function ApplicantRegistrationForm({
     mutationFn: async () => {
       if (!draftApplicantId) throw new Error("No applicant ID available to update.");
       const formData = getValues();
-      return await updateApplicantDraft(draftApplicantId, formData);
+      const payload = {
+        ...formData,
+        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+      };
+      return await updateApplicantV2(draftApplicantId, payload);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["applicant", data.name] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
       toast.success("Applicant changes saved successfully!", {
         description: "All profile details and official CV have been updated.",
       });
@@ -345,7 +359,7 @@ export function ApplicantRegistrationForm({
       }
     },
     onError: (error: unknown) => {
-      const err = error as ApiError;
+      const err = error as ApiV2Error;
       toast.error("Failed to save changes", {
         description: err.message || "Please check the entered values.",
       });
@@ -377,20 +391,30 @@ export function ApplicantRegistrationForm({
       }
 
       let activeId = draftApplicantId;
+      const payload = {
+        ...formData,
+        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+        gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
+        nationality: formData.nationality || "Ethiopia",
+        entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
+        destination_country: formData.destination_country || "Saudi Arabia",
+      };
+
       if (!activeId) {
-        const draft = await createApplicantDraft(formData);
-        activeId = draft.name;
-        setDraftApplicantId(draft.name);
+        const draft = await createApplicantV2(payload);
+        activeId = draft.name || "";
+        setDraftApplicantId(activeId);
       } else {
-        await updateApplicantDraft(activeId, formData);
+        await updateApplicantV2(activeId, payload);
       }
 
-      return await registerApplicant(activeId);
+      return await registerApplicantV2(activeId);
     },
     onSuccess: (data) => {
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
       toast.success(data.message || "Applicant Successfully Registered!", {
         description: "Status transitioned to Registered. You can now generate an official CV.",
       });
@@ -399,7 +423,7 @@ export function ApplicantRegistrationForm({
       }
     },
     onError: (error: unknown) => {
-      const err = error as ApiError;
+      const err = error as ApiV2Error;
       setIsConfirmRegisterOpen(false);
       toast.error("Registration Requirement Not Met", {
         description: err.message || "Please check the highlighted required fields.",
@@ -414,12 +438,12 @@ export function ApplicantRegistrationForm({
       if (!draftApplicantId) throw new Error("No applicant ID available.");
       const formData = getValues();
       if (formData && Object.keys(formData).length > 0) {
-        await updateApplicantDraft(draftApplicantId, formData);
+        await updateApplicantV2(draftApplicantId, formData);
       }
-      return await generateCV(draftApplicantId);
+      return await generateCvV2(draftApplicantId);
     },
     onSuccess: async (data) => {
-      const fileUrl = data.message?.file_url;
+      const fileUrl = data.cv_file_url || (data as any)?.message?.file_url;
       if (fileUrl) {
         setGeneratedCvUrl(fileUrl);
         setIsCvPreviewOpen(true);
@@ -428,13 +452,13 @@ export function ApplicantRegistrationForm({
       await queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
       try {
         if (draftApplicantId) {
-          const refreshed = await getApplicant(draftApplicantId);
-          if (refreshed?.applicant_state) {
-            setApplicantState(refreshed.applicant_state);
+          const refreshed = await getApplicantV2(draftApplicantId);
+          if (refreshed?.status || refreshed?.applicant_state) {
+            setApplicantState(refreshed.status || refreshed.applicant_state || "CV Generated");
           }
         }
       } catch {}
-      toast.success(data.message?.message || "CV PDF generated successfully!");
+      toast.success(data.message || "CV PDF generated successfully!");
     },
     onError: (error: unknown) => {
       const err = error as Error;

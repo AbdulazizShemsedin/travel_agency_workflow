@@ -17,17 +17,19 @@ import {
   Activity,
   Check,
 } from "lucide-react";
-import { getApplicantsList } from "@/lib/api/applicantApi";
+import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { calculateRemainingDays } from "@/lib/validations/applicant.schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
-  const { data: applicants = [], isLoading } = useQuery({
-    queryKey: ["applicants"],
-    queryFn: getApplicantsList,
+  const { data: rawApplicants = [], isLoading } = useQuery({
+    queryKey: ["applicants_v2_dashboard"],
+    queryFn: () => listApplicantsV2(),
   });
+
+  const applicants = rawApplicants as V2ApplicantDetails[];
 
   // Calculate dynamic stats from real backend database
   const totalCount = applicants.length;

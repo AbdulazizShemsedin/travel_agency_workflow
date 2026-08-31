@@ -16,7 +16,7 @@ import {
   Calendar,
   Lock,
 } from "lucide-react";
-import { updateMusanedStatusApi } from "@/lib/api/applicantApi";
+import { updateApplicantV2 } from "@/lib/api/v2";
 import { Applicant } from "@/types/applicant";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isPureForeignAgency } from "@/lib/auth/permissions";
@@ -37,7 +37,7 @@ import { Select } from "@/components/ui/select";
 interface MusanedVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  applicant: Applicant;
+  applicant: any;
   onSuccess?: () => void;
 }
 
@@ -71,30 +71,25 @@ export function MusanedVerificationModal({
     }
   }, [isOpen, applicant]);
 
-  // RBAC: Check if user is allowed to edit Musaned status
-  // Allowed: System Manager, Administrator, Agency Admin, Recruiter, Intake Officer, Clearance Officer, Wakala Officer, Desk User
-  // Denied: Foreign Agency / Agent
-
   const updateMutation = useMutation({
     mutationFn: async () => {
       const isUploaded = status === "Registered" ? 1 : 0;
-      return await updateMusanedStatusApi({
-        applicant: applicant.name,
+      return await updateApplicantV2(applicant.name, {
         is_uploaded_to_musaned: isUploaded,
         musaned_reference_no: referenceNo.trim(),
         musaned_status: status,
       });
     },
     onSuccess: (data) => {
-      queryClient.setQueryData<Applicant>(["applicant", applicant.name], (prev) => {
+      queryClient.setQueryData<any>(["applicant", applicant.name], (prev: any) => {
         if (!prev) return prev;
         return {
           ...prev,
           musaned_status: status,
           is_uploaded_to_musaned: status === "Registered" ? 1 : 0,
           musaned_reference_no: referenceNo.trim(),
-          musaned_uploaded_at: data.musaned_uploaded_at || new Date().toISOString(),
-          musaned_registered_by: data.musaned_registered_by || authUser?.full_name || authUser?.email || "Operations Staff",
+          musaned_uploaded_at: new Date().toISOString(),
+          musaned_registered_by: authUser?.full_name || authUser?.email || "Operations Staff",
         };
       });
       queryClient.invalidateQueries({ queryKey: ["applicant", applicant.name] });

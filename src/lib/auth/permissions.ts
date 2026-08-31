@@ -12,6 +12,8 @@ export type PermissionAction =
   | "viewReports"
   | "manageContractors"
   | "accessAgentPortal"
+  | "manageCommunication"
+  | "manageTicketing"
   | "editLms"
   | "editInjaz"
   | "editWakala"
@@ -20,6 +22,29 @@ export type PermissionAction =
   | "createDeparture"
   | "editEmbassy"
   | "editTelesign";
+
+export const V2_CANONICAL_ROLES = [
+  "Registrar",
+  "Manager",
+  "Admin",
+  "Clearance Officer",
+  "Ticketer",
+  "Complaint Manager",
+  "Finance Manager",
+  "Foreign Agency",
+  "Communication Manager",
+  "Contract Parser",
+  "Saudi LMIS",
+  "Saudi Taeshir",
+  "Saudi Embassy",
+  "Kuwait LMIS",
+  "Kuwait Telesign",
+  "Kuwait Embassy",
+  "System Manager",
+  "Administrator",
+] as const;
+
+export type V2Role = (typeof V2_CANONICAL_ROLES)[number];
 
 /**
  * Checks if the user has a specific role (exact match, case-insensitive, trimmed).
@@ -77,16 +102,21 @@ export function isPureForeignAgency(user: AuthUser | null | undefined): boolean 
   const internalRoles = [
     "system manager",
     "administrator",
-    "agency admin",
-    "lms employee",
+    "manager",
+    "admin",
+    "registrar",
     "clearance officer",
-    "wakala officer",
-    "injaz officer",
-    "embassy officer",
-    "accounts manager",
-    "accounts officer",
-    "recruiter",
-    "intake officer",
+    "ticketer",
+    "complaint manager",
+    "finance manager",
+    "communication manager",
+    "contract parser",
+    "saudi lmis",
+    "saudi taeshir",
+    "saudi embassy",
+    "kuwait lmis",
+    "kuwait telesign",
+    "kuwait embassy",
   ];
   const hasInternalRole = (user.roles || []).some((r) =>
     internalRoles.includes((typeof r === "string" ? r : "").trim().toLowerCase())
@@ -98,168 +128,194 @@ export function isPureForeignAgency(user: AuthUser | null | undefined): boolean 
 }
 
 /**
- * Maps standard application capabilities to the authoritative backend roles.
- * Canonical backend roles:
- * - System Manager
- * - LMS Employee
- * - Accounts Manager
- * - Foreign Agency
- * - Wakala Officer
- * - Injaz Officer
- * - Embassy Officer
+ * Maps standard application capabilities to the 16 authoritative V2 backend roles.
  */
 const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
-  manageUsers: ["System Manager", "Agency Admin", "Administrator"],
+  manageUsers: [
+    "System Manager",
+    "Administrator",
+    "Admin",
+    "Manager",
+  ],
   viewDashboard: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Recruiter",
+    "Admin",
+    "Manager",
+    "Registrar",
     "Clearance Officer",
-    "Accounts Officer",
-    "Applicant Viewer",
-    "LMS Employee",
-    "Accounts Manager",
-    "Injaz Officer",
-    "Wakala Officer",
-    "Embassy Officer",
-    "Foreign Agency",
+    "Ticketer",
+    "Complaint Manager",
+    "Finance Manager",
+    "Communication Manager",
+    "Contract Parser",
+    "Saudi LMIS",
+    "Saudi Taeshir",
+    "Saudi Embassy",
+    "Kuwait LMIS",
+    "Kuwait Telesign",
+    "Kuwait Embassy",
   ],
   viewApplicants: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Recruiter",
+    "Admin",
+    "Manager",
+    "Registrar",
     "Clearance Officer",
-    "Accounts Officer",
-    "Applicant Viewer",
-    "LMS Employee",
-    "Injaz Officer",
-    "Wakala Officer",
-    "Embassy Officer",
+    "Ticketer",
+    "Complaint Manager",
+    "Finance Manager",
+    "Communication Manager",
+    "Contract Parser",
+    "Saudi LMIS",
+    "Saudi Taeshir",
+    "Saudi Embassy",
+    "Kuwait LMIS",
+    "Kuwait Telesign",
+    "Kuwait Embassy",
   ],
   registerApplicant: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Recruiter",
-    "LMS Employee",
+    "Admin",
+    "Manager",
+    "Registrar",
   ],
   manageClearances: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "LMS Employee",
-    "Injaz Officer",
-    "Wakala Officer",
-    "Embassy Officer",
+    "Saudi LMIS",
+    "Saudi Taeshir",
+    "Saudi Embassy",
+    "Kuwait LMIS",
+    "Kuwait Telesign",
+    "Kuwait Embassy",
   ],
   viewFinance: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Accounts Officer",
-    "Accounts Manager",
+    "Admin",
+    "Finance Manager",
   ],
   manageCommission: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Accounts Officer",
-    "Accounts Manager",
-    "LMS Employee",
+    "Admin",
+    "Finance Manager",
   ],
   manageComplaints: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Foreign Agency",
-    "LMS Employee",
+    "Admin",
+    "Manager",
+    "Complaint Manager",
   ],
   viewReports: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Accounts Officer",
-    "Clearance Officer",
-    "Accounts Manager",
-    "LMS Employee",
-    "Injaz Officer",
-    "Wakala Officer",
-    "Embassy Officer",
-    "Departure Officer",
-    "Ticket Officer",
-    "Recruiter",
-    "Applicant Viewer",
+    "Admin",
+    "Manager",
+    "Finance Manager",
+    "Complaint Manager",
   ],
   manageContractors: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
+    "Finance Manager",
+    "Registrar",
   ],
   accessAgentPortal: [
     "Foreign Agency",
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
   ],
-  // Processing Stream Capabilities
+  manageCommunication: [
+    "Communication Manager",
+    "System Manager",
+    "Administrator",
+    "Admin",
+    "Manager",
+  ],
+  manageTicketing: [
+    "Ticketer",
+    "System Manager",
+    "Administrator",
+    "Admin",
+    "Manager",
+  ],
+  // Step-Specific Capabilities (mapped to 6 country+step roles)
   editLms: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "LMS Employee",
+    "Saudi LMIS",
+    "Kuwait LMIS",
   ],
   editInjaz: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "Injaz Officer",
+    "Saudi Taeshir",
   ],
   editWakala: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "Wakala Officer",
+    "Saudi Embassy",
   ],
   createStamp: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "Embassy Officer",
+    "Saudi Embassy",
+    "Kuwait Embassy",
   ],
   createTicket: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Clearance Officer",
-    "LMS Employee",
+    "Admin",
+    "Manager",
+    "Ticketer",
   ],
   createDeparture: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
-    "Clearance Officer",
-    "LMS Employee",
+    "Admin",
+    "Manager",
+    "Ticketer",
   ],
   editEmbassy: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "Embassy Officer",
+    "Saudi Embassy",
+    "Kuwait Embassy",
   ],
   editTelesign: [
     "System Manager",
-    "Agency Admin",
     "Administrator",
+    "Admin",
+    "Manager",
     "Clearance Officer",
-    "LMS Employee",
+    "Kuwait Telesign",
   ],
 };
 
@@ -268,7 +324,7 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
  * Backend permissions remain the ultimate security authority.
  */
 export function can(user: AuthUser | null | undefined, action: PermissionAction): boolean {
-  if (!user) return true; // Default allow for authenticated internal workflow
+  if (!user) return true;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
   if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
   const allowedRoles = ACTION_ROLE_MAP[action];

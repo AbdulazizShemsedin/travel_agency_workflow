@@ -10,6 +10,8 @@
  */
 
 import { requestV2 } from "./client";
+import { isDemoMode } from "@/lib/config/env";
+import { demoStore } from "@/lib/demo/store";
 
 export type V2ComplaintResolutionStatus =
   | "Resolved"
@@ -34,6 +36,8 @@ export interface V2ComplaintRecord {
   [key: string]: any;
 }
 
+export type V2ComplaintItem = V2ComplaintRecord;
+
 export interface V2ComplaintAgingReport {
   new_count?: number;
   unresolved_count?: number;
@@ -50,6 +54,11 @@ export async function createComplaintV2(
   description: string,
   workerStatusAtComplaint: string
 ): Promise<{ name?: string; message?: string }> {
+  if (isDemoMode()) {
+    const created = demoStore.createComplaint(placement, description, workerStatusAtComplaint);
+    return { name: created.name, message: "Complaint ticket filed successfully" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.complaint_api.create_complaint",
     {
@@ -69,6 +78,10 @@ export async function createComplaintV2(
 export async function acknowledgeComplaintV2(
   complaintName: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    return { message: "Complaint acknowledged" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.complaint_api.acknowledge_complaint",
     {
@@ -82,6 +95,10 @@ export async function acknowledgeComplaintV2(
  * Lists Unresolved complaints, oldest-first.
  */
 export async function listUnresolvedComplaintsV2(): Promise<V2ComplaintRecord[]> {
+  if (isDemoMode()) {
+    return demoStore.getComplaints();
+  }
+
   const result = await requestV2<V2ComplaintRecord[] | { complaints?: V2ComplaintRecord[] }>(
     "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
     { method: "POST" }
@@ -101,6 +118,11 @@ export async function resolveComplaintV2(
   resolutionNotes?: string,
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (isDemoMode()) {
+    const resolved = demoStore.resolveComplaint(complaintName, newStatus, resolutionNotes);
+    return { message: `Complaint ${complaintName} marked as ${resolved.status}` };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.complaint_api.resolve_complaint",
     {
@@ -115,12 +137,4 @@ export async function resolveComplaintV2(
   );
 }
 
-/**
- * Fetches complaint aging report.
- */
-export async function getComplaintAgingReportV2(): Promise<V2ComplaintAgingReport> {
-  return requestV2<V2ComplaintAgingReport>(
-    "/api/method/agency_tracking.report_api.get_complaint_aging_report",
-    { method: "POST" }
-  );
-}
+

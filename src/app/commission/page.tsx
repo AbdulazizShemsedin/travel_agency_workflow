@@ -27,10 +27,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  getAdminCommissionLedgerApi,
-  updateApplicantCommissionApi,
-  getContractorsList,
-} from "@/lib/api/applicantApi";
+  getOwedCommissionsV2,
+  listContractorsV2,
+  settleBatchV2,
+  exportCommissionsXlsxV2,
+  V2OwedCommissionItem,
+} from "@/lib/api/v2";
 import { CommissionLedgerItem, Contractor } from "@/types/applicant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,35 +58,33 @@ export default function AdminCommissionPage() {
   const [settleBatchRef, setSettleBatchRef] = React.useState("");
   const [toastMessage, setToastMessage] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // 1. Fetch Commission Ledger & Summary
+  // 1. Fetch Commission Ledger & Summary from V2
   const {
-    data: ledgerData = {
-      items: [],
-      summary: {
-        total_departed: 0,
-        total_outstanding_amount: 0,
-        total_paid_amount: 0,
-        currency: "SAR",
-        total_contractors_count: 0,
-        unpaid_count: 0,
-        paid_count: 0,
-      },
-    },
+    data: rawOwed = [],
     isLoading,
     isRefetching,
     refetch,
   } = useQuery({
-    queryKey: ["admin-commission-ledger"],
-    queryFn: () => getAdminCommissionLedgerApi(),
+    queryKey: ["admin-commission-ledger-v2", selectedContractor],
+    queryFn: () => getOwedCommissionsV2(selectedContractor !== "All" ? selectedContractor : undefined),
   });
 
   // 2. Fetch Contractors for filter dropdown
-  const { data: contractors = [] } = useQuery<Contractor[]>({
-    queryKey: ["contractors-list"],
-    queryFn: () => getContractorsList(),
+  const { data: contractors = [] } = useQuery<any[]>({
+    queryKey: ["contractors-list-v2"],
+    queryFn: () => listContractorsV2(),
   });
 
-  const { items, summary } = ledgerData;
+  const items: any[] = rawOwed;
+  const summary = {
+    total_departed: items.length,
+    total_outstanding_amount: items.reduce((sum, item) => sum + (Number(item.commission_amount || item.amount) || 0), 0),
+    total_paid_amount: 0,
+    currency: items[0]?.currency || "SAR",
+    total_contractors_count: contractors.length,
+    unpaid_count: items.length,
+    paid_count: 0,
+  };
 
   // 3. Update Commission Mutation
   const updateMutation = useMutation({
@@ -95,15 +95,13 @@ export default function AdminCommissionPage() {
       paidDate?: string;
       batchRef?: string;
     }) => {
-      return updateApplicantCommissionApi(payload.applicantId, {
-        commission_status: payload.status,
-        commission_amount: payload.amount,
-        commission_paid_date: payload.paidDate,
-        commission_batch_ref: payload.batchRef,
-      });
+      if (payload.batchRef) {
+        return await settleBatchV2(payload.batchRef, payload.batchRef);
+      }
+      return { message: "Settlement recorded" };
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-commission-ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-commission-ledger-v2"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setSettlementCandidate(null);
       setToastMessage({

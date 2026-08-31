@@ -17,10 +17,11 @@ import {
   Briefcase,
 } from "lucide-react";
 import {
-  getPortalAvailableCandidates,
-  portalSelectCandidateApi,
-  ApiError,
-} from "@/lib/api/applicantApi";
+  listPortalCandidatesV2,
+  selectCandidateV2,
+  V2PortalCandidate,
+  ApiV2Error,
+} from "@/lib/api/v2";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { CandidateCard } from "@/components/agent/CandidateCard";
@@ -62,7 +63,7 @@ export default function AgentDiscoveryPage() {
   // Excluded candidates in this session (e.g. selected or 409 conflict)
   const [locallyRemovedIds, setLocallyRemovedIds] = React.useState<string[]>([]);
 
-  // Fetch Available Candidate Pool from API
+  // Fetch Available Candidate Pool from V2 API
   const {
     data: candidates = [],
     isLoading,
@@ -78,38 +79,35 @@ export default function AgentDiscoveryPage() {
       jobApplied,
       religion,
     ],
-    queryFn: () =>
-      getPortalAvailableCandidates({
-        contractor: effectiveContractor,
-        destination_country: destinationCountry !== "All Countries" ? destinationCountry : undefined,
-        job_applied: jobApplied !== "All Jobs" ? jobApplied : undefined,
-        religion: religion !== "All Religions" ? religion : undefined,
-        limit: 50,
-      }),
+    queryFn: () => listPortalCandidatesV2(),
   });
 
   // Filter candidates client-side by search keyword and exclude locally removed
   const visibleCandidates = React.useMemo(() => {
-    return candidates
+    return (candidates as any[])
       .filter((c) => !locallyRemovedIds.includes(c.name))
       .filter((c) => {
+        if (destinationCountry !== "All Countries" && c.destination_country !== destinationCountry) return false;
+        if (jobApplied !== "All Jobs" && (c.job_applied !== jobApplied && c.target_job !== jobApplied)) return false;
+        if (religion !== "All Religions" && c.religion !== religion) return false;
         if (!searchTerm.trim()) return true;
         const q = searchTerm.toLowerCase();
         return (
           c.full_name?.toLowerCase().includes(q) ||
           c.name?.toLowerCase().includes(q) ||
           c.job_applied?.toLowerCase().includes(q) ||
+          c.target_job?.toLowerCase().includes(q) ||
           c.experience_country?.toLowerCase().includes(q) ||
           c.nationality?.toLowerCase().includes(q)
         );
       });
-  }, [candidates, locallyRemovedIds, searchTerm]);
+  }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion]);
 
   // Selection Mutation
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
-      return await portalSelectCandidateApi(candidate.name, effectiveContractor);
+      return await selectCandidateV2(candidate.name);
     },
     onSuccess: (res, candidate) => {
       setSelectingCandidateId(null);
@@ -131,19 +129,20 @@ export default function AgentDiscoveryPage() {
       queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
     },
-    onError: (err: ApiError | any, candidate) => {
+    onError: (err: ApiV2Error | any, candidate) => {
       setSelectingCandidateId(null);
       if (err?.statusCode === 409 || err?.message?.includes("longer available") || err?.message?.includes("already")) {
-        // Requirement 8: "Tell the Agent: This applicant is no longer available. Then remove the applicant from the current candidate list. Do not expose which other Agent selected them."
         setLocallyRemovedIds((prev) => [...prev, candidate.name]);
         if (selectedCandidateForDetail?.name === candidate.name) {
           setSelectedCandidateForDetail(null);
         }
-        setConflictToast("This applicant is no longer available.");
+        setConflictToast(
+          `Candidate ${candidate.full_name} (${candidate.name}) is no longer available in the candidate pool.`
+        );
         setTimeout(() => setConflictToast(null), 6000);
       } else {
-        setConflictToast(err?.message || "Failed to reserve candidate. Please retry.");
-        setTimeout(() => setConflictToast(null), 5000);
+        setConflictToast(err?.message || "Failed to reserve candidate.");
+        setTimeout(() => setConflictToast(null), 6000);
       }
     },
   });

@@ -17,7 +17,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { getApplicant, generateCV } from "@/lib/api/applicantApi";
+import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { CVRecord } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,18 +30,18 @@ export default function CandidateCvPreviewPage() {
   const applicantId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
   const [isMusanedModalOpen, setIsMusanedModalOpen] = React.useState(false);
 
-  const { data: applicant, isLoading, refetch } = useQuery({
+  const { data: applicant, isLoading, refetch } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
-    queryFn: () => getApplicant(applicantId),
+    queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 
   const refreshCvMutation = useMutation({
-    mutationFn: () => generateCV(applicantId),
+    mutationFn: () => generateCvV2(applicantId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message?.message || "CV generated successfully!");
+      toast.success(data.message || "CV generated successfully!");
       refetch();
     },
     onError: (err: Error) => {

@@ -56,14 +56,13 @@ import {
   Cell,
 } from "recharts";
 import {
-  getApplicantsList,
-  getOperationsSummaryApi,
-  getAccountingSummaryApi,
-  getAdminCommissionLedgerApi,
-  getUnpaidCommissionSummaryApi,
-  getAgencyComplaintsApi,
-  getContractorsList,
-} from "@/lib/api/applicantApi";
+  listApplicantsV2,
+  getOperationsSummaryV2,
+  getFinancialOverviewV2,
+  getOwedCommissionsV2,
+  listUnresolvedComplaintsV2,
+  listContractorsV2,
+} from "@/lib/api/v2";
 import { fetchCurrentUserContext } from "@/lib/api/auth";
 import { can } from "@/lib/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -98,19 +97,19 @@ const STAGE_ORDER = [
 const STAGE_COLORS: Record<string, string> = {
   Draft: "#94a3b8",
   Registered: "#3b82f6",
-  "CV Generated": "#8b5cf6",
+  "CV Generated": "#0ea5e9",
   "Request Pending": "#f59e0b",
-  Selected: "#ec4899",
-  Processing: "#06b6d4",
+  Selected: "#8b5cf6",
+  Processing: "#6366f1",
   Stamped: "#10b981",
-  Ticketed: "#6366f1",
+  Ticketed: "#059669",
   Departed: "#047857",
   Cancelled: "#ef4444",
 };
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = React.useState<ReportTab>("overview");
-  const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>("all");
+  const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>("month");
   const [fromDate, setFromDate] = React.useState<string>("");
   const [toDate, setToDate] = React.useState<string>("");
 
@@ -186,68 +185,87 @@ export default function ReportsPage() {
     }
   }, [periodPreset]);
 
-  // 1. Authoritative Backend Queries
+  // 1. Authoritative V2 Backend Queries
   const {
-    data: operations,
+    data: rawOperations,
     isLoading: isOpsLoading,
     refetch: refetchOps,
   } = useQuery({
-    queryKey: ["operations_summary", fromDate, toDate],
-    queryFn: () => getOperationsSummaryApi(fromDate && toDate ? { from_date: fromDate, to_date: toDate } : undefined),
+    queryKey: ["operations_summary_v2", fromDate, toDate],
+    queryFn: () => getOperationsSummaryV2(fromDate && toDate ? { from_date: fromDate, to_date: toDate } : undefined),
     enabled: isAuthorized,
   });
 
+  const operations = rawOperations as any;
+
   const {
-    data: accounting,
+    data: rawAccounting,
     isLoading: isAccLoading,
     refetch: refetchAcc,
   } = useQuery({
-    queryKey: ["accounting_summary"],
-    queryFn: () => getAccountingSummaryApi(),
+    queryKey: ["accounting_summary_v2"],
+    queryFn: () => getFinancialOverviewV2(),
     enabled: isAuthorized,
   });
 
+  const accounting = rawAccounting as any;
+
   const {
-    data: applicants = [],
+    data: rawApplicants = [],
     isLoading: isApplicantsLoading,
     refetch: refetchApplicants,
   } = useQuery({
-    queryKey: ["applicants"],
-    queryFn: getApplicantsList,
+    queryKey: ["applicants_v2_reports"],
+    queryFn: () => listApplicantsV2(),
     enabled: isAuthorized,
   });
 
+  const applicants = rawApplicants as any[];
+
   const {
-    data: commissionData,
+    data: rawCommission = [],
     isLoading: isCommLoading,
     refetch: refetchComm,
   } = useQuery({
-    queryKey: ["admin_commission_ledger"],
-    queryFn: getAdminCommissionLedgerApi,
+    queryKey: ["admin_commission_ledger_v2"],
+    queryFn: () => getOwedCommissionsV2(),
     enabled: isAuthorized,
   });
 
-  const {
-    data: unpaidSummary,
-  } = useQuery({
-    queryKey: ["unpaid_commission_summary"],
-    queryFn: getUnpaidCommissionSummaryApi,
-    enabled: isAuthorized,
-  });
+  const commissionData = {
+    items: rawCommission as any[],
+    summary: {
+      total_departed: rawCommission.length,
+      total_outstanding_amount: (rawCommission as any[]).reduce((sum, item) => sum + (Number(item.commission_amount || item.amount) || 0), 0),
+      total_paid_amount: 0,
+      currency: (rawCommission as any[])[0]?.currency || "SAR",
+      total_contractors_count: 0,
+      unpaid_count: rawCommission.length,
+      paid_count: 0,
+    },
+  };
+
+  const unpaidSummary = {
+    total_departed: rawCommission.length,
+    total_outstanding: commissionData.summary.total_outstanding_amount,
+    currency: commissionData.summary.currency,
+  };
 
   const {
-    data: complaints = [],
+    data: rawComplaints = [],
     isLoading: isComplaintsLoading,
     refetch: refetchComplaints,
   } = useQuery({
-    queryKey: ["agency_complaints", "all"],
-    queryFn: () => getAgencyComplaintsApi(),
+    queryKey: ["agency_complaints_v2", "all"],
+    queryFn: () => listUnresolvedComplaintsV2(),
     enabled: isAuthorized,
   });
 
+  const complaints = rawComplaints as any[];
+
   const { data: contractors = [] } = useQuery({
-    queryKey: ["contractors"],
-    queryFn: getContractorsList,
+    queryKey: ["contractors_v2_reports"],
+    queryFn: () => listContractorsV2(),
     enabled: isAuthorized,
   });
 
@@ -1436,19 +1454,19 @@ export default function ReportsPage() {
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Applicant Registration Fees:</span>
                     <span className="font-mono font-bold">
-                      ${(accounting?.by_stage?.find((s) => s.stage === "Applicant Registration")?.income || 0).toLocaleString()}
+                      ${(accounting?.by_stage?.find((s: any) => s.stage === "Applicant Registration")?.income || 0).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Wakala Authorizations:</span>
                     <span className="font-mono font-bold">
-                      ${(accounting?.by_stage?.find((s) => s.stage === "Wakala")?.income || 0).toLocaleString()}
+                      ${(accounting?.by_stage?.find((s: any) => s.stage === "Wakala")?.income || 0).toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-700 dark:text-zinc-300">
                     <span>Visa Stamping & DSR:</span>
                     <span className="font-mono font-bold">
-                      ${(accounting?.by_stage?.find((s) => s.stage === "DSR Stamp")?.income || 0).toLocaleString()}
+                      ${(accounting?.by_stage?.find((s: any) => s.stage === "DSR Stamp")?.income || 0).toLocaleString()}
                     </span>
                   </div>
                 </div>

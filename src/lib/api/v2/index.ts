@@ -15,3 +15,5 @@ export * from "./communication";
 export * from "./notifications";
 export * from "./documents";
 export * from "./cv";
+export * from "./reports";
+export * from "./contractors";

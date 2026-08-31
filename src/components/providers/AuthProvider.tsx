@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { loginUser, logoutUser, getLoggedUser, fetchCurrentUserContext, AuthUser } from "@/lib/api/auth";
 import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction } from "@/lib/auth/permissions";
+import { isDemoMode } from "@/lib/config/env";
+import { DEMO_USERS, DemoUserProfile } from "@/lib/demo/users";
 import { AgencyContextResponse } from "@/types/applicant";
 
 interface AuthContextType {
@@ -19,6 +21,8 @@ interface AuthContextType {
   hasAnyRole: (roles: string[]) => boolean;
   hasAllRoles: (roles: string[]) => boolean;
   can: (action: PermissionAction) => boolean;
+  demoUserKey?: string;
+  switchDemoUser?: (userKey: string) => void;
 }
 
 const AuthContext = React.createContext<AuthContextType>({
@@ -41,8 +45,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authUser, setAuthUser] = React.useState<AuthUser | null>(null);
   const [agencyContext, setAgencyContext] = React.useState<AgencyContextResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  const [demoUserKey, setDemoUserKey] = React.useState<string>("admin");
   const router = useRouter();
   const pathname = usePathname();
+
+  const switchDemoUser = React.useCallback((key: string) => {
+    const profile = DEMO_USERS[key] || DEMO_USERS.admin;
+    setDemoUserKey(key);
+    setUser(profile.email);
+    setAuthUser({
+      email: profile.email,
+      full_name: profile.full_name,
+      roles: profile.roles,
+      is_internal_staff: !profile.roles.includes("Foreign Agency"),
+      contractor: profile.roles.includes("Foreign Agency") ? "CON-001" : undefined,
+    });
+    if (profile.roles.includes("Foreign Agency")) {
+      setAgencyContext({
+        user: profile.email,
+        full_name: profile.full_name,
+        roles: profile.roles,
+        is_internal_staff: false,
+        contractor: {
+          name: "CON-001",
+          company_name: profile.full_name,
+          country: profile.email.includes("kuwait") ? "Kuwait" : "Saudi Arabia",
+        },
+      });
+    } else {
+      setAgencyContext(null);
+    }
+  }, []);
 
   const loadUserContext = React.useCallback(async () => {
     try {
@@ -65,23 +98,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthUser({
             email: loggedUser,
             full_name: loggedUser,
-            roles: [], // Safe unprivileged state: Authenticated != Authorized
+            roles: [],
             is_internal_staff: false,
           });
         }
+      } else if (isDemoMode()) {
+        switchDemoUser("admin");
       } else {
         setUser(null);
         setAuthUser(null);
         setAgencyContext(null);
       }
     } catch {
-      setUser(null);
-      setAuthUser(null);
-      setAgencyContext(null);
+      if (isDemoMode()) {
+        switchDemoUser("admin");
+      } else {
+        setUser(null);
+        setAuthUser(null);
+        setAgencyContext(null);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [switchDemoUser]);
 
   React.useEffect(() => {
     loadUserContext();
@@ -137,6 +176,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasAnyRole: userHasAnyRole,
         hasAllRoles: userHasAllRoles,
         can: userCan,
+        demoUserKey,
+        switchDemoUser,
       }}
     >
       {children}

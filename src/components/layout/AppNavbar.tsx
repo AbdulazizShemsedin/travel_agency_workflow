@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
+import { DemoRoleSwitcher } from "@/components/demo/DemoRoleSwitcher";
 
 interface AppNavbarProps {
   isSidebarCollapsed?: boolean;
@@ -82,8 +83,11 @@ export function AppNavbar({
         )}
       </div>
 
-      {/* Right Actions: Dark Mode & Notifications & User */}
+      {/* Right Actions: Demo Switcher & Dark Mode & Notifications & User */}
       <div className="flex items-center gap-2">
+        {/* Demo Mode Role Persona Switcher */}
+        <DemoRoleSwitcher />
+
         {/* Dark Mode Switcher */}
         <Button
           variant="outline"

@@ -42,13 +42,19 @@ import {
   XCircle,
 } from "lucide-react";
 import {
-  getApplicant,
-  registerApplicant,
-  generateCV,
-  cancelApplicant,
-  restoreApplicant,
-  fetchProcessingData,
-} from "@/lib/api/applicantApi";
+  getApplicantV2,
+  registerApplicantV2,
+  generateCvV2,
+  cancelApplicantV2,
+  restartApplicantV2,
+  logApplicantFeeV2,
+  listCountryBansV2,
+  setCountryBanV2,
+  removeCountryBanV2,
+  listPlacementsV2,
+  listMyClearanceStepsV2,
+  V2ApplicantDetails,
+} from "@/lib/api/v2";
 import { ProcessingStream } from "@/types/processing";
 import {
   calculateRemainingDays,
@@ -76,7 +82,6 @@ const CANONICAL_STAGES = [
   "Draft",
   "Registered",
   "CV Generated",
-  "Request Pending",
   "Selected",
   "Processing",
   "Stamped",
@@ -104,24 +109,43 @@ export default function ApplicantDetailPage() {
     isLoading,
     isError,
     refetch,
-  } = useQuery({
+  } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
-    queryFn: () => getApplicant(applicantId),
+    queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 
-  const { data: processingData, refetch: refetchProcessing } = useQuery({
-    queryKey: ["processing", applicantId],
-    queryFn: () => fetchProcessingData(applicantId),
+  const { data: placements = [] } = useQuery({
+    queryKey: ["applicant-placements", applicantId],
+    queryFn: () => listPlacementsV2({ applicant: applicantId }),
+    enabled: !!applicantId,
+  });
+
+  const { data: clearanceSteps = [] } = useQuery({
+    queryKey: ["my-clearance-steps"],
+    queryFn: () => listMyClearanceStepsV2(),
+  });
+
+  const applicantClearanceSteps = React.useMemo(() => {
+    return clearanceSteps.filter(
+      (s) => s.applicant_name === applicantId || s.applicant_name === applicant?.name
+    );
+  }, [clearanceSteps, applicantId, applicant?.name]);
+
+  const activePlacement = placements[0] || null;
+
+  const { data: countryBans = [] } = useQuery({
+    queryKey: ["country-bans", applicantId],
+    queryFn: () => listCountryBansV2(applicantId),
     enabled: !!applicantId,
   });
 
   const generateCvMutation = useMutation({
-    mutationFn: () => generateCV(applicantId),
+    mutationFn: () => generateCvV2(applicantId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message?.message || "CV generated successfully! Opening preview...");
+      toast.success(data.message || "CV generated successfully! Opening preview...");
       router.push(`/applicants/${encodeURIComponent(applicantId)}/cv`);
     },
     onError: (err: Error) => {
@@ -130,7 +154,7 @@ export default function ApplicantDetailPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: () => registerApplicant(applicantId),
+    mutationFn: () => registerApplicantV2(applicantId),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -142,7 +166,7 @@ export default function ApplicantDetailPage() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => cancelApplicant(applicantId, cancelRemarks),
+    mutationFn: () => cancelApplicantV2(applicantId, cancelRemarks || "Administrative cancellation"),
     onSuccess: (data) => {
       setIsCancelModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
@@ -152,14 +176,23 @@ export default function ApplicantDetailPage() {
     onError: (err: Error) => toast.error("Cancellation failed", { description: err.message }),
   });
 
-  const restoreMutation = useMutation({
-    mutationFn: () => restoreApplicant(applicantId, "auto"),
+  const restartMutation = useMutation({
+    mutationFn: () => restartApplicantV2(applicantId, "Draft"),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message?.message || "Applicant process restored.");
+      toast.success(data.message || "Applicant restarted to Draft.");
     },
-    onError: (err: Error) => toast.error("Restore failed", { description: err.message }),
+    onError: (err: Error) => toast.error("Restart failed", { description: err.message }),
+  });
+
+  const logFeeMutation = useMutation({
+    mutationFn: () => logApplicantFeeV2(applicantId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      toast.success(data.message || "Registration fee logged to finance ledger!");
+    },
+    onError: (err: Error) => toast.error("Failed to log fee", { description: err.message }),
   });
 
   if (isLoading) {
@@ -267,8 +300,8 @@ export default function ApplicantDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => restoreMutation.mutate()}
-              disabled={restoreMutation.isPending}
+              onClick={() => restartMutation.mutate()}
+              disabled={restartMutation.isPending}
               className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300"
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
@@ -291,7 +324,7 @@ export default function ApplicantDetailPage() {
             size="sm"
             onClick={async () => {
               try {
-                const res = await sendApplicantToExtension(applicant);
+                const res = await sendApplicantToExtension(applicant as any);
                 if (res.success) {
                   toast.success(`Candidate ${applicant.name} sent to Travel Agency Assistant extension!`);
                 } else {
@@ -578,28 +611,23 @@ export default function ApplicantDetailPage() {
           </div>
         )}
 
-        {/* Stage 6: Processing (Parallel LMS, Injaz, Wakala) */}
-        {(currentStage === "Processing" ||
-          (currentStage === "Selected" &&
-            Boolean(
-              processingData?.dsr &&
-                (processingData.lms?.employee ||
-                  processingData.injaz?.employee ||
-                  processingData.wakala?.employee ||
-                  processingData.telesign?.employee ||
-                  processingData.embassy?.employee)
-            ))) && (
+        {/* Stage 6: Processing (V2 Placement & Dynamic Clearance Steps) */}
+        {(currentStage === "Processing" || currentStage === "Selected" || Boolean(activePlacement)) && (
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: Processing ({isKuwaitApplicant ? "Kuwait Work Permit & Visa" : "Multi-Stream Clearances"})
+                  Stage: {activePlacement?.status || currentStage} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
-                  {isKuwaitApplicant
-                    ? "Execute Kuwait Ministry Work Permit and Overseas Placement processing."
-                    : "Execute parallel clearance streams: LMS Clearance, Injaz/Teashir, and Wakala Authorization."}
+                  {activePlacement ? (
+                    <>
+                      Active Placement: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{activePlacement.name}</strong> • Contractor: <strong>{activePlacement.contractor || "Direct"}</strong> • Visa: <strong>{activePlacement.visa_number || "Pending"}</strong>
+                    </>
+                  ) : (
+                    "Candidate is allocated for placement processing. Clearance steps will dynamically execute per corridor."
+                  )}
                 </p>
               </div>
               <Button
@@ -611,82 +639,32 @@ export default function ApplicantDetailPage() {
                 <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Reassign / Update Staff
               </Button>
             </div>
-            <div className={`grid grid-cols-1 ${isKuwaitApplicant ? "sm:grid-cols-1 max-w-md" : "sm:grid-cols-3"} gap-3 pt-2`}>
-              {/* LMS Clearance */}
-              <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {isKuwaitApplicant ? "Kuwait LMS Permit & Visa" : "LMS Clearance"}
-                  </span>
-                  <Badge variant={processingData?.lms?.status === "Issued" ? "success" : "warning"}>
-                    {processingData?.lms?.status || "Pending"}
-                  </Badge>
+
+            {/* Dynamic Clearance Steps Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              {applicantClearanceSteps.length > 0 ? (
+                applicantClearanceSteps.map((step) => (
+                  <div key={step.name} className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {step.step_type}
+                      </span>
+                      <Badge variant={step.status === "Issued" || step.status === "Complete" || step.status === "Stamped" ? "success" : step.status === "Rejected" ? "destructive" : "warning"}>
+                        {step.status || "Pending"}
+                      </Badge>
+                    </div>
+                    <p className="text-slate-500 dark:text-zinc-400">
+                      Officer: {step.assigned_officer || "Unassigned"}
+                    </p>
+                    <div className="text-[10px] text-slate-400 font-mono">
+                      Step ID: {step.name} (Seq {step.sequence_order})
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="sm:col-span-3 rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 text-center text-xs text-slate-500">
+                  No active clearance steps currently queued for this candidate.
                 </div>
-                <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.lms?.employee || "Unassigned"}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setProcessingInitialTab("lms");
-                    setIsProcessingModalOpen(true);
-                  }}
-                  className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
-                >
-                  Manage LMS
-                </Button>
-              </div>
-
-              {/* Saudi Specific Clearances: Injaz & Wakala */}
-              {!isKuwaitApplicant && (
-                <>
-                  {/* Injaz Clearance */}
-                  <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Fingerprint className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Injaz Clearance
-                      </span>
-                      <Badge variant={processingData?.injaz?.status === "Completed" ? "success" : "warning"}>
-                        {processingData?.injaz?.status || "Pending"}
-                      </Badge>
-                    </div>
-                    <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.injaz?.employee || "Unassigned"}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setProcessingInitialTab("injaz");
-                        setIsProcessingModalOpen(true);
-                      }}
-                      className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
-                    >
-                      Manage Injaz
-                    </Button>
-                  </div>
-
-                  {/* Wakala Clearance */}
-                  <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Wakala Clearance
-                      </span>
-                      <Badge variant={processingData?.wakala?.status === "Completed" ? "success" : "warning"}>
-                        {processingData?.wakala?.status || "Pending"}
-                      </Badge>
-                    </div>
-                    <p className="text-slate-500 dark:text-zinc-400">Employee: {processingData?.wakala?.employee || "Unassigned"}</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setProcessingInitialTab("wakala");
-                        setIsProcessingModalOpen(true);
-                      }}
-                      className="w-full text-xs h-7 border-slate-300 dark:border-[#26262d]"
-                    >
-                      Manage Wakala
-                    </Button>
-                  </div>
-                </>
               )}
             </div>
           </div>
@@ -960,7 +938,7 @@ export default function ApplicantDetailPage() {
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100 dark:divide-[#222227] text-xs">
                 {(applicant.income_expense_logs || []).length > 0 ? (
-                  applicant.income_expense_logs?.map((log, i) => (
+                  (applicant.income_expense_logs as any[])?.map((log: any, i: number) => (
                     <div key={i} className="flex items-center justify-between p-3">
                       <div>
                         <span className={`font-bold mr-2 ${log.transaction_type === "Income" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
@@ -1090,15 +1068,7 @@ export default function ApplicantDetailPage() {
 
           {/* Candidate Fees & Financials Ledger */}
           {(() => {
-            const allFees = [
-              ...(processingData?.lms?.financials || []),
-              ...(processingData?.injaz?.financials || []),
-              ...(processingData?.wakala?.financials || []),
-              ...(processingData?.embassy?.financials || []),
-              ...(processingData?.stamp?.financials || []),
-              ...(processingData?.departure?.financials || []),
-              ...(applicant.income_expense_logs || []),
-            ];
+            const allFees = (applicant.income_expense_logs || []) as any[];
             const candidateIncome = allFees
               .filter((f: any) => f.transaction_type === "Income")
               .reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
@@ -1174,8 +1144,6 @@ export default function ApplicantDetailPage() {
         </div>
       </div>
 
-
-
       {/* Assign Employee Modal */}
       {applicant && (
         <AssignEmployeeModal
@@ -1186,14 +1154,13 @@ export default function ApplicantDetailPage() {
           onClose={() => setIsAssignModalOpen(false)}
           onSuccess={() => {
             refetch();
-            refetchProcessing();
           }}
         />
       )}
 
       {/* Processing Streams Modal */}
       <ProcessingStreamsModal
-        applicant={applicant}
+        applicant={applicant as any}
         isOpen={isProcessingModalOpen}
         onClose={() => setIsProcessingModalOpen(false)}
         initialTab={processingInitialTab}

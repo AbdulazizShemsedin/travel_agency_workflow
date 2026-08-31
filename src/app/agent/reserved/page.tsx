@@ -19,8 +19,10 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
-import { getAgencyReservedCandidatesApi } from "@/lib/api/applicantApi";
-import { AgencyPipelineCandidate } from "@/types/applicant";
+import {
+  listPlacementsV2,
+  V2PlacementRecord,
+} from "@/lib/api/v2";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,18 +53,21 @@ export default function MyReservedCandidatesPage() {
     isRefetching,
   } = useQuery({
     queryKey: ["agency-reserved-candidates", effectiveContractor],
-    queryFn: () => getAgencyReservedCandidatesApi(effectiveContractor),
+    queryFn: () => listPlacementsV2(),
   });
 
   const filteredCandidates = React.useMemo(() => {
-    return reservedCandidates.filter((c) => {
+    return (reservedCandidates as any[]).filter((c) => {
       if (!searchTerm.trim()) return true;
       const q = searchTerm.toLowerCase();
       return (
         c.full_name?.toLowerCase().includes(q) ||
+        c.applicant_name?.toLowerCase().includes(q) ||
+        c.applicant?.toLowerCase().includes(q) ||
         c.name?.toLowerCase().includes(q) ||
         c.passport_number?.toLowerCase().includes(q) ||
-        c.job_applied?.toLowerCase().includes(q)
+        c.job_applied?.toLowerCase().includes(q) ||
+        c.target_job?.toLowerCase().includes(q)
       );
     });
   }, [reservedCandidates, searchTerm]);

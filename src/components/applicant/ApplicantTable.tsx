@@ -20,14 +20,14 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Applicant, ApplicantState } from "@/types/applicant";
-import { getApplicantsList } from "@/lib/api/applicantApi";
+import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 
-function getStageBadgeVariant(stage: ApplicantState): {
+function getStageBadgeVariant(stage: string): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
   dotColor: string;
 } {
@@ -68,16 +68,17 @@ export function ApplicantTable() {
   const [assignTargetIds, setAssignTargetIds] = React.useState<string[]>([]);
   const [assignTargetNames, setAssignTargetNames] = React.useState<string[]>([]);
 
-  const { data: applicants = [], isLoading } = useQuery({
+  const { data: applicants = [], isLoading } = useQuery<V2ApplicantDetails[]>({
     queryKey: ["applicants"],
-    queryFn: getApplicantsList,
+    queryFn: () => listApplicantsV2(),
   });
 
   // Filtered & searched data
   const filteredApplicants = React.useMemo(() => {
     return applicants.filter((applicant) => {
+      const currentStatus = applicant.status || applicant.applicant_state || "Draft";
       const matchesStage =
-        selectedStage === "All" || applicant.applicant_state === selectedStage;
+        selectedStage === "All" || currentStatus === selectedStage;
 
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -147,16 +148,17 @@ export function ApplicantTable() {
     setIsAssignModalOpen(true);
   };
 
-  const handleSingleAssign = (applicant: Applicant, e?: React.MouseEvent) => {
+  const handleSingleAssign = (applicant: V2ApplicantDetails, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (applicant.applicant_state !== "Selected") {
+    const currentStatus = applicant.status || applicant.applicant_state;
+    if (currentStatus !== "Selected") {
       toast.error("Cannot Assign Employee", {
-        description: `Applicant is currently in '${applicant.applicant_state}' stage. Assignment is only available in 'Selected' stage.`,
+        description: `Applicant is currently in '${currentStatus}' stage. Assignment is only available in 'Selected' stage.`,
       });
       return;
     }
     setAssignTargetIds([applicant.name]);
-    setAssignTargetNames([applicant.full_name]);
+    setAssignTargetNames([applicant.full_name || applicant.name]);
     setIsAssignModalOpen(true);
   };
 

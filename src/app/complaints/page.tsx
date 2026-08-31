@@ -19,13 +19,15 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import {
-  getAgencyComplaintsApi,
-  submitAgencyComplaintApi,
-  resolveAgencyComplaintApi,
-  getApplicantsList,
-  getContractorsList,
-  uploadFileApi,
-} from "@/lib/api/applicantApi";
+  listUnresolvedComplaintsV2,
+  createComplaintV2,
+  resolveComplaintV2,
+  acknowledgeComplaintV2,
+  listContractorsV2,
+  listApplicantsV2,
+  uploadFileV2,
+  V2ComplaintItem,
+} from "@/lib/api/v2";
 import {
   AgencyComplaint,
   ComplaintSeverity,
@@ -49,8 +51,8 @@ export default function AdminComplaintsPage() {
   const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest" | "severity" | "sla">("newest");
 
   const { data: contractors = [] } = useQuery({
-    queryKey: ["contractors"],
-    queryFn: getContractorsList,
+    queryKey: ["contractors_v2"],
+    queryFn: () => listContractorsV2(),
   });
 
   // Submit Modal
@@ -70,13 +72,13 @@ export default function AdminComplaintsPage() {
     if (!submitForm.contractor && contractors.length > 0) {
       setSubmitForm((prev) => ({
         ...prev,
-        contractor: prev.contractor || contractors[0]?.name || "",
+        contractor: prev.contractor || (contractors[0] as any)?.name || "",
       }));
     }
   }, [contractors, submitForm.contractor]);
 
   // Resolve Modal
-  const [selectedComplaintForResolve, setSelectedComplaintForResolve] = React.useState<AgencyComplaint | null>(null);
+  const [selectedComplaintForResolve, setSelectedComplaintForResolve] = React.useState<any | null>(null);
   const [resolveForm, setResolveForm] = React.useState({
     outcome: COMPLAINT_OUTCOMES[0] as string,
     resolution_notes: "",
@@ -88,21 +90,17 @@ export default function AdminComplaintsPage() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const { data: complaints = [], isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["admin-complaints", activeTab, contractorFilter],
-    queryFn: () =>
-      getAgencyComplaintsApi({
-        tab: activeTab,
-        contractor: contractorFilter !== "All Agencies" ? contractorFilter : undefined,
-      }),
+    queryKey: ["admin-complaints-v2", activeTab, contractorFilter],
+    queryFn: () => listUnresolvedComplaintsV2(),
   });
 
   // Client-side filtering & sorting
   const filteredAndSortedComplaints = React.useMemo(() => {
-    let list = [...complaints];
+    let list = (complaints as any[]);
 
     // Filter by Category
     if (categoryFilter !== "All Categories") {
-      list = list.filter((c) => c.complaint_category === categoryFilter);
+      list = list.filter((c) => c.complaint_category === categoryFilter || c.category === categoryFilter);
     }
 
     // Filter by Severity
@@ -122,20 +120,6 @@ export default function AdminComplaintsPage() {
         const timeB = b.creation ? new Date(b.creation).getTime() : 0;
         return timeA - timeB;
       }
-      if (sortOrder === "severity") {
-        const weight: Record<string, number> = {
-          "Critical / Emergency": 3,
-          "Critical": 3,
-          "High": 2,
-          "Normal": 1,
-          "Medium": 1,
-          "Low": 0,
-        };
-        return (weight[b.severity] || 0) - (weight[a.severity] || 0);
-      }
-      if (sortOrder === "sla") {
-        return (b.days_unresolved || 0) - (a.days_unresolved || 0);
-      }
       return 0;
     });
 
@@ -143,21 +127,26 @@ export default function AdminComplaintsPage() {
   }, [complaints, categoryFilter, severityFilter, sortOrder]);
 
   const { data: applicants = [] } = useQuery({
-    queryKey: ["applicants"],
-    queryFn: getApplicantsList,
+    queryKey: ["applicants-v2-complaints"],
+    queryFn: () => listApplicantsV2(),
   });
 
-  const availableReplacements = applicants.filter((a) => a.applicant_state === "Registered" || a.applicant_state === "CV Generated");
+  const availableReplacements = (applicants as any[]).filter((a) => a.applicant_state === "Registered" || a.applicant_state === "CV Generated");
 
   const submitMutation = useMutation({
-    mutationFn: (data: typeof submitForm) => submitAgencyComplaintApi(data),
+    mutationFn: async (data: typeof submitForm) => {
+      return await createComplaintV2(
+        data.applicant_search,
+        `[${data.complaint_category} - ${data.severity}] ${data.complaint_details}`,
+        "Working Abroad"
+      );
+    },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
-      queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-complaints-v2"] });
       setIsSubmitModalOpen(false);
       setErrorMessage(null);
       setSubmitForm({
-        contractor: contractors[0]?.name || "",
+        contractor: (contractors[0] as any)?.name || "",
         applicant_search: "",
         full_name: "",
         complaint_category: COMPLAINT_CATEGORIES[0] as ComplaintCategory,
@@ -165,7 +154,7 @@ export default function AdminComplaintsPage() {
         complaint_details: "",
         attachment: "",
       });
-      setToastMessage(res?.message?.message || "Complaint logged successfully.");
+      setToastMessage(res?.message || "Complaint logged successfully.");
       setTimeout(() => setToastMessage(null), 5000);
     },
     onError: (err: any) => {
@@ -175,10 +164,11 @@ export default function AdminComplaintsPage() {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: (data: typeof resolveForm & { complaint_id: string }) => resolveAgencyComplaintApi(data),
+    mutationFn: async (data: typeof resolveForm & { complaint_id: string }) => {
+      return await resolveComplaintV2(data.complaint_id, "Resolved", data.resolution_notes);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-complaints"] });
-      queryClient.invalidateQueries({ queryKey: ["agency-complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-complaints-v2"] });
       setSelectedComplaintForResolve(null);
       setErrorMessage(null);
       setToastMessage("Complaint resolved and updated.");
@@ -552,12 +542,12 @@ export default function AdminComplaintsPage() {
                   value={submitForm.applicant_search}
                   onChange={(e) => {
                     const sel = applicants.find((a) => a.name === e.target.value);
-                    const candidateContractor = (sel as any)?.contractor || sel?.locked_contractor || sel?.selected_by;
+                    const candidateContractor = (sel as any)?.contractor || (sel as any)?.locked_contractor || (sel as any)?.selected_by;
                     setSubmitForm({
                       ...submitForm,
                       applicant_search: e.target.value,
-                      full_name: sel ? (sel.full_name || sel.first_name) : "",
-                      contractor: candidateContractor || submitForm.contractor || contractors[0]?.name || "",
+                      full_name: sel ? (sel.full_name || (sel as any).first_name || "") : "",
+                      contractor: candidateContractor || submitForm.contractor || (contractors[0] as any)?.name || "",
                     });
                   }}
                 >

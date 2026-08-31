@@ -17,9 +17,9 @@ import {
   Loader2,
 } from "lucide-react";
 import {
-  getUnpaidCommissionSummaryApi,
-  getUnpaidCommissionCandidatesListApi,
-} from "@/lib/api/applicantApi";
+  getOwedCommissionsV2,
+  V2OwedCommissionItem,
+} from "@/lib/api/v2";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,38 +38,30 @@ export default function AgentCommissionPage() {
 
   const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
 
-  // Fetch summary
+  // Fetch owed commissions list from V2
   const {
-    data: summary = { total_departed: 0, agreed_rate: 1500, total_outstanding: 0, currency: "SAR" },
-    isLoading: isSummaryLoading,
-    refetch: refetchSummary,
-    isRefetching: isSummaryRefetching,
-  } = useQuery({
-    queryKey: ["unpaid-commission-summary", effectiveContractor],
-    queryFn: () => getUnpaidCommissionSummaryApi(),
-  });
-
-  // Fetch candidates list
-  const {
-    data: candidates = [],
+    data: candidateList = [],
     isLoading: isListLoading,
     refetch: refetchList,
-  } = useQuery({
+    isRefetching: isSummaryRefetching,
+  } = useQuery<V2OwedCommissionItem[]>({
     queryKey: ["unpaid-commission-candidates", effectiveContractor],
-    queryFn: () => getUnpaidCommissionCandidatesListApi(50),
+    queryFn: () => getOwedCommissionsV2(effectiveContractor || undefined),
   });
 
-  const rawCandidates = candidates as any;
-  const candidateList: any[] = Array.isArray(rawCandidates)
-    ? rawCandidates
-    : Array.isArray(rawCandidates?.message)
-    ? rawCandidates.message
-    : Array.isArray(rawCandidates?.data)
-    ? rawCandidates.data
-    : [];
+  const totalOutstanding = candidateList.reduce(
+    (acc, curr) => acc + (Number(curr.commission_amount || curr.amount) || 0),
+    0
+  );
+
+  const summary = {
+    total_departed: candidateList.length,
+    agreed_rate: candidateList[0]?.commission_amount || 1500,
+    total_outstanding: totalOutstanding,
+    currency: candidateList[0]?.currency || "SAR",
+  };
 
   const handleRefreshAll = () => {
-    refetchSummary();
     refetchList();
   };
 

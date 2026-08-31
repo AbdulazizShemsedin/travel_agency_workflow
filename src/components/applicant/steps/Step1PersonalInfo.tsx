@@ -4,7 +4,7 @@ import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
 import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2 } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
-import { uploadFileApi, scanPassportMRZApi } from "@/lib/api/applicantApi";
+import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,33 +99,26 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       setValue("date_of_birth", d.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
     if (d.gender) {
-      setValue("gender", d.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      setValue("gender", d.gender, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
     if (d.nationality) {
       setValue("nationality", d.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
     if (d.passport_expiry) {
       setValue("passport_expiry", d.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-      const parts = d.passport_expiry.split("-");
-      if (parts.length === 3) {
-        const expY = parseInt(parts[0], 10);
-        if (!isNaN(expY)) {
-          const issueY = expY - 5;
-          const calcIssueDate = `${issueY}-${parts[1]}-${parts[2]}`;
-          setValue("passport_issue_date", calcIssueDate, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        }
+      if (d.passport_issue_date) {
+        setValue("passport_issue_date", d.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
       }
-    }
-    if (d.passport_issue_date) {
-      setValue("passport_issue_date", d.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
     if (d.place_of_issue) {
       setValue("place_of_issue", d.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    } else {
+      setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
 
     setOcrSuccessData(d);
     setIsOcrReviewOpen(false);
-    toast.success("Passport data applied to registration form!");
+    toast.success("Applicant personal info auto-populated from passport scan!");
   };
 
   // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend Python OCR and/or Client OCR)
@@ -136,11 +129,11 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     setIsScanningOCR(true);
 
     try {
-      // 1. Upload passport scan file to Frappe
+      // 1. Upload passport scan file
       let uploadedUrl = "";
       try {
-        const uploadRes = await uploadFileApi(file, "Applicant", "", "passport_scan");
-        const fileUrl = (uploadRes as any)?.file_url || (uploadRes as any)?.message?.file_url || "";
+        const uploadRes = await uploadFileV2(file, true, "Applicant");
+        const fileUrl = uploadRes?.file_url || "";
         if (fileUrl) {
           uploadedUrl = fileUrl;
           setValue("passport_scan", fileUrl, { shouldDirty: true, shouldValidate: true });
@@ -148,20 +141,16 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
           setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
         }
       } catch (e) {
-        console.warn("File upload to server error:", e);
+        console.warn("File upload error:", e);
       }
 
       // 2. Dispatch file_url to backend Python OCR engine
       let extractedData: any = null;
       if (uploadedUrl) {
         try {
-          const ocrRes = await scanPassportMRZApi({
-            file_url: uploadedUrl,
-          });
-
-          const d = (ocrRes as any)?.data || (ocrRes as any)?.message?.data || ocrRes;
-          if (d && (d.passport_number || d.first_name || d.last_name || d.date_of_birth)) {
-            extractedData = d;
+          const ocrRes = await parsePassportFileV2(uploadedUrl);
+          if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth)) {
+            extractedData = ocrRes;
           }
         } catch (backendErr) {
           console.warn("Backend OCR parse error:", backendErr);
@@ -235,8 +224,8 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       setIsUploadingPassport(true);
 
       try {
-        const res = await uploadFileApi(file, "Applicant", "", "photo_passport");
-        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        const res = await uploadFileV2(file, true, "Applicant");
+        const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
           setValue("photo_passport", fileUrl, { shouldDirty: true, shouldValidate: true });
@@ -260,8 +249,8 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       setIsUploadingFullBody(true);
 
       try {
-        const res = await uploadFileApi(file, "Applicant", "", "photo_full_body");
-        const fileUrl = (res as any)?.file_url || (res as any)?.message?.file_url || "";
+        const res = await uploadFileV2(file, true, "Applicant");
+        const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });
           toast.success("Full body photo uploaded successfully!");

@@ -3,7 +3,12 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Loader2, Plus, ArrowUpRight, ArrowDownLeft, X, CheckCircle2, DollarSign } from "lucide-react";
-import { getAccountingSummaryApi, recordAccountingTransactionApi } from "@/lib/api/applicantApi";
+import {
+  getFinancialOverviewV2,
+  logStageExpenseV2,
+  logStageIncomeV2,
+  V2SupportedCurrency,
+} from "@/lib/api/v2";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,26 +23,37 @@ export default function ExpensesIncomePage() {
     amount: "",
     description: "",
     applicant: "",
+    currency: "SAR" as V2SupportedCurrency,
     date: new Date().toISOString().split("T")[0],
   });
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
-  const { data: summary, isLoading, isError, error } = useQuery({
-    queryKey: ["accounting_summary"],
-    queryFn: getAccountingSummaryApi,
+  const { data: rawSummary, isLoading, isError, error } = useQuery({
+    queryKey: ["accounting_summary_v2"],
+    queryFn: () => getFinancialOverviewV2(),
   });
 
+  const summary = rawSummary as any;
+
   const recordTxnMutation = useMutation({
-    mutationFn: recordAccountingTransactionApi,
+    mutationFn: async (data: typeof formData) => {
+      const amt = parseFloat(data.amount) || 0;
+      if (data.transaction_type === "Expense") {
+        return await logStageExpenseV2(amt, data.currency, data.description, data.applicant || undefined);
+      } else {
+        return await logStageIncomeV2(amt, data.currency, data.description, data.applicant || undefined);
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounting_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting_summary_v2"] });
       setIsAddModalOpen(false);
       setFormData({
         transaction_type: "Income",
         amount: "",
         description: "",
         applicant: "",
+        currency: "SAR",
         date: new Date().toISOString().split("T")[0],
       });
       setErrorMessage(null);
@@ -53,19 +69,13 @@ export default function ExpensesIncomePage() {
     e.preventDefault();
     setErrorMessage(null);
     if (!formData.amount || !formData.description) return;
-    recordTxnMutation.mutate({
-      transaction_type: formData.transaction_type,
-      amount: parseFloat(formData.amount) || 0,
-      description: formData.description,
-      applicant: formData.applicant || undefined,
-      date: formData.date,
-    });
+    recordTxnMutation.mutate(formData);
   };
 
-  const totalIncome = summary?.total_income ?? 0;
-  const totalExpense = summary?.total_expense ?? 0;
-  const netBalance = summary?.net_balance ?? 0;
-  const recentTxns = summary?.recent_transactions ?? [];
+  const totalIncome = summary?.totals_birr?.income ?? summary?.total_income ?? 0;
+  const totalExpense = summary?.totals_birr?.expense ?? summary?.total_expense ?? 0;
+  const netBalance = totalIncome - totalExpense;
+  const recentTxns: any[] = summary?.recent_transactions ?? [];
 
   return (
     <div className="space-y-6 pb-12">
@@ -165,20 +175,20 @@ export default function ExpensesIncomePage() {
           </CardHeader>
           <CardContent className="pt-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              {summary.by_stage.map((s) => (
+              {summary.by_stage.map((s: any) => (
                 <div key={s.stage} className="rounded-lg border border-slate-200 dark:border-[#26262d] p-3 bg-slate-50/50 dark:bg-[#16161b]">
                   <span className="font-bold text-slate-900 dark:text-white block mb-1">{s.stage}</span>
                   <div className="flex justify-between text-slate-500 dark:text-zinc-400">
                     <span>Income:</span>
-                    <span className="font-mono text-emerald-700 dark:text-emerald-400">+${s.income.toLocaleString()}</span>
+                    <span className="font-mono text-emerald-700 dark:text-emerald-400">+${Number(s.income || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-slate-500 dark:text-zinc-400">
                     <span>Expense:</span>
-                    <span className="font-mono text-rose-600 dark:text-rose-400">-${s.expense.toLocaleString()}</span>
+                    <span className="font-mono text-rose-600 dark:text-rose-400">-${Number(s.expense || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between font-bold pt-1 border-t border-slate-200 dark:border-[#26262d] mt-1">
                     <span>Net:</span>
-                    <span className="font-mono text-slate-900 dark:text-white">${s.net.toLocaleString()}</span>
+                    <span className="font-mono text-slate-900 dark:text-white">${Number(s.net || 0).toLocaleString()}</span>
                   </div>
                 </div>
               ))}
@@ -211,7 +221,7 @@ export default function ExpensesIncomePage() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
               {recentTxns.length > 0 ? (
-                recentTxns.map((t, idx) => (
+                recentTxns.map((t: any, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                     <td className="px-4 py-3">
                       {t.type === "Income" ? (
