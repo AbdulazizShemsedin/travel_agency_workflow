@@ -74,12 +74,10 @@ export function ApplicantRegistrationForm({
     existingApplicantId || null
   );
   const [applicantState, setApplicantState] = React.useState<string>("Draft");
-  const [generatedCvUrl, setGeneratedCvUrl] = React.useState<string | null>(null);
   const [activeSection, setActiveSection] = React.useState<string>("section-personal");
 
   // Dialog state
   const [isConfirmRegisterOpen, setIsConfirmRegisterOpen] = React.useState(false);
-  const [isCvPreviewOpen, setIsCvPreviewOpen] = React.useState(false);
 
   // React Hook Form
   const form = useForm<BaseApplicantFormValues>({
@@ -432,42 +430,6 @@ export function ApplicantRegistrationForm({
     },
   });
 
-  // 3. GENERATE CV MUTATION
-  const generateCvMutation = useMutation({
-    mutationFn: async () => {
-      if (!draftApplicantId) throw new Error("No applicant ID available.");
-      const formData = getValues();
-      if (formData && Object.keys(formData).length > 0) {
-        await updateApplicantV2(draftApplicantId, formData);
-      }
-      return await generateCvV2(draftApplicantId);
-    },
-    onSuccess: async (data) => {
-      const fileUrl = data.cv_file_url || (data as any)?.message?.file_url;
-      if (fileUrl) {
-        setGeneratedCvUrl(fileUrl);
-        setIsCvPreviewOpen(true);
-      }
-      await queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      await queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
-      try {
-        if (draftApplicantId) {
-          const refreshed = await getApplicantV2(draftApplicantId);
-          if (refreshed?.status || refreshed?.applicant_state) {
-            setApplicantState(refreshed.status || refreshed.applicant_state || "CV Generated");
-          }
-        }
-      } catch {}
-      toast.success(data.message || "CV PDF generated successfully!");
-    },
-    onError: (error: unknown) => {
-      const err = error as Error;
-      toast.error("CV Generation Failed", {
-        description: err.message,
-      });
-    },
-  });
-
   const handleRegisterClick = async () => {
     clearErrors();
     const formData = getValues();
@@ -674,72 +636,6 @@ export function ApplicantRegistrationForm({
           <Step4CocMedical form={form} />
         </section>
 
-        {/* Section 5: CV & Document Actions (When ID exists or registered) */}
-        {draftApplicantId && (
-          <section id="section-cv" className="scroll-mt-20 space-y-4">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-                5
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Official CV & Bilateral Documents
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  Compile and generate standardized bilingual CV for international recruitment partner discovery.
-                </p>
-              </div>
-            </div>
-
-            <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-5 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-sm text-slate-900 dark:text-white">
-                    <FileCheck2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-                    Bilingual International Recruitment CV
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Compiled directly by the backend engine with photo, passport details, skill ratings, and medical clearance.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    onClick={() => generateCvMutation.mutate()}
-                    disabled={generateCvMutation.isPending}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
-                  >
-                    {generateCvMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        Generating CV...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        Generate Official CV
-                      </>
-                    )}
-                  </Button>
-
-                  {generatedCvUrl && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsCvPreviewOpen(true)}
-                      className="text-xs font-semibold text-slate-700 dark:text-zinc-300"
-                    >
-                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                      Preview PDF
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          </section>
-        )}
-
         {/* Sticky Bottom Action Toolbar */}
         <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-xl backdrop-blur-md">
           <div className="flex items-center gap-3">
@@ -885,62 +781,6 @@ export function ApplicantRegistrationForm({
               ) : (
                 "Confirm & Register"
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Official Backend Generated CV Preview Modal */}
-      <Dialog open={isCvPreviewOpen} onOpenChange={setIsCvPreviewOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] flex flex-col p-6">
-          <DialogHeader className="pb-2 border-b border-slate-100 dark:border-[#202026]">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
-                  <FileCheck2 className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-                  Official Backend Generated Candidate CV
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-0.5">
-                  Official bilateral recruitment CV compiled and formatted by the backend processing engine.
-                </DialogDescription>
-              </div>
-              {generatedCvUrl && (
-                <a
-                  href={generatedCvUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-800 text-white text-xs font-semibold hover:bg-emerald-900 transition"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Download PDF
-                </a>
-              )}
-            </div>
-          </DialogHeader>
-
-          <div className="flex-1 min-h-[60vh] py-4">
-            {generatedCvUrl ? (
-              <iframe
-                src={generatedCvUrl}
-                className="w-full h-full min-h-[60vh] rounded-lg border border-slate-200 dark:border-[#202026]"
-                title="Candidate CV Preview"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-slate-400 text-xs">
-                No CV file URL available.
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="pt-2 border-t border-slate-100 dark:border-[#202026]">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsCvPreviewOpen(false)}
-              className="text-xs"
-            >
-              Close
             </Button>
           </DialogFooter>
         </DialogContent>

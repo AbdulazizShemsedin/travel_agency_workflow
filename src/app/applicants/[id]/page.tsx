@@ -445,63 +445,19 @@ export default function ApplicantDetailPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                {isSaudiApplicant ? (
-                  isMusanedReady ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                      Stage: Registered (Musaned Verified — Ready for CV Generation)
-                    </>
-                  ) : (
-                    <>
-                      <Building2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-                      Stage: Registered (Prerequisite: Musaned Pre-Registration Required)
-                    </>
-                  )
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                    Stage: Registered (Ready for CV Generation — {applicant.destination_country || "Kuwait"})
-                  </>
-                )}
+                <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                Stage: Registered (Ready for CV Generation)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                {isSaudiApplicant
-                  ? isMusanedReady
-                    ? `Musaned Reference: ${applicant.musaned_reference_no || "Verified"}. Requirements met to generate the bilateral recruitment CV.`
-                    : "All Stage 2 KYC is complete. Domestic worker pre-registration on Musaned must be confirmed before bilateral CV generation."
-                  : `All Stage 2 KYC and Medical requirements are verified for ${applicant.destination_country || "Kuwait"}. Generate the recruitment CV.`}
+                All Stage 2 KYC and Medical requirements are verified for {applicant.destination_country || "the corridor"}. Generate the recruitment CV.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {isSaudiApplicant && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsMusanedModalOpen(true)}
-                  className={`text-xs ${
-                    !isMusanedReady
-                      ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-300 font-semibold"
-                      : "border-slate-300 dark:border-[#26262d]"
-                  }`}
-                >
-                  <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                  {isMusanedReady ? "View / Edit Musaned" : "Confirm Musaned Registration"}
-                </Button>
-              )}
-
               <Button
                 onClick={() => generateCvMutation.mutate()}
-                disabled={generateCvMutation.isPending || (isSaudiApplicant && !isMusanedReady)}
-                className={`${
-                  isSaudiApplicant && !isMusanedReady
-                    ? "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
-                    : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
-                } text-xs font-semibold`}
-                title={
-                  isSaudiApplicant && !isMusanedReady
-                    ? "Musaned registration required for Saudi corridor"
-                    : "Generate bilateral recruitment CV"
-                }
+                disabled={generateCvMutation.isPending}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+                title="Generate bilateral recruitment CV"
               >
                 {generateCvMutation.isPending ? (
                   <>

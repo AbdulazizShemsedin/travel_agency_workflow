@@ -29,7 +29,7 @@ import {
 } from "@/types/applicant";
 import { ProcessingData } from "@/types/processing";
 import { BaseApplicantFormValues } from "@/lib/validations/applicant.schema";
-import { listApplicantsV2, listPlacementsV2, listUnresolvedComplaintsV2, listMyClearanceStepsV2 } from "./v2";
+import { listApplicantsV2, listPlacementsV2, listUnresolvedComplaintsV2, listMyClearanceStepsV2, generateCvV2 } from "./v2";
 
 export interface ApiError {
   message: string;
@@ -473,104 +473,14 @@ export async function registerApplicant(
 export async function generateCV(
   applicantName: string
 ): Promise<CVGenerationResponse> {
-  let originalCountry = "";
-  // Pre-sync passport scan, profile photo, and full body photo to Applicant & CV Record
-  try {
-    const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);
-    if (appRes.ok) {
-      const appJson = await appRes.json();
-      const appData = appJson.data;
-      originalCountry = appData?.destination_country || "";
-      const passportScanUrl = appData?.passport_scan || appData?.passport_copy || appData?.passport_image;
-      const photoPassportUrl = appData?.photo_passport || appData?.profile_photo_url;
-      const fullBodyUrl = appData?.photo_full_body;
-
-      // Update Applicant if fields need normalization
-      if (passportScanUrl && (!appData.passport_scan || !appData.passport_copy)) {
-        await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            passport_scan: passportScanUrl,
-            passport_copy: passportScanUrl,
-            passport_image: passportScanUrl,
-          }),
-        });
-      }
-
-      // Update CV Record if present
-      const cvRes = await fetch(
-        `/api/resource/CV%20Record?filters=[["applicant","=","${encodeURIComponent(applicantName)}"]]&fields=["name"]&limit_page_length=1`
-      );
-      if (cvRes.ok) {
-        const cvData = await cvRes.json();
-        if (cvData.data && cvData.data.length > 0) {
-          const cvName = cvData.data[0].name;
-          await fetch(`/api/resource/CV%20Record/${encodeURIComponent(cvName)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              passport_scan: passportScanUrl,
-              photo_passport: photoPassportUrl,
-              photo_full_body: fullBodyUrl,
-            }),
-          });
-        }
-      }
-    }
-  } catch (e) {
-    console.warn("CV pre-generation sync warning:", e);
-  }
-
-  // Handle Saudi Arabia Musaned platform verification pre-step
-  if (originalCountry === "Saudi Arabia") {
-    try {
-      await fetch(
-        "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicant: applicantName,
-            musaned_status: "Verified",
-            musaned_reference_no: `MUS-${Date.now().toString().slice(-6)}`,
-          }),
-        }
-      );
-      // Temporarily switch destination country to allow the backend PDF generator to run
-      await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destination_country: "Kuwait" }),
-      });
-    } catch (e) {
-      console.warn("Musaned pre-generation step warning:", e);
-    }
-  }
-
-  let res = await fetch(
-    "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.generate_cv",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ applicant_name: applicantName }),
-    }
-  );
-
-  // Restore destination country if it was Saudi Arabia
-  if (originalCountry === "Saudi Arabia") {
-    try {
-      await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ destination_country: "Saudi Arabia" }),
-      });
-    } catch (e) {
-      console.warn("Failed to restore destination country after CV generation:", e);
-    }
-  }
-
-  return handleApiResponse<CVGenerationResponse>(res);
+  const result = await generateCvV2(applicantName);
+  return {
+    message: {
+      cv_record: result.cv_file_url || `/applicants/${encodeURIComponent(applicantName)}/cv`,
+      file_url: result.cv_file_url || `/applicants/${encodeURIComponent(applicantName)}/cv`,
+      message: result.message || "CV generated successfully",
+    },
+  };
 }
 
 // Get CV Record directly: GET /api/resource/CV Record

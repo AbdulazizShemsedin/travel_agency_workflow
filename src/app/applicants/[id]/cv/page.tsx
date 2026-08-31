@@ -135,31 +135,13 @@ export default function CandidateCvPreviewPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isSaudiApplicant && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsMusanedModalOpen(true)}
-              className="text-xs border-slate-300 dark:border-[#26262d]"
-            >
-              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-              {isMusanedReady || isPostCvStage ? "View / Edit Musaned" : "Confirm Musaned Registration"}
-            </Button>
-          )}
-
           <Button
             variant="outline"
             size="sm"
             onClick={() => refreshCvMutation.mutate()}
-            disabled={refreshCvMutation.isPending || (isSaudiApplicant && !isMusanedReady)}
-            className={`text-xs border-slate-300 dark:border-[#26262d] ${
-              isSaudiApplicant && !isMusanedReady ? "opacity-50 cursor-not-allowed" : ""
-            }`}
-            title={
-              isSaudiApplicant && !isMusanedReady
-                ? "Musaned registration required before generating CV"
-                : "Compile / Refresh CV"
-            }
+            disabled={refreshCvMutation.isPending}
+            className="text-xs border-slate-300 dark:border-[#26262d]"
+            title="Compile / Refresh CV"
           >
             <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshCvMutation.isPending ? "animate-spin" : ""}`} />
             {refreshCvMutation.isPending ? "Generating CV..." : hasCvPdf ? "Regenerate CV PDF" : "Generate CV PDF"}
@@ -180,51 +162,6 @@ export default function CandidateCvPreviewPage() {
           )}
         </div>
       </div>
-
-      {/* Musaned Verified Confirmation Banner */}
-      {isSaudiApplicant && (isPostCvStage || hasCvPdf) && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-800/60 p-3.5 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
-            <div>
-              <strong className="text-emerald-950 dark:text-emerald-100">Musaned Verified Before CV Generation</strong>
-              <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
-                Prerequisite fulfilled{applicant.musaned_reference_no ? ` (Ref: ${applicant.musaned_reference_no})` : ""}. Candidate is published and eligible for overseas Agent Portal discovery.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setIsMusanedModalOpen(true)}
-            className="text-xs border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-950"
-          >
-            <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> View Musaned Record
-          </Button>
-        </div>
-      )}
-
-      {/* Musaned Prerequisite Notice (Only when NOT yet verified and NO CV) */}
-      {isSaudiApplicant && !isMusanedReady && !isPostCvStage && !hasCvPdf && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-start gap-2.5">
-            <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-amber-950 dark:text-amber-100">Musaned Pre-Registration Required</strong>
-              <p className="mt-0.5 text-[11px] text-amber-800 dark:text-amber-300">
-                To generate the standardized bilateral recruitment CV, the domestic worker must first be registered on Musaned.
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            onClick={() => setIsMusanedModalOpen(true)}
-            className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shrink-0"
-          >
-            <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Confirm Musaned Registration
-          </Button>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* EMBEDDED OFFICIAL PDF VIEWER FRAME OR EMPTY STATE                         */}

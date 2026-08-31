@@ -8,6 +8,7 @@
  */
 
 import { requestV2 } from "./client";
+import { isDemoMode } from "@/lib/config/env";
 
 export interface V2PushSubscriptionStatus {
   subscribed: boolean;
@@ -19,6 +20,10 @@ export interface V2PushSubscriptionStatus {
  * Checks whether the current user has an active Push Subscription.
  */
 export async function getPushSubscriptionStatusV2(): Promise<V2PushSubscriptionStatus> {
+  if (isDemoMode()) {
+    return { subscribed: true, endpoint: "https://demo.push.service/mock-sub" };
+  }
+
   const result = await requestV2<V2PushSubscriptionStatus | { subscribed?: boolean }>(
     "/api/method/agency_tracking.notification_api.get_push_subscription_status",
     { method: "POST" }
@@ -38,6 +43,10 @@ export async function subscribeToPushV2(
   p256dh: string,
   auth: string
 ): Promise<{ status?: string; message?: string }> {
+  if (isDemoMode()) {
+    return { status: "Success", message: "Push subscription activated" };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.notification_api.subscribe_to_push",
     {
@@ -57,6 +66,10 @@ export async function subscribeToPushV2(
 export async function triggerWakalaReminderV2(
   clearanceStepName: string
 ): Promise<{ status?: string; message?: string }> {
+  if (isDemoMode()) {
+    return { status: "Success", message: `Wakala reminder sent for step ${clearanceStepName}` };
+  }
+
   return requestV2(
     "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
     {

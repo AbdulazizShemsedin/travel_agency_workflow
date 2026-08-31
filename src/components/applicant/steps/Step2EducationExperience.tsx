@@ -616,22 +616,7 @@ export function Step2EducationExperience({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                Place of Birth <span className="text-rose-500">*</span>
-              </Label>
-              <Input
-                id="place_of_birth"
-                placeholder="e.g., Oromia, Amhara"
-                {...register("place_of_birth")}
-                className={errors.place_of_birth ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
-              />
-              {errors.place_of_birth && (
-                <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_birth.message}</p>
-              )}
-            </div>
-
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="leaving_town" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                 Leaving Town <span className="text-slate-400 font-normal">(Optional)</span>

@@ -178,7 +178,7 @@ export function Step5Review({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {cvUrl ? (
+              {cvUrl && (
                 <a
                   href={cvUrl}
                   target="_blank"
@@ -189,18 +189,6 @@ export function Step5Review({
                   View Generated CV
                   <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
                 </a>
-              ) : (
-                onGenerateCV && (
-                  <Button
-                    type="button"
-                    onClick={onGenerateCV}
-                    disabled={isGeneratingCV}
-                    className="bg-emerald-800 hover:bg-emerald-900 text-white"
-                  >
-                    <FileText className="mr-2 h-4 w-4" />
-                    {isGeneratingCV ? "Generating..." : "Generate CV PDF"}
-                  </Button>
-                )
               )}
             </div>
           </div>
