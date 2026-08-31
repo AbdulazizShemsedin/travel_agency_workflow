@@ -178,16 +178,43 @@ export function CandidateDetailModal({
               <Briefcase className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
               Prior Overseas Work Experience
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">Country of Experience: </span>
-                <strong className="text-slate-900 dark:text-white">{candidate.experience_country || "First Time Applicant"}</strong>
-              </div>
-              <div>
-                <span className="text-slate-500 dark:text-zinc-400">Duration: </span>
-                <strong className="text-slate-900 dark:text-white">{candidate.experience_period || "None"}</strong>
-              </div>
-            </div>
+            {(() => {
+              const rawPeriod = candidate.experience_period?.trim();
+              const rawCountry = candidate.experience_country?.trim();
+              const hasPeriod = Boolean(
+                rawPeriod &&
+                rawPeriod !== "None" &&
+                rawPeriod !== "0" &&
+                rawPeriod.toLowerCase() !== "first time" &&
+                rawPeriod.toLowerCase() !== "first time applicant"
+              );
+              const hasCountry = Boolean(
+                rawCountry &&
+                rawCountry.toLowerCase() !== "first time" &&
+                rawCountry.toLowerCase() !== "first time applicant" &&
+                rawCountry.toLowerCase() !== "none"
+              );
+              const isExperienced = hasPeriod || hasCountry;
+              const countryDisplay = isExperienced
+                ? (hasCountry ? rawCountry : "Overseas")
+                : "None / First Time Applicant";
+              const durationDisplay = isExperienced
+                ? (hasPeriod ? rawPeriod : "Experienced")
+                : "None";
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                  <div>
+                    <span className="text-slate-500 dark:text-zinc-400">Country of Experience: </span>
+                    <strong className="text-slate-900 dark:text-white">{countryDisplay}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 dark:text-zinc-400">Duration: </span>
+                    <strong className="text-slate-900 dark:text-white">{durationDisplay}</strong>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Verified Skills Matrix */}

@@ -41,6 +41,8 @@ export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 
 export const LANGUAGE_LEVEL_OPTIONS = ["None", "Basic", "Good", "Fluent"] as const;
 
+export const COMPLEXION_OPTIONS = ["FAIR", "MEDIUM", "DARK"] as const;
+
 export const JOB_APPLIED_OPTIONS = [
   "House worker",
   "Housemaid",
@@ -155,7 +157,7 @@ export const baseApplicantSchema = z.object({
   monthly_salary: z.string().trim().default("1000"),
   height: z.string().trim().optional().or(z.literal("")),
   weight: z.string().trim().optional().or(z.literal("")),
-  complexion: z.string().trim().default("Fair"),
+  complexion: z.string().trim().default("FAIR"),
   place_of_birth: z.string().trim().optional().or(z.literal("")),
   leaving_town: z.string().trim().optional().or(z.literal("")),
 

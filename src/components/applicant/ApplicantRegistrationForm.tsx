@@ -119,7 +119,7 @@ export function ApplicantRegistrationForm({
       experience_country: initialData?.experience_country || "",
       experience_period: initialData?.experience_period || "",
       monthly_salary: initialData?.monthly_salary || "1000",
-      complexion: initialData?.complexion || "Fair",
+      complexion: initialData?.complexion || "FAIR",
       skill_cleaning:
         initialData?.skill_cleaning !== undefined
           ? initialData.skill_cleaning === 1 ||

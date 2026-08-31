@@ -29,6 +29,7 @@ import { WorkspaceApplicantRow } from "@/types/workspace";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -392,27 +393,35 @@ export function EmbassyReportView() {
                 />
               </div>
 
-              <select
-                value={wakalaFilter}
-                onChange={(e) => setWakalaFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Wakala</option>
-                <option value="Authorized">Authorized</option>
-                <option value="Pending">Pending</option>
-              </select>
+              <div className="w-36">
+                <SimpleSelect
+                  value={wakalaFilter}
+                  onValueChange={setWakalaFilter}
+                  options={[
+                    { value: "All", label: "All Wakala" },
+                    { value: "Authorized", label: "Authorized" },
+                    { value: "Pending", label: "Pending" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Wakala"
+                />
+              </div>
 
-              <select
-                value={embassyStatusFilter}
-                onChange={(e) => setEmbassyStatusFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Embassy Status</option>
-                <option value="Approved">Approved / Stamped</option>
-                <option value="Submitted">Submitted</option>
-                <option value="Pending">Pending</option>
-                <option value="Rejected">Rejected</option>
-              </select>
+              <div className="w-44">
+                <SimpleSelect
+                  value={embassyStatusFilter}
+                  onValueChange={setEmbassyStatusFilter}
+                  options={[
+                    { value: "All", label: "All Embassy Status" },
+                    { value: "Approved", label: "Approved / Stamped" },
+                    { value: "Submitted", label: "Submitted" },
+                    { value: "Pending", label: "Pending" },
+                    { value: "Rejected", label: "Rejected" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Embassy Status"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>

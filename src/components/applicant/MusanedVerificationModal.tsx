@@ -233,7 +233,7 @@ export function MusanedVerificationModal({
               <Select
                 id="musaned_status"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as MusanedStatusType)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value as MusanedStatusType)}
               >
                 <option value="Registered">
                   Completed / Registered (Verified on Musaned — Ready for CV)

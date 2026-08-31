@@ -193,7 +193,7 @@ export function ContractRequestModal({
             </Label>
             <Select
               value={selectedContractor || activeContractor?.name || ""}
-              onChange={(e) => setSelectedContractor(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedContractor(e.target.value)}
               disabled={sendMutation.isPending || !!sentWhatsappUrl}
               className="w-full text-xs font-medium"
             >

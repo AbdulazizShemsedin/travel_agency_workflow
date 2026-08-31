@@ -231,18 +231,26 @@ export function DrawerField({
 }: DrawerFieldProps) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400 uppercase tracking-wide">
-        {label}
-      </label>
+      <div className="flex items-center justify-between gap-1.5">
+        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400 uppercase tracking-wide truncate">
+          {label}
+        </label>
+        {isReadOnly && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-500 dark:text-zinc-400 bg-slate-200/80 dark:bg-[#202028] border border-slate-300/50 dark:border-[#2a2a35] shrink-0">
+            <Lock className="h-2.5 w-2.5 text-slate-400" />
+            Uneditable
+          </span>
+        )}
+      </div>
 
       {children ? (
         children
       ) : isReadOnly ? (
-        <div className="h-9 px-3 py-2 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-slate-100 dark:bg-[#1a1a20] text-xs font-medium text-slate-700 dark:text-zinc-300 select-all truncate">
+        <div className="h-9 px-3 py-2 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-slate-100 dark:bg-[#1a1a20] text-xs font-medium text-slate-700 dark:text-zinc-300 select-all truncate flex items-center">
           {value !== undefined && value !== null && String(value).trim() !== "" ? String(value) : "—"}
         </div>
       ) : (
-        <div className="h-9 px-3 py-2 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#121216] text-xs font-medium text-slate-800 dark:text-zinc-200 truncate">
+        <div className="h-9 px-3 py-2 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#121216] text-xs font-medium text-slate-800 dark:text-zinc-200 truncate flex items-center">
           {value !== undefined && value !== null && String(value).trim() !== "" ? String(value) : "—"}
         </div>
       )}

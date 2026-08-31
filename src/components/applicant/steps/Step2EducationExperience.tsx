@@ -23,7 +23,7 @@ interface Step2EducationExperienceProps {
 }
 
 const LANGUAGE_OPTIONS = ["None", "Basic", "Fair", "Good", "Fluent"];
-const COMPLEXION_OPTIONS = ["Fair", "Medium", "Dark", "Other"];
+const COMPLEXION_OPTIONS = ["", "FAIR", "MEDIUM", "DARK"];
 
 export function Step2EducationExperience({
   form,
@@ -606,7 +606,7 @@ export function Step2EducationExperience({
               <Select id="complexion" {...register("complexion")} error={!!errors.complexion}>
                 {COMPLEXION_OPTIONS.map((c) => (
                   <option key={c} value={c}>
-                    {c} {c === "Fair" ? "(Default)" : ""}
+                    {c === "" ? "Select Complexion" : c}
                   </option>
                 ))}
               </Select>

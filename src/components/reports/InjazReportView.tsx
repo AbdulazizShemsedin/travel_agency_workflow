@@ -30,6 +30,7 @@ import { WorkspaceApplicantRow } from "@/types/workspace";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -376,25 +377,33 @@ export function InjazReportView() {
                 />
               </div>
 
-              <select
-                value={paymentFilter}
-                onChange={(e) => setPaymentFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Injaz Payments</option>
-                <option value="PAID">PAID</option>
-                <option value="UNPAID">UNPAID</option>
-              </select>
+              <div className="w-40">
+                <SimpleSelect
+                  value={paymentFilter}
+                  onValueChange={setPaymentFilter}
+                  options={[
+                    { value: "All", label: "All Injaz Payments" },
+                    { value: "PAID", label: "PAID" },
+                    { value: "UNPAID", label: "UNPAID" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Payment"
+                />
+              </div>
 
-              <select
-                value={medicalFilter}
-                onChange={(e) => setMedicalFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Medical</option>
-                <option value="FIT">FIT</option>
-                <option value="UNFIT">UNFIT</option>
-              </select>
+              <div className="w-36">
+                <SimpleSelect
+                  value={medicalFilter}
+                  onValueChange={setMedicalFilter}
+                  options={[
+                    { value: "All", label: "All Medical" },
+                    { value: "FIT", label: "FIT" },
+                    { value: "UNFIT", label: "UNFIT" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Medical"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>

@@ -59,7 +59,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
           onToggleSidebar={toggleSidebar}
           onMobileMenuToggle={toggleMobileMenu}
         />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-in fade-in duration-150">
+        <main className="flex-1 w-full p-3 sm:p-5 lg:p-6 animate-in fade-in duration-150">
           {children}
         </main>
       </div>

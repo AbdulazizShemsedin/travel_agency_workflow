@@ -231,13 +231,14 @@ export function LMISWorkspace({
       align: "center",
       cell: (row) => {
         const text = row.medicalRemaining || "—";
-        const isNegative = text.includes("-");
+        const days = row.medicalRemainingDays ?? (typeof row.medicalRemaining === "string" ? parseInt(row.medicalRemaining, 10) : undefined);
+        const isUrgent = (days !== undefined && !isNaN(days) && days <= 15) || text.includes("-");
         return (
           <span
             className={cn(
-              "font-mono font-semibold text-xs",
-              isNegative
-                ? "text-rose-600 dark:text-rose-400"
+              "font-mono font-semibold text-xs px-2 py-0.5 rounded-md inline-block",
+              isUrgent
+                ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 border border-rose-200/80 dark:border-rose-800/80"
                 : "text-emerald-700 dark:text-emerald-400"
             )}
           >

@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://applicantprocessing-production-e2e7.up.railway.app";
+    "https://agencytracking-production.up.railway.app";
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -12,6 +12,12 @@ function getFrappeConfig(req: NextRequest) {
 
   const cookie = req.headers.get("cookie");
   const authHeader = req.headers.get("authorization");
+  const csrfToken = req.headers.get("x-frappe-csrf-token");
+
+  // Forward CSRF token for state-changing operations
+  if (csrfToken) {
+    headers["X-Frappe-CSRF-Token"] = csrfToken;
+  }
 
   // Forward user session credentials transparently
   if (cookie) {

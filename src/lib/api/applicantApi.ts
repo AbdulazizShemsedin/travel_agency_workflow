@@ -2483,11 +2483,8 @@ export async function getPortalAvailableCandidates(filters?: {
           skill_baby_sitting: a.skill_baby_sitting === "YES" || a.skill_baby_sitting === 1 ? 1 : 0,
           skill_washing: a.skill_washing === "YES" || a.skill_washing === 1 ? 1 : 0,
           skill_ironing: a.skill_ironing === "YES" || a.skill_ironing === 1 ? 1 : 0,
-          skill_elderly_care: a.skill_elderly_care === "YES" || a.skill_elderly_care === 1 ? 1 : 0,
-          skill_driving: a.skill_driving === "YES" || a.skill_driving === 1 ? 1 : 0,
-          experience_country: a.experience_country || "First Time",
-          experience_period: a.experience_period || "None",
-          religion: a.religion || "Muslim",
+          experience_country: a.experience_country || "",
+          experience_period: a.experience_period || "",
           place_of_birth: a.place_of_birth || a.leaving_town || "",
           leaving_town: a.leaving_town || "",
           marital_status: a.marital_status || "",
@@ -3404,16 +3401,19 @@ export async function fetchOperationalWorkspaceData(
       const medicalExpiryDate = applicant.medical_expiry_date || (medicalDate ? new Date(new Date(medicalDate).getTime() + 90 * 24 * 3600 * 1000).toISOString().split("T")[0] : undefined);
 
       let medicalRemaining = "—";
+      let medicalRemainingDays: number | undefined = undefined;
       if (medicalExpiryDate) {
         const exp = new Date(medicalExpiryDate);
         if (!isNaN(exp.getTime())) {
           const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-          medicalRemaining = `${diffDays}DAYS LEFT`;
+          medicalRemainingDays = diffDays;
+          medicalRemaining = `${diffDays} DAYS LEFT`;
         }
       } else if (medicalDate) {
         const exp = new Date(new Date(medicalDate).getTime() + 90 * 24 * 3600 * 1000);
         const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-        medicalRemaining = `${diffDays}DAYS LEFT`;
+        medicalRemainingDays = diffDays;
+        medicalRemaining = `${diffDays} DAYS LEFT`;
       }
 
       // Injaz payment & appointment date
@@ -3474,6 +3474,7 @@ export async function fetchOperationalWorkspaceData(
         contractDate,
         duration,
         medicalRemaining,
+        medicalRemainingDays,
         injazPayment,
         appointmentDate,
         contact,

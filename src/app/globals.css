@@ -52,6 +52,20 @@ input, select, textarea {
   color: inherit;
 }
 
+select {
+  cursor: pointer;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+select option, select optgroup {
+  background-color: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+}
+
 input::placeholder, textarea::placeholder {
   color: #94a3b8;
 }
@@ -60,6 +74,19 @@ input::placeholder, textarea::placeholder {
   background-color: #141418 !important;
   border-color: #27272f !important;
   color: #f4f4f5 !important;
+}
+
+.dark select option, .dark select optgroup {
+  background-color: #141418 !important;
+  color: #f4f4f5 !important;
+  padding: 8px 12px;
+}
+
+.dark select option:checked,
+.dark select option:hover,
+.dark select option:focus {
+  background-color: #064e3b !important;
+  color: #ffffff !important;
 }
 
 .dark input::placeholder, .dark textarea::placeholder {

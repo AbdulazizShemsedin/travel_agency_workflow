@@ -110,7 +110,7 @@ export default function CandidateCvPreviewPage() {
     Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+    <div className="w-full space-y-6 pb-20">
       {/* Top Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-[#222227] pb-4">
         <div>

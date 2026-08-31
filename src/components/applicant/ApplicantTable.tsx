@@ -25,11 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { SimpleSelect } from "@/components/ui/select";
 
 function getStageBadgeVariant(stage: ApplicantState): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
@@ -233,25 +229,29 @@ export function ApplicantTable() {
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Stage Filter */}
-          <select
-            value={selectedStage}
-            onChange={(e) => {
-              setSelectedStage(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="h-9.5 rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 text-xs text-slate-800 dark:text-zinc-200 shadow-xs focus:border-emerald-700 focus:outline-none cursor-pointer"
-          >
-            <option value="All">All Stages ({applicants.length})</option>
-            <option value="Draft">Draft</option>
-            <option value="Registered">Registered</option>
-            <option value="CV Generated">CV Generated</option>
-            <option value="Selected">Selected</option>
-            <option value="Processing">Processing</option>
-            <option value="Stamped">Stamped</option>
-            <option value="Ticketed">Ticketed</option>
-            <option value="Departed">Departed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
+          <div className="w-44 sm:w-52">
+            <SimpleSelect
+              value={selectedStage}
+              onValueChange={(val) => {
+                setSelectedStage(val);
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: "All", label: `All Stages (${applicants.length})` },
+                { value: "Draft", label: "Draft" },
+                { value: "Registered", label: "Registered" },
+                { value: "CV Generated", label: "CV Generated" },
+                { value: "Selected", label: "Selected" },
+                { value: "Processing", label: "Processing" },
+                { value: "Stamped", label: "Stamped" },
+                { value: "Ticketed", label: "Ticketed" },
+                { value: "Departed", label: "Departed" },
+                { value: "Cancelled", label: "Cancelled" },
+              ]}
+              triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
+              aria-label="Filter by Stage"
+            />
+          </div>
         </div>
       </div>
 
@@ -348,69 +348,60 @@ export function ApplicantTable() {
                         </Badge>
                       </td>
                       <td
-                        className="px-4 py-3 text-right"
+                        className="px-4 py-2.5 text-right"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {/* Three Vertical Dots Action Popover */}
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                        {/* Direct Inline Action Buttons */}
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          {/* 1. View Detail Action */}
+                          <Link
+                            href={`/applicants/${encodeURIComponent(applicant.name)}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-slate-200 dark:hover:bg-[#252530] border border-slate-200 dark:border-[#2a2a35] transition"
+                            title="View Candidate Dossier"
+                          >
+                            <Eye className="h-3 w-3 text-slate-500" />
+                            <span>View</span>
+                          </Link>
+
+                          {/* 2. Assign Processing Employee - SHOWN ONLY IF ON 'Selected' STAGE */}
+                          {isSelectedStage && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleSingleAssign(applicant, e)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              title="Assign Processing Staff"
                             >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-52 p-1.5 shadow-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-                            <div className="space-y-1 text-xs">
-                              {/* 1. Applicant Detail Option */}
-                              <Link
-                                href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                              >
-                                <Eye className="h-3.5 w-3.5 text-slate-500" />
-                                Applicant Detail
-                              </Link>
+                              <UserCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <span>Assign</span>
+                            </button>
+                          )}
 
-                              {/* 2. Assign Processing Employee Option - SHOWN ONLY IF ON 'Selected' STAGE */}
-                              {isSelectedStage && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleSingleAssign(applicant, e)}
-                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-medium text-emerald-900 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition text-left cursor-pointer"
-                                >
-                                  <UserCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-                                  Assign Processing Employee
-                                </button>
-                              )}
+                          {/* 3. Preview CV Action */}
+                          {applicant.applicant_state !== "Draft" && (
+                            <Link
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"
+                              title="Standardized PDF CV"
+                            >
+                              <FileText className="h-3 w-3 text-purple-600" />
+                              <span>CV</span>
+                            </Link>
+                          )}
 
-                              {/* 3. Preview CV Option */}
-                              {applicant.applicant_state !== "Draft" && (
-                                <Link
-                                  href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
-                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                >
-                                  <FileText className="h-3.5 w-3.5 text-purple-600" />
-                                  Preview CV
-                                </Link>
-                              )}
-
-                              {/* 4. Contractor Doc Option */}
-                              {(applicant.applicant_state === "CV Generated" ||
-                                applicant.applicant_state === "Selected" ||
-                                applicant.applicant_state === "Processing") && (
-                                <Link
-                                  href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                >
-                                  <Building2 className="h-3.5 w-3.5 text-amber-600" />
-                                  Contractor Document
-                                </Link>
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                          {/* 4. Contractor Document Action */}
+                          {(applicant.applicant_state === "CV Generated" ||
+                            applicant.applicant_state === "Selected" ||
+                            applicant.applicant_state === "Processing") && (
+                            <Link
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
+                              title="Contractor Deployment Document"
+                            >
+                              <Building2 className="h-3 w-3 text-amber-600" />
+                              <span>Doc</span>
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

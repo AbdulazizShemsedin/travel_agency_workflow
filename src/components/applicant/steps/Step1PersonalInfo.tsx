@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle } from "lucide-react";
-import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS } from "@/lib/validations/applicant.schema";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2 } from "lucide-react";
+import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileApi, scanPassportMRZApi } from "@/lib/api/applicantApi";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -729,53 +729,102 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
           </CardHeader>
 
           <CardContent className="space-y-5">
-            {/* Applicant Type Selection (Standard vs Muayena) */}
-            <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#16161b] p-3.5 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <Label className="text-xs font-bold text-slate-900 dark:text-white">
-                    Applicant Deployment Type <span className="text-rose-500">*</span>
-                  </Label>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Select Standard agency recruitment or Muayena (direct candidate allocation).
+            {/* Corridor & Deployment Type Configuration Card */}
+            <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#16161b] p-4 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* 1. Target Destination Country */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="destination_country" className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Globe2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Target Destination Country <span className="text-rose-500">*</span>
+                    </Label>
+                    <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      Corridor Workflow
+                    </span>
+                  </div>
+                  <Select
+                    id="destination_country"
+                    {...register("destination_country")}
+                    error={!!errors.destination_country}
+                    className="font-medium"
+                  >
+                    {DESTINATION_COUNTRY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c === "Saudi Arabia"
+                          ? "🇸🇦 Saudi Arabia (Musaned / Injaz)"
+                          : c === "Kuwait"
+                          ? "🇰🇼 Kuwait (Direct LMIS Permit & Visa)"
+                          : c === "United Arab Emirates"
+                          ? "🇦🇪 United Arab Emirates (UAE)"
+                          : c === "Qatar"
+                          ? "🇶🇦 Qatar"
+                          : c === "Oman"
+                          ? "🇴🇲 Oman"
+                          : c === "Jordan"
+                          ? "🇯🇴 Jordan"
+                          : `🌐 ${c}`}
+                      </option>
+                    ))}
+                  </Select>
+                  {errors.destination_country && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.destination_country.message}</p>
+                  )}
+                  {/* Informational Corridor Tag */}
+                  <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-0.5">
+                    {watch("destination_country")?.toLowerCase() === "kuwait"
+                      ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
+                      : "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."}
                   </p>
                 </div>
-                <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-white dark:bg-[#121215]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
-                      if (watch("contact_person_name") === "Muayena") {
-                        setValue("contact_person_name", "", { shouldDirty: true });
-                        setValue("emergency_relationship", "", { shouldDirty: true });
-                      }
-                    }}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                      watch("applicant_type") === "Standard" || !watch("applicant_type")
-                        ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
-                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
-                    }`}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
-                      const currentContact = watch("contact_person_name");
-                      if (!currentContact || currentContact === "") {
-                        setValue("contact_person_name", "Muayena", { shouldDirty: true });
-                        setValue("emergency_relationship", "Muayena / Sponsor", { shouldDirty: true });
-                      }
-                    }}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition ${
-                      watch("applicant_type") === "Muayena"
-                        ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
-                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
-                    }`}
-                  >
-                    Muayena
-                  </button>
+
+                {/* 2. Applicant Deployment Type (Standard vs Muayena) */}
+                <div className="space-y-1.5 flex flex-col justify-between">
+                  <div>
+                    <Label className="text-xs font-bold text-slate-900 dark:text-white">
+                      Applicant Deployment Type <span className="text-rose-500">*</span>
+                    </Label>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Standard agency pool or Muayena (direct client allocation).
+                    </p>
+                  </div>
+                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-white dark:bg-[#121215] w-full">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
+                        if (watch("contact_person_name") === "Muayena") {
+                          setValue("contact_person_name", "", { shouldDirty: true });
+                          setValue("emergency_relationship", "", { shouldDirty: true });
+                        }
+                      }}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${
+                        watch("applicant_type") === "Standard" || !watch("applicant_type")
+                          ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
+                          : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
+                      }`}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
+                        const currentContact = watch("contact_person_name");
+                        if (!currentContact || currentContact === "") {
+                          setValue("contact_person_name", "Muayena", { shouldDirty: true });
+                          setValue("emergency_relationship", "Muayena / Sponsor", { shouldDirty: true });
+                        }
+                      }}
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${
+                        watch("applicant_type") === "Muayena"
+                          ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
+                          : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
+                      }`}
+                    >
+                      Muayena
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

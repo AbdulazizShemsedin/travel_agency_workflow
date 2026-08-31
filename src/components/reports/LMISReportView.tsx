@@ -28,6 +28,7 @@ import { WorkspaceApplicantRow } from "@/types/workspace";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -397,26 +398,34 @@ export function LMISReportView() {
                 />
               </div>
 
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Statuses</option>
-                <option value="Issued">Issued</option>
-                <option value="Pending">Pending</option>
-                <option value="Rejected">Rejected</option>
-              </select>
+              <div className="w-36">
+                <SimpleSelect
+                  value={statusFilter}
+                  onValueChange={setStatusFilter}
+                  options={[
+                    { value: "All", label: "All Statuses" },
+                    { value: "Issued", label: "Issued" },
+                    { value: "Pending", label: "Pending" },
+                    { value: "Rejected", label: "Rejected" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Status"
+                />
+              </div>
 
-              <select
-                value={medicalFilter}
-                onChange={(e) => setMedicalFilter(e.target.value)}
-                className="h-8 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-700 dark:text-zinc-300"
-              >
-                <option value="All">All Medical</option>
-                <option value="FIT">FIT</option>
-                <option value="UNFIT">UNFIT</option>
-              </select>
+              <div className="w-36">
+                <SimpleSelect
+                  value={medicalFilter}
+                  onValueChange={setMedicalFilter}
+                  options={[
+                    { value: "All", label: "All Medical" },
+                    { value: "FIT", label: "FIT" },
+                    { value: "UNFIT", label: "UNFIT" },
+                  ]}
+                  triggerClassName="h-8 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  aria-label="Filter by Medical"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>

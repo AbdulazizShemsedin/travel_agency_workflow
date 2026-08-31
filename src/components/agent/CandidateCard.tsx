@@ -105,37 +105,66 @@ export function CandidateCard({
         </div>
 
         {/* Key Facts Grid */}
-        <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span>Age: <strong className="text-slate-900 dark:text-white">{candidate.age} yrs</strong></span>
-          </div>
+        {(() => {
+          const rawPeriod = candidate.experience_period?.trim();
+          const rawCountry = candidate.experience_country?.trim();
+          const hasPeriod = Boolean(
+            rawPeriod &&
+            rawPeriod !== "None" &&
+            rawPeriod !== "0" &&
+            rawPeriod.toLowerCase() !== "first time" &&
+            rawPeriod.toLowerCase() !== "first time applicant"
+          );
+          const hasCountry = Boolean(
+            rawCountry &&
+            rawCountry.toLowerCase() !== "first time" &&
+            rawCountry.toLowerCase() !== "first time applicant" &&
+            rawCountry.toLowerCase() !== "none"
+          );
+          const isExperienced = hasPeriod || hasCountry;
+          const expDisplay = isExperienced
+            ? (hasCountry && hasPeriod ? `${rawCountry} (${rawPeriod})` : hasPeriod ? rawPeriod : `${rawCountry} Exp`)
+            : "First Time";
+          const priorWorkDisplay = isExperienced
+            ? (hasCountry ? rawCountry : `Experienced (${rawPeriod})`)
+            : "First Time Applicant";
 
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Muslim"}</strong></span>
-          </div>
+          return (
+            <>
+              <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span>Age: <strong className="text-slate-900 dark:text-white">{candidate.age} yrs</strong></span>
+                </div>
 
-          <div className="flex items-center gap-1.5">
-            <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">Birthplace: <strong className="text-slate-900 dark:text-white">{candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}</strong></span>
-          </div>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Muslim"}</strong></span>
+                </div>
 
-          <div className="flex items-center gap-1.5">
-            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{candidate.experience_period || candidate.experience_country || "First Time"}</strong></span>
-          </div>
-        </div>
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">Birthplace: <strong className="text-slate-900 dark:text-white">{candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}</strong></span>
+                </div>
 
-        {/* Prior Work & Salary Row */}
-        <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
-          <span>Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{candidate.experience_country || "First Time"}</strong></span>
-          {candidate.monthly_salary ? (
-            <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono">
-              {candidate.monthly_salary} SAR/mo
-            </span>
-          ) : null}
-        </div>
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{expDisplay}</strong></span>
+                </div>
+              </div>
+
+              {/* Prior Work & Salary Row */}
+              <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
+                <span className="truncate max-w-[65%]">Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{priorWorkDisplay}</strong></span>
+                {candidate.monthly_salary ? (
+                  <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono shrink-0">
+                    {candidate.monthly_salary} SAR/mo
+                  </span>
+                ) : null}
+              </div>
+            </>
+          );
+        })()}
 
         {/* 3. Action Buttons */}
         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-[#202026] flex items-center gap-2">

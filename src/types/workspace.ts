@@ -39,6 +39,8 @@ export interface WorkspaceApplicantRow {
   contractDate?: string;
   duration?: number;
   medicalRemaining?: string;
+  medicalRemainingDays?: number;
+  examRemainingDays?: number;
   injazPayment?: string;
   appointmentDate?: string;
   contact?: string;

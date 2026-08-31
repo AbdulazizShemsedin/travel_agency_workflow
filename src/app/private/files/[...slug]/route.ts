@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://applicantprocessing-production-e2e7.up.railway.app";
+    "https://agencytracking-production.up.railway.app";
 
   const headers: Record<string, string> = {
     Accept: "*/*",

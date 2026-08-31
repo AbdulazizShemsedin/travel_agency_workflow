@@ -243,13 +243,13 @@ export function AgentLayout({
       </header>
 
       {/* Main Page Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
+      <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
         {children}
       </main>
 
       {/* Agency Footer */}
-      <footer className="border-t border-slate-200/80 dark:border-[#202026] bg-white dark:bg-[#0c0c0f] py-6 px-4 text-center text-xs text-slate-500 dark:text-zinc-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+      <footer className="border-t border-slate-200/80 dark:border-[#202026] bg-white dark:bg-[#0c0c0f] py-6 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 dark:text-zinc-500">
+        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© 2026 Applicant Processing System • Foreign Partner Portal</p>
           <div className="flex items-center gap-4 text-[11px]">
             <span>90-Day Bilateral Guarantee</span>
