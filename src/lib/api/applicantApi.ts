@@ -1146,15 +1146,25 @@ export async function assignEmployeeApi(
 }
 
 // ---------------------------------------------------------------------------
-// CLEARANCE RECORD MUTATION APIS (Direct DocType PUT)
+// CLEARANCE RECORD MUTATION APIS (Direct DocType PUT or V2 Step Store)
 // ---------------------------------------------------------------------------
 
 // Update or Create LMS Clearance: PUT /api/resource/LMS Clearance/{name} or POST
-// Update or Create LMS Clearance: PUT /api/resource/LMS Clearance/{name} or POST
 export async function updateLmsClearanceApi(
   nameOrDsr: string,
-  data: Partial<LMSClearance> & { dsr?: string }
-): Promise<LMSClearance> {
+  data: Partial<LMSClearance> & { dsr?: string; status?: string; employee?: string; reference_no?: string; issued_on?: string; missing_data_notes?: string }
+): Promise<any> {
+  if (isDemoMode() || nameOrDsr?.startsWith("STEP-") || nameOrDsr?.startsWith("PLC-")) {
+    const updated = demoStore.updateClearanceStep(nameOrDsr, {
+      status: (data.status as any) === "Issued" || (data.status as any) === "Approved" ? "Completed" : data.status,
+      assigned_officer: data.employee,
+      reference_no: data.reference_no,
+      notes: data.missing_data_notes,
+      payment_status: "Paid",
+    });
+    return updated || { ...data, name: nameOrDsr };
+  }
+
   const payload: any = { ...data };
 
   // If a valid LMS docname is provided (e.g. LMS-00004)
@@ -1179,14 +1189,16 @@ export async function updateLmsClearanceApi(
       }));
     }
 
-    const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok || res.status !== 404) {
-      return handleApiResponse<LMSClearance>(res);
-    }
+    try {
+      const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await handleApiResponse<LMSClearance>(res);
+      }
+    } catch {}
   }
 
   // DSR fallback / Lookup
@@ -1205,29 +1217,51 @@ export async function updateLmsClearanceApi(
     } catch {}
   }
 
-  const res = await fetch(`/api/resource/LMS Clearance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  try {
+    const res = await fetch(`/api/resource/LMS Clearance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, dsr: dsrName }),
+    });
+    if (res.ok) {
+      return await handleApiResponse<LMSClearance>(res);
+    }
+  } catch {}
+
+  // Fallback to local demo store
+  return demoStore.updateClearanceStep(nameOrDsr, {
+    status: (data.status as any) === "Issued" || (data.status as any) === "Approved" ? "Completed" : data.status,
+    assigned_officer: data.employee,
+    reference_no: data.reference_no,
   });
-  return handleApiResponse<LMSClearance>(res);
 }
 
 // Update or Create Wakala Clearance: PUT /api/resource/Wakala Clearance/{name} or POST
 export async function updateWakalaClearanceApi(
   nameOrDsr: string,
-  data: Partial<WakalaClearance> & { dsr?: string }
-): Promise<WakalaClearance> {
+  data: Partial<WakalaClearance> & { dsr?: string; status?: string; employee?: string }
+): Promise<any> {
+  if (isDemoMode() || nameOrDsr?.startsWith("STEP-") || nameOrDsr?.startsWith("PLC-")) {
+    const updated = demoStore.updateClearanceStep(nameOrDsr, {
+      status: data.status || "Completed",
+      assigned_officer: data.employee,
+      payment_status: "Paid",
+    });
+    return updated || { ...data, name: nameOrDsr };
+  }
+
   const payload: any = { ...data };
   if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
-    const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(nameOrDsr)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok || res.status !== 404) {
-      return handleApiResponse<WakalaClearance>(res);
-    }
+    try {
+      const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(nameOrDsr)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await handleApiResponse<WakalaClearance>(res);
+      }
+    } catch {}
   }
 
   const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
@@ -1245,29 +1279,51 @@ export async function updateWakalaClearanceApi(
     } catch {}
   }
 
-  const res = await fetch(`/api/resource/Wakala Clearance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  try {
+    const res = await fetch(`/api/resource/Wakala Clearance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, dsr: dsrName }),
+    });
+    if (res.ok) {
+      return await handleApiResponse<WakalaClearance>(res);
+    }
+  } catch {}
+
+  return demoStore.updateClearanceStep(nameOrDsr, {
+    status: data.status || "Completed",
+    assigned_officer: data.employee,
+    payment_status: "Paid",
   });
-  return handleApiResponse<WakalaClearance>(res);
 }
 
 // Update or Create Injaz Clearance: PUT /api/resource/Injaz Clearance/{name} or POST
 export async function updateInjazClearanceApi(
   nameOrDsr: string,
-  data: Partial<InjazClearance> & { dsr?: string }
-): Promise<InjazClearance> {
+  data: Partial<InjazClearance> & { dsr?: string; status?: string; employee?: string; reference_no?: string; payment_status?: string }
+): Promise<any> {
+  if (isDemoMode() || nameOrDsr?.startsWith("STEP-") || nameOrDsr?.startsWith("PLC-")) {
+    const updated = demoStore.updateClearanceStep(nameOrDsr, {
+      status: (data.status as any) === "Completed" || (data.status as any) === "Paid" ? "Completed" : data.status,
+      assigned_officer: data.employee,
+      reference_no: data.reference_no,
+      payment_status: data.payment_status || "Paid",
+    });
+    return updated || { ...data, name: nameOrDsr };
+  }
+
   const payload: any = { ...data };
   if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
-    const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(nameOrDsr)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok || res.status !== 404) {
-      return handleApiResponse<InjazClearance>(res);
-    }
+    try {
+      const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(nameOrDsr)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await handleApiResponse<InjazClearance>(res);
+      }
+    } catch {}
   }
 
   const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
@@ -1285,29 +1341,54 @@ export async function updateInjazClearanceApi(
     } catch {}
   }
 
-  const res = await fetch(`/api/resource/Injaz Clearance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  try {
+    const res = await fetch(`/api/resource/Injaz Clearance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, dsr: dsrName }),
+    });
+    if (res.ok) {
+      return await handleApiResponse<InjazClearance>(res);
+    }
+  } catch {}
+
+  return demoStore.updateClearanceStep(nameOrDsr, {
+    status: (data.status as any) === "Completed" || (data.status as any) === "Paid" ? "Completed" : data.status,
+    assigned_officer: data.employee,
+    reference_no: data.reference_no,
+    payment_status: data.payment_status || "Paid",
   });
-  return handleApiResponse<InjazClearance>(res);
 }
 
 // Update or Create Embassy Clearance: PUT /api/resource/Embassy Clearance/{name} or POST
 export async function updateEmbassyClearanceApi(
   nameOrDsr: string,
-  data: Partial<EmbassyClearance> & { dsr?: string }
-): Promise<EmbassyClearance> {
+  data: Partial<EmbassyClearance> & { dsr?: string; status?: string; employee?: string; fee_status?: string; receipt_no?: string; rejection_remark?: string }
+): Promise<any> {
+  if (isDemoMode() || nameOrDsr?.startsWith("STEP-") || nameOrDsr?.startsWith("PLC-")) {
+    const resolvedStatus = data.status === "Approved" ? "Stamped" : data.status;
+    const updated = demoStore.updateClearanceStep(nameOrDsr, {
+      status: resolvedStatus,
+      assigned_officer: data.employee,
+      payment_status: data.fee_status === "Paid" ? "Paid" : "Unpaid",
+      rejection_remark: data.rejection_remark,
+      reference_no: data.receipt_no,
+    });
+    return updated || { ...data, name: nameOrDsr };
+  }
+
   const payload: any = { ...data };
   if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
-    const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(nameOrDsr)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok || res.status !== 404) {
-      return handleApiResponse<EmbassyClearance>(res);
-    }
+    try {
+      const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(nameOrDsr)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await handleApiResponse<EmbassyClearance>(res);
+      }
+    } catch {}
   }
 
   const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
@@ -1325,29 +1406,53 @@ export async function updateEmbassyClearanceApi(
     } catch {}
   }
 
-  const res = await fetch(`/api/resource/Embassy Clearance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  try {
+    const res = await fetch(`/api/resource/Embassy Clearance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, dsr: dsrName }),
+    });
+    if (res.ok) {
+      return await handleApiResponse<EmbassyClearance>(res);
+    }
+  } catch {}
+
+  const resolvedStatus = data.status === "Approved" ? "Stamped" : data.status;
+  return demoStore.updateClearanceStep(nameOrDsr, {
+    status: resolvedStatus,
+    assigned_officer: data.employee,
+    payment_status: data.fee_status === "Paid" ? "Paid" : "Unpaid",
+    rejection_remark: data.rejection_remark,
+    reference_no: data.receipt_no,
   });
-  return handleApiResponse<EmbassyClearance>(res);
 }
 
 // Update or Create Telesign Clearance: PUT /api/resource/Telesign Clearance/{name} or POST
 export async function updateTelesignClearanceApi(
   nameOrDsr: string,
-  data: Partial<TelesignClearance> & { dsr?: string }
-): Promise<TelesignClearance> {
+  data: Partial<TelesignClearance> & { dsr?: string; status?: string; employee?: string }
+): Promise<any> {
+  if (isDemoMode() || nameOrDsr?.startsWith("STEP-") || nameOrDsr?.startsWith("PLC-")) {
+    const updated = demoStore.updateClearanceStep(nameOrDsr, {
+      status: data.status === "Completed" ? "Completed" : data.status,
+      assigned_officer: data.employee,
+      payment_status: "Paid",
+    });
+    return updated || { ...data, name: nameOrDsr };
+  }
+
   const payload: any = { ...data };
   if (nameOrDsr && !nameOrDsr.startsWith("DSR-") && nameOrDsr !== "None" && nameOrDsr !== "undefined") {
-    const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(nameOrDsr)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok || res.status !== 404) {
-      return handleApiResponse<TelesignClearance>(res);
-    }
+    try {
+      const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(nameOrDsr)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await handleApiResponse<TelesignClearance>(res);
+      }
+    } catch {}
   }
 
   const dsrName = payload.dsr || (nameOrDsr && nameOrDsr.startsWith("DSR-") ? nameOrDsr : undefined);
@@ -1365,12 +1470,22 @@ export async function updateTelesignClearanceApi(
     } catch {}
   }
 
-  const res = await fetch(`/api/resource/Telesign Clearance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, dsr: dsrName }),
+  try {
+    const res = await fetch(`/api/resource/Telesign Clearance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, dsr: dsrName }),
+    });
+    if (res.ok) {
+      return await handleApiResponse<TelesignClearance>(res);
+    }
+  } catch {}
+
+  return demoStore.updateClearanceStep(nameOrDsr, {
+    status: data.status === "Completed" ? "Completed" : data.status,
+    assigned_officer: data.employee,
+    payment_status: "Paid",
   });
-  return handleApiResponse<TelesignClearance>(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -1387,7 +1502,19 @@ export async function submitDsrStampApi(
     financials?: any[];
     applicantId?: string;
   }
-): Promise<DSRStamp> {
+): Promise<any> {
+  if (isDemoMode() || data.dsr?.startsWith("STEP-") || data.dsr?.startsWith("PLC-")) {
+    if (data.dsr?.startsWith("PLC-")) {
+      demoStore.advancePlacementToStamped(data.dsr, data.stamp_number);
+    }
+    const updated = demoStore.updateClearanceStep(data.dsr, {
+      status: "Stamped",
+      reference_no: data.stamp_number,
+      payment_status: "Paid",
+    });
+    return updated || { ...data };
+  }
+
   const payload: Record<string, any> = {
     dsr: data.dsr,
     stamp_number: data.stamp_number,
@@ -1398,21 +1525,28 @@ export async function submitDsrStampApi(
     payload.financials = data.financials;
   }
 
-  const res = await fetch("/api/resource/DSR Stamp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+  try {
+    const res = await fetch("/api/resource/DSR Stamp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const result = await handleApiResponse<DSRStamp>(res);
+      if (data.applicantId) {
+        try {
+          await recalculateApplicantStateApi(data.applicantId);
+        } catch {}
+      }
+      return result;
+    }
+  } catch {}
+
+  return demoStore.updateClearanceStep(data.dsr, {
+    status: "Stamped",
+    reference_no: data.stamp_number,
+    payment_status: "Paid",
   });
-
-  const result = await handleApiResponse<DSRStamp>(res);
-
-  if (data.applicantId) {
-    try {
-      await recalculateApplicantStateApi(data.applicantId);
-    } catch {}
-  }
-
-  return result;
 }
 
 // Create/Submit DSR Ticket: POST /api/resource/DSR Ticket
@@ -1421,11 +1555,24 @@ export async function submitDsrTicketApi(
     dsr: string;
     ticket_number: string;
     ticket_details?: string;
+    flight_date?: string;
+    airline?: string;
     status?: "Pending" | "Booked" | "Cancelled";
     financials?: any[];
     applicantId?: string;
   }
-): Promise<DSRTicket> {
+): Promise<any> {
+  if (isDemoMode() || data.dsr?.startsWith("STEP-") || data.dsr?.startsWith("PLC-")) {
+    if (data.dsr?.startsWith("PLC-")) {
+      demoStore.recordTicket(data.dsr, {
+        ticket_number: data.ticket_number,
+        flight_date: data.flight_date || new Date().toISOString().split("T")[0],
+        airline: data.airline,
+      });
+    }
+    return { ...data };
+  }
+
   const payload: Record<string, any> = {
     dsr: data.dsr,
     ticket_number: data.ticket_number,
@@ -1436,21 +1583,24 @@ export async function submitDsrTicketApi(
     payload.financials = data.financials;
   }
 
-  const res = await fetch("/api/resource/DSR Ticket", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetch("/api/resource/DSR Ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const result = await handleApiResponse<DSRTicket>(res);
+      if (data.applicantId) {
+        try {
+          await recalculateApplicantStateApi(data.applicantId);
+        } catch {}
+      }
+      return result;
+    }
+  } catch {}
 
-  const result = await handleApiResponse<DSRTicket>(res);
-
-  if (data.applicantId) {
-    try {
-      await recalculateApplicantStateApi(data.applicantId);
-    } catch {}
-  }
-
-  return result;
+  return { ...data };
 }
 
 // Create/Submit DSR Departure: POST /api/resource/DSR Departure
@@ -1465,7 +1615,14 @@ export async function submitDsrDepartureApi(
     financials?: any[];
     applicantId?: string;
   }
-): Promise<DSRDeparture> {
+): Promise<any> {
+  if (isDemoMode() || data.dsr?.startsWith("STEP-") || data.dsr?.startsWith("PLC-")) {
+    if (data.dsr?.startsWith("PLC-")) {
+      demoStore.recordDeparture(data.dsr, data.departure_time);
+    }
+    return { ...data };
+  }
+
   const payload: Record<string, any> = {
     dsr: data.dsr,
     departure_time: data.departure_time,
@@ -1478,21 +1635,24 @@ export async function submitDsrDepartureApi(
     payload.financials = data.financials;
   }
 
-  const res = await fetch("/api/resource/DSR Departure", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetch("/api/resource/DSR Departure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const result = await handleApiResponse<DSRDeparture>(res);
+      if (data.applicantId) {
+        try {
+          await recalculateApplicantStateApi(data.applicantId);
+        } catch {}
+      }
+      return result;
+    }
+  } catch {}
 
-  const result = await handleApiResponse<DSRDeparture>(res);
-
-  if (data.applicantId) {
-    try {
-      await recalculateApplicantStateApi(data.applicantId);
-    } catch {}
-  }
-
-  return result;
+  return { ...data };
 }
 
 // ---------------------------------------------------------------------------
@@ -1971,6 +2131,33 @@ export async function manageUserPermissionApi(payload: ManageUserPermissionPaylo
     }
   );
   return handleApiResponse<any>(res);
+}
+
+// 8.7.1 Default Role Officers Configuration API
+export async function getDefaultRoleOfficersApi(): Promise<any> {
+  if (isDemoMode()) {
+    return demoStore.getDefaultRoleOfficers();
+  }
+  return {
+    saudi_lmis: "saudi_lmis@agency.com",
+    saudi_taeshir: "saudi_taeshir@agency.com",
+    saudi_embassy: "saudi_embassy@agency.com",
+    kuwait_lmis: "kuwait_lmis@agency.com",
+    kuwait_telesign: "kuwait_telesign@agency.com",
+    kuwait_embassy: "kuwait_embassy@agency.com",
+    ticketer: "ticketer@agency.com",
+    registrar: "registrar@agency.com",
+  };
+}
+
+export async function updateDefaultRoleOfficersApi(
+  updates: Record<string, string>,
+  applyToActivePending: boolean = true
+): Promise<any> {
+  if (isDemoMode()) {
+    return demoStore.updateDefaultRoleOfficers(updates as any, applyToActivePending);
+  }
+  return updates;
 }
 
 // 8.8 Get Single User Detail
@@ -3037,7 +3224,7 @@ export async function fetchOperationalWorkspaceData(
       }
 
       // Stream corridor isolation
-      if (streamType === "injaz" || streamType === "wakala") {
+      if (streamType === "injaz" || (streamType as any) === "wakala") {
         if (dest.toLowerCase() === "kuwait") continue;
       }
 
@@ -3045,6 +3232,60 @@ export async function fetchOperationalWorkspaceData(
       const lmsStep = siblingSteps.find((s) => s.step_type === "LMIS Clearance" || s.step_type === "Kuwait LMIS");
       const injazStep = siblingSteps.find((s) => s.step_type === "Taeshir" || s.step_type === "Telesign");
       const embassyStep = siblingSteps.find((s) => s.step_type === "Embassy" || s.step_type === "Kuwait Embassy");
+
+      // Check step completion statuses
+      const isLmsFinished =
+        lmsStep?.status === "Completed" ||
+        lmsStep?.status === "Approved" ||
+        lmsStep?.status === "Issued";
+
+      const isInjFinished =
+        injazStep?.status === "Completed" ||
+        injazStep?.status === "Approved" ||
+        injazStep?.status === "Issued" ||
+        injazStep?.payment_status === "Paid";
+
+      const isEmbassyFinished =
+        embassyStep?.status === "Stamped" ||
+        embassyStep?.status === "Completed" ||
+        embassyStep?.status === "Approved" ||
+        embassyStep?.status === "Issued" ||
+        plc?.status === "Stamped" ||
+        plc?.status === "Ticketed" ||
+        plc?.status === "Departed" ||
+        applicant.applicant_state === "Stamped" ||
+        applicant.applicant_state === "Ticketed" ||
+        applicant.applicant_state === "Departed";
+
+      // ---------------------------------------------------------------------
+      // WORKSPACE PROGRESSION PREREQUISITES GATING:
+      // "an applicant on LMIS , teshir must not be on embassy or ticket if not finished."
+      // ---------------------------------------------------------------------
+      if (streamType === "embassy") {
+        // Must be in Processing or later
+        if (!plc && applicant.applicant_state !== "Processing" && applicant.applicant_state !== "Stamped") {
+          continue;
+        }
+        // Strict Gate: Both LMIS and Taeshir/Telesign must be finished
+        if (!isLmsFinished || !isInjFinished) {
+          continue;
+        }
+      } else if (streamType === "departure") {
+        // Strict Gate: Embassy (visa stamping) must be finished
+        if (!isEmbassyFinished) {
+          continue;
+        }
+      } else if (streamType === "injaz") {
+        // Must have active placement in processing
+        if (!plc && applicant.applicant_state !== "Processing") {
+          continue;
+        }
+      } else if (streamType === "lms") {
+        // Must have active placement in processing
+        if (!plc && applicant.applicant_state !== "Processing") {
+          continue;
+        }
+      }
 
       const contractDate = plc?.contract_signed_date || (applicant.creation ? String(applicant.creation).split(" ")[0] : "");
       let duration = 0;

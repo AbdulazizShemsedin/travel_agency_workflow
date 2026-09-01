@@ -72,7 +72,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { exportToCSV, exportToPrintPDF, ExportColumn } from "@/lib/utils/reportExport";
-import { Applicant, CommissionLedgerItem, AgencyComplaint, Contractor } from "@/types/applicant";
+import { Applicant, CommissionLedgerItem, AgencyComplaint, Contractor, resolveApplicantStage } from "@/types/applicant";
 import { LMISReportView } from "@/components/reports/LMISReportView";
 import { InjazReportView } from "@/components/reports/InjazReportView";
 import { EmbassyReportView } from "@/components/reports/EmbassyReportView";
@@ -85,10 +85,10 @@ const STAGE_ORDER = [
   "Draft",
   "Registered",
   "CV Generated",
-  "Request Pending",
   "Selected",
-  "Processing",
-  "Stamped",
+  "LMIS",
+  "Te'shir",
+  "Embassy/Wakala",
   "Ticketed",
   "Departed",
   "Cancelled",
@@ -100,8 +100,11 @@ const STAGE_COLORS: Record<string, string> = {
   "CV Generated": "#0ea5e9",
   "Request Pending": "#f59e0b",
   Selected: "#8b5cf6",
-  Processing: "#6366f1",
-  Stamped: "#10b981",
+  LMIS: "#2563eb",
+  "Te'shir": "#7c3aed",
+  "Embassy/Wakala": "#0d9488",
+  Processing: "#2563eb",
+  Stamped: "#0d9488",
   Ticketed: "#059669",
   Departed: "#047857",
   Cancelled: "#ef4444",
@@ -385,7 +388,8 @@ export default function ReportsPage() {
       if (!isWithinSelectedDateRange(a.creation || a.modified)) return false;
 
       // Stage filter
-      if (stageFilter !== "all" && a.applicant_state !== stageFilter) return false;
+      const currentStage = resolveApplicantStage(a);
+      if (stageFilter !== "all" && currentStage !== stageFilter) return false;
 
       // Destination country
       if (stageCountryFilter !== "all" && a.destination_country !== stageCountryFilter) return false;
@@ -468,7 +472,7 @@ export default function ReportsPage() {
     }
     for (const a of applicants) {
       if (isWithinSelectedDateRange(a.creation || a.modified)) {
-        const s = a.applicant_state || "Draft";
+        const s = resolveApplicantStage(a);
         counts[s] = (counts[s] || 0) + 1;
       }
     }
@@ -842,7 +846,7 @@ export default function ReportsPage() {
         { header: "Religion", accessor: (r) => applicantMap.get(r.name)?.religion || "—" },
         { header: "Place of Birth", accessor: (r) => applicantMap.get(r.name)?.place_of_birth || "—" },
         { header: "Departure Date", accessor: "departure_date" },
-        { header: "Commission Rate", accessor: (r) => `${r.commission_amount} ${r.commission_currency}` },
+        { header: "Commission Rate", accessor: (r) => `${r.commission_amount} ${r.commission_currency || "Birr"}` },
         { header: "Payment Status", accessor: "commission_status" },
         { header: "Batch Reference", accessor: (r) => r.commission_batch_ref || "—" },
       ];
@@ -852,8 +856,8 @@ export default function ReportsPage() {
         filteredCommissionItems,
         [
           { label: "Total Candidates", value: filteredCommTotals.totalEligible },
-          { label: "Unpaid / Outstanding", value: `${filteredCommTotals.unpaidAmount.toLocaleString()} SAR` },
-          { label: "Collected / Paid", value: `${filteredCommTotals.paidAmount.toLocaleString()} SAR` },
+          { label: "Unpaid / Outstanding", value: `${filteredCommTotals.unpaidAmount.toLocaleString()} Birr` },
+          { label: "Collected / Paid", value: `${filteredCommTotals.paidAmount.toLocaleString()} Birr` },
           { label: "Reporting Period", value: periodStr },
         ],
         `Period: ${periodStr} | Agency: ${commAgencyFilter} | Status: ${commStatusFilter}`
@@ -1028,12 +1032,13 @@ export default function ReportsPage() {
   const isAdmin =
     emailOrName === "administrator" ||
     emailOrName.startsWith("admin") ||
-    userRoles.some((r: string) => r === "system manager" || r === "administrator" || r === "agency admin");
+    userRoles.some((r: string) => r === "system manager" || r === "administrator" || r === "agency admin" || r === "manager");
 
-  const isLmisOnly = !isAdmin && userRoles.some((r: string) => r.includes("lms") || r.includes("lmis") || r.includes("clearance"));
-  const isInjazOnly = !isAdmin && !isLmisOnly && userRoles.some((r: string) => r.includes("injaz") || r.includes("teshir") || r.includes("te'shir"));
-  const isEmbassyOnly = !isAdmin && !isLmisOnly && !isInjazOnly && userRoles.some((r: string) => r.includes("embassy") || r.includes("wakala"));
-  const isDepartureOnly = !isAdmin && !isLmisOnly && !isInjazOnly && !isEmbassyOnly && userRoles.some((r: string) => r.includes("ticket") || r.includes("departure"));
+  // Determine specific role view (evaluated with specific step priority)
+  const isInjazOnly = !isAdmin && userRoles.some((r: string) => r.includes("taeshir") || r.includes("teshir") || r.includes("te'shir") || r.includes("injaz"));
+  const isEmbassyOnly = !isAdmin && !isInjazOnly && userRoles.some((r: string) => r.includes("embassy") || r.includes("wakala") || r.includes("telesign"));
+  const isDepartureOnly = !isAdmin && !isInjazOnly && !isEmbassyOnly && userRoles.some((r: string) => r.includes("ticket") || r.includes("departure"));
+  const isLmisOnly = !isAdmin && !isInjazOnly && !isEmbassyOnly && !isDepartureOnly && userRoles.some((r: string) => r.includes("lms") || r.includes("lmis") || r === "clearance officer");
 
   // Specialized Single-Role Views
   if (isLmisOnly) {

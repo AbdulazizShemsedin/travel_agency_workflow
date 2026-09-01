@@ -24,6 +24,7 @@ import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export default function AgentCommissionPage() {
   const { authUser, agencyContext } = useAuth();
@@ -56,19 +57,53 @@ export default function AgentCommissionPage() {
 
   const summary = {
     total_departed: candidateList.length,
-    agreed_rate: candidateList[0]?.commission_amount || 1500,
+    agreed_rate: candidateList[0]?.commission_amount || 115000,
     total_outstanding: totalOutstanding,
-    currency: candidateList[0]?.currency || "SAR",
+    currency: candidateList[0]?.currency || "Birr",
   };
 
   const handleRefreshAll = () => {
     refetchList();
   };
 
-  const excelExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
-  const pdfExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
+  // Export Columns Definition
+  const exportColumns: ExportColumn<any>[] = [
+    { header: "Candidate Name", accessor: (row) => row.full_name || row.name || "—" },
+    { header: "Passport Number", accessor: (row) => row.passport_number || "EP-VERIFIED" },
+    { header: "Departure Date", accessor: (row) => row.departure_date || "—" },
+    { header: "Destination Country", accessor: (row) => row.destination_country || "Saudi Arabia" },
+    { header: "Sponsor Name", accessor: (row) => row.sponsor_name || "—" },
+    { header: "Commission Amount", accessor: (row) => `${(Number(row.commission_amount || row.amount) || 0).toLocaleString()}` },
+    { header: "Currency", accessor: (row) => row.currency || "Birr" },
+  ];
+
+  const handleExportExcel = () => {
+    exportToExcel(
+      `Commission_Statement_${activeContractor || "Agency"}_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      candidateList,
+      `Commission Billing Statement - ${activeContractor || "Agency"}`,
+      {
+        "Partner Agency": activeContractor || "All",
+        "Total Departed Placements": candidateList.length,
+        "Total Outstanding (Birr)": totalOutstanding.toLocaleString(),
+      }
+    );
+  };
+
+  const handleExportPDF = () => {
+    exportToPDF(
+      `Commission Invoice & Statement - ${activeContractor || "Agency"}`,
+      exportColumns,
+      candidateList,
+      [
+        { label: "Departed Candidates", value: String(summary.total_departed || candidateList.length) },
+        { label: "Agreed Rate / Candidate", value: `${summary.agreed_rate.toLocaleString()} Birr` },
+        { label: "Total Outstanding Due", value: `${summary.total_outstanding.toLocaleString()} Birr` },
+      ],
+      `Partner Agency: ${activeContractor || "All"}`
+    );
+  };
 
   return (
     <AgentLayout
@@ -129,68 +164,70 @@ export default function AgentCommissionPage() {
           <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-                Agreed Rate / Placement
+                Agreed Commission Rate
               </p>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
-                <DollarSign className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
-              {(summary.agreed_rate || 1500).toLocaleString()} {summary.currency || "SAR"}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Contractor agreement rate
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 shadow-xs">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
-                Outstanding Statement Total
-              </p>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-800 text-white">
                 <Receipt className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-2xl font-extrabold text-emerald-950 dark:text-emerald-200 mt-2">
-              {(summary.total_outstanding || (summary.total_departed || candidateList.length) * (summary.agreed_rate || 1500)).toLocaleString()} {summary.currency || "SAR"}
+            <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
+              {summary.agreed_rate.toLocaleString()} {summary.currency}
             </p>
-            <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400 mt-1">
-              Ready for billing reconciliation
+            <p className="text-[11px] text-slate-400 mt-1">
+              Per successfully departed candidate
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
+                Total Outstanding Due
+              </p>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                <Clock className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-2">
+              {summary.total_outstanding.toLocaleString()} {summary.currency}
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Pending invoice wire transfer
             </p>
           </div>
         </div>
 
-        {/* Export Statement Download Section */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Invoice Actions */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-5 rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-slate-50/50 dark:bg-[#121216]">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Official Accounting Statements
-            </h3>
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              Official Placement Invoice Statement
+            </h4>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Export and download certified billing reports in Excel or PDF format.
+              Export this candidate batch statement in Excel format or printable PDF with bank details.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <a
-              href={excelExportUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportExcel}
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs px-4 py-2.5 shadow-xs transition"
             >
               <FileSpreadsheet className="h-4 w-4" />
               Export Excel (.xlsx)
-            </a>
-            <a
-              href={pdfExportUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50 dark:bg-[#18181f] text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#202028] font-semibold text-xs px-4 py-2.5 transition"
             >
               <FileText className="h-4 w-4" />
               Download PDF Invoice
-            </a>
+            </Button>
           </div>
         </div>
 
@@ -247,7 +284,7 @@ export default function AgentCommissionPage() {
                         </p>
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300">
-                        {(cand.rate || 1500).toLocaleString()} {cand.currency || "SAR"}
+                        {(Number(cand.commission_amount || cand.amount || cand.rate) || 115000).toLocaleString()} {cand.currency || "Birr"}
                       </td>
                     </tr>
                   ))}

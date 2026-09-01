@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { calculateRemainingDays } from "@/lib/validations/applicant.schema";
+import { resolveApplicantStage } from "@/types/applicant";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,19 +34,15 @@ export default function DashboardPage() {
 
   // Calculate dynamic stats from real backend database
   const totalCount = applicants.length;
-  const draftCount = applicants.filter((a) => a.applicant_state === "Draft").length;
-  const registeredCount = applicants.filter((a) => a.applicant_state === "Registered").length;
-  const cvCount = applicants.filter((a) => a.applicant_state === "CV Generated").length;
-  const selectedCount = applicants.filter((a) => a.applicant_state === "Selected").length;
-  const processingCount = applicants.filter((a) => a.applicant_state === "Processing").length;
-  const stampedCount = applicants.filter((a) => a.applicant_state === "Stamped").length;
-  const ticketedCount = applicants.filter((a) => a.applicant_state === "Ticketed").length;
-  const departedCount = applicants.filter((a) => a.applicant_state === "Departed").length;
-
-  // Sub-stream breakdown for parallel Processing stage
-  const lmsActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
-  const wakalaActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
-  const injazActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
+  const draftCount = applicants.filter((a) => resolveApplicantStage(a) === "Draft").length;
+  const registeredCount = applicants.filter((a) => resolveApplicantStage(a) === "Registered").length;
+  const cvCount = applicants.filter((a) => resolveApplicantStage(a) === "CV Generated").length;
+  const selectedCount = applicants.filter((a) => resolveApplicantStage(a) === "Selected").length;
+  const lmisCount = applicants.filter((a) => resolveApplicantStage(a) === "LMIS").length;
+  const teshirCount = applicants.filter((a) => resolveApplicantStage(a) === "Te'shir").length;
+  const embassyWakalaCount = applicants.filter((a) => resolveApplicantStage(a) === "Embassy/Wakala").length;
+  const ticketedCount = applicants.filter((a) => resolveApplicantStage(a) === "Ticketed").length;
+  const departedCount = applicants.filter((a) => resolveApplicantStage(a) === "Departed").length;
 
   const inProgressCount = applicants.filter(
     (a) =>
@@ -54,7 +51,7 @@ export default function DashboardPage() {
       a.applicant_state !== "Cancelled"
   ).length;
 
-  const completedCount = stampedCount + ticketedCount;
+  const completedCount = embassyWakalaCount + ticketedCount;
 
   // Real compliance & expiry alerts from real records only
   const realAlerts = React.useMemo(() => {
@@ -171,6 +168,15 @@ export default function DashboardPage() {
     },
     {
       step: 2,
+      title: "Registered",
+      count: registeredCount,
+      badge: "Registered",
+      color: "border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300",
+      accent: "bg-emerald-600",
+      link: "/applicants?filter=Registered",
+    },
+    {
+      step: 3,
       title: "CV Generated",
       count: cvCount,
       badge: "CV Ready",
@@ -179,7 +185,7 @@ export default function DashboardPage() {
       link: "/applicants?filter=CV Generated",
     },
     {
-      step: 3,
+      step: 4,
       title: "Selected",
       count: selectedCount,
       badge: "Selected",
@@ -188,31 +194,34 @@ export default function DashboardPage() {
       link: "/applicants?filter=Selected",
     },
     {
-      step: 4,
-      title: "Processing",
-      count: processingCount,
-      badge: "Parallel Streams",
-      color: "border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200",
-      accent: "bg-emerald-700",
-      isParent: true,
-      subBranches: [
-        { name: "LMS", count: lmsActiveCount, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
-        { name: "WAKALA", count: wakalaActiveCount, color: "text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800" },
-        { name: "INJAZ", count: injazActiveCount, color: "text-blue-700 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800" },
-      ],
-      link: "/applicants?filter=Processing",
-    },
-    {
       step: 5,
-      title: "Embassy Stamp",
-      count: stampedCount,
-      badge: "Visa Issued",
-      color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300",
-      accent: "bg-teal-600",
-      link: "/applicants?filter=Stamped",
+      title: "LMIS Clearance",
+      count: lmisCount,
+      badge: "LMIS Step",
+      color: "border-blue-300 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200",
+      accent: "bg-blue-700",
+      link: "/applicants?filter=LMIS",
     },
     {
       step: 6,
+      title: "Te'shir / Injaz",
+      count: teshirCount,
+      badge: "Te'shir Step",
+      color: "border-purple-300 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-950/30 text-purple-950 dark:text-purple-200",
+      accent: "bg-purple-700",
+      link: "/applicants?filter=Te'shir",
+    },
+    {
+      step: 7,
+      title: "Embassy / Wakala",
+      count: embassyWakalaCount,
+      badge: "Embassy & Stamping",
+      color: "border-teal-300 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/30 text-teal-950 dark:text-teal-200",
+      accent: "bg-teal-700",
+      link: "/applicants?filter=Embassy/Wakala",
+    },
+    {
+      step: 8,
       title: "Ticket Booked",
       count: ticketedCount,
       badge: "Flight Ticket",
@@ -221,7 +230,7 @@ export default function DashboardPage() {
       link: "/applicants?filter=Ticketed",
     },
     {
-      step: 7,
+      step: 9,
       title: "Departed",
       count: departedCount,
       badge: "Deployed",
@@ -373,34 +382,15 @@ export default function DashboardPage() {
                   {stage.title}
                 </h4>
 
-                {stage.isParent && stage.subBranches ? (
-                  <div className="mt-2 space-y-1.5 border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2">
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase">
-                      Sub-Streams:
-                    </p>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {stage.subBranches.map((sub) => (
-                        <div
-                          key={sub.name}
-                          className={`flex flex-col items-center justify-center p-1.5 rounded-lg border text-center ${sub.color}`}
-                        >
-                          <span className="text-[9px] font-black">{sub.name}</span>
-                          <span className="font-mono font-bold text-xs">{sub.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-zinc-800/60">
-                    <span>Candidates</span>
-                    <Link
-                      href={stage.link}
-                      className="text-emerald-800 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-0.5 text-[10px]"
-                    >
-                      View <ArrowRight className="h-3 w-3" />
-                    </Link>
-                  </div>
-                )}
+                <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-zinc-800/60">
+                  <span>Candidates</span>
+                  <Link
+                    href={stage.link}
+                    className="text-emerald-800 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-0.5 text-[10px]"
+                  >
+                    View <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
               </div>
             ))}
           </div>

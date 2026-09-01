@@ -27,7 +27,7 @@ import {
   recalculateApplicantStateApi,
 } from "@/lib/api/applicantApi";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { can } from "@/lib/auth/permissions";
+import { can, isAdminUser } from "@/lib/auth/permissions";
 
 interface WakalaWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -49,11 +49,13 @@ export function WakalaWorkspace({
   const queryClient = useQueryClient();
   const { authUser } = useAuth();
   const canEdit = can(authUser, "editWakala") || can(authUser, "manageClearances");
+  const isAdmin = isAdminUser(authUser);
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
   // Form State for Drawer
   const [status, setStatus] = React.useState<"Pending" | "Completed">("Pending");
+  const [wakalaRefNo, setWakalaRefNo] = React.useState("");
   const [employee, setEmployee] = React.useState("");
   const [isSendingReminder, setIsSendingReminder] = React.useState(false);
 
@@ -62,7 +64,8 @@ export function WakalaWorkspace({
     if (selectedRow) {
       const wakala = selectedRow.wakala;
       setStatus((wakala?.status as any) || "Pending");
-      setEmployee(wakala?.employee || "");
+      setWakalaRefNo((wakala as any)?.reference_no || (wakala as any)?.wakala_number || "");
+      setEmployee(wakala?.employee || (wakala as any)?.assigned_officer || "");
     }
   }, [selectedRow]);
 
@@ -77,9 +80,10 @@ export function WakalaWorkspace({
 
       await updateWakalaClearanceApi(targetDoc, {
         status,
-        employee: employee || undefined,
+        ...(isAdmin && employee ? { employee } : {}),
+        reference_no: wakalaRefNo || undefined,
         dsr: selectedRow.dsrName,
-      });
+      } as any);
 
       // Recalculate lifecycle
       try {
@@ -339,21 +343,37 @@ export function WakalaWorkspace({
             </select>
           </DrawerField>
 
-          <DrawerField label="Assigned Wakala Officer" isReadOnly={false}>
-            <select
-              value={employee}
+          <DrawerField label="Wakala Authorization / Reference №" isReadOnly={false}>
+            <input
+              type="text"
+              placeholder="e.g. WAK-2026-99201"
+              value={wakalaRefNo}
               disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setEmployee(e.target.value)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
-            >
-              <option value="">-- Select Handler Employee --</option>
-              {employees.map((emp) => (
-                <option key={emp.name} value={emp.name}>
-                  {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
-                </option>
-              ))}
-            </select>
+              onChange={(e) => setWakalaRefNo(e.target.value)}
+              className="h-9 w-full px-3 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+            />
           </DrawerField>
+
+          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
+          {isAdmin && (
+            <div className="sm:col-span-2">
+              <DrawerField label="Assigned Wakala Officer (Admin Only)" isReadOnly={false}>
+                <select
+                  value={employee}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setEmployee(e.target.value)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                >
+                  <option value="">-- Select Handler Employee --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.name} value={emp.name}>
+                      {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
+                    </option>
+                  ))}
+                </select>
+              </DrawerField>
+            </div>
+          )}
         </DrawerSection>
       </OperationalDrawer>
     </>

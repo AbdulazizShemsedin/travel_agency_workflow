@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/popover";
 import { SimpleSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { exportToExcel } from "@/lib/utils/reportExport";
 
 interface OperationalTableProps<T extends WorkspaceApplicantRow = WorkspaceApplicantRow> {
   title: string;
@@ -272,29 +273,35 @@ export function OperationalTable<T extends WorkspaceApplicantRow = WorkspaceAppl
   const totalPages = table.getPageCount() || 1;
   const startIndex = pageIndex * pageSize;
 
-  // CSV Export utility
+  // Excel / CSV Export utility
   const handleExportCSV = () => {
     const rows = table.getFilteredRowModel().rows;
     if (rows.length === 0) return;
 
-    const visibleHeaders = visibleColumns.map((c) => `"${c.columnDef.header || c.id}"`).join(",");
-    const csvRows = rows.map((row) => {
-      return visibleColumns
-        .map((col) => {
-          const val = (row.original as any)[col.id] ?? "";
-          return `"${String(val).replace(/"/g, '""')}"`;
-        })
-        .join(",");
-    });
+    const exportCols = visibleColumns
+      .filter((col) => col.id !== "actions" && col.id !== "select")
+      .map((col) => ({
+        header: String(col.columnDef.header || col.id),
+        accessor: (row: any) => {
+          const val = row[col.id] ?? row[(col.columnDef as any).accessorKey] ?? "";
+          if (val && typeof val === "object") return "";
+          return val;
+        },
+      }));
 
-    const csvContent = "data:text/csv;charset=utf-8," + [visibleHeaders, ...csvRows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${title.toLowerCase().replace(/\s+/g, "_")}_export.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const exportData = rows.map((r) => r.original);
+
+    exportToExcel(
+      `${title.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${new Date().toISOString().split("T")[0]}`,
+      exportCols,
+      exportData,
+      `${title} - Operational Roster`,
+      {
+        "Corridor Filter": corridorFilter || "All",
+        "Status Filter": selectedStatusFilter,
+        "Total Filtered Records": rows.length,
+      }
+    );
   };
 
   // Quick action: Sort by most urgent remaining days (ascending order)

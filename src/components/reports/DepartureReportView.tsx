@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export function DepartureReportView() {
   const [ticketFilter, setTicketFilter] = React.useState<string>("All");
@@ -74,74 +75,69 @@ export function DepartureReportView() {
     { name: "> 90 Days", count: durationOver90, fill: "#ef4444" },
   ];
 
-  // Filtered dataset
+  // Filtered rows
   const filteredRows = React.useMemo(() => {
     return departureData.filter((row) => {
-      const isBooked = row.ticketStatus === "Booked" || (row.ticketNumber && row.ticketNumber !== "—");
-      const matchesTicket =
-        ticketFilter === "All" ||
-        (ticketFilter === "Booked" && isBooked) ||
-        (ticketFilter === "Pending" && !isBooked);
-
+      const matchesTicket = ticketFilter === "All" || row.ticketStatus === ticketFilter;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         row.fullName.toLowerCase().includes(q) ||
         row.passportNumber.toLowerCase().includes(q) ||
         (row.sponsorName && row.sponsorName.toLowerCase().includes(q)) ||
-        (row.company && row.company.toLowerCase().includes(q));
+        (row.ticketNumber && row.ticketNumber.toLowerCase().includes(q));
 
       return matchesTicket && matchesSearch;
     });
   }, [departureData, ticketFilter, searchQuery]);
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Export Columns
+  const exportColumns: ExportColumn<WorkspaceApplicantRow>[] = [
+    { header: "Applicant ID", accessor: "applicantId" },
+    { header: "Candidate Name", accessor: "fullName" },
+    { header: "Passport Number", accessor: "passportNumber" },
+    { header: "Destination Country", accessor: "destinationCountry" },
+    { header: "Visa Number", accessor: (r: WorkspaceApplicantRow) => r.visaNumber || "—" },
+    { header: "Sponsor Name", accessor: (r: WorkspaceApplicantRow) => r.sponsorName || "—" },
+    { header: "Sponsor Phone", accessor: (r: WorkspaceApplicantRow) => (r as any).sponsor?.phone || (r as any).sponsorPhone || (r as any).telephone || "—" },
+    { header: "Ticket Number / PNR", accessor: (r: WorkspaceApplicantRow) => r.ticketNumber || "—" },
+    { header: "Ticket Status", accessor: (r: WorkspaceApplicantRow) => r.ticketStatus || "Pending" },
+    { header: "Medical 2 Status", accessor: (r: WorkspaceApplicantRow) => (r.departure?.medical_2_result as string) || "Pass" },
+    { header: "Departure Time", accessor: (r: WorkspaceApplicantRow) => r.departure?.departure_time || "—" },
+    { header: "Departure Status", accessor: (r: WorkspaceApplicantRow) => r.departure?.status || "Pending" },
+  ];
+
+  // Excel Export
+  const handleExportExcel = () => {
     if (filteredRows.length === 0) return;
-    const headers = [
-      "NO",
-      "LABOR ID",
-      "NAME",
-      "PASSPORT",
-      "CONTRACT",
-      "DURATION",
-      "VISA #",
-      "SPONSOR NAME",
-      "SPONSOR ID",
-      "TELEPHONE",
-      "COMPANY",
-      "LMIS STATUS",
-      "EMBASSY STATUS",
-      "TICKET",
-      "HOUSE / REMARK",
-    ];
+    exportToExcel(
+      `Flight_Departure_Report_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredRows,
+      "Flight Ticketing & Departure Operations Report",
+      {
+        "Corridor": corridorFilter,
+        "Ticket Status Filter": ticketFilter,
+        "Total Filtered Records": filteredRows.length,
+      }
+    );
+  };
 
-    const rows = filteredRows.map((row, idx) => [
-      idx + 1,
-      `"${row.laborId || ""}"`,
-      `"${row.fullName.replace(/"/g, '""')}"`,
-      `"${row.passportNumber}"`,
-      `"${row.contractDate || ""}"`,
-      row.duration ?? 0,
-      `"${row.visaNumber || ""}"`,
-      `"${(row.sponsorName || "").replace(/"/g, '""')}"`,
-      `"${(row.sponsorId || "").replace(/"/g, '""')}"`,
-      `"${row.telephone || ""}"`,
-      `"${(row.company || "").replace(/"/g, '""')}"`,
-      `"${row.lmisStatus || "Pending"}"`,
-      `"${row.embassyStatus || "Pending"}"`,
-      `"${row.ticketNumber && row.ticketNumber !== "—" ? row.ticketNumber : row.ticketStatus || "Pending"}"`,
-      `"${(row.jobApplied || row.remark || "Housemaid").replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ticket_departure_report_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // PDF Export
+  const handleExportPDF = () => {
+    if (filteredRows.length === 0) return;
+    exportToPDF(
+      "Flight Ticketing & Departure Operations Report",
+      exportColumns,
+      filteredRows,
+      [
+        { label: "Total Candidates", value: filteredRows.length },
+        { label: "Tickets Booked", value: filteredRows.filter((r) => r.ticketStatus === "Booked").length },
+        { label: "Departed Placements", value: filteredRows.filter((r) => r.departure?.status === "Departed").length },
+        { label: "Awaiting Departure", value: filteredRows.filter((r) => r.departure?.status !== "Departed").length },
+      ],
+      `Corridor: ${corridorFilter} | Ticket Filter: ${ticketFilter}`
+    );
   };
 
   return (
@@ -195,12 +191,22 @@ export function DepartureReportView() {
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportPDF}
+            className="h-8 px-2.5 text-xs font-medium gap-1.5 border-slate-300 dark:border-[#2c2c36]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export PDF</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
             className="h-8 px-3 text-xs font-semibold gap-1.5 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white"
           >
             <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </Button>
         </div>
       </div>

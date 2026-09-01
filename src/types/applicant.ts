@@ -1,11 +1,14 @@
-// Canonical 10-state progression + Cancelled
-// Authoritative source: backend-contract/doctypes/Applicant.json field "applicant_state"
+// Canonical progression stages + Cancelled
+// Individual operational clearance stages: LMIS, Te'shir, Embassy/Wakala
 export type ApplicantState =
   | "Draft"
   | "Registered"
   | "CV Generated"
   | "Request Pending"
   | "Selected"
+  | "LMIS"
+  | "Te'shir"
+  | "Embassy/Wakala"
   | "Processing"
   | "Stamped"
   | "Ticketed"
@@ -17,39 +20,95 @@ export const CANONICAL_STATES: ApplicantState[] = [
   "Draft",
   "Registered",
   "CV Generated",
-  "Request Pending",
   "Selected",
-  "Processing",
-  "Stamped",
+  "LMIS",
+  "Te'shir",
+  "Embassy/Wakala",
   "Ticketed",
   "Departed",
 ];
 
-export const STATE_STEP_MAP: Record<ApplicantState, number> = {
+export const STATE_STEP_MAP: Record<string, number> = {
   Draft: 1,
   Registered: 2,
   "CV Generated": 3,
   "Request Pending": 4,
-  Selected: 5,
-  Processing: 6,
+  Selected: 4,
+  LMIS: 5,
+  "Te'shir": 6,
+  "Embassy/Wakala": 7,
+  Processing: 5,
   Stamped: 7,
   Ticketed: 8,
   Departed: 9,
   Cancelled: 0,
 };
 
-export const STATE_PROGRESS_MAP: Record<ApplicantState, number> = {
-  Draft: 11,
-  Registered: 22,
-  "CV Generated": 33,
-  "Request Pending": 44,
-  Selected: 55,
-  Processing: 66,
-  Stamped: 77,
-  Ticketed: 88,
+export const STATE_PROGRESS_MAP: Record<string, number> = {
+  Draft: 10,
+  Registered: 20,
+  "CV Generated": 35,
+  "Request Pending": 45,
+  Selected: 50,
+  LMIS: 62,
+  "Te'shir": 75,
+  "Embassy/Wakala": 88,
+  Processing: 62,
+  Stamped: 88,
+  Ticketed: 95,
   Departed: 100,
   Cancelled: 0,
 };
+
+export function resolveApplicantStage(
+  applicant: { applicant_state?: string; status?: string; [key: string]: any },
+  placement?: { status?: string; corridor_state?: string; [key: string]: any } | null,
+  clearanceSteps?: { step_type?: string; status?: string; payment_status?: string }[]
+): string {
+  const raw = applicant?.applicant_state || applicant?.status || "Draft";
+
+  if (raw === "Draft") return "Draft";
+  if (raw === "Registered") return "Registered";
+  if (raw === "CV Generated") return "CV Generated";
+  if (raw === "Request Pending") return "Request Pending";
+  if (raw === "Departed" || placement?.status === "Departed") return "Departed";
+  if (raw === "Ticketed" || placement?.status === "Ticketed") return "Ticketed";
+  if (raw === "Stamped" || placement?.status === "Stamped") return "Embassy/Wakala";
+  if (raw === "Cancelled") return "Cancelled";
+  if (raw === "LMIS" || raw === "Te'shir" || raw === "Embassy/Wakala" || raw === "Wakala") {
+    return raw === "Wakala" ? "Embassy/Wakala" : raw;
+  }
+
+  // If candidate is undergoing clearance:
+  if (clearanceSteps && clearanceSteps.length > 0) {
+    const lms = clearanceSteps.find((s) => (s.step_type || "").toLowerCase().includes("lmis") || (s.step_type || "").toLowerCase().includes("lms"));
+    const inj = clearanceSteps.find((s) => (s.step_type || "").toLowerCase().includes("taeshir") || (s.step_type || "").toLowerCase().includes("injaz") || (s.step_type || "").toLowerCase().includes("telesign"));
+    const emb = clearanceSteps.find((s) => (s.step_type || "").toLowerCase().includes("embassy"));
+
+    const isLmsDone = lms?.status === "Completed" || lms?.status === "Issued" || lms?.status === "Approved" || lms?.status === "Complete";
+    const isInjDone = inj?.status === "Completed" || inj?.status === "Issued" || inj?.status === "Approved" || inj?.status === "Complete" || inj?.payment_status === "Paid";
+    const isEmbDone = emb?.status === "Stamped" || emb?.status === "Completed" || emb?.status === "Approved" || emb?.status === "Issued";
+
+    // Both parallel steps are done:
+    if (isLmsDone && isInjDone) {
+      if (isEmbDone) {
+        if (placement?.status === "Ticketed" || raw === "Ticketed") return "Ticketed";
+        if (placement?.status === "Departed" || raw === "Departed") return "Departed";
+        return "Embassy/Wakala";
+      }
+      return "Embassy/Wakala";
+    }
+
+    if (!isLmsDone && !isInjDone) return "LMIS";
+    if (!isLmsDone) return "LMIS";
+    if (!isInjDone) return "Te'shir";
+    return "Embassy/Wakala";
+  }
+
+  if (raw === "Processing" || placement?.status === "Processing") return "LMIS";
+
+  return raw;
+}
 
 export interface IncomeExpenseLog {
   name?: string;

@@ -29,7 +29,7 @@ import {
   recalculateApplicantStateApi,
 } from "@/lib/api/applicantApi";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { can } from "@/lib/auth/permissions";
+import { can, isAdminUser } from "@/lib/auth/permissions";
 
 interface DepartureWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -51,6 +51,7 @@ export function DepartureWorkspace({
   const queryClient = useQueryClient();
   const { authUser } = useAuth();
   const canEdit = can(authUser, "createTicket") || can(authUser, "createDeparture") || can(authUser, "manageClearances");
+  const isAdmin = isAdminUser(authUser);
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
@@ -58,7 +59,12 @@ export function DepartureWorkspace({
   // Ticket fields
   const [ticketStatus, setTicketStatus] = React.useState<"Pending" | "Booked" | "Cancelled">("Pending");
   const [ticketNumber, setTicketNumber] = React.useState("");
+  const [airline, setAirline] = React.useState("Ethiopian Airlines");
+  const [flightDate, setFlightDate] = React.useState("");
+  const [ticketCost, setTicketCost] = React.useState<number | "">("");
+  const [ticketCurrency, setTicketCurrency] = React.useState("USD");
   const [ticketDetails, setTicketDetails] = React.useState("");
+  const [employee, setEmployee] = React.useState("");
 
   // Medical 2 fields
   const [medical2Result, setMedical2Result] = React.useState<"Pass" | "Fail" | "">("");
@@ -66,8 +72,11 @@ export function DepartureWorkspace({
   const [medical2Remark, setMedical2Remark] = React.useState("");
 
   // Departure fields
-  const [departureStatus, setDepartureStatus] = React.useState<"Pending" | "Departed" | "Cancelled">("Pending");
+  const [departureStatus, setDepartureStatus] = React.useState<"Pending" | "Departed" | "Rescheduled" | "Cancelled">("Pending");
   const [departureTime, setDepartureTime] = React.useState("");
+  const [rescheduleDate, setRescheduleDate] = React.useState("");
+  const [rescheduleCause, setRescheduleCause] = React.useState<"Internal" | "Airport">("Airport");
+  const [rescheduleCost, setRescheduleCost] = React.useState<number | "">("");
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -77,7 +86,12 @@ export function DepartureWorkspace({
 
       setTicketStatus((tkt?.status as any) || "Pending");
       setTicketNumber(tkt?.ticket_number || "");
+      setAirline((tkt as any)?.airline || "Ethiopian Airlines");
+      setFlightDate((tkt as any)?.flight_date || (selectedRow.ticket as any)?.flight_date || "");
+      setTicketCost((tkt as any)?.ticket_cost || "");
+      setTicketCurrency((tkt as any)?.currency || "USD");
       setTicketDetails(tkt?.ticket_details || "");
+      setEmployee((tkt as any)?.employee || (dep as any)?.employee || (tkt as any)?.assigned_officer || "");
 
       setMedical2Result((dep?.medical_2_result as any) || "");
       setMedical2Date(dep?.medical_2_date || "");
@@ -85,17 +99,21 @@ export function DepartureWorkspace({
 
       setDepartureStatus((dep?.status as any) || "Pending");
       setDepartureTime(dep?.departure_time || "");
+      setRescheduleDate((dep as any)?.reschedule_date || "");
+      setRescheduleCause((dep as any)?.reschedule_cause || "Airport");
+      setRescheduleCost((dep as any)?.reschedule_cost || "");
     }
   }, [selectedRow]);
 
   // Mutation
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!selectedRow?.dsrName) {
-        throw new Error("No DSR record found on backend for this candidate. Cannot record ticket or departure.");
-      }
+      if (!selectedRow) return;
 
-      const dsrName = selectedRow.dsrName;
+      const dsrName = selectedRow.dsrName || selectedRow.applicantId;
+      if (!dsrName) {
+        throw new Error("No linked candidate record found.");
+      }
 
       // 1. Submit / Update DSR Ticket
       if (ticketNumber.trim() || ticketStatus !== "Pending") {
@@ -104,7 +122,12 @@ export function DepartureWorkspace({
           ticket_number: ticketNumber.trim() || "TKT-PENDING",
           ticket_details: ticketDetails || undefined,
           status: ticketStatus,
-        });
+          airline: airline || undefined,
+          flight_date: flightDate || undefined,
+          ticket_cost: Number(ticketCost) || undefined,
+          currency: ticketCurrency || undefined,
+          ...(isAdmin && employee ? { employee } : {}),
+        } as any);
       }
 
       // 2. Submit / Update DSR Departure & Medical 2
@@ -116,7 +139,11 @@ export function DepartureWorkspace({
           medical_2_result: medical2Result || undefined,
           medical_2_date: medical2Date || undefined,
           medical_2_remark: medical2Remark || undefined,
-        });
+          reschedule_date: departureStatus === "Rescheduled" ? rescheduleDate : undefined,
+          reschedule_cause: departureStatus === "Rescheduled" ? rescheduleCause : undefined,
+          reschedule_cost: departureStatus === "Rescheduled" ? Number(rescheduleCost) || 0 : undefined,
+          ...(isAdmin && employee ? { employee } : {}),
+        } as any);
       }
 
       // 3. Trigger backend lifecycle recalculation
@@ -440,6 +467,55 @@ export function DepartureWorkspace({
             />
           </DrawerField>
 
+          <DrawerField label="Airline Carrier" isReadOnly={false}>
+            <select
+              value={airline}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setAirline(e.target.value)}
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+            >
+              <option value="Ethiopian Airlines">Ethiopian Airlines (ET)</option>
+              <option value="Saudia">Saudia (SV)</option>
+              <option value="FlyDubai">FlyDubai (FZ)</option>
+              <option value="Qatar Airways">Qatar Airways (QR)</option>
+              <option value="Emirates">Emirates (EK)</option>
+              <option value="Other">Other Airline</option>
+            </select>
+          </DrawerField>
+
+          <DrawerField label="Flight Date" isReadOnly={false}>
+            <Input
+              type="date"
+              value={flightDate}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setFlightDate(e.target.value)}
+              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Ticket Cost" isReadOnly={false}>
+            <div className="flex gap-1.5">
+              <Input
+                type="number"
+                placeholder="450"
+                value={ticketCost}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setTicketCost(e.target.value ? Number(e.target.value) : "")}
+                className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+              <select
+                value={ticketCurrency}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setTicketCurrency(e.target.value)}
+                className="h-9 w-20 px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold"
+              >
+                <option value="USD">USD</option>
+                <option value="SAR">SAR</option>
+                <option value="ETB">ETB</option>
+              </select>
+            </div>
+          </DrawerField>
+
           <div className="sm:col-span-2">
             <DrawerField label="Flight Details / Route Itinerary" isReadOnly={false}>
               <Textarea
@@ -503,6 +579,7 @@ export function DepartureWorkspace({
             >
               <option value="Pending">Pending (Scheduled)</option>
               <option value="Departed">Departed (Flight Escorted & Flown)</option>
+              <option value="Rescheduled">Rescheduled</option>
               <option value="Cancelled">Cancelled</option>
             </select>
           </DrawerField>
@@ -517,6 +594,53 @@ export function DepartureWorkspace({
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
           </DrawerField>
+
+          {departureStatus === "Rescheduled" && (
+            <>
+              <DrawerField label="Rescheduled Flight Date" isReadOnly={false}>
+                <Input
+                  type="date"
+                  value={rescheduleDate}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </DrawerField>
+
+              <DrawerField label="Reschedule Cause" isReadOnly={false}>
+                <select
+                  value={rescheduleCause}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setRescheduleCause(e.target.value as any)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md"
+                >
+                  <option value="Airport">Airport / Airline Delay</option>
+                  <option value="Internal">Internal Agency Reschedule</option>
+                </select>
+              </DrawerField>
+            </>
+          )}
+
+          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
+          {isAdmin && (
+            <div className="sm:col-span-2">
+              <DrawerField label="Assigned Ticketing Officer (Admin Only)" isReadOnly={false}>
+                <select
+                  value={employee}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setEmployee(e.target.value)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                >
+                  <option value="">-- Select Handler Employee --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.name} value={emp.name}>
+                      {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
+                    </option>
+                  ))}
+                </select>
+              </DrawerField>
+            </div>
+          )}
         </DrawerSection>
       </OperationalDrawer>
     </>

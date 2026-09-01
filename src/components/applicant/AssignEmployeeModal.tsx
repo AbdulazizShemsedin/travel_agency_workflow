@@ -20,6 +20,7 @@ import {
   getCorridorStepsV2,
   reassignClearanceStepV2,
   listPlacementsV2,
+  listMyClearanceStepsV2,
   V2ClearanceStep,
 } from "@/lib/api/v2";
 import { getSystemUsersApi, SystemUserRecord } from "@/lib/api/applicantApi";
@@ -93,29 +94,62 @@ export function AssignEmployeeModal({
     return null;
   }, [placements, placementName, applicantIds]);
 
+  // 4. Fetch existing clearance steps if placement exists to pre-populate current handlers
+  const { data: allClearanceSteps = [] } = useQuery<V2ClearanceStep[]>({
+    queryKey: ["my-clearance-steps"],
+    queryFn: () => listMyClearanceStepsV2(),
+    enabled: isOpen && !!activePlacement?.name,
+  });
+
   const [strategy, setStrategy] = React.useState<AssignmentStrategy>("corridor_lead");
   const [leadOfficerEmail, setLeadOfficerEmail] = React.useState<string>("");
   const [stepOfficerMap, setStepOfficerMap] = React.useState<Record<string, string>>({});
 
-  // Initialize officer defaults
+  // Initialize officer defaults and pre-populate currently assigned staff
   React.useEffect(() => {
     if (systemUsers.length > 0) {
       const defaultEmail = systemUsers[0].email || systemUsers[0].name;
-      if (!leadOfficerEmail) {
-        setLeadOfficerEmail(defaultEmail);
-      }
 
       const initialMap: Record<string, string> = {};
+      const placementSteps = activePlacement?.name
+        ? allClearanceSteps.filter((s: V2ClearanceStep) => s.placement === activePlacement.name)
+        : [];
+
       corridorConfig.forEach((step) => {
-        // Try matching role to step
-        const matched = systemUsers.find((u) =>
-          u.roles.some((r) => r.toLowerCase().includes(step.step_type.toLowerCase()))
+        const stepTypeLower = step.step_type.toLowerCase();
+        // 1. Check if placement already has an assigned officer for this step
+        const existing = placementSteps.find(
+          (s: V2ClearanceStep) =>
+            (s.step_type || "").toLowerCase().includes(stepTypeLower) ||
+            stepTypeLower.includes((s.step_type || "").toLowerCase())
         );
-        initialMap[step.step_type] = matched ? (matched.email || matched.name) : defaultEmail;
+
+        if (existing?.assigned_officer) {
+          initialMap[step.step_type] = existing.assigned_officer;
+        } else {
+          // 2. Otherwise match role to step
+          const matched = systemUsers.find((u) =>
+            u.roles.some((r) => {
+              const roleLower = r.toLowerCase();
+              if (stepTypeLower.includes("lmis") || stepTypeLower.includes("lms")) return roleLower.includes("lmis") || roleLower.includes("lms");
+              if (stepTypeLower.includes("taeshir") || stepTypeLower.includes("teshir") || stepTypeLower.includes("injaz")) return roleLower.includes("taeshir") || roleLower.includes("teshir") || roleLower.includes("injaz");
+              if (stepTypeLower.includes("embassy")) return roleLower.includes("embassy");
+              if (stepTypeLower.includes("ticket") || stepTypeLower.includes("departure")) return roleLower.includes("ticket") || roleLower.includes("departure");
+              return roleLower.includes(stepTypeLower);
+            })
+          );
+          initialMap[step.step_type] = matched ? (matched.email || matched.name) : defaultEmail;
+        }
       });
+
       setStepOfficerMap(initialMap);
+      if (placementSteps[0]?.assigned_officer) {
+        setLeadOfficerEmail(placementSteps[0].assigned_officer);
+      } else if (!leadOfficerEmail) {
+        setLeadOfficerEmail(defaultEmail);
+      }
     }
-  }, [systemUsers, corridorConfig]);
+  }, [systemUsers, corridorConfig, allClearanceSteps, activePlacement?.name]);
 
   // Assignment Mutation (Executes V2 reassignClearanceStepV2 per step)
   const assignMutation = useMutation({
@@ -153,8 +187,11 @@ export function AssignEmployeeModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["placements"] });
       queryClient.invalidateQueries({ queryKey: ["clearance_steps"] });
+      queryClient.invalidateQueries({ queryKey: ["my-clearance-steps"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success("Corridor clearance officers assigned successfully!");
+      queryClient.invalidateQueries({ queryKey: ["applicant"] });
+      toast.success("Corridor clearance officers updated successfully!");
       if (onSuccess) onSuccess();
       onClose();
     },
@@ -164,6 +201,8 @@ export function AssignEmployeeModal({
       });
     },
   });
+
+  const isReassignMode = activePlacement?.status === "Processing" || (applicantIds.length > 0 && Boolean(activePlacement));
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -175,11 +214,12 @@ export function AssignEmployeeModal({
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                Corridor Clearance Officer Allocation
+                {isReassignMode ? "Change Assigned Employee / Reassign Officers" : "Corridor Clearance Officer Allocation"}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Assign authorized officers to manage and execute the required clearance steps for{" "}
-                <strong className="text-slate-800 dark:text-zinc-200">{targetCountry}</strong> corridor.
+                {isReassignMode
+                  ? `Update or reassign operational staff managing clearance steps for ${targetCountry} corridor.`
+                  : `Assign authorized officers to manage and execute the required clearance steps for ${targetCountry} corridor.`}
               </DialogDescription>
             </div>
           </div>
@@ -316,17 +356,17 @@ export function AssignEmployeeModal({
             size="sm"
             onClick={() => assignMutation.mutate()}
             disabled={assignMutation.isPending || isUsersLoading}
-            className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-semibold shadow-xs"
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
           >
             {assignMutation.isPending ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Assigning Officers...
+                Updating Officers...
               </>
             ) : (
               <>
                 <Check className="mr-1.5 h-3.5 w-3.5" />
-                Confirm Clearance Officers
+                {isReassignMode ? "Confirm Employee Reassignment" : "Confirm Staff Allocation"}
               </>
             )}
           </Button>

@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export default function AdminCommissionPage() {
   const queryClient = useQueryClient();
@@ -80,7 +81,7 @@ export default function AdminCommissionPage() {
     total_departed: items.length,
     total_outstanding_amount: items.reduce((sum, item) => sum + (Number(item.commission_amount || item.amount) || 0), 0),
     total_paid_amount: 0,
-    currency: items[0]?.currency || "SAR",
+    currency: items[0]?.currency || "Birr",
     total_contractors_count: contractors.length,
     unpaid_count: items.length,
     paid_count: 0,
@@ -122,7 +123,7 @@ export default function AdminCommissionPage() {
   const openSettlementModal = (item: CommissionLedgerItem) => {
     setSettlementCandidate(item);
     setSettleStatus(item.commission_status === "Paid" ? "Paid" : "Paid");
-    setSettleAmount(String(item.commission_amount || 1500));
+    setSettleAmount(String(item.commission_amount || 115000));
     setSettleDate(item.commission_paid_date || new Date().toISOString().split("T")[0]);
     setSettleBatchRef(item.commission_batch_ref || `INV-${new Date().getFullYear()}-${item.name}`);
   };
@@ -189,7 +190,7 @@ export default function AdminCommissionPage() {
         return new Date(a.departure_date || a.creation || 0).getTime() - new Date(b.departure_date || b.creation || 0).getTime();
       }
       if (sortBy === "highest_amount") {
-        return b.commission_amount - a.commission_amount;
+        return (b.commission_amount || 0) - (a.commission_amount || 0);
       }
       if (sortBy === "contractor") {
         return (a.contractor_name || "").localeCompare(b.contractor_name || "");
@@ -230,7 +231,7 @@ export default function AdminCommissionPage() {
           paidCount: 0,
           totalOutstanding: 0,
           totalPaid: 0,
-          defaultRate: conObj?.default_commission_amount || 1500,
+          defaultRate: conObj?.default_commission_amount || 115000,
         };
       }
 
@@ -239,20 +240,62 @@ export default function AdminCommissionPage() {
       }
       if (item.commission_status === "Paid") {
         map[cId].paidCount += 1;
-        map[cId].totalPaid += item.commission_amount;
-      } else if (item.commission_status === "Pending" || item.commission_status === "Invoiced") {
+        map[cId].totalPaid += (Number(item.commission_amount || item.amount) || 0);
+      } else if (item.commission_status === "Pending" || item.commission_status === "Invoiced" || !item.commission_status) {
         map[cId].unpaidCount += 1;
-        map[cId].totalOutstanding += item.commission_amount;
+        map[cId].totalOutstanding += (Number(item.commission_amount || item.amount) || 0);
       }
     }
 
     return Object.values(map);
   }, [items, contractors]);
 
-  const excelExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
-  const pdfExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
+  // Export Columns Definition
+  const exportColumns: ExportColumn<any>[] = [
+    { header: "Candidate ID", accessor: (row) => row.applicant || row.name || "—" },
+    { header: "Full Name", accessor: (row) => row.full_name || "—" },
+    { header: "Passport Number", accessor: (row) => row.passport_number || "—" },
+    { header: "Partner Agency", accessor: (row) => row.contractor_name || row.contractor || "—" },
+    { header: "Destination Country", accessor: (row) => row.destination_country || "Saudi Arabia" },
+    { header: "Departure / Stage", accessor: (row) => row.departure_date || row.applicant_state || "Pending" },
+    { header: "Commission Amount", accessor: (row) => `${(Number(row.commission_amount || row.amount) || 0).toLocaleString()}` },
+    { header: "Currency", accessor: (row) => row.currency || "Birr" },
+    { header: "Billing Status", accessor: (row) => row.commission_status || row.status || "Pending" },
+    { header: "Batch / Invoice Ref", accessor: (row) => row.commission_batch_ref || row.batch || "Unassigned" },
+    { header: "Payment Date", accessor: (row) => row.commission_paid_date || "—" },
+  ];
+
+  // Excel / CSV Export Handler
+  const handleExportExcel = () => {
+    exportToExcel(
+      `Agency_Commission_Statement_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredItems,
+      "Agency Commissions & Accounts Settlement Statement",
+      {
+        "Filter Partner Agency": selectedContractor,
+        "Filter Status": selectedStatus,
+        "Total Outstanding (Birr)": summary.total_outstanding_amount.toLocaleString(),
+        "Total Records": filteredItems.length,
+      }
+    );
+  };
+
+  // PDF Export Handler
+  const handleExportPDF = () => {
+    exportToPDF(
+      "Agency Commissions & Accounts Settlement Statement",
+      exportColumns,
+      filteredItems,
+      [
+        { label: "Total Departed Placements", value: summary.total_departed.toLocaleString() },
+        { label: "Outstanding Unpaid Billing", value: `${summary.total_outstanding_amount.toLocaleString()} Birr` },
+        { label: "Total Settled Commissions", value: `${summary.total_paid_amount.toLocaleString()} Birr` },
+        { label: "Partner Foreign Agencies", value: String(contractorSummaries.length || summary.total_contractors_count) },
+      ],
+      `Filter Agency: ${selectedContractor} | Status: ${selectedStatus}`
+    );
+  };
 
   return (
     <div className="space-y-6 pb-16">
@@ -298,25 +341,27 @@ export default function AdminCommissionPage() {
             Refresh
           </Button>
 
-          <a
-            href={excelExportUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 px-3.5 py-2 text-xs font-bold text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 transition shadow-2xs"
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="text-xs rounded-xl border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 font-bold"
           >
-            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-            <span>Export Excel Statement</span>
-          </a>
+            <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+            Export Excel Statement
+          </Button>
 
-          <a
-            href={pdfExportUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 px-3.5 py-2 text-xs font-bold text-blue-900 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition shadow-2xs"
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            className="text-xs rounded-xl border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/80 font-bold"
           >
-            <FileText className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
-            <span>Export PDF Report</span>
-          </a>
+            <FileText className="mr-1.5 h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
+            Export PDF Report
+          </Button>
         </div>
       </div>
 
@@ -437,7 +482,7 @@ export default function AdminCommissionPage() {
                         {c.contractorName}
                       </h4>
                       <span className="text-[10px] text-slate-500 dark:text-zinc-400">
-                        {c.country} • Agreed: {c.defaultRate.toLocaleString()} SAR/cand
+                        {c.country} • Agreed: {c.defaultRate.toLocaleString()} Birr/cand
                       </span>
                     </div>
                     <Badge variant="outline" className="text-[10px] font-mono">
@@ -449,13 +494,13 @@ export default function AdminCommissionPage() {
                     <div>
                       <span className="text-[10px] text-slate-400 block">Outstanding</span>
                       <strong className="text-amber-700 dark:text-amber-400 font-mono">
-                        {c.totalOutstanding.toLocaleString()} SAR
+                        {c.totalOutstanding.toLocaleString()} Birr
                       </strong>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-slate-400 block">Settled</span>
                       <strong className="text-emerald-700 dark:text-emerald-400 font-mono">
-                        {c.totalPaid.toLocaleString()} SAR
+                        {c.totalPaid.toLocaleString()} Birr
                       </strong>
                     </div>
                   </div>
@@ -610,13 +655,13 @@ export default function AdminCommissionPage() {
                       <td className="px-4 py-3.5 text-right font-mono">
                         {isWaived ? (
                           <div>
-                            <span className="text-slate-400 line-through text-[11px]">1,500 SAR</span>
+                            <span className="text-slate-400 line-through text-[11px]">115,000 Birr</span>
                             <span className="block font-bold text-purple-700 dark:text-purple-400 text-xs">$0 (Guaranteed)</span>
                           </div>
                         ) : (
                           <div>
                             <span className="text-sm font-black text-slate-900 dark:text-white">
-                              {item.commission_amount.toLocaleString()} {item.commission_currency}
+                              {(Number(item.commission_amount || item.amount) || 0).toLocaleString()} {item.currency || item.commission_currency || "Birr"}
                             </span>
                           </div>
                         )}
@@ -756,14 +801,14 @@ export default function AdminCommissionPage() {
                 {/* Commission Amount */}
                 <div className="space-y-1.5">
                   <Label htmlFor="settleAmount" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Amount (SAR) <span className="text-rose-500">*</span>
+                    Amount (Birr) <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="settleAmount"
                     type="number"
                     value={settleAmount}
                     onChange={(e) => setSettleAmount(e.target.value)}
-                    placeholder="1500"
+                    placeholder="115000"
                     required
                   />
                 </div>

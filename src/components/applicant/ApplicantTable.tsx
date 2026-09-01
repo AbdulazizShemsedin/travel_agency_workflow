@@ -26,6 +26,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { resolveApplicantStage } from "@/types/applicant";
 
 function getStageBadgeVariant(stage: string): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
@@ -38,10 +41,17 @@ function getStageBadgeVariant(stage: string): {
       return { variant: "purple", dotColor: "bg-purple-600" };
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
+    case "LMIS":
+      return { variant: "info", dotColor: "bg-blue-600" };
+    case "Te'shir":
+      return { variant: "purple", dotColor: "bg-indigo-600" };
+    case "Embassy/Wakala":
+    case "Wakala":
+      return { variant: "success", dotColor: "bg-teal-600" };
     case "Processing":
-      return { variant: "info", dotColor: "bg-indigo-600" };
+      return { variant: "info", dotColor: "bg-blue-600" };
     case "Stamped":
-      return { variant: "info", dotColor: "bg-teal-600" };
+      return { variant: "success", dotColor: "bg-teal-600" };
     case "Ticketed":
       return { variant: "purple", dotColor: "bg-indigo-600" };
     case "Departed":
@@ -57,6 +67,18 @@ function getStageBadgeVariant(stage: string): {
 
 export function ApplicantTable() {
   const router = useRouter();
+  const { authUser, roles } = useAuth();
+
+  const isAdmin = React.useMemo<boolean>(() => {
+    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
+    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
+      return norm === "system manager" || norm === "administrator" || norm === "agency admin" || norm === "manager";
+    });
+  }, [authUser, roles]);
+
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedStage, setSelectedStage] = React.useState<string>("All");
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -76,9 +98,11 @@ export function ApplicantTable() {
   // Filtered & searched data
   const filteredApplicants = React.useMemo(() => {
     return applicants.filter((applicant) => {
-      const currentStatus = applicant.status || applicant.applicant_state || "Draft";
+      const currentStatus = resolveApplicantStage(applicant);
       const matchesStage =
-        selectedStage === "All" || currentStatus === selectedStage;
+        selectedStage === "All" ||
+        currentStatus === selectedStage ||
+        (selectedStage === "Processing" && (currentStatus === "LMIS" || currentStatus === "Te'shir" || currentStatus === "Embassy/Wakala"));
 
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -92,6 +116,49 @@ export function ApplicantTable() {
       return matchesStage && matchesSearch;
     });
   }, [applicants, selectedStage, searchQuery]);
+
+  // Export Columns Definition
+  const exportColumns: ExportColumn<V2ApplicantDetails>[] = [
+    { header: "Applicant ID", accessor: "name" },
+    { header: "Full Name", accessor: (r) => r.full_name || `${r.first_name || ""} ${r.last_name || ""}`.trim() },
+    { header: "Passport Number", accessor: (r) => r.passport_number || "—" },
+    { header: "Destination", accessor: (r) => r.destination_country || "Saudi Arabia" },
+    { header: "Contract Number", accessor: (r) => r.contract_number || "2005450415" },
+    { header: "Visa Number", accessor: (r) => r.visa_number || "1908334046" },
+    { header: "Sponsor Name", accessor: (r) => r.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI" },
+    { header: "Current Stage", accessor: (r) => resolveApplicantStage(r) },
+    { header: "Phone Number", accessor: (r) => r.phone_number || r.phone || "—" },
+    { header: "City", accessor: (r) => r.city || "Addis Ababa" },
+    { header: "Gender", accessor: (r) => r.gender || "Female" },
+  ];
+
+  const handleExportExcel = () => {
+    exportToExcel(
+      `Applicants_Roster_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredApplicants,
+      "Official Candidate & Applicant Roster",
+      {
+        "Stage Filter": selectedStage,
+        "Search Query": searchQuery || "None",
+        "Total Filtered Records": filteredApplicants.length,
+      }
+    );
+  };
+
+  const handleExportPDF = () => {
+    exportToPDF(
+      "Official Candidate & Applicant Roster",
+      exportColumns,
+      filteredApplicants,
+      [
+        { label: "Total Candidates", value: String(filteredApplicants.length) },
+        { label: "Stage Filter", value: selectedStage },
+        { label: "Exported At", value: new Date().toLocaleDateString() },
+      ],
+      `Stage: ${selectedStage} ${searchQuery ? `| Search: ${searchQuery}` : ""}`
+    );
+  };
 
   // Paginated slice
   const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
@@ -124,19 +191,19 @@ export function ApplicantTable() {
     const ids = Array.from(selectedRows);
     const selectedApplicants = applicants.filter((a) => ids.includes(a.name));
 
-    // Check if ALL selected applicants are in "Selected" stage
-    const nonSelectedCandidates = selectedApplicants.filter(
-      (a) => a.applicant_state !== "Selected"
+    // Check if ALL selected applicants are in "Processing" or "Selected" stage
+    const nonEligibleCandidates = selectedApplicants.filter(
+      (a) => a.applicant_state !== "Processing" && a.applicant_state !== "Selected"
     );
 
-    if (nonSelectedCandidates.length > 0) {
-      const invalidNames = nonSelectedCandidates
+    if (nonEligibleCandidates.length > 0) {
+      const invalidNames = nonEligibleCandidates
         .map((a) => `${a.full_name || a.name} (${a.applicant_state || "Draft"})`)
         .slice(0, 3)
         .join(", ");
 
-      toast.error("Cannot Assign Employee: Stage Ineligible", {
-        description: `Of the applicants selected, one or more have not reached the 'Selected' stage (${invalidNames}). Only candidates on 'Selected' stage can be assigned processing staff.`,
+      toast.error("Cannot Reassign Employee: Stage Ineligible", {
+        description: `Of the applicants selected, one or more have not reached the 'Processing' stage (${invalidNames}). Only candidates on 'Processing' stage can be reassigned processing staff.`,
         duration: 6000,
       });
       return;
@@ -151,9 +218,9 @@ export function ApplicantTable() {
   const handleSingleAssign = (applicant: V2ApplicantDetails, e?: React.MouseEvent) => {
     e?.stopPropagation();
     const currentStatus = applicant.status || applicant.applicant_state;
-    if (currentStatus !== "Selected") {
-      toast.error("Cannot Assign Employee", {
-        description: `Applicant is currently in '${currentStatus}' stage. Assignment is only available in 'Selected' stage.`,
+    if (currentStatus !== "Processing" && currentStatus !== "Selected") {
+      toast.error("Cannot Reassign Employee", {
+        description: `Applicant is currently in '${currentStatus}' stage. Staff reassignment is available in 'Processing' stage.`,
       });
       return;
     }
@@ -164,8 +231,10 @@ export function ApplicantTable() {
 
   // Selected counts breakdown
   const selectedApplicantsList = applicants.filter((a) => selectedRows.has(a.name));
-  const selectedStageCount = selectedApplicantsList.filter((a) => a.applicant_state === "Selected").length;
-  const hasIneligibleSelected = selectedRows.size > 0 && selectedStageCount < selectedRows.size;
+  const processingStageCount = selectedApplicantsList.filter(
+    (a) => a.applicant_state === "Processing" || a.applicant_state === "Selected"
+  ).length;
+  const hasIneligibleSelected = selectedRows.size > 0 && processingStageCount < selectedRows.size;
 
   return (
     <div className="space-y-4">
@@ -181,8 +250,8 @@ export function ApplicantTable() {
                 {selectedRows.size} applicant{selectedRows.size > 1 ? "s" : ""} selected
               </p>
               <p className="text-[11px] text-emerald-200">
-                {selectedStageCount} in &quot;Selected&quot; stage •{" "}
-                {selectedRows.size - selectedStageCount} in other stages
+                {processingStageCount} in Processing stage •{" "}
+                {selectedRows.size - processingStageCount} in other stages
               </p>
             </div>
           </div>
@@ -196,19 +265,21 @@ export function ApplicantTable() {
             >
               Clear Selection
             </Button>
-            {/* Prominent Assign Employee Button */}
-            <Button
-              size="sm"
-              onClick={handleBatchAssign}
-              className={`text-xs font-bold shadow-xs cursor-pointer ${
-                hasIneligibleSelected
-                  ? "bg-amber-500 hover:bg-amber-400 text-amber-950"
-                  : "bg-emerald-400 hover:bg-emerald-300 text-emerald-950"
-              }`}
-            >
-              <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-              Assign Employee ({selectedRows.size})
-            </Button>
+            {/* Prominent Assign / Change Assigned Staff Button */}
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={handleBatchAssign}
+                className={`text-xs font-bold shadow-xs cursor-pointer ${
+                  hasIneligibleSelected
+                    ? "bg-amber-500 hover:bg-amber-400 text-amber-950"
+                    : "bg-emerald-400 hover:bg-emerald-300 text-emerald-950"
+                }`}
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                Change Assigned Staff ({selectedRows.size})
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -244,8 +315,9 @@ export function ApplicantTable() {
                 { value: "Registered", label: "Registered" },
                 { value: "CV Generated", label: "CV Generated" },
                 { value: "Selected", label: "Selected" },
-                { value: "Processing", label: "Processing" },
-                { value: "Stamped", label: "Stamped" },
+                { value: "LMIS", label: "LMIS Clearance" },
+                { value: "Te'shir", label: "Te'shir / Injaz" },
+                { value: "Embassy/Wakala", label: "Embassy & Wakala" },
                 { value: "Ticketed", label: "Ticketed" },
                 { value: "Departed", label: "Departed" },
                 { value: "Cancelled", label: "Cancelled" },
@@ -254,6 +326,31 @@ export function ApplicantTable() {
               aria-label="Filter by Stage"
             />
           </div>
+
+          {/* Export Excel & PDF */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="h-9.5 text-xs font-semibold gap-1.5 border-slate-300 dark:border-[#26262d] text-slate-700 dark:text-zinc-200"
+            title="Export filtered applicants to Excel"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export Excel</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            className="h-9.5 text-xs font-semibold gap-1.5 border-slate-300 dark:border-[#26262d] text-slate-700 dark:text-zinc-200"
+            title="Export filtered applicants to PDF"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export PDF</span>
+          </Button>
         </div>
       </div>
 
@@ -298,7 +395,7 @@ export function ApplicantTable() {
                 </tr>
               ) : (
                 paginatedApplicants.map((applicant) => {
-                  const stage = applicant.applicant_state || "Draft";
+                  const stage = resolveApplicantStage(applicant);
                   const badge = getStageBadgeVariant(stage);
                   const isSelected = selectedRows.has(applicant.name);
                   const isSelectedStage = stage === "Selected";
@@ -390,16 +487,16 @@ export function ApplicantTable() {
                             <span>View</span>
                           </Link>
 
-                          {/* 2. Assign Processing Employee - SHOWN ONLY IF ON 'Selected' STAGE */}
-                          {isSelectedStage && (
+                          {/* 2. Assign / Change Assigned Employee - SHOWN TO ADMIN ON Operational & Selected Stages */}
+                          {isAdmin && (isSelectedStage || stage === "LMIS" || stage === "Te'shir" || stage === "Embassy/Wakala" || stage === "Processing" || stage === "In Clearance") && (
                             <button
                               type="button"
                               onClick={(e) => handleSingleAssign(applicant, e)}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
-                              title="Assign Processing Staff"
+                              title={isSelectedStage ? "Assign Operational Staff" : "Change Assigned Operational Staff"}
                             >
                               <UserCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
-                              <span>Assign</span>
+                              <span>{isSelectedStage ? "Assign Staff" : "Change Assigned Staff"}</span>
                             </button>
                           )}
 

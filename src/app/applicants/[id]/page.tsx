@@ -40,6 +40,7 @@ import {
   Plus,
   Ticket,
   XCircle,
+  GitBranch,
 } from "lucide-react";
 import {
   getApplicantV2,
@@ -76,14 +77,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/components/providers/AuthProvider";
+
+import { resolveApplicantStage } from "@/types/applicant";
 
 const CANONICAL_STAGES = [
   "Draft",
   "Registered",
   "CV Generated",
   "Selected",
-  "Processing",
-  "Stamped",
+  "LMIS",
+  "Te'shir",
+  "Embassy/Wakala",
   "Ticketed",
   "Departed",
 ];
@@ -94,6 +99,17 @@ export default function ApplicantDetailPage() {
   const rawId = params?.id;
   const applicantId = typeof rawId === "string" ? decodeURIComponent(rawId) : Array.isArray(rawId) ? decodeURIComponent(rawId[0]) : "";
   const queryClient = useQueryClient();
+  const { authUser, roles } = useAuth();
+
+  const isAdmin = React.useMemo<boolean>(() => {
+    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
+    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
+      return norm === "system manager" || norm === "administrator" || norm === "agency admin" || norm === "manager";
+    });
+  }, [authUser, roles]);
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
@@ -126,10 +142,18 @@ export default function ApplicantDetailPage() {
   });
 
   const applicantClearanceSteps = React.useMemo(() => {
+    const placementNames = new Set(placements.map((p) => p.name).filter(Boolean));
     return clearanceSteps.filter(
-      (s) => s.applicant_name === applicantId || s.applicant_name === applicant?.name
+      (s) =>
+        (s.placement && placementNames.has(s.placement)) ||
+        s.applicant === applicantId ||
+        s.applicant_name === applicantId ||
+        s.applicant === applicant?.name ||
+        s.applicant_name === applicant?.name ||
+        (applicant?.full_name && s.applicant_name === applicant.full_name) ||
+        (applicant?.applicant_name && s.applicant_name === applicant.applicant_name)
     );
-  }, [clearanceSteps, applicantId, applicant?.name]);
+  }, [clearanceSteps, placements, applicantId, applicant?.name, applicant?.full_name, applicant?.applicant_name]);
 
   const activePlacement = placements[0] || null;
 
@@ -229,8 +253,10 @@ export default function ApplicantDetailPage() {
   const passStatus = getExpiryBadgeStatus(passDays);
 
   // Authoritative State Machine Resolution
-  const currentStage = applicant.applicant_state || "Draft";
-  const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
+  const activeSteps = (applicant as any).clearance_steps || applicantClearanceSteps || [];
+  const placement = (applicant as any).placement || activePlacement || null;
+  const currentStage = resolveApplicantStage(applicant, placement, activeSteps);
+  const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage as any);
 
   const destination = (applicant.destination_country || "").trim().toLowerCase();
   const isKuwaitApplicant = destination === "kuwait";
@@ -244,6 +270,9 @@ export default function ApplicantDetailPage() {
     "CV Generated",
     "Request Pending",
     "Selected",
+    "LMIS",
+    "Te'shir",
+    "Embassy/Wakala",
     "Processing",
     "Stamped",
     "Ticketed",
@@ -338,6 +367,58 @@ export default function ApplicantDetailPage() {
           >
             <Send className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
             Send to Extension
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                toast.info("Generating Injaz document...");
+                const { downloadInjazDocumentPDF } = await import("@/lib/pdf/injazDocumentGenerator");
+                await downloadInjazDocumentPDF({
+                  applicantId: applicant.name,
+                  fullName: applicant.full_name || applicant.applicant_name,
+                  firstName: applicant.first_name,
+                  middleName: applicant.middleName || applicant.middle_name,
+                  lastName: applicant.lastName || applicant.last_name,
+                  motherName: (applicant as any).mother_name || (applicant as any).motherName || "AYESHA MOHAMMED",
+                  passportNumber: applicant.passport_number,
+                  passportIssueDate: (applicant as any).passport_issue_date || "2024-08-14",
+                  passportExpiry: applicant.passport_expiry || "2029-08-14",
+                  placeOfIssue: (applicant as any).place_of_issue || "ADDIS ABABA",
+                  placeOfBirth: applicant.place_of_birth || (applicant as any).leaving_town || "ADDIS ABABA",
+                  dateOfBirth: applicant.date_of_birth || "1997-04-12",
+                  nationality: applicant.nationality || "ETHIOPIAN",
+                  gender: applicant.gender || "FEMALE",
+                  maritalStatus: applicant.marital_status || "SINGLE",
+                  religion: applicant.religion || "MUSLIM",
+                  targetJob: applicant.target_job || applicant.job_applied || "HOUSEMAID",
+                  educationLevel: (applicant as any).education_level || "PRIMARY SCHOOL",
+                  phone: applicant.phone || "+251 91 123 4567",
+                  city: (applicant as any).city || "ADDIS ABABA",
+                  destinationCountry: applicant.destination_country || "Saudi Arabia",
+                  sponsorName: (applicant as any).sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI",
+                  sponsorId: (applicant as any).sponsor_id || "1130373143",
+                  sponsorPhone: (applicant as any).sponsor_phone || "966503221802",
+                  destinationCity: (applicant as any).destination_city || "RIYADH",
+                  contractorName: applicant.locked_contractor || (applicant as any).contractor_name || "Tihamat Asir Recruitment company",
+                  contractNumber: (applicant as any).contract_number || "2005450415",
+                  visaNumber: (applicant as any).visa_number || "1908334046",
+                  injazNumber: `E${applicant.passport_number?.replace(/\D/g, "") || "4982104"}`,
+                  paymentNo: "99281401",
+                  appointmentDate: (applicant as any).appointment_date || "2026-08-25",
+                });
+                toast.success("Injaz document generated and downloaded successfully!");
+              } catch (err: any) {
+                toast.error("Failed to generate Injaz document: " + err.message);
+              }
+            }}
+            className="text-xs border-blue-300 text-blue-900 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300"
+            title="Download official Injaz visa form PDF"
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
+            Injaz document
           </Button>
 
           <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
@@ -573,14 +654,17 @@ export default function ApplicantDetailPage() {
                   )}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAssignModalOpen(true)}
-                className="text-xs border-slate-300 dark:border-[#26262d] shrink-0"
-              >
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Reassign / Update Staff
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="text-xs border-emerald-600/40 dark:border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0 font-bold shadow-2xs"
+                  title="Admin authorization: Change assigned operational staff for this candidate"
+                >
+                  <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Change Assigned Employee
+                </Button>
+              )}
             </div>
 
             {/* Dynamic Clearance Steps Grid */}

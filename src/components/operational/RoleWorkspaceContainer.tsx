@@ -46,45 +46,88 @@ export function RoleWorkspaceContainer() {
 
   const allTabsConfig = [
     { id: "directory", label: "Directory", icon: Users, desc: "All Candidates" },
-    { id: "lms", label: "LMIS", icon: FileCheck2, desc: "Ministry & COC" },
-    { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA" },
-    { id: "wakala", label: "Wakala", icon: FileText, desc: "Musaned Authorization" },
-    { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Passport Visa" },
-    { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Dispatch" },
+    { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
+    { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
+    { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
+    { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Departure" },
   ];
 
-  // Determine available tabs for current user
-  const availableTabs = React.useMemo(() => {
-    if (isAdmin) return allTabsConfig;
+  // Determine available tabs and default workspace for current user
+  const { availableTabs, defaultTab, defaultCorridor } = React.useMemo(() => {
+    if (isAdmin) {
+      return {
+        availableTabs: allTabsConfig,
+        defaultTab: "directory",
+        defaultCorridor: "All",
+      };
+    }
 
     const r = (roles || []).map((x) => String(x).toLowerCase().trim()).join(" ");
     const allowed: string[] = [];
+    let prefTab = "";
+    let prefCorridor = "All";
 
-    if (r.includes("lms") || r.includes("lmis") || r.includes("clearance")) allowed.push("lms");
-    if (r.includes("injaz") || r.includes("teshir") || r.includes("te'shir")) allowed.push("injaz");
-    if (r.includes("wakala")) allowed.push("wakala");
-    if (r.includes("embassy")) allowed.push("embassy");
-    if (r.includes("ticket") || r.includes("departure")) allowed.push("departure");
-    if (r.includes("recruiter") || r.includes("intake") || r.includes("applicant viewer") || allowed.length === 0) {
-      if (allowed.length === 0) allowed.push("directory");
+    if (r.includes("saudi")) prefCorridor = "Saudi Arabia";
+    if (r.includes("kuwait")) prefCorridor = "Kuwait";
+
+    // 1. Te'shir / Injaz MOFA specialist
+    if (r.includes("taeshir") || r.includes("teshir") || r.includes("te'shir") || r.includes("injaz")) {
+      allowed.push("injaz");
+      if (!prefTab) prefTab = "injaz";
     }
 
-    return allTabsConfig.filter((tab) => allowed.includes(tab.id));
+    // 2. Embassy & Stamping specialist (includes Wakala / Musaned)
+    if (r.includes("embassy") || r.includes("wakala") || r.includes("telesign")) {
+      if (!allowed.includes("embassy")) allowed.push("embassy");
+      if (!prefTab) prefTab = "embassy";
+    }
+
+    // 3. LMIS Ministry Clearance specialist
+    if (r.includes("lms") || r.includes("lmis")) {
+      if (!allowed.includes("lms")) allowed.push("lms");
+      if (!prefTab) prefTab = "lms";
+    }
+
+    // 4. Ticketing & Logistics specialist
+    if (r.includes("ticket") || r.includes("departure")) {
+      if (!allowed.includes("departure")) allowed.push("departure");
+      if (!prefTab) prefTab = "departure";
+    }
+
+    // 5. Candidate Intake & Registrar
+    if (r.includes("registrar") || r.includes("recruiter") || r.includes("intake") || r.includes("applicant viewer")) {
+      if (!allowed.includes("directory")) allowed.push("directory");
+      if (!prefTab) prefTab = "directory";
+    }
+
+    // 6. Generic Clearance Officer fallback
+    if (r.includes("clearance") && allowed.length === 0) {
+      allowed.push("lms", "injaz", "embassy");
+      prefTab = "lms";
+    }
+
+    // 7. General fallback
+    if (allowed.length === 0) {
+      allowed.push("directory");
+      prefTab = "directory";
+    }
+
+    const filteredTabs = allTabsConfig.filter((tab) => allowed.includes(tab.id));
+    return {
+      availableTabs: filteredTabs,
+      defaultTab: prefTab || filteredTabs[0]?.id || "directory",
+      defaultCorridor: prefCorridor,
+    };
   }, [isAdmin, roles]);
 
-  const defaultTab = React.useMemo<string>(() => {
-    return availableTabs[0]?.id || (isAdmin ? "directory" : "lms");
-  }, [availableTabs, isAdmin]);
-
   const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
-  const [corridorFilter, setCorridorFilter] = React.useState<string>("All");
+  const [corridorFilter, setCorridorFilter] = React.useState<string>(defaultCorridor);
 
-  // Keep activeTab synced with defaultTab on mount/role changes
+  // Keep activeTab and corridorFilter immediately synced with persona / role switcher changes
   React.useEffect(() => {
-    if (!availableTabs.some((t) => t.id === activeTab)) {
-      setActiveTab(defaultTab);
-    }
-  }, [availableTabs, defaultTab, activeTab]);
+    setActiveTab(defaultTab);
+    setCorridorFilter(defaultCorridor);
+  }, [defaultTab, defaultCorridor, roles, authUser?.email]);
 
   // Fetch employees list for drawers
   const { data: employees = [] } = useQuery({
@@ -229,17 +272,6 @@ export function RoleWorkspaceContainer() {
 
         {activeTab === "injaz" && (
           <InjazWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
-
-        {activeTab === "wakala" && (
-          <WakalaWorkspace
             data={workspaceData}
             isLoading={isLoading || isRefetching}
             onRefresh={refetch}

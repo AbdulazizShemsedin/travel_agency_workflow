@@ -104,24 +104,48 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     if (d.nationality) {
       setValue("nationality", d.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
-    if (d.passport_expiry) {
-      setValue("passport_expiry", d.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-      if (d.passport_issue_date) {
-        setValue("passport_issue_date", d.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+
+    // Auto-calculate exact 5-year relationship between issue date and expiry date
+    let resolvedIssueDate = d.passport_issue_date || "";
+    let resolvedExpiryDate = d.passport_expiry || "";
+
+    if (resolvedIssueDate && !resolvedExpiryDate) {
+      const parts = resolvedIssueDate.split("-");
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        if (!isNaN(y)) resolvedExpiryDate = `${y + 5}-${parts[1]}-${parts[2]}`;
+      }
+    } else if (resolvedExpiryDate && !resolvedIssueDate) {
+      const parts = resolvedExpiryDate.split("-");
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        if (!isNaN(y)) resolvedIssueDate = `${y - 5}-${parts[1]}-${parts[2]}`;
       }
     }
+
+    if (resolvedIssueDate) {
+      setValue("passport_issue_date", resolvedIssueDate, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+    if (resolvedExpiryDate) {
+      setValue("passport_expiry", resolvedExpiryDate, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
+
     if (d.place_of_issue) {
       setValue("place_of_issue", d.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     } else {
       setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
 
-    setOcrSuccessData(d);
+    setOcrSuccessData({
+      ...d,
+      passport_issue_date: resolvedIssueDate,
+      passport_expiry: resolvedExpiryDate,
+    });
     setIsOcrReviewOpen(false);
-    toast.success("Applicant personal info auto-populated from passport scan!");
+    toast.success("Passport data extracted and form auto-filled successfully!");
   };
 
-  // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend Python OCR and/or Client OCR)
+  // Main Standalone Client-Side Passport Fast-Extractor
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
     const localUrl = URL.createObjectURL(file);
@@ -129,53 +153,39 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     setIsScanningOCR(true);
 
     try {
-      // 1. Upload passport scan file
-      let uploadedUrl = "";
-      try {
-        const uploadRes = await uploadFileV2(file, true, "Applicant");
-        const fileUrl = uploadRes?.file_url || "";
-        if (fileUrl) {
-          uploadedUrl = fileUrl;
-          setValue("passport_scan", fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("passport_copy" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
-        }
-      } catch (e) {
-        console.warn("File upload error:", e);
-      }
-
-      // 2. Dispatch file_url to backend Python OCR engine
+      // 1. Immediately run high-speed optical character extraction client-side in the browser
       let extractedData: any = null;
-      if (uploadedUrl) {
-        try {
-          const ocrRes = await parsePassportFileV2(uploadedUrl);
-          if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth)) {
-            extractedData = ocrRes;
-          }
-        } catch (backendErr) {
-          console.warn("Backend OCR parse error:", backendErr);
-        }
-      }
-
-      // 3. If backend didn't return complete data, execute client-side OCR fallback
-      if (!extractedData) {
+      try {
         const clientOcr = await performOpticalPassportOCR(file);
         if (clientOcr && (clientOcr.passport_number || clientOcr.first_name || clientOcr.date_of_birth)) {
           extractedData = clientOcr;
         }
+      } catch (clientErr) {
+        console.warn("Client OCR engine notice:", clientErr);
       }
 
+      // 2. Upload file in the background for permanent document attachment
+      uploadFileV2(file, true, "Applicant")
+        .then((uploadRes) => {
+          const fileUrl = uploadRes?.file_url || "";
+          if (fileUrl) {
+            setValue("passport_scan", fileUrl, { shouldDirty: true, shouldValidate: true });
+            setValue("passport_copy" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+            setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+          }
+        })
+        .catch((e) => console.warn("Background file upload note:", e));
+
+      // 3. If client OCR produced fields, directly auto-fill without blocking on any backend server
       if (extractedData) {
-        // Show review dialog so user can confirm before applying
+        handleApplyOcrData(extractedData);
         setPendingOcrData(extractedData);
-        setIsOcrReviewOpen(true);
-        toast.success("Passport extracted successfully! Review and apply data.");
       } else {
-        toast.info("Passport scan attached. You can fill or edit registration fields.");
+        toast.info("Passport scan attached. Please enter or review candidate details.");
       }
     } catch (err: any) {
-      console.warn("Passport scan processing warning:", err);
-      toast.error("Passport processing warning: " + (err?.message || "Please check details."));
+      console.warn("Passport extraction notice:", err);
+      toast.info("Passport scan attached. You can fill or edit registration fields.");
     } finally {
       setIsScanningOCR(false);
     }
@@ -187,28 +197,8 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     try {
       const parsed = parseMRZText(mrzInputText.trim());
       if (parsed) {
-        if (parsed.first_name) setValue("first_name", parsed.first_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.middle_name) setValue("middle_name", parsed.middle_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.last_name) setValue("last_name", parsed.last_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.passport_number) setValue("passport_number", parsed.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.date_of_birth) setValue("date_of_birth", parsed.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.gender) setValue("gender", parsed.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.nationality) setValue("nationality", parsed.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.passport_expiry) {
-          setValue("passport_expiry", parsed.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          if (parsed.passport_issue_date) {
-            setValue("passport_issue_date", parsed.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          }
-        }
-        if (parsed.place_of_issue) {
-          setValue("place_of_issue", parsed.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        } else {
-          setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        }
-
-        setOcrSuccessData(parsed);
+        handleApplyOcrData(parsed);
         setIsMrzDialogOpen(false);
-        toast.success("MRZ text parsed and filled successfully!");
       }
     } catch (err) {
       console.warn("Manual MRZ decode warning:", err);
@@ -907,23 +897,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="passport_expiry" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Passport Expiry Date <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    id="passport_expiry"
-                    type="date"
-                    {...register("passport_expiry")}
-                    className={errors.passport_expiry ? "border-rose-500" : ""}
-                  />
-                  {errors.passport_expiry && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_expiry.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
                   <Label htmlFor="place_of_issue" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Place of Issue <span className="text-rose-500">*</span>
                   </Label>
@@ -937,19 +910,77 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_issue.message}</p>
                   )}
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Passport Issue Date <span className="text-rose-500">*</span>
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                      Passport Issue Date <span className="text-rose-500">*</span>
+                    </Label>
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                      Auto-sets 5-yr Expiry
+                    </span>
+                  </div>
                   <Input
                     id="passport_issue_date"
                     type="date"
-                    {...register("passport_issue_date")}
+                    {...register("passport_issue_date", {
+                      onChange: (e) => {
+                        const issueVal = e.target.value;
+                        if (issueVal) {
+                          const parts = issueVal.split("-");
+                          if (parts.length === 3) {
+                            const year = parseInt(parts[0], 10);
+                            if (!isNaN(year)) {
+                              const expVal = `${year + 5}-${parts[1]}-${parts[2]}`;
+                              setValue("passport_expiry", expVal, {
+                                shouldValidate: true,
+                                shouldDirty: true,
+                                shouldTouch: true,
+                              });
+                            }
+                          }
+                        }
+                      },
+                    })}
                     className={errors.passport_issue_date ? "border-rose-500" : ""}
                   />
                   {errors.passport_issue_date && (
                     <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_issue_date.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="passport_expiry" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Passport Expiry Date <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="passport_expiry"
+                    type="date"
+                    {...register("passport_expiry", {
+                      onChange: (e) => {
+                        const expVal = e.target.value;
+                        if (expVal && !watch("passport_issue_date")) {
+                          const parts = expVal.split("-");
+                          if (parts.length === 3) {
+                            const year = parseInt(parts[0], 10);
+                            if (!isNaN(year)) {
+                              const issueVal = `${year - 5}-${parts[1]}-${parts[2]}`;
+                              setValue("passport_issue_date", issueVal, {
+                                shouldValidate: true,
+                                shouldDirty: true,
+                                shouldTouch: true,
+                              });
+                            }
+                          }
+                        }
+                      },
+                    })}
+                    className={errors.passport_expiry ? "border-rose-500" : ""}
+                  />
+                  {errors.passport_expiry && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_expiry.message}</p>
                   )}
                 </div>
               </div>

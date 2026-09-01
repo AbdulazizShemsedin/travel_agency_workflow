@@ -230,12 +230,12 @@ export async function getOperationsSummaryV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2OperationsSummary> {
+  const dates = parseDates(fromDate, toDate);
   if (isDemoMode()) {
-    return demoStore.getOperationsSummary();
+    return demoStore.getOperationsSummary(dates?.from_date, dates?.to_date);
   }
 
   try {
-    const dates = parseDates(fromDate, toDate);
     return await requestV2<V2OperationsSummary>(
       "/api/method/agency_tracking.report_api.get_operations_summary",
       {
@@ -245,7 +245,7 @@ export async function getOperationsSummaryV2(
     );
   } catch (err) {
     console.warn("[Reports] getOperationsSummaryV2 backend error, using demo fallback:", err);
-    return demoStore.getOperationsSummary();
+    return demoStore.getOperationsSummary(dates?.from_date, dates?.to_date);
   }
 }
 
@@ -283,12 +283,12 @@ export async function getFinancialOverviewV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2FinancialOverviewReport> {
+  const dates = parseDates(fromDate, toDate);
   if (isDemoMode()) {
-    return demoStore.getFinancialOverview();
+    return demoStore.getFinancialOverview(dates?.from_date, dates?.to_date);
   }
 
   try {
-    const dates = parseDates(fromDate, toDate);
     return await requestV2<V2FinancialOverviewReport>(
       "/api/method/agency_tracking.report_api.get_financial_overview",
       {
@@ -298,7 +298,7 @@ export async function getFinancialOverviewV2(
     );
   } catch (err) {
     console.warn("[Reports] getFinancialOverviewV2 backend error, using demo fallback:", err);
-    return demoStore.getFinancialOverview();
+    return demoStore.getFinancialOverview(dates?.from_date, dates?.to_date);
   }
 }
 

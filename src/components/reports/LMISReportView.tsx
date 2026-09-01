@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export function LMISReportView() {
   const [corridorFilter, setCorridorFilter] = React.useState<string>("All");
@@ -101,49 +102,54 @@ export function LMISReportView() {
     });
   }, [lmisData, statusFilter, medicalFilter, searchQuery]);
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Export Columns
+  const exportColumns: ExportColumn<WorkspaceApplicantRow>[] = [
+    { header: "Applicant ID", accessor: "applicantId" },
+    { header: "Candidate Name", accessor: "fullName" },
+    { header: "Passport Number", accessor: "passportNumber" },
+    { header: "Labor ID / Ref", accessor: (r: WorkspaceApplicantRow) => r.laborId || "—" },
+    { header: "Contract Date", accessor: (r: WorkspaceApplicantRow) => r.contractDate || "—" },
+    { header: "Medical Status", accessor: (r: WorkspaceApplicantRow) => r.medicalStatus || "Pending" },
+    { header: "Medical Date", accessor: (r: WorkspaceApplicantRow) => r.medicalDate || "—" },
+    { header: "Medical Remaining Days", accessor: (r: WorkspaceApplicantRow) => r.medicalRemaining ?? "—" },
+    { header: "LMIS Status", accessor: (r: WorkspaceApplicantRow) => r.lmisStatus || "Pending" },
+    { header: "Issue Date", accessor: (r: WorkspaceApplicantRow) => r.issueDate || "—" },
+    { header: "Contact", accessor: (r: WorkspaceApplicantRow) => r.contact || "—" },
+    { header: "Remark", accessor: (r: WorkspaceApplicantRow) => r.remark || "—" },
+  ];
+
+  // Excel Export
+  const handleExportExcel = () => {
     if (filteredRows.length === 0) return;
-    const headers = [
-      "NO",
-      "NAME",
-      "PASSPORT",
-      "LABOR ID",
-      "CONTRACT DATE",
-      "DURATION",
-      "MEDICAL",
-      "MED DATE",
-      "MEDI REMAINING",
-      "STATUS",
-      "ISSUE DATE",
-      "CONTACT",
-      "REMARK",
-    ];
+    exportToExcel(
+      `LMIS_Ministry_Clearance_Report_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredRows,
+      "LMIS / Ministry of Labor Clearance Operational Report",
+      {
+        "Corridor": corridorFilter,
+        "Status Filter": statusFilter,
+        "Medical Filter": medicalFilter,
+        "Total Filtered Records": filteredRows.length,
+      }
+    );
+  };
 
-    const rows = filteredRows.map((row, idx) => [
-      idx + 1,
-      `"${row.fullName.replace(/"/g, '""')}"`,
-      `"${row.passportNumber}"`,
-      `"${row.laborId || ""}"`,
-      `"${row.contractDate || ""}"`,
-      row.duration ?? 0,
-      `"${row.medicalStatus || "Pending"}"`,
-      `"${row.medicalDate || ""}"`,
-      `"${row.medicalRemaining || ""}"`,
-      `"${row.lmisStatus || "Pending"}"`,
-      `"${row.issueDate || ""}"`,
-      `"${(row.contact || "").replace(/"/g, '""')}"`,
-      `"${(row.remark || "").replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `lmis_clearance_report_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // PDF Export
+  const handleExportPDF = () => {
+    if (filteredRows.length === 0) return;
+    exportToPDF(
+      "LMIS Ministry Clearance Operations Report",
+      exportColumns,
+      filteredRows,
+      [
+        { label: "Total Candidates", value: filteredRows.length },
+        { label: "Issued Clearances", value: filteredRows.filter((r) => r.lmisStatus === "Issued").length },
+        { label: "Pending Ministry", value: filteredRows.filter((r) => r.lmisStatus === "Pending" || !r.lmisStatus).length },
+        { label: "Medical Valid", value: filteredRows.filter((r) => (r.medicalStatus || "").toUpperCase().includes("FIT")).length },
+      ],
+      `Corridor: ${corridorFilter} | Status: ${statusFilter} | Medical: ${medicalFilter}`
+    );
   };
 
   return (
@@ -197,12 +203,22 @@ export function LMISReportView() {
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportPDF}
+            className="h-8 px-2.5 text-xs font-medium gap-1.5 border-slate-300 dark:border-[#2c2c36]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export PDF</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
             className="h-8 px-3 text-xs font-semibold gap-1.5 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white"
           >
             <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </Button>
         </div>
       </div>

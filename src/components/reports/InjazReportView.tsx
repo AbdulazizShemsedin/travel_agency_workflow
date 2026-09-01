@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export function InjazReportView() {
   const [paymentFilter, setPaymentFilter] = React.useState<string>("All");
@@ -77,14 +78,10 @@ export function InjazReportView() {
     { name: "> 90 Days", count: durationOver90, fill: "#ef4444" },
   ];
 
-  // Filtered dataset
+  // Filtered rows
   const filteredRows = React.useMemo(() => {
     return injazData.filter((row) => {
-      const matchesPayment =
-        paymentFilter === "All" ||
-        (paymentFilter === "PAID" && row.injazPayment === "PAID") ||
-        (paymentFilter === "UNPAID" && row.injazPayment !== "PAID");
-
+      const matchesPayment = paymentFilter === "All" || row.injazPayment === paymentFilter;
       const matchesMedical =
         medicalFilter === "All" ||
         (medicalFilter === "FIT" && (row.medicalStatus || "").toUpperCase().includes("FIT")) ||
@@ -101,47 +98,52 @@ export function InjazReportView() {
     });
   }, [injazData, paymentFilter, medicalFilter, searchQuery]);
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Export Columns
+  const exportColumns: ExportColumn<WorkspaceApplicantRow>[] = [
+    { header: "Applicant ID", accessor: "applicantId" },
+    { header: "Candidate Name", accessor: "fullName" },
+    { header: "Passport Number", accessor: "passportNumber" },
+    { header: "Contract Date", accessor: (r: WorkspaceApplicantRow) => r.contractDate || "—" },
+    { header: "Medical Status", accessor: (r: WorkspaceApplicantRow) => r.medicalStatus || "Pending" },
+    { header: "Medical Date", accessor: (r: WorkspaceApplicantRow) => r.medicalDate || "—" },
+    { header: "Medical Remaining Days", accessor: (r: WorkspaceApplicantRow) => r.medicalRemaining ?? "—" },
+    { header: "Injaz Payment Status", accessor: (r: WorkspaceApplicantRow) => r.injazPayment || "UNPAID" },
+    { header: "Te'shir Appointment Date", accessor: (r: WorkspaceApplicantRow) => r.appointmentDate || "—" },
+    { header: "Contact", accessor: (r: WorkspaceApplicantRow) => r.contact || "—" },
+    { header: "Remark", accessor: (r: WorkspaceApplicantRow) => r.remark || "—" },
+  ];
+
+  // Excel Export
+  const handleExportExcel = () => {
     if (filteredRows.length === 0) return;
-    const headers = [
-      "NO",
-      "NAME",
-      "PASSPORT",
-      "CONTRACT",
-      "DURATION",
-      "MEDICAL",
-      "MED DATE",
-      "MEDI REMAINING",
-      "INJAZ PAYMENT",
-      "APPOINTMENT DATE",
-      "CONTACT",
-      "REMARK",
-    ];
+    exportToExcel(
+      `Teshir_Injaz_Report_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredRows,
+      "Te'shir / Injaz MOFA Processing Operational Report",
+      {
+        "Payment Filter": paymentFilter,
+        "Medical Filter": medicalFilter,
+        "Total Filtered Records": filteredRows.length,
+      }
+    );
+  };
 
-    const rows = filteredRows.map((row, idx) => [
-      idx + 1,
-      `"${row.fullName.replace(/"/g, '""')}"`,
-      `"${row.passportNumber}"`,
-      `"${row.contractDate || ""}"`,
-      row.duration ?? 0,
-      `"${row.medicalStatus || "Pending"}"`,
-      `"${row.medicalDate || ""}"`,
-      `"${row.medicalRemaining || ""}"`,
-      `"${row.injazPayment || "UNPAID"}"`,
-      `"${row.appointmentDate || ""}"`,
-      `"${(row.contact || "").replace(/"/g, '""')}"`,
-      `"${(row.remark || "").replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `teshir_injaz_report_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // PDF Export
+  const handleExportPDF = () => {
+    if (filteredRows.length === 0) return;
+    exportToPDF(
+      "Te'shir / Injaz MOFA Processing Operations Report",
+      exportColumns,
+      filteredRows,
+      [
+        { label: "Total Candidates", value: filteredRows.length },
+        { label: "Injaz Fee PAID", value: filteredRows.filter((r) => r.injazPayment === "PAID").length },
+        { label: "Pending Biometrics", value: filteredRows.filter((r) => !r.appointmentDate).length },
+        { label: "Medical Valid", value: filteredRows.filter((r) => (r.medicalStatus || "").toUpperCase().includes("FIT")).length },
+      ],
+      `Payment: ${paymentFilter} | Medical: ${medicalFilter}`
+    );
   };
 
   return (
@@ -176,12 +178,22 @@ export function InjazReportView() {
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportPDF}
+            className="h-8 px-2.5 text-xs font-medium gap-1.5 border-slate-300 dark:border-[#2c2c36]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export PDF</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
             className="h-8 px-3 text-xs font-semibold gap-1.5 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white"
           >
             <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </Button>
         </div>
       </div>

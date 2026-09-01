@@ -95,6 +95,27 @@ export function hasExactRole(user: AuthUser | null | undefined, targetRole: stri
 }
 
 /**
+ * Evaluates whether the user is an Administrator or System Manager / Agency Admin.
+ * Only administrators can view/modify handler officer assignments across operational workspaces.
+ */
+export function isAdminUser(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
+  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (!Array.isArray(user.roles)) return false;
+  return user.roles.some((r) => {
+    const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
+    return (
+      norm === "system manager" ||
+      norm === "administrator" ||
+      norm === "admin" ||
+      norm === "agency admin" ||
+      norm === "manager"
+    );
+  });
+}
+
+/**
  * Determines if a user is purely an external Foreign Agency partner without internal operational privileges.
  */
 export function isPureForeignAgency(user: AuthUser | null | undefined): boolean {
@@ -221,6 +242,14 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Manager",
     "Finance Manager",
     "Complaint Manager",
+    "Clearance Officer",
+    "Saudi LMIS",
+    "Saudi Taeshir",
+    "Saudi Embassy",
+    "Kuwait LMIS",
+    "Kuwait Telesign",
+    "Kuwait Embassy",
+    "Ticketer",
   ],
   manageContractors: [
     "System Manager",

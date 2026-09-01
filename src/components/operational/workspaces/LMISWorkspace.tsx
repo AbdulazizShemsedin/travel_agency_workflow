@@ -32,7 +32,7 @@ import {
   recalculateApplicantStateApi,
 } from "@/lib/api/applicantApi";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { can } from "@/lib/auth/permissions";
+import { can, isAdminUser } from "@/lib/auth/permissions";
 
 interface LMISWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -54,12 +54,14 @@ export function LMISWorkspace({
   const queryClient = useQueryClient();
   const { authUser } = useAuth();
   const canEdit = can(authUser, "editLms") || can(authUser, "manageClearances");
+  const isAdmin = isAdminUser(authUser);
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
   // Form State for Drawer
   const [status, setStatus] = React.useState<"Pending" | "Issued" | "Rejected">("Pending");
   const [issuedOn, setIssuedOn] = React.useState("");
+  const [laborRefNo, setLaborRefNo] = React.useState("");
   const [employee, setEmployee] = React.useState("");
   const [missingDataRequested, setMissingDataRequested] = React.useState(false);
   const [missingDataType, setMissingDataType] = React.useState("GAMCA Medical");
@@ -72,7 +74,8 @@ export function LMISWorkspace({
       const lms = selectedRow.lms;
       setStatus((lms?.status as any) || "Pending");
       setIssuedOn(lms?.issued_on || "");
-      setEmployee(lms?.employee || "");
+      setLaborRefNo(selectedRow.laborId || (lms as any)?.reference_no || "");
+      setEmployee(lms?.employee || (lms as any)?.assigned_officer || "");
       setMissingDataRequested(Boolean(lms?.missing_data_requested));
       setMissingDataType(lms?.missing_data_type || "GAMCA Medical");
       setMissingDataStatus((lms?.missing_data_status as any) || "Pending");
@@ -84,21 +87,22 @@ export function LMISWorkspace({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedRow) return;
-      const targetDoc = selectedRow.lms?.name || selectedRow.dsrName;
+      const targetDoc = selectedRow.lms?.name || selectedRow.dsrName || selectedRow.applicantId;
       if (!targetDoc) {
-        throw new Error("No linked LMS Clearance or DSR record found on backend for this candidate.");
+        throw new Error("No linked LMS Clearance or candidate record found.");
       }
 
       await updateLmsClearanceApi(targetDoc, {
         status,
         issued_on: status === "Issued" ? (issuedOn || new Date().toISOString().split("T")[0]) : undefined,
-        employee: employee || undefined,
+        ...(isAdmin && employee ? { employee } : {}),
         missing_data_requested: missingDataRequested ? 1 : 0,
         missing_data_type: missingDataType || undefined,
         missing_data_status: missingDataStatus,
         missing_data_notes: missingDataNotes || undefined,
+        reference_no: laborRefNo || undefined,
         dsr: selectedRow.dsrName,
-      });
+      } as any);
 
       // Recalculate lifecycle
       try {
@@ -404,22 +408,38 @@ export function LMISWorkspace({
           </DrawerField>
 
           <div className="sm:col-span-2">
-            <DrawerField label="Assigned Officer" isReadOnly={false}>
-              <select
-                value={employee}
+            <DrawerField label="Labor ID / Ministry Reference No" isReadOnly={false}>
+              <Input
+                type="text"
+                placeholder="e.g. LMS-ET-2026-9912"
+                value={laborRefNo}
                 disabled={!canEdit || mutation.isPending}
-                onChange={(e) => setEmployee(e.target.value)}
-                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
-              >
-                <option value="">-- Select Handler Employee --</option>
-                {employees.map((emp) => (
-                  <option key={emp.name} value={emp.name}>
-                    {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => setLaborRefNo(e.target.value)}
+                className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
             </DrawerField>
           </div>
+
+          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
+          {isAdmin && (
+            <div className="sm:col-span-2">
+              <DrawerField label="Assigned LMIS Officer (Admin Only)" isReadOnly={false}>
+                <select
+                  value={employee}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setEmployee(e.target.value)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                >
+                  <option value="">-- Select Handler Employee --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.name} value={emp.name}>
+                      {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
+                    </option>
+                  ))}
+                </select>
+              </DrawerField>
+            </div>
+          )}
         </DrawerSection>
 
         {/* Section 3: Missing Data Request Hub */}

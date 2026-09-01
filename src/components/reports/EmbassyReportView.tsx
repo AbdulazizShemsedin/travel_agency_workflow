@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { exportToExcel, exportToPDF, ExportColumn } from "@/lib/utils/reportExport";
 
 export function EmbassyReportView() {
   const [corridorFilter, setCorridorFilter] = React.useState<string>("All");
@@ -69,63 +70,68 @@ export function EmbassyReportView() {
     { name: "Pending Authorization", value: totalPassports - wakalaAuthorized, color: "#d97706" },
   ].filter((d) => d.value > 0);
 
-  // Filtered dataset
+  // Filtered rows
   const filteredRows = React.useMemo(() => {
     return embassyData.filter((row) => {
-      const isWakalaAuth = (row.wakalaStatus || "").toLowerCase().includes("completed") || (row.wakalaStatus || "").toLowerCase().includes("authorized");
-      const matchesWakala =
-        wakalaFilter === "All" ||
-        (wakalaFilter === "Authorized" && isWakalaAuth) ||
-        (wakalaFilter === "Pending" && !isWakalaAuth);
-
-      const isApproved = row.embassyStatus === "Approved" || row.stamp?.status === "Completed";
-      const matchesEmbassy =
-        embassyStatusFilter === "All" ||
-        (embassyStatusFilter === "Approved" && isApproved) ||
-        (embassyStatusFilter === "Submitted" && row.embassyStatus === "Submitted") ||
-        (embassyStatusFilter === "Pending" && (!row.embassyStatus || row.embassyStatus === "Pending") && !isApproved) ||
-        (embassyStatusFilter === "Rejected" && row.embassyStatus === "Rejected");
-
+      const matchesWakala = wakalaFilter === "All" || row.wakalaStatus === wakalaFilter;
+      const matchesEmbassy = embassyStatusFilter === "All" || row.embassyStatus === embassyStatusFilter;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         row.fullName.toLowerCase().includes(q) ||
         row.passportNumber.toLowerCase().includes(q) ||
-        (row.sponsorName && row.sponsorName.toLowerCase().includes(q));
+        (row.contact && row.contact.toLowerCase().includes(q));
 
       return matchesWakala && matchesEmbassy && matchesSearch;
     });
   }, [embassyData, wakalaFilter, embassyStatusFilter, searchQuery]);
 
-  // CSV Export
-  const handleExportCSV = () => {
+  // Export Columns
+  const exportColumns: ExportColumn<WorkspaceApplicantRow>[] = [
+    { header: "Applicant ID", accessor: "applicantId" },
+    { header: "Candidate Name", accessor: "fullName" },
+    { header: "Passport Number", accessor: "passportNumber" },
+    { header: "Destination Country", accessor: "destinationCountry" },
+    { header: "Wakala Status", accessor: (r: WorkspaceApplicantRow) => r.wakalaStatus || "Pending" },
+    { header: "Embassy Status", accessor: (r: WorkspaceApplicantRow) => r.embassyStatus || "Pending" },
+    { header: "Visa Stamp Number", accessor: (r: WorkspaceApplicantRow) => r.visaNumber || "—" },
+    { header: "Sponsor Name", accessor: (r: WorkspaceApplicantRow) => r.sponsorName || "—" },
+    { header: "Contract Number", accessor: (r: WorkspaceApplicantRow) => r.contractNumber || "—" },
+    { header: "Remark", accessor: (r: WorkspaceApplicantRow) => r.remark || "—" },
+  ];
+
+  // Excel Export
+  const handleExportExcel = () => {
     if (filteredRows.length === 0) return;
-    const headers = [
-      "NO",
-      "NAME",
-      "PASSPORT",
-      "WEKALA",
-      "EMBASSY STATUS",
-      "REMARK",
-    ];
+    exportToExcel(
+      `Embassy_Clearance_Report_${new Date().toISOString().split("T")[0]}`,
+      exportColumns,
+      filteredRows,
+      "Embassy Clearance & Wakala Authorization Report",
+      {
+        "Corridor": corridorFilter,
+        "Wakala Filter": wakalaFilter,
+        "Embassy Status Filter": embassyStatusFilter,
+        "Total Filtered Records": filteredRows.length,
+      }
+    );
+  };
 
-    const rows = filteredRows.map((row, idx) => [
-      idx + 1,
-      `"${row.fullName.replace(/"/g, '""')}"`,
-      `"${row.passportNumber}"`,
-      `"${row.wakalaStatus || "Pending"}"`,
-      `"${row.embassyStatus || "Pending"}"`,
-      `"${(row.remark || "").replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `embassy_wakala_report_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // PDF Export
+  const handleExportPDF = () => {
+    if (filteredRows.length === 0) return;
+    exportToPDF(
+      "Embassy Clearance & Wakala Authorization Report",
+      exportColumns,
+      filteredRows,
+      [
+        { label: "Total Candidates", value: filteredRows.length },
+        { label: "Visa Stamped", value: filteredRows.filter((r) => r.embassyStatus === "Approved").length },
+        { label: "Submitted to Embassy", value: filteredRows.filter((r) => r.embassyStatus === "Submitted").length },
+        { label: "Wakala Verified", value: filteredRows.filter((r) => r.wakalaStatus === "Completed").length },
+      ],
+      `Corridor: ${corridorFilter} | Wakala: ${wakalaFilter} | Embassy: ${embassyStatusFilter}`
+    );
   };
 
   return (
@@ -179,12 +185,22 @@ export function EmbassyReportView() {
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportPDF}
+            className="h-8 px-2.5 text-xs font-medium gap-1.5 border-slate-300 dark:border-[#2c2c36]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export PDF</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleExportExcel}
             className="h-8 px-3 text-xs font-semibold gap-1.5 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white"
           >
             <Download className="h-3.5 w-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </Button>
         </div>
       </div>

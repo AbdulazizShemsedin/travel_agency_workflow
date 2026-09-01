@@ -27,7 +27,7 @@ export const DEMO_USERS: Record<string, DemoUserProfile> = {
   manager: {
     email: "manager@agency.com",
     full_name: "Dawit Haile",
-    roles: ["Manager"],
+    roles: ["Manager", "System Manager"],
     department: "Operations Directorate",
   },
   clearance_officer: {
@@ -39,37 +39,37 @@ export const DEMO_USERS: Record<string, DemoUserProfile> = {
   saudi_lmis: {
     email: "saudi_lmis@agency.com",
     full_name: "Aman Al-Saeed",
-    roles: ["Saudi LMIS", "Clearance Officer"],
+    roles: ["Saudi LMIS"],
     department: "Saudi Arabia Corridor",
   },
   saudi_taeshir: {
     email: "saudi_taeshir@agency.com",
     full_name: "Hanan Seid",
-    roles: ["Saudi Taeshir", "Clearance Officer"],
+    roles: ["Saudi Taeshir"],
     department: "Saudi Arabia Corridor",
   },
   saudi_embassy: {
     email: "saudi_embassy@agency.com",
     full_name: "Kassaye Wolde",
-    roles: ["Saudi Embassy", "Clearance Officer"],
+    roles: ["Saudi Embassy"],
     department: "Saudi Arabia Corridor",
   },
   kuwait_lmis: {
     email: "kuwait_lmis@agency.com",
     full_name: "Tariq Ibrahim",
-    roles: ["Kuwait LMIS", "Clearance Officer"],
+    roles: ["Kuwait LMIS"],
     department: "Kuwait Corridor",
   },
   kuwait_telesign: {
     email: "kuwait_telesign@agency.com",
     full_name: "Rahel Belay",
-    roles: ["Kuwait Telesign", "Clearance Officer"],
+    roles: ["Kuwait Telesign"],
     department: "Kuwait Corridor",
   },
   kuwait_embassy: {
     email: "kuwait_embassy@agency.com",
     full_name: "Getachew Assefa",
-    roles: ["Kuwait Embassy", "Clearance Officer"],
+    roles: ["Kuwait Embassy"],
     department: "Kuwait Corridor",
   },
   ticketer: {

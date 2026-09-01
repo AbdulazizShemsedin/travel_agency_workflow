@@ -72,6 +72,28 @@ const INITIAL_DEMO_USERS: DemoSystemUserRecord[] = Object.entries(DEMO_USERS).ma
   };
 });
 
+export interface DefaultRoleOfficersConfig {
+  saudi_lmis: string;
+  saudi_taeshir: string;
+  saudi_embassy: string;
+  kuwait_lmis: string;
+  kuwait_telesign: string;
+  kuwait_embassy: string;
+  ticketer: string;
+  registrar: string;
+}
+
+export const INITIAL_DEFAULT_OFFICERS: DefaultRoleOfficersConfig = {
+  saudi_lmis: "saudi_lmis@agency.com",
+  saudi_taeshir: "saudi_taeshir@agency.com",
+  saudi_embassy: "saudi_embassy@agency.com",
+  kuwait_lmis: "kuwait_lmis@agency.com",
+  kuwait_telesign: "kuwait_telesign@agency.com",
+  kuwait_embassy: "kuwait_embassy@agency.com",
+  ticketer: "ticketer@agency.com",
+  registrar: "registrar@agency.com",
+};
+
 class DemoStore {
   private applicants: V2ApplicantDetails[] = [...DEMO_APPLICANTS];
   private placements: V2PlacementRecord[] = [...DEMO_PLACEMENTS];
@@ -81,10 +103,12 @@ class DemoStore {
   private owedCommissions: V2OwedCommissionItem[] = [...DEMO_OWED_COMMISSIONS];
   private commissionBatches: V2CommissionBatch[] = [...DEMO_COMMISSION_BATCHES];
   private users: DemoSystemUserRecord[] = [...INITIAL_DEMO_USERS];
+  private defaultOfficers: DefaultRoleOfficersConfig = { ...INITIAL_DEFAULT_OFFICERS };
   private isLoadedFromStorage = false;
 
   constructor() {
     this.loadStorage();
+    this.autoMigrateSelectedToProcessing();
   }
 
   private loadStorage() {
@@ -93,18 +117,22 @@ class DemoStore {
       const storedApps = localStorage.getItem("V2_DEMO_APPLICANTS");
       if (storedApps) {
         const parsed = JSON.parse(storedApps);
-        this.applicants = parsed.map((a: any) => ({
-          contract_number: "2005450415",
-          visa_number: "1908334046",
-          sponsor_name: "ABDULLAH AMER MUGHABBIRI ALBARIQI",
-          sponsor_id: "1130373143",
-          sponsor_phone: "966503221802",
-          destination_city: "Riyadh",
-          contractor_name: "Tihamat Asir Recruitment company",
-          contract_signed_date: "2026-08-13",
-          appointment_date: "2026-08-25",
-          ...a,
-        }));
+        this.applicants = parsed.map((a: any) => {
+          const baseline = DEMO_APPLICANTS.find((d) => d.name === a.name);
+          const isStaleDate = !a.creation || a.creation.startsWith("2026-02") || a.creation.startsWith("2026-01");
+          return {
+            contract_number: "2005450415",
+            visa_number: "1908334046",
+            sponsor_name: "ABDULLAH AMER MUGHABBIRI ALBARIQI",
+            sponsor_id: "1130373143",
+            sponsor_phone: "966503221802",
+            destination_city: "Riyadh",
+            contractor_name: "Tihamat Asir Recruitment company",
+            ...a,
+            creation: isStaleDate && baseline ? baseline.creation : a.creation,
+            modified: isStaleDate && baseline ? baseline.modified : a.modified,
+          };
+        });
       }
 
       const storedPlc = localStorage.getItem("V2_DEMO_PLACEMENTS");
@@ -117,8 +145,6 @@ class DemoStore {
           employer_national_id: "1130373143",
           employer_phone: "966503221802",
           contractor_name: "Tihamat Asir Recruitment company",
-          contract_signed_date: "2026-08-13",
-          appointment_date: "2026-08-25",
           ...p,
         }));
       }
@@ -139,14 +165,189 @@ class DemoStore {
       if (storedCon) this.contractors = JSON.parse(storedCon);
 
       const storedComm = localStorage.getItem("V2_DEMO_COMMISSIONS");
-      if (storedComm) this.owedCommissions = JSON.parse(storedComm);
+      if (storedComm) {
+        const parsedComm = JSON.parse(storedComm);
+        this.owedCommissions = parsedComm.map((c: any) => {
+          const baselineComm = DEMO_OWED_COMMISSIONS.find((d) => d.name === c.name);
+          const isStale = !c.creation || c.creation.startsWith("2026-02");
+          return {
+            ...c,
+            creation: isStale && baselineComm ? baselineComm.creation : c.creation,
+          };
+        });
+      } else {
+        this.owedCommissions = [...DEMO_OWED_COMMISSIONS];
+      }
 
       const storedUsers = localStorage.getItem("V2_DEMO_USERS");
       if (storedUsers) this.users = JSON.parse(storedUsers);
 
+      const storedOfficers = localStorage.getItem("V2_DEMO_DEFAULT_OFFICERS");
+      if (storedOfficers) {
+        this.defaultOfficers = { ...INITIAL_DEFAULT_OFFICERS, ...JSON.parse(storedOfficers) };
+      }
+
       this.isLoadedFromStorage = true;
+      this.autoMigrateSelectedToProcessing();
     } catch (e) {
       console.warn("DemoStore load storage warning:", e);
+    }
+  }
+
+  /**
+   * Automatically auto-assigns and migrates any candidate or placement in "Selected"
+   * status directly to "Processing" with active corridor steps.
+   */
+  public autoMigrateSelectedToProcessing() {
+    let changed = false;
+
+    // 1. Reconcile all applicants in "Selected" state -> advance immediately to "Processing"
+    for (let i = 0; i < this.applicants.length; i++) {
+      const app = this.applicants[i];
+      if (app.applicant_state === "Selected" || (app as any).status === "Selected") {
+        app.applicant_state = "Processing";
+        app.status = "Processing";
+        app.modified = new Date().toISOString().replace("T", " ").substring(0, 19);
+        changed = true;
+      }
+    }
+
+    // 2. Reconcile all placements in "Selected" state -> advance immediately to "Processing" & "In Clearance"
+    for (let i = 0; i < this.placements.length; i++) {
+      const plc = this.placements[i];
+      if (plc.status === "Selected" || (plc as any).status === "Selected") {
+        plc.status = "Processing";
+        plc.corridor_state = "In Clearance";
+        plc.modified = new Date().toISOString().replace("T", " ").substring(0, 19);
+        changed = true;
+
+        const linkedApp = this.applicants.find((a) => a.name === plc.applicant);
+        if (linkedApp) {
+          linkedApp.applicant_state = "Processing";
+          linkedApp.status = "Processing";
+          linkedApp.active_placement = plc.name;
+        }
+      }
+    }
+
+    // 3. Ensure every Processing/Stamped placement has auto-assigned corridor clearance steps
+    const activePlacements = this.placements.filter((p) => p.status === "Processing" || p.status === "Stamped");
+    for (const plc of activePlacements) {
+      const isSaudi = (plc.destination_country || "").toLowerCase().includes("saudi") || !(plc.destination_country || "").toLowerCase().includes("kuwait");
+      const existingSteps = this.clearanceSteps.filter((s) => s.placement === plc.name);
+
+      if (existingSteps.length === 0) {
+        if (isSaudi) {
+          this.clearanceSteps.push(
+            {
+              name: `STEP-${Date.now()}-${plc.name}-1`,
+              placement: plc.name,
+              step_type: "LMIS Clearance",
+              sequence_order: 1,
+              is_mandatory: 1,
+              status: "Pending",
+              amount: 150,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.saudi_lmis || "saudi_lmis@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            },
+            {
+              name: `STEP-${Date.now()}-${plc.name}-2`,
+              placement: plc.name,
+              step_type: "Taeshir",
+              sequence_order: 2,
+              is_mandatory: 1,
+              status: "Pending",
+              appointment_date: "2026-08-25",
+              due_date: "2026-08-25",
+              amount: 380,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.saudi_taeshir || "saudi_taeshir@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            },
+            {
+              name: `STEP-${Date.now()}-${plc.name}-3`,
+              placement: plc.name,
+              step_type: "Embassy",
+              sequence_order: 3,
+              is_mandatory: 1,
+              status: "Pending",
+              amount: 600,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.saudi_embassy || "saudi_embassy@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            }
+          );
+        } else {
+          this.clearanceSteps.push(
+            {
+              name: `STEP-${Date.now()}-${plc.name}-1`,
+              placement: plc.name,
+              step_type: "Kuwait LMIS",
+              sequence_order: 1,
+              is_mandatory: 1,
+              status: "Pending",
+              amount: 180,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.kuwait_lmis || "kuwait_lmis@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            },
+            {
+              name: `STEP-${Date.now()}-${plc.name}-2`,
+              placement: plc.name,
+              step_type: "Telesign",
+              sequence_order: 2,
+              is_mandatory: 1,
+              status: "Pending",
+              amount: 220,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.kuwait_telesign || "kuwait_telesign@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            },
+            {
+              name: `STEP-${Date.now()}-${plc.name}-3`,
+              placement: plc.name,
+              step_type: "Kuwait Embassy",
+              sequence_order: 3,
+              is_mandatory: 1,
+              status: "Pending",
+              amount: 500,
+              payment_status: "Paid",
+              assigned_officer: this.defaultOfficers.kuwait_embassy || "kuwait_embassy@agency.com",
+              creation: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+              modified: plc.creation || new Date().toISOString().replace("T", " ").substring(0, 19),
+            }
+          );
+        }
+        changed = true;
+      } else {
+        // Reconcile and normalize legacy officer emails
+        for (const st of existingSteps) {
+          const stepLower = (st.step_type || "").toLowerCase();
+          if (stepLower.includes("lmis") && (!st.assigned_officer || st.assigned_officer.startsWith("officer_"))) {
+            st.assigned_officer = isSaudi ? this.defaultOfficers.saudi_lmis : this.defaultOfficers.kuwait_lmis;
+            changed = true;
+          } else if ((stepLower.includes("taeshir") || stepLower.includes("teshir") || stepLower.includes("injaz")) && (!st.assigned_officer || st.assigned_officer.startsWith("officer_"))) {
+            st.assigned_officer = this.defaultOfficers.saudi_taeshir;
+            changed = true;
+          } else if (stepLower.includes("telesign") && (!st.assigned_officer || st.assigned_officer.startsWith("officer_"))) {
+            st.assigned_officer = this.defaultOfficers.kuwait_telesign;
+            changed = true;
+          } else if (stepLower.includes("embassy") && (!st.assigned_officer || st.assigned_officer.startsWith("officer_"))) {
+            st.assigned_officer = isSaudi ? this.defaultOfficers.saudi_embassy : this.defaultOfficers.kuwait_embassy;
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      this.saveStorage();
     }
   }
 
@@ -160,6 +361,7 @@ class DemoStore {
       localStorage.setItem("V2_DEMO_CONTRACTORS", JSON.stringify(this.contractors));
       localStorage.setItem("V2_DEMO_COMMISSIONS", JSON.stringify(this.owedCommissions));
       localStorage.setItem("V2_DEMO_USERS", JSON.stringify(this.users));
+      localStorage.setItem("V2_DEMO_DEFAULT_OFFICERS", JSON.stringify(this.defaultOfficers));
     } catch (e) {
       console.warn("DemoStore save storage warning:", e);
     }
@@ -171,10 +373,58 @@ class DemoStore {
     this.clearanceSteps = [...DEMO_CLEARANCE_STEPS];
     this.contractors = [...DEMO_CONTRACTORS];
     this.users = [...INITIAL_DEMO_USERS];
+    this.defaultOfficers = { ...INITIAL_DEFAULT_OFFICERS };
     this.complaints = [...DEMO_COMPLAINTS];
     this.owedCommissions = [...DEMO_OWED_COMMISSIONS];
     this.commissionBatches = [...DEMO_COMMISSION_BATCHES];
     this.saveStorage();
+  }
+
+  // --- DEFAULT ROLE OFFICERS ---
+  public getDefaultRoleOfficers(): DefaultRoleOfficersConfig {
+    return { ...this.defaultOfficers };
+  }
+
+  public updateDefaultRoleOfficers(
+    updates: Partial<DefaultRoleOfficersConfig>,
+    applyToActivePending: boolean = true
+  ): DefaultRoleOfficersConfig {
+    this.defaultOfficers = {
+      ...this.defaultOfficers,
+      ...updates,
+    };
+
+    if (applyToActivePending) {
+      for (const step of this.clearanceSteps) {
+        if (step.status === "Pending" || step.status === "In Progress" || step.status === "Action Required") {
+          const plc = step.placement ? this.getPlacement(step.placement) : undefined;
+          const isSaudi = plc
+            ? (plc.destination_country || "").toLowerCase().includes("saudi") ||
+              !(plc.destination_country || "").toLowerCase().includes("kuwait")
+            : true;
+          const stepLower = (step.step_type || "").toLowerCase();
+
+          if (stepLower.includes("lmis")) {
+            if (isSaudi && updates.saudi_lmis) step.assigned_officer = updates.saudi_lmis;
+            if (!isSaudi && updates.kuwait_lmis) step.assigned_officer = updates.kuwait_lmis;
+          } else if (
+            stepLower.includes("taeshir") ||
+            stepLower.includes("teshir") ||
+            stepLower.includes("injaz")
+          ) {
+            if (updates.saudi_taeshir) step.assigned_officer = updates.saudi_taeshir;
+          } else if (stepLower.includes("telesign")) {
+            if (updates.kuwait_telesign) step.assigned_officer = updates.kuwait_telesign;
+          } else if (stepLower.includes("embassy")) {
+            if (isSaudi && updates.saudi_embassy) step.assigned_officer = updates.saudi_embassy;
+            if (!isSaudi && updates.kuwait_embassy) step.assigned_officer = updates.kuwait_embassy;
+          }
+        }
+      }
+    }
+
+    this.saveStorage();
+    return { ...this.defaultOfficers };
   }
 
   // --- APPLICANTS ---
@@ -232,11 +482,49 @@ class DemoStore {
   public updateApplicant(name: string, updates: Partial<V2ApplicantDetails>): V2ApplicantDetails {
     const idx = this.applicants.findIndex((a) => a.name === name);
     if (idx >= 0) {
+      const isSelecting = updates.applicant_state === "Selected" || (updates as any).status === "Selected";
+      const resolvedState = isSelecting ? "Processing" : (updates.applicant_state || this.applicants[idx].applicant_state);
+
       this.applicants[idx] = {
         ...this.applicants[idx],
         ...updates,
+        applicant_state: resolvedState,
+        status: isSelecting ? "Processing" : (updates.status || this.applicants[idx].status),
         modified: new Date().toISOString().replace("T", " ").substring(0, 19),
       };
+
+      if (isSelecting) {
+        // Ensure linked placement exists and is in Processing
+        let plc = this.placements.find((p) => p.applicant === name);
+        if (!plc) {
+          const contractor = this.contractors[0];
+          const plcId = `PLC-2026-${String(this.placements.length + 1).padStart(4, "0")}`;
+          plc = {
+            name: plcId,
+            applicant: name,
+            full_name: this.applicants[idx].full_name || this.applicants[idx].first_name,
+            applicant_name: this.applicants[idx].full_name || this.applicants[idx].first_name,
+            passport_number: this.applicants[idx].passport_number,
+            contractor: contractor?.name || "CON-001",
+            contractor_name: contractor?.contractor_name || "Tihamat Asir Recruitment company",
+            destination_country: this.applicants[idx].destination_country || "Saudi Arabia",
+            target_job: this.applicants[idx].target_job || "Housemaid",
+            status: "Processing",
+            corridor_state: "In Clearance",
+            medical_selected_status: "FIT",
+            is_muayena: this.applicants[idx].applicant_type === "Muayena" ? 1 : 0,
+            creation: new Date().toISOString().replace("T", " ").substring(0, 19),
+            modified: new Date().toISOString().replace("T", " ").substring(0, 19),
+          };
+          this.placements.unshift(plc);
+          this.applicants[idx].active_placement = plcId;
+        } else {
+          plc.status = "Processing";
+          plc.corridor_state = "In Clearance";
+        }
+        this.autoMigrateSelectedToProcessing();
+      }
+
       this.saveStorage();
       return this.applicants[idx];
     }
@@ -292,8 +580,8 @@ class DemoStore {
       contractor_name: contractor.contractor_name,
       destination_country: app.destination_country || contractor.country || "Saudi Arabia",
       target_job: app.target_job || "Housemaid",
-      status: "Selected",
-      corridor_state: "Initiated",
+      status: "Processing",
+      corridor_state: "In Clearance",
       medical_selected_status: app.medical_status === "FIT" ? "FIT" : "Pending",
       is_muayena: app.applicant_type === "Muayena" ? 1 : 0,
       creation: new Date().toISOString().replace("T", " ").substring(0, 19),
@@ -302,15 +590,15 @@ class DemoStore {
 
     this.placements.unshift(newPlc);
 
-    // Update Applicant
+    // Update Applicant immediately to Processing stage
     const updatedApp = this.updateApplicant(app.name, {
-      applicant_state: "Selected",
+      applicant_state: "Processing",
       active_placement: plcId,
       selected_by: contractor.name,
       locked_contractor: contractor.name,
     });
 
-    // Create Corridor Clearance Steps
+    // Create Corridor Clearance Steps with auto-assigned operational officers
     const isSaudi = (newPlc.destination_country || "").toLowerCase().includes("saudi");
     if (isSaudi) {
       this.clearanceSteps.push(
@@ -323,7 +611,7 @@ class DemoStore {
           status: "Pending",
           amount: 150,
           payment_status: "Unpaid",
-          assigned_officer: "officer_saudi_lmis@agency.com",
+          assigned_officer: "saudi_lmis@agency.com",
         },
         {
           name: `STEP-${Date.now()}-2`,
@@ -334,7 +622,7 @@ class DemoStore {
           status: "Pending",
           amount: 380,
           payment_status: "Unpaid",
-          assigned_officer: "officer_taeshir@agency.com",
+          assigned_officer: "saudi_taeshir@agency.com",
         },
         {
           name: `STEP-${Date.now()}-3`,
@@ -345,7 +633,7 @@ class DemoStore {
           status: "Pending",
           amount: 600,
           payment_status: "Unpaid",
-          assigned_officer: "officer_saudi_embassy@agency.com",
+          assigned_officer: "saudi_embassy@agency.com",
         }
       );
     } else {
@@ -359,7 +647,7 @@ class DemoStore {
           status: "Pending",
           amount: 180,
           payment_status: "Unpaid",
-          assigned_officer: "officer_kuwait_lmis@agency.com",
+          assigned_officer: "kuwait_lmis@agency.com",
         },
         {
           name: `STEP-${Date.now()}-2`,
@@ -370,7 +658,7 @@ class DemoStore {
           status: "Pending",
           amount: 220,
           payment_status: "Unpaid",
-          assigned_officer: "officer_telesign@agency.com",
+          assigned_officer: "kuwait_telesign@agency.com",
         },
         {
           name: `STEP-${Date.now()}-3`,
@@ -381,7 +669,7 @@ class DemoStore {
           status: "Pending",
           amount: 550,
           payment_status: "Unpaid",
-          assigned_officer: "officer_kuwait_embassy@agency.com",
+          assigned_officer: "kuwait_embassy@agency.com",
         }
       );
     }
@@ -488,7 +776,22 @@ class DemoStore {
   }
 
   public updateClearanceStep(stepName: string, updates: Partial<V2ClearanceStep>): V2ClearanceStep {
-    const idx = this.clearanceSteps.findIndex((s) => s.name === stepName);
+    let idx = this.clearanceSteps.findIndex((s) => s.name === stepName);
+    
+    // Support composite identifier: e.g. "PLC-2026-0001-lmis_clearance"
+    if (idx < 0 && stepName.includes("-")) {
+      const parts = stepName.split("-");
+      const plcCandidate = parts.slice(0, 3).join("-");
+      const stepTypeKeyword = parts.slice(3).join(" ").replace(/_/g, " ").toLowerCase();
+      
+      idx = this.clearanceSteps.findIndex((s) => {
+        const matchesPlc = s.placement === plcCandidate;
+        const currentType = (s.step_type || "").toLowerCase();
+        const matchesType = currentType.includes(stepTypeKeyword) || stepTypeKeyword.includes(currentType);
+        return matchesPlc && matchesType;
+      });
+    }
+
     if (idx >= 0) {
       this.clearanceSteps[idx] = {
         ...this.clearanceSteps[idx],
@@ -501,7 +804,7 @@ class DemoStore {
 
       // Check if all steps for this placement are completed/stamped
       const siblingSteps = updated.placement ? this.clearanceSteps.filter((s) => s.placement === updated.placement) : [];
-      const allDone = siblingSteps.every((s) => s.status === "Completed" || s.status === "Stamped" || s.status === "Issued");
+      const allDone = siblingSteps.length > 0 && siblingSteps.every((s) => s.status === "Completed" || s.status === "Stamped" || s.status === "Issued");
 
       if (allDone && plc && plc.status === "Processing") {
         this.advancePlacementToStamped(plc.name);
@@ -510,7 +813,20 @@ class DemoStore {
       this.saveStorage();
       return updated;
     }
-    throw new Error(`Clearance step ${stepName} not found`);
+    
+    // If not found, create or return a fallback to ensure smooth demo operation
+    const newStep: V2ClearanceStep = {
+      name: `STEP-${Date.now()}`,
+      step_type: stepName,
+      status: "Pending",
+      sequence_order: this.clearanceSteps.length + 1,
+      is_mandatory: 1,
+      ...updates,
+      modified: new Date().toISOString().replace("T", " ").substring(0, 19),
+    };
+    this.clearanceSteps.push(newStep);
+    this.saveStorage();
+    return newStep;
   }
 
   // --- CONTRACTORS ---
@@ -584,8 +900,34 @@ class DemoStore {
   }
 
   // --- FINANCE & COMMISSIONS ---
-  public getFinancialOverview(): V2FinancialOverviewReport {
-    return { ...DEMO_FINANCIAL_OVERVIEW };
+  public getFinancialOverview(fromDate?: string, toDate?: string): V2FinancialOverviewReport {
+    let comms = this.owedCommissions;
+    if (fromDate || toDate) {
+      comms = comms.filter((c) => {
+        const d = (c.creation || "").split("T")[0].split(" ")[0];
+        if (!d) return true;
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      });
+    }
+
+    const totalCommBirr = comms.reduce((acc, c) => acc + (c.currency === "KWD" ? (Number(c.amount) || 0) * 405 : (Number(c.amount) || 0) * 33.5), 0);
+    const settledBirr = comms.filter((c) => c.status === "Settled").reduce((acc, c) => acc + (c.currency === "KWD" ? (Number(c.amount) || 0) * 405 : (Number(c.amount) || 0) * 33.5), 0);
+    const outstandingBirr = totalCommBirr - settledBirr;
+
+    return {
+      from_date: fromDate || new Date().toISOString().split("T")[0],
+      to_date: toDate || new Date().toISOString().split("T")[0],
+      totals_birr: {
+        income: Math.max(250000, totalCommBirr * 1.8),
+        expense: Math.max(100000, totalCommBirr * 0.7),
+        commission: totalCommBirr,
+        refund: 0,
+      },
+      outstanding_owed_birr: outstandingBirr,
+      settled_in_period_birr: settledBirr,
+    };
   }
 
   public getOwedCommissions(contractor?: string, destinationCountry?: string): V2OwedCommissionItem[] {
@@ -612,8 +954,63 @@ class DemoStore {
   }
 
   // --- REPORTS ---
-  public getOperationsSummary(): V2OperationsSummary {
-    return { ...DEMO_OPERATIONS_SUMMARY };
+  public getOperationsSummary(fromDate?: string, toDate?: string): V2OperationsSummary {
+    let list = this.applicants;
+    if (fromDate || toDate) {
+      list = list.filter((a) => {
+        const d = (a.creation || a.modified || "").split("T")[0].split(" ")[0];
+        if (!d) return true;
+        if (fromDate && d < fromDate) return false;
+        if (toDate && d > toDate) return false;
+        return true;
+      });
+    }
+
+    const funnel: Record<string, number> = {
+      Draft: 0,
+      Registered: 0,
+      "CV Generated": 0,
+      Selected: 0,
+      Processing: 0,
+      Stamped: 0,
+      Ticketed: 0,
+      Departed: 0,
+      Cancelled: 0,
+    };
+
+    list.forEach((a) => {
+      const st = a.applicant_state || "Draft";
+      funnel[st] = (funnel[st] || 0) + 1;
+    });
+
+    return {
+      from_date: fromDate || new Date().toISOString().split("T")[0],
+      to_date: toDate || new Date().toISOString().split("T")[0],
+      applicant_funnel: funnel,
+      placement_funnel: {
+        Selected: funnel.Selected || 0,
+        Processing: funnel.Processing || 0,
+        Stamped: funnel.Stamped || 0,
+        Ticketed: funnel.Ticketed || 0,
+        Departed: funnel.Departed || 0,
+        Cancelled: funnel.Cancelled || 0,
+      },
+      conversion_rates: {
+        registered_to_cv_generated: 92.5,
+        stamped_to_ticketed: 94.0,
+        ticketed_to_departed: 98.2,
+      },
+      turnaround_days: {
+        selected_to_ticketed: 14.5,
+        selected_to_departed: 18.2,
+      },
+      pending_overdue: {
+        placements_approaching_ticket_deadline: 2,
+        placements_critical_not_departed: 0,
+        complaints_unresolved: this.complaints.filter((c) => c.status !== "Resolved").length,
+        transactions_pending_approval: 0,
+      },
+    };
   }
 
   public getDailyWorkReport(): V2DailyWorkReport {
