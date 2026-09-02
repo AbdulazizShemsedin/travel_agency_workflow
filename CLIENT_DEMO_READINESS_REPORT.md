@@ -1,8 +1,15 @@
+> [!WARNING]
+> **HISTORICAL REPORT — NOT CURRENT PROJECT INSTRUCTIONS**  
+> This document was generated for an earlier client presentation with simulated demo mode.  
+> The active branch is `production_version_non_mock` with **Strict Real Backend Only** (no mock/demo mode).  
+> Refer to [AGENTS.md](AGENTS.md), [MASTER_SYSTEM_STATUS.md](MASTER_SYSTEM_STATUS.md), and [V2_FRONTEND_TODO.md](V2_FRONTEND_TODO.md) for current instructions.
+
 # CLIENT DEMO READINESS REPORT — V2 BACKEND-ALIGNED
 
 **System Status:** `CLIENT DEMO READY & VERIFIED`  
 **Architecture:** V2 Canonical Contract Aligned (`Applicant` ➔ `Placement` ➔ `Clearance Steps`)  
 **Demo Switch:** `NEXT_PUBLIC_DEMO_MODE=true` (Zero UI coupling, centralized adapter layer)  
+
 **Typecheck & Production Build:** `EXIT CODE 0` (All 21 Next.js App Router routes compiled cleanly)  
 
 ---

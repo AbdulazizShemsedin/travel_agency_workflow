@@ -1,6 +1,12 @@
+> [!WARNING]
+> **HISTORICAL AUDIT — SUPERSEDED BY FINAL_V2_CONFORMANCE_MATRIX.MD**  
+> This early audit targeted branch `backend-v2-integration`.  
+> Refer to [AGENTS.md](AGENTS.md), [FINAL_V2_CONFORMANCE_MATRIX.md](FINAL_V2_CONFORMANCE_MATRIX.md), and [MASTER_SYSTEM_STATUS.md](MASTER_SYSTEM_STATUS.md) for current authoritative instructions.
+
 # V2 FRONTEND CONFORMANCE AUDIT
 
 **Target Environment**: `backend-v2-integration`  
+
 **Backend API Authority**: `https://agencytracking-production.up.railway.app`  
 **Contract Baseline**: `BUSINESS_AND_SYSTEM_DOCUMENTATION.md`, `01-applicant-contract.md` - `07-file-upload-contracts.md`, `new swagger.json`  
 **Audit Timestamp**: 2026-08-31T11:20:00Z  

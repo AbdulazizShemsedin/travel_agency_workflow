@@ -1,7 +1,14 @@
+> [!WARNING]
+> **HISTORICAL REPORT — NOT CURRENT PROJECT INSTRUCTIONS**  
+> This document was generated for an earlier client presentation with simulated demo mode.  
+> The active branch is `production_version_non_mock` with **Strict Real Backend Only** (no mock/demo mode).  
+> Refer to [AGENTS.md](AGENTS.md), [MASTER_SYSTEM_STATUS.md](MASTER_SYSTEM_STATUS.md), and [V2_FRONTEND_TODO.md](V2_FRONTEND_TODO.md) for current instructions.
+
 # CLIENT DEMO ACCEPTANCE REPORT — V2 BACKEND-ALIGNED
 
 **Date of Execution:** August 31, 2026  
 **Target Environment:** `NEXT_PUBLIC_DEMO_MODE=true` & `NEXT_PUBLIC_DEMO_MODE=false`  
+
 **Evaluation Scope:** Verification of Existing Implementation (Zero Added Business Logic)  
 **Overall Readiness Verdict:** `PASS (SAFE & PRESENTABLE FOR CLIENT DEMO)`  
 

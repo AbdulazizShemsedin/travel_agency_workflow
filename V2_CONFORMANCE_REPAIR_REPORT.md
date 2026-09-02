@@ -1,6 +1,12 @@
+> [!WARNING]
+> **HISTORICAL REPAIR REPORT — NOT CURRENT PROJECT INSTRUCTIONS**  
+> This repair log documented changes on branch `backend-v2-integration`.  
+> Refer to [AGENTS.md](AGENTS.md), [FINAL_V2_CONFORMANCE_MATRIX.md](FINAL_V2_CONFORMANCE_MATRIX.md), and [V2_FRONTEND_TODO.md](V2_FRONTEND_TODO.md) for current authoritative instructions.
+
 # V2 FRONTEND CONFORMANCE REPAIR REPORT
 
 **Branch**: `backend-v2-integration`  
+
 **API Baseline**: V2 Whitelisted API Surface (`https://agencytracking-production.up.railway.app`)  
 **Audit Document**: [**`V2_CONFORMANCE_AUDIT.md`**](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/V2_CONFORMANCE_AUDIT.md)  
 **Report Date**: 2026-08-31T11:25:00Z  

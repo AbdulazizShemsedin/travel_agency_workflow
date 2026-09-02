@@ -1,6 +1,12 @@
+> [!WARNING]
+> **HISTORICAL ARCHITECTURAL AUDIT — NOT CURRENT PROJECT INSTRUCTIONS**  
+> This document was created on August 30, 2026. Note that `list_applicants` (flagged herein as a blocker) was subsequently implemented on August 31.  
+> Refer to [AGENTS.md](AGENTS.md), [FINAL_V2_CONFORMANCE_MATRIX.md](FINAL_V2_CONFORMANCE_MATRIX.md), and [MASTER_SYSTEM_STATUS.md](MASTER_SYSTEM_STATUS.md) for current authoritative contracts.
+
 # BACKEND V2 MIGRATION AUDIT: FRONTEND vs. NEW AGENCY TRACKING BACKEND CONTRACT
 
 **Document Version**: 2.0.0 (Read-Only Architectural Audit)  
+
 **Target Specification**: `Agency Tracking API v1.0.0` (`swagger.json`)  
 **Scope**: Complete Frontend (`src/`) Audit against New Whitelisted RPC Architecture (`agency_tracking.*`)  
 **Author**: Antigravity Technical Migration Auditor  

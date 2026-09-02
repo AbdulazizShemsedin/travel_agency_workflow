@@ -1,7 +1,14 @@
+> [!WARNING]
+> **HISTORICAL REPORT — NOT CURRENT PROJECT INSTRUCTIONS**  
+> This report was generated on August 31, 2026 on the `backend-v2-integration` branch and contains premature 100% completion claims.  
+> Out of 69 functional capabilities, 31 remain partial or in progress.  
+> Refer to [AGENTS.md](AGENTS.md), [MASTER_SYSTEM_STATUS.md](MASTER_SYSTEM_STATUS.md), and [V2_FRONTEND_TODO.md](V2_FRONTEND_TODO.md) for the active status and priority plan.
+
 # V2 Frontend Migration & Implementation Report
 
 **Project**: Travel Agency Workflow Management System  
 **Authoritative Backend Environment**: Railway Production (`https://agencytracking-production.up.railway.app`)  
+
 **Backend Branch Reference**: `backend-v2-integration`  
 **Frontend Framework**: Next.js 16 (App Router) + TypeScript + Tailwind CSS + TanStack Query  
 **Status**: 100% Complete & Verified (`npx tsc --noEmit` exit code 0; `npm run build` exit code 0)  
