@@ -105,6 +105,25 @@ export async function POST(
       body: bodyText || "{}",
     });
 
+    const resContentType = res.headers.get("content-type") || "";
+    const isBinary =
+      resContentType.includes("application/pdf") ||
+      resContentType.includes("application/vnd.openxmlformats") ||
+      resContentType.includes("application/vnd.ms-excel") ||
+      resContentType.includes("text/csv") ||
+      resContentType.includes("application/octet-stream");
+
+    if (isBinary && res.ok) {
+      const buffer = await res.arrayBuffer();
+      const headers = new Headers();
+      headers.set("Content-Type", resContentType);
+      const contentDisposition = res.headers.get("content-disposition");
+      if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
+      const setCookie = res.headers.get("set-cookie");
+      if (setCookie) headers.set("set-cookie", setCookie);
+      return new Response(buffer, { status: res.status, headers });
+    }
+
     const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
     const response = NextResponse.json(data, { status: res.status });
     const setCookie = res.headers.get("set-cookie");
@@ -135,6 +154,25 @@ export async function GET(
       headers: config.headers,
       cache: "no-store",
     });
+
+    const resContentType = res.headers.get("content-type") || "";
+    const isBinary =
+      resContentType.includes("application/pdf") ||
+      resContentType.includes("application/vnd.openxmlformats") ||
+      resContentType.includes("application/vnd.ms-excel") ||
+      resContentType.includes("text/csv") ||
+      resContentType.includes("application/octet-stream");
+
+    if (isBinary && res.ok) {
+      const buffer = await res.arrayBuffer();
+      const headers = new Headers();
+      headers.set("Content-Type", resContentType);
+      const contentDisposition = res.headers.get("content-disposition");
+      if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
+      const setCookie = res.headers.get("set-cookie");
+      if (setCookie) headers.set("set-cookie", setCookie);
+      return new Response(buffer, { status: res.status, headers });
+    }
 
     const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
     const response = NextResponse.json(data, { status: res.status });

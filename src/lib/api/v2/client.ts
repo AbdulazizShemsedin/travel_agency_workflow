@@ -135,11 +135,17 @@ export async function requestV2<T = any>(
     body: bodyData,
   });
 
-  // Handle binary streams (e.g. XLSX export)
+  // Handle binary streams (e.g. XLSX export, PDF invoice)
   const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/vnd.openxmlformats") || contentType.includes("text/csv")) {
+  if (
+    contentType.includes("application/vnd.openxmlformats") ||
+    contentType.includes("application/vnd.ms-excel") ||
+    contentType.includes("text/csv") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/octet-stream")
+  ) {
     if (!response.ok) {
-      throw new ApiV2Error(`File export failed with HTTP ${response.status}`, response.status);
+      throw new ApiV2Error(`File download failed with HTTP ${response.status}`, response.status);
     }
     return (await response.blob()) as unknown as T;
   }

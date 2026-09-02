@@ -1,28 +1,23 @@
 /**
  * Application Environment Configuration
  * 
- * NEXT_PUBLIC_DEMO_MODE:
- * - When true: Activates centralized demo adapter layer for unpopulated/demonstration records while maintaining 100% V2 schema compliance.
- * - When false: Strictly queries live V2 Railway Frappe backend.
+ * Strict Production Policy:
+ * - Real Backend Only (https://agencytracking-production.up.railway.app)
+ * - NO Demo Mode
+ * - NO Mock Business Data
+ * - NO V1 Fallbacks
  */
 
 export function isDemoMode(): boolean {
+  // In production branch, demo mode is strictly prohibited
+  return false;
+}
+
+export function setDemoModeOverride(_enabled: boolean | null): void {
+  // Purge any legacy localStorage override
   if (typeof window !== "undefined") {
-    const override = localStorage.getItem("DEMO_MODE_OVERRIDE");
-    if (override !== null) {
-      return override === "true";
-    }
-  }
-  return process.env.NEXT_PUBLIC_DEMO_MODE === "true" || process.env.NEXT_PUBLIC_DEMO_MODE === "1";
-}
-
-export function setDemoModeOverride(enabled: boolean | null): void {
-  if (typeof window === "undefined") return;
-  if (enabled === null) {
     localStorage.removeItem("DEMO_MODE_OVERRIDE");
-  } else {
-    localStorage.setItem("DEMO_MODE_OVERRIDE", String(enabled));
   }
 }
 
-export const DEMO_MODE = typeof process !== "undefined" && (process.env.NEXT_PUBLIC_DEMO_MODE === "true" || process.env.NEXT_PUBLIC_DEMO_MODE === "1");
+export const DEMO_MODE = false;

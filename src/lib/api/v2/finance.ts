@@ -264,8 +264,7 @@ export async function getOwedCommissionsV2(
     return demoStore.getOwedCommissions(contractor, destinationCountry);
   }
 
-  try {
-    const body: Record<string, any> = { order };
+  const body: Record<string, any> = { order };
     if (contractor) body.contractor = contractor;
     if (destinationCountry) body.destination_country = destinationCountry;
 
@@ -280,10 +279,6 @@ export async function getOwedCommissionsV2(
     if (Array.isArray(result)) return result;
     if (result && Array.isArray((result as any).items)) return (result as any).items;
     return [];
-  } catch (err) {
-    console.warn("[Finance] getOwedCommissionsV2 backend error, using demo fallback:", err);
-    return demoStore.getOwedCommissions(contractor, destinationCountry);
-  }
 }
 
 /**
@@ -372,22 +367,13 @@ export async function uploadBankStatementV2(
     };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
-      {
-        method: "POST",
-        body: { file_url: fileUrl },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend reconciliation API error, using demo fallback:", err);
-    return {
-      message: "Bank statement CSV processed successfully. 4 ledger items matched.",
-      matched: 4,
-      unmatched: 1,
-    };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
+    {
+      method: "POST",
+      body: { file_url: fileUrl },
+    }
+  );
 }
 
 /**
@@ -401,21 +387,16 @@ export async function manuallyMatchLineV2(
     return { message: `Statement line ${statementLineName} matched to batch ${batchName}` };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.reconciliation_api.manually_match_line",
-      {
-        method: "POST",
-        body: {
-          statement_line_name: statementLineName,
-          batch_name: batchName,
-        },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend match line error, fallback to success:", err);
-    return { message: `Statement line ${statementLineName} matched to batch ${batchName}` };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.reconciliation_api.manually_match_line",
+    {
+      method: "POST",
+      body: {
+        statement_line_name: statementLineName,
+        batch_name: batchName,
+      },
+    }
+  );
 }
 
 /**
@@ -428,18 +409,13 @@ export async function settleBatchItemsV2(
     return { message: `${itemNames.length} batch items settled successfully` };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.finance_api.settle_batch_items",
-      {
-        method: "POST",
-        body: { item_names: JSON.stringify(itemNames) },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend settle items error, fallback to success:", err);
-    return { message: `${itemNames.length} batch items settled successfully` };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.finance_api.settle_batch_items",
+    {
+      method: "POST",
+      body: { item_names: JSON.stringify(itemNames) },
+    }
+  );
 }
 
 /**
@@ -457,25 +433,16 @@ export async function uploadBatchPaymentProofV2(
     };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
-      {
-        method: "POST",
-        body: {
-          batch_name: batchName,
-          file_url: fileUrl,
-        },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend payment proof upload error, fallback to mock:", err);
-    return {
-      message: "Batch payment proof processed. 3 candidates matched.",
-      matched: 3,
-      unmatched: 0,
-    };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        file_url: fileUrl,
+      },
+    }
+  );
 }
 
 /**

@@ -37,29 +37,18 @@ export async function generateCvV2(
     };
   }
 
-  try {
-    const res = await requestV2<V2GenerateCvResponse>(
-      "/api/method/agency_tracking.cv_api.generate_cv",
-      {
-        method: "POST",
-        body: { applicant_name: applicantName },
-      }
-    );
-    return {
-      applicant_name: applicantName,
-      cv_file_url: res?.cv_file_url || cvUrl,
-      status: "CV Generated",
-      message: res?.message || "Official bilateral CV compiled and generated successfully",
-      ...res,
-    };
-  } catch (err: any) {
-    console.warn("Backend generate_cv fallback:", err);
-    // If backend fails or track check returns warning, ensure state is CV Generated with full bilateral preview
-    return {
-      applicant_name: applicantName,
-      cv_file_url: cvUrl,
-      status: "CV Generated",
-      message: "Official bilateral CV compiled and generated successfully",
-    };
-  }
+  const res = await requestV2<V2GenerateCvResponse>(
+    "/api/method/agency_tracking.cv_api.generate_cv",
+    {
+      method: "POST",
+      body: { applicant_name: applicantName },
+    }
+  );
+  return {
+    applicant_name: applicantName,
+    cv_file_url: res?.cv_file_url || cvUrl,
+    status: "CV Generated",
+    message: res?.message || "Official bilateral CV compiled and generated successfully",
+    ...res,
+  };
 }

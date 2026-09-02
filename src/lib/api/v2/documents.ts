@@ -98,8 +98,7 @@ export async function uploadFileV2(
     };
   }
 
-  try {
-    const formData = new FormData();
+  const formData = new FormData();
     formData.append("file", file);
     formData.append("is_private", isPrivate ? "1" : "0");
     if (doctype) formData.append("doctype", doctype);
@@ -110,40 +109,20 @@ export async function uploadFileV2(
       body: formData,
       isMultipart: true,
     });
-  } catch (err) {
-    console.warn("uploadFileV2 backend error, fallback to client preview:", err);
-    return {
-      file_url: typeof window !== "undefined" && typeof URL !== "undefined" && URL.createObjectURL ? URL.createObjectURL(file) : "/demo/document_preview.pdf",
-      file_name: file.name,
-      name: `FILE-${Date.now().toString().slice(-6)}`,
-    };
-  }
 }
 
 /**
  * Extracts ICAO 9303 MRZ fields from a passport scan file.
  */
 export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPassportData> {
-  if (isDemoMode()) {
-    return generateMockPassportData(fileUrl);
-  }
-
-  try {
-    const result = await requestV2<V2ParsedPassportData>(
-      "/api/method/agency_tracking.passport_parser.parse_passport_file",
-      {
-        method: "POST",
-        body: { file_url: fileUrl },
-      }
-    );
-    if (result && (result.passport_number || result.first_name)) {
-      return { status: "success", message: "Passport parsed successfully", ...result };
+  const result = await requestV2<V2ParsedPassportData>(
+    "/api/method/agency_tracking.passport_parser.parse_passport_file",
+    {
+      method: "POST",
+      body: { file_url: fileUrl },
     }
-  } catch (err) {
-    console.warn("Backend passport parser not active, using intelligent OCR fallback:", err);
-  }
-
-  return generateMockPassportData(fileUrl);
+  );
+  return { status: "success", message: "Passport parsed successfully", ...result };
 }
 
 /**
@@ -153,82 +132,47 @@ export async function parseContractFileV2(
   fileUrl: string,
   destinationCountry?: "Saudi Arabia" | "Kuwait" | string
 ): Promise<V2ParsedContractData> {
-  if (isDemoMode()) {
-    return generateMockContractData(destinationCountry);
-  }
-
-  try {
-    const result = await requestV2<V2ParsedContractData>(
-      "/api/method/agency_tracking.contract_parser.parse_contract_file",
-      {
-        method: "POST",
-        body: {
-          file_url: fileUrl,
-          ...(destinationCountry ? { destination_country: destinationCountry } : {}),
-        },
-      }
-    );
-    if (result && (result.contract_number || result.sponsor_name)) {
-      return { status: "success", message: "Contract document parsed successfully", ...result };
+  const result = await requestV2<V2ParsedContractData>(
+    "/api/method/agency_tracking.contract_parser.parse_contract_file",
+    {
+      method: "POST",
+      body: {
+        file_url: fileUrl,
+        ...(destinationCountry ? { destination_country: destinationCountry } : {}),
+      },
     }
-  } catch (err) {
-    console.warn("Backend contract parser not active, using intelligent contract fallback:", err);
-  }
-
-  return generateMockContractData(destinationCountry);
+  );
+  return { status: "success", message: "Contract document parsed successfully", ...result };
 }
 
 /**
  * Extracts fields from a Saudi Injaz paper document.
  */
 export async function parseInjazFileV2(fileUrl: string): Promise<V2ParsedInjazData> {
-  if (isDemoMode()) {
-    return generateMockInjazData();
-  }
-
-  try {
-    const result = await requestV2<V2ParsedInjazData>(
-      "/api/method/agency_tracking.contract_parser.parse_injaz_file",
-      {
-        method: "POST",
-        body: { file_url: fileUrl },
-      }
-    );
-    if (result && (result.injaz_application_number || result.mofa_barcode)) {
-      return { status: "success", message: "Injaz parsed successfully", ...result };
+  const result = await requestV2<V2ParsedInjazData>(
+    "/api/method/agency_tracking.contract_parser.parse_injaz_file",
+    {
+      method: "POST",
+      body: { file_url: fileUrl },
     }
-  } catch (err) {
-    console.warn("Backend Injaz parser not active, using intelligent Injaz fallback:", err);
-  }
-
-  return generateMockInjazData();
+  );
+  return { status: "success", message: "Injaz parsed successfully", ...result };
 }
 
 /**
  * Extracts fields from a Kuwait eVisa document.
  */
 export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData> {
-  if (isDemoMode()) {
-    return generateMockVisaData();
-  }
-
-  try {
-    const result = await requestV2<V2ParsedVisaData>(
-      "/api/method/agency_tracking.contract_parser.parse_visa_file",
-      {
-        method: "POST",
-        body: { file_url: fileUrl },
-      }
-    );
-    if (result && (result.visa_number || result.sponsor_name)) {
-      return { status: "success", message: "Visa parsed successfully", ...result };
+  const result = await requestV2<V2ParsedVisaData>(
+    "/api/method/agency_tracking.contract_parser.parse_visa_file",
+    {
+      method: "POST",
+      body: { file_url: fileUrl },
     }
-  } catch (err) {
-    console.warn("Backend visa parser not active, using intelligent eVisa fallback:", err);
-  }
-
-  return generateMockVisaData();
+  );
+  return { status: "success", message: "Visa parsed successfully", ...result };
 }
+
 
 // ---------------------------------------------------------------------------
 // Intelligent Mock Extractors for Demo & Graceful Fallback

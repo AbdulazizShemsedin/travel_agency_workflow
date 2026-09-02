@@ -31,27 +31,21 @@ export async function getPushSubscriptionStatusV2(): Promise<V2PushSubscriptionS
     };
   }
 
-  try {
-    const result = await requestV2<V2PushSubscriptionStatus | { subscribed?: boolean }>(
-      "/api/method/agency_tracking.notification_api.get_push_subscription_status",
-      { method: "POST" }
-    );
+  const result = await requestV2<{
+    subscribed?: boolean;
+    endpoint?: string;
+    vapid_public_key?: string;
+    enabled?: boolean;
+  }>("/api/method/agency_tracking.notification_api.get_push_subscription_status", {
+    method: "POST",
+  });
 
-    return {
-      subscribed: Boolean((result as any)?.subscribed),
-      endpoint: (result as any)?.endpoint,
-      vapid_public_key: (result as any)?.vapid_public_key || "BK8sQ9XyZ1v4W2uA8",
-      enabled: Boolean((result as any)?.enabled ?? true),
-    };
-  } catch (err) {
-    console.warn("Backend push subscription status unavailable, fallback to active:", err);
-    return {
-      subscribed: true,
-      endpoint: "https://demo.push.service/mock-sub",
-      vapid_public_key: "BK8sQ9XyZ1v4W2uA8",
-      enabled: true,
-    };
-  }
+  return {
+    subscribed: Boolean((result as any)?.subscribed),
+    endpoint: (result as any)?.endpoint,
+    vapid_public_key: (result as any)?.vapid_public_key || "",
+    enabled: Boolean((result as any)?.enabled ?? true),
+  };
 }
 
 /**
@@ -66,22 +60,17 @@ export async function subscribeToPushV2(
     return { status: "Success", message: "Push subscription activated successfully" };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.notification_api.subscribe_to_push",
-      {
-        method: "POST",
-        body: {
-          endpoint,
-          p256dh,
-          auth,
-        },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend subscribe_to_push unavailable, fallback to success:", err);
-    return { status: "Success", message: "Push notification subscription activated" };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.notification_api.subscribe_to_push",
+    {
+      method: "POST",
+      body: {
+        endpoint,
+        p256dh,
+        auth,
+      },
+    }
+  );
 }
 
 /**
@@ -94,16 +83,11 @@ export async function triggerWakalaReminderV2(
     return { status: "Success", message: `Wakala payment reminder dispatched for step ${clearanceStepName}` };
   }
 
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
-      {
-        method: "POST",
-        body: { clearance_step_name: clearanceStepName },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend trigger_wakala_reminder fallback:", err);
-    return { status: "Success", message: `Wakala payment reminder dispatched for step ${clearanceStepName}` };
-  }
+  return await requestV2(
+    "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
+    {
+      method: "POST",
+      body: { clearance_step_name: clearanceStepName },
+    }
+  );
 }
