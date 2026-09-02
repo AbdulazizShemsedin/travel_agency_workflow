@@ -1,0 +1,2132 @@
+[
+  {
+    "path": "/api/method/upload_file",
+    "method": "POST",
+    "summary": "Upload a file (raw Frappe endpoint)",
+    "description": "Standard Frappe multipart file upload -- returns a file_url that most agency_tracking parsing endpoints (parse_contract_file, parse_passport_file, upload_contract, etc.) expect as their file_url argument.",
+    "tags": [
+      "api",
+      "method",
+      "upload_file"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/login",
+    "method": "POST",
+    "summary": "Log in (raw Frappe endpoint)",
+    "description": "Standard Frappe session-cookie login. Not an agency_tracking function -- Frappe's own built-in auth endpoint, listed here because it's the first call any frontend makes.",
+    "tags": [
+      "api",
+      "method",
+      "Authentication",
+      "login"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/logout",
+    "method": "POST",
+    "summary": "Log out",
+    "description": "Ends the current session cookie.",
+    "tags": [
+      "api",
+      "method",
+      "Authentication",
+      "logout"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.auth_api.get_current_user",
+    "method": "POST",
+    "summary": "Get current session user",
+    "description": "allow_guest=True so a page refresh doesn't 403 before the SPA even knows whether a session exists. Returns null for Guest, otherwise user/full_name/roles.",
+    "tags": [
+      "api",
+      "method",
+      "Authentication",
+      "agency_tracking.auth_api.get_current_user"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.auth_api.get_csrf_token",
+    "method": "POST",
+    "summary": "Get CSRF token",
+    "description": "Frappe requires this token on every state-changing request once logged in.",
+    "tags": [
+      "api",
+      "method",
+      "Authentication",
+      "agency_tracking.auth_api.get_csrf_token"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.cancel_applicant",
+    "method": "POST",
+    "summary": "Cancel an Applicant (global escape hatch)",
+    "description": "Only from Registered/CV Generated. If an active_placement exists, freezes it and every linked Clearance Step to Cancelled first, then cancels the Applicant itself. Never bumps cycle_number by itself -- only a later restart does.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.cancel_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.create_applicant",
+    "method": "POST",
+    "summary": "Open a new Applicant file at Draft",
+    "description": "Draft floor: full_name, gender, nationality, entry_track. Accepts any other Applicant field as additional form data.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.create_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.get_applicant",
+    "method": "POST",
+    "summary": "Fetch a single Applicant",
+    "description": "Full doc as dict.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.get_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.list_applicants",
+    "method": "POST",
+    "summary": "List Applicants the caller's role can read",
+    "description": "backend-issues #02: whitelisted replacement for the raw /api/resource/Applicant fallback. Enforces the doctype's own permissions (Registrar, Manager, Admin, System Manager, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.list_applicants"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.set_country_ban",
+    "method": "POST",
+    "summary": "Set a permanent per-(Applicant, Country) ban",
+    "description": "backend-issues #08: previously no whitelisted writer existed for Applicant Country Ban -- the doctype's own permissions already grant create to Registrar/Complaint Manager/Manager/Admin/System Manager.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.set_country_ban"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.list_country_bans",
+    "method": "POST",
+    "summary": "List country bans, optionally scoped to one Applicant",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.list_country_bans"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.remove_country_ban",
+    "method": "POST",
+    "summary": "Lift a country ban",
+    "description": "Delete permission on Applicant Country Ban is Manager/Admin/System Manager only -- Registrar/Complaint Manager can set a ban but not lift one.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.remove_country_ban"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.log_applicant_fee",
+    "method": "POST",
+    "summary": "Manually log the Registration Fee to the Finance ledger",
+    "description": "Sets fee_status=Paid and saves -- Applicant.maybe_log_fee_transaction then creates the actual Pending Applicant Transaction in the same save. Requires fee_required + registration_fee_amount already set; throws if this fee was already logged.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.log_applicant_fee"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.register_applicant",
+    "method": "POST",
+    "summary": "Draft -> Registered",
+    "description": "Field-floor and medical checks run inside Applicant.validate(), triggered by the sanctioned transition() path.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.register_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.restart_applicant",
+    "method": "POST",
+    "summary": "Restart a Cancelled Applicant",
+    "description": "Cancelled -> Draft or Registered. cycle_number bumps automatically. Restarting straight to Registered fails naturally if the field floor isn't actually satisfied.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.restart_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.update_applicant",
+    "method": "POST",
+    "summary": "Edit an Applicant at Draft or Registered",
+    "description": "Does not change status -- use register_applicant for that. If entry_track changes while Registered/CV Generated, forces a regression to Draft first (cycle_number bumps automatically). destination_country changes are checked against Applicant Country Ban.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.update_applicant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
+    "method": "POST",
+    "summary": "LMIS-stage edit: national_id, labor_id, emergency contact, COC",
+    "description": "Narrow allowlisted edit surface -- national_id/labor_id/emergency_contact_*/coc_status/exam_date are deliberately NOT part of the Registered field floor; they're captured here once the candidate is actually at the LMIS clearance step. Any field outside the allowlist is silently ignored.",
+    "tags": [
+      "api",
+      "method",
+      "Applicant",
+      "agency_tracking.applicant_api.update_applicant_for_lmis"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_engine.get_placement_officers",
+    "method": "POST",
+    "summary": "List which officer is currently assigned to each Clearance Step on a Placement",
+    "description": "Sourced from the same open ToDo assignment data that drives Clearance Step permissions -- every Placement detail view exposes who's currently working each step.",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_engine.get_placement_officers"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.add_participant",
+    "method": "POST",
+    "summary": "Add a participant to an internal thread",
+    "description": "Agency threads are fixed at exactly two participants -- blocked outright for those.",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.add_participant"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.create_agency_thread",
+    "method": "POST",
+    "summary": "Create/get this agency's thread with the Communication Manager",
+    "description": "Foreign Agency only. No recipient parameter -- routing happens entirely server-side.",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.create_agency_thread"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.create_internal_thread",
+    "method": "POST",
+    "summary": "Create/get an internal staff-to-staff thread",
+    "description": "Internal staff only, open between all staff, no role restriction. Never a route into an agency's thread.",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.create_internal_thread"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.get_thread_messages",
+    "method": "POST",
+    "summary": "Get all messages in a thread",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.get_thread_messages"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.list_threads",
+    "method": "POST",
+    "summary": "List the current user's threads",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.list_threads"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.mark_read",
+    "method": "POST",
+    "summary": "Mark a thread as read for the current user",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.mark_read"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.chat_api.send_message",
+    "method": "POST",
+    "summary": "Send a message in a thread",
+    "description": "Must have text or an attachment. Mentioning an Applicant/Placement still requires read permission on the mentioned record.",
+    "tags": [
+      "api",
+      "method",
+      "Chat",
+      "agency_tracking.chat_api.send_message"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.complete_clearance_step",
+    "method": "POST",
+    "summary": "Mark a Clearance Step complete/Issued",
+    "description": "Not for Embassy steps. LMIS (both countries) completes to 'Issued'; everything else (Taeshir, Telesign) completes to the generic 'Complete'. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.complete_clearance_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
+    "method": "POST",
+    "summary": "List the current user's Clearance Step queue",
+    "description": "A Clearance Officer/Ticketer's own ToDo-scoped queue, or -- for the six country+step roles -- every row of their matching step_type.",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.list_my_clearance_steps"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.reassign_clearance_step",
+    "method": "POST",
+    "summary": "Reassign a Clearance Step to a different officer",
+    "description": "The escape hatch for the default auto-chain assignment. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.reassign_clearance_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.reject_embassy_step",
+    "method": "POST",
+    "summary": "Mark an Embassy step Rejected (Thursday, failure outcome)",
+    "description": "Saudi/Kuwait Embassy only. A written rejection_remark is required. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.reject_embassy_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.stamp_embassy_step",
+    "method": "POST",
+    "summary": "Mark an Embassy step Stamped (Thursday, success outcome)",
+    "description": "Saudi/Kuwait Embassy only. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.stamp_embassy_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.start_clearance_step",
+    "method": "POST",
+    "summary": "Mark a Clearance Step In Progress",
+    "description": "Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.start_clearance_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.clearance_api.submit_embassy_step",
+    "method": "POST",
+    "summary": "Submit an Embassy step's documents (Monday)",
+    "description": "Saudi/Kuwait Embassy only. Pending -> Submitted. Blocked (417) once the step is already terminal (Issued/Complete/Stamped/Rejected) or its parent Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-3).",
+    "tags": [
+      "api",
+      "method",
+      "Clearance Steps",
+      "agency_tracking.clearance_api.submit_embassy_step"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.complaint_api.acknowledge_complaint",
+    "method": "POST",
+    "summary": "New -> Unresolved",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Complaints",
+      "agency_tracking.complaint_api.acknowledge_complaint"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.complaint_api.create_complaint",
+    "method": "POST",
+    "summary": "Log a complaint against a placed worker",
+    "description": "A Foreign Agency can only complain about their own placement; internal staff need a recognized staff role.",
+    "tags": [
+      "api",
+      "method",
+      "Complaints",
+      "agency_tracking.complaint_api.create_complaint"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
+    "method": "POST",
+    "summary": "List Unresolved complaints, oldest-first",
+    "description": "So nothing quietly sits forgotten at the bottom of a list.",
+    "tags": [
+      "api",
+      "method",
+      "Complaints",
+      "agency_tracking.complaint_api.list_unresolved_complaints"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.complaint_api.resolve_complaint",
+    "method": "POST",
+    "summary": "Resolve a complaint (Resolved / Free Replacement / Escalated / Dismissed)",
+    "description": "Dismissed requires a written resolution_notes. override_reason (Manager Override) widens permission to include plain Manager for that one call.",
+    "tags": [
+      "api",
+      "method",
+      "Complaints",
+      "agency_tracking.complaint_api.resolve_complaint"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.cv_api.generate_cv",
+    "method": "POST",
+    "summary": "Generate and attach the official Agency CV PDF",
+    "description": "Standard track, Registered status only. Renders via a Frappe Print Format, mirrors to Cloudflare R2 (falls back to a local private file if Storage Settings isn't configured). Moves the Applicant to CV Generated.",
+    "tags": [
+      "api",
+      "method",
+      "CV",
+      "agency_tracking.cv_api.generate_cv"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.approve_transaction",
+    "method": "POST",
+    "summary": "Approve a Pending transaction",
+    "description": "Pending -> Approved via the sanctioned transition() path. Only Approved entries count toward ledger/balance totals.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.approve_transaction"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.create_commission_batch",
+    "method": "POST",
+    "summary": "Batch a contractor's owed commissions for settlement",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.create_commission_batch"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.get_fx_rate",
+    "method": "POST",
+    "summary": "Get the cached FX rate for a currency",
+    "description": "ETB is hardcoded to 1.0 (Birr itself, no conversion needed). Other currencies fall back to the most recent cached rate on or before as_of_date; throws if none was ever recorded.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.get_fx_rate"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.get_owed_commissions",
+    "method": "POST",
+    "summary": "List a contractor's owed (unbatched, Approved) commissions",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.get_owed_commissions"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.log_stage_expense",
+    "method": "POST",
+    "summary": "Log an expense",
+    "description": "Open to any internal staff role -- Finance Manager/Admin approval (approve_transaction) is the real gate, not who's allowed to log. placement is optional (general office expenses are loggable too).",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.log_stage_expense"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.log_stage_income",
+    "method": "POST",
+    "summary": "Log income",
+    "description": "Same shape/permissions as log_stage_expense.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.log_stage_income"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.reject_transaction",
+    "method": "POST",
+    "summary": "Reject a Pending transaction",
+    "description": "Pending -> Rejected. A written rejection_reason is required.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.reject_transaction"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.set_fx_rate",
+    "method": "POST",
+    "summary": "Manually record an FX rate",
+    "description": "Custom-mode path (FX Rate Settings). ETB cannot be set -- it's always 1:1, hardcoded.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.set_fx_rate"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.settle_batch_items",
+    "method": "POST",
+    "summary": "Mark specific Commission Batch Items paid (partial settlement)",
+    "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): explicit multi-select manual settlement, alongside upload_batch_payment_proof's parser. Batch status becomes Partially Settled until every item is Paid.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.settle_batch_items"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    "method": "POST",
+    "summary": "Upload a paid-applicants list (CSV or PDF) and fuzzy-match against a batch",
+    "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): best-effort parse + fuzzy name match against the batch's own item list. Unmatched names stay Pending for manual settle_batch_items review -- never blocks.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.upload_batch_payment_proof"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
+    "method": "POST",
+    "summary": "Render a Commission Batch invoice PDF on demand",
+    "description": "AGREED_SPEC.md Part 7.3 (backend-issues #09): applicant names + amounts, built fresh whenever requested, not pre-generated/stored at batch creation.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.get_batch_invoice_pdf"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.settle_batch",
+    "method": "POST",
+    "summary": "Mark a Commission Batch settled",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.settle_batch"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.trigger_early_commission_accrual",
+    "method": "POST",
+    "summary": "Manually trigger commission accrual early",
+    "description": "For cases needing to bill sooner than Departed. Idempotency-guarded -- calling this then later reaching Departed naturally is a no-op the second time.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.trigger_early_commission_accrual"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.finance_api.void_transaction",
+    "method": "POST",
+    "summary": "Void an Approved transaction",
+    "description": "Approved -> Voided, via transition(). No hard delete, ever -- the row stays visible with its status flagged. A written void_reason is required.",
+    "tags": [
+      "api",
+      "method",
+      "Finance",
+      "agency_tracking.finance_api.void_transaction"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.contractor_api.create_contractor",
+    "method": "POST",
+    "summary": "Register a new foreign agency and its portal login",
+    "description": "backend-issues #07: Contractor.user is a required, unique Link, so there was previously no whitelisted way to create one -- Muayena placement creation (create_muayena_placement's contractor_name) is unusable without a Contractor to point at.",
+    "tags": [
+      "api",
+      "method",
+      "Foreign Agency",
+      "agency_tracking.contractor_api.create_contractor"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.contractor_api.list_contractors",
+    "method": "POST",
+    "summary": "List Contractors the caller's role can manage",
+    "description": "backend-issues #07: read surface for picking an existing agency (create_muayena_placement's contractor_name, Finance's batching/rate lookups).",
+    "tags": [
+      "api",
+      "method",
+      "Foreign Agency",
+      "agency_tracking.contractor_api.list_contractors"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.portal_api.list_my_wakala_requests",
+    "method": "POST",
+    "summary": "List unpaid Wakala-bearing Embassy steps for the agency's own placements",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Foreign Agency",
+      "agency_tracking.portal_api.list_my_wakala_requests"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.portal_api.list_portal_candidates",
+    "method": "POST",
+    "summary": "Browse the candidate catalog",
+    "description": "Standard-track, CV Generated, not yet locked by anyone, matching the agency's own destination country. Non-PII fields only.",
+    "tags": [
+      "api",
+      "method",
+      "Foreign Agency",
+      "agency_tracking.portal_api.list_portal_candidates"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.portal_api.select_candidate",
+    "method": "POST",
+    "summary": "Select a candidate (creates a Placement)",
+    "description": "Atomic, globally exclusive -- row-locked so two concurrent selections can't both succeed. free_replacement_for_complaint uses an approved free-replacement credit instead of billing normally.",
+    "tags": [
+      "api",
+      "method",
+      "Foreign Agency",
+      "agency_tracking.portal_api.select_candidate"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.notification_api.get_push_subscription_status",
+    "method": "POST",
+    "summary": "Check whether the current user has an active Push Subscription",
+    "description": "Drives the manual 'enable notifications' fallback button.",
+    "tags": [
+      "api",
+      "method",
+      "Notification",
+      "agency_tracking.notification_api.get_push_subscription_status"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.notification_api.subscribe_to_push",
+    "method": "POST",
+    "summary": "Subscribe the current browser to Push notifications",
+    "description": "A user subscribing their own browser -- never on behalf of anyone else.",
+    "tags": [
+      "api",
+      "method",
+      "Notification",
+      "agency_tracking.notification_api.subscribe_to_push"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
+    "method": "POST",
+    "summary": "Manually trigger a Wakala payment reminder",
+    "description": "The escape hatch alongside the automatic Fri/Sat/Sun watchdog. Embassy steps only.",
+    "tags": [
+      "api",
+      "method",
+      "Notification",
+      "agency_tracking.notification_api.trigger_wakala_reminder"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.contract_parser.parse_contract_file",
+    "method": "POST",
+    "summary": "Extract structured fields from an uploaded contract",
+    "description": "Saudi: contract#/visa#/employer/agency/salary. Kuwait: employer/site/duration/salary only (its template carries far less). Returns mock fixture data instead of real OCR when Document Parsing Settings.use_mock_parsing is on.",
+    "tags": [
+      "api",
+      "method",
+      "Parsing",
+      "agency_tracking.contract_parser.parse_contract_file"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.contract_parser.parse_injaz_file",
+    "method": "POST",
+    "summary": "Extract fields from a Saudi Injaz paper",
+    "description": "Injaz application number, passport number, applicant demographics, origin agency.",
+    "tags": [
+      "api",
+      "method",
+      "Parsing",
+      "agency_tracking.contract_parser.parse_injaz_file"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.contract_parser.parse_visa_file",
+    "method": "POST",
+    "summary": "Extract fields from a Kuwait eVisa document",
+    "description": "visa_number/type/dates/reference, sponsor name+civil ID, Kuwait agency name+license.",
+    "tags": [
+      "api",
+      "method",
+      "Parsing",
+      "agency_tracking.contract_parser.parse_visa_file"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.passport_parser.parse_passport_file",
+    "method": "POST",
+    "summary": "Extract MRZ fields from a passport scan",
+    "description": "ICAO 9303 checksum self-correcting MRZ parser (TD3/TD1), falls back to visual OCR. Never raises -- returns {} on failure.",
+    "tags": [
+      "api",
+      "method",
+      "Parsing",
+      "agency_tracking.passport_parser.parse_passport_file"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.advance_placement",
+    "method": "POST",
+    "summary": "Move a Placement forward via the sanctioned transition() path",
+    "description": "The direct/manual advance. override_reason attempts a Manager Override if the move is gate-blocked.",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.advance_placement"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.create_muayena_placement",
+    "method": "POST",
+    "summary": "Create a Placement directly (Muayena track)",
+    "description": "Muayena enters directly at Selected with contract in hand -- no portal, no CV. Contractor is always picked manually.",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.create_muayena_placement"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.record_reschedule",
+    "method": "POST",
+    "summary": "Record a ticket reschedule",
+    "description": "reschedule_cost only meaningful/loggable when cause=Internal -- an airline/airport-caused reschedule isn't billed to the agency. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.record_reschedule"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.record_selected_medical_result",
+    "method": "POST",
+    "summary": "Record the post-contract medical result",
+    "description": "Gates Selected -> Processing. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.record_selected_medical_result"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.record_predeparture_medical_result",
+    "method": "POST",
+    "summary": "Record the pre-departure (Medical 2) result",
+    "description": "Gates Ticketed -> Departed. FIT just records the result; UNFIT cancels the whole Applicant + Placement via the same cascade as cancel_applicant. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.record_predeparture_medical_result"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.record_ticket_details",
+    "method": "POST",
+    "summary": "Record ticket number/flight date, auto-logs cost as an expense",
+    "description": "ticket_cost (if given) auto-creates a Pending Applicant Transaction expense. Blocked (417) once the Placement is already Departed/Cancelled (cc2 QA pass, backend-issues NEW-1).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.record_ticket_details"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.upload_contract",
+    "method": "POST",
+    "summary": "Attach a signed contract to a Selected Placement",
+    "description": "Extracts contract_signed_date plus country-specific structured fields via contract_parser.parse_contract_file.",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.upload_contract"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.upload_visa",
+    "method": "POST",
+    "summary": "Attach a Kuwait visa document",
+    "description": "Kuwait only. Cross-checks the parsed agency identity against the Placement's actual Contractor and flags a mismatch (notify, never auto-reassigns).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.upload_visa"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.placement_api.list_placements",
+    "method": "POST",
+    "summary": "List Placements the caller's role can read",
+    "description": "backend-issues #02: whitelisted replacement for the raw /api/resource/Placement fallback. Enforces the doctype's own permissions (Manager, Admin, System Manager, Contract Parser, Ticketer, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).",
+    "tags": [
+      "api",
+      "method",
+      "Placement",
+      "agency_tracking.placement_api.list_placements"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.api_docs.get_swagger_spec",
+    "method": "GET",
+    "summary": "Get full Swagger specification JSON",
+    "description": "Returns this full Swagger 2.0 / OpenAPI specification as a JSON object.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.api_docs.get_swagger_spec"
+    ],
+    "roles": [],
+    "security": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.reconciliation_api.manually_match_line",
+    "method": "POST",
+    "summary": "Manually match an unmatched statement line to a batch",
+    "description": "Escape hatch for lines the automatic matcher couldn't confidently resolve.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.reconciliation_api.manually_match_line"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
+    "method": "POST",
+    "summary": "Upload a bank statement CSV",
+    "description": "Parses rows and runs the automatic line-to-batch matcher (matches by total amount).",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.reconciliation_api.upload_bank_statement"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "method": "POST",
+    "summary": "Export commission records as a binary .xlsx (CSV fallback)",
+    "description": "Streams the file directly in the response (frappe.response['filecontent']), not a JSON body.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.export_commissions_xlsx"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_complaint_aging_report",
+    "method": "POST",
+    "summary": "New/Unresolved (with age)/Resolved counts",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_complaint_aging_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
+    "method": "POST",
+    "summary": "Approved transaction totals grouped by destination country",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_cost_breakdown_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_daily_work_report",
+    "method": "POST",
+    "summary": "CVs created, medicals processed, clearances issued, embassies cleared, tickets booked, departures — for a date range",
+    "description": "business-workflow-srs.md Part 8's exact list.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_daily_work_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_employee_financial_report",
+    "method": "POST",
+    "summary": "Per-employee net expense + approval/rejection rate",
+    "description": "",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_employee_financial_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_financial_overview",
+    "method": "POST",
+    "summary": "Income/expense/commission/refund totals + outstanding/settled",
+    "description": "Deliberately Admin-only, not Manager, unlike every other report here -- the financial-visibility wall from Step 8 applies to reporting too, not just the raw ledger.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_financial_overview"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_operations_summary",
+    "method": "POST",
+    "summary": "Recruitment funnel + SLA/turnaround dashboard data",
+    "description": "Manager/Admin only. applicant_funnel/placement_funnel are current-state snapshot counts; conversion_rates and turnaround_days are computed from Process Event transitions within from_date/to_date; pending_overdue reuses get_placement_aging_report's thresholds plus unresolved-complaint and pending-transaction counts.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_operations_summary"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_pending_approval_queue",
+    "method": "POST",
+    "summary": "List every Pending Applicant Transaction, oldest-first",
+    "description": "So nothing sits forgotten waiting on Finance review.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_pending_approval_queue"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_placement_aging_report",
+    "method": "POST",
+    "summary": "Placements approaching the ticket deadline, and critical ones not yet Departed",
+    "description": "Two buckets, both sorted worst-first (highest priority): approaching_ticket_deadline (25-29 days since contract_signed_date) and critical_not_departed (30+ days). Distinct from the contract_age_watchdog push notification -- this is a pull/list view.",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_placement_aging_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.report_api.get_staff_performance_report",
+    "method": "POST",
+    "summary": "get_daily_work_report's same breakdown, per individual staff member",
+    "description": "Grouped by whoever actually did the work (CV Record.generated_by, Clearance Step.completed_by, Process Event.actor for placement-stage transitions).",
+    "tags": [
+      "api",
+      "method",
+      "Reports",
+      "agency_tracking.report_api.get_staff_performance_report"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ]
+  },
+  {
+    "path": "/api/method/agency_tracking.corridor_engine.get_corridor_steps",
+    "method": "POST",
+    "summary": "Get the ordered step definitions for a destination country's corridor",
+    "description": "Data-driven -- adding a new corridor (e.g. a third country) is purely a Corridor Definition doc, no code change.",
+    "tags": [
+      "api",
+      "method",
+      "State Machine",
+      "agency_tracking.corridor_engine.get_corridor_steps"
+    ],
+    "roles": [],
+    "security": [
+      {
+        "ApiKeyAuth": []
+      }
+    ],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ]
+  }
+]

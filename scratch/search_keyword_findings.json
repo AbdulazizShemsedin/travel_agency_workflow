@@ -1,0 +1,861 @@
+{
+  "mock": [
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 1951,
+      "content": "\"description\": \"Saudi: contract#/visa#/employer/agency/salary. Kuwait: employer/site/duration/salary only (its template carries far less). Returns mock fixture data instead of real OCR when Document Parsing Settings.use_mock_parsing is on.\","
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 234,
+      "content": "// Intelligent Mock Extractors for Demo & Graceful Fallback"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 472,
+      "content": "console.warn(\"Backend payment proof upload error, fallback to mock:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 28,
+      "content": "endpoint: \"https://demo.push.service/mock-sub\","
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 50,
+      "content": "endpoint: \"https://demo.push.service/mock-sub\","
+    }
+  ],
+  "dummy": [],
+  "fake": [],
+  "fixture": [
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 1951,
+      "content": "\"description\": \"Saudi: contract#/visa#/employer/agency/salary. Kuwait: employer/site/duration/salary only (its template carries far less). Returns mock fixture data instead of real OCR when Document Parsing Settings.use_mock_parsing is on.\","
+    },
+    {
+      "file": "src/lib/demo/applicants.ts",
+      "line": 2,
+      "content": "* Demo Applicants Fixture (V2 Candidate Profiles)"
+    },
+    {
+      "file": "src/lib/demo/clearances.ts",
+      "line": 2,
+      "content": "* Demo Clearance Steps Fixture (V2 Clearance Workflow)"
+    },
+    {
+      "file": "src/lib/demo/complaints.ts",
+      "line": 2,
+      "content": "* Demo Complaints Fixture (V2 90-Day Warranty Dispute Management)"
+    },
+    {
+      "file": "src/lib/demo/contractors.ts",
+      "line": 2,
+      "content": "* Demo Contractors Fixture (V2 Foreign Agencies)"
+    },
+    {
+      "file": "src/lib/demo/finance.ts",
+      "line": 2,
+      "content": "* Demo Finance & Commission Fixture (V2 Finance Engine)"
+    },
+    {
+      "file": "src/lib/demo/placements.ts",
+      "line": 2,
+      "content": "* Demo Placements Fixture (V2 Placements)"
+    },
+    {
+      "file": "src/lib/demo/reports.ts",
+      "line": 2,
+      "content": "* Demo Reports Fixture (V2 Analytics & Management Reports)"
+    },
+    {
+      "file": "src/lib/demo/users.ts",
+      "line": 2,
+      "content": "* Demo Users & Role Profiles Fixture (V2 RBAC Roles)"
+    }
+  ],
+  "demo": [
+    {
+      "file": "src/components/demo/DemoRoleSwitcher.tsx",
+      "line": 6,
+      "content": "import { DEMO_USERS } from \"@/lib/demo/users\";"
+    },
+    {
+      "file": "src/components/demo/DemoRoleSwitcher.tsx",
+      "line": 39,
+      "content": "Demo:"
+    },
+    {
+      "file": "src/components/demo/DemoRoleSwitcher.tsx",
+      "line": 97,
+      "content": "<span>Demo Mode Active</span>"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 14,
+      "content": "import { DemoRoleSwitcher } from \"@/components/demo/DemoRoleSwitcher\";"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 86,
+      "content": "{/* Right Actions: Demo Switcher & Dark Mode & Notifications & User */}"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 88,
+      "content": "{/* Demo Mode Role Persona Switcher */}"
+    },
+    {
+      "file": "src/components/operational/workspaces/InjazWorkspace.tsx",
+      "line": 32,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/components/providers/AuthProvider.tsx",
+      "line": 8,
+      "content": "import { DEMO_USERS, DemoUserProfile } from \"@/lib/demo/users\";"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 49,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/applicants.ts",
+      "line": 21,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/applicants.ts",
+      "line": 134,
+      "content": "return { name: created.name, message: \"Applicant created successfully in demo workspace\" };"
+    },
+    {
+      "file": "src/lib/api/v2/applicants.ts",
+      "line": 239,
+      "content": "console.warn(\"[Applicants] listApplicantsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/clearance.ts",
+      "line": 16,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/complaints.ts",
+      "line": 14,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/complaints.ts",
+      "line": 112,
+      "content": "console.warn(\"[Complaints] listUnresolvedComplaintsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/contractors.ts",
+      "line": 11,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/cv.ts",
+      "line": 10,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 95,
+      "content": "file_url: typeof window !== \"undefined\" && typeof URL !== \"undefined\" && URL.createObjectURL ? URL.createObjectURL(file) : \"/demo/document_preview.pdf\","
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 116,
+      "content": "file_url: typeof window !== \"undefined\" && typeof URL !== \"undefined\" && URL.createObjectURL ? URL.createObjectURL(file) : \"/demo/document_preview.pdf\","
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 234,
+      "content": "// Intelligent Mock Extractors for Demo & Graceful Fallback"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 26,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 27,
+      "content": "import { DEMO_FX_RATES } from \"@/lib/demo/finance\";"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 284,
+      "content": "console.warn(\"[Finance] getOwedCommissionsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 384,
+      "content": "console.warn(\"Backend reconciliation API error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 28,
+      "content": "endpoint: \"https://demo.push.service/mock-sub\","
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 50,
+      "content": "endpoint: \"https://demo.push.service/mock-sub\","
+    },
+    {
+      "file": "src/lib/api/v2/placements.ts",
+      "line": 18,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/placements.ts",
+      "line": 134,
+      "content": "return { message: \"Contract document attached in demo state\" };"
+    },
+    {
+      "file": "src/lib/api/v2/placements.ts",
+      "line": 157,
+      "content": "return { message: \"Visa document attached in demo state\" };"
+    },
+    {
+      "file": "src/lib/api/v2/portal.ts",
+      "line": 12,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 19,
+      "content": "import { demoStore } from \"@/lib/demo/store\";"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 20,
+      "content": "import { DEMO_COST_BREAKDOWN, DEMO_EMPLOYEE_FINANCIAL } from \"@/lib/demo/reports\";"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 247,
+      "content": "console.warn(\"[Reports] getOperationsSummaryV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 274,
+      "content": "console.warn(\"[Reports] getPlacementAgingReportV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 300,
+      "content": "console.warn(\"[Reports] getFinancialOverviewV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/config/env.ts",
+      "line": 5,
+      "content": "* - When true: Activates centralized demo adapter layer for unpopulated/demonstration records while maintaining 100% V2 schema compliance."
+    },
+    {
+      "file": "src/lib/demo/applicants.ts",
+      "line": 2,
+      "content": "* Demo Applicants Fixture (V2 Candidate Profiles)"
+    },
+    {
+      "file": "src/lib/demo/applicants.ts",
+      "line": 531,
+      "content": "cv_file_url: \"/demo/cv_preview.pdf\","
+    },
+    {
+      "file": "src/lib/demo/clearances.ts",
+      "line": 2,
+      "content": "* Demo Clearance Steps Fixture (V2 Clearance Workflow)"
+    },
+    {
+      "file": "src/lib/demo/complaints.ts",
+      "line": 2,
+      "content": "* Demo Complaints Fixture (V2 90-Day Warranty Dispute Management)"
+    },
+    {
+      "file": "src/lib/demo/contractors.ts",
+      "line": 2,
+      "content": "* Demo Contractors Fixture (V2 Foreign Agencies)"
+    },
+    {
+      "file": "src/lib/demo/finance.ts",
+      "line": 2,
+      "content": "* Demo Finance & Commission Fixture (V2 Finance Engine)"
+    },
+    {
+      "file": "src/lib/demo/index.ts",
+      "line": 2,
+      "content": "* Unified Demo Module Exports"
+    },
+    {
+      "file": "src/lib/demo/index.ts",
+      "line": 4,
+      "content": "* Exports all centralized demo fixtures, user roles, and the reactive demoStore."
+    },
+    {
+      "file": "src/lib/demo/placements.ts",
+      "line": 2,
+      "content": "* Demo Placements Fixture (V2 Placements)"
+    },
+    {
+      "file": "src/lib/demo/reports.ts",
+      "line": 2,
+      "content": "* Demo Reports Fixture (V2 Analytics & Management Reports)"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 2,
+      "content": "* Centralized Demo Reactive Store"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 4,
+      "content": "* Manages mutable in-memory demo data conforming to V2 backend schemas."
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 243,
+      "content": "throw new Error(`Applicant ${name} not found in demo state`);"
+    },
+    {
+      "file": "src/lib/demo/users.ts",
+      "line": 2,
+      "content": "* Demo Users & Role Profiles Fixture (V2 RBAC Roles)"
+    }
+  ],
+  "fallback": [
+    {
+      "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+      "line": 418,
+      "content": "// Fallback: If no Contractor exists on backend DB, create initial standard Contractor"
+    },
+    {
+      "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+      "line": 559,
+      "content": "// Populate form data with extracted fields while keeping any user entered non-empty values as fallback"
+    },
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 311,
+      "content": "\"description\": \"backend-issues #02: whitelisted replacement for the raw /api/resource/Applicant fallback. Enforces the doctype's own permissions (Registrar, Manager, Admin, System Manager, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).\","
+    },
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 3027,
+      "content": "\"description\": \"Drives the manual 'enable notifications' fallback button.\","
+    },
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 3891,
+      "content": "\"description\": \"backend-issues #02: whitelisted replacement for the raw /api/resource/Placement fallback. Enforces the doctype's own permissions (Manager, Admin, System Manager, Contract Parser, Ticketer, Finance Manager, Clearance Officer, Complaint Manager, Communication Manager, and the six country+step roles).\","
+    },
+    {
+      "file": "src/Assets/new swagger.json",
+      "line": 4193,
+      "content": "\"summary\": \"Export commission records as a binary .xlsx (CSV fallback)\","
+    },
+    {
+      "file": "src/components/applicant/steps/Step1PersonalInfo.tsx",
+      "line": 160,
+      "content": "// 3. If backend didn't return complete data, execute client-side OCR fallback"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 615,
+      "content": "// Non-blocking fallback"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 891,
+      "content": "// Fallback to parse_dossier_file"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1192,
+      "content": "// DSR fallback / Lookup"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1600,
+      "content": "console.warn(\"Accounting aggregation fallback:\", aggErr);"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1735,
+      "content": "// Fallback 1: Query Frappe /api/resource/Role"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1775,
+      "content": "// Fallback 2: Canonical Frappe Role definitions"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1866,
+      "content": "// Fallback to standard Frappe User resource"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2651,
+      "content": "console.warn(\"get_agency_pipeline_candidates RPC error, using relational fallback:\", rpcErr);"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2654,
+      "content": "// Authoritative Fallback: Query Applicant resource with valid schema fields"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2727,
+      "content": "console.warn(\"getAgencyPipelineCandidatesApi resource fallback warning:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/applicants.ts",
+      "line": 195,
+      "content": "* Authoritative V2 replacement for raw /api/resource/Applicant fallback."
+    },
+    {
+      "file": "src/lib/api/v2/applicants.ts",
+      "line": 239,
+      "content": "console.warn(\"[Applicants] listApplicantsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/complaints.ts",
+      "line": 112,
+      "content": "console.warn(\"[Complaints] listUnresolvedComplaintsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/cv.ts",
+      "line": 56,
+      "content": "console.warn(\"Backend generate_cv fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 114,
+      "content": "console.warn(\"uploadFileV2 backend error, fallback to client preview:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 143,
+      "content": "console.warn(\"Backend passport parser not active, using intelligent OCR fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 175,
+      "content": "console.warn(\"Backend contract parser not active, using intelligent contract fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 201,
+      "content": "console.warn(\"Backend Injaz parser not active, using intelligent Injaz fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 227,
+      "content": "console.warn(\"Backend visa parser not active, using intelligent eVisa fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/documents.ts",
+      "line": 234,
+      "content": "// Intelligent Mock Extractors for Demo & Graceful Fallback"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 284,
+      "content": "console.warn(\"[Finance] getOwedCommissionsV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 384,
+      "content": "console.warn(\"Backend reconciliation API error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 416,
+      "content": "console.warn(\"Backend match line error, fallback to success:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 440,
+      "content": "console.warn(\"Backend settle items error, fallback to success:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/finance.ts",
+      "line": 472,
+      "content": "console.warn(\"Backend payment proof upload error, fallback to mock:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 47,
+      "content": "console.warn(\"Backend push subscription status unavailable, fallback to active:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 82,
+      "content": "console.warn(\"Backend subscribe_to_push unavailable, fallback to success:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/notifications.ts",
+      "line": 106,
+      "content": "console.warn(\"Backend trigger_wakala_reminder fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/placements.ts",
+      "line": 97,
+      "content": "* Authoritative V2 replacement for raw /api/resource/Placement fallback."
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 247,
+      "content": "console.warn(\"[Reports] getOperationsSummaryV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 274,
+      "content": "console.warn(\"[Reports] getPlacementAgingReportV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/api/v2/reports.ts",
+      "line": 300,
+      "content": "console.warn(\"[Reports] getFinancialOverviewV2 backend error, using demo fallback:\", err);"
+    },
+    {
+      "file": "src/lib/extensionBridge.ts",
+      "line": 235,
+      "content": "// Fallback timeout in case extension is not loaded in this browser session"
+    }
+  ],
+  "localStorage": [
+    {
+      "file": "src/app/notifications/page.tsx",
+      "line": 49,
+      "content": "localStorage.getItem(\"dismissed_notifications\") || \"[]\""
+    },
+    {
+      "file": "src/app/notifications/page.tsx",
+      "line": 52,
+      "content": "localStorage.setItem(\"dismissed_notifications\", JSON.stringify(existing));"
+    },
+    {
+      "file": "src/app/notifications/page.tsx",
+      "line": 60,
+      "content": "localStorage.getItem(\"dismissed_notifications\") || \"[]\""
+    },
+    {
+      "file": "src/app/notifications/page.tsx",
+      "line": 63,
+      "content": "localStorage.setItem(\"dismissed_notifications\", JSON.stringify(updated));"
+    },
+    {
+      "file": "src/app/notifications/page.tsx",
+      "line": 69,
+      "content": "localStorage.removeItem(\"dismissed_notifications\");"
+    },
+    {
+      "file": "src/components/agent/AgentLayout.tsx",
+      "line": 81,
+      "content": "localStorage.setItem(\"theme\", \"light\");"
+    },
+    {
+      "file": "src/components/agent/AgentLayout.tsx",
+      "line": 85,
+      "content": "localStorage.setItem(\"theme\", \"dark\");"
+    },
+    {
+      "file": "src/components/layout/AppLayoutClient.tsx",
+      "line": 20,
+      "content": "// Load sidebar preference from localStorage"
+    },
+    {
+      "file": "src/components/layout/AppLayoutClient.tsx",
+      "line": 22,
+      "content": "const saved = localStorage.getItem(\"sidebar_collapsed\");"
+    },
+    {
+      "file": "src/components/layout/AppLayoutClient.tsx",
+      "line": 31,
+      "content": "localStorage.setItem(\"sidebar_collapsed\", String(next));"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 30,
+      "content": "const saved = localStorage.getItem(\"theme\");"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 44,
+      "content": "localStorage.setItem(\"theme\", \"light\");"
+    },
+    {
+      "file": "src/components/layout/AppNavbar.tsx",
+      "line": 48,
+      "content": "localStorage.setItem(\"theme\", \"dark\");"
+    },
+    {
+      "file": "src/components/notifications/PushNotificationToggle.tsx",
+      "line": 78,
+      "content": "const storedPref = localStorage.getItem(\"push_notifications_enabled\");"
+    },
+    {
+      "file": "src/components/notifications/PushNotificationToggle.tsx",
+      "line": 87,
+      "content": "localStorage.setItem(\"push_notifications_enabled\", \"true\");"
+    },
+    {
+      "file": "src/components/notifications/PushNotificationToggle.tsx",
+      "line": 195,
+      "content": "localStorage.setItem(\"push_notifications_enabled\", \"true\");"
+    },
+    {
+      "file": "src/components/notifications/PushNotificationToggle.tsx",
+      "line": 231,
+      "content": "localStorage.setItem(\"push_notifications_enabled\", \"false\");"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 312,
+      "content": "const raw = localStorage.getItem(`musaned_record_${applicantName}`);"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 323,
+      "content": "localStorage.setItem(`musaned_record_${applicantName}`, JSON.stringify(record));"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2125,
+      "content": "? JSON.parse(localStorage.getItem(\"dismissed_notifications\") || \"[]\")"
+    },
+    {
+      "file": "src/lib/config/env.ts",
+      "line": 11,
+      "content": "const override = localStorage.getItem(\"DEMO_MODE_OVERRIDE\");"
+    },
+    {
+      "file": "src/lib/config/env.ts",
+      "line": 22,
+      "content": "localStorage.removeItem(\"DEMO_MODE_OVERRIDE\");"
+    },
+    {
+      "file": "src/lib/config/env.ts",
+      "line": 24,
+      "content": "localStorage.setItem(\"DEMO_MODE_OVERRIDE\", String(enabled));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 93,
+      "content": "const storedApps = localStorage.getItem(\"V2_DEMO_APPLICANTS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 110,
+      "content": "const storedPlc = localStorage.getItem(\"V2_DEMO_PLACEMENTS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 126,
+      "content": "const storedSteps = localStorage.getItem(\"V2_DEMO_STEPS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 135,
+      "content": "const storedComps = localStorage.getItem(\"V2_DEMO_COMPLAINTS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 138,
+      "content": "const storedCon = localStorage.getItem(\"V2_DEMO_CONTRACTORS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 141,
+      "content": "const storedComm = localStorage.getItem(\"V2_DEMO_COMMISSIONS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 144,
+      "content": "const storedUsers = localStorage.getItem(\"V2_DEMO_USERS\");"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 156,
+      "content": "localStorage.setItem(\"V2_DEMO_APPLICANTS\", JSON.stringify(this.applicants));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 157,
+      "content": "localStorage.setItem(\"V2_DEMO_PLACEMENTS\", JSON.stringify(this.placements));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 158,
+      "content": "localStorage.setItem(\"V2_DEMO_STEPS\", JSON.stringify(this.clearanceSteps));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 159,
+      "content": "localStorage.setItem(\"V2_DEMO_COMPLAINTS\", JSON.stringify(this.complaints));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 160,
+      "content": "localStorage.setItem(\"V2_DEMO_CONTRACTORS\", JSON.stringify(this.contractors));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 161,
+      "content": "localStorage.setItem(\"V2_DEMO_COMMISSIONS\", JSON.stringify(this.owedCommissions));"
+    },
+    {
+      "file": "src/lib/demo/store.ts",
+      "line": 162,
+      "content": "localStorage.setItem(\"V2_DEMO_USERS\", JSON.stringify(this.users));"
+    },
+    {
+      "file": "src/lib/extensionBridge.ts",
+      "line": 178,
+      "content": "// Always back up into localStorage for instant cross-tab access"
+    },
+    {
+      "file": "src/lib/extensionBridge.ts",
+      "line": 180,
+      "content": "localStorage.setItem(\"travel_agency_selected_applicant\", JSON.stringify(payload));"
+    },
+    {
+      "file": "src/lib/extensionBridge.ts",
+      "line": 255,
+      "content": "localStorage.removeItem(\"travel_agency_selected_applicant\");"
+    }
+  ],
+  "applicant_processing": [
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 484,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.register_applicant\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 533,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.cancel_applicant\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 564,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.restore_applicant\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 603,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 721,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.send_contract_request\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 756,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.batch_send_contract_requests\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 877,
+      "content": "\"/api/method/applicant_processing.applicant_processing.utils.contract_parser.parse_contract_document\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 893,
+      "content": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1533,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.get_accounting_summary\""
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1699,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.get_available_roles\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1850,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.get_system_users\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1914,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.update_system_user\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1932,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.set_user_password\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1949,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.assign_user_roles\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1966,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.manage_user_permission\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 1984,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.get_user_detail\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2402,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.portal_release_candidate\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2593,
+      "content": "\"/api/method/applicant_processing.applicant_processing.utils.push_api.send_test_web_push\","
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2608,
+      "content": "\"/api/method/applicant_processing.applicant_processing.api.get_my_agency_context\""
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2617,
+      "content": "`/api/method/applicant_processing.applicant_processing.api.get_agency_candidate_detail?applicant_id=${encodeURIComponent(applicantId)}`"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2637,
+      "content": "`/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}`"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2736,
+      "content": "\"/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_summary\""
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2754,
+      "content": "`/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_candidates_list?limit=${limit}`"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2811,
+      "content": "`/api/method/applicant_processing.applicant_processing.api.search_applicants_for_complaint?query=${encodeURIComponent(query)}`"
+    },
+    {
+      "file": "src/lib/api/applicantApi.ts",
+      "line": 2824,
+      "content": "\"/api/method/applicant_processing.applicant_processing.utils.push_api.subscribe_web_push\","
+    }
+  ]
+}

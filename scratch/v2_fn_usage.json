@@ -1,0 +1,856 @@
+{
+  "/api/method/agency_tracking.applicant_api.create_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "createApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantRegistrationForm.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.get_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "getApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantRegistrationForm.tsx",
+      "src/app/applicants/[id]/cv/page.tsx",
+      "src/app/applicants/[id]/edit/page.tsx",
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.list_applicants": {
+    "v2Functions": [
+      {
+        "fnName": "listApplicantsV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantTable.tsx",
+      "src/app/complaints/page.tsx",
+      "src/app/dashboard/page.tsx",
+      "src/app/reports/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.register_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "registerApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantRegistrationForm.tsx",
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.update_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "updateApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantRegistrationForm.tsx",
+      "src/components/applicant/MusanedVerificationModal.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis": {
+    "v2Functions": [
+      {
+        "fnName": "updateApplicantForLmisV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.applicant_api.cancel_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "cancelApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.restart_applicant": {
+    "v2Functions": [
+      {
+        "fnName": "restartApplicantV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.set_country_ban": {
+    "v2Functions": [
+      {
+        "fnName": "setCountryBanV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.list_country_bans": {
+    "v2Functions": [
+      {
+        "fnName": "listCountryBansV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.remove_country_ban": {
+    "v2Functions": [
+      {
+        "fnName": "removeCountryBanV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.applicant_api.log_applicant_fee": {
+    "v2Functions": [
+      {
+        "fnName": "logApplicantFeeV2",
+        "file": "src/lib/api/v2/applicants.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/login": {
+    "v2Functions": [
+      {
+        "fnName": "loginV2",
+        "file": "src/lib/api/v2/auth.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/logout": {
+    "v2Functions": [
+      {
+        "fnName": "logoutV2",
+        "file": "src/lib/api/v2/auth.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.auth_api.get_current_user": {
+    "v2Functions": [
+      {
+        "fnName": "getCurrentUserV2",
+        "file": "src/lib/api/v2/auth.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.auth_api.get_csrf_token": {
+    "v2Functions": [
+      {
+        "fnName": "getCsrfTokenV2",
+        "file": "src/lib/api/v2/auth.ts"
+      },
+      {
+        "fnName": "getCachedOrFetchCsrfToken",
+        "file": "src/lib/api/v2/client.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.clearance_api.list_my_clearance_steps": {
+    "v2Functions": [
+      {
+        "fnName": "listMyClearanceStepsV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.clearance_api.start_clearance_step": {
+    "v2Functions": [
+      {
+        "fnName": "startClearanceStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.clearance_api.complete_clearance_step": {
+    "v2Functions": [
+      {
+        "fnName": "completeClearanceStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.clearance_api.reassign_clearance_step": {
+    "v2Functions": [
+      {
+        "fnName": "reassignClearanceStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/AssignEmployeeModal.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.clearance_api.submit_embassy_step": {
+    "v2Functions": [
+      {
+        "fnName": "submitEmbassyStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.clearance_api.stamp_embassy_step": {
+    "v2Functions": [
+      {
+        "fnName": "stampEmbassyStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.clearance_api.reject_embassy_step": {
+    "v2Functions": [
+      {
+        "fnName": "rejectEmbassyStepV2",
+        "file": "src/lib/api/v2/clearance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.": {
+    "v2Functions": [],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.create_agency_thread": {
+    "v2Functions": [
+      {
+        "fnName": "createAgencyThreadV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.create_internal_thread": {
+    "v2Functions": [
+      {
+        "fnName": "createInternalThreadV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.list_threads": {
+    "v2Functions": [
+      {
+        "fnName": "listThreadsV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.get_thread_messages": {
+    "v2Functions": [
+      {
+        "fnName": "getThreadMessagesV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.send_message": {
+    "v2Functions": [
+      {
+        "fnName": "sendMessageV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.mark_read": {
+    "v2Functions": [
+      {
+        "fnName": "markReadV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.chat_api.add_participant": {
+    "v2Functions": [
+      {
+        "fnName": "addParticipantV2",
+        "file": "src/lib/api/v2/communication.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.complaint_api.create_complaint": {
+    "v2Functions": [
+      {
+        "fnName": "createComplaintV2",
+        "file": "src/lib/api/v2/complaints.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/agent/complaints/page.tsx",
+      "src/app/complaints/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.complaint_api.acknowledge_complaint": {
+    "v2Functions": [
+      {
+        "fnName": "acknowledgeComplaintV2",
+        "file": "src/lib/api/v2/complaints.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/complaints/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.complaint_api.list_unresolved_complaints": {
+    "v2Functions": [
+      {
+        "fnName": "listUnresolvedComplaintsV2",
+        "file": "src/lib/api/v2/complaints.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/agent/complaints/page.tsx",
+      "src/app/complaints/page.tsx",
+      "src/app/reports/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.complaint_api.resolve_complaint": {
+    "v2Functions": [
+      {
+        "fnName": "resolveComplaintV2",
+        "file": "src/lib/api/v2/complaints.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/complaints/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.report_api.get_complaint_aging_report": {
+    "v2Functions": [
+      {
+        "fnName": "getComplaintAgingReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.contractor_api.list_contractors": {
+    "v2Functions": [
+      {
+        "fnName": "listContractorsV2",
+        "file": "src/lib/api/v2/contractors.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/commission/page.tsx",
+      "src/app/complaints/page.tsx",
+      "src/app/contractors/page.tsx",
+      "src/app/reports/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.contractor_api.create_contractor": {
+    "v2Functions": [
+      {
+        "fnName": "createContractorV2",
+        "file": "src/lib/api/v2/contractors.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/contractors/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.corridor_engine.get_corridor_steps": {
+    "v2Functions": [
+      {
+        "fnName": "getCorridorStepsV2",
+        "file": "src/lib/api/v2/corridor.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/AssignEmployeeModal.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.cv_api.generate_cv": {
+    "v2Functions": [
+      {
+        "fnName": "generateCvV2",
+        "file": "src/lib/api/v2/cv.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/ApplicantRegistrationForm.tsx",
+      "src/app/applicants/[id]/cv/page.tsx",
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/upload_file": {
+    "v2Functions": [
+      {
+        "fnName": "uploadFileV2",
+        "file": "src/lib/api/v2/documents.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/steps/Step1PersonalInfo.tsx",
+      "src/app/agent/complaints/page.tsx",
+      "src/app/complaints/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.passport_parser.parse_passport_file": {
+    "v2Functions": [
+      {
+        "fnName": "parsePassportFileV2",
+        "file": "src/lib/api/v2/documents.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/steps/Step1PersonalInfo.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.contract_parser.parse_contract_file": {
+    "v2Functions": [
+      {
+        "fnName": "parseContractFileV2",
+        "file": "src/lib/api/v2/documents.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.contract_parser.parse_injaz_file": {
+    "v2Functions": [
+      {
+        "fnName": "parseInjazFileV2",
+        "file": "src/lib/api/v2/documents.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.contract_parser.parse_visa_file": {
+    "v2Functions": [
+      {
+        "fnName": "parseVisaFileV2",
+        "file": "src/lib/api/v2/documents.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.log_stage_expense": {
+    "v2Functions": [
+      {
+        "fnName": "logStageExpenseV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/expenses-income/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.finance_api.log_stage_income": {
+    "v2Functions": [
+      {
+        "fnName": "logStageIncomeV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/expenses-income/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.finance_api.approve_transaction": {
+    "v2Functions": [
+      {
+        "fnName": "approveTransactionV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.reject_transaction": {
+    "v2Functions": [
+      {
+        "fnName": "rejectTransactionV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.void_transaction": {
+    "v2Functions": [
+      {
+        "fnName": "voidTransactionV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.get_fx_rate": {
+    "v2Functions": [
+      {
+        "fnName": "getFxRateV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.set_fx_rate": {
+    "v2Functions": [
+      {
+        "fnName": "setFxRateV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.get_owed_commissions": {
+    "v2Functions": [
+      {
+        "fnName": "getOwedCommissionsV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/agent/commission/page.tsx",
+      "src/app/commission/page.tsx",
+      "src/app/reports/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.finance_api.create_commission_batch": {
+    "v2Functions": [
+      {
+        "fnName": "createCommissionBatchV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.settle_batch": {
+    "v2Functions": [
+      {
+        "fnName": "settleBatchV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/commission/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.finance_api.trigger_early_commission_accrual": {
+    "v2Functions": [
+      {
+        "fnName": "triggerEarlyCommissionAccrualV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.reconciliation_api.upload_bank_statement": {
+    "v2Functions": [
+      {
+        "fnName": "uploadBankStatementV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.reconciliation_api.manually_match_line": {
+    "v2Functions": [
+      {
+        "fnName": "manuallyMatchLineV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.export_commissions_xlsx": {
+    "v2Functions": [
+      {
+        "fnName": "exportCommissionsXlsxV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/commission/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.report_api.get_cost_breakdown_report": {
+    "v2Functions": [
+      {
+        "fnName": "getCostBreakdownReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_employee_financial_report": {
+    "v2Functions": [
+      {
+        "fnName": "getEmployeeFinancialReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_pending_approval_queue": {
+    "v2Functions": [
+      {
+        "fnName": "getPendingApprovalQueueV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.settle_batch_items": {
+    "v2Functions": [
+      {
+        "fnName": "settleBatchItemsV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.upload_batch_payment_proof": {
+    "v2Functions": [
+      {
+        "fnName": "uploadBatchPaymentProofV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf": {
+    "v2Functions": [
+      {
+        "fnName": "getBatchInvoicePdfV2",
+        "file": "src/lib/api/v2/finance.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.notification_api.subscribe_to_push": {
+    "v2Functions": [
+      {
+        "fnName": "subscribeToPushV2",
+        "file": "src/lib/api/v2/notifications.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.notification_api.get_push_subscription_status": {
+    "v2Functions": [
+      {
+        "fnName": "getPushSubscriptionStatusV2",
+        "file": "src/lib/api/v2/notifications.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.notification_api.trigger_wakala_reminder": {
+    "v2Functions": [
+      {
+        "fnName": "triggerWakalaReminderV2",
+        "file": "src/lib/api/v2/notifications.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.create_muayena_placement": {
+    "v2Functions": [
+      {
+        "fnName": "createMuayenaPlacementV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.list_placements": {
+    "v2Functions": [
+      {
+        "fnName": "listPlacementsV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": [
+      "src/components/applicant/AssignEmployeeModal.tsx",
+      "src/app/agent/complaints/page.tsx",
+      "src/app/agent/reserved/page.tsx",
+      "src/app/applicants/[id]/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.placement_api.upload_contract": {
+    "v2Functions": [
+      {
+        "fnName": "uploadContractV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.upload_visa": {
+    "v2Functions": [
+      {
+        "fnName": "uploadVisaV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.record_selected_medical_result": {
+    "v2Functions": [
+      {
+        "fnName": "recordSelectedMedicalResultV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.record_predeparture_medical_result": {
+    "v2Functions": [
+      {
+        "fnName": "recordPredepartureMedicalResultV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.advance_placement": {
+    "v2Functions": [
+      {
+        "fnName": "advancePlacementV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.record_ticket_details": {
+    "v2Functions": [
+      {
+        "fnName": "recordTicketDetailsV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.placement_api.record_reschedule": {
+    "v2Functions": [
+      {
+        "fnName": "recordRescheduleV2",
+        "file": "src/lib/api/v2/placements.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.portal_api.list_portal_candidates": {
+    "v2Functions": [
+      {
+        "fnName": "listPortalCandidatesV2",
+        "file": "src/lib/api/v2/portal.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/agent/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.portal_api.select_candidate": {
+    "v2Functions": [
+      {
+        "fnName": "selectCandidateV2",
+        "file": "src/lib/api/v2/portal.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/agent/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.portal_api.list_my_wakala_requests": {
+    "v2Functions": [
+      {
+        "fnName": "listMyWakalaRequestsV2",
+        "file": "src/lib/api/v2/portal.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_daily_work_report": {
+    "v2Functions": [
+      {
+        "fnName": "getDailyWorkReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_staff_performance_report": {
+    "v2Functions": [
+      {
+        "fnName": "getStaffPerformanceReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_operations_summary": {
+    "v2Functions": [
+      {
+        "fnName": "getOperationsSummaryV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/reports/page.tsx"
+    ]
+  },
+  "/api/method/agency_tracking.report_api.get_placement_aging_report": {
+    "v2Functions": [
+      {
+        "fnName": "getPlacementAgingReportV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": []
+  },
+  "/api/method/agency_tracking.report_api.get_financial_overview": {
+    "v2Functions": [
+      {
+        "fnName": "getFinancialOverviewV2",
+        "file": "src/lib/api/v2/reports.ts"
+      }
+    ],
+    "consumers": [
+      "src/app/expenses-income/page.tsx",
+      "src/app/reports/page.tsx"
+    ]
+  }
+}

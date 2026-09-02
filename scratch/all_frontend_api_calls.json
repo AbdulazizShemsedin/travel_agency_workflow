@@ -1,0 +1,1166 @@
+[
+  {
+    "file": "src/app/agent/commission/page.tsx",
+    "line": 69,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.export_commissions_xlsx\";"
+  },
+  {
+    "file": "src/app/agent/commission/page.tsx",
+    "line": 71,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.export_commissions_xlsx\";"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 373,
+    "endpoint": "/api/resource/Applicant%20Dossier",
+    "codeSnippet": "`/api/resource/Applicant%20Dossier?filters=[[\"applicant\",\"=\",\"${encodeURIComponent("
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 383,
+    "endpoint": "/api/resource/Applicant%20Dossier/${encodeURIComponent(existingDos.name)}",
+    "codeSnippet": "await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(existingDos.name)}`, {"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 401,
+    "endpoint": "/api/resource/Contractor",
+    "codeSnippet": "const contrRes = await fetch('/api/resource/Contractor?fields=[\"name\",\"company_name\"]&limit_page_length=20');"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 421,
+    "endpoint": "/api/resource/Contractor",
+    "codeSnippet": "const initialContrRes = await fetch(\"/api/resource/Contractor\", {"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 440,
+    "endpoint": "/api/resource/Contract%20Request",
+    "codeSnippet": "`/api/resource/Contract%20Request?filters=[[\"applicant\",\"=\",\"${encodeURIComponent("
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 452,
+    "endpoint": "/api/resource/CV%20Record",
+    "codeSnippet": "`/api/resource/CV%20Record?filters=[[\"applicant\",\"=\",\"${encodeURIComponent("
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 471,
+    "endpoint": "/api/resource/Contract",
+    "codeSnippet": "const newCrRes = await fetch(\"/api/resource/Contract Request\", {"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 491,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "const createDosRes = await fetch(\"/api/resource/Applicant Dossier\", {"
+  },
+  {
+    "file": "src/app/applicants/[id]/contractor-doc/page.tsx",
+    "line": 531,
+    "endpoint": "/api/resource/Applicant%20Dossier/${encodeURIComponent(dossierName)}",
+    "codeSnippet": "`/api/resource/Applicant%20Dossier/${encodeURIComponent(dossierName)}`"
+  },
+  {
+    "file": "src/app/commission/page.tsx",
+    "line": 253,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.export_commissions_xlsx\";"
+  },
+  {
+    "file": "src/app/commission/page.tsx",
+    "line": 255,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.export_commissions_xlsx\";"
+  },
+  {
+    "file": "src/app/reports/page.tsx",
+    "line": 2344,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "href=\"/api/method/agency_tracking.report_api.export_commissions_xlsx\""
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 279,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "const res = await fetch(\"/api/resource/Applicant\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 293,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantName)}",
+    "codeSnippet": "const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 354,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantName)}",
+    "codeSnippet": "const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantName)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 364,
+    "endpoint": "/api/resource/CV%20Record",
+    "codeSnippet": "const cvRes = await fetch(`/api/resource/CV%20Record?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantName)}\"]]&fields=[\"*\"]&order_by=creation%20desc&limit_page_length=1`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 374,
+    "endpoint": "/api/resource/Contract%20Request",
+    "codeSnippet": "const crRes = await fetch(`/api/resource/Contract%20Request?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantName)}\"]]&fields=[\"*\"]`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 389,
+    "endpoint": "/api/resource/Applicant%20Dossier",
+    "codeSnippet": "const dosRes = await fetch(`/api/resource/Applicant%20Dossier?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantName)}\"]]&fields=[\"*\"]`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 468,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "`/api/resource/Applicant?fields=${fieldParam}&limit_page_length=0&order_by=creation desc`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 484,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.register_applicant",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.register_applicant\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 511,
+    "endpoint": "/api/resource/CV%20Record/${encodeURIComponent(applicantNameOrCvName)}",
+    "codeSnippet": "const res = await fetch(`/api/resource/CV%20Record/${encodeURIComponent(applicantNameOrCvName)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 514,
+    "endpoint": "/api/resource/CV%20Record",
+    "codeSnippet": "const res = await fetch(`/api/resource/CV%20Record?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantNameOrCvName)}\"]]&fields=[\"*\"]`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 533,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.cancel_applicant",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.cancel_applicant\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 564,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.restore_applicant",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.restore_applicant\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 603,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant.applicant.update_musaned_status\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 642,
+    "endpoint": "/api/resource/Contractor",
+    "codeSnippet": "const res = await fetch(\"/api/resource/Contractor\");"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 648,
+    "endpoint": "/api/resource/Contractor",
+    "codeSnippet": "const res = await fetch(\"/api/resource/Contractor\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 664,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantId)}",
+    "codeSnippet": "const appRes = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 672,
+    "endpoint": "/api/resource/CV%20Record",
+    "codeSnippet": "const cvRes = await fetch(`/api/resource/CV%20Record?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantId)}\"]]&fields=[\"*\"]`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 681,
+    "endpoint": "/api/resource/Contractor/${encodeURIComponent(contractorName)}",
+    "codeSnippet": "const conRes = await fetch(`/api/resource/Contractor/${encodeURIComponent(contractorName)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 689,
+    "endpoint": "/api/resource/Contract%20Request",
+    "codeSnippet": "const checkCr = await fetch(`/api/resource/Contract%20Request?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantId)}\"]]&fields=[\"*\"]&order_by=creation%20desc&limit_page_length=1`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 695,
+    "endpoint": "/api/resource/Contract%20Request",
+    "codeSnippet": "const createCr = await fetch(\"/api/resource/Contract%20Request\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 711,
+    "endpoint": "/api/resource/Contract%20Request/${encodeURIComponent(crName)}",
+    "codeSnippet": "const putRes = await fetch(`/api/resource/Contract%20Request/${encodeURIComponent(crName)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 721,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.send_contract_request",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.send_contract_request\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 756,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.batch_send_contract_requests",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.contract_request.contract_request.batch_send_contract_requests\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 775,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "const res = await fetch(\"/api/resource/Applicant Dossier\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 803,
+    "endpoint": "/api/resource/Contract%20Request",
+    "codeSnippet": "`/api/resource/Contract%20Request?filters=[[\"applicant\",\"=\",\"${encodeURIComponent("
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 815,
+    "endpoint": "/api/resource/Applicant%20Dossier",
+    "codeSnippet": "`/api/resource/Applicant%20Dossier?filters=[[\"applicant\",\"=\",\"${encodeURIComponent("
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 844,
+    "endpoint": "/api/resource/Applicant%20Dossier/${encodeURIComponent(dosName)}",
+    "codeSnippet": "const putRes = await fetch(`/api/resource/Applicant%20Dossier/${encodeURIComponent(dosName)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 851,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "const postRes = await fetch(\"/api/resource/Applicant Dossier\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 877,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.utils.contract_parser.parse_contract_document",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.utils.contract_parser.parse_contract_document\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 893,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.doctype.applicant_dossier.applicant_dossier.parse_dossier_file\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 931,
+    "endpoint": "/api/resource/Applicant%20Dossier",
+    "codeSnippet": "`/api/resource/Applicant%20Dossier?filters=[[\"applicant\",\"=\",\"${encodeURIComponent(applicantId)}\"]]&fields=[\"*\"]&limit_page_length=1`,"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 944,
+    "endpoint": "/api/resource/DSR",
+    "codeSnippet": "`/api/resource/DSR?filters=[[\"applicant_dossier\",\"=\",\"${encodeURIComponent(dossierName)}\"]]&fields=[\"*\"]&order_by=creation%20desc&limit_page_length=1`,"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 966,
+    "endpoint": "/api/resource/LMS%20Clearance",
+    "codeSnippet": "fetch(`/api/resource/LMS%20Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 967,
+    "endpoint": "/api/resource/Injaz%20Clearance",
+    "codeSnippet": "fetch(`/api/resource/Injaz%20Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 968,
+    "endpoint": "/api/resource/Wakala%20Clearance",
+    "codeSnippet": "fetch(`/api/resource/Wakala%20Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 969,
+    "endpoint": "/api/resource/Embassy%20Clearance",
+    "codeSnippet": "fetch(`/api/resource/Embassy%20Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 970,
+    "endpoint": "/api/resource/Telesign%20Clearance",
+    "codeSnippet": "fetch(`/api/resource/Telesign%20Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 971,
+    "endpoint": "/api/resource/DSR%20Stamp",
+    "codeSnippet": "fetch(`/api/resource/DSR%20Stamp?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 972,
+    "endpoint": "/api/resource/DSR%20Ticket",
+    "codeSnippet": "fetch(`/api/resource/DSR%20Ticket?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 973,
+    "endpoint": "/api/resource/DSR%20Departure",
+    "codeSnippet": "fetch(`/api/resource/DSR%20Departure?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"*\"]&limit_page_length=1`, { cache: \"no-store\" }),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1052,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantId)}",
+    "codeSnippet": "`/api/resource/Applicant/${encodeURIComponent(applicantId)}?fields=[\"destination_country\"]`,"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1124,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantId)}",
+    "codeSnippet": "`/api/resource/Applicant/${encodeURIComponent(applicantId)}`,"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1164,
+    "endpoint": "/api/resource/LMS",
+    "codeSnippet": "const existing = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1182,
+    "endpoint": "/api/resource/LMS",
+    "codeSnippet": "const res = await fetch(`/api/resource/LMS Clearance/${encodeURIComponent(nameOrDsr)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1197,
+    "endpoint": "/api/resource/LMS",
+    "codeSnippet": "`/api/resource/LMS Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"name\"]&limit_page_length=1`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1208,
+    "endpoint": "/api/resource/LMS",
+    "codeSnippet": "const res = await fetch(`/api/resource/LMS Clearance`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1223,
+    "endpoint": "/api/resource/Wakala",
+    "codeSnippet": "const res = await fetch(`/api/resource/Wakala Clearance/${encodeURIComponent(nameOrDsr)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1237,
+    "endpoint": "/api/resource/Wakala",
+    "codeSnippet": "`/api/resource/Wakala Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"name\"]&limit_page_length=1`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1248,
+    "endpoint": "/api/resource/Wakala",
+    "codeSnippet": "const res = await fetch(`/api/resource/Wakala Clearance`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1263,
+    "endpoint": "/api/resource/Injaz",
+    "codeSnippet": "const res = await fetch(`/api/resource/Injaz Clearance/${encodeURIComponent(nameOrDsr)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1277,
+    "endpoint": "/api/resource/Injaz",
+    "codeSnippet": "`/api/resource/Injaz Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"name\"]&limit_page_length=1`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1288,
+    "endpoint": "/api/resource/Injaz",
+    "codeSnippet": "const res = await fetch(`/api/resource/Injaz Clearance`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1303,
+    "endpoint": "/api/resource/Embassy",
+    "codeSnippet": "const res = await fetch(`/api/resource/Embassy Clearance/${encodeURIComponent(nameOrDsr)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1317,
+    "endpoint": "/api/resource/Embassy",
+    "codeSnippet": "`/api/resource/Embassy Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"name\"]&limit_page_length=1`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1328,
+    "endpoint": "/api/resource/Embassy",
+    "codeSnippet": "const res = await fetch(`/api/resource/Embassy Clearance`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1343,
+    "endpoint": "/api/resource/Telesign",
+    "codeSnippet": "const res = await fetch(`/api/resource/Telesign Clearance/${encodeURIComponent(nameOrDsr)}`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1357,
+    "endpoint": "/api/resource/Telesign",
+    "codeSnippet": "`/api/resource/Telesign Clearance?filters=[[\"dsr\",\"=\",\"${encodeURIComponent(dsrName)}\"]]&fields=[\"name\"]&limit_page_length=1`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1368,
+    "endpoint": "/api/resource/Telesign",
+    "codeSnippet": "const res = await fetch(`/api/resource/Telesign Clearance`, {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1401,
+    "endpoint": "/api/resource/DSR",
+    "codeSnippet": "const res = await fetch(\"/api/resource/DSR Stamp\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1439,
+    "endpoint": "/api/resource/DSR",
+    "codeSnippet": "const res = await fetch(\"/api/resource/DSR Ticket\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1481,
+    "endpoint": "/api/resource/DSR",
+    "codeSnippet": "const res = await fetch(\"/api/resource/DSR Departure\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1518,
+    "endpoint": "/api/method/upload_file",
+    "codeSnippet": "const res = await fetch(\"/api/method/upload_file\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1533,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_accounting_summary",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.get_accounting_summary\""
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1556,
+    "endpoint": "/api/resource/${encodeURIComponent(dt)}",
+    "codeSnippet": "const res = await fetch(`/api/resource/${encodeURIComponent(dt)}?fields=[\"name\",\"full_name\",\"first_name\",\"creation\"]&limit_page_length=50`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1560,
+    "endpoint": "/api/resource/${encodeURIComponent(dt)}/${encodeURIComponent(doc.name)}",
+    "codeSnippet": "const detailRes = await fetch(`/api/resource/${encodeURIComponent(dt)}/${encodeURIComponent(doc.name)}`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1699,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_available_roles",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.get_available_roles\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1737,
+    "endpoint": "/api/resource/Role",
+    "codeSnippet": "const roleRes = await fetch(\"/api/resource/Role?limit_page_length=100\");"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1850,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_system_users",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.get_system_users\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1869,
+    "endpoint": "/api/resource/User",
+    "codeSnippet": "'/api/resource/User?fields=[\"name\",\"email\",\"first_name\",\"last_name\",\"full_name\",\"enabled\",\"user_image\",\"creation\"]&limit_page_length=50'"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1914,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.update_system_user",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.update_system_user\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1932,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.set_user_password",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.set_user_password\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1949,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.assign_user_roles",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.assign_user_roles\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1966,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.manage_user_permission",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.manage_user_permission\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 1984,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_user_detail",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.get_user_detail\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2095,
+    "endpoint": "/api/resource/Income%20Expense%20Log",
+    "codeSnippet": "const res = await fetch(\"/api/resource/Income%20Expense%20Log\", {"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2402,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.portal_release_candidate",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.portal_release_candidate\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2593,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.utils.push_api.send_test_web_push",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.utils.push_api.send_test_web_push\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2608,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_my_agency_context",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.api.get_my_agency_context\""
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2617,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_agency_candidate_detail",
+    "codeSnippet": "`/api/method/applicant_processing.applicant_processing.api.get_agency_candidate_detail?applicant_id=${encodeURIComponent(applicantId)}`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2637,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}",
+    "codeSnippet": "`/api/method/applicant_processing.applicant_processing.api.get_agency_pipeline_candidates${query}`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2683,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "`/api/resource/Applicant?filters=${filterQuery}&fields=${validFields}&limit_page_length=${limit}&order_by=modified%20desc`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2694,
+    "endpoint": "/api/resource/Applicant%20Dossier",
+    "codeSnippet": "`/api/resource/Applicant%20Dossier?fields=[\"name\",\"applicant\",\"contractor_name\",\"sponsor_name\",\"visa_number\",\"contract_number\",\"contract_date\"]&limit_page_length=200`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2736,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_summary",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_summary\""
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2754,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_candidates_list",
+    "codeSnippet": "`/api/method/applicant_processing.applicant_processing.utils.commission_export.get_unpaid_commission_candidates_list?limit=${limit}`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2773,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "const res = await fetch(`/api/resource/Applicant?fields=${fields}&limit_page_length=1000`);"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2811,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.api.search_applicants_for_complaint",
+    "codeSnippet": "`/api/method/applicant_processing.applicant_processing.api.search_applicants_for_complaint?query=${encodeURIComponent(query)}`"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2824,
+    "endpoint": "/api/method/applicant_processing.applicant_processing.utils.push_api.subscribe_web_push",
+    "codeSnippet": "\"/api/method/applicant_processing.applicant_processing.utils.push_api.subscribe_web_push\","
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2870,
+    "endpoint": "/api/resource/Applicant",
+    "codeSnippet": "fetch(`/api/resource/Applicant?fields=${fields}&limit_page_length=1000&order_by=modified%20desc`),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2872,
+    "endpoint": "/api/resource/Applicant%20Departure",
+    "codeSnippet": "fetch(`/api/resource/Applicant%20Departure?fields=[\"name\",\"applicant\",\"departure_date\",\"flight_number\",\"contractor_name\"]&limit_page_length=1000`).catch(() => null),"
+  },
+  {
+    "file": "src/lib/api/applicantApi.ts",
+    "line": 2990,
+    "endpoint": "/api/resource/Applicant/${encodeURIComponent(applicantId)}",
+    "codeSnippet": "const res = await fetch(`/api/resource/Applicant/${encodeURIComponent(applicantId)}`, {"
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 138,
+    "endpoint": "/api/method/agency_tracking.applicant_api.create_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.create_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 158,
+    "endpoint": "/api/method/agency_tracking.applicant_api.get_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.get_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 209,
+    "endpoint": "/api/method/agency_tracking.applicant_api.list_applicants",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.list_applicants\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 257,
+    "endpoint": "/api/method/agency_tracking.applicant_api.register_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.register_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 281,
+    "endpoint": "/api/method/agency_tracking.applicant_api.update_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.update_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 306,
+    "endpoint": "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.update_applicant_for_lmis\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 328,
+    "endpoint": "/api/method/agency_tracking.applicant_api.cancel_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.cancel_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 353,
+    "endpoint": "/api/method/agency_tracking.applicant_api.restart_applicant",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.restart_applicant\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 377,
+    "endpoint": "/api/method/agency_tracking.applicant_api.set_country_ban",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.set_country_ban\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 400,
+    "endpoint": "/api/method/agency_tracking.applicant_api.list_country_bans",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.list_country_bans\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 423,
+    "endpoint": "/api/method/agency_tracking.applicant_api.remove_country_ban",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.remove_country_ban\","
+  },
+  {
+    "file": "src/lib/api/v2/applicants.ts",
+    "line": 443,
+    "endpoint": "/api/method/agency_tracking.applicant_api.log_applicant_fee",
+    "codeSnippet": "\"/api/method/agency_tracking.applicant_api.log_applicant_fee\","
+  },
+  {
+    "file": "src/lib/api/v2/auth.ts",
+    "line": 31,
+    "endpoint": "/api/method/login",
+    "codeSnippet": "const result = await requestV2<V2LoginResponse>(\"/api/method/login\", {"
+  },
+  {
+    "file": "src/lib/api/v2/auth.ts",
+    "line": 54,
+    "endpoint": "/api/method/logout",
+    "codeSnippet": "await requestV2(\"/api/method/logout\", {"
+  },
+  {
+    "file": "src/lib/api/v2/auth.ts",
+    "line": 68,
+    "endpoint": "/api/method/agency_tracking.auth_api.get_current_user",
+    "codeSnippet": "\"/api/method/agency_tracking.auth_api.get_current_user\","
+  },
+  {
+    "file": "src/lib/api/v2/auth.ts",
+    "line": 89,
+    "endpoint": "/api/method/agency_tracking.auth_api.get_csrf_token",
+    "codeSnippet": "\"/api/method/agency_tracking.auth_api.get_csrf_token\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 84,
+    "endpoint": "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.list_my_clearance_steps\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 109,
+    "endpoint": "/api/method/agency_tracking.clearance_api.start_clearance_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.start_clearance_step\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 136,
+    "endpoint": "/api/method/agency_tracking.clearance_api.complete_clearance_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.complete_clearance_step\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 161,
+    "endpoint": "/api/method/agency_tracking.clearance_api.reassign_clearance_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.reassign_clearance_step\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 184,
+    "endpoint": "/api/method/agency_tracking.clearance_api.submit_embassy_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.submit_embassy_step\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 209,
+    "endpoint": "/api/method/agency_tracking.clearance_api.stamp_embassy_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.stamp_embassy_step\","
+  },
+  {
+    "file": "src/lib/api/v2/clearance.ts",
+    "line": 236,
+    "endpoint": "/api/method/agency_tracking.clearance_api.reject_embassy_step",
+    "codeSnippet": "\"/api/method/agency_tracking.clearance_api.reject_embassy_step\","
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 5,
+    "endpoint": "/api/method/agency_tracking.*",
+    "codeSnippet": "* 1. ONLY whitelisted `/api/method/agency_tracking.*` and standard `/api/method/login`, `/api/method/logout`, `/api/method/upload_file` endpoints are permitted."
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 5,
+    "endpoint": "/api/method/login",
+    "codeSnippet": "* 1. ONLY whitelisted `/api/method/agency_tracking.*` and standard `/api/method/login`, `/api/method/logout`, `/api/method/upload_file` endpoints are permitted."
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 5,
+    "endpoint": "/api/method/logout",
+    "codeSnippet": "* 1. ONLY whitelisted `/api/method/agency_tracking.*` and standard `/api/method/login`, `/api/method/logout`, `/api/method/upload_file` endpoints are permitted."
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 5,
+    "endpoint": "/api/method/upload_file",
+    "codeSnippet": "* 1. ONLY whitelisted `/api/method/agency_tracking.*` and standard `/api/method/login`, `/api/method/logout`, `/api/method/upload_file` endpoints are permitted."
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 6,
+    "endpoint": "/api/resource/*",
+    "codeSnippet": "* 2. Raw `/api/resource/*` requests are strictly forbidden in V2."
+  },
+  {
+    "file": "src/lib/api/v2/client.ts",
+    "line": 43,
+    "endpoint": "/api/method/agency_tracking.auth_api.get_csrf_token",
+    "codeSnippet": "const res = await fetch(\"/api/method/agency_tracking.auth_api.get_csrf_token\", {"
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 95,
+    "endpoint": "/api/method/agency_tracking.chat_api.create_agency_thread",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.create_agency_thread\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 113,
+    "endpoint": "/api/method/agency_tracking.chat_api.create_internal_thread",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.create_internal_thread\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 134,
+    "endpoint": "/api/method/agency_tracking.chat_api.list_threads",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.list_threads\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 152,
+    "endpoint": "/api/method/agency_tracking.chat_api.get_thread_messages",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.get_thread_messages\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 183,
+    "endpoint": "/api/method/agency_tracking.chat_api.send_message",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.send_message\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 206,
+    "endpoint": "/api/method/agency_tracking.chat_api.mark_read",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.mark_read\","
+  },
+  {
+    "file": "src/lib/api/v2/communication.ts",
+    "line": 226,
+    "endpoint": "/api/method/agency_tracking.chat_api.add_participant",
+    "codeSnippet": "\"/api/method/agency_tracking.chat_api.add_participant\","
+  },
+  {
+    "file": "src/lib/api/v2/complaints.ts",
+    "line": 63,
+    "endpoint": "/api/method/agency_tracking.complaint_api.create_complaint",
+    "codeSnippet": "\"/api/method/agency_tracking.complaint_api.create_complaint\","
+  },
+  {
+    "file": "src/lib/api/v2/complaints.ts",
+    "line": 86,
+    "endpoint": "/api/method/agency_tracking.complaint_api.acknowledge_complaint",
+    "codeSnippet": "\"/api/method/agency_tracking.complaint_api.acknowledge_complaint\","
+  },
+  {
+    "file": "src/lib/api/v2/complaints.ts",
+    "line": 104,
+    "endpoint": "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
+    "codeSnippet": "\"/api/method/agency_tracking.complaint_api.list_unresolved_complaints\","
+  },
+  {
+    "file": "src/lib/api/v2/complaints.ts",
+    "line": 132,
+    "endpoint": "/api/method/agency_tracking.complaint_api.resolve_complaint",
+    "codeSnippet": "\"/api/method/agency_tracking.complaint_api.resolve_complaint\","
+  },
+  {
+    "file": "src/lib/api/v2/contractors.ts",
+    "line": 63,
+    "endpoint": "/api/method/agency_tracking.contractor_api.list_contractors",
+    "codeSnippet": "\"/api/method/agency_tracking.contractor_api.list_contractors\","
+  },
+  {
+    "file": "src/lib/api/v2/contractors.ts",
+    "line": 95,
+    "endpoint": "/api/method/agency_tracking.contractor_api.create_contractor",
+    "codeSnippet": "\"/api/method/agency_tracking.contractor_api.create_contractor\","
+  },
+  {
+    "file": "src/lib/api/v2/corridor.ts",
+    "line": 51,
+    "endpoint": "/api/method/agency_tracking.corridor_engine.get_corridor_steps",
+    "codeSnippet": "\"/api/method/agency_tracking.corridor_engine.get_corridor_steps\","
+  },
+  {
+    "file": "src/lib/api/v2/cv.ts",
+    "line": 42,
+    "endpoint": "/api/method/agency_tracking.cv_api.generate_cv",
+    "codeSnippet": "\"/api/method/agency_tracking.cv_api.generate_cv\","
+  },
+  {
+    "file": "src/lib/api/v2/documents.ts",
+    "line": 108,
+    "endpoint": "/api/method/upload_file",
+    "codeSnippet": "return await requestV2<V2FileUploadResponse>(\"/api/method/upload_file\", {"
+  },
+  {
+    "file": "src/lib/api/v2/documents.ts",
+    "line": 133,
+    "endpoint": "/api/method/agency_tracking.passport_parser.parse_passport_file",
+    "codeSnippet": "\"/api/method/agency_tracking.passport_parser.parse_passport_file\","
+  },
+  {
+    "file": "src/lib/api/v2/documents.ts",
+    "line": 162,
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_contract_file",
+    "codeSnippet": "\"/api/method/agency_tracking.contract_parser.parse_contract_file\","
+  },
+  {
+    "file": "src/lib/api/v2/documents.ts",
+    "line": 191,
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_injaz_file",
+    "codeSnippet": "\"/api/method/agency_tracking.contract_parser.parse_injaz_file\","
+  },
+  {
+    "file": "src/lib/api/v2/documents.ts",
+    "line": 217,
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_visa_file",
+    "codeSnippet": "\"/api/method/agency_tracking.contract_parser.parse_visa_file\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 99,
+    "endpoint": "/api/method/agency_tracking.finance_api.log_stage_expense",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.log_stage_expense\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 128,
+    "endpoint": "/api/method/agency_tracking.finance_api.log_stage_income",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.log_stage_income\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 153,
+    "endpoint": "/api/method/agency_tracking.finance_api.approve_transaction",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.approve_transaction\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 173,
+    "endpoint": "/api/method/agency_tracking.finance_api.reject_transaction",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.reject_transaction\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 196,
+    "endpoint": "/api/method/agency_tracking.finance_api.void_transaction",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.void_transaction\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 219,
+    "endpoint": "/api/method/agency_tracking.finance_api.get_fx_rate",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.get_fx_rate\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 243,
+    "endpoint": "/api/method/agency_tracking.finance_api.set_fx_rate",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.set_fx_rate\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 273,
+    "endpoint": "/api/method/agency_tracking.finance_api.get_owed_commissions",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.get_owed_commissions\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 309,
+    "endpoint": "/api/method/agency_tracking.finance_api.create_commission_batch",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.create_commission_batch\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 335,
+    "endpoint": "/api/method/agency_tracking.finance_api.settle_batch",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.settle_batch\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 353,
+    "endpoint": "/api/method/agency_tracking.finance_api.trigger_early_commission_accrual",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.trigger_early_commission_accrual\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 377,
+    "endpoint": "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
+    "codeSnippet": "\"/api/method/agency_tracking.reconciliation_api.upload_bank_statement\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 406,
+    "endpoint": "/api/method/agency_tracking.reconciliation_api.manually_match_line",
+    "codeSnippet": "\"/api/method/agency_tracking.reconciliation_api.manually_match_line\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 433,
+    "endpoint": "/api/method/agency_tracking.finance_api.settle_batch_items",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.settle_batch_items\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 462,
+    "endpoint": "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.upload_batch_payment_proof\","
+  },
+  {
+    "file": "src/lib/api/v2/finance.ts",
+    "line": 494,
+    "endpoint": "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
+    "codeSnippet": "\"/api/method/agency_tracking.finance_api.get_batch_invoice_pdf\","
+  },
+  {
+    "file": "src/lib/api/v2/notifications.ts",
+    "line": 36,
+    "endpoint": "/api/method/agency_tracking.notification_api.get_push_subscription_status",
+    "codeSnippet": "\"/api/method/agency_tracking.notification_api.get_push_subscription_status\","
+  },
+  {
+    "file": "src/lib/api/v2/notifications.ts",
+    "line": 71,
+    "endpoint": "/api/method/agency_tracking.notification_api.subscribe_to_push",
+    "codeSnippet": "\"/api/method/agency_tracking.notification_api.subscribe_to_push\","
+  },
+  {
+    "file": "src/lib/api/v2/notifications.ts",
+    "line": 99,
+    "endpoint": "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
+    "codeSnippet": "\"/api/method/agency_tracking.notification_api.trigger_wakala_reminder\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 83,
+    "endpoint": "/api/method/agency_tracking.placement_api.create_muayena_placement",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.create_muayena_placement\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 110,
+    "endpoint": "/api/method/agency_tracking.placement_api.list_placements",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.list_placements\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 138,
+    "endpoint": "/api/method/agency_tracking.placement_api.upload_contract",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.upload_contract\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 161,
+    "endpoint": "/api/method/agency_tracking.placement_api.upload_visa",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.upload_visa\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 190,
+    "endpoint": "/api/method/agency_tracking.placement_api.record_selected_medical_result",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.record_selected_medical_result\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 220,
+    "endpoint": "/api/method/agency_tracking.placement_api.record_predeparture_medical_result",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.record_predeparture_medical_result\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 254,
+    "endpoint": "/api/method/agency_tracking.placement_api.advance_placement",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.advance_placement\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 282,
+    "endpoint": "/api/method/agency_tracking.placement_api.record_ticket_details",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.record_ticket_details\","
+  },
+  {
+    "file": "src/lib/api/v2/placements.ts",
+    "line": 310,
+    "endpoint": "/api/method/agency_tracking.placement_api.record_reschedule",
+    "codeSnippet": "\"/api/method/agency_tracking.placement_api.record_reschedule\","
+  },
+  {
+    "file": "src/lib/api/v2/portal.ts",
+    "line": 104,
+    "endpoint": "/api/method/agency_tracking.portal_api.list_portal_candidates",
+    "codeSnippet": "\"/api/method/agency_tracking.portal_api.list_portal_candidates\","
+  },
+  {
+    "file": "src/lib/api/v2/portal.ts",
+    "line": 134,
+    "endpoint": "/api/method/agency_tracking.portal_api.select_candidate",
+    "codeSnippet": "\"/api/method/agency_tracking.portal_api.select_candidate\","
+  },
+  {
+    "file": "src/lib/api/v2/portal.ts",
+    "line": 154,
+    "endpoint": "/api/method/agency_tracking.portal_api.list_my_wakala_requests",
+    "codeSnippet": "\"/api/method/agency_tracking.portal_api.list_my_wakala_requests\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 195,
+    "endpoint": "/api/method/agency_tracking.report_api.get_daily_work_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_daily_work_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 216,
+    "endpoint": "/api/method/agency_tracking.report_api.get_staff_performance_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_staff_performance_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 240,
+    "endpoint": "/api/method/agency_tracking.report_api.get_operations_summary",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_operations_summary\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 262,
+    "endpoint": "/api/method/agency_tracking.report_api.get_placement_aging_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_placement_aging_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 293,
+    "endpoint": "/api/method/agency_tracking.report_api.get_financial_overview",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_financial_overview\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 318,
+    "endpoint": "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_cost_breakdown_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 339,
+    "endpoint": "/api/method/agency_tracking.report_api.get_employee_financial_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_employee_financial_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 354,
+    "endpoint": "/api/method/agency_tracking.report_api.get_pending_approval_queue",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_pending_approval_queue\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 369,
+    "endpoint": "/api/method/agency_tracking.report_api.get_complaint_aging_report",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.get_complaint_aging_report\","
+  },
+  {
+    "file": "src/lib/api/v2/reports.ts",
+    "line": 387,
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "codeSnippet": "\"/api/method/agency_tracking.report_api.export_commissions_xlsx\","
+  }
+]

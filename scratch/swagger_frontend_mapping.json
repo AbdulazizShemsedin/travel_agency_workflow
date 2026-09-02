@@ -1,0 +1,1810 @@
+[
+  {
+    "endpoint": "/api/method/upload_file",
+    "httpMethod": "POST",
+    "summary": "Upload a file (raw Frappe endpoint)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/client.ts",
+      "src/lib/api/v2/documents.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [
+      "src/lib/api/applicantApi.ts"
+    ],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/login",
+    "httpMethod": "POST",
+    "summary": "Log in (raw Frappe endpoint)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/auth.ts",
+      "src/lib/api/v2/client.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/logout",
+    "httpMethod": "POST",
+    "summary": "Log out",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/auth.ts",
+      "src/lib/api/v2/client.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.auth_api.get_current_user",
+    "httpMethod": "POST",
+    "summary": "Get current session user",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/auth.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.auth_api.get_csrf_token",
+    "httpMethod": "POST",
+    "summary": "Get CSRF token",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/auth.ts",
+      "src/lib/api/v2/client.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.cancel_applicant",
+    "httpMethod": "POST",
+    "summary": "Cancel an Applicant (global escape hatch)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [
+      "src/lib/api/applicantApi.ts"
+    ],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.create_applicant",
+    "httpMethod": "POST",
+    "summary": "Open a new Applicant file at Draft",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.get_applicant",
+    "httpMethod": "POST",
+    "summary": "Fetch a single Applicant",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.list_applicants",
+    "httpMethod": "POST",
+    "summary": "List Applicants the caller's role can read",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.set_country_ban",
+    "httpMethod": "POST",
+    "summary": "Set a permanent per-(Applicant, Country) ban",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.list_country_bans",
+    "httpMethod": "POST",
+    "summary": "List country bans, optionally scoped to one Applicant",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.remove_country_ban",
+    "httpMethod": "POST",
+    "summary": "Lift a country ban",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.log_applicant_fee",
+    "httpMethod": "POST",
+    "summary": "Manually log the Registration Fee to the Finance ledger",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.register_applicant",
+    "httpMethod": "POST",
+    "summary": "Draft -> Registered",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [
+      "src/lib/api/applicantApi.ts"
+    ],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.restart_applicant",
+    "httpMethod": "POST",
+    "summary": "Restart a Cancelled Applicant",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.update_applicant",
+    "httpMethod": "POST",
+    "summary": "Edit an Applicant at Draft or Registered",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
+    "httpMethod": "POST",
+    "summary": "LMIS-stage edit: national_id, labor_id, emergency contact, COC",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/applicants.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_engine.get_placement_officers",
+    "httpMethod": "POST",
+    "summary": "List which officer is currently assigned to each Clearance Step on a Placement",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": false,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.add_participant",
+    "httpMethod": "POST",
+    "summary": "Add a participant to an internal thread",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.create_agency_thread",
+    "httpMethod": "POST",
+    "summary": "Create/get this agency's thread with the Communication Manager",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.create_internal_thread",
+    "httpMethod": "POST",
+    "summary": "Create/get an internal staff-to-staff thread",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.get_thread_messages",
+    "httpMethod": "POST",
+    "summary": "Get all messages in a thread",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.list_threads",
+    "httpMethod": "POST",
+    "summary": "List the current user's threads",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.mark_read",
+    "httpMethod": "POST",
+    "summary": "Mark a thread as read for the current user",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.chat_api.send_message",
+    "httpMethod": "POST",
+    "summary": "Send a message in a thread",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/communication.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.complete_clearance_step",
+    "httpMethod": "POST",
+    "summary": "Mark a Clearance Step complete/Issued",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
+    "httpMethod": "POST",
+    "summary": "List the current user's Clearance Step queue",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.reassign_clearance_step",
+    "httpMethod": "POST",
+    "summary": "Reassign a Clearance Step to a different officer",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.reject_embassy_step",
+    "httpMethod": "POST",
+    "summary": "Mark an Embassy step Rejected (Thursday, failure outcome)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.stamp_embassy_step",
+    "httpMethod": "POST",
+    "summary": "Mark an Embassy step Stamped (Thursday, success outcome)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.start_clearance_step",
+    "httpMethod": "POST",
+    "summary": "Mark a Clearance Step In Progress",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.clearance_api.submit_embassy_step",
+    "httpMethod": "POST",
+    "summary": "Submit an Embassy step's documents (Monday)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/clearance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.complaint_api.acknowledge_complaint",
+    "httpMethod": "POST",
+    "summary": "New -> Unresolved",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/complaints.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.complaint_api.create_complaint",
+    "httpMethod": "POST",
+    "summary": "Log a complaint against a placed worker",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/complaints.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
+    "httpMethod": "POST",
+    "summary": "List Unresolved complaints, oldest-first",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/complaints.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.complaint_api.resolve_complaint",
+    "httpMethod": "POST",
+    "summary": "Resolve a complaint (Resolved / Free Replacement / Escalated / Dismissed)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/complaints.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.cv_api.generate_cv",
+    "httpMethod": "POST",
+    "summary": "Generate and attach the official Agency CV PDF",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/cv.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [
+      "src/lib/api/applicantApi.ts"
+    ],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.approve_transaction",
+    "httpMethod": "POST",
+    "summary": "Approve a Pending transaction",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.create_commission_batch",
+    "httpMethod": "POST",
+    "summary": "Batch a contractor's owed commissions for settlement",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.get_fx_rate",
+    "httpMethod": "POST",
+    "summary": "Get the cached FX rate for a currency",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.get_owed_commissions",
+    "httpMethod": "POST",
+    "summary": "List a contractor's owed (unbatched, Approved) commissions",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.log_stage_expense",
+    "httpMethod": "POST",
+    "summary": "Log an expense",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.log_stage_income",
+    "httpMethod": "POST",
+    "summary": "Log income",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.reject_transaction",
+    "httpMethod": "POST",
+    "summary": "Reject a Pending transaction",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.set_fx_rate",
+    "httpMethod": "POST",
+    "summary": "Manually record an FX rate",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.settle_batch_items",
+    "httpMethod": "POST",
+    "summary": "Mark specific Commission Batch Items paid (partial settlement)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    "httpMethod": "POST",
+    "summary": "Upload a paid-applicants list (CSV or PDF) and fuzzy-match against a batch",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
+    "httpMethod": "POST",
+    "summary": "Render a Commission Batch invoice PDF on demand",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.settle_batch",
+    "httpMethod": "POST",
+    "summary": "Mark a Commission Batch settled",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.trigger_early_commission_accrual",
+    "httpMethod": "POST",
+    "summary": "Manually trigger commission accrual early",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.finance_api.void_transaction",
+    "httpMethod": "POST",
+    "summary": "Void an Approved transaction",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.contractor_api.create_contractor",
+    "httpMethod": "POST",
+    "summary": "Register a new foreign agency and its portal login",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/contractors.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.contractor_api.list_contractors",
+    "httpMethod": "POST",
+    "summary": "List Contractors the caller's role can manage",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/contractors.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.portal_api.list_my_wakala_requests",
+    "httpMethod": "POST",
+    "summary": "List unpaid Wakala-bearing Embassy steps for the agency's own placements",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/portal.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.portal_api.list_portal_candidates",
+    "httpMethod": "POST",
+    "summary": "Browse the candidate catalog",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/portal.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.portal_api.select_candidate",
+    "httpMethod": "POST",
+    "summary": "Select a candidate (creates a Placement)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/portal.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.notification_api.get_push_subscription_status",
+    "httpMethod": "POST",
+    "summary": "Check whether the current user has an active Push Subscription",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/notifications.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.notification_api.subscribe_to_push",
+    "httpMethod": "POST",
+    "summary": "Subscribe the current browser to Push notifications",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/notifications.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
+    "httpMethod": "POST",
+    "summary": "Manually trigger a Wakala payment reminder",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/notifications.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_contract_file",
+    "httpMethod": "POST",
+    "summary": "Extract structured fields from an uploaded contract",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/documents.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_injaz_file",
+    "httpMethod": "POST",
+    "summary": "Extract fields from a Saudi Injaz paper",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/documents.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.contract_parser.parse_visa_file",
+    "httpMethod": "POST",
+    "summary": "Extract fields from a Kuwait eVisa document",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/documents.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.passport_parser.parse_passport_file",
+    "httpMethod": "POST",
+    "summary": "Extract MRZ fields from a passport scan",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/documents.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.advance_placement",
+    "httpMethod": "POST",
+    "summary": "Move a Placement forward via the sanctioned transition() path",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.create_muayena_placement",
+    "httpMethod": "POST",
+    "summary": "Create a Placement directly (Muayena track)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.record_reschedule",
+    "httpMethod": "POST",
+    "summary": "Record a ticket reschedule",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.record_selected_medical_result",
+    "httpMethod": "POST",
+    "summary": "Record the post-contract medical result",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.record_predeparture_medical_result",
+    "httpMethod": "POST",
+    "summary": "Record the pre-departure (Medical 2) result",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.record_ticket_details",
+    "httpMethod": "POST",
+    "summary": "Record ticket number/flight date, auto-logs cost as an expense",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.upload_contract",
+    "httpMethod": "POST",
+    "summary": "Attach a signed contract to a Selected Placement",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.upload_visa",
+    "httpMethod": "POST",
+    "summary": "Attach a Kuwait visa document",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.placement_api.list_placements",
+    "httpMethod": "POST",
+    "summary": "List Placements the caller's role can read",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/placements.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.api_docs.get_swagger_spec",
+    "httpMethod": "GET",
+    "summary": "Get full Swagger specification JSON",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200"
+    ],
+    "v2Callers": [],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": false,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.reconciliation_api.manually_match_line",
+    "httpMethod": "POST",
+    "summary": "Manually match an unmatched statement line to a batch",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
+    "httpMethod": "POST",
+    "summary": "Upload a bank statement CSV",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "httpMethod": "POST",
+    "summary": "Export commission records as a binary .xlsx (CSV fallback)",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts",
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [
+      "src/app/agent/commission/page.tsx",
+      "src/app/commission/page.tsx",
+      "src/app/reports/page.tsx"
+    ],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": true
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_complaint_aging_report",
+    "httpMethod": "POST",
+    "summary": "New/Unresolved (with age)/Resolved counts",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/complaints.ts",
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
+    "httpMethod": "POST",
+    "summary": "Approved transaction totals grouped by destination country",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts",
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_daily_work_report",
+    "httpMethod": "POST",
+    "summary": "CVs created, medicals processed, clearances issued, embassies cleared, tickets booked, departures — for a date range",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_employee_financial_report",
+    "httpMethod": "POST",
+    "summary": "Per-employee net expense + approval/rejection rate",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts",
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_financial_overview",
+    "httpMethod": "POST",
+    "summary": "Income/expense/commission/refund totals + outstanding/settled",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_operations_summary",
+    "httpMethod": "POST",
+    "summary": "Recruitment funnel + SLA/turnaround dashboard data",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_pending_approval_queue",
+    "httpMethod": "POST",
+    "summary": "List every Pending Applicant Transaction, oldest-first",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/finance.ts",
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_placement_aging_report",
+    "httpMethod": "POST",
+    "summary": "Placements approaching the ticket deadline, and critical ones not yet Departed",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.report_api.get_staff_performance_report",
+    "httpMethod": "POST",
+    "summary": "get_daily_work_report's same breakdown, per individual staff member",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/reports.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  },
+  {
+    "endpoint": "/api/method/agency_tracking.corridor_engine.get_corridor_steps",
+    "httpMethod": "POST",
+    "summary": "Get the ordered step definitions for a destination country's corridor",
+    "roles": [],
+    "parameters": [],
+    "requestBody": null,
+    "responses": [
+      "200",
+      "403",
+      "417"
+    ],
+    "v2Callers": [
+      "src/lib/api/v2/corridor.ts"
+    ],
+    "pageCallers": [],
+    "compCallers": [],
+    "legacyCallers": [],
+    "hasV2Wrapper": true,
+    "hasUIUsage": false
+  }
+]
