@@ -108,8 +108,13 @@ export async function requestV2<T = any>(
     ...options.headers,
   };
 
-  // Attach CSRF token on POST requests if not logging in/out
-  if (method === "POST" && !endpoint.endsWith("/login") && !endpoint.endsWith("/logout")) {
+  // Attach CSRF token on POST requests if not logging in/out or fetching CSRF token
+  if (
+    method === "POST" &&
+    !endpoint.endsWith("/login") &&
+    !endpoint.endsWith("/logout") &&
+    !endpoint.includes("get_csrf_token")
+  ) {
     const csrfToken = await getCachedOrFetchCsrfToken();
     if (csrfToken) {
       headers["X-Frappe-CSRF-Token"] = csrfToken;
@@ -137,18 +142,30 @@ export async function requestV2<T = any>(
 
   // Handle binary streams (e.g. XLSX export, PDF invoice)
   const contentType = response.headers.get("content-type") || "";
-  if (
+  const contentDisposition = response.headers.get("content-disposition") || "";
+  const isBinaryResponse =
     contentType.includes("application/vnd.openxmlformats") ||
     contentType.includes("application/vnd.ms-excel") ||
     contentType.includes("text/csv") ||
     contentType.includes("application/pdf") ||
-    contentType.includes("application/octet-stream")
-  ) {
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("binary/octet-stream") ||
+    contentDisposition.includes("attachment");
+
+  if (isBinaryResponse) {
     if (!response.ok) {
-      throw new ApiV2Error(`File download failed with HTTP ${response.status}`, response.status);
+      let errorMsg = `File download failed with HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson?.message) {
+          errorMsg = typeof errJson.message === "string" ? errJson.message : JSON.stringify(errJson.message);
+        }
+      } catch {}
+      throw new ApiV2Error(errorMsg, response.status);
     }
     return (await response.blob()) as unknown as T;
   }
+
 
   let jsonResponse: any = null;
   try {

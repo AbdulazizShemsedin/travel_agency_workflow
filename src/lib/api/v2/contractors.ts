@@ -7,8 +7,6 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
 
 export interface V2ContractorRecord {
   name: string;
@@ -54,10 +52,6 @@ export async function listContractorsV2(
   filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100
 ): Promise<V2ContractorRecord[]> {
-  if (isDemoMode()) {
-    return demoStore.getContractors();
-  }
-
   const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
   const result = await requestV2<V2ContractorRecord[] | { contractors?: V2ContractorRecord[] }>(
     "/api/method/agency_tracking.contractor_api.list_contractors",
@@ -81,16 +75,6 @@ export async function listContractorsV2(
 export async function createContractorV2(
   payload: V2CreateContractorPayload
 ): Promise<{ name?: string; contractor_name?: string; company_name?: string; message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    const created = demoStore.createContractor(payload);
-    return {
-      name: created.name,
-      contractor_name: created.contractor_name,
-      company_name: created.contractor_name,
-      message: "Contractor registered successfully",
-    };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.contractor_api.create_contractor",
     {

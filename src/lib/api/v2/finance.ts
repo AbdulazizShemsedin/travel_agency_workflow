@@ -1,7 +1,7 @@
 /**
- * V2 Finance, Commissions & Reconciliation API
+ * V2 Finance & Commission Lifecycle API
  * 
- * Endpoints:
+ * Authoritative Backend Endpoints:
  * - POST /api/method/agency_tracking.finance_api.log_stage_expense
  * - POST /api/method/agency_tracking.finance_api.log_stage_income
  * - POST /api/method/agency_tracking.finance_api.approve_transaction
@@ -11,20 +11,18 @@
  * - POST /api/method/agency_tracking.finance_api.set_fx_rate
  * - POST /api/method/agency_tracking.finance_api.get_owed_commissions
  * - POST /api/method/agency_tracking.finance_api.create_commission_batch
+ * - POST /api/method/agency_tracking.finance_api.get_batch_invoice_pdf
+ * - POST /api/method/agency_tracking.finance_api.upload_batch_payment_proof
+ * - POST /api/method/agency_tracking.finance_api.settle_batch_items
  * - POST /api/method/agency_tracking.finance_api.settle_batch
  * - POST /api/method/agency_tracking.finance_api.trigger_early_commission_accrual
  * - POST /api/method/agency_tracking.reconciliation_api.upload_bank_statement
  * - POST /api/method/agency_tracking.reconciliation_api.manually_match_line
- * - POST /api/method/agency_tracking.report_api.export_commissions_xlsx
- * - POST /api/method/agency_tracking.report_api.get_cost_breakdown_report
  * - POST /api/method/agency_tracking.report_api.get_employee_financial_report
  * - POST /api/method/agency_tracking.report_api.get_pending_approval_queue
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
-import { DEMO_FX_RATES } from "@/lib/demo/finance";
 
 export type V2SupportedCurrency = "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR";
 
@@ -48,35 +46,40 @@ export interface V2OwedCommissionItem {
   applicant?: string;
   applicant_name?: string;
   full_name?: string;
-  contractor: string;
+  contractor?: string;
   contractor_name?: string;
-  destination_country?: string;
   amount: number;
-  commission_amount?: number;
-  currency: string;
+  currency: V2SupportedCurrency;
+  accrual_date?: string;
+  destination_country?: string;
   status?: string;
-  departure_date?: string;
-  flight_number?: string;
-  batch?: string;
-  creation?: string;
+  [key: string]: any;
+}
+
+export interface V2CommissionBatchItem {
+  name?: string;
+  transaction?: string;
+  transaction_name?: string;
+  placement?: string;
+  applicant?: string;
+  applicant_name?: string;
+  amount: number;
+  currency: string;
+  settled?: number | boolean;
+  settlement_date?: string;
   [key: string]: any;
 }
 
 export interface V2CommissionBatch {
   name: string;
   contractor: string;
+  contractor_name?: string;
   destination_country?: string;
   total_amount: number;
-  currency: string;
-  status: "Draft" | "Settled" | "Unmatched" | string;
-  settlement_reference?: string;
-  items?: Array<{
-    transaction_name?: string;
-    amount?: number;
-    currency?: string;
-    applicant?: string;
-    applicant_name?: string;
-  }>;
+  currency: V2SupportedCurrency;
+  status: "Draft" | "Invoiced" | "Partially Settled" | "Settled" | "Cancelled" | string;
+  items?: V2CommissionBatchItem[];
+  payment_proof?: string;
   creation?: string;
   [key: string]: any;
 }
@@ -91,10 +94,6 @@ export async function logStageExpenseV2(
   placement?: string,
   stageLoggedAt?: string
 ): Promise<{ name?: string; message?: string }> {
-  if (isDemoMode()) {
-    return { name: `TXN-${Date.now()}`, message: "Expense logged to ledger" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_expense",
     {
@@ -120,10 +119,6 @@ export async function logStageIncomeV2(
   placement?: string,
   stageLoggedAt?: string
 ): Promise<{ name?: string; message?: string }> {
-  if (isDemoMode()) {
-    return { name: `TXN-${Date.now()}`, message: "Income logged to ledger" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_income",
     {
@@ -145,10 +140,6 @@ export async function logStageIncomeV2(
 export async function approveTransactionV2(
   transactionName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: "Transaction approved" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.approve_transaction",
     {
@@ -165,10 +156,6 @@ export async function rejectTransactionV2(
   transactionName: string,
   rejectionReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: "Transaction rejected" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.reject_transaction",
     {
@@ -188,10 +175,6 @@ export async function voidTransactionV2(
   transactionName: string,
   voidReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: "Transaction voided" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.void_transaction",
     {
@@ -211,10 +194,6 @@ export async function getFxRateV2(
   currency: V2SupportedCurrency,
   asOfDate?: string
 ): Promise<{ rate?: number; currency: string; message?: any }> {
-  if (isDemoMode()) {
-    return { rate: DEMO_FX_RATES[currency] || 1.0, currency };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.get_fx_rate",
     {
@@ -235,10 +214,6 @@ export async function setFxRateV2(
   rateToBirr: number,
   rateDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `FX rate for ${currency} set to ${rateToBirr}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.set_fx_rate",
     {
@@ -260,25 +235,21 @@ export async function getOwedCommissionsV2(
   destinationCountry?: string,
   order: "oldest" | "newest" = "oldest"
 ): Promise<V2OwedCommissionItem[]> {
-  if (isDemoMode()) {
-    return demoStore.getOwedCommissions(contractor, destinationCountry);
-  }
-
   const body: Record<string, any> = { order };
-    if (contractor) body.contractor = contractor;
-    if (destinationCountry) body.destination_country = destinationCountry;
+  if (contractor) body.contractor = contractor;
+  if (destinationCountry) body.destination_country = destinationCountry;
 
-    const result = await requestV2<V2OwedCommissionItem[] | { items?: V2OwedCommissionItem[] }>(
-      "/api/method/agency_tracking.finance_api.get_owed_commissions",
-      {
-        method: "POST",
-        body,
-      }
-    );
+  const result = await requestV2<V2OwedCommissionItem[] | { items?: V2OwedCommissionItem[] }>(
+    "/api/method/agency_tracking.finance_api.get_owed_commissions",
+    {
+      method: "POST",
+      body,
+    }
+  );
 
-    if (Array.isArray(result)) return result;
-    if (result && Array.isArray((result as any).items)) return (result as any).items;
-    return [];
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).items)) return (result as any).items;
+  return [];
 }
 
 /**
@@ -289,18 +260,7 @@ export async function createCommissionBatchV2(
   destinationCountry: string,
   transactionNames?: string[]
 ): Promise<V2CommissionBatch> {
-  if (isDemoMode()) {
-    return {
-      name: `BATCH-2026-${Math.floor(100 + Math.random() * 900)}`,
-      contractor,
-      destination_country: destinationCountry,
-      total_amount: 7000,
-      currency: destinationCountry.includes("Kuwait") ? "KWD" : "SAR",
-      status: "Draft",
-    };
-  }
-
-  return requestV2<V2CommissionBatch>(
+  const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
     "/api/method/agency_tracking.finance_api.create_commission_batch",
     {
       method: "POST",
@@ -313,6 +273,78 @@ export async function createCommissionBatchV2(
       },
     }
   );
+
+  if (result && "message" in result && result.message) {
+    return result.message as V2CommissionBatch;
+  }
+  return result as V2CommissionBatch;
+}
+
+/**
+ * Renders a Commission Batch invoice PDF on demand.
+ */
+export async function getBatchInvoicePdfV2(batchName: string): Promise<Blob> {
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
+    {
+      method: "POST",
+      body: { batch_name: batchName },
+      headers: {
+        Accept: "application/pdf, application/json, */*",
+      },
+    }
+  );
+}
+
+/**
+ * Uploads a paid-applicants list (CSV or PDF) and fuzzy-matches against a batch.
+ */
+export async function uploadBatchPaymentProofV2(
+  batchName: string,
+  fileUrl: string
+): Promise<{ matched_items: string[]; unmatched_names: string[]; [key: string]: any }> {
+  const result = await requestV2<{
+    message?: {
+      matched_items?: string[];
+      unmatched_names?: string[];
+    };
+    matched_items?: string[];
+    unmatched_names?: string[];
+    [key: string]: any;
+  }>(
+    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        file_url: fileUrl,
+      },
+    }
+  );
+
+  const payload = result.message || result;
+  return {
+    matched_items: Array.isArray(payload.matched_items) ? payload.matched_items : [],
+    unmatched_names: Array.isArray(payload.unmatched_names) ? payload.unmatched_names : [],
+    ...payload,
+  };
+}
+
+/**
+ * Marks specific Commission Batch Items paid (partial settlement).
+ */
+export async function settleBatchItemsV2(
+  itemNames: string[]
+): Promise<{ message?: any; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.settle_batch_items",
+    {
+      method: "POST",
+      body: {
+        item_names: JSON.stringify(itemNames),
+      },
+    }
+  );
 }
 
 /**
@@ -322,10 +354,6 @@ export async function settleBatchV2(
   batchName: string,
   settlementReference: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return demoStore.settleBatch(batchName, settlementReference);
-  }
-
   return requestV2(
     "/api/method/agency_tracking.finance_api.settle_batch",
     {
@@ -359,14 +387,6 @@ export async function triggerEarlyCommissionAccrualV2(
 export async function uploadBankStatementV2(
   fileUrl: string
 ): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
-  if (isDemoMode()) {
-    return {
-      message: "Bank statement CSV processed successfully. 4 ledger items matched.",
-      matched: 4,
-      unmatched: 1,
-    };
-  }
-
   return await requestV2(
     "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
     {
@@ -383,10 +403,6 @@ export async function manuallyMatchLineV2(
   statementLineName: string,
   batchName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `Statement line ${statementLineName} matched to batch ${batchName}` };
-  }
-
   return await requestV2(
     "/api/method/agency_tracking.reconciliation_api.manually_match_line",
     {
@@ -398,76 +414,3 @@ export async function manuallyMatchLineV2(
     }
   );
 }
-
-/**
- * Marks specific Commission Batch Items paid (partial settlement).
- */
-export async function settleBatchItemsV2(
-  itemNames: string[]
-): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `${itemNames.length} batch items settled successfully` };
-  }
-
-  return await requestV2(
-    "/api/method/agency_tracking.finance_api.settle_batch_items",
-    {
-      method: "POST",
-      body: { item_names: JSON.stringify(itemNames) },
-    }
-  );
-}
-
-/**
- * Uploads a paid-applicants list (CSV or PDF) and fuzzy-matches against a commission batch.
- */
-export async function uploadBatchPaymentProofV2(
-  batchName: string,
-  fileUrl: string
-): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
-  if (isDemoMode()) {
-    return {
-      message: "Batch payment proof processed. 3 candidates matched.",
-      matched: 3,
-      unmatched: 0,
-    };
-  }
-
-  return await requestV2(
-    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
-    {
-      method: "POST",
-      body: {
-        batch_name: batchName,
-        file_url: fileUrl,
-      },
-    }
-  );
-}
-
-/**
- * Renders a Commission Batch invoice PDF on demand.
- */
-export async function getBatchInvoicePdfV2(
-  batchName: string
-): Promise<Blob> {
-  if (isDemoMode()) {
-    const mockPdfText = `%PDF-1.4 Commission Batch Invoice - ${batchName}`;
-    return new Blob([mockPdfText], { type: "application/pdf" });
-  }
-
-  try {
-    return await requestV2<Blob>(
-      "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
-      {
-        method: "POST",
-        body: { batch_name: batchName },
-      }
-    );
-  } catch (err) {
-    console.warn("Backend getBatchInvoicePdfV2 error, generating client PDF blob:", err);
-    const mockPdfText = `%PDF-1.4 Commission Batch Invoice - ${batchName}`;
-    return new Blob([mockPdfText], { type: "application/pdf" });
-  }
-}
-

@@ -15,9 +15,6 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
-import { DEMO_COST_BREAKDOWN, DEMO_EMPLOYEE_FINANCIAL } from "@/lib/demo/reports";
 
 export interface V2DailyWorkReport {
   from_date: string;
@@ -44,90 +41,99 @@ export interface V2StaffPerformanceItem {
 export interface V2OperationsSummary {
   from_date: string;
   to_date: string;
-  applicant_funnel: {
-    Draft?: number;
-    Registered?: number;
-    "CV Generated"?: number;
-    Selected?: number;
-    Processing?: number;
-    Stamped?: number;
-    Ticketed?: number;
-    Departed?: number;
-    Cancelled?: number;
-    [key: string]: number | undefined;
+  funnel?: {
+    draft: number;
+    registered: number;
+    cv_generated: number;
+    selected: number;
+    processing: number;
+    stamped: number;
+    ticketed: number;
+    departed: number;
+    cancelled: number;
   };
-  placement_funnel: {
-    Selected?: number;
-    Processing?: number;
-    Stamped?: number;
-    Ticketed?: number;
-    Departed?: number;
-    Cancelled?: number;
-    [key: string]: number | undefined;
+  turnaround_sla?: {
+    avg_registration_days: number;
+    avg_clearance_days: number;
+    avg_embassy_days: number;
+    avg_ticketing_days: number;
   };
-  conversion_rates: {
-    registered_to_cv_generated?: number | null;
-    stamped_to_ticketed?: number | null;
-    ticketed_to_departed?: number | null;
-  };
-  turnaround_days: {
-    selected_to_ticketed?: number | null;
-    selected_to_departed?: number | null;
-  };
-  pending_overdue: {
-    placements_approaching_ticket_deadline: number;
-    placements_critical_not_departed: number;
-    complaints_unresolved: number;
-    transactions_pending_approval: number;
-  };
+  overdue_clearance_steps?: number;
+  [key: string]: any;
 }
 
 export interface V2PlacementAgingReport {
   approaching_ticket_deadline: Array<{
     name: string;
-    age_days: number;
-    status: string;
-    applicant?: string;
+    applicant: string;
     full_name?: string;
-    contractor?: string;
+    contractor: string;
+    contractor_name?: string;
     destination_country?: string;
+    stamped_date?: string;
+    days_since_stamp?: number;
+    age_days?: number;
+    status?: string;
     [key: string]: any;
   }>;
   critical_not_departed: Array<{
     name: string;
-    age_days: number;
-    status: string;
-    applicant?: string;
+    applicant: string;
     full_name?: string;
-    contractor?: string;
+    contractor: string;
+    contractor_name?: string;
     destination_country?: string;
+    ticketed_date?: string;
+    days_since_stamp?: number;
+    age_days?: number;
+    status?: string;
     [key: string]: any;
   }>;
 }
 
 export interface V2FinancialOverviewReport {
-  from_date: string;
-  to_date: string;
-  totals_birr: {
-    commission: number;
-    refund: number;
-    income: number;
-    expense: number;
+  from_date?: string;
+  to_date?: string;
+  total_expenses_etb?: number;
+  total_income_etb?: number;
+  net_balance_etb?: number;
+  total_commissions_owed?: number;
+  total_commissions_settled?: number;
+  pending_approval_count?: number;
+  totals_birr?: {
+    income?: number;
+    expense?: number;
+    commission?: number;
+    refund?: number;
   };
-  outstanding_owed_birr: number;
-  settled_in_period_birr: number;
+  outstanding_owed_birr?: number;
+  settled_in_period_birr?: number;
+  [key: string]: any;
 }
 
 export interface V2CostBreakdownReport {
-  from_date: string;
-  to_date: string;
-  by_country_birr?: Record<string, number>;
+  from_date?: string;
+  to_date?: string;
+  by_destination?: Record<string, {
+    total_expense: number;
+    count: number;
+    avg_cost_per_placement: number;
+  }>;
+  by_stage?: Record<string, number>;
   [key: string]: any;
 }
 
 export interface V2EmployeeFinancialItem {
-  user: string;
+  employee?: string;
+  employee_name?: string;
+  user?: string;
   full_name?: string;
+  total_expenses_logged?: number;
+  total_income_logged?: number;
+  net_etb?: number;
+  approved_count?: number;
+  rejected_count?: number;
+  pending_count?: number;
   approved_transactions_count?: number;
   rejected_transactions_count?: number;
   net_expense_handled_birr?: number;
@@ -136,46 +142,53 @@ export interface V2EmployeeFinancialItem {
 
 export interface V2PendingApprovalItem {
   name: string;
-  transaction_type: "Income" | "Expense";
+  transaction_type: "Expense" | "Income";
   amount: number;
   currency: string;
   description: string;
+  placement?: string;
+  applicant?: string;
+  full_name?: string;
+  logged_by: string;
+  stage_logged_at?: string;
   creation: string;
-  owner: string;
-  owner_name?: string;
+  [key: string]: any;
+}
+
+export interface V2ComplaintAgingItem {
+  complaint_name?: string;
+  applicant?: string;
+  full_name?: string;
+  contractor?: string;
+  contractor_name?: string;
+  days_unresolved?: number;
+  status?: string;
+  days_bucket?: string;
+  count?: number;
   [key: string]: any;
 }
 
 export interface V2ComplaintAgingSummary {
-  new_count: number;
-  unresolved_count: number;
-  aging_breakdown: Array<{
-    complaint_name: string;
-    contractor: string;
-    contractor_name?: string;
-    applicant: string;
-    full_name?: string;
-    days_unresolved: number;
-    status: string;
-    creation: string;
-  }>;
-  resolved_count: number;
+  new_count?: number;
+  unresolved_count?: number;
+  resolved_count?: number;
+  aging_breakdown?: V2ComplaintAgingItem[];
+  [key: string]: any;
 }
 
 function parseDates(
-  arg1?: string | { from_date?: string; to_date?: string },
-  arg2?: string
-): { from_date: string; to_date: string } {
-  const today = new Date().toISOString().split("T")[0];
-  if (typeof arg1 === "object" && arg1 !== null) {
+  fromDate?: string | { from_date?: string; to_date?: string },
+  toDate?: string
+): { from_date?: string; to_date?: string } {
+  if (typeof fromDate === "object" && fromDate !== null) {
     return {
-      from_date: arg1.from_date || "2020-01-01",
-      to_date: arg1.to_date || today,
+      ...(fromDate.from_date ? { from_date: fromDate.from_date } : {}),
+      ...(fromDate.to_date ? { to_date: fromDate.to_date } : {}),
     };
   }
   return {
-    from_date: typeof arg1 === "string" && arg1 ? arg1 : "2020-01-01",
-    to_date: arg2 || today,
+    ...(fromDate ? { from_date: fromDate } : {}),
+    ...(toDate ? { to_date: toDate } : {}),
   };
 }
 
@@ -186,10 +199,6 @@ export async function getDailyWorkReportV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2DailyWorkReport> {
-  if (isDemoMode()) {
-    return demoStore.getDailyWorkReport();
-  }
-
   const dates = parseDates(fromDate, toDate);
   return requestV2<V2DailyWorkReport>(
     "/api/method/agency_tracking.report_api.get_daily_work_report",
@@ -207,10 +216,6 @@ export async function getStaffPerformanceReportV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2StaffPerformanceItem[]> {
-  if (isDemoMode()) {
-    return demoStore.getStaffPerformance();
-  }
-
   const dates = parseDates(fromDate, toDate);
   const result = await requestV2<V2StaffPerformanceItem[]>(
     "/api/method/agency_tracking.report_api.get_staff_performance_report",
@@ -230,10 +235,6 @@ export async function getOperationsSummaryV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2OperationsSummary> {
-  if (isDemoMode()) {
-    return demoStore.getOperationsSummary();
-  }
-
   const dates = parseDates(fromDate, toDate);
   return await requestV2<V2OperationsSummary>(
     "/api/method/agency_tracking.report_api.get_operations_summary",
@@ -248,10 +249,6 @@ export async function getOperationsSummaryV2(
  * Placements approaching the ticket deadline (25-29 days), and critical ones not yet Departed (30+ days).
  */
 export async function getPlacementAgingReportV2(): Promise<V2PlacementAgingReport> {
-  if (isDemoMode()) {
-    return demoStore.getPlacementAging();
-  }
-
   const result = await requestV2<V2PlacementAgingReport>(
     "/api/method/agency_tracking.report_api.get_placement_aging_report",
     {
@@ -273,10 +270,6 @@ export async function getFinancialOverviewV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2FinancialOverviewReport> {
-  if (isDemoMode()) {
-    return demoStore.getFinancialOverview();
-  }
-
   const dates = parseDates(fromDate, toDate);
   return await requestV2<V2FinancialOverviewReport>(
     "/api/method/agency_tracking.report_api.get_financial_overview",
@@ -294,10 +287,6 @@ export async function getCostBreakdownReportV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2CostBreakdownReport> {
-  if (isDemoMode()) {
-    return DEMO_COST_BREAKDOWN;
-  }
-
   const dates = parseDates(fromDate, toDate);
   return requestV2<V2CostBreakdownReport>(
     "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
@@ -315,10 +304,6 @@ export async function getEmployeeFinancialReportV2(
   fromDate?: string | { from_date?: string; to_date?: string },
   toDate?: string
 ): Promise<V2EmployeeFinancialItem[]> {
-  if (isDemoMode()) {
-    return DEMO_EMPLOYEE_FINANCIAL;
-  }
-
   const dates = parseDates(fromDate, toDate);
   const result = await requestV2<V2EmployeeFinancialItem[]>(
     "/api/method/agency_tracking.report_api.get_employee_financial_report",
@@ -377,6 +362,9 @@ export async function exportCommissionsXlsxV2(
         ...(destinationCountry ? { destination_country: destinationCountry } : {}),
         ...(fromDate ? { from_date: fromDate } : {}),
         ...(toDate ? { to_date: toDate } : {}),
+      },
+      headers: {
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/json, */*",
       },
     }
   );

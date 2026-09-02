@@ -21,3 +21,10 @@ export function setDemoModeOverride(_enabled: boolean | null): void {
 }
 
 export const DEMO_MODE = false;
+
+// Auto-purge any stale localStorage override immediately upon module load
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("DEMO_MODE_OVERRIDE");
+  } catch {}
+}

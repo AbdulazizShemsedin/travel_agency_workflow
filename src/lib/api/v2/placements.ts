@@ -14,8 +14,6 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
 
 export type V2PlacementStatus =
   | "Selected"
@@ -74,11 +72,6 @@ export async function createMuayenaPlacementV2(
   contractorName: string,
   fileUrl?: string
 ): Promise<{ name?: string; placement_name?: string; message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    const res = demoStore.selectCandidate(applicantName, contractorName);
-    return { name: res.placement.name, placement_name: res.placement.name, message: "Muayena placement created" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.create_muayena_placement",
     {
@@ -101,11 +94,17 @@ export async function listPlacementsV2(
   limitPageLength: number = 100,
   orderBy: string = "modified desc"
 ): Promise<V2PlacementRecord[]> {
-  if (isDemoMode()) {
-    return demoStore.getPlacements();
+  // Guard against TanStack Query passing QueryFunctionContext ({ queryKey, signal }) as filters
+  let cleanFilters = filters;
+  if (
+    cleanFilters &&
+    typeof cleanFilters === "object" &&
+    ("queryKey" in cleanFilters || "signal" in cleanFilters)
+  ) {
+    cleanFilters = undefined;
   }
 
-  const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
+  const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
   const result = await requestV2<V2PlacementRecord[] | { placements?: V2PlacementRecord[] }>(
     "/api/method/agency_tracking.placement_api.list_placements",
     {
@@ -118,22 +117,24 @@ export async function listPlacementsV2(
     }
   );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).placements)) return (result as any).placements;
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (result && Array.isArray((result as any).placements)) {
+    return (result as any).placements;
+  }
   return [];
 }
 
 /**
- * Attaches a signed contract to a Selected Placement.
+ * Uploads a contract file and sets contract fields on Placement.
  */
-export async function uploadContractV2(
+export async function uploadPlacementContractV2(
   placementName: string,
-  fileUrl: string
+  fileUrl: string,
+  contractNumber?: string,
+  contractSignedDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: "Contract document attached in demo state" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.upload_contract",
     {
@@ -141,22 +142,23 @@ export async function uploadContractV2(
       body: {
         placement_name: placementName,
         file_url: fileUrl,
+        ...(contractNumber ? { contract_number: contractNumber } : {}),
+        ...(contractSignedDate ? { contract_signed_date: contractSignedDate } : {}),
       },
     }
   );
 }
 
 /**
- * Attaches a Kuwait eVisa document to a Placement.
+ * Uploads a visa file and sets visa fields on Placement (Kuwait only).
  */
-export async function uploadVisaV2(
+export async function uploadPlacementVisaV2(
   placementName: string,
-  fileUrl: string
+  fileUrl: string,
+  visaNumber?: string,
+  visaIssueDate?: string,
+  visaExpiryDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: "Visa document attached in demo state" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.upload_visa",
     {
@@ -164,14 +166,19 @@ export async function uploadVisaV2(
       body: {
         placement_name: placementName,
         file_url: fileUrl,
+        ...(visaNumber ? { visa_number: visaNumber } : {}),
+        ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
+        ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
       },
     }
   );
 }
 
+export const uploadContractV2 = uploadPlacementContractV2;
+export const uploadVisaV2 = uploadPlacementVisaV2;
+
 /**
- * Records post-selection medical examination result (FIT / UNFIT).
- * Gates Selected -> Processing. UNFIT automatically cancels Applicant + Placement.
+ * Records the Stage 1 medical check result (Selected -> Processing gate).
  */
 export async function recordSelectedMedicalResultV2(
   placementName: string,
@@ -179,13 +186,6 @@ export async function recordSelectedMedicalResultV2(
   examinationDate?: string,
   expiryDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    if (status === "FIT") {
-      demoStore.advancePlacementToProcessing(placementName);
-    }
-    return { message: `Selected medical result recorded: ${status}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_selected_medical_result",
     {
@@ -209,13 +209,6 @@ export async function recordPredepartureMedicalResultV2(
   status: "FIT" | "UNFIT",
   examinationDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    if (status === "FIT") {
-      demoStore.recordDeparture(placementName);
-    }
-    return { message: `Pre-departure medical recorded: ${status}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_predeparture_medical_result",
     {
@@ -237,19 +230,6 @@ export async function advancePlacementV2(
   newStatus: V2PlacementStatus,
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    if (newStatus === "Processing") {
-      demoStore.advancePlacementToProcessing(placementName);
-    } else if (newStatus === "Stamped") {
-      demoStore.advancePlacementToStamped(placementName);
-    } else if (newStatus === "Ticketed") {
-      demoStore.recordTicket(placementName, { ticket_number: `TKT-${Math.floor(100000 + Math.random() * 900000)}`, flight_date: "2026-03-10" });
-    } else if (newStatus === "Departed") {
-      demoStore.recordDeparture(placementName);
-    }
-    return { message: `Placement advanced to ${newStatus}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.advance_placement",
     {
@@ -273,11 +253,6 @@ export async function recordTicketDetailsV2(
   ticketCost?: number,
   currency: string = "ETB"
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    demoStore.recordTicket(placementName, { ticket_number: ticketNumber, flight_date: flightDate });
-    return { message: "Ticket details recorded successfully" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_ticket_details",
     {
@@ -302,10 +277,6 @@ export async function recordRescheduleV2(
   rescheduleCost?: number,
   currency: string = "ETB"
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `Reschedule recorded for ${rescheduleDate}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_reschedule",
     {

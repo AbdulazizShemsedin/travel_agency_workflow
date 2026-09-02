@@ -1,158 +1,80 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   Users,
-  Building2,
-  CreditCard,
-  FileText,
-  FileCheck2,
-  Plane,
-  Globe2,
+  ShieldCheck,
   Plus,
-  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { OperationalStreamType } from "@/types/workspace";
-import {
-  fetchOperationalWorkspaceData,
-  getEmployeesList,
-} from "@/lib/api/applicantApi";
-import { LMISWorkspace } from "./workspaces/LMISWorkspace";
-import { InjazWorkspace } from "./workspaces/InjazWorkspace";
-import { WakalaWorkspace } from "./workspaces/WakalaWorkspace";
-import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
-import { DepartureWorkspace } from "./workspaces/DepartureWorkspace";
+import { V2ClearanceQueueWorkspace } from "./V2ClearanceQueueWorkspace";
 import { ApplicantTable } from "@/components/applicant/ApplicantTable";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
 export function RoleWorkspaceContainer() {
   const { authUser, roles } = useAuth();
 
-  // Determine if user has administrator privileges
-  const isAdmin = React.useMemo<boolean>(() => {
+  // Determine if user has administrator or management privileges
+  const isManagerOrAdmin = React.useMemo<boolean>(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
     if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
-      const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
-      return norm === "system manager" || norm === "administrator" || norm === "agency admin";
+      const norm = String(r).trim().toLowerCase();
+      return (
+        norm === "system manager" ||
+        norm === "administrator" ||
+        norm === "manager" ||
+        norm === "agency admin"
+      );
     });
   }, [authUser, roles]);
 
   const allTabsConfig = [
-    { id: "directory", label: "Directory", icon: Users, desc: "All Candidates" },
-    { id: "lms", label: "LMIS", icon: FileCheck2, desc: "Ministry & COC" },
-    { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA" },
-    { id: "wakala", label: "Wakala", icon: FileText, desc: "Musaned Authorization" },
-    { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Passport Visa" },
-    { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Dispatch" },
+    {
+      id: "clearance",
+      label: "Clearance Queue",
+      icon: ShieldCheck,
+      desc: "Role-scoped V2 Clearance Steps",
+    },
+    {
+      id: "directory",
+      label: "Candidate Directory",
+      icon: Users,
+      desc: "All Registered Candidates",
+    },
   ];
 
-  // Determine available tabs for current user
+  // Both Clearance Queue and Candidate Directory tabs are accessible
   const availableTabs = React.useMemo(() => {
-    if (isAdmin) return allTabsConfig;
+    return allTabsConfig;
+  }, []);
 
-    const r = (roles || []).map((x) => String(x).toLowerCase().trim()).join(" ");
-    const allowed: string[] = [];
-
-    if (r.includes("lms") || r.includes("lmis") || r.includes("clearance")) allowed.push("lms");
-    if (r.includes("injaz") || r.includes("teshir") || r.includes("te'shir")) allowed.push("injaz");
-    if (r.includes("wakala")) allowed.push("wakala");
-    if (r.includes("embassy")) allowed.push("embassy");
-    if (r.includes("ticket") || r.includes("departure")) allowed.push("departure");
-    if (r.includes("recruiter") || r.includes("intake") || r.includes("applicant viewer") || allowed.length === 0) {
-      if (allowed.length === 0) allowed.push("directory");
-    }
-
-    return allTabsConfig.filter((tab) => allowed.includes(tab.id));
-  }, [isAdmin, roles]);
-
-  const defaultTab = React.useMemo<string>(() => {
-    return availableTabs[0]?.id || (isAdmin ? "directory" : "lms");
-  }, [availableTabs, isAdmin]);
-
+  const defaultTab = "clearance";
   const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
-  const [corridorFilter, setCorridorFilter] = React.useState<string>("All");
 
-  // Keep activeTab synced with defaultTab on mount/role changes
+  // Keep activeTab synced with defaultTab on role or tab changes
   React.useEffect(() => {
     if (!availableTabs.some((t) => t.id === activeTab)) {
       setActiveTab(defaultTab);
     }
   }, [availableTabs, defaultTab, activeTab]);
 
-  // Fetch employees list for drawers
-  const { data: employees = [] } = useQuery({
-    queryKey: ["employees"],
-    queryFn: getEmployeesList,
-  });
-
-  // Fetch live workspace data for active operational stream
-  const isOperationalTab = activeTab !== "directory";
-  const streamType = (isOperationalTab ? activeTab : "lms") as OperationalStreamType;
-
-  const {
-    data: workspaceData = [],
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: ["operational_workspace", streamType, corridorFilter],
-    queryFn: () => fetchOperationalWorkspaceData(streamType, corridorFilter),
-    enabled: isOperationalTab,
-    staleTime: 10000,
-  });
-
-  // Workspace Titles & Descriptions for header
-  const getHeaderInfo = () => {
-    if (isAdmin) {
+  // Dynamic Workspace Titles & Descriptions for header
+  const headerInfo = React.useMemo(() => {
+    if (activeTab === "clearance") {
       return {
-        title: "Applicant Processing",
-        subtitle: "Comprehensive candidate lifecycle management and operational workspaces.",
-      };
-    }
-    if (activeTab === "lms") {
-      return {
-        title: "LMIS Clearance Workspace",
-        subtitle: "Ministry of Labor clearance, quota compliance, and candidate COC verification.",
-      };
-    }
-    if (activeTab === "injaz") {
-      return {
-        title: "Te'shir / Injaz MOFA Processing",
-        subtitle: "Saudi MOFA electronic visa application, fee settlement, and biometric appointment tracking.",
-      };
-    }
-    if (activeTab === "wakala") {
-      return {
-        title: "Wakala Authorization Workspace",
-        subtitle: "Musaned electronic power of attorney verification and agency payment confirmation.",
-      };
-    }
-    if (activeTab === "embassy") {
-      return {
-        title: "Embassy Clearance & Visa Stamping",
-        subtitle: "Diplomatic mission submission, embassy fee receipts, and passport visa sticker stamping.",
-      };
-    }
-    if (activeTab === "departure") {
-      return {
-        title: "Flight Ticketing & Departure Workspace",
-        subtitle: "Airline ticket reservation, Pre-departure Medical 2 fitness, and Bole Airport dispatch.",
+        title: "Operational Clearance Queue",
+        subtitle: "Dynamic corridor stages and role-scoped clearance step execution.",
       };
     }
     return {
-      title: "Applicant Processing",
-      subtitle: "Role-based candidate operational workspace.",
+      title: "Applicant Directory",
+      subtitle: "Comprehensive candidate registration and intake registry.",
     };
-  };
-
-  const headerInfo = getHeaderInfo();
+  }, [activeTab]);
 
   return (
     <div className="space-y-5">
@@ -170,7 +92,7 @@ export function RoleWorkspaceContainer() {
         </div>
 
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {isManagerOrAdmin && (
             <Link href="/applicants/new">
               <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-9">
                 <Plus className="mr-1.5 h-4 w-4" />
@@ -182,7 +104,7 @@ export function RoleWorkspaceContainer() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Operational Workspace Navigation Tabs (Shown if >1 Tab Available) */}
+      {/* Workspace Navigation Tabs (Shown if >1 Tab Available)        */}
       {/* ------------------------------------------------------------- */}
       {availableTabs.length > 1 && (
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
@@ -196,7 +118,7 @@ export function RoleWorkspaceContainer() {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
+                  "flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
                   isActive
                     ? "border-emerald-700 dark:border-emerald-500 text-emerald-950 dark:text-emerald-400 bg-emerald-50/50 dark:bg-[#13241d]/50"
                     : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-[#181820]"
@@ -211,65 +133,11 @@ export function RoleWorkspaceContainer() {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* Active Operational Workspace Rendering                        */}
+      {/* Active Operational View                                       */}
       {/* ------------------------------------------------------------- */}
       <div>
+        {activeTab === "clearance" && <V2ClearanceQueueWorkspace />}
         {activeTab === "directory" && <ApplicantTable />}
-
-        {activeTab === "lms" && (
-          <LMISWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
-
-        {activeTab === "injaz" && (
-          <InjazWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
-
-        {activeTab === "wakala" && (
-          <WakalaWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
-
-        {activeTab === "embassy" && (
-          <EmbassyWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
-
-        {activeTab === "departure" && (
-          <DepartureWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
-        )}
       </div>
     </div>
   );

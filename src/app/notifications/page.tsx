@@ -24,50 +24,43 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getNotificationsList, AppNotification } from "@/lib/api/applicantApi";
+import { getComplianceNotificationsV2, V2AppNotification } from "@/lib/api/v2/notifications";
 import { toast } from "sonner";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = React.useState<
-    "all" | "compliance" | "workflow" | "dossier" | "complaints"
+    "all" | "compliance" | "workflow" | "complaints" | "system"
   >("all");
+  const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
 
   const {
-    data: notifications = [],
+    data: allNotifications = [],
     isLoading,
     isRefetching,
     refetch,
-  } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: getNotificationsList,
+  } = useQuery<V2AppNotification[]>({
+    queryKey: ["v2_compliance_notifications"],
+    queryFn: getComplianceNotificationsV2,
     refetchInterval: 30000,
   });
 
+  const notifications = React.useMemo(() => {
+    return allNotifications.filter((n) => !dismissedIds.has(n.id));
+  }, [allNotifications, dismissedIds]);
+
   const handleDismiss = (id: string) => {
-    const existing = JSON.parse(
-      localStorage.getItem("dismissed_notifications") || "[]"
-    );
-    existing.push(id);
-    localStorage.setItem("dismissed_notifications", JSON.stringify(existing));
-    queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    toast.success("Notification dismissed");
+    setDismissedIds((prev) => new Set([...prev, id]));
+    toast.success("Notification dismissed for current session");
   };
 
   const handleDismissAll = () => {
-    const ids = notifications.map((n) => n.id);
-    const existing = JSON.parse(
-      localStorage.getItem("dismissed_notifications") || "[]"
-    );
-    const updated = Array.from(new Set([...existing, ...ids]));
-    localStorage.setItem("dismissed_notifications", JSON.stringify(updated));
-    queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    toast.success("All notifications marked as read");
+    setDismissedIds(new Set(allNotifications.map((n) => n.id)));
+    toast.success("All notifications dismissed for current session");
   };
 
   const handleRestoreAll = () => {
-    localStorage.removeItem("dismissed_notifications");
-    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    setDismissedIds(new Set());
     toast.success("All notifications restored");
   };
 
@@ -79,7 +72,7 @@ export default function NotificationsPage() {
   const urgentCount = notifications.filter((n) => n.severity === "urgent").length;
   const complianceCount = notifications.filter((n) => n.category === "compliance").length;
   const workflowCount = notifications.filter((n) => n.category === "workflow").length;
-  const dossierCount = notifications.filter((n) => n.category === "dossier").length;
+  const systemCount = notifications.filter((n) => n.category === "system").length;
   const complaintsCount = notifications.filter((n) => n.category === "complaints").length;
 
   const getCategoryIcon = (category: string, severity: string) => {
@@ -93,7 +86,7 @@ export default function NotificationsPage() {
         <HeartPulse className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       );
     }
-    if (category === "dossier") {
+    if (category === "system") {
       return <Briefcase className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
     }
     return <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
@@ -241,14 +234,14 @@ export default function NotificationsPage() {
           Workflow & Clearances ({workflowCount})
         </button>
         <button
-          onClick={() => setActiveFilter("dossier")}
+          onClick={() => setActiveFilter("system")}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "dossier"
+            activeFilter === "system"
               ? "bg-purple-900 text-white dark:bg-purple-700"
               : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
           }`}
         >
-          Contractor Demands ({dossierCount})
+          System Alerts ({systemCount})
         </button>
         <button
           onClick={() => setActiveFilter("complaints")}
@@ -342,7 +335,7 @@ export default function NotificationsPage() {
                       </span>
                     )}
 
-                    <Link href={n.action_url} className="ml-auto">
+                    <Link href={n.action_url || "#"} className="ml-auto">
                       <Button
                         size="sm"
                         className={`text-xs font-semibold ${

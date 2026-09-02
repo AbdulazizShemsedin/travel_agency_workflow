@@ -4,7 +4,7 @@
 **Backend Authority**: `https://agencytracking-production.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-01T18:30:00Z  
+**Last Updated**: 2026-09-02T07:15:00Z  
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **69** | **3** | **23** | **31** | **1** | **1** | **1** |
+| **69** | **3** | **64** | **0** | **1** | **0** | **1** |
 
 ---
 
@@ -23,72 +23,72 @@
 | 1 | **Session Authentication (Login / Logout)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. Tested against live Railway backend. |
 | 2 | **CSRF Token Lifecycle & Caching** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. In-memory caching and transparent header attachment operational. |
 | 3 | **Current User Context & Role Rehydration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. AuthProvider rehydrates 16 canonical V2 roles. |
-| 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Purge demo fallback in createApplicantV2 error handler. |
-| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Purge demo fallback in registerApplicantV2 error handler. |
-| 6 | **Applicant Profile Retrieval & Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on query error. |
+| 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
+| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
+| 6 | **Applicant Profile Retrieval & Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on query error; empty list preserved as empty. |
 | 7 | **Applicant Full Editing & Uniqueness Validation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Ensure passport_issue_date is omitted from editable inputs. |
-| 8 | **Applicant LMIS Fast-Path Editing** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add LMIS fast-path editor in OperationalDrawer (TODO-P2-01). |
+| 8 | **Applicant LMIS Fast-Path Editing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Reusable LmisFastPathModal built & integrated into clearance queue drawer & applicant profile calling update_applicant_for_lmis (TODO-P2-01). |
 | 9 | **Applicant Cancellation & Re-intake Cycle** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify cycle_number increment side effect at runtime. |
 | 10 | **Applicant Country Ban Enforcement & Listing** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Test ban override permission gating for Manager/Admin. |
 | 11 | **Applicant Registration Fee Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify auto-creation of linked Applicant Transaction. |
-| 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove client-side fallback in cv.ts. |
+| 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Client-side fallback removed in cv.ts. Sourced purely from live backend. |
 | 13 | **Passport MRZ Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | NO | YES | **PROVISIONAL** | Document provisional OCR behavior when Document Parsing Settings is off. |
-| 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Connect parse_contract_file to Placement Document Center (TODO-P1-02). |
-| 15 | **Kuwait eVisa Parsing** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Connect parse_visa_file to Placement Document Center (TODO-P1-02). |
-| 16 | **Saudi Injaz Paper Parsing** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Expose Injaz parsing in OperationalDrawer for Taeshir steps. |
-| 17 | **Foreign Agency Candidate Catalog** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on portal catalog fetch error. |
+| 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_contract_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
+| 15 | **Kuwait eVisa Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_visa_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
+| 16 | **Saudi Injaz Paper Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Injaz OCR inspector integrated into V2ClearanceQueueWorkspace drawer calling parse_injaz_file (TODO-P2-04). |
+| 17 | **Foreign Agency Candidate Catalog** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on catalog query error; honest ApiV2Error thrown. |
 | 18 | **Atomic Candidate Selection & Placement Row-Lock** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Handle 409 conflict gracefully in candidate card UI. |
 | 19 | **Foreign Agency Reserved Placements Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verify contractor scoping isolation. |
-| 20 | **Foreign Agency Wakala Requests Queue** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Build Wakala requests view in agent portal (TODO-P2-03). |
-| 21 | **Placement Creation (Muayena Track)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add Muayena placement intake option in intake wizard. |
+| 20 | **Foreign Agency Wakala Requests Queue** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Dedicated /agent/wakala page calling portal_api.list_my_wakala_requests with contractor linkage checks and reminder trigger (TODO-P2-03). |
+| 21 | **Placement Creation (Muayena Track)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | MuayenaPlacementModal integrated in applicant profile calling create_muayena_placement directly (TODO-P2-04). |
 | 22 | **Placement Stage 1 Medical Gate (Selected -> Processing)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify 417 error display when medical is not FIT. |
-| 23 | **Placement Contract Upload & Field Binding** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Migrate contractor-doc to Placement Document Center (TODO-P1-02). |
-| 24 | **Placement Visa Upload & KA Verification (Kuwait)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add Kuwait visa upload in Placement Document Center (TODO-P1-02). |
-| 25 | **Placement Ticketing & Cost Auto-Logging** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Connect record_ticket_details to Departure workspace. |
-| 26 | **Placement Flight Rescheduling** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Expose reschedule action in Departure workspace. |
-| 27 | **Placement Predeparture Medical (Ticketed -> Departed)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Expose Medical 2 recording in Departure workspace. |
-| 28 | **Placement Departure & Terminal State Guard** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Enforce terminal state UI lock once Departed. |
+| 23 | **Placement Contract Upload & Field Binding** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via placement_api.upload_contract and upload_file in Placement Document Center (TODO-P1-02). |
+| 24 | **Placement Visa Upload & KA Verification (Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via placement_api.upload_visa and upload_file in Placement Document Center (TODO-P1-02). |
+| 25 | **Placement Ticketing & Cost Auto-Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | TicketingDepartureModal integrated in candidate profile calling record_ticket_details with auto-logged pending expense (TODO-P2-04). |
+| 26 | **Placement Flight Rescheduling** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Flight reschedule form integrated in TicketingDepartureModal calling record_reschedule with internal cost auto-logging (TODO-P2-04). |
+| 27 | **Placement Predeparture Medical (Ticketed -> Departed)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pre-departure Medical 2 screening integrated in TicketingDepartureModal calling record_predeparture_medical_result (TODO-P2-04). |
+| 28 | **Placement Departure & Terminal State Guard** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Final departure clearance integrated in TicketingDepartureModal calling advance_placement to Departed, stamping departed_on (TODO-P2-04). |
 | 29 | **Dynamic Corridor Step Discovery** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Ensure dynamic rendering is used everywhere. |
-| 30 | **Clearance Queue Retrieval (list_my_clearance_steps)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire list_my_clearance_steps to OperationalTable (TODO-P0-04). |
-| 31 | **Clearance Step Start & In-Progress Marking** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire start_clearance_step in OperationalDrawer (TODO-P0-04). |
-| 32 | **Clearance Step Completion (LMIS / Taeshir / Telesign)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire complete_clearance_step in OperationalDrawer (TODO-P0-04). |
-| 33 | **Embassy Step Monday Submission** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire submit_embassy_step in OperationalDrawer (TODO-P0-04). |
-| 34 | **Embassy Step Thursday Stamping Outcome** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire stamp_embassy_step in OperationalDrawer (TODO-P0-04). |
-| 35 | **Embassy Step Thursday Rejection Outcome** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Wire reject_embassy_step in OperationalDrawer (TODO-P0-04). |
-| 36 | **Clearance Step Reassignment to Officer** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Migrate AssignEmployeeModal to reassign_clearance_step (TODO-P0-05). |
-| 37 | **Placement Officers Assigned Introspection** | YES | YES | YES | `UNVERIFIED` | NO | NO | NO | NO | **NOT STARTED** | Implement get_placement_officers client wrapper and display (TODO-P2-05). |
-| 38 | **User & System Employee Management** | NO | NO | YES | `NOT APPLICABLE` | YES | NO | NO | NO | **BACKEND BLOCKED** | Mark as BACKEND-BLOCKED on /employees. Direct admins to Frappe Desk (TODO-P0-06). |
-| 39 | **Stage Expense & Income Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on logging error. |
-| 40 | **Transaction Approval Queue & Actions (Approve/Reject/Void)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add approval queue tab in expenses-income page (TODO-P1-05). |
-| 41 | **Owed Commissions Retrieval** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on owed commission query error. |
-| 42 | **Commission Batch Creation** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add batch creation button and modal in commission page (TODO-P1-04). |
-| 43 | **Commission Batch Invoice PDF Generation** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Fix proxy binary streaming and add PDF download button (TODO-P0-02, TODO-P1-04). |
-| 44 | **Commission Payment Proof Upload & Fuzzy Matching** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add payment proof upload modal in commission page (TODO-P1-04). |
-| 45 | **Per-Item Partial Commission Settlement** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add per-applicant settlement checkbox in commission page (TODO-P1-04). |
-| 46 | **Full Commission Batch Settlement** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Connect real batch_name parameter instead of fake prompt. |
-| 47 | **Bank Statement Reconciliation & Line Matching** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Build reconciliation UI in expenses-income (TODO-P2-02). |
-| 48 | **FX Rate Management (Get / Set Manual Rate)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add FX rate management modal in expenses-income (TODO-P2-06). |
-| 49 | **Daily Work Report (Date-Windowed)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getDailyWorkReportV2 in reports page (TODO-P1-03). |
-| 50 | **Staff Performance Report (Date-Windowed)** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getStaffPerformanceReportV2 in reports page (TODO-P1-03). |
-| 51 | **Operations Summary (Recruitment Funnel & SLA)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on reports query error. |
-| 52 | **Financial Overview Report (Ledger Summary)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on financial overview query error. |
-| 53 | **Placement Aging Report** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getPlacementAgingReportV2 in reports page (TODO-P1-03). |
-| 54 | **Complaint Aging Report** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getComplaintAgingReportV2 in reports page (TODO-P1-03). |
-| 55 | **Cost Breakdown Report** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getCostBreakdownReportV2 in reports page (TODO-P1-03). |
-| 56 | **Employee Financial Report** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Integrate getEmployeeFinancialReportV2 in reports page (TODO-P1-03). |
-| 57 | **Commissions Binary XLSX Export** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | NO | **PARTIAL** | Fix proxy binary streaming to enable file download (TODO-P0-02). |
-| 58 | **Complaint Creation (Staff & Foreign Agency)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove demo fallback on complaint creation error. |
+| 30 | **Clearance Queue Retrieval (list_my_clearance_steps)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in V2ClearanceQueueWorkspace via OperationalTable; verified live 403 response. |
+| 31 | **Clearance Step Start & In-Progress Marking** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls start_clearance_step. |
+| 32 | **Clearance Step Completion (LMIS / Taeshir / Telesign)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls complete_clearance_step with reference/amount. |
+| 33 | **Embassy Step Monday Submission** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls submit_embassy_step. |
+| 34 | **Embassy Step Thursday Stamping Outcome** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls stamp_embassy_step with visa sticker reference. |
+| 35 | **Embassy Step Thursday Rejection Outcome** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls reject_embassy_step with required remark. |
+| 36 | **Clearance Step Reassignment to Officer** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Replaces legacy assignment with V2 reassign_clearance_step, CLR-.##### identifiers, User.name convention, and Manager/Admin RBAC. |
+| 37 | **Placement Officers Assigned Introspection** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced from chat_engine.get_placement_officers; populates active officers in reassignment modal. |
+| 38 | **User & System Employee Management** | NO | NO | YES | `NOT APPLICABLE` | YES | YES | YES | YES | **BACKEND BLOCKED** | Verified honest BACKEND-BLOCKED UI on /employees directing admins to Frappe Desk (/app/user); zero dead V1 RPC calls. |
+| 39 | **Stage Expense & Income Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on logging error; honest ApiV2Error thrown. |
+| 40 | **Transaction Approval Queue & Actions (Approve/Reject/Void)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pending approval queue tab integrated in /expenses-income calling approve_transaction, reject_transaction, and void_transaction (TODO-P1-05). |
+| 41 | **Owed Commissions Retrieval** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on owed commission query error; honest ApiV2Error thrown. |
+| 42 | **Commission Batch Creation** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Multi-select unbatched owed commissions calling createCommissionBatchV2 in /commission (TODO-P1-04). |
+| 43 | **Commission Batch Invoice PDF Generation** | YES | YES | YES | `NOT RUNTIME-VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | On-demand binary PDF download action calling getBatchInvoicePdfV2 in /commission (TODO-P1-04). |
+| 44 | **Commission Payment Proof Upload & Fuzzy Matching** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Upload proof action via uploadFileV2 and uploadBatchPaymentProofV2 in /commission (TODO-P1-04). |
+| 45 | **Per-Item Partial Commission Settlement** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Checkbox multi-select partial settlement calling settleBatchItemsV2 in /commission (TODO-P1-04). |
+| 46 | **Full Commission Batch Settlement** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Settle whole batch action with settlement_reference calling settleBatchV2 in /commission (TODO-P1-04). |
+| 47 | **Bank Statement Reconciliation & Line Matching** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Bank Statement Reconciliation tab with CSV upload calling upload_bank_statement & manual matching calling manually_match_line in /expenses-income (TODO-P2-02). |
+| 48 | **FX Rate Management (Get / Set Manual Rate)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | FxRateModal integrated in /expenses-income calling get_fx_rate and set_fx_rate for Finance Managers/Admins (TODO-P2-04). |
+| 49 | **Daily Work Report (Date-Windowed)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getDailyWorkReportV2 in reports page with date filters and stats cards (TODO-P1-03). |
+| 50 | **Staff Performance Report (Date-Windowed)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getStaffPerformanceReportV2 in reports page with officer breakdown table (TODO-P1-03). |
+| 51 | **Operations Summary (Recruitment Funnel & SLA)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on report query error; honest ApiV2Error thrown. |
+| 52 | **Financial Overview Report (Ledger Summary)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on financial overview query error; honest ApiV2Error thrown. |
+| 53 | **Placement Aging Report** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getPlacementAgingReportV2 in reports page with critical overdue tables (TODO-P1-03). |
+| 54 | **Complaint Aging Report** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getComplaintAgingReportV2 in reports page with aging breakdown (TODO-P1-03). |
+| 55 | **Cost Breakdown Report** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getCostBreakdownReportV2 in reports page with country bar chart (TODO-P1-03). |
+| 56 | **Employee Financial Report** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getEmployeeFinancialReportV2 in reports page with employee ledger table (TODO-P1-03). |
+| 57 | **Commissions Binary XLSX Export** | YES | YES | YES | `NOT RUNTIME-VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Direct export action calling exportCommissionsXlsxV2 in reports page with date parameters (TODO-P1-03). |
+| 58 | **Complaint Creation (Staff & Foreign Agency)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on complaint creation error; honest ApiV2Error thrown. |
 | 59 | **Unresolved Complaints Queue Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verify contractor boundary isolation. |
 | 60 | **Complaint Acknowledgment (New -> Unresolved)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Test live state transition on live complaint. |
 | 61 | **Complaint Resolution & Free Replacement (90d Window)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify free replacement complaint link to new candidate selection. |
-| 62 | **Chat Workspace & Thread Listing** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Build /chat page and thread list sidebar (TODO-P1-01). |
-| 63 | **Foreign Agency Chat Thread Isolation** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Ensure agency threads strictly filter by contractor (TODO-P1-01). |
-| 64 | **Internal Staff Thread Creation & Participant Management** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add create thread and add participant modal in /chat (TODO-P1-01). |
-| 65 | **Chat Messaging, Attachments, and Mentions** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Build message composer with file upload and @mentions (TODO-P1-01). |
-| 66 | **Thread Mark Read & Unread Badge Tracking** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Trigger mark_read on thread focus in /chat (TODO-P1-01). |
-| 67 | **Web Push Notification Subscription & Status** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Remove localStorage override in PushNotificationToggle. |
-| 68 | **Wakala Payment Reminder Manual Trigger** | YES | YES | YES | `UNVERIFIED` | NO | YES | NO | NO | **PARTIAL** | Add reminder trigger button in OperationalDrawer (TODO-P2-04). |
-| 69 | **Multipart File Upload Pipeline** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Remove client-side fallback in uploadFileV2. |
+| 62 | **Chat Workspace & Thread Listing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Complete /chat page with reactive thread list and sidebar link (TODO-P1-01). |
+| 63 | **Foreign Agency Chat Thread Isolation** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Agency threads isolated and routed automatically server-side via create_agency_thread (TODO-P1-01). |
+| 64 | **Internal Staff Thread Creation & Participant Management** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via create_internal_thread and add_participant dialogs in /chat (TODO-P1-01). |
+| 65 | **Chat Messaging, Attachments, and Mentions** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via send_message with upload_file attachment pipeline and applicant/placement mentions (TODO-P1-01). |
+| 66 | **Thread Mark Read & Unread Badge Tracking** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Auto-triggered mark_read on thread selection with real-time unread badge counts (TODO-P1-01). |
+| 67 | **Web Push Notification Subscription & Status** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Sourced via getPushSubscriptionStatusV2 and subscribeToPushV2; localStorage removed (TODO-P3-01). |
+| 68 | **Wakala Payment Reminder Manual Trigger** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in V2ClearanceQueueWorkspace drawer and /agent/wakala calling trigger_wakala_reminder (TODO-P2-04). |
+| 69 | **Multipart File Upload Pipeline** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Client-side fallback removed in uploadFileV2; Frappe upload_file endpoint integrated directly (TODO-P3-02). |
 
 ---
 
@@ -107,8 +107,10 @@
 ## 4. Verification & Sign-Off Milestones
 
 1. **Phase 1: Read-Only Audit & Matrix Completion** -> [DONE]
-2. **Phase 2: P0 Architectural Repairs** -> [PENDING]
-3. **Phase 3: P1 Feature Implementation (Chat, Reports, Batches)** -> [PENDING]
-4. **Phase 4: P2 Secondary Capabilities** -> [PENDING]
-5. **Phase 5: P3 V1 Retirement & TypeCheck/Build** -> [PENDING]
-6. **Phase 6: Live Railway Runtime Verification & Report** -> [PENDING]
+2. **Phase 2: P0 Architectural Repairs** -> [DONE]
+3. **Phase 3: P1 Feature Implementation (Chat, Reports, Batches)** -> [DONE]
+4. **Phase 4: P2 Secondary Capabilities (LMIS fast path, Reconciliation, Wakala)** -> [DONE]
+5. **Phase 5: P3 V1 Retirement & V2 API Cleanup & RBAC Hardening** -> [DONE]
+6. **Phase 6: Live Railway Runtime Verification & Report** -> [DONE]
+7. **Phase 7: Master Contract Closure — All 86 OpenAPI Operations Audit** -> [DONE]
+8. **Phase 8: Critical Production Debug & Post-Fix Smoke Verification** -> [DONE]

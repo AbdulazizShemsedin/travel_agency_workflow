@@ -8,7 +8,7 @@
  * - POST /api/method/agency_tracking.auth_api.get_csrf_token
  */
 
-import { requestV2, setCachedCsrfToken, clearCsrfToken } from "./client";
+import { requestV2, setCachedCsrfToken, clearCsrfToken, getCachedOrFetchCsrfToken } from "./client";
 import { V2AuthUser } from "@/lib/auth/v2Roles";
 
 export interface V2LoginResponse {
@@ -35,7 +35,7 @@ export async function loginV2(usr: string, pwd: string): Promise<V2LoginResponse
 
   // Automatically fetch and cache CSRF token upon successful login
   try {
-    const csrfToken = await getCsrfTokenV2();
+    const csrfToken = await getCachedOrFetchCsrfToken();
     if (csrfToken) {
       setCachedCsrfToken(csrfToken);
     }
@@ -82,16 +82,8 @@ export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
 }
 
 /**
- * Explicitly fetches CSRF token.
+ * Explicitly fetches CSRF token (deduplicated and cached).
  */
 export async function getCsrfTokenV2(): Promise<string | null> {
-  const data = await requestV2<{ csrf_token?: string } | string>(
-    "/api/method/agency_tracking.auth_api.get_csrf_token",
-    { method: "POST" }
-  );
-
-  if (typeof data === "string") {
-    return data;
-  }
-  return data?.csrf_token || null;
+  return getCachedOrFetchCsrfToken();
 }

@@ -264,19 +264,31 @@ export function DrawerField({
 
 export function DrawerSection({
   title,
-  icon: Icon,
+  icon,
   children,
   className,
 }: {
   title: string;
-  icon?: any;
+  icon?: React.ComponentType<{ className?: string }> | React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    if (typeof icon === "function") {
+      const IconComponent = icon as React.ComponentType<{ className?: string }>;
+      return <IconComponent className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+    }
+    return null;
+  };
+
   return (
     <div className={cn("space-y-3", className)}>
       <div className="flex items-center gap-1.5 pb-1.5 border-b border-slate-100 dark:border-[#222228]">
-        {Icon && <Icon className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />}
+        {renderIcon()}
         <h5 className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
           {title}
         </h5>

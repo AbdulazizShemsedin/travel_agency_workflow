@@ -24,8 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
 
-import { getContractorsList } from "@/lib/api/applicantApi";
-import { Contractor } from "@/types/applicant";
+import { listContractorsV2, V2ContractorRecord } from "@/lib/api/v2/contractors";
 
 interface AgentLayoutProps {
   children: React.ReactNode;
@@ -44,7 +43,7 @@ export function AgentLayout({
   const { user, authUser, agencyContext, logout } = useAuth();
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [isAgencyDropdownOpen, setIsAgencyDropdownOpen] = React.useState(false);
-  const [contractorsList, setContractorsList] = React.useState<Contractor[]>([]);
+  const [contractorsList, setContractorsList] = React.useState<V2ContractorRecord[]>([]);
 
   const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
   const currentAgencyDisplay =
@@ -57,7 +56,7 @@ export function AgentLayout({
   React.useEffect(() => {
     // Only load contractor list for internal staff who have permission to switch view
     if (!isAgencyUser) {
-      getContractorsList()
+      listContractorsV2()
         .then((list) => {
           if (Array.isArray(list) && list.length > 0) {
             setContractorsList(list);
@@ -90,6 +89,7 @@ export function AgentLayout({
   const navItems = [
     { label: "Candidate Marketplace", href: "/agent", icon: Users },
     { label: "My Reserved Candidates", href: "/agent/reserved", icon: CheckCircle2 },
+    { label: "Wakala Requests", href: "/agent/wakala", icon: ShieldCheck },
     { label: "Commission & Statements", href: "/agent/commission", icon: Receipt },
     { label: "Complaints & Guarantee", href: "/agent/complaints", icon: AlertCircle },
   ];

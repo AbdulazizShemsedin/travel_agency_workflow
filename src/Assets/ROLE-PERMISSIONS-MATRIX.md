@@ -145,3 +145,34 @@ roles); they're omitted from most rows to keep the table readable.
 | Action | Allowed | Notes |
 |---|---|---|
 | `list_portal_candidates` / `select_candidate` / `list_my_wakala_requests` | Foreign Agency role **with** a linked Contractor record | A bare Foreign Agency user with no linked Contractor gets a clear, actionable 403 ("No Contractor record is linked to this user."), not a generic permission error. |
+
+---
+
+## Frontend Security & RBAC Hardening Audit (P3-03)
+
+### 1. Architectural Principles
+- **UX Enforcement Only**: Frontend permission checks (`can(user, action)`, `hasRole`, `hasAnyRole`) govern navigation item rendering, button visibility, and tab access. The backend Python API methods (`roles.py`, `doc.has_permission()`, and `state_machine.py`) remain the sole authoritative security enforcement layer.
+- **Fail-Closed Permissions**: `can(user, action)` strictly returns `false` if `user` is unauthenticated or null. Unauthenticated callers are never granted default action privileges.
+- **User Identifier Standard**: All operations targeting internal staff (e.g. `reassign_clearance_step`, `create_internal_thread`, `add_participant`) require the canonical User `name`, which is the user's registered email address (`email == name`).
+- **Session & CSRF**: Session cookies are transmitted via `credentials: "include"`. State-changing POST requests automatically resolve and attach the CSRF token via `X-Frappe-CSRF-Token` using an in-memory cached mutex.
+- **Private Files**: `/private/files/[...slug]` proxies directly to the backend with session cookies, returning HTTP 403 Forbidden if the user's role lacks read access to the attached DocType.
+- **Portal Isolation**: External Foreign Agency users (`roles.includes("Foreign Agency") && !authUser.is_internal_staff`) are isolated from internal operational links (`/applicants`, `/employees`, `/contractors`, `/expenses-income`, `/commission`, `/reports`), seeing only their dedicated `/agent/*` workspace and `/chat`.
+
+---
+
+### 2. Major Role Family Verification Matrix
+
+| Role Family | Canonical Roles | Read Access | Write / Operational Gating | UI Isolation & Navigation Visibility | Verification Status | Notes |
+|:---|:---|:---|:---|:---|:---|:---|
+| **Admin** | `Admin`, `Administrator`, `System Manager` | Full access across all 69 capabilities | Full write access to all endpoints, overrides, reassignment, and reports | Sees full internal navigation + settings + employee explorer | `RUNTIME VERIFIED` | Tested against live production Railway backend. |
+| **Manager** | `Manager` | Full access to Applicants, Placements, Clearance, Complaints, Contractors, General Reports | Reassign steps, override clearance gates with written reason, resolve complaints. Blocked from Admin-only financial reports (`get_financial_overview`, `get_pending_approval_queue`, `get_cost_breakdown_report`, `get_employee_financial_report`) | Full internal navigation (except Admin-only financial reports) | `VERIFIED VIA CONTRACT / LIVE 403` | Denied financial approval operations at backend level. |
+| **Registrar** | `Registrar` | Applicants, Contractors, Internal Threads | `create_applicant`, `update_applicant`, `register_applicant`, `cancel_applicant`, `restart_applicant`, `set_country_ban`, `log_applicant_fee`. **Denied Placement read/write access** | Applicants, Add Applicant button, Contractors | `VERIFIED VIA CONTRACT / LIVE 403` | Placement write/read denied by Frappe DocType permission rules. |
+| **Finance** | `Finance Manager` | Read-only Applicants & Placements; Full access to Financial transactions & batches | `approve_transaction`, `reject_transaction`, `void_transaction`, `create_commission_batch`, `settle_batch_items`, `settle_batch`, `set_fx_rate`, `upload_bank_statement`, `manually_match_line` | Expenses/Income, Commissions, Financial tab in Reports | `VERIFIED VIA CONTRACT / LIVE 403` | Approval queue actions gated strictly to Finance Manager & Admin. |
+| **Clearance** | `Clearance Officer` | Read-only Applicants & Placements; Assigned Clearance Steps | `start_clearance_step`, `complete_clearance_step`, `log_stage_expense`. Blocked from reassigning steps (Manager/Admin only) or cross-assigned steps | Clearance Queue in `/applicants` | `VERIFIED VIA CONTRACT / LIVE 403` | Step operations row-locked to ToDo assignment. |
+| **Ticketer** | `Ticketer` | Read-only Applicants & Placements; Assigned Ticketing Steps | `record_ticket_details`, `record_reschedule`, `record_predeparture_medical_result`, `advance_placement` to Ticketed/Departed. Departed blocked if Medical 2 is UNFIT | Clearance Queue, Ticketing modal in `/applicants/[id]` | `VERIFIED VIA CONTRACT / LIVE 403` | Terminal departure gated by state machine medical 2 check. |
+| **Complaint** | `Complaint Manager` | Complaints, Applicants (read-only), Placements (read-only) | `create_complaint`, `acknowledge_complaint`, `resolve_complaint` (Free Replacement requires Manager role), `set_country_ban` | Complaints Desk, Complaints tab in Reports | `VERIFIED VIA CONTRACT / LIVE 403` | Free replacement outcome requires Manager authorization. |
+| **Communication** | `Communication Manager` | Threads, Applicants (read-only), Placements (read-only) | Automatic recipient for `create_agency_thread`; manages internal and agency communication | Chat Workspace, Sidebar Chat link | `VERIFIED VIA CONTRACT / LIVE 403` | Agency threads locked to 2 participants by backend engine. |
+| **Foreign Agency** | `Foreign Agency` | Available approved candidates (`list_portal_candidates`), own Wakala requests, own reserved candidates | `select_candidate` (atomic row-lock), `create_complaint`, `create_agency_thread`. Requires linked `Contractor` record | **Isolated to `/agent/*` and `/chat`** | `RUNTIME VERIFIED` | Verified live Railway 403 returned when no linked Contractor is associated with session user. |
+| **Contract Parser** | `Contract Parser` | Placements, OCR parsing endpoints | `upload_contract`, `upload_visa`, `create_muayena_placement`, `parse_contract_file`, `parse_visa_file`, `parse_passport_file` | Placement Document Center, Intake OCR | `VERIFIED VIA CONTRACT / LIVE 403` | Dedicated intake and document attachment role. |
+| **Country-Specific Clearance** | `Saudi LMIS`, `Saudi Taeshir`, `Saudi Embassy`, `Kuwait LMIS`, `Kuwait Telesign`, `Kuwait Embassy` | Assigned corridor clearance steps of matching `step_type` | Operates exact step matching role: LMIS↔`update_applicant_for_lmis`, Taeshir↔`parse_injaz_file`, Embassy↔`submit_embassy_step`, `stamp_embassy_step`, `reject_embassy_step` | Clearance Queue scoped to matching step types | `VERIFIED VIA CONTRACT / LIVE 403` | Cross-corridor or cross-step actions denied with 403 by backend. |
+

@@ -17,8 +17,6 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
 
 export type V2ApplicantLifecycleStatus =
   | "Draft"
@@ -48,54 +46,35 @@ export interface V2ApplicantDetails {
   applicant_state?: string;
   destination_country?: string;
   passport_number?: string;
-  passport_issue_date?: string;
-  passport_expiry_date?: string;
-  passport_issue_place?: string;
-  passport_scan?: string;
-  photograph?: string;
-  photo_passport?: string;
-  photo_full_body?: string;
+  passport_expiry?: string;
+  phone_number?: string;
+  phone?: string;
   target_job?: string;
   job_applied?: string;
-  salary_amount?: number;
-  salary_currency?: string;
-  salary?: number;
+  cycle_number?: number;
   national_id?: string;
   labor_id?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
-  emergency_contact_address?: string;
-  medical_status?: string;
-  medical_issue_date?: string;
-  medical_expiry_date?: string;
-  coc_status?: string;
-  exam_date?: string;
-  phone_number?: string;
-  alternate_phone?: string;
-  email?: string;
-  city?: string;
-  region?: string;
-  sub_region?: string;
-  address_line_1?: string;
-  date_of_birth?: string;
-  religion?: string;
-  marital_status?: string;
-  children?: number;
-  highest_education?: string;
-  institution?: string;
-  graduation_year?: number;
-  current_employer?: string;
-  years_of_experience?: number;
-  english_level?: string;
-  arabic_level?: string;
-  experience_country?: string;
-  experience_period?: string;
-  complexion?: string;
-  fee_required?: number | boolean;
+  coc_attachment?: string;
+  has_active_ban?: number | boolean;
+  registration_fee_status?: string;
   registration_fee_amount?: number;
-  fee_status?: "Pending" | "Paid" | string;
-  active_placement?: string | null;
-  cycle_number?: number;
+  photograph?: string;
+  photo_passport?: string;
+  salary_amount?: number;
+  salary?: number;
+  salary_currency?: string;
+  sponsor_name?: string;
+  sponsor_id?: string;
+  sponsor_phone?: string;
+  contract_number?: string;
+  contract_period?: string | number;
+  visa_number?: string;
+  contractor_name?: string;
+  is_uploaded_to_musaned?: number | boolean;
+  musaned_status?: string;
+  musaned_reference_no?: string;
   creation?: string;
   modified?: string;
   [key: string]: any;
@@ -107,16 +86,15 @@ export interface V2LmisUpdatePayload {
   labor_id?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
-  emergency_contact_address?: string;
-  coc_status?: "Pending" | "Issued" | "Not Started" | string;
-  exam_date?: string;
+  coc_attachment?: string;
+  [key: string]: any;
 }
 
 export interface V2CountryBanRecord {
   name: string;
   applicant: string;
   country: string;
-  reason: string;
+  reason?: string;
   set_by?: string;
   set_on?: string;
   creation?: string;
@@ -129,11 +107,6 @@ export interface V2CountryBanRecord {
 export async function createApplicantV2(
   payload: V2CreateApplicantPayload
 ): Promise<{ name?: string; message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    const created = demoStore.createApplicant(payload);
-    return { name: created.name, message: "Applicant created successfully in demo workspace" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.create_applicant",
     {
@@ -149,11 +122,6 @@ export async function createApplicantV2(
 export async function getApplicantV2(
   applicantName: string
 ): Promise<V2ApplicantDetails> {
-  if (isDemoMode()) {
-    const found = demoStore.getApplicant(applicantName);
-    if (found) return found;
-  }
-
   const result = await requestV2<V2ApplicantDetails>(
     "/api/method/agency_tracking.applicant_api.get_applicant",
     {
@@ -162,25 +130,19 @@ export async function getApplicantV2(
     }
   );
 
-  // Normalize legacy and V2 property aliases for smooth UI interop
+  // Normalization aliases
   if (result) {
     if (result.status && !result.applicant_state) {
       result.applicant_state = result.status;
     }
-    if (result.applicant_state && !result.status) {
-      result.status = result.applicant_state as V2ApplicantLifecycleStatus;
-    }
     if (result.target_job && !result.job_applied) {
       result.job_applied = result.target_job;
     }
-    if (result.job_applied && !result.target_job) {
-      result.target_job = result.job_applied;
+    if (result.phone_number && !result.phone) {
+      result.phone = result.phone_number;
     }
     if (result.photograph && !result.photo_passport) {
       result.photo_passport = result.photograph;
-    }
-    if (result.photo_passport && !result.photograph) {
-      result.photograph = result.photo_passport;
     }
     if (result.salary_amount !== undefined && result.salary === undefined) {
       result.salary = result.salary_amount;
@@ -199,11 +161,17 @@ export async function listApplicantsV2(
   limitPageLength: number = 100,
   orderBy: string = "modified desc"
 ): Promise<V2ApplicantDetails[]> {
-  if (isDemoMode()) {
-    return demoStore.getApplicants();
+  // Guard against TanStack Query passing QueryFunctionContext ({ queryKey, signal }) as filters
+  let cleanFilters = filters;
+  if (
+    cleanFilters &&
+    typeof cleanFilters === "object" &&
+    ("queryKey" in cleanFilters || "signal" in cleanFilters)
+  ) {
+    cleanFilters = undefined;
   }
 
-  const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
+  const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
   const result = await requestV2<V2ApplicantDetails[] | { applicants?: V2ApplicantDetails[] }>(
     "/api/method/agency_tracking.applicant_api.list_applicants",
     {
@@ -243,11 +211,6 @@ export async function listApplicantsV2(
 export async function registerApplicantV2(
   applicantName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    const updated = demoStore.registerApplicant(applicantName);
-    return { name: updated.name, message: "Applicant registered successfully" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.register_applicant",
     {
@@ -267,11 +230,6 @@ export async function updateApplicantV2(
   overrideBan?: boolean,
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    const updated = demoStore.updateApplicant(applicantName, extraFields || {});
-    return { name: updated.name, message: "Applicant updated successfully" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.update_applicant",
     {
@@ -292,11 +250,6 @@ export async function updateApplicantV2(
 export async function updateApplicantForLmisV2(
   payload: V2LmisUpdatePayload
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    demoStore.updateApplicant(payload.applicant_name, payload);
-    return { message: "LMIS fields updated" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
     {
@@ -314,11 +267,6 @@ export async function cancelApplicantV2(
   applicantName: string,
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    demoStore.cancelApplicant(applicantName, reason);
-    return { message: `Applicant ${applicantName} cancelled` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.cancel_applicant",
     {
@@ -339,11 +287,6 @@ export async function restartApplicantV2(
   applicantName: string,
   targetStatus: "Draft" | "Registered"
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    demoStore.updateApplicant(applicantName, { applicant_state: targetStatus });
-    return { message: `Applicant ${applicantName} restarted to ${targetStatus}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.restart_applicant",
     {
@@ -364,10 +307,6 @@ export async function setCountryBanV2(
   country: string,
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `Country ban recorded for ${country}` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.set_country_ban",
     {
@@ -387,10 +326,6 @@ export async function setCountryBanV2(
 export async function listCountryBansV2(
   applicantName?: string
 ): Promise<V2CountryBanRecord[]> {
-  if (isDemoMode()) {
-    return [];
-  }
-
   const result = await requestV2<V2CountryBanRecord[] | { bans?: V2CountryBanRecord[] }>(
     "/api/method/agency_tracking.applicant_api.list_country_bans",
     {
@@ -410,10 +345,6 @@ export async function listCountryBansV2(
 export async function removeCountryBanV2(
   banName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    return { message: `Ban lifted` };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.remove_country_ban",
     {
@@ -429,11 +360,6 @@ export async function removeCountryBanV2(
 export async function logApplicantFeeV2(
   applicantName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (isDemoMode()) {
-    demoStore.updateApplicant(applicantName, { registration_fee_status: "Paid" });
-    return { message: "Registration fee logged to ledger" };
-  }
-
   return requestV2(
     "/api/method/agency_tracking.applicant_api.log_applicant_fee",
     {

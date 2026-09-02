@@ -1,712 +1,499 @@
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
-  Plus,
-  Loader2,
-  UserPlus,
-  X,
-  Mail,
-  Phone,
-  ShieldCheck,
-  CheckCircle2,
   Lock,
-  KeyRound,
-  Shield,
-  UserCheck,
-  UserX,
-  RefreshCw,
+  ExternalLink,
+  ShieldCheck,
+  User,
+  Users,
   Search,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  Shield,
+  FileCheck2,
+  Coins,
+  Plane,
+  MessageSquare,
+  Sparkles,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  getSystemUsersApi,
-  getAvailableRolesApi,
-  createSystemUserApi,
-  updateSystemUserApi,
-  setUserPasswordApi,
-  assignUserRolesApi,
-  SystemUserRecord,
-  SystemRoleItem,
-} from "@/lib/api/applicantApi";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { toast } from "sonner";
+import { getCurrentUserV2, V2CurrentUserResponse } from "@/lib/api/v2/auth";
+import { cn } from "@/lib/utils";
+
+// Authoritative 16 Canonical Roles per roles.py and ROLE-PERMISSIONS-MATRIX.md
+interface CanonicalRoleDefinition {
+  name: string;
+  category: "Core & Admin" | "Intake & Registry" | "Clearance Pipeline" | "Operations & Finance";
+  description: string;
+  permissionsSummary: string;
+  accessSurface: string[];
+}
+
+const CANONICAL_V2_ROLES: CanonicalRoleDefinition[] = [
+  // 1. Core & Admin
+  {
+    name: "Administrator",
+    category: "Core & Admin",
+    description: "Frappe standard root administrator with complete write and override authority across all DocTypes.",
+    permissionsSummary: "Full CRUD on all DocTypes; financial approval queue; country-ban override; clearance step reassignment.",
+    accessSurface: ["All Modules", "Frappe Desk Core", "System Settings"],
+  },
+  {
+    name: "System Manager",
+    category: "Core & Admin",
+    description: "Core administrative role managing agency operations, user role grants, and operational parameters.",
+    permissionsSummary: "Complete operational management; user provisioning via Frappe Desk; role assignment; financial approvals.",
+    accessSurface: ["All Modules", "User Management", "Audit Logs"],
+  },
+  {
+    name: "Agency Admin",
+    category: "Core & Admin",
+    description: "Executive agency administrator overseeing candidate pipelines, financial health, and cross-corridor status.",
+    permissionsSummary: "Full read/write on Applicants, Placements, Clearance Steps, Reports, and Approval Queues.",
+    accessSurface: ["Applicants", "Placements", "Reports", "Approvals", "Finance"],
+  },
+  {
+    name: "Manager",
+    category: "Core & Admin",
+    description: "Operational team lead managing day-to-day clearance execution, step assignments, and workflow overrides.",
+    permissionsSummary: "Full read/write on Applicants & Placements; clearance step reassignment; country-ban override; daily work reports.",
+    accessSurface: ["Applicants", "Placements", "Clearance Steps", "Daily Reports"],
+  },
+
+  // 2. Intake & Registry
+  {
+    name: "Registrar",
+    category: "Intake & Registry",
+    description: "Front-office intake officer responsible for candidate dossier registration and initial documentation.",
+    permissionsSummary: "Create, edit, and register Applicants; set country bans. Strictly no write access to Placements or Finance.",
+    accessSurface: ["Applicant Registration", "Intake Registry", "Country Bans (Create Only)"],
+  },
+  {
+    name: "Recruiter",
+    category: "Intake & Registry",
+    description: "Field recruiter with prospective candidate intake and profile viewing grants.",
+    permissionsSummary: "Read-only access to registered candidates; candidate intake drafting; applicant CV generation.",
+    accessSurface: ["Candidate Directory", "CV Generation"],
+  },
+  {
+    name: "Applicant Viewer",
+    category: "Intake & Registry",
+    description: "Read-only audit role for external consultants, inspectors, or intake reviewers.",
+    permissionsSummary: "Read-only inspection of candidate registration profiles; no mutation or action grants.",
+    accessSurface: ["Applicant Directory (Read-Only)"],
+  },
+
+  // 3. Clearance Pipeline
+  {
+    name: "Clearance Officer",
+    category: "Clearance Pipeline",
+    description: "Cross-corridor clearance specialist operating ToDo-assigned clearance tasks across destination countries.",
+    permissionsSummary: "Operate assigned Clearance Steps (start/complete/submit); read-only on Applicants & Placements.",
+    accessSurface: ["Assigned Clearance Steps", "Candidate Dossier (Read-Only)"],
+  },
+  {
+    name: "Saudi LMIS",
+    category: "Clearance Pipeline",
+    description: "Specialized officer for Saudi Labor Market Information System (LMIS), COC exam, and labor ID clearance.",
+    permissionsSummary: "Operate LMIS Clearance steps (start/complete); narrow candidate edit via update_applicant_for_lmis.",
+    accessSurface: ["Saudi LMIS Steps", "COC / Labor ID Fields"],
+  },
+  {
+    name: "Saudi Taeshir",
+    category: "Clearance Pipeline",
+    description: "Specialized officer managing Saudi visa service center (VFS / Taeshir) biometric coordination and fees.",
+    permissionsSummary: "Operate Taeshir clearance steps (start/complete); reference and fee recording.",
+    accessSurface: ["Saudi Taeshir Steps", "Biometric Reference Logging"],
+  },
+  {
+    name: "Saudi Embassy",
+    category: "Clearance Pipeline",
+    description: "Consular liaison officer managing Monday dossier submission and Thursday visa stamping outcomes for Saudi Arabia.",
+    permissionsSummary: "Submit dossier to embassy; stamp visa (reference recording); reject visa (mandatory remark).",
+    accessSurface: ["Saudi Embassy Steps", "Consular Submissions", "Visa Stamping"],
+  },
+  {
+    name: "Kuwait LMIS",
+    category: "Clearance Pipeline",
+    description: "Specialized clearance officer managing Kuwait ministry labor clearance and work permit approvals.",
+    permissionsSummary: "Operate Kuwait LMIS clearance steps (start/complete); narrow candidate edit via update_applicant_for_lmis.",
+    accessSurface: ["Kuwait LMIS Steps", "Labor Approval Logging"],
+  },
+  {
+    name: "Kuwait Telesign",
+    category: "Clearance Pipeline",
+    description: "Specialized officer managing Kuwait Telesign authentication, biometric clearance, and COC certification.",
+    permissionsSummary: "Operate Telesign clearance steps (start/complete); reference number and fee recording.",
+    accessSurface: ["Kuwait Telesign Steps", "COC Certification"],
+  },
+  {
+    name: "Kuwait Embassy",
+    category: "Clearance Pipeline",
+    description: "Consular liaison officer managing Monday dossier submission and Thursday visa stamping outcomes for Kuwait.",
+    permissionsSummary: "Submit dossier to embassy; stamp visa (reference recording); reject visa (mandatory remark).",
+    accessSurface: ["Kuwait Embassy Steps", "Consular Submissions", "Visa Stamping"],
+  },
+
+  // 4. Operations & Finance
+  {
+    name: "Ticket & Departure Officer",
+    category: "Operations & Finance",
+    description: "Travel coordinator managing flight itinerary booking, ticket upload, pre-departure fit medical, and departure dispatch.",
+    permissionsSummary: "Record ticket details; log Medical 2 fit results; execute placement departure transition.",
+    accessSurface: ["Tickets", "Medical 2 Gate", "Departure Execution"],
+  },
+  {
+    name: "Finance Manager",
+    category: "Operations & Finance",
+    description: "Chief accountant managing transaction approvals, currency exchange rates, commission batching, and invoicing.",
+    permissionsSummary: "Approve, reject, or void applicant transactions; batch commissions; generate PDF invoices; settle batches.",
+    accessSurface: ["Financial Approvals", "Commission Batches", "Invoice PDF Exports", "FX Rates"],
+  },
+  {
+    name: "Complaint Manager",
+    category: "Operations & Finance",
+    description: "Welfare officer managing applicant grievance intake, investigation aging, and dispute resolution.",
+    permissionsSummary: "List, create, update, and resolve complaints; set country bans; view complaint aging metrics.",
+    accessSurface: ["Complaints Queue", "Welfare Actions", "Country Bans"],
+  },
+  {
+    name: "Communication Manager",
+    category: "Operations & Finance",
+    description: "Internal and agency messaging supervisor managing chat channels and external agency communication threads.",
+    permissionsSummary: "Create internal/agency threads; post messages; attach documents; manage participant rosters.",
+    accessSurface: ["Chat System", "Agency Channels"],
+  },
+];
 
 export default function EmployeesPage() {
-  const queryClient = useQueryClient();
-  const { can } = useAuth();
-  const isSystemManager = can("manageUsers");
+  const { authUser, roles } = useAuth();
+  const [searchQuery, setSearchQuery] = React.useState<string>("");
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("All");
+  const [isDeskModalOpen, setIsDeskModalOpen] = React.useState<boolean>(false);
 
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
-  const [selectedUserForPassword, setSelectedUserForPassword] = React.useState<SystemUserRecord | null>(null);
-  const [newPassword, setNewPassword] = React.useState("");
-  const [logoutSessions, setLogoutSessions] = React.useState(false);
+  const activeEmail = authUser?.email || "Unknown User";
+  const activeFullName = authUser?.full_name || "Agency Staff";
+  const activeRoles: string[] = Array.isArray(roles) ? roles.map((r) => String(r)) : [];
 
-  const [selectedUserForRoles, setSelectedUserForRoles] = React.useState<SystemUserRecord | null>(null);
-  const [assignedRoles, setAssignedRoles] = React.useState<string[]>([]);
-
-  // Form State for Add User
-  const [formData, setFormData] = React.useState({
-    email: "",
-    first_name: "",
-    last_name: "",
-    phone: "",
-    password: "",
-    roles: ["LMS Employee"],
-    send_welcome_email: false,
-  });
-
-  // Query Available Roles from Backend
-  const { data: availableRoles = [], isLoading: isRolesLoading } = useQuery({
-    queryKey: ["available_roles"],
-    queryFn: getAvailableRolesApi,
-  });
-
-  // Query System Users from Backend
-  const {
-    data: systemUsers = [],
-    isLoading: isUsersLoading,
-    isRefetching,
-    refetch,
-  } = useQuery({
-    queryKey: ["system_users"],
-    queryFn: () => getSystemUsersApi(),
-  });
-
-  // 1. Create User Mutation
-  const createUserMutation = useMutation({
-    mutationFn: createSystemUserApi,
-    onSuccess: (newUser) => {
-      queryClient.invalidateQueries({ queryKey: ["system_users"] });
-      setIsAddModalOpen(false);
-      setFormData({
-        email: "",
-        first_name: "",
-        last_name: "",
-        phone: "",
-        password: "",
-        roles: ["LMS Employee"],
-        send_welcome_email: false,
-      });
-      toast.success(`User ${newUser.full_name || newUser.email} created successfully with roles!`);
-    },
-    onError: (err: any) => {
-      toast.error("Failed to create user", {
-        description: err.message || "Please verify the details and try again.",
-      });
-    },
-  });
-
-  // 2. Set Password Mutation
-  const setPasswordMutation = useMutation({
-    mutationFn: setUserPasswordApi,
-    onSuccess: () => {
-      setSelectedUserForPassword(null);
-      setNewPassword("");
-      toast.success("Password updated successfully!");
-    },
-    onError: (err: any) => {
-      toast.error("Failed to reset password", {
-        description: err.message || "Please try again.",
-      });
-    },
-  });
-
-  // 3. Assign Roles Mutation
-  const assignRolesMutation = useMutation({
-    mutationFn: assignUserRolesApi,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["system_users"] });
-      setSelectedUserForRoles(null);
-      toast.success("User roles synchronized successfully!");
-    },
-    onError: (err: any) => {
-      toast.error("Failed to update roles", {
-        description: err.message || "Please try again.",
-      });
-    },
-  });
-
-  // 4. Toggle Enabled / Disabled Status Mutation
-  const toggleUserStatusMutation = useMutation({
-    mutationFn: (user: SystemUserRecord) =>
-      updateSystemUserApi({
-        user: user.email || user.name,
-        enabled: user.enabled ? 0 : 1,
-      }),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ["system_users"] });
-      toast.success(
-        `User ${updated.full_name || updated.email} ${updated.enabled ? "activated" : "deactivated"} successfully.`
+  // Filter canonical roles
+  const filteredRoles = React.useMemo(() => {
+    return CANONICAL_V2_ROLES.filter((r) => {
+      if (selectedCategory !== "All" && r.category !== selectedCategory) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        r.name.toLowerCase().includes(q) ||
+        r.description.toLowerCase().includes(q) ||
+        r.permissionsSummary.toLowerCase().includes(q) ||
+        r.accessSurface.some((s) => s.toLowerCase().includes(q))
       );
-    },
-    onError: (err: any) => {
-      toast.error("Failed to update user status", {
-        description: err.message,
-      });
-    },
-  });
-
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.email.trim() || !formData.first_name.trim()) {
-      toast.error("Email and First Name are required.");
-      return;
-    }
-    if (formData.roles.length === 0) {
-      toast.error("Please select at least one role.");
-      return;
-    }
-    createUserMutation.mutate(formData);
-  };
-
-  const handleRoleToggle = (roleName: string) => {
-    setFormData((prev) => {
-      const exists = prev.roles.includes(roleName);
-      if (exists) {
-        return { ...prev, roles: prev.roles.filter((r) => r !== roleName) };
-      }
-      return { ...prev, roles: [...prev.roles, roleName] };
     });
-  };
-
-  const handleEditRoleToggle = (roleName: string) => {
-    setAssignedRoles((prev) => {
-      const exists = prev.includes(roleName);
-      if (exists) {
-        return prev.filter((r) => r !== roleName);
-      }
-      return [...prev, roleName];
-    });
-  };
-
-  const filteredUsers = systemUsers.filter((u) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      u.full_name?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q) ||
-      u.roles?.some((r) => r.toLowerCase().includes(q))
-    );
-  });
+  }, [selectedCategory, searchQuery]);
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header */}
+    <div className="space-y-6">
+      {/* ------------------------------------------------------------- */}
+      {/* Top Header & Honest Backend-Blocked Status Notice             */}
+      {/* ------------------------------------------------------------- */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            User & Employee Directory
-          </h2>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-            className="text-xs border-slate-200 dark:border-[#26262d]"
-          >
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isRefetching ? "animate-spin text-emerald-600" : ""}`} />
-            Refresh
-          </Button>
-
-          <Button
-            onClick={() => setIsAddModalOpen(true)}
-            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs"
-          >
-            <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add System User
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter / Search Bar */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-        <Input
-          type="text"
-          placeholder="Search by name, email, or role..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 h-9 text-xs bg-white dark:bg-[#121215] border-slate-200 dark:border-[#26262d]"
-        />
-      </div>
-
-      {/* System Users Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-        {isUsersLoading ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
-            <span className="ml-2 text-xs text-slate-500">Loading system accounts from Frappe...</span>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              System Roles & Staff Governance
+            </h1>
+            <Badge
+              variant="outline"
+              className="text-[11px] font-bold uppercase tracking-wider bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+            >
+              BACKEND-BLOCKED
+            </Badge>
           </div>
-        ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="px-4 py-3.5">User Profile</th>
-                <th className="px-4 py-3.5">Email / Identifier</th>
-                <th className="px-4 py-3.5">Assigned Roles</th>
-                <th className="px-4 py-3.5">Phone Contact</th>
-                <th className="px-4 py-3.5">Account Status</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#222227] text-slate-700 dark:text-zinc-300">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((u) => {
-                  const isEnabled = Boolean(u.enabled);
-                  return (
-                    <tr key={u.email || u.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                            {(u.full_name || u.first_name || u.email)
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .slice(0, 2)
-                              .toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-900 dark:text-white">
-                              {u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.email}
-                            </div>
-                            <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
-                              {u.user_type || "System User"}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
+          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+            Authoritative RBAC role definitions and user administration governance for the V2 Travel Agency Workflow backend.
+          </p>
+        </div>
 
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-zinc-300">
-                        {u.email}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {Array.isArray(u.roles) && u.roles.length > 0 ? (
-                            u.roles.map((r) => (
-                              <span
-                                key={r}
-                                className="inline-flex items-center rounded-md bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                              >
-                                {r}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">No roles assigned</span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-zinc-300">
-                        {u.phone || "—"}
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {isEnabled ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                            Disabled
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUserForRoles(u);
-                              setAssignedRoles(u.roles || []);
-                            }}
-                            className="h-7 px-2 text-[11px] text-slate-600 hover:text-emerald-800 dark:text-zinc-300"
-                            title="Edit Roles"
-                          >
-                            <Shield className="h-3 w-3 mr-1" /> Roles
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUserForPassword(u);
-                              setNewPassword("");
-                            }}
-                            className="h-7 px-2 text-[11px] text-slate-600 hover:text-amber-800 dark:text-zinc-300"
-                            title="Reset Password"
-                          >
-                            <KeyRound className="h-3 w-3 mr-1" /> Password
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleUserStatusMutation.mutate(u)}
-                            className={`h-7 px-2 text-[11px] ${
-                              isEnabled ? "text-rose-600 hover:bg-rose-50" : "text-emerald-700 hover:bg-emerald-50"
-                            }`}
-                            title={isEnabled ? "Deactivate User" : "Activate User"}
-                          >
-                            {isEnabled ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                    No users found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
+        <div>
+          <Button
+            type="button"
+            onClick={() => setIsDeskModalOpen(true)}
+            className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs font-semibold h-9 shadow-xs"
+          >
+            <Lock className="mr-1.5 h-3.5 w-3.5 text-amber-400" />
+            User Creation (Frappe Desk Only)
+          </Button>
+        </div>
       </div>
 
-      {/* 1. Add User Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-6 shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] pb-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                  <UserPlus className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Create System User
-                  </h3>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Creates an authentic profile in Frappe with password and multiple roles.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
+      {/* ------------------------------------------------------------- */}
+      {/* Honest Architectural Status Banner                            */}
+      {/* ------------------------------------------------------------- */}
+      <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2 shadow-xs">
+        <div className="flex items-start gap-2.5">
+          <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold text-sm text-amber-950 dark:text-amber-200">
+              User Creation & Credential Management is Handled via Frappe Desk
             </div>
+            <p className="leading-relaxed text-amber-900/90 dark:text-amber-300/90">
+              In accordance with strict security architecture and the V2 Frappe backend contract, internal user provisioning, account creation, password resets, and session revocations are <strong>intentionally not exposed</strong> through frontend RPC methods.
+              To create new employee records or alter role grants, administrators must use the authoritative <strong>Frappe Desk User Management</strong> console.
+            </p>
+            <div className="pt-1.5 flex items-center gap-3">
+              <a
+                href="https://agencytracking-production.up.railway.app/app/user"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-semibold text-amber-950 dark:text-amber-200 hover:underline"
+              >
+                Open Frappe Desk (/app/user)
+                <ExternalLink className="h-3 w-3" />
+              </a>
+              <span className="text-amber-400">•</span>
+              <span className="text-[11px] text-amber-800/80 dark:text-amber-400/80">
+                Requires System Manager or Administrator privileges.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="first_name">First Name *</Label>
-                  <Input
-                    id="first_name"
-                    required
-                    placeholder="e.g. Salim"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="h-8.5 text-xs bg-slate-50 dark:bg-[#16161b]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="last_name">Last Name</Label>
-                  <Input
-                    id="last_name"
-                    placeholder="e.g. Kassim"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="h-8.5 text-xs bg-slate-50 dark:bg-[#16161b]"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="email">Email Address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  placeholder="e.g. salim@agency.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="h-8.5 text-xs bg-slate-50 dark:bg-[#16161b]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    placeholder="+251911..."
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="h-8.5 text-xs bg-slate-50 dark:bg-[#16161b]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="password">Initial Password *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="h-8.5 text-xs bg-slate-50 dark:bg-[#16161b]"
-                  />
-                </div>
-              </div>
-
-              {/* Multi-Role Selection Checkboxes */}
-              <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
-                <Label className="font-semibold text-slate-800 dark:text-zinc-200">
-                  Assign System Roles (Multi-Role Support) *
-                </Label>
-                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b]">
-                  {isRolesLoading ? (
-                    <div className="col-span-2 flex items-center justify-center gap-2 text-slate-500 dark:text-zinc-400 py-4 text-xs">
-                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                      Loading system roles...
-                    </div>
-                  ) : availableRoles.length > 0 ? (
-                    availableRoles.map((role) => {
-                      const roleKey = role.role_name || (role as any).role || "";
-                      const isSelected = formData.roles.includes(roleKey);
-                      return (
-                        <label
-                          key={roleKey}
-                          className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition text-[11px] ${
-                            isSelected
-                              ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold"
-                              : "hover:bg-slate-100 dark:hover:bg-[#1e1e24] text-slate-700 dark:text-zinc-300"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleRoleToggle(roleKey)}
-                            className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
-                          />
-                          <div>
-                            <div>{role.label || roleKey}</div>
-                            {role.description && (
-                              <div className="text-[9px] text-slate-400 font-normal leading-tight">
-                                {role.description}
-                              </div>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <div className="col-span-2 text-center text-slate-400 py-2 text-xs">
-                      No roles available
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-[#222227]">
-                <Button
-                  type="button"
+      {/* ------------------------------------------------------------- */}
+      {/* Current Active Session & Role Profile                         */}
+      {/* ------------------------------------------------------------- */}
+      <div className="p-4 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-800 dark:text-emerald-400 font-bold text-sm">
+              {activeFullName
+                .split(/\s+/)
+                .map((n: string) => n[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase() || "ME"}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  {activeFullName}
+                </h3>
+                <Badge
                   variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="text-xs"
+                  className="text-[10px] font-mono border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400"
                 >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={createUserMutation.isPending}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 shadow-sm"
-                >
-                  {createUserMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Creating...
-                    </>
-                  ) : (
-                    "Create User Profile"
-                  )}
-                </Button>
+                  Active Session
+                </Badge>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 2. Reset Password Modal */}
-      {selectedUserForPassword && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] pb-2.5">
-              <div className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Reset Password
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedUserForPassword(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Setting a new password for <strong className="text-slate-900 dark:text-white">{selectedUserForPassword.email}</strong>.
-            </p>
-
-            <div className="space-y-2 text-xs">
-              <Label htmlFor="new_pass">New Secure Password</Label>
-              <Input
-                id="new_pass"
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="h-8.5 text-xs"
-              />
-
-              <label className="flex items-center gap-2 pt-2 text-[11px] text-slate-600 dark:text-zinc-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={logoutSessions}
-                  onChange={(e) => setLogoutSessions(e.target.checked)}
-                  className="rounded text-amber-600"
-                />
-                <span>Log out all active sessions on other devices</span>
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedUserForPassword(null)}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!newPassword || setPasswordMutation.isPending}
-                onClick={() =>
-                  setPasswordMutation.mutate({
-                    user: selectedUserForPassword.email || selectedUserForPassword.name,
-                    new_password: newPassword,
-                    logout_all_sessions: logoutSessions,
-                  })
-                }
-                className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
-              >
-                {setPasswordMutation.isPending ? "Updating..." : "Set Password"}
-              </Button>
+              <p className="text-xs font-mono text-slate-500 dark:text-zinc-400 mt-0.5">
+                User.name (Email): <strong>{activeEmail}</strong>
+              </p>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* 3. Assign Roles Modal */}
-      {selectedUserForRoles && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] pb-2.5">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-emerald-700" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Synchronize User Roles
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedUserForRoles(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Modifying assigned roles for <strong className="text-slate-900 dark:text-white">{selectedUserForRoles.email}</strong>.
-            </p>
-
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs">
-              {isRolesLoading ? (
-                <div className="col-span-2 flex items-center justify-center gap-2 text-slate-500 dark:text-zinc-400 py-4 text-xs">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                  Loading system roles...
-                </div>
-              ) : availableRoles.length > 0 ? (
-                availableRoles.map((role) => {
-                  const roleKey = role.role_name || (role as any).role || "";
-                  const isSelected = assignedRoles.includes(roleKey);
-                  return (
-                    <label
-                      key={roleKey}
-                      className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition text-[11px] ${
-                        isSelected
-                          ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold"
-                          : "hover:bg-slate-100 dark:hover:bg-[#1e1e24] text-slate-700 dark:text-zinc-300"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleEditRoleToggle(roleKey)}
-                        className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>{role.label || roleKey}</span>
-                    </label>
-                  );
-                })
+          <div className="flex flex-col items-start sm:items-end gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+              Assigned Security Roles:
+            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activeRoles.length > 0 ? (
+                activeRoles.map((role: string) => (
+                  <Badge
+                    key={role}
+                    variant="outline"
+                    className="text-[10px] font-semibold bg-slate-100 dark:bg-[#181822] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#282835]"
+                  >
+                    <ShieldCheck className="h-3 w-3 mr-1 text-emerald-600" />
+                    {role}
+                  </Badge>
+                ))
               ) : (
-                <div className="col-span-2 text-center text-slate-400 py-2 text-xs">
-                  No roles available
-                </div>
+                <span className="text-xs text-slate-400">No specific roles detected</span>
               )}
             </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedUserForRoles(null)}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={assignRolesMutation.isPending}
-                onClick={() =>
-                  assignRolesMutation.mutate({
-                    user: selectedUserForRoles.email || selectedUserForRoles.name,
-                    roles: assignedRoles,
-                    replace: true,
-                  })
-                }
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs"
-              >
-                {assignRolesMutation.isPending ? "Saving..." : "Save Roles"}
-              </Button>
-            </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Canonical 16 Roles Architecture Explorer                      */}
+      {/* ------------------------------------------------------------- */}
+      <div className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+              Canonical V2 RBAC Architecture (16 Sourced Roles)
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+              Role permissions strictly enforced in the backend state machine and API routers per <code className="font-mono text-[11px]">roles.py</code>.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search roles or access..."
+                className="h-8 pl-8 text-xs w-48 sm:w-60"
+              />
+            </div>
+
+            <select
+              aria-label="Filter roles by category"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="h-8 px-2.5 text-xs font-semibold rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#14141a] text-slate-700 dark:text-zinc-300"
+            >
+              <option value="All">All Categories</option>
+              <option value="Core & Admin">Core & Admin</option>
+              <option value="Intake & Registry">Intake & Registry</option>
+              <option value="Clearance Pipeline">Clearance Pipeline</option>
+              <option value="Operations & Finance">Operations & Finance</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Roles Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filteredRoles.map((role) => (
+            <div
+              key={role.name}
+              className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 flex flex-col justify-between space-y-3 shadow-xs hover:border-slate-300 dark:hover:border-[#323240] transition-all"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm text-slate-900 dark:text-white">
+                    {role.name}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] px-1.5 py-0 font-medium",
+                      role.category === "Core & Admin" && "border-purple-300 text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20",
+                      role.category === "Intake & Registry" && "border-blue-300 text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
+                      role.category === "Clearance Pipeline" && "border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20",
+                      role.category === "Operations & Finance" && "border-amber-300 text-amber-800 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                    )}
+                  >
+                    {role.category}
+                  </Badge>
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+                  {role.description}
+                </p>
+
+                <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#181820] text-[11px] text-slate-700 dark:text-zinc-300">
+                  <span className="font-semibold text-slate-900 dark:text-white block mb-0.5">
+                    Authority:
+                  </span>
+                  {role.permissionsSummary}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                <span className="text-[10px] font-semibold text-slate-400 block mb-1">
+                  Access Surface:
+                </span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {role.accessSurface.map((surface) => (
+                    <span
+                      key={surface}
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-[#1a1a22] text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-[#272732]"
+                    >
+                      {surface}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Frappe Desk Guidance Dialog                                   */}
+      {/* ------------------------------------------------------------- */}
+      <Dialog open={isDeskModalOpen} onOpenChange={setIsDeskModalOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6">
+          <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-3">
+            <div className="flex items-center gap-2">
+              <div className="h-9 w-9 rounded-xl bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-700 dark:text-amber-400">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                  User Management is Backend-Blocked
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                  User creation and password management are handled exclusively in Frappe Desk.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+            <p>
+              The V2 production backend does not expose any frontend RPC endpoint for creating internal employee accounts. Attempting to create accounts via obsolete endpoints will trigger permission or whitelisting errors.
+            </p>
+            <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#252530] space-y-1.5">
+              <span className="font-bold text-slate-900 dark:text-white block">
+                Official User Provisioning Workflow:
+              </span>
+              <ol className="list-decimal pl-4 space-y-1 text-[11px] text-slate-600 dark:text-zinc-300">
+                <li>Log in to Frappe Desk with Administrator credentials.</li>
+                <li>Navigate to <strong>User</strong> list (<code className="font-mono text-[10px]">/app/user</code>).</li>
+                <li>Click <strong>Add User</strong>, enter email and full name.</li>
+                <li>Assign the appropriate canonical V2 roles (e.g. <em>Registrar</em>, <em>Saudi LMIS</em>, <em>Manager</em>).</li>
+                <li>The user will immediately be able to authenticate into this frontend portal.</li>
+              </ol>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-slate-100 dark:border-[#1e1e24] pt-3 flex items-center justify-between sm:justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsDeskModalOpen(false)}
+              className="text-xs h-9"
+            >
+              Close
+            </Button>
+
+            <a
+              href="https://agencytracking-production.up.railway.app/app/user"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button
+                type="button"
+                className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs font-semibold h-9 shadow-xs"
+              >
+                Open Frappe Desk
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </a>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   X,
   AlertCircle,
   ExternalLink,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ interface NavItemConfig {
 const navItems: NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard" },
   { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants" },
+  { label: "Messages / Chat", href: "/chat", icon: MessageSquare, action: "manageCommunication" },
   { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers" },
   { label: "Contractors", href: "/contractors", icon: Building2, action: "manageContractors" },
   { label: "Commissions", href: "/commission", icon: DollarSign, action: "manageCommission" },
@@ -57,14 +59,21 @@ export function AppSidebar({
   const pathname = usePathname();
   const { user, authUser, can, roles } = useAuth();
 
+  // Check if current user is an external Foreign Agency partner
+  const isForeignAgency = roles.includes("Foreign Agency") && !authUser?.is_internal_staff;
+
   // If user is authenticated, filter nav items based on verified backend roles
   const visibleNavItems = React.useMemo(() => {
-    if (!user) return navItems; // Unauthenticated shows default preview
+    if (isForeignAgency) {
+      // Pure foreign agency is isolated from internal operational links
+      return [];
+    }
+    if (!user) return navItems; // Unauthenticated preview
     return navItems.filter((item) => can(item.action));
-  }, [user, can]);
+  }, [user, can, isForeignAgency]);
 
-  const canRegister = !user || can("registerApplicant");
-  const canAccessAgentPortal = !user || can("accessAgentPortal") || roles.includes("Foreign Agency");
+  const canRegister = !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
+  const canAccessAgentPortal = can("accessAgentPortal") || roles.includes("Foreign Agency");
   const showLabels = isMobileOpen || !isCollapsed;
 
   return (

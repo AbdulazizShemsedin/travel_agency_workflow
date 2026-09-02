@@ -1,71 +1,6 @@
-import { Applicant, ApplicantDossier } from "@/types/applicant";
-import {
-  LMSClearanceRecord,
-  InjazClearanceRecord,
-  WakalaClearanceRecord,
-  EmbassyClearanceRecord,
-  TelesignClearanceRecord,
-  DSRStampRecord,
-  DSRTicketRecord,
-  DSRDepartureRecord,
-} from "@/types/processing";
+import * as React from "react";
 
-export type OperationalStreamType = "lms" | "injaz" | "wakala" | "embassy" | "departure";
-
-export interface WorkspaceApplicantRow {
-  applicantId: string;
-  applicant: Applicant;
-  dossier?: ApplicantDossier | null;
-  dsrName?: string;
-  destinationCountry: string;
-  fullName: string;
-  passportNumber: string;
-  phone?: string;
-  medicalStatus?: string;
-  medicalDate?: string;
-  medicalExpiryDate?: string;
-  jobApplied?: string;
-  lockedContractor?: string;
-  sponsorName?: string;
-  sponsorId?: string;
-  visaNumber?: string;
-  contractNumber?: string;
-  contractIssueDate?: string;
-  salary?: number | string;
-  contractPeriod?: string;
-
-  // Normalized / Sheet Computed Fields
-  laborId?: string;
-  contractDate?: string;
-  duration?: number;
-  medicalRemaining?: string;
-  medicalRemainingDays?: number;
-  examRemainingDays?: number;
-  injazPayment?: string;
-  appointmentDate?: string;
-  contact?: string;
-  remark?: string;
-  wakalaStatus?: string;
-  embassyStatus?: string;
-  telephone?: string;
-  company?: string;
-  lmisStatus?: string;
-  issueDate?: string;
-  ticketStatus?: string;
-  ticketNumber?: string;
-
-  // Stream-specific records
-  lms?: LMSClearanceRecord | null;
-  injaz?: InjazClearanceRecord | null;
-  wakala?: WakalaClearanceRecord | null;
-  embassy?: EmbassyClearanceRecord | null;
-  telesign?: TelesignClearanceRecord | null;
-  stamp?: DSRStampRecord | null;
-  ticket?: DSRTicketRecord | null;
-  departure?: DSRDepartureRecord | null;
-}
-
-export interface OperationalColumn<T = WorkspaceApplicantRow> {
+export interface OperationalColumn<T = any> {
   id: string;
   header: string;
   accessorKey?: keyof T;
@@ -80,3 +15,33 @@ export interface WorkspaceFilterOption {
   value: string;
 }
 
+export interface V2ClearanceQueueRow {
+  name: string; // CLR-00001
+  step_type: string; // "LMIS Clearance" | "Taeshir" | "Embassy" | "Kuwait LMIS" | "Telesign" | "Kuwait Embassy"
+  sequence_order: number;
+  is_mandatory: number; // 1 or 0
+  status: string; // "Pending" | "In Progress" | "Issued" | "Complete" | "Submitted" | "Stamped" | "Rejected" | "Cancelled"
+  date_started?: string | null;
+  date_completed?: string | null;
+  completed_by?: string | null;
+  reference_no?: string | null;
+  amount?: number | null;
+  payment_status?: string | null;
+  rejection_remark?: string | null;
+
+  // Placement context
+  placement: string; // PLM-00006
+  destination_country?: string; // "Saudi Arabia" | "Kuwait"
+  contractor?: string;
+  contractor_name?: string;
+
+  // Applicant context
+  applicant?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  passport_number?: string;
+  phone?: string;
+  gender?: string;
+  [key: string]: any;
+}

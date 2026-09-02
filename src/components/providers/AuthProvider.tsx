@@ -79,28 +79,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserContext = React.useCallback(async () => {
     try {
-      const loggedUser = await getLoggedUser();
-      if (loggedUser) {
-        setUser(loggedUser);
-        const fullContext = await fetchCurrentUserContext();
-        if (fullContext) {
-          setAuthUser(fullContext);
-          if (fullContext.contractor) {
-            setAgencyContext({
-              user: fullContext.email,
-              full_name: fullContext.full_name || fullContext.email,
-              roles: fullContext.roles,
-              is_internal_staff: fullContext.is_internal_staff ?? false,
-              contractor: fullContext.contractor,
-            });
-          }
-        } else {
-          setAuthUser({
-            email: loggedUser,
-            full_name: loggedUser,
-            roles: [],
-            is_internal_staff: false,
+      const fullContext = await fetchCurrentUserContext();
+      if (fullContext && fullContext.email && fullContext.email !== "Guest") {
+        setUser(fullContext.email);
+        setAuthUser(fullContext);
+        if (fullContext.contractor) {
+          setAgencyContext({
+            user: fullContext.email,
+            full_name: fullContext.full_name || fullContext.email,
+            roles: fullContext.roles,
+            is_internal_staff: fullContext.is_internal_staff ?? false,
+            contractor: fullContext.contractor,
           });
+        } else {
+          setAgencyContext(null);
         }
       } else if (isDemoMode()) {
         switchDemoUser("admin");
@@ -125,6 +117,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     loadUserContext();
   }, [loadUserContext]);
+
+  // Route protection: redirect unauthenticated users to /login
+  React.useEffect(() => {
+    if (!isLoading) {
+      if (!authUser && pathname !== "/login" && !pathname.startsWith("/login")) {
+        router.push("/login");
+      } else if (authUser && pathname === "/login") {
+        if (authUser.roles?.includes("Foreign Agency") && !authUser.is_internal_staff) {
+          router.push("/agent");
+        } else {
+          router.push("/applicants");
+        }
+      }
+    }
+  }, [isLoading, authUser, pathname, router]);
 
   const login = async (email: string, pass: string) => {
     setIsLoading(true);
@@ -160,6 +167,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userHasAnyRole = React.useCallback((r: string[]) => hasAnyRole(authUser, r), [authUser]);
   const userHasAllRoles = React.useCallback((r: string[]) => hasAllRoles(authUser, r), [authUser]);
   const userCan = React.useCallback((action: PermissionAction) => can(authUser, action), [authUser]);
+
+  // Prevent protected pages from mounting and triggering unauthenticated API cascades during initialization
+  if (isLoading && pathname !== "/login" && !pathname?.startsWith("/login")) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#090d16]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">Initializing session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider

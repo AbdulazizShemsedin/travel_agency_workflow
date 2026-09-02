@@ -8,7 +8,9 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
+import { listApplicantsV2 } from "./applicants";
+import { listPlacementsV2 } from "./placements";
+import { listUnresolvedComplaintsV2 } from "./complaints";
 
 export interface V2PushSubscriptionStatus {
   subscribed: boolean;
@@ -18,19 +20,23 @@ export interface V2PushSubscriptionStatus {
   [key: string]: any;
 }
 
+export interface V2AppNotification {
+  id: string;
+  title: string;
+  description: string;
+  category: "compliance" | "workflow" | "complaints" | "system";
+  severity: "urgent" | "warning" | "info";
+  timestamp: string;
+  applicant_id?: string;
+  applicant_name?: string;
+  action_url?: string;
+  action_label?: string;
+}
+
 /**
  * Checks whether the current user has an active Push Subscription.
  */
 export async function getPushSubscriptionStatusV2(): Promise<V2PushSubscriptionStatus> {
-  if (isDemoMode()) {
-    return {
-      subscribed: true,
-      endpoint: "https://demo.push.service/mock-sub",
-      vapid_public_key: "BK8sQ9XyZ1v4W2uA8",
-      enabled: true,
-    };
-  }
-
   const result = await requestV2<{
     subscribed?: boolean;
     endpoint?: string;
@@ -56,10 +62,6 @@ export async function subscribeToPushV2(
   p256dh: string,
   auth: string
 ): Promise<{ status?: string; message?: string }> {
-  if (isDemoMode()) {
-    return { status: "Success", message: "Push subscription activated successfully" };
-  }
-
   return await requestV2(
     "/api/method/agency_tracking.notification_api.subscribe_to_push",
     {
@@ -79,10 +81,6 @@ export async function subscribeToPushV2(
 export async function triggerWakalaReminderV2(
   clearanceStepName: string
 ): Promise<{ status?: string; message?: string }> {
-  if (isDemoMode()) {
-    return { status: "Success", message: `Wakala payment reminder dispatched for step ${clearanceStepName}` };
-  }
-
   return await requestV2(
     "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
     {
@@ -90,4 +88,99 @@ export async function triggerWakalaReminderV2(
       body: { clearance_step_name: clearanceStepName },
     }
   );
+}
+
+/**
+ * Dynamically computes real-time operational compliance notifications from live V2 backend data.
+ * Zero localStorage persistence; state is always derived from live server records.
+ */
+export async function getComplianceNotificationsV2(): Promise<V2AppNotification[]> {
+  const notifications: V2AppNotification[] = [];
+
+  try {
+    const [applicants, placements, complaints] = await Promise.all([
+      listApplicantsV2().catch(() => []),
+      listPlacementsV2().catch(() => []),
+      listUnresolvedComplaintsV2().catch(() => []),
+    ]);
+
+    const now = new Date();
+
+    // 1. Applicant Passport Expiry & Compliance
+    for (const app of applicants) {
+      const name = app.full_name || app.first_name || app.name;
+
+      if (app.passport_expiry) {
+        const passDate = new Date(app.passport_expiry);
+        const diffDays = Math.round((passDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 30 && diffDays >= 0) {
+          notifications.push({
+            id: `pass-urgent-${app.name}`,
+            title: `Urgent: Passport Expiring Soon (${diffDays} days)`,
+            description: `${name}'s passport expires on ${app.passport_expiry}. Immediate renewal required before embassy clearance.`,
+            category: "compliance",
+            severity: "urgent",
+            timestamp: "Action Required",
+            applicant_id: app.name,
+            applicant_name: name,
+            action_url: `/applicants/${encodeURIComponent(app.name)}`,
+            action_label: "View Profile",
+          });
+        } else if (diffDays < 0) {
+          notifications.push({
+            id: `pass-expired-${app.name}`,
+            title: `Expired Passport: ${name}`,
+            description: `Passport expired on ${app.passport_expiry}. Processing is halted until renewed.`,
+            category: "compliance",
+            severity: "urgent",
+            timestamp: "Expired",
+            applicant_id: app.name,
+            applicant_name: name,
+            action_url: `/applicants/${encodeURIComponent(app.name)}`,
+            action_label: "View Profile",
+          });
+        }
+      }
+    }
+
+    // 2. Pre-Departure Medical 2 Checks for Ticketed Placements
+    for (const plc of placements) {
+      if (plc.status === "Ticketed") {
+        notifications.push({
+          id: `plc-med2-${plc.name}`,
+          title: `Pre-Departure Medical 2 Due: Placement ${plc.name}`,
+          description: `Candidate is Ticketed for flight departure. Pre-departure medical fitness verification required before clearance.`,
+          category: "workflow",
+          severity: "warning",
+          timestamp: plc.flight_date || "Flight Imminent",
+          applicant_id: plc.applicant,
+          applicant_name: plc.applicant_name,
+          action_url: `/applicants/${encodeURIComponent(plc.applicant)}`,
+          action_label: "Open Candidate",
+        });
+      }
+    }
+
+    // 3. Active Complaints & Warranty Disputes
+    for (const comp of complaints) {
+      const candidateName = comp.full_name || comp.applicant_name || comp.applicant || "Candidate";
+
+      notifications.push({
+        id: `comp-${comp.name}`,
+        title: `Active Complaint: ${candidateName}`,
+        description: `Dispute ticket for ${candidateName} (Placement ${comp.placement || "N/A"}): "${comp.description || "Active complaint"}"`,
+        category: "complaints",
+        severity: "urgent",
+        timestamp: comp.creation ? comp.creation.split(" ")[0] : "Active Ticket",
+        applicant_id: comp.applicant,
+        applicant_name: candidateName,
+        action_url: "/complaints",
+        action_label: "Review Ticket",
+      });
+    }
+  } catch (err) {
+    console.error("V2 Compliance notifications fetch error:", err);
+  }
+
+  return notifications;
 }

@@ -53,9 +53,11 @@ import {
   removeCountryBanV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
+  recordSelectedMedicalResultV2,
+  advancePlacementV2,
+  triggerEarlyCommissionAccrualV2,
   V2ApplicantDetails,
 } from "@/lib/api/v2";
-import { ProcessingStream } from "@/types/processing";
 import {
   calculateRemainingDays,
   getExpiryBadgeStatus,
@@ -66,6 +68,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
 import { MusanedVerificationModal } from "@/components/applicant/MusanedVerificationModal";
+import { LmisFastPathModal } from "@/components/applicant/LmisFastPathModal";
+import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
+import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import {
   Dialog,
   DialogContent,
@@ -97,11 +102,17 @@ export default function ApplicantDetailPage() {
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
-  const [isProcessingModalOpen, setIsProcessingModalOpen] = React.useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
   const [isMusanedModalOpen, setIsMusanedModalOpen] = React.useState(false);
+  const [isLmisModalOpen, setIsLmisModalOpen] = React.useState(false);
+  const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
+  const [isTicketingModalOpen, setIsTicketingModalOpen] = React.useState(false);
+  const [ticketingInitialTab, setTicketingInitialTab] = React.useState<"ticket" | "reschedule" | "medical2" | "departure">("ticket");
+  const [isMedical1ModalOpen, setIsMedical1ModalOpen] = React.useState(false);
+  const [med1Status, setMed1Status] = React.useState<"FIT" | "UNFIT">("FIT");
+  const [med1Date, setMed1Date] = React.useState(() => new Date().toISOString().split("T")[0]);
+  const [med1Expiry, setMed1Expiry] = React.useState("");
   const [cancelRemarks, setCancelRemarks] = React.useState("");
-  const [processingInitialTab, setProcessingInitialTab] = React.useState<ProcessingStream>("lms");
 
   const {
     data: applicant,
@@ -125,13 +136,18 @@ export default function ApplicantDetailPage() {
     queryFn: () => listMyClearanceStepsV2(),
   });
 
+  const activePlacement = placements[0] || null;
+
   const applicantClearanceSteps = React.useMemo(() => {
     return clearanceSteps.filter(
-      (s) => s.applicant_name === applicantId || s.applicant_name === applicant?.name
+      (s) =>
+        (activePlacement?.name && s.placement === activePlacement.name) ||
+        s.applicant === applicantId ||
+        s.applicant === applicant?.name ||
+        s.applicant_name === applicantId ||
+        s.applicant_name === applicant?.name
     );
-  }, [clearanceSteps, applicantId, applicant?.name]);
-
-  const activePlacement = placements[0] || null;
+  }, [clearanceSteps, activePlacement?.name, applicantId, applicant?.name]);
 
   const { data: countryBans = [] } = useQuery({
     queryKey: ["country-bans", applicantId],
@@ -192,6 +208,50 @@ export default function ApplicantDetailPage() {
       toast.success(data.message || "Registration fee logged to finance ledger!");
     },
     onError: (err: Error) => toast.error("Failed to log fee", { description: err.message }),
+  });
+
+  const recordMedical1Mutation = useMutation({
+    mutationFn: () => {
+      if (!activePlacement) throw new Error("No active placement found");
+      return recordSelectedMedicalResultV2(activePlacement.name, med1Status, med1Date, med1Expiry || undefined);
+    },
+    onSuccess: () => {
+      setIsMedical1ModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      toast.success(`Stage 1 Medical recorded as ${med1Status}`);
+    },
+    onError: (err: any) => {
+      toast.error("Failed to record Medical result", { description: err.message });
+    },
+  });
+
+  const advanceToProcessingMutation = useMutation({
+    mutationFn: () => {
+      if (!activePlacement) throw new Error("No active placement found");
+      return advancePlacementV2(activePlacement.name, "Processing");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      toast.success("Placement advanced to Processing");
+    },
+    onError: (err: any) => {
+      toast.error("Failed to advance placement", { description: err.message });
+    },
+  });
+
+  const triggerEarlyCommissionMutation = useMutation({
+    mutationFn: () => {
+      if (!activePlacement) throw new Error("No active placement found");
+      return triggerEarlyCommissionAccrualV2(activePlacement.name);
+    },
+    onSuccess: (res) => {
+      toast.success("Early Commission Accrued", { description: res.message || "Commission record created." });
+    },
+    onError: (err: any) => {
+      toast.error("Failed to accrue commission", { description: err.message });
+    },
   });
 
   if (isLoading) {
@@ -257,13 +317,6 @@ export default function ApplicantDetailPage() {
     applicant.is_uploaded_to_musaned === true ||
     applicant.musaned_status === "Registered" ||
     Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
-
-  const isContractDocApproved = Boolean(
-    applicant.contractor_doc &&
-    (applicant.contractor_doc.approval_status === "Approved" ||
-     applicant.contractor_doc.selection_status === "Selected" ||
-     applicant.contractor_doc.parsed_at)
-  );
 
   return (
     <div className="space-y-6 pb-20">
@@ -346,6 +399,33 @@ export default function ApplicantDetailPage() {
               Contract Document (PDF)
             </Button>
           </Link>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsLmisModalOpen(true)}
+            className="text-xs border-emerald-300 text-emerald-900 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+            title="Update allowlisted LMIS metadata (National ID, Labor ID, COC, Emergency Contacts)"
+          >
+            <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+            LMIS Fast-Path
+          </Button>
+
+          {/* Muayena Track Direct Placement Creator */}
+          {!activePlacement && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsMuayenaModalOpen(true)}
+              className="text-xs border-indigo-300 text-indigo-900 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300"
+              title="Create Muayena Placement directly with contract in hand"
+            >
+              <Building2 className="mr-1.5 h-3.5 w-3.5 text-indigo-700 dark:text-indigo-400" />
+              Muayena Intake
+            </Button>
+          )}
 
           <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
             <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
@@ -545,6 +625,34 @@ export default function ApplicantDetailPage() {
                 </Button>
               </Link>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMedical1ModalOpen(true)}
+                className="text-xs border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50"
+              >
+                <HeartPulse className="mr-1.5 h-3.5 w-3.5" />
+                Medical 1 Screening: {activePlacement?.medical_selected_status || "Pending"}
+              </Button>
+              {activePlacement?.medical_selected_status === "FIT" && (
+                <Button
+                  size="sm"
+                  onClick={() => advanceToProcessingMutation.mutate()}
+                  disabled={advanceToProcessingMutation.isPending}
+                  className="bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
+                >
+                  <Clock className="mr-1.5 h-3.5 w-3.5" /> Advance to Processing
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => triggerEarlyCommissionMutation.mutate()}
+                disabled={triggerEarlyCommissionMutation.isPending}
+                className="text-xs border-slate-300 dark:border-[#26262d]"
+              >
+                <DollarSign className="mr-1.5 h-3.5 w-3.5" /> Accrue Early Commission
+              </Button>
+              <Button
                 onClick={() => setIsAssignModalOpen(true)}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
               >
@@ -627,8 +735,8 @@ export default function ApplicantDetailPage() {
             </div>
             <Button
               onClick={() => {
-                setProcessingInitialTab("ticket");
-                setIsProcessingModalOpen(true);
+                setTicketingInitialTab("ticket");
+                setIsTicketingModalOpen(true);
               }}
               className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
             >
@@ -649,15 +757,28 @@ export default function ApplicantDetailPage() {
                 Ticket confirmed. Perform Pre-Departure Medical 2 check and finalize flight departure clearance.
               </p>
             </div>
-            <Button
-              onClick={() => {
-                setProcessingInitialTab("departure");
-                setIsProcessingModalOpen(true);
-              }}
-              className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold"
-            >
-              <HeartPulse className="mr-1.5 h-3.5 w-3.5" /> Verify Medical 2 & Depart
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTicketingInitialTab("reschedule");
+                  setIsTicketingModalOpen(true);
+                }}
+                className="text-xs border-slate-300 dark:border-[#26262d]"
+              >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reschedule Flight
+              </Button>
+              <Button
+                onClick={() => {
+                  setTicketingInitialTab("medical2");
+                  setIsTicketingModalOpen(true);
+                }}
+                className="bg-purple-900 hover:bg-purple-950 dark:bg-purple-700 dark:hover:bg-purple-600 text-white text-xs font-semibold"
+              >
+                <HeartPulse className="mr-1.5 h-3.5 w-3.5" /> Verify Medical 2 & Depart
+              </Button>
+            </div>
           </div>
         )}
 
@@ -1090,13 +1211,18 @@ export default function ApplicantDetailPage() {
       {/* Assign Employee Modal */}
       {applicant && (
         <AssignEmployeeModal
+          applicantId={applicant.name || applicantId}
+          applicantName={applicant.full_name || applicant.first_name || "Applicant"}
           applicantIds={[applicant.name || applicantId]}
-          applicantNames={[applicant.full_name || "Applicant"]}
-          destinationCountry={applicant.destination_country}
+          applicantNames={[applicant.full_name || applicant.first_name || "Applicant"]}
+          placementName={activePlacement?.name}
+          destinationCountry={activePlacement?.destination_country || applicant.destination_country}
           isOpen={isAssignModalOpen}
           onClose={() => setIsAssignModalOpen(false)}
           onSuccess={() => {
             refetch();
+            queryClient.invalidateQueries({ queryKey: ["my-clearance-steps"] });
+            queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
           }}
         />
       )}
@@ -1147,6 +1273,121 @@ export default function ApplicantDetailPage() {
           onSuccess={() => refetch()}
         />
       )}
+
+      {/* LMIS Fast-Path Intake Modal */}
+      <LmisFastPathModal
+        isOpen={isLmisModalOpen}
+        onClose={() => setIsLmisModalOpen(false)}
+        applicantId={applicant.name}
+        applicantName={applicant.full_name || applicant.name}
+        initialValues={{
+          national_id: applicant.national_id,
+          labor_id: applicant.labor_id,
+          emergency_contact_name: applicant.emergency_contact_name,
+          emergency_contact_phone: applicant.emergency_contact_phone,
+          emergency_contact_address: applicant.emergency_contact_address,
+          coc_status: applicant.coc_status,
+          exam_date: applicant.exam_date,
+        }}
+        onSuccess={() => refetch()}
+      />
+
+      {/* Muayena Direct Placement Modal */}
+      <MuayenaPlacementModal
+        isOpen={isMuayenaModalOpen}
+        onClose={() => setIsMuayenaModalOpen(false)}
+        applicantId={applicant.name}
+        applicantName={applicant.full_name || applicant.name}
+        onSuccess={() => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
+        }}
+      />
+
+      {/* Ticketing & Departure Workspace Modal */}
+      <TicketingDepartureModal
+        isOpen={isTicketingModalOpen}
+        onClose={() => setIsTicketingModalOpen(false)}
+        placement={activePlacement || null}
+        applicantName={applicant.full_name || applicant.name}
+        initialTab={ticketingInitialTab}
+        onSuccess={() => {
+          refetch();
+          queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
+        }}
+      />
+
+      {/* Stage 1 Medical Gate Dialog */}
+      <Dialog open={isMedical1ModalOpen} onOpenChange={setIsMedical1ModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <HeartPulse className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
+              Record Stage 1 Medical Result
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Selected to Processing Gate: Record the medical screening fitness result for placement {activePlacement?.name}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <Label className="font-semibold">Medical Result *</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <Button
+                  type="button"
+                  variant={med1Status === "FIT" ? "default" : "outline"}
+                  onClick={() => setMed1Status("FIT")}
+                  className={med1Status === "FIT" ? "bg-emerald-900 hover:bg-emerald-950 text-white" : "border-slate-300"}
+                >
+                  FIT (Passed)
+                </Button>
+                <Button
+                  type="button"
+                  variant={med1Status === "UNFIT" ? "destructive" : "outline"}
+                  onClick={() => setMed1Status("UNFIT")}
+                  className={med1Status === "UNFIT" ? "bg-rose-700 hover:bg-rose-800 text-white" : "border-slate-300"}
+                >
+                  UNFIT (Failed)
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="font-semibold">Examination Date *</Label>
+              <Input
+                type="date"
+                value={med1Date}
+                onChange={(e) => setMed1Date(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="font-semibold">Expiry Date (Optional)</Label>
+              <Input
+                type="date"
+                value={med1Expiry}
+                onChange={(e) => setMed1Expiry(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsMedical1ModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => recordMedical1Mutation.mutate()}
+              disabled={recordMedical1Mutation.isPending || !med1Date}
+              className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
+            >
+              {recordMedical1Mutation.isPending ? "Recording..." : "Save Medical Result"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,8 +6,6 @@
  */
 
 import { requestV2 } from "./client";
-import { isDemoMode } from "@/lib/config/env";
-import { demoStore } from "@/lib/demo/store";
 
 export interface V2GenerateCvResponse {
   applicant_name?: string;
@@ -26,16 +24,6 @@ export async function generateCvV2(
   applicantName: string
 ): Promise<V2GenerateCvResponse> {
   const cvUrl = `/applicants/${encodeURIComponent(applicantName)}/cv`;
-
-  if (isDemoMode()) {
-    const updated = demoStore.generateCv(applicantName);
-    return {
-      applicant_name: updated.name,
-      cv_file_url: cvUrl,
-      status: "CV Generated",
-      message: "Official bilateral CV compiled and generated successfully",
-    };
-  }
 
   const res = await requestV2<V2GenerateCvResponse>(
     "/api/method/agency_tracking.cv_api.generate_cv",

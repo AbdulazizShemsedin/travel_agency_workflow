@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 function getStageBadgeVariant(stage: string): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
@@ -57,6 +58,7 @@ function getStageBadgeVariant(stage: string): {
 
 export function ApplicantTable() {
   const router = useRouter();
+  const { authUser } = useAuth();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedStage, setSelectedStage] = React.useState<string>("All");
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -71,6 +73,7 @@ export function ApplicantTable() {
   const { data: applicants = [], isLoading } = useQuery<V2ApplicantDetails[]>({
     queryKey: ["applicants"],
     queryFn: () => listApplicantsV2(),
+    enabled: Boolean(authUser),
   });
 
   // Filtered & searched data

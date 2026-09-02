@@ -29,11 +29,11 @@ import {
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import {
-  getNotificationsList,
-  getVapidPublicKeyApi,
-  saveWebPushSubscriptionApi,
-  sendTestWebPushApi,
-} from "@/lib/api/applicantApi";
+  getComplianceNotificationsV2,
+  getPushSubscriptionStatusV2,
+  subscribeToPushV2,
+  V2AppNotification,
+} from "@/lib/api/v2/notifications";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -58,9 +58,9 @@ export function PushNotificationToggle() {
   const [toastFeedback, setToastFeedback] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Fetch in-app notifications
-  const { data: notifications = [] } = useQuery({
+  const { data: notifications = [] } = useQuery<V2AppNotification[]>({
     queryKey: ["notifications"],
-    queryFn: getNotificationsList,
+    queryFn: getComplianceNotificationsV2,
     refetchInterval: 30000,
   });
 
@@ -160,9 +160,9 @@ export function PushNotificationToggle() {
         return;
       }
 
-      const vapidRes = await getVapidPublicKeyApi();
+      const statusRes = await getPushSubscriptionStatusV2();
       const vapidKey =
-        vapidRes?.public_key ||
+        statusRes?.vapid_public_key ||
         "BBoijYa6nfblI5iPhXyBmdA8nKYJUzgs1H3-zZGsyVIBYOWaUps-j2SE8rh4Jfm81hFjLd33EEcQzXxYsrlSqU8";
 
       const existing = await reg.pushManager.getSubscription();
@@ -185,12 +185,7 @@ export function PushNotificationToggle() {
         ? btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(authKey))))
         : "";
 
-      await saveWebPushSubscriptionApi({
-        endpoint: subscription.endpoint,
-        p256dh,
-        auth,
-        user_agent: navigator.userAgent,
-      });
+      await subscribeToPushV2(subscription.endpoint, p256dh, auth);
 
       localStorage.setItem("push_notifications_enabled", "true");
       setIsPushEnabled(true);
@@ -246,8 +241,15 @@ export function PushNotificationToggle() {
   // 5. Send Test Notification
   const handleSendTestPush = async () => {
     try {
-      await sendTestWebPushApi();
-      showFeedback("Test notification dispatched to your device!");
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        new Notification("Travel Agency Workflow Alert", {
+          body: "Push notifications active! You will receive live alerts for candidate progress.",
+          icon: "/favicon.ico",
+        });
+        showFeedback("Test notification dispatched to your device!");
+      } else {
+        showFeedback("Notification permission not granted.", "error");
+      }
     } catch {
       showFeedback("Test notification sent.", "success");
     }
@@ -395,7 +397,7 @@ export function PushNotificationToggle() {
               notifications.slice(0, 5).map((n) => (
                 <Link
                   key={n.id}
-                  href={n.action_url}
+                  href={n.action_url || "#"}
                   onClick={() => setIsPopoverOpen(false)}
                   className="block p-3 hover:bg-slate-50 dark:hover:bg-[#18181f] transition"
                 >

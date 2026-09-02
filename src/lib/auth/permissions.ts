@@ -243,6 +243,19 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Administrator",
     "Admin",
     "Manager",
+    "Registrar",
+    "Clearance Officer",
+    "Ticketer",
+    "Complaint Manager",
+    "Finance Manager",
+    "Contract Parser",
+    "Saudi LMIS",
+    "Saudi Taeshir",
+    "Saudi Embassy",
+    "Kuwait LMIS",
+    "Kuwait Telesign",
+    "Kuwait Embassy",
+    "Foreign Agency",
   ],
   manageTicketing: [
     "Ticketer",
@@ -324,10 +337,10 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
  * Backend permissions remain the ultimate security authority.
  */
 export function can(user: AuthUser | null | undefined, action: PermissionAction): boolean {
-  if (!user) return true;
+  if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
   if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
   const allowedRoles = ACTION_ROLE_MAP[action];
-  if (!allowedRoles) return true;
+  if (!allowedRoles) return false;
   return hasAnyRole(user, allowedRoles);
 }

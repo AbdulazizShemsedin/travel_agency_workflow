@@ -12,8 +12,12 @@ import {
 } from "@/components/ui/popover";
 
 export function DemoRoleSwitcher() {
+  if (!isDemoMode()) {
+    return null;
+  }
+
   const { demoUserKey, switchDemoUser } = useAuth();
-  const [activeMode, setActiveMode] = React.useState<boolean>(true);
+  const [activeMode, setActiveMode] = React.useState<boolean>(false);
   const [open, setOpen] = React.useState<boolean>(false);
 
   React.useEffect(() => {

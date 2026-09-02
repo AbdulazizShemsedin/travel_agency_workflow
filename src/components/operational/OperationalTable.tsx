@@ -34,7 +34,7 @@ import {
   CheckSquare,
   Square,
 } from "lucide-react";
-import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
+import { OperationalColumn } from "@/types/workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ import {
 import { SimpleSelect } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-interface OperationalTableProps<T extends WorkspaceApplicantRow = WorkspaceApplicantRow> {
+interface OperationalTableProps<T extends Record<string, any> = any> {
   title: string;
   subtitle?: string;
   columns: OperationalColumn<T>[];
@@ -61,7 +61,7 @@ interface OperationalTableProps<T extends WorkspaceApplicantRow = WorkspaceAppli
   extraHeaderActions?: React.ReactNode;
 }
 
-export function OperationalTable<T extends WorkspaceApplicantRow = WorkspaceApplicantRow>({
+export function OperationalTable<T extends Record<string, any> = any>({
   title,
   subtitle,
   columns: inputColumns,
