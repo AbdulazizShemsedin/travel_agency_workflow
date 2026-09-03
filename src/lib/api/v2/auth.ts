@@ -33,9 +33,10 @@ export async function loginV2(usr: string, pwd: string): Promise<V2LoginResponse
     body: { usr, pwd },
   });
 
-  // Automatically fetch and cache CSRF token upon successful login
+  // Automatically purge guest CSRF token and fetch fresh session token upon successful login
   try {
-    const csrfToken = await getCachedOrFetchCsrfToken();
+    clearCsrfToken();
+    const csrfToken = await getCachedOrFetchCsrfToken(true);
     if (csrfToken) {
       setCachedCsrfToken(csrfToken);
     }
@@ -66,7 +67,7 @@ export async function logoutV2(): Promise<void> {
 export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
   const data = await requestV2<V2CurrentUserResponse | null>(
     "/api/method/agency_tracking.auth_api.get_current_user",
-    { method: "POST" }
+    { method: "GET" }
   );
 
   if (!data || !data.user || data.user === "Guest") {

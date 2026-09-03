@@ -14,7 +14,7 @@ interface AuthContextType {
   roles: string[];
   agencyContext: AgencyContextResponse | null;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
   refreshContext: () => Promise<void>;
   hasRole: (role: string) => boolean;
@@ -31,7 +31,7 @@ const AuthContext = React.createContext<AuthContextType>({
   roles: [],
   agencyContext: null,
   isLoading: true,
-  login: async () => {},
+  login: async () => null,
   logout: async () => {},
   refreshContext: async () => {},
   hasRole: () => false,
@@ -101,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthUser(null);
         setAgencyContext(null);
       }
+      return fullContext;
     } catch {
       if (isDemoMode()) {
         switchDemoUser("admin");
@@ -109,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthUser(null);
         setAgencyContext(null);
       }
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       await loginUser(email, pass);
-      await loadUserContext();
+      const userContext = await loadUserContext();
+      if (userContext) {
+        if (userContext.roles?.includes("Foreign Agency") && !userContext.is_internal_staff) {
+          router.push("/agent");
+        } else {
+          router.push("/applicants");
+        }
+      }
+      return userContext;
     } finally {
       setIsLoading(false);
     }

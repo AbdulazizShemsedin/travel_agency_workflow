@@ -27,7 +27,11 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login(email.trim(), password);
+      const userContext = await login(email.trim(), password);
+      if (!userContext) {
+        setError("Invalid login credentials. Please verify your email/username and password.");
+        setIsSubmitting(false);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please verify your credentials.");
       setIsSubmitting(false);

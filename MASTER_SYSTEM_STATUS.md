@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **69** | **3** | **64** | **0** | **1** | **0** | **1** |
+| **75** | **11** | **63** | **0** | **0** | **0** | **1** |
 
 ---
 
@@ -32,7 +32,7 @@
 | 10 | **Applicant Country Ban Enforcement & Listing** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Test ban override permission gating for Manager/Admin. |
 | 11 | **Applicant Registration Fee Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify auto-creation of linked Applicant Transaction. |
 | 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Client-side fallback removed in cv.ts. Sourced purely from live backend. |
-| 13 | **Passport MRZ Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | NO | YES | **PROVISIONAL** | Document provisional OCR behavior when Document Parsing Settings is off. |
+| 13 | **Passport MRZ Parsing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified parse_passport_file returns 200 without lifecycle mutation side-effects. |
 | 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_contract_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
 | 15 | **Kuwait eVisa Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_visa_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
 | 16 | **Saudi Injaz Paper Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Injaz OCR inspector integrated into V2ClearanceQueueWorkspace drawer calling parse_injaz_file (TODO-P2-04). |
@@ -57,7 +57,7 @@
 | 35 | **Embassy Step Thursday Rejection Outcome** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in OperationalDrawer; calls reject_embassy_step with required remark. |
 | 36 | **Clearance Step Reassignment to Officer** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Replaces legacy assignment with V2 reassign_clearance_step, CLR-.##### identifiers, User.name convention, and Manager/Admin RBAC. |
 | 37 | **Placement Officers Assigned Introspection** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced from chat_engine.get_placement_officers; populates active officers in reassignment modal. |
-| 38 | **User & System Employee Management** | NO | NO | YES | `NOT APPLICABLE` | YES | YES | YES | YES | **BACKEND BLOCKED** | Verified honest BACKEND-BLOCKED UI on /employees directing admins to Frappe Desk (/app/user); zero dead V1 RPC calls. |
+| 38 | **User & System Employee Management** | YES | NO | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | In-app staff creation, editing, role assignment, and password reset via native frappe.client.* RPCs without Frappe Desk. |
 | 39 | **Stage Expense & Income Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on logging error; honest ApiV2Error thrown. |
 | 40 | **Transaction Approval Queue & Actions (Approve/Reject/Void)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pending approval queue tab integrated in /expenses-income calling approve_transaction, reject_transaction, and void_transaction (TODO-P1-05). |
 | 41 | **Owed Commissions Retrieval** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on owed commission query error; honest ApiV2Error thrown. |
@@ -86,9 +86,15 @@
 | 64 | **Internal Staff Thread Creation & Participant Management** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via create_internal_thread and add_participant dialogs in /chat (TODO-P1-01). |
 | 65 | **Chat Messaging, Attachments, and Mentions** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via send_message with upload_file attachment pipeline and applicant/placement mentions (TODO-P1-01). |
 | 66 | **Thread Mark Read & Unread Badge Tracking** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Auto-triggered mark_read on thread selection with real-time unread badge counts (TODO-P1-01). |
-| 67 | **Web Push Notification Subscription & Status** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Sourced via getPushSubscriptionStatusV2 and subscribeToPushV2; localStorage removed (TODO-P3-01). |
+| 67 | **Web Push Notification Subscription & Status** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Sourced via getPushSubscriptionStatusV2, subscribeToPushV2, and getVapidPublicKeyV2 with dynamic key discovery. |
 | 68 | **Wakala Payment Reminder Manual Trigger** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated in V2ClearanceQueueWorkspace drawer and /agent/wakala calling trigger_wakala_reminder (TODO-P2-04). |
-| 69 | **Multipart File Upload Pipeline** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Client-side fallback removed in uploadFileV2; Frappe upload_file endpoint integrated directly (TODO-P3-02). |
+| 69 | **Multipart File Upload Pipeline** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Clean Frappe upload_file endpoint integrated directly; 417 DocType misuse completely resolved. |
+| 70 | **VAPID Public Key Retrieval (Dynamic Discovery)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated getVapidPublicKeyV2 in push notification subscription flow with zero hardcoding. |
+| 71 | **VAPID Keypair Regeneration (Admin Dialog)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated regenerateVapidKeysV2 with admin-gated confirmation modal in notifications popover. |
+| 72 | **R2 Object Storage Connectivity Probe** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated testStorageConnectionV2 with live status dialog in admin diagnostics. |
+| 73 | **New Complaints Triage Queue** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated listNewComplaintsV2 with dedicated New / Triage tab and Acknowledge action. |
+| 74 | **Authoritative Complaints Filtering (All / Status Slices)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated listComplaintsV2 with status query parameter and filtering UI. |
+| 75 | **Commission Batch Advance Payment & Ledger Posting** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated recordBatchAdvanceV2 with advance modal, financial grid, and Partially Settled state transition. |
 
 ---
 
@@ -97,7 +103,7 @@
 - **COMPLETE**: Fully implemented in UI, integrated with whitelisted V2 API, verified live against Railway production, and zero mock/demo fallbacks remain.
 - **IMPLEMENTED**: Fully implemented in UI and integrated with V2 API, awaiting comprehensive live runtime verification with production credentials.
 - **PARTIAL**: V2 API client wrapper exists in `src/lib/api/v2/*`, but UI page or component is missing, incomplete, or requires modernization.
-- **BACKEND BLOCKED**: Requested capability (e.g. User Management / Employee creation) has no whitelisted V2 API endpoint in the backend. Handled gracefully with informational admin UI.
+- **BACKEND BLOCKED**: Requested capability has no whitelisted V2 API endpoint in the backend.
 - **NOT STARTED**: Endpoint/capability identified in backend/Swagger, but no V2 wrapper or UI component has been built.
 - **PROVISIONAL**: Operational contracts where backend response or OCR parsing may return test/stubbed values per Document Parsing Settings.
 - **CONTRACT MISMATCH**: Discrepancy observed between Swagger schema and backend runtime implementation.
@@ -114,3 +120,4 @@
 6. **Phase 6: Live Railway Runtime Verification & Report** -> [DONE]
 7. **Phase 7: Master Contract Closure — All 86 OpenAPI Operations Audit** -> [DONE]
 8. **Phase 8: Critical Production Debug & Post-Fix Smoke Verification** -> [DONE]
+9. **Phase 9: V2 Backend Hardening & New Features (2026-09) Integration & Verification** -> [DONE]

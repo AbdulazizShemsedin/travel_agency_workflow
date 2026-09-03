@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-function getFrappeConfig(req: NextRequest) {
+function getFrappeConfig(req: NextRequest, methodPath = "") {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
@@ -15,8 +15,13 @@ function getFrappeConfig(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const csrfToken = req.headers.get("x-frappe-csrf-token");
 
-  // Forward CSRF token for state-changing operations
-  if (csrfToken) {
+  // Forward CSRF token for state-changing operations (never on auth or token retrieval)
+  if (
+    csrfToken &&
+    !methodPath.endsWith("/login") &&
+    !methodPath.endsWith("/logout") &&
+    !methodPath.includes("get_csrf_token")
+  ) {
     headers["X-Frappe-CSRF-Token"] = csrfToken;
   }
 
@@ -80,7 +85,7 @@ export async function POST(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
-  const config = getFrappeConfig(req);
+  const config = getFrappeConfig(req, methodPath);
 
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -142,10 +147,14 @@ export async function POST(
     }
 
     const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+    if (!res.ok) {
+      console.error("[PROXY ERROR POST]", methodPath, res.status, data);
+    }
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);
     return response;
   } catch (err: any) {
+    console.error("[PROXY CATCH POST]", methodPath, err);
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",
@@ -162,7 +171,7 @@ export async function GET(
 ) {
   const { slug } = await params;
   const methodPath = slug.join("/");
-  const config = getFrappeConfig(req);
+  const config = getFrappeConfig(req, methodPath);
 
   try {
     const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
@@ -194,10 +203,14 @@ export async function GET(
     }
 
     const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+    if (!res.ok) {
+      console.error("[PROXY ERROR GET]", methodPath, res.status, data);
+    }
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);
     return response;
   } catch (err: any) {
+    console.error("[PROXY CATCH GET]", methodPath, err);
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",

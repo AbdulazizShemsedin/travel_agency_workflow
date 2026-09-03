@@ -29,25 +29,23 @@ export class ApiV2Error extends Error {
 let cachedCsrfToken: string | null = null;
 let isFetchingCsrfToken: Promise<string | null> | null = null;
 
-export async function getCachedOrFetchCsrfToken(): Promise<string | null> {
-  if (cachedCsrfToken) {
+export async function getCachedOrFetchCsrfToken(forceFresh = false): Promise<string | null> {
+  if (!forceFresh && cachedCsrfToken) {
     return cachedCsrfToken;
   }
 
-  if (isFetchingCsrfToken) {
+  if (isFetchingCsrfToken && !forceFresh) {
     return isFetchingCsrfToken;
   }
 
   isFetchingCsrfToken = (async () => {
     try {
       const res = await fetch("/api/method/agency_tracking.auth_api.get_csrf_token", {
-        method: "POST",
+        method: "GET",
         credentials: "include",
         headers: {
           "Accept": "application/json",
-          "Content-Type": "application/json",
         },
-        body: "{}",
       });
 
       if (res.ok) {
@@ -114,8 +112,7 @@ export async function requestV2<T = any>(
     method === "POST" &&
     !endpoint.endsWith("/login") &&
     !endpoint.endsWith("/logout") &&
-    !endpoint.includes("get_csrf_token") &&
-    !endpoint.includes("get_current_user")
+    !endpoint.includes("get_csrf_token")
   ) {
     const csrfToken = await getCachedOrFetchCsrfToken();
     if (csrfToken) {
@@ -177,6 +174,31 @@ export async function requestV2<T = any>(
       throw new ApiV2Error(`HTTP ${response.status}: Server returned non-JSON response`, response.status);
     }
     return {} as T;
+  }
+
+  // Auto-heal on CSRFTokenError: purge cache, fetch fresh CSRF token, and retry once
+  if (
+    (jsonResponse?.exc_type === "CSRFTokenError" ||
+      (response.status === 400 && String(jsonResponse?._server_messages || "").includes("Invalid Request"))) &&
+    !(options as any)._isRetry &&
+    !endpoint.endsWith("/login") &&
+    !endpoint.endsWith("/logout") &&
+    !endpoint.includes("get_csrf_token")
+  ) {
+    console.warn(`[V2 Client] CSRF token mismatch on ${endpoint}. Refreshing token and retrying...`);
+    clearCsrfToken();
+    const freshToken = await getCachedOrFetchCsrfToken(true);
+    const retryHeaders: Record<string, string> = {
+      ...options.headers,
+    };
+    if (freshToken) {
+      retryHeaders["X-Frappe-CSRF-Token"] = freshToken;
+    }
+    return requestV2<T>(endpoint, {
+      ...options,
+      headers: retryHeaders,
+      _isRetry: true,
+    } as any);
   }
 
   // Parse Frappe standard errors and validation failures
