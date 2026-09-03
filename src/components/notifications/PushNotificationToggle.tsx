@@ -93,6 +93,21 @@ export function PushNotificationToggle() {
     refetchInterval: 30000,
   });
 
+  // Fetch authoritative backend subscription status
+  const { data: serverPushStatus } = useQuery({
+    queryKey: ["push_subscription_status", user],
+    queryFn: getPushSubscriptionStatusV2,
+    enabled: Boolean(user),
+    staleTime: 15000,
+  });
+
+  React.useEffect(() => {
+    if (serverPushStatus && typeof serverPushStatus.subscribed === "boolean") {
+      setIsPushEnabled(serverPushStatus.subscribed);
+      localStorage.setItem("push_notifications_enabled", String(serverPushStatus.subscribed));
+    }
+  }, [serverPushStatus]);
+
   // 1. Check browser support and current subscription status on mount
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -121,6 +136,8 @@ export function PushNotificationToggle() {
 
         if (storedPref === "true" && permission === "granted") {
           setIsPushEnabled(true);
+        } else if (serverPushStatus && typeof serverPushStatus.subscribed === "boolean") {
+          setIsPushEnabled(serverPushStatus.subscribed);
         } else {
           setIsPushEnabled(false);
         }
@@ -130,7 +147,7 @@ export function PushNotificationToggle() {
     };
 
     checkSubscriptionStatus();
-  }, []);
+  }, [serverPushStatus]);
 
   // 2. Prompt user immediately upon login if push notifications are not enabled
   React.useEffect(() => {
@@ -213,6 +230,7 @@ export function PushNotificationToggle() {
         : "";
 
       await subscribeToPushV2(subscription.endpoint, p256dh, auth);
+      queryClient.invalidateQueries({ queryKey: ["push_subscription_status"] });
 
       localStorage.setItem("push_notifications_enabled", "true");
       setIsPushEnabled(true);
@@ -253,6 +271,7 @@ export function PushNotificationToggle() {
       localStorage.setItem("push_notifications_enabled", "false");
       setIsPushEnabled(false);
       setIsModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["push_subscription_status"] });
       showFeedback("Desktop push notifications have been disabled.");
       sonnerToast.info("Push Notifications Disabled", {
         description: "You will no longer receive desktop OS notifications.",

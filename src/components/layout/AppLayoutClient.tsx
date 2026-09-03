@@ -16,8 +16,6 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
-  const isAgentRoute = pathname?.startsWith("/agent");
-  const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
 
   // Load sidebar preference from localStorage
   React.useEffect(() => {
@@ -35,12 +33,24 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
     });
   };
 
+  const isAgentRoute = pathname?.startsWith("/agent");
+  const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
+  const isForeignAgency =
+    Boolean(authUser) &&
+    (authUser?.roles || []).some((r) => String(r).toLowerCase().trim() === "foreign agency") &&
+    authUser?.is_internal_staff === false;
+
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
   };
 
-  // Never wrap login pages or unauthenticated states in the management portal shell
-  if (isAgentRoute || isLoginRoute || (!authUser && !user && !isLoading)) {
+  // Never wrap login pages, unauthenticated states, or agent routes in the management portal shell
+  if (
+    isAgentRoute ||
+    isLoginRoute ||
+    (pathname === "/chat" && isForeignAgency) ||
+    (!authUser && !user && !isLoading)
+  ) {
     return <>{children}</>;
   }
 

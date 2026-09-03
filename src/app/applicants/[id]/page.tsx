@@ -465,7 +465,7 @@ export default function ApplicantDetailPage() {
                         : "text-slate-400 dark:text-zinc-500"
                     }`}
                   >
-                    {stage}
+                    {stage === "Processing" ? "Processing (LMIS, Te'shir, Embassy)" : stage}
                   </span>
                 </div>
                 {idx !== CANONICAL_STAGES.length - 1 && (

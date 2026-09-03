@@ -25,6 +25,7 @@ import {
   AtSign,
   Briefcase,
   X,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -59,10 +60,16 @@ export function ChatContainer() {
   const { authUser, roles } = useAuth();
   const currentEmail = (authUser?.email || "").toLowerCase().trim();
 
+  const isForeignAgency = React.useMemo(() => {
+    const hasRole = (roles || []).some((r) => String(r).toLowerCase().trim() === "foreign agency");
+    return hasRole && authUser?.is_internal_staff === false;
+  }, [roles, authUser]);
+
   // State
   const [selectedThread, setSelectedThread] = React.useState<V2ChatThread | null>(null);
   const [searchQuery, setSearchQuery] = React.useState<string>("");
   const [threadTypeFilter, setThreadTypeFilter] = React.useState<string>("All");
+  const [isMobileThreadOpen, setIsMobileThreadOpen] = React.useState<boolean>(false);
 
   // Composer State
   const [messageText, setMessageText] = React.useState<string>("");
@@ -77,7 +84,9 @@ export function ChatContainer() {
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = React.useState<boolean>(false);
 
   // New Thread Form State
-  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">("Internal");
+  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">(
+    isForeignAgency ? "Agency" : "Internal"
+  );
   const [newThreadRecipient, setNewThreadRecipient] = React.useState<string>("");
   const [newThreadContextType, setNewThreadContextType] = React.useState<string>("General");
   const [newThreadContextRef, setNewThreadContextRef] = React.useState<string>("");
@@ -109,6 +118,27 @@ export function ChatContainer() {
       }
     }
   }, [threads, selectedThread]);
+
+  // Auto-initialize agency thread with Communication Manager if foreign agency has no threads yet
+  React.useEffect(() => {
+    if (isForeignAgency && !isThreadsLoading && threads.length === 0) {
+      createAgencyThreadV2()
+        .then((res: any) => {
+          queryClient.invalidateQueries({ queryKey: ["chat_threads"] });
+          const threadName = res?.name || res?.thread_name;
+          if (threadName) {
+            setSelectedThread({
+              name: threadName,
+              thread_type: "Agency",
+            });
+            setIsMobileThreadOpen(true);
+          }
+        })
+        .catch((err) => {
+          console.warn("Auto-initialization of agency thread failed:", err);
+        });
+    }
+  }, [isForeignAgency, isThreadsLoading, threads.length, queryClient]);
 
   // 2. Fetch Messages for Selected Thread
   const {
@@ -190,7 +220,7 @@ export function ChatContainer() {
 
   const createThreadMutation = useMutation({
     mutationFn: async () => {
-      if (newThreadType === "Agency") {
+      if (isForeignAgency || newThreadType === "Agency") {
         return await createAgencyThreadV2();
       } else {
         if (!newThreadRecipient.trim() || !newThreadRecipient.includes("@")) {
@@ -203,19 +233,21 @@ export function ChatContainer() {
         );
       }
     },
-    onSuccess: (res) => {
-      toast.success("Conversation thread initialized successfully");
+    onSuccess: (res: any) => {
+      toast.success(isForeignAgency ? "Staff conversation ready" : "Conversation thread initialized successfully");
       setIsNewThreadModalOpen(false);
       setNewThreadRecipient("");
       setNewThreadContextRef("");
       setNewThreadContextType("General");
 
       queryClient.invalidateQueries({ queryKey: ["chat_threads"] });
-      if (res?.thread_name) {
+      const threadName = res?.name || res?.thread_name;
+      if (threadName) {
         setSelectedThread({
-          name: res.thread_name,
-          thread_type: newThreadType,
+          name: threadName,
+          thread_type: isForeignAgency ? "Agency" : newThreadType,
         });
+        setIsMobileThreadOpen(true);
       }
     },
     onError: (err: any) => {
@@ -287,10 +319,12 @@ export function ChatContainer() {
           </div>
           <div>
             <h1 className="text-sm font-bold text-slate-900 dark:text-white">
-              V2 Communication & Agency Chat
+              {isForeignAgency ? "Staff Coordination & Messages" : "V2 Communication & Agency Chat"}
             </h1>
             <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-              Live discussion threads with internal staff and foreign agency partners.
+              {isForeignAgency
+                ? "Direct bilateral channel with Agency Communication Manager."
+                : "Live discussion threads with internal staff and foreign agency partners."}
             </p>
           </div>
         </div>
@@ -299,11 +333,24 @@ export function ChatContainer() {
           <Button
             type="button"
             size="sm"
-            onClick={() => setIsNewThreadModalOpen(true)}
+            onClick={() => {
+              if (isForeignAgency) {
+                createThreadMutation.mutate();
+              } else {
+                setIsNewThreadModalOpen(true);
+              }
+            }}
+            disabled={createThreadMutation.isPending}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs h-8 shadow-xs font-semibold"
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            New Conversation
+            {createThreadMutation.isPending ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : isForeignAgency ? (
+              <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+            ) : (
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {isForeignAgency ? "Connect with Staff" : "New Conversation"}
           </Button>
         </div>
       </div>
@@ -315,7 +362,12 @@ export function ChatContainer() {
         {/* ============================================================= */}
         {/* Left Column: Thread List                                     */}
         {/* ============================================================= */}
-        <div className="w-80 sm:w-96 border-r border-slate-200 dark:border-[#202027] flex flex-col bg-slate-50/30 dark:bg-[#121217]">
+        <div
+          className={cn(
+            "w-full md:w-80 lg:w-96 border-r border-slate-200 dark:border-[#202027] flex flex-col bg-slate-50/30 dark:bg-[#121217]",
+            isMobileThreadOpen ? "hidden md:flex" : "flex"
+          )}
+        >
           {/* Thread Search & Filter Bar */}
           <div className="p-3 border-b border-slate-200 dark:border-[#202027] space-y-2">
             <div className="relative">
@@ -329,26 +381,28 @@ export function ChatContainer() {
             </div>
 
             {/* Filter Pills */}
-            <div className="flex items-center gap-1">
-              {["All", "Internal", "Agency"].map((type) => {
-                const active = threadTypeFilter === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setThreadTypeFilter(type)}
-                    className={cn(
-                      "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all",
-                      active
-                        ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
-                        : "text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#20202a]"
-                    )}
-                  >
-                    {type === "Agency" ? "Foreign Agencies" : type === "Internal" ? "Internal Staff" : "All Channels"}
-                  </button>
-                );
-              })}
-            </div>
+            {!isForeignAgency && (
+              <div className="flex items-center gap-1">
+                {["All", "Internal", "Agency"].map((type) => {
+                  const active = threadTypeFilter === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setThreadTypeFilter(type)}
+                      className={cn(
+                        "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all",
+                        active
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                          : "text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#20202a]"
+                      )}
+                    >
+                      {type === "Agency" ? "Foreign Agencies" : type === "Internal" ? "Internal Staff" : "All Channels"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Thread Items List */}
@@ -367,7 +421,10 @@ export function ChatContainer() {
                   <button
                     key={thread.name}
                     type="button"
-                    onClick={() => setSelectedThread(thread)}
+                    onClick={() => {
+                      setSelectedThread(thread);
+                      setIsMobileThreadOpen(true);
+                    }}
                     className={cn(
                       "w-full p-3.5 text-left transition-all flex flex-col gap-1.5",
                       isSelected
@@ -383,7 +440,7 @@ export function ChatContainer() {
                           <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
                         )}
                         <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {thread.title || thread.name}
+                          {isAgency && isForeignAgency ? "Agency Communication Desk" : thread.title || thread.name}
                         </span>
                       </div>
 
@@ -421,10 +478,16 @@ export function ChatContainer() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsNewThreadModalOpen(true)}
+                  onClick={() => {
+                    if (isForeignAgency) {
+                      createThreadMutation.mutate();
+                    } else {
+                      setIsNewThreadModalOpen(true);
+                    }
+                  }}
                   className="text-xs h-7"
                 >
-                  Start Discussion
+                  {isForeignAgency ? "Connect with Staff" : "Start Discussion"}
                 </Button>
               </div>
             )}
@@ -434,12 +497,28 @@ export function ChatContainer() {
         {/* ============================================================= */}
         {/* Right Column: Selected Thread Messages & Composer            */}
         {/* ============================================================= */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-[#0e0e12]">
+        <div
+          className={cn(
+            "flex-1 flex flex-col bg-white dark:bg-[#0e0e12]",
+            !isMobileThreadOpen ? "hidden md:flex" : "flex"
+          )}
+        >
           {selectedThread ? (
             <>
               {/* Thread Header */}
               <div className="p-4 border-b border-slate-200 dark:border-[#202027] flex items-center justify-between gap-3 bg-white dark:bg-[#111116]">
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsMobileThreadOpen(false)}
+                    className="md:hidden -ml-1.5 mr-0.5 p-1.5 h-8 w-8 text-slate-600 dark:text-zinc-300 shrink-0"
+                    aria-label="Back to conversations list"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+
                   <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-[#191922] border border-slate-200 dark:border-[#272734] flex items-center justify-center shrink-0">
                     {isAgencyThread ? (
                       <Globe2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -451,7 +530,9 @@ export function ChatContainer() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                        {selectedThread.title || selectedThread.name}
+                        {isAgencyThread && isForeignAgency
+                          ? "Agency Communication Desk"
+                          : selectedThread.title || selectedThread.name}
                       </h2>
                       <Badge
                         variant="outline"
@@ -462,14 +543,16 @@ export function ChatContainer() {
                             : "border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50"
                         )}
                       >
-                        {selectedThread.thread_type || "Internal"}
+                        {isAgencyThread ? "Partner Channel" : selectedThread.thread_type || "Internal"}
                       </Badge>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
                       <Users className="h-3 w-3 shrink-0 text-slate-400" />
                       <span className="truncate">
-                        {(selectedThread.participants || []).join(", ") || "Active Participants"}
+                        {isAgencyThread
+                          ? "Direct Line: Foreign Partner ↔ Communication Manager"
+                          : (selectedThread.participants || []).join(", ") || "Active Participants"}
                       </span>
                     </div>
                   </div>
@@ -479,7 +562,7 @@ export function ChatContainer() {
                   {/* Context Link */}
                   {selectedThread.context_type === "Applicant" && selectedThread.context_reference && (
                     <Link
-                      href={`/applicants/${selectedThread.context_reference}`}
+                      href={isForeignAgency ? "/agent" : `/applicants/${selectedThread.context_reference}`}
                       className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-[#1a1a24] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#292938] hover:underline"
                     >
                       <User className="h-3 w-3" />
@@ -489,7 +572,7 @@ export function ChatContainer() {
                   )}
 
                   {/* Add Participant: Internal threads only per contract */}
-                  {!isAgencyThread && (
+                  {!isAgencyThread && !isForeignAgency && (
                     <Button
                       type="button"
                       size="sm"
@@ -758,11 +841,24 @@ export function ChatContainer() {
               </div>
               <Button
                 type="button"
-                onClick={() => setIsNewThreadModalOpen(true)}
+                onClick={() => {
+                  if (isForeignAgency) {
+                    createThreadMutation.mutate();
+                  } else {
+                    setIsNewThreadModalOpen(true);
+                  }
+                }}
+                disabled={createThreadMutation.isPending}
                 className="bg-emerald-900 text-white text-xs h-8 font-semibold"
               >
-                <Plus className="mr-1 h-3.5 w-3.5" />
-                Start Conversation
+                {createThreadMutation.isPending ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : isForeignAgency ? (
+                  <MessageSquare className="mr-1 h-3.5 w-3.5" />
+                ) : (
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                )}
+                {isForeignAgency ? "Connect with Staff" : "Start Conversation"}
               </Button>
             </div>
           )}
@@ -786,44 +882,46 @@ export function ChatContainer() {
 
           <div className="space-y-4 py-2 text-xs">
             {/* Thread Type Selector */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setNewThreadType("Internal")}
-                className={cn(
-                  "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
-                  newThreadType === "Internal"
-                    ? "border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 ring-1 ring-emerald-800"
-                    : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
-                )}
-              >
-                <Building2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
-                <div>
-                  <span className="font-bold block">Internal Staff Thread</span>
-                  <span className="text-[11px] opacity-80">Coordination between agency colleagues</span>
-                </div>
-              </button>
+            {!isForeignAgency ? (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewThreadType("Internal")}
+                  className={cn(
+                    "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
+                    newThreadType === "Internal"
+                      ? "border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 ring-1 ring-emerald-800"
+                      : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
+                  )}
+                >
+                  <Building2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
+                  <div>
+                    <span className="font-bold block">Internal Staff Thread</span>
+                    <span className="text-[11px] opacity-80">Coordination between agency colleagues</span>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setNewThreadType("Agency")}
-                className={cn(
-                  "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
-                  newThreadType === "Agency"
-                    ? "border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 ring-1 ring-blue-800"
-                    : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
-                )}
-              >
-                <Globe2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
-                <div>
-                  <span className="font-bold block">Foreign Agency Channel</span>
-                  <span className="text-[11px] opacity-80">Direct agency partner thread</span>
-                </div>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setNewThreadType("Agency")}
+                  className={cn(
+                    "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
+                    newThreadType === "Agency"
+                      ? "border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 ring-1 ring-blue-800"
+                      : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
+                  )}
+                >
+                  <Globe2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                  <div>
+                    <span className="font-bold block">Foreign Agency Channel</span>
+                    <span className="text-[11px] opacity-80">Direct agency partner thread</span>
+                  </div>
+                </button>
+              </div>
+            ) : null}
 
-            {/* Internal Thread Fields */}
-            {newThreadType === "Internal" ? (
+            {/* Internal Thread Fields or Agency Message */}
+            {!isForeignAgency && newThreadType === "Internal" ? (
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
@@ -867,10 +965,10 @@ export function ChatContainer() {
                 </div>
               </div>
             ) : (
-              <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/50 text-xs text-blue-900 dark:text-blue-300 space-y-1">
-                <p className="font-semibold">Foreign Agency Communication Protocol</p>
+              <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
+                <p className="font-semibold">Direct Agency Communication Channel</p>
                 <p className="text-[11px] leading-relaxed">
-                  Foreign Agency channels automatically route to the Communication Manager on the backend. No explicit recipient email is required.
+                  Foreign Agency channels connect directly with headquarters Communication Managers on the backend. Click Initialize to establish or refresh this live channel.
                 </p>
               </div>
             )}

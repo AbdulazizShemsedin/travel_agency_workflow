@@ -19,11 +19,13 @@ import {
   ExternalLink,
   Receipt,
   LogOut,
+  MessageSquare,
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
-
 import { listContractorsV2, V2ContractorRecord } from "@/lib/api/v2/contractors";
 
 interface AgentLayoutProps {
@@ -43,6 +45,7 @@ export function AgentLayout({
   const { user, authUser, agencyContext, logout } = useAuth();
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [isAgencyDropdownOpen, setIsAgencyDropdownOpen] = React.useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
   const [contractorsList, setContractorsList] = React.useState<V2ContractorRecord[]>([]);
 
   const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
@@ -52,6 +55,11 @@ export function AgentLayout({
     authUser?.contractor ||
     activeContractor ||
     "Authorized Partner";
+
+  // Automatically close mobile menu on route change
+  React.useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [pathname]);
 
   React.useEffect(() => {
     // Only load contractor list for internal staff who have permission to switch view
@@ -92,6 +100,7 @@ export function AgentLayout({
     { label: "Wakala Requests", href: "/agent/wakala", icon: ShieldCheck },
     { label: "Commission & Statements", href: "/agent/commission", icon: Receipt },
     { label: "Complaints & Guarantee", href: "/agent/complaints", icon: AlertCircle },
+    { label: "Messages & Staff Chat", href: "/agent/chat", icon: MessageSquare },
   ];
 
   return (
@@ -105,7 +114,7 @@ export function AgentLayout({
           </span>
           <span className="hidden sm:inline text-emerald-300/80">|</span>
           <span className="hidden sm:inline text-[11px] text-emerald-300/80">
-            Dedicated candidate selection & Musaned contract processing
+            Dedicated candidate selection, Musaned contracts & staff coordination
           </span>
         </div>
 
@@ -154,13 +163,15 @@ export function AgentLayout({
             </div>
           )}
 
-          <Link
-            href="/applicants"
-            className="text-[11px] font-medium text-emerald-300 hover:text-white underline underline-offset-2 flex items-center gap-1"
-          >
-            <span>Internal Admin View</span>
-            <ExternalLink className="h-2.5 w-2.5" />
-          </Link>
+          {!isAgencyUser && (
+            <Link
+              href="/applicants"
+              className="text-[11px] font-medium text-emerald-300 hover:text-white underline underline-offset-2 flex items-center gap-1"
+            >
+              <span>Internal Admin View</span>
+              <ExternalLink className="h-2.5 w-2.5" />
+            </Link>
+          )}
         </div>
       </div>
 
@@ -182,17 +193,20 @@ export function AgentLayout({
             </div>
           </Link>
 
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 pl-4 border-l border-slate-200 dark:border-[#222227]">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-1 pl-4 border-l border-slate-200 dark:border-[#222227]">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href === "/agent" && pathname === "/agent/discovery");
+              const isActive =
+                pathname === item.href ||
+                (item.href === "/agent" && (pathname === "/agent/discovery" || pathname === "/agent")) ||
+                (item.href === "/agent/chat" && (pathname === "/agent/chat" || pathname === "/chat"));
 
               return (
                 <Link
                   key={item.label}
                   href={item.href}
-                  className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
                     isActive
                       ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/70"
                       : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e] hover:text-slate-900 dark:hover:text-white"
@@ -207,7 +221,7 @@ export function AgentLayout({
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Selected candidates counter badge */}
           {selectedCount > 0 && (
             <div className="hidden sm:flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-3 py-1 text-xs font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
@@ -227,20 +241,133 @@ export function AgentLayout({
             {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
-          {/* Sign Out Button */}
+          {/* Sign Out Button (Desktop) */}
           {user && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => logout()}
-              className="h-9 text-xs rounded-xl border-slate-200 dark:border-[#26262f] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+              className="hidden sm:inline-flex h-9 text-xs rounded-xl border-slate-200 dark:border-[#26262f] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
             >
               <LogOut className="h-3.5 w-3.5 mr-1" />
-              <span className="hidden sm:inline">Sign Out</span>
+              <span>Sign Out</span>
             </Button>
           )}
+
+          {/* Mobile Menu Toggle Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsMobileNavOpen((prev) => !prev)}
+            className="lg:hidden h-9 w-9 p-0 rounded-xl text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#18181e]"
+            aria-label={isMobileNavOpen ? "Close menu" : "Open navigation menu"}
+          >
+            {isMobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
         </div>
       </header>
+
+      {/* Mobile Horizontal Quick-Nav Strip (Always accessible 1-tap navigation on mobile and tablets) */}
+      <div className="lg:hidden sticky top-16 z-30 flex items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0d0d11]/95 backdrop-blur-md">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href ||
+            (item.href === "/agent" && (pathname === "/agent/discovery" || pathname === "/agent")) ||
+            (item.href === "/agent/chat" && (pathname === "/agent/chat" || pathname === "/chat"));
+
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                isActive
+                  ? "bg-emerald-900 text-white dark:bg-emerald-800 dark:text-emerald-100 shadow-xs"
+                  : "text-slate-600 dark:text-zinc-400 bg-slate-100/80 dark:bg-[#17171e] hover:bg-slate-200 dark:hover:bg-[#22222b]"
+              }`}
+            >
+              <Icon className={`h-3.5 w-3.5 ${isActive ? "text-emerald-300" : "text-slate-500"}`} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Mobile Full Slide-Down Navigation Drawer */}
+      {isMobileNavOpen && (
+        <div className="fixed inset-0 top-[calc(4rem+1px)] z-50 lg:hidden bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-[#0f0f14] border-b border-slate-200 dark:border-[#222229] shadow-2xl p-4 space-y-4 max-h-[calc(100vh-5rem)] overflow-y-auto animate-in slide-in-from-top-2 duration-150">
+            {/* Agency Context Badge */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-emerald-800 text-white flex items-center justify-center">
+                  <Globe2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200">{currentAgencyDisplay}</p>
+                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400">Authenticated Foreign Partner</p>
+                </div>
+              </div>
+              {selectedCount > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-800 text-white">
+                  {selectedCount} Selected
+                </span>
+              )}
+            </div>
+
+            {/* Navigation links */}
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 px-2 pb-1">
+                Portal Sections & Tools
+              </p>
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive =
+                  pathname === item.href ||
+                  (item.href === "/agent" && (pathname === "/agent/discovery" || pathname === "/agent")) ||
+                  (item.href === "/agent/chat" && (pathname === "/agent/chat" || pathname === "/chat"));
+
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className={`flex items-center justify-between p-3 rounded-xl text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                        : "text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#181820]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`h-5 w-5 ${isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    <ArrowRight className="h-4 w-4 opacity-50" />
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Mobile Sign Out */}
+            {user && (
+              <div className="pt-2 border-t border-slate-100 dark:border-[#1f1f26]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsMobileNavOpen(false);
+                    logout();
+                  }}
+                  className="w-full justify-center h-10 text-xs text-rose-600 border-rose-200 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out of Portal
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Page Area */}
       <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
@@ -256,7 +383,7 @@ export function AgentLayout({
             <span>•</span>
             <span>Direct Row-Level Selection Lock</span>
             <span>•</span>
-            <span>Bilateral Deployment Accord</span>
+            <span>Staff Coordination Channel</span>
           </div>
         </div>
       </footer>

@@ -95,6 +95,7 @@
 | 73 | **New Complaints Triage Queue** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated listNewComplaintsV2 with dedicated New / Triage tab and Acknowledge action. |
 | 74 | **Authoritative Complaints Filtering (All / Status Slices)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated listComplaintsV2 with status query parameter and filtering UI. |
 | 75 | **Commission Batch Advance Payment & Ledger Posting** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated recordBatchAdvanceV2 with advance modal, financial grid, and Partially Settled state transition. |
+| 76 | **Foreign Agency Mobile Navigation & Dedicated Staff Chat Workspace** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Built mobile quick-nav bar & hamburger drawer in AgentLayout. Integrated dedicated /agent/chat workspace backed by create_agency_thread with auto-init & responsive chat pane. |
 
 ---
 
@@ -121,3 +122,4 @@
 7. **Phase 7: Master Contract Closure — All 86 OpenAPI Operations Audit** -> [DONE]
 8. **Phase 8: Critical Production Debug & Post-Fix Smoke Verification** -> [DONE]
 9. **Phase 9: V2 Backend Hardening & New Features (2026-09) Integration & Verification** -> [DONE]
+10. **Phase 10: Foreign Agency Mobile Navigation & Staff Chat Workspace Integration** -> [DONE]
