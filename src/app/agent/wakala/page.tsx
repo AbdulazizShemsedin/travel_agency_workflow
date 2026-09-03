@@ -215,17 +215,19 @@ export default function AgentWakalaRequestsPage() {
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
+            <div className="overflow-x-auto relative">
+              <table className="w-full text-xs text-left min-w-[760px] border-separate border-spacing-0">
+                <thead className="text-[11px] text-slate-500 dark:text-zinc-400 bg-slate-50/95 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3">Step ID</th>
-                    <th className="py-2.5 px-3">Placement</th>
-                    <th className="py-2.5 px-3">Candidate</th>
-                    <th className="py-2.5 px-3">Passport</th>
-                    <th className="py-2.5 px-3">Wakala Status</th>
-                    <th className="py-2.5 px-3">Created / Due</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2.5 px-3.5 min-w-[170px] sm:min-w-[200px] border-b border-r border-slate-200 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                      Candidate
+                    </th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Step ID</th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Placement</th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Passport</th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Wakala Status</th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Created / Due</th>
+                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] text-right whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -245,20 +247,27 @@ export default function AgentWakalaRequestsPage() {
                     </tr>
                   ) : filteredRequests.length > 0 ? (
                     filteredRequests.map((req) => (
-                      <tr key={req.clearance_step_name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
+                      <tr key={req.clearance_step_name} className="group hover:bg-slate-50 dark:hover:bg-[#15151c]">
+                        {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2.5 px-3.5 min-w-[170px] sm:min-w-[200px] border-b border-r border-slate-100 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                          <div className="font-bold text-slate-900 dark:text-white truncate">
+                            {req.full_name || req.applicant_name || "Candidate"}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400 truncate">
+                            {req.passport_number || req.applicant_name || "Passport"}
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           {req.clearance_step_name}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-zinc-300">
+                        <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           {req.placement_name || "Active Placement"}
                         </td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
-                          {req.full_name || req.applicant_name || "Candidate"}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-500">
+                        <td className="py-2.5 px-3 font-mono text-slate-500 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           {req.passport_number || "—"}
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           <Badge
                             variant="outline"
                             className="border-amber-300 text-amber-800 bg-amber-50 text-[10px]"
@@ -266,10 +275,10 @@ export default function AgentWakalaRequestsPage() {
                             {req.status || "Pending Payment"}
                           </Badge>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-400">
+                        <td className="py-2.5 px-3 text-slate-400 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           {req.creation ? new Date(req.creation).toLocaleDateString() : "Pending"}
                         </td>
-                        <td className="py-2.5 px-3 text-right">
+                        <td className="py-2.5 px-3 text-right border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
                             <Button
                               type="button"

@@ -47,6 +47,19 @@ export const V2_CANONICAL_ROLES = [
 export type V2Role = (typeof V2_CANONICAL_ROLES)[number];
 
 /**
+ * Normalizes any role representation (string, { role: string }, { name: string }) to a clean lowercase string.
+ */
+export function extractRoleName(r: unknown): string {
+  if (typeof r === "string") return r.trim().toLowerCase();
+  if (r && typeof r === "object") {
+    const roleObj = r as Record<string, unknown>;
+    if (typeof roleObj.role === "string") return roleObj.role.trim().toLowerCase();
+    if (typeof roleObj.name === "string") return roleObj.name.trim().toLowerCase();
+  }
+  return "";
+}
+
+/**
  * Checks if the user has a specific role (exact match, case-insensitive, trimmed).
  * System Manager / Administrator always passes all role checks.
  */
@@ -57,8 +70,13 @@ export function hasRole(user: AuthUser | null | undefined, targetRole: string): 
   if (!Array.isArray(user.roles)) return false;
   const normalizedTarget = targetRole.trim().toLowerCase();
   return user.roles.some((r) => {
-    const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
-    return norm === "system manager" || norm === "administrator" || norm === normalizedTarget;
+    const norm = extractRoleName(r);
+    return (
+      norm === "system manager" ||
+      norm === "administrator" ||
+      norm === "admin" ||
+      norm === normalizedTarget
+    );
   });
 }
 
@@ -89,7 +107,7 @@ export function hasExactRole(user: AuthUser | null | undefined, targetRole: stri
   if (!user || !Array.isArray(user.roles)) return false;
   const normalizedTarget = targetRole.trim().toLowerCase();
   return user.roles.some((r) => {
-    const norm = (typeof r === "string" ? r : "").trim().toLowerCase();
+    const norm = extractRoleName(r);
     return norm === normalizedTarget;
   });
 }
@@ -119,7 +137,7 @@ export function isPureForeignAgency(user: AuthUser | null | undefined): boolean 
     "kuwait embassy",
   ];
   const hasInternalRole = (user.roles || []).some((r) =>
-    internalRoles.includes((typeof r === "string" ? r : "").trim().toLowerCase())
+    internalRoles.includes(extractRoleName(r))
   );
   if (hasInternalRole || user.is_internal_staff === true) {
     return false;

@@ -123,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isLoading) {
       if (!authUser && pathname !== "/login" && !pathname.startsWith("/login")) {
         router.push("/login");
-      } else if (authUser && pathname === "/login") {
+      } else if (authUser && (pathname === "/login" || pathname?.startsWith("/login"))) {
         if (authUser.roles?.includes("Foreign Agency") && !authUser.is_internal_staff) {
           router.push("/agent");
         } else {
@@ -138,9 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await loginUser(email, pass);
       await loadUserContext();
-      if (pathname === "/login") {
-        router.push("/applicants");
-      }
     } finally {
       setIsLoading(false);
     }

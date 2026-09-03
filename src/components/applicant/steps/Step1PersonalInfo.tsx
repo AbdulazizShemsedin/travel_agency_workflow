@@ -132,7 +132,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       // 1. Upload passport scan file
       let uploadedUrl = "";
       try {
-        const uploadRes = await uploadFileV2(file, true, "Applicant");
+        const uploadRes = await uploadFileV2(file, true);
         const fileUrl = uploadRes?.file_url || "";
         if (fileUrl) {
           uploadedUrl = fileUrl;
@@ -224,7 +224,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       setIsUploadingPassport(true);
 
       try {
-        const res = await uploadFileV2(file, true, "Applicant");
+        const res = await uploadFileV2(file, true);
         const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
@@ -249,7 +249,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       setIsUploadingFullBody(true);
 
       try {
-        const res = await uploadFileV2(file, true, "Applicant");
+        const res = await uploadFileV2(file, true);
         const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });

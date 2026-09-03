@@ -167,38 +167,40 @@ export default function MyReservedCandidatesPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+            <div className="overflow-x-auto relative">
+              <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
+                <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="px-4 py-3.5">Candidate</th>
-                    <th className="px-4 py-3.5">Job & Destination</th>
-                    <th className="px-4 py-3.5">Reservation Status</th>
-                    <th className="px-4 py-3.5">Allocation Date</th>
-                    <th className="px-4 py-3.5 text-center">CV Document</th>
-                    <th className="px-4 py-3.5 text-right">Next Action</th>
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                      Candidate
+                    </th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Reservation Status</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Allocation Date</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-center whitespace-nowrap">CV Document</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Next Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                   {filteredCandidates.map((c) => (
-                    <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                      {/* Candidate Identity */}
-                      <td className="px-4 py-3.5">
+                    <tr key={c.name} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                      {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
+                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
                         <div className="flex items-center gap-3">
                           {c.photo_passport ? (
                             <img
                               src={c.photo_passport}
                               alt={c.full_name}
-                              className="h-10 w-10 rounded-xl object-cover border border-slate-200 dark:border-[#26262f]"
+                              className="h-10 w-10 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-xs">
+                            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-xs shrink-0">
                               {c.full_name?.slice(0, 2) || "CA"}
                             </div>
                           )}
-                          <div>
-                            <p className="font-bold text-slate-900 dark:text-white">{c.full_name || c.name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 dark:text-white truncate">{c.full_name || c.name}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">
                               {c.name} • {c.passport_number || "Passport Verified"}
                             </p>
                           </div>
@@ -206,13 +208,13 @@ export default function MyReservedCandidatesPage() {
                       </td>
 
                       {/* Job & Destination */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <p className="font-semibold text-slate-800 dark:text-zinc-200">{c.job_applied || "Housemaid"}</p>
                         <p className="text-[10px] text-slate-400">{c.destination_country || "Saudi Arabia"}</p>
                       </td>
 
                       {/* Reservation Status */}
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <div className="flex flex-col items-start gap-1">
                           <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
                             ✓ Reserved (Selected)
@@ -222,7 +224,7 @@ export default function MyReservedCandidatesPage() {
                       </td>
 
                       {/* Allocation Date */}
-                      <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-300">
+                      <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-[11px]">
                           <Clock className="h-3 w-3 text-slate-400" />
                           <span>{c.contract_date ? c.contract_date.split(" ")[0] : "Active"}</span>
@@ -230,7 +232,7 @@ export default function MyReservedCandidatesPage() {
                       </td>
 
                       {/* CV Download */}
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-4 py-3.5 text-center border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         {c.cv_file_url ? (
                           <a
                             href={c.cv_file_url}
@@ -247,12 +249,12 @@ export default function MyReservedCandidatesPage() {
                       </td>
 
                       {/* Primary Next Action */}
-                      <td className="px-4 py-3.5 text-right">
+                      <td className="px-4 py-3.5 text-right border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <Link href={`/applicants/${encodeURIComponent(c.name)}/contractor-doc`}>
                           <Button
                             type="button"
                             size="sm"
-                            className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-2xs"
+                            className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-2xs whitespace-nowrap"
                           >
                             <FileUp className="mr-1.5 h-3.5 w-3.5" />
                             Upload Musaned Contract

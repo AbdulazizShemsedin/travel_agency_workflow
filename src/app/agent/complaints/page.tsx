@@ -191,7 +191,7 @@ export default function AgentComplaintsPage() {
       setIsUploadingAttachment(true);
       setFormError(null);
       try {
-        const res = await uploadFileV2(file, true, "Agency Complaint");
+        const res = await uploadFileV2(file, true);
         const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setFormData((prev) => ({ ...prev, attachment: fileUrl }));

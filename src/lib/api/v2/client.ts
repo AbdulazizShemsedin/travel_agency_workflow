@@ -47,6 +47,7 @@ export async function getCachedOrFetchCsrfToken(): Promise<string | null> {
           "Accept": "application/json",
           "Content-Type": "application/json",
         },
+        body: "{}",
       });
 
       if (res.ok) {
@@ -113,7 +114,8 @@ export async function requestV2<T = any>(
     method === "POST" &&
     !endpoint.endsWith("/login") &&
     !endpoint.endsWith("/logout") &&
-    !endpoint.includes("get_csrf_token")
+    !endpoint.includes("get_csrf_token") &&
+    !endpoint.includes("get_current_user")
   ) {
     const csrfToken = await getCachedOrFetchCsrfToken();
     if (csrfToken) {

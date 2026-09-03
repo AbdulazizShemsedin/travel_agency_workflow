@@ -76,10 +76,15 @@ export interface V2CommissionBatch {
   contractor_name?: string;
   destination_country?: string;
   total_amount: number;
+  total_amount_birr?: number;
   currency: V2SupportedCurrency;
-  status: "Draft" | "Invoiced" | "Partially Settled" | "Settled" | "Cancelled" | string;
+  status: "Draft" | "Sent" | "Invoiced" | "Partially Settled" | "Settled" | "Cancelled" | string;
   items?: V2CommissionBatchItem[];
   payment_proof?: string;
+  advance_amount?: number;
+  advance_reference?: string;
+  advance_received_on?: string;
+  balance_due_birr?: number;
   creation?: string;
   [key: string]: any;
 }
@@ -413,4 +418,34 @@ export async function manuallyMatchLineV2(
       },
     }
   );
+}
+
+/**
+ * Records a partial / advance payment against a Commission Batch Request.
+ * RBAC: Finance Manager / Admin.
+ * Moves open batch (Draft/Sent) -> Partially Settled.
+ */
+export async function recordBatchAdvanceV2(
+  batchName: string,
+  advanceAmount: number,
+  advanceReference?: string
+): Promise<V2CommissionBatch> {
+  const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
+    "/api/method/agency_tracking.finance_api.record_batch_advance",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        advance_amount: advanceAmount,
+        ...(advanceReference && advanceReference.trim()
+          ? { advance_reference: advanceReference.trim() }
+          : {}),
+      },
+    }
+  );
+
+  if (result && "message" in result && result.message) {
+    return result.message as V2CommissionBatch;
+  }
+  return result as V2CommissionBatch;
 }

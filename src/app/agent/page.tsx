@@ -15,7 +15,10 @@ import {
   ShieldCheck,
   UserCheck,
   Briefcase,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
   selectCandidateV2,
@@ -51,6 +54,7 @@ export default function AgentDiscoveryPage() {
   const [destinationCountry, setDestinationCountry] = React.useState("All Countries");
   const [jobApplied, setJobApplied] = React.useState("All Jobs");
   const [religion, setReligion] = React.useState("All Religions");
+  const [viewMode, setViewMode] = React.useState<"grid" | "table">("grid");
 
   // Selection & Detail Modal State
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] =
@@ -288,17 +292,165 @@ export default function AgentDiscoveryPage() {
             </Button>
           </div>
         ) : (
-          /* Responsive Candidate Grid: ~3 cards per row on larger screens, 1 per row on mobile */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visibleCandidates.map((candidate) => (
-              <CandidateCard
-                key={candidate.name}
-                candidate={candidate}
-                onViewDetails={setSelectedCandidateForDetail}
-                onSelect={handleSelectCandidate}
-                isSelecting={selectingCandidateId === candidate.name}
-              />
-            ))}
+          <div className="space-y-4">
+            {/* View Mode & Count Header */}
+            <div className="flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400 font-medium">
+                <span>
+                  Showing <strong className="text-slate-900 dark:text-white">{visibleCandidates.length}</strong> available candidates
+                </span>
+              </div>
+              <div className="flex items-center rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-semibold transition ${
+                    viewMode === "grid"
+                      ? "bg-emerald-800 text-white shadow-2xs"
+                      : "text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+                  }`}
+                  title="Card Grid View"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Cards</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-semibold transition ${
+                    viewMode === "table"
+                      ? "bg-emerald-800 text-white shadow-2xs"
+                      : "text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+                  }`}
+                  title="Mobile-Optimized Table View (Sticky First Column)"
+                >
+                  <TableIcon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Table</span>
+                </button>
+              </div>
+            </div>
+
+            {viewMode === "grid" ? (
+              /* Responsive Candidate Grid: ~3 cards per row on larger screens, 1 per row on mobile */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {visibleCandidates.map((candidate) => (
+                  <CandidateCard
+                    key={candidate.name}
+                    candidate={candidate}
+                    onViewDetails={setSelectedCandidateForDetail}
+                    onSelect={handleSelectCandidate}
+                    isSelecting={selectingCandidateId === candidate.name}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Mobile-Optimized Candidate Table with STICKY FIRST COLUMN */
+              <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
+                <div className="overflow-x-auto relative">
+                  <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
+                    <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+                      <tr>
+                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                          Candidate
+                        </th>
+                        <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
+                        <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Demographics</th>
+                        <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Experience</th>
+                        <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Medical Status</th>
+                        <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
+                      {visibleCandidates.map((candidate) => (
+                        <tr key={candidate.name} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                          {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
+                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                            <div className="flex items-center gap-3">
+                              {candidate.photo_passport ? (
+                                <img
+                                  src={candidate.photo_passport}
+                                  alt={candidate.full_name}
+                                  className="h-10 w-10 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-xs shrink-0">
+                                  {candidate.full_name?.slice(0, 2) || "CA"}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-900 dark:text-white truncate">{candidate.full_name || candidate.name}</p>
+                                <p className="text-[10px] text-slate-400 font-mono truncate">
+                                  {candidate.name} • {candidate.passport_number || "Verified"}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Job & Destination */}
+                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                            <p className="font-semibold text-slate-800 dark:text-zinc-200">{candidate.job_applied || "Housemaid"}</p>
+                            <p className="text-[10px] text-slate-400">{candidate.destination_country || "Saudi Arabia"}</p>
+                          </td>
+
+                          {/* Demographics */}
+                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap text-[11px] text-slate-600 dark:text-zinc-300">
+                            <div>{candidate.religion || "Muslim"} • {candidate.age ? `${candidate.age} yrs` : "Adult"}</div>
+                            <div className="text-[10px] text-slate-400">{candidate.marital_status || "Single"}</div>
+                          </td>
+
+                          {/* Experience */}
+                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap text-[11px] text-slate-600 dark:text-zinc-300">
+                            {candidate.experience_country ? (
+                              <Badge variant="outline" className="text-[10px] font-medium border-slate-300 dark:border-[#26262f]">
+                                {candidate.experience_country} ({candidate.experience_years || 1}y)
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-400 text-[10px]">First Time</span>
+                            )}
+                          </td>
+
+                          {/* Medical Status */}
+                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {candidate.medical_status || "Fit / Passed"}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3.5 text-right border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedCandidateForDetail(candidate)}
+                                className="text-xs h-7 rounded-lg border-slate-200 dark:border-[#26262f]"
+                              >
+                                Details
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={selectingCandidateId === candidate.name}
+                                onClick={() => handleSelectCandidate(candidate)}
+                                className="text-xs h-7 rounded-lg bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+                              >
+                                {selectingCandidateId === candidate.name ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  "Select"
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

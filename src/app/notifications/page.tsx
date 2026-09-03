@@ -106,7 +106,7 @@ export default function NotificationsPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Live compliance alerts, expiry warnings, contractor demands, and stage progress from Frappe backend.
+            Live compliance alerts, expiry warnings, contractor demands, and stage progress across operational queues.
           </p>
         </div>
 
@@ -258,7 +258,7 @@ export default function NotificationsPage() {
       {/* Notifications List */}
       {isLoading ? (
         <div className="py-12 text-center text-xs text-slate-400">
-          Loading live operational alerts from Frappe...
+          Loading live operational alerts...
         </div>
       ) : filteredNotifications.length === 0 ? (
         <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">

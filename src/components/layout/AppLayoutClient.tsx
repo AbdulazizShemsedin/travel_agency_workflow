@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppNavbar } from "@/components/layout/AppNavbar";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 interface AppLayoutClientProps {
   children: React.ReactNode;
@@ -11,11 +12,12 @@ interface AppLayoutClientProps {
 
 export function AppLayoutClient({ children }: AppLayoutClientProps) {
   const pathname = usePathname();
+  const { user, authUser, isLoading } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const isAgentRoute = pathname?.startsWith("/agent");
-  const isLoginRoute = pathname === "/login";
+  const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
 
   // Load sidebar preference from localStorage
   React.useEffect(() => {
@@ -37,7 +39,8 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
     setIsMobileMenuOpen((prev) => !prev);
   };
 
-  if (isAgentRoute || isLoginRoute) {
+  // Never wrap login pages or unauthenticated states in the management portal shell
+  if (isAgentRoute || isLoginRoute || (!authUser && !user && !isLoading)) {
     return <>{children}</>;
   }
 

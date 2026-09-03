@@ -215,30 +215,33 @@ export default function AgentCommissionPage() {
               No unpaid departed candidates found for this billing cycle.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-100 dark:border-[#222227] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+            <div className="overflow-x-auto relative">
+              <table className="w-full text-left text-xs min-w-[740px] border-separate border-spacing-0">
+                <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="px-5 py-3.5">Candidate Name</th>
-                    <th className="px-5 py-3.5">Passport Number</th>
-                    <th className="px-5 py-3.5">Departure Date</th>
-                    <th className="px-5 py-3.5">Destination & Sponsor</th>
-                    <th className="px-5 py-3.5 text-right">Commission Fee</th>
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-5 py-3.5 min-w-[180px] sm:min-w-[220px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                      Candidate Name
+                    </th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport Number</th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Departure Date</th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Destination & Sponsor</th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Commission Fee</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                   {candidateList.map((cand, idx) => (
-                    <tr key={cand.name || idx} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                      <td className="px-5 py-3.5 font-bold text-slate-900 dark:text-white">
+                    <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                      {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
+                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-5 py-3.5 min-w-[180px] sm:min-w-[220px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white transition-colors truncate">
                         {cand.full_name || cand.name}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300">
+                      <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         {cand.passport_number || "EP-VERIFIED"}
                       </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300">
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         {cand.departure_date || "2026-08-20"}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <p className="font-semibold text-slate-800 dark:text-zinc-200">
                           {cand.destination_country || "Saudi Arabia"}
                         </p>
@@ -246,7 +249,7 @@ export default function AgentCommissionPage() {
                           {cand.sponsor_name || "Sponsor Assigned"}
                         </p>
                       </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300">
+                      <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         {(cand.rate || 1500).toLocaleString()} {cand.currency || "SAR"}
                       </td>
                     </tr>

@@ -11,6 +11,9 @@ import {
   Send,
   ExternalLink,
   ShieldCheck,
+  KeyRound,
+  Database,
+  RefreshCw,
 } from "lucide-react";
 import { toast as sonnerToast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,13 +30,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getComplianceNotificationsV2,
   getPushSubscriptionStatusV2,
   subscribeToPushV2,
+  getVapidPublicKeyV2,
+  regenerateVapidKeysV2,
   V2AppNotification,
 } from "@/lib/api/v2/notifications";
+import {
+  testStorageConnectionV2,
+  V2StorageConnectionStatus,
+} from "@/lib/api/v2/storage";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -48,7 +57,8 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 export function PushNotificationToggle() {
-  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, roles, authUser } = useAuth();
   const [isPushEnabled, setIsPushEnabled] = React.useState<boolean>(false);
   const [isSupported, setIsSupported] = React.useState<boolean>(true);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
@@ -57,10 +67,29 @@ export function PushNotificationToggle() {
   const [modalAction, setModalAction] = React.useState<"enable" | "disable">("enable");
   const [toastFeedback, setToastFeedback] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  // Admin Diagnostics States
+  const [isRegenVapidModalOpen, setIsRegenVapidModalOpen] = React.useState<boolean>(false);
+  const [isRegeneratingVapid, setIsRegeneratingVapid] = React.useState<boolean>(false);
+  const [isStorageModalOpen, setIsStorageModalOpen] = React.useState<boolean>(false);
+  const [isTestingStorage, setIsTestingStorage] = React.useState<boolean>(false);
+  const [storageStatus, setStorageStatus] = React.useState<V2StorageConnectionStatus | null>(null);
+
+  // Check if caller is System Manager or Administrator
+  const isSystemManagerOrAdmin = React.useMemo(() => {
+    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
+    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = String(r).trim().toLowerCase();
+      return norm === "system manager" || norm === "administrator" || norm === "admin";
+    });
+  }, [authUser, roles]);
+
   // Fetch in-app notifications
   const { data: notifications = [] } = useQuery<V2AppNotification[]>({
     queryKey: ["notifications"],
     queryFn: getComplianceNotificationsV2,
+    enabled: Boolean(user),
     refetchInterval: 30000,
   });
 
@@ -160,10 +189,8 @@ export function PushNotificationToggle() {
         return;
       }
 
-      const statusRes = await getPushSubscriptionStatusV2();
-      const vapidKey =
-        statusRes?.vapid_public_key ||
-        "BBoijYa6nfblI5iPhXyBmdA8nKYJUzgs1H3-zZGsyVIBYOWaUps-j2SE8rh4Jfm81hFjLd33EEcQzXxYsrlSqU8";
+      // Fetch authoritative VAPID public key dynamically from backend (zero hardcoding)
+      const vapidKey = await getVapidPublicKeyV2();
 
       const existing = await reg.pushManager.getSubscription();
       if (existing) {
@@ -252,6 +279,56 @@ export function PushNotificationToggle() {
       }
     } catch {
       showFeedback("Test notification sent.", "success");
+    }
+  };
+
+  // 6. Admin: Regenerate VAPID Keys
+  const handleRegenerateVapid = async () => {
+    setIsRegeneratingVapid(true);
+    try {
+      await regenerateVapidKeysV2();
+      sonnerToast.success("VAPID Keys Regenerated", {
+        description: "Fresh keypair created on server. Existing client subscriptions invalidated.",
+      });
+      setIsPushEnabled(false);
+      localStorage.removeItem("push_notifications_enabled");
+      setIsRegenVapidModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      showFeedback("VAPID keypair regenerated. Please re-subscribe.", "success");
+    } catch (err: any) {
+      sonnerToast.error("Regeneration Failed", {
+        description: err?.message || "Failed to regenerate VAPID keypair on backend.",
+      });
+    } finally {
+      setIsRegeneratingVapid(false);
+    }
+  };
+
+  // 7. Admin: Test R2 Storage Connection
+  const handleTestStorage = async () => {
+    setIsTestingStorage(true);
+    try {
+      const res = await testStorageConnectionV2();
+      setStorageStatus(res);
+      if (res.status === "success") {
+        sonnerToast.success("R2 Storage Connected", {
+          description: res.message || `Bucket '${res.bucket}' verified read/write.`,
+        });
+      } else {
+        sonnerToast.error("Storage Issue", {
+          description: res.message || "Storage connection returned failure status.",
+        });
+      }
+    } catch (err: any) {
+      setStorageStatus({
+        status: "error",
+        message: err?.message || "Failed to reach storage connection endpoint.",
+      });
+      sonnerToast.error("Storage Test Failed", {
+        description: err?.message || "Communication failure with storage engine.",
+      });
+    } finally {
+      setIsTestingStorage(false);
     }
   };
 
@@ -426,15 +503,42 @@ export function PushNotificationToggle() {
           </div>
 
           {/* 4. Footer */}
-          <div className="border-t border-slate-100 dark:border-[#222227] p-2.5 bg-slate-50/50 dark:bg-[#15151a] text-center">
+          <div className="border-t border-slate-100 dark:border-[#222227] p-2.5 bg-slate-50/50 dark:bg-[#15151a] flex items-center justify-between">
             <Link
               href="/notifications"
               onClick={() => setIsPopoverOpen(false)}
-              className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 transition"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 transition"
             >
               <span>Notification Center</span>
               <ExternalLink className="h-3 w-3" />
             </Link>
+
+            {/* Admin Diagnostics quick buttons */}
+            {isSystemManagerOrAdmin && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStorageModalOpen(true);
+                    handleTestStorage();
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
+                  title="Test R2 object storage readiness"
+                >
+                  <Database className="h-3 w-3 text-emerald-500" />
+                  <span>R2</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsRegenVapidModalOpen(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                  title="Regenerate VAPID push keys"
+                >
+                  <KeyRound className="h-3 w-3 text-amber-500" />
+                  <span>VAPID</span>
+                </button>
+              </div>
+            )}
           </div>
         </PopoverContent>
       </Popover>
@@ -550,6 +654,129 @@ export function PushNotificationToggle() {
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* VAPID Keypair Regeneration Admin Dialog */}
+      <Dialog open={isRegenVapidModalOpen} onOpenChange={setIsRegenVapidModalOpen}>
+        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-amber-500" />
+              Regenerate VAPID Push Keys
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-2">
+              Regenerating the VAPID keypair generates a fresh cryptographic keypair on the backend server.
+              <span className="block mt-2 font-semibold text-rose-600 dark:text-rose-400">
+                Warning: This invalidates all active browser push subscriptions across all users. Every team member will need to re-enable push notifications on their devices.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRegenVapidModalOpen(false)}
+              disabled={isRegeneratingVapid}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleRegenerateVapid}
+              disabled={isRegeneratingVapid}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer"
+            >
+              {isRegeneratingVapid ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Regenerating...
+                </>
+              ) : (
+                "Confirm & Regenerate Keys"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* R2 Storage Connection Test Dialog */}
+      <Dialog open={isStorageModalOpen} onOpenChange={setIsStorageModalOpen}>
+        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Database className="h-4 w-4 text-emerald-500" />
+              R2 Object Storage Health
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Live read/write verification probe with Cloudflare R2 bucket.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="my-2 p-3.5 rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50 dark:bg-[#16161c] space-y-2 text-xs">
+            {isTestingStorage ? (
+              <div className="flex items-center justify-center py-6 gap-2 text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                <span>Testing R2 storage connectivity & permissions...</span>
+              </div>
+            ) : storageStatus ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-500 dark:text-zinc-400">Connection Status:</span>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded-full text-[11px] ${
+                      storageStatus.status === "success"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                    }`}
+                  >
+                    {storageStatus.status === "success" ? "Connected" : "Error"}
+                  </span>
+                </div>
+                {storageStatus.bucket && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 dark:text-zinc-400">R2 Bucket:</span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-zinc-200">
+                      {storageStatus.bucket}
+                    </span>
+                  </div>
+                )}
+                {storageStatus.public_url_base && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-slate-500 dark:text-zinc-400">Public CDN Base:</span>
+                    <span className="font-mono text-[10px] text-slate-600 dark:text-zinc-300 truncate">
+                      {storageStatus.public_url_base}
+                    </span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-200/80 dark:border-[#26262f]">
+                  <p className="text-[11px] text-slate-600 dark:text-zinc-300">
+                    {storageStatus.message}
+                  </p>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          <DialogFooter className="mt-3 flex sm:justify-between items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestStorage}
+              disabled={isTestingStorage}
+              className="text-xs cursor-pointer"
+            >
+              <RefreshCw className={`mr-1.5 h-3 w-3 ${isTestingStorage ? "animate-spin" : ""}`} />
+              Re-test Connection
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setIsStorageModalOpen(false)}
+              className="bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 text-white font-bold text-xs"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

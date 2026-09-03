@@ -116,3 +116,37 @@ export async function resolveComplaintV2(
     }
   );
 }
+
+/**
+ * Lists freshly-raised complaints (status New), oldest-first -- the triage inbox.
+ * RBAC: Complaint Manager / Manager / Admin.
+ */
+export async function listNewComplaintsV2(): Promise<V2ComplaintRecord[]> {
+  const result = await requestV2<V2ComplaintRecord[] | { message?: V2ComplaintRecord[] }>(
+    "/api/method/agency_tracking.complaint_api.list_new_complaints",
+    { method: "GET" }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
+  return [];
+}
+
+/**
+ * Lists all complaints, or a single-status slice (e.g. New, Unresolved, Resolved, Dismissed).
+ * RBAC: Complaint Manager / Manager / Admin.
+ */
+export async function listComplaintsV2(status?: string): Promise<V2ComplaintRecord[]> {
+  const query = status && status.trim() && status !== "All"
+    ? `?status=${encodeURIComponent(status.trim())}`
+    : "";
+
+  const result = await requestV2<V2ComplaintRecord[] | { message?: V2ComplaintRecord[] }>(
+    `/api/method/agency_tracking.complaint_api.list_complaints${query}`,
+    { method: "GET" }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
+  return [];
+}

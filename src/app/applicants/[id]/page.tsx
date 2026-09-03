@@ -268,7 +268,7 @@ export default function ApplicantDetailPage() {
       <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/40 p-6 text-center">
         <h3 className="text-base font-semibold text-rose-800 dark:text-rose-300">Applicant Record Not Found</h3>
         <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
-          The requested applicant profile could not be loaded from Frappe backend.
+          The requested applicant profile could not be loaded from the server.
         </p>
         <Link href="/applicants" className="mt-4 inline-block">
           <Button variant="outline" size="sm">

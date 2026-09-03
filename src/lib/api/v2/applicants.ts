@@ -188,6 +188,12 @@ export async function listApplicantsV2(
     ? result
     : result && Array.isArray((result as any).applicants)
     ? (result as any).applicants
+    : result && Array.isArray((result as any).data)
+    ? (result as any).data
+    : result && Array.isArray((result as any).items)
+    ? (result as any).items
+    : result && Array.isArray((result as any).message)
+    ? (result as any).message
     : [];
 
   return rawList.map((item: V2ApplicantDetails) => {
@@ -199,6 +205,9 @@ export async function listApplicantsV2(
     }
     if (item.photograph && !item.photo_passport) {
       item.photo_passport = item.photograph;
+    }
+    if (!item.full_name && (item.first_name || item.last_name)) {
+      item.full_name = `${item.first_name || ""} ${item.last_name || ""}`.trim();
     }
     return item;
   });

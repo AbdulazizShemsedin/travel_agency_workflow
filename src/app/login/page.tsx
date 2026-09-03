@@ -16,12 +16,6 @@ export default function LoginPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  React.useEffect(() => {
-    if (user) {
-      router.push("/applicants");
-    }
-  }, [user, router]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -34,10 +28,8 @@ export default function LoginPage() {
 
     try {
       await login(email.trim(), password);
-      router.push("/applicants");
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please verify your credentials.");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -79,6 +71,7 @@ export default function LoginPage() {
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
+                  id="login-email"
                   type="text"
                   placeholder="e.g. officer@agency.com"
                   value={email}
@@ -90,12 +83,13 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+              <label htmlFor="login-password" className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
                 Password
               </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
+                  id="login-password"
                   type="password"
                   placeholder="••••••••••••"
                   value={password}
@@ -107,6 +101,7 @@ export default function LoginPage() {
             </div>
 
             <Button
+              id="login-submit-btn"
               type="submit"
               disabled={isSubmitting}
               className="w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition duration-150 shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 mt-2 cursor-pointer"
@@ -128,7 +123,7 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-slate-800/80 text-center">
             <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
               <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              <span>Direct Session Authentication with Frappe Engine</span>
+              <span>Secure Cloud Session Authentication</span>
             </div>
           </div>
         </div>

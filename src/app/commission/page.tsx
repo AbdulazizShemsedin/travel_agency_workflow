@@ -45,12 +45,22 @@ import {
   uploadBatchPaymentProofV2,
   settleBatchItemsV2,
   settleBatchV2,
+  recordBatchAdvanceV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
 } from "@/lib/api/v2/finance";
 import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 export default function AdminCommissionPage() {
@@ -80,6 +90,13 @@ export default function AdminCommissionPage() {
   // Whole Batch Settlement
   const [settlementReference, setSettlementReference] = React.useState<string>("");
   const [isSettlingWholeBatch, setIsSettlingWholeBatch] = React.useState<boolean>(false);
+
+  // Advance Payment Modal States
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = React.useState<boolean>(false);
+  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<string>("");
+  const [advanceReferenceInput, setAdvanceReferenceInput] = React.useState<string>("");
+  const [isSubmittingAdvance, setIsSubmittingAdvance] = React.useState<boolean>(false);
+  const [advanceConfirmStep, setAdvanceConfirmStep] = React.useState<boolean>(false);
 
   // Payment Proof File Upload & Fuzzy Match
   const [paymentProofFile, setPaymentProofFile] = React.useState<File | null>(null);
@@ -323,7 +340,42 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION 6: Export Commissions XLSX
+  // ACTION 6: Record Advance Payment
+  const handleRecordAdvance = async () => {
+    if (!activeBatch?.name) return;
+    const amount = Number(advanceAmountInput);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast.error("Invalid Amount", { description: "Please enter a valid positive advance amount." });
+      return;
+    }
+
+    setIsSubmittingAdvance(true);
+    try {
+      const updatedBatch = await recordBatchAdvanceV2(
+        activeBatch.name,
+        amount,
+        advanceReferenceInput.trim() || undefined
+      );
+
+      setActiveBatch(updatedBatch);
+      setIsAdvanceModalOpen(false);
+      setAdvanceConfirmStep(false);
+      setAdvanceAmountInput("");
+      setAdvanceReferenceInput("");
+      toast.success("Advance Payment Recorded", {
+        description: `Successfully posted ${amount.toLocaleString()} Birr for batch ${activeBatch.name}. Status: ${updatedBatch.status || "Partially Settled"}.`,
+      });
+      refetchOwed();
+    } catch (err: any) {
+      toast.error("Advance Posting Failed", {
+        description: err?.message || "Backend rejected advance payment.",
+      });
+    } finally {
+      setIsSubmittingAdvance(false);
+    }
+  };
+
+  // ACTION 7: Export Commissions XLSX
   const handleExportCommissionsXlsx = async () => {
     setIsExportingXlsx(true);
     try {
@@ -499,6 +551,23 @@ export default function AdminCommissionPage() {
 
               {/* Top Batch Actions */}
               <div className="flex items-center gap-2">
+                {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Cancelled" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setAdvanceAmountInput("");
+                      setAdvanceReferenceInput("");
+                      setAdvanceConfirmStep(false);
+                      setIsAdvanceModalOpen(true);
+                    }}
+                    className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
+                  >
+                    <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                    Record Advance
+                  </Button>
+                )}
+
                 <Button
                   type="button"
                   variant="outline"
@@ -520,6 +589,40 @@ export default function AdminCommissionPage() {
                 >
                   <X className="h-4 w-4" />
                 </Button>
+              </div>
+            </div>
+
+            {/* Financial Status Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white dark:bg-[#121217] border border-emerald-200/80 dark:border-emerald-900/40 text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Total Invoice</span>
+                <p className="font-bold text-slate-900 dark:text-white mt-0.5">
+                  {(activeBatch.total_amount_birr || activeBatch.total_amount).toLocaleString()} {activeBatch.currency || "ETB"}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Received</span>
+                <p className="font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">
+                  {(activeBatch.advance_amount || 0).toLocaleString()} Birr
+                </p>
+                {activeBatch.advance_reference && (
+                  <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.advance_reference}</p>
+                )}
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Received Date</span>
+                <p className="font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
+                  {activeBatch.advance_received_on || "—"}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Balance Due</span>
+                <p className="font-bold text-amber-800 dark:text-amber-300 mt-0.5">
+                  {(activeBatch.balance_due_birr !== undefined
+                    ? activeBatch.balance_due_birr
+                    : (activeBatch.total_amount_birr || activeBatch.total_amount)
+                  ).toLocaleString()} Birr
+                </p>
               </div>
             </div>
           </CardHeader>
@@ -835,6 +938,144 @@ export default function AdminCommissionPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Record Advance Payment Dialog */}
+      <Dialog open={isAdvanceModalOpen} onOpenChange={setIsAdvanceModalOpen}>
+        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-amber-500" />
+              Record Commission Batch Advance Payment
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Apply a partial advance wire or cash payment against batch {activeBatch?.name}.
+            </DialogDescription>
+          </DialogHeader>
+
+          {activeBatch && (
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200/80 dark:border-[#26262f] grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium">Batch Total:</span>
+                  <p className="font-bold text-slate-800 dark:text-zinc-200">
+                    {(activeBatch.total_amount_birr || activeBatch.total_amount).toLocaleString()} {activeBatch.currency || "ETB"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] text-amber-500 font-medium">Remaining Balance Due:</span>
+                  <p className="font-bold text-amber-700 dark:text-amber-400">
+                    {(activeBatch.balance_due_birr !== undefined
+                      ? activeBatch.balance_due_birr
+                      : (activeBatch.total_amount_birr || activeBatch.total_amount)
+                    ).toLocaleString()} Birr
+                  </p>
+                </div>
+              </div>
+
+              {!advanceConfirmStep ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Advance Amount (Birr) *</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      min="1"
+                      placeholder="e.g. 50000"
+                      value={advanceAmountInput}
+                      onChange={(e) => setAdvanceAmountInput(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Advance Wire / Bank Reference (Optional)</Label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. CBE-TX-984210 / Wire Ref"
+                      value={advanceReferenceInput}
+                      onChange={(e) => setAdvanceReferenceInput(e.target.value)}
+                      className="text-xs h-9"
+                    />
+                  </div>
+
+                  <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAdvanceModalOpen(false)}
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const amt = Number(advanceAmountInput);
+                        if (!amt || isNaN(amt) || amt <= 0) {
+                          toast.error("Invalid Amount", { description: "Please enter a positive advance amount." });
+                          return;
+                        }
+                        const maxDue = activeBatch.balance_due_birr ?? (activeBatch.total_amount_birr || activeBatch.total_amount);
+                        if (amt > maxDue) {
+                          toast.error("Amount Exceeds Balance", {
+                            description: `Advance amount cannot exceed remaining balance due of ${maxDue.toLocaleString()} Birr.`,
+                          });
+                          return;
+                        }
+                        setAdvanceConfirmStep(true);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer"
+                    >
+                      Review & Confirm
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs space-y-1.5">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                      Please confirm advance payment details:
+                    </p>
+                    <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                      <li>Amount: <strong>{Number(advanceAmountInput).toLocaleString()} Birr</strong></li>
+                      <li>Reference: <strong>{advanceReferenceInput.trim() || "None specified"}</strong></li>
+                      <li>Batch status will transition to <strong>Partially Settled</strong> on backend.</li>
+                    </ul>
+                  </div>
+
+                  <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAdvanceConfirmStep(false)}
+                      disabled={isSubmittingAdvance}
+                      className="text-xs"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleRecordAdvance}
+                      disabled={isSubmittingAdvance}
+                      className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs cursor-pointer"
+                    >
+                      {isSubmittingAdvance ? (
+                        <>
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Posting to Ledger...
+                        </>
+                      ) : (
+                        "Post Advance Payment"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

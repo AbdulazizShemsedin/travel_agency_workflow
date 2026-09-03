@@ -35,8 +35,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 6. **Authoritative Backend RBAC**:
    - Role permissions are enforced across 16 canonical roles (`roles.py`, `src/Assets/ROLE-PERMISSIONS-MATRIX.md`).
    - User identifier convention: All parameters expecting a user identifier require the User `name`, which is the user's email address (`email` = `name`).
-7. **User Management is BACKEND-BLOCKED**:
-   - No whitelisted V2 endpoint exists for internal user/employee creation or password resets. Direct administrators to Frappe Desk.
+7. **Frontend Employee & Staff Management**:
+   - Staff user accounts, security roles, activation status, and password resets are managed directly within the frontend portal via native `/api/method/frappe.client.*` RPCs (`src/lib/api/v2/employees.ts`).
+   - Clients must never be directed to Frappe Desk or external administrative consoles.
 8. **Engineering & Verification Discipline**:
    - Preserve reusable UI layouts and design systems (`OperationalTable`, `OperationalDrawer`, styling) while replacing obsolete V1 logic.
    - Maintain and update `MASTER_SYSTEM_STATUS.md` and `V2_FRONTEND_TODO.md` after completing meaningful work.

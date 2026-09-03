@@ -60,7 +60,8 @@ export function AppSidebar({
   const { user, authUser, can, roles } = useAuth();
 
   // Check if current user is an external Foreign Agency partner
-  const isForeignAgency = roles.includes("Foreign Agency") && !authUser?.is_internal_staff;
+  const hasForeignAgencyRole = roles.some((r) => String(r).toLowerCase().trim() === "foreign agency");
+  const isForeignAgency = hasForeignAgencyRole && authUser?.is_internal_staff === false;
 
   // If user is authenticated, filter nav items based on verified backend roles
   const visibleNavItems = React.useMemo(() => {
@@ -73,7 +74,7 @@ export function AppSidebar({
   }, [user, can, isForeignAgency]);
 
   const canRegister = !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
-  const canAccessAgentPortal = can("accessAgentPortal") || roles.includes("Foreign Agency");
+  const canAccessAgentPortal = can("accessAgentPortal") || hasForeignAgencyRole;
   const showLabels = isMobileOpen || !isCollapsed;
 
   return (
@@ -238,31 +239,7 @@ export function AppSidebar({
                 </div>
               )}
             </div>
-          ) : (
-            <Link
-              href="/login"
-              onClick={onCloseMobile}
-              title={!showLabels ? "Sign In" : undefined}
-              className={cn(
-                "flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50 dark:bg-[#141418] p-2 hover:bg-slate-100 dark:hover:bg-[#1c1c22] transition",
-                !showLabels ? "justify-center p-1.5" : ""
-              )}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-zinc-300">
-                ?
-              </div>
-              {showLabels && (
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    Sign In
-                  </p>
-                  <p className="truncate text-[10px] text-slate-500 dark:text-zinc-400">
-                    Authenticate Session
-                  </p>
-                </div>
-              )}
-            </Link>
-          )}
+          ) : null}
         </div>
       </aside>
     </>

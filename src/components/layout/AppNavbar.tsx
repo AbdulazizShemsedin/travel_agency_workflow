@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, LogOut, LogIn } from "lucide-react";
+import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -107,7 +106,7 @@ export function AppNavbar({
         <PushNotificationToggle />
 
         {/* User Account Popover or Login Button */}
-        {user ? (
+        {user && (
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -134,17 +133,6 @@ export function AppNavbar({
               </button>
             </PopoverContent>
           </Popover>
-        ) : (
-          <Link href="/login">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3 text-xs font-semibold rounded-lg border-emerald-600/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-            >
-              <LogIn className="h-3.5 w-3.5 mr-1.5" />
-              Sign In
-            </Button>
-          </Link>
         )}
       </div>
     </header>

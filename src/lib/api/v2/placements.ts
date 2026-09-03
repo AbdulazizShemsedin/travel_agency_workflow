@@ -123,6 +123,15 @@ export async function listPlacementsV2(
   if (result && Array.isArray((result as any).placements)) {
     return (result as any).placements;
   }
+  if (result && Array.isArray((result as any).data)) {
+    return (result as any).data;
+  }
+  if (result && Array.isArray((result as any).items)) {
+    return (result as any).items;
+  }
+  if (result && Array.isArray((result as any).message)) {
+    return (result as any).message;
+  }
   return [];
 }
 

@@ -17,3 +17,5 @@ export * from "./documents";
 export * from "./cv";
 export * from "./reports";
 export * from "./contractors";
+export * from "./employees";
+export * from "./storage";

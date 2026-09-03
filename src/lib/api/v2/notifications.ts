@@ -184,3 +184,36 @@ export async function getComplianceNotificationsV2(): Promise<V2AppNotification[
 
   return notifications;
 }
+
+/**
+ * Fetches the backend VAPID public applicationServerKey for PushManager.subscribe().
+ * Auto-generates keys on first call on the backend.
+ */
+export async function getVapidPublicKeyV2(): Promise<string> {
+  const result = await requestV2<{ vapid_public_key?: string; message?: { vapid_public_key?: string } }>(
+    "/api/method/agency_tracking.notification_api.get_vapid_public_key",
+    { method: "GET" }
+  );
+
+  const key = (result as any)?.vapid_public_key || (result as any)?.message?.vapid_public_key || "";
+  if (!key) {
+    throw new Error("No VAPID public key returned by backend server.");
+  }
+  return key;
+}
+
+/**
+ * Forces regeneration of the backend VAPID keypair.
+ * Admin / System Manager only. Invalidates all existing client push subscriptions.
+ */
+export async function regenerateVapidKeysV2(): Promise<{ vapid_public_key: string; message?: string }> {
+  const result = await requestV2<{ vapid_public_key?: string; message?: string }>(
+    "/api/method/agency_tracking.notification_api.regenerate_vapid_keys",
+    { method: "POST" }
+  );
+
+  return {
+    vapid_public_key: (result as any)?.vapid_public_key || (result as any)?.message?.vapid_public_key || "",
+    message: (result as any)?.message || "VAPID keypair regenerated successfully.",
+  };
+}

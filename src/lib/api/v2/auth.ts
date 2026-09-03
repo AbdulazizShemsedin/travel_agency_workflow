@@ -73,10 +73,22 @@ export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
     return null;
   }
 
+  const rawRoles = Array.isArray(data.roles) ? data.roles : [];
+  const normalizedRoles = rawRoles
+    .map((r: any) => {
+      if (typeof r === "string") return r.trim();
+      if (r && typeof r === "object") {
+        if (typeof r.role === "string") return r.role.trim();
+        if (typeof r.name === "string") return r.name.trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+
   return {
     user: data.user,
     full_name: data.full_name || data.user,
-    roles: Array.isArray(data.roles) ? data.roles : [],
+    roles: normalizedRoles,
     contractor: data.contractor || null,
   };
 }

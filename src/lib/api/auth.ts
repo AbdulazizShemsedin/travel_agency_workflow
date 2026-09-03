@@ -51,16 +51,31 @@ export async function fetchCurrentUserContext(): Promise<AuthUser | null> {
     }
 
     const rawRoles = Array.isArray(user.roles) ? user.roles : [];
-    const isForeignAgency = rawRoles.some(
-      (r) => (typeof r === "string" ? r.toLowerCase() : "") === "foreign agency"
-    );
+    const hasInternalStaffRole = rawRoles.some((r) => {
+      const norm = (typeof r === "string" ? r : "").toLowerCase().trim();
+      return (
+        norm === "system manager" ||
+        norm === "administrator" ||
+        norm === "admin" ||
+        norm === "manager" ||
+        norm === "registrar" ||
+        norm === "clearance officer" ||
+        norm === "finance manager" ||
+        norm === "complaint manager" ||
+        norm === "ticketer"
+      );
+    });
+
+    const isForeignAgency =
+      !hasInternalStaffRole &&
+      rawRoles.some((r) => (typeof r === "string" ? r.toLowerCase().trim() : "") === "foreign agency");
 
     return {
       email: user.user,
       full_name: user.full_name || user.user,
       roles: rawRoles,
-      is_internal_staff: !isForeignAgency,
-      contractor: isForeignAgency ? { name: user.user } : null,
+      is_internal_staff: hasInternalStaffRole || !isForeignAgency,
+      contractor: isForeignAgency ? { name: user.user } : user.contractor || null,
       enabled: true,
     };
   } catch (err) {

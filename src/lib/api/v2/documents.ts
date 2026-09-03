@@ -92,8 +92,10 @@ export async function uploadFileV2(
   const formData = new FormData();
   formData.append("file", file);
   formData.append("is_private", isPrivate ? "1" : "0");
-  if (doctype) formData.append("doctype", doctype);
-  if (docname) formData.append("docname", docname);
+  if (doctype && docname && typeof docname === "string" && docname.trim()) {
+    formData.append("doctype", doctype.trim());
+    formData.append("docname", docname.trim());
+  }
 
   return await requestV2<V2FileUploadResponse>("/api/method/upload_file", {
     method: "POST",
