@@ -19,3 +19,4 @@ export * from "./reports";
 export * from "./contractors";
 export * from "./employees";
 export * from "./storage";
+export * from "./operational";

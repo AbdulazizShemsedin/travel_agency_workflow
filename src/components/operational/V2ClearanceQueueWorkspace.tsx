@@ -72,6 +72,7 @@ export function V2ClearanceQueueWorkspace() {
 
   const [corridorFilter, setCorridorFilter] = React.useState<string>("All");
   const [selectedStepTypeFilter, setSelectedStepTypeFilter] = React.useState<string>("All");
+  const [activeSheetTab, setActiveSheetTab] = React.useState<"all" | "lmis" | "taeshir" | "embassy">("all");
   const [selectedRow, setSelectedRow] = React.useState<V2ClearanceQueueRow | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
   const [isReassignModalOpen, setIsReassignModalOpen] = React.useState(false);
@@ -226,9 +227,20 @@ export function V2ClearanceQueueWorkspace() {
       if (selectedStepTypeFilter !== "All" && row.step_type !== selectedStepTypeFilter) {
         return false;
       }
+      // Sheet-tab filter
+      if (activeSheetTab === "lmis") {
+        const st = row.step_type.toLowerCase();
+        if (!st.includes("lmis")) return false;
+      } else if (activeSheetTab === "taeshir") {
+        const st = row.step_type.toLowerCase();
+        if (!st.includes("taeshir") && !st.includes("telesign")) return false;
+      } else if (activeSheetTab === "embassy") {
+        const st = row.step_type.toLowerCase();
+        if (!st.includes("embassy")) return false;
+      }
       return true;
     });
-  }, [enrichedRows, corridorFilter, selectedStepTypeFilter]);
+  }, [enrichedRows, corridorFilter, selectedStepTypeFilter, activeSheetTab]);
 
   // Dynamic Step Types available in current view
   const availableStepTypes = React.useMemo<string[]>(() => {
@@ -413,8 +425,427 @@ export function V2ClearanceQueueWorkspace() {
     );
   };
 
-  // Operational Table Columns
-  const columns: OperationalColumn<V2ClearanceQueueRow>[] = [
+  // ──────────────────────────────────────────────────────────────────────────
+  // LMIS Sheet columns (matching physical LMIS tracking sheet)
+  // ──────────────────────────────────────────────────────────────────────────
+  const lmisColumns: OperationalColumn<V2ClearanceQueueRow>[] = [
+    {
+      id: "no",
+      header: "NO",
+      width: "50px",
+      align: "center",
+      sortable: false,
+      cell: (_row, index) => (
+        <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">{index ?? 1}</span>
+      ),
+    },
+    {
+      id: "name",
+      header: "NAME",
+      width: "200px",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
+            {(row.full_name || "?").substring(0, 2)}
+          </div>
+          <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[180px] text-xs">
+            {row.full_name || "—"}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "passport",
+      header: "PASSPORT",
+      width: "120px",
+      cell: (row) => (
+        <span className="font-mono font-medium text-slate-700 dark:text-zinc-300 text-xs">{row.passport_number || "—"}</span>
+      ),
+    },
+    {
+      id: "laborId",
+      header: "LABOR ID",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono text-slate-600 dark:text-zinc-400 font-medium text-xs">{row.reference_no || row.labor_id || "—"}</span>
+      ),
+    },
+    {
+      id: "destination",
+      header: "DESTINATION",
+      width: "110px",
+      cell: (row) => (
+        <div className="flex items-center gap-1">
+          <span className="text-sm">{row.destination_country === "Kuwait" ? "🇰🇼" : "🇸🇦"}</span>
+          <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium">{row.destination_country || "—"}</span>
+        </div>
+      ),
+    },
+    {
+      id: "contractor",
+      header: "CONTRACTOR",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-xs text-slate-700 dark:text-zinc-300 uppercase truncate block max-w-[130px] font-medium">{row.contractor_name || "—"}</span>
+      ),
+    },
+    {
+      id: "medical",
+      header: "MEDICAL",
+      width: "90px",
+      align: "center",
+      cell: (row) => {
+        const isFit = (row.medical_status || "").toUpperCase().includes("FIT");
+        return (
+          <Badge className={isFit ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-rose-600 text-white font-bold text-[10px]"}>
+            {isFit ? "FIT" : row.medical_status || "?"}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: "STATUS",
+      width: "110px",
+      align: "center",
+      cell: (row) => {
+        const st = row.status || "Pending";
+        return (
+          <Badge
+            className={
+              st === "Issued" || st === "Complete" || st === "Completed"
+                ? "bg-emerald-600 text-white font-semibold text-[10px]"
+                : st === "Rejected" || st === "Cancelled"
+                ? "bg-rose-600 text-white font-semibold text-[10px]"
+                : st === "In Progress"
+                ? "bg-blue-600 text-white font-semibold text-[10px]"
+                : "bg-amber-500 text-white font-semibold text-[10px]"
+            }
+          >
+            {st}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "issueDate",
+      header: "ISSUE DATE",
+      width: "110px",
+      cell: (row) => (
+        <span className="text-slate-600 dark:text-zinc-400 font-medium text-xs">{row.date_completed || "—"}</span>
+      ),
+    },
+    {
+      id: "contact",
+      header: "CONTACT",
+      width: "130px",
+      cell: (row) => (
+        <span className="text-slate-800 dark:text-zinc-200 font-medium text-xs truncate block max-w-[120px]">{row.phone || "—"}</span>
+      ),
+    },
+    {
+      id: "remark",
+      header: "REMARK",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-slate-500 dark:text-zinc-400 truncate block max-w-[130px] text-xs">{row.rejection_remark || "—"}</span>
+      ),
+    },
+    {
+      id: "action",
+      header: "ACTION",
+      width: "80px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); handleRowClick(row); }}
+          className="h-7 px-2.5 text-xs font-semibold border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+        >
+          Open
+        </Button>
+      ),
+    },
+  ];
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Te'shir (Taeshir / Telesign) Sheet columns
+  // ──────────────────────────────────────────────────────────────────────────
+  const taeshirColumns: OperationalColumn<V2ClearanceQueueRow>[] = [
+    {
+      id: "no",
+      header: "#",
+      width: "50px",
+      align: "center",
+      sortable: false,
+      cell: (_row, index) => (
+        <span className="text-slate-600 dark:text-zinc-400 font-mono text-xs">{(index ?? 0) + 1}</span>
+      ),
+    },
+    {
+      id: "candidate",
+      header: "CANDIDATE",
+      width: "200px",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 font-bold text-[10px] border border-blue-300/40 uppercase">
+            {(row.full_name || "?").substring(0, 2)}
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-slate-900 dark:text-white uppercase truncate text-xs max-w-[160px]">{row.full_name || "—"}</span>
+            <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400">{row.passport_number || "—"}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "destination",
+      header: "DESTINATION",
+      width: "110px",
+      cell: (row) => (
+        <div className="flex items-center gap-1">
+          <span className="text-sm">{row.destination_country === "Kuwait" ? "🇰🇼" : "🇸🇦"}</span>
+          <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium">{row.destination_country || "—"}</span>
+        </div>
+      ),
+    },
+    {
+      id: "contractor",
+      header: "CONTRACTOR",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-xs text-slate-700 dark:text-zinc-300 uppercase truncate block max-w-[130px] font-medium">{row.contractor_name || "—"}</span>
+      ),
+    },
+    {
+      id: "injazNo",
+      header: "INJAZ / REF NO",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono text-slate-700 dark:text-zinc-300 font-medium text-xs">{row.reference_no || "—"}</span>
+      ),
+    },
+    {
+      id: "appointmentDate",
+      header: "APPOINTMENT DATE",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-slate-700 dark:text-zinc-300 font-medium text-xs">{row.date_started || "—"}</span>
+      ),
+    },
+    {
+      id: "paymentStatus",
+      header: "INJAZ PAYMENT",
+      width: "120px",
+      align: "center",
+      cell: (row) => {
+        const isPaid = (row.payment_status || "").toLowerCase().includes("paid");
+        return (
+          <Badge className={isPaid ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-slate-400 text-white font-bold text-[10px]"}>
+            {isPaid ? "PAID" : "UNPAID"}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: "STATUS",
+      width: "110px",
+      align: "center",
+      cell: (row) => {
+        const st = row.status || "Pending";
+        return (
+          <Badge
+            className={
+              st === "Issued" || st === "Complete" || st === "Completed"
+                ? "bg-emerald-600 text-white font-semibold text-[10px]"
+                : st === "Rejected" || st === "Cancelled"
+                ? "bg-rose-600 text-white font-semibold text-[10px]"
+                : st === "In Progress"
+                ? "bg-blue-600 text-white font-semibold text-[10px]"
+                : "bg-amber-500 text-white font-semibold text-[10px]"
+            }
+          >
+            {st}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "remark",
+      header: "REMARK",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-slate-500 dark:text-zinc-400 truncate block max-w-[130px] text-xs">{row.rejection_remark || "—"}</span>
+      ),
+    },
+    {
+      id: "action",
+      header: "ACTION",
+      width: "80px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); handleRowClick(row); }}
+          className="h-7 px-2.5 text-xs font-semibold border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+        >
+          Open
+        </Button>
+      ),
+    },
+  ];
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Embassy Sheet columns (matching physical Embassy tracking sheet)
+  // ──────────────────────────────────────────────────────────────────────────
+  const embassyColumns: OperationalColumn<V2ClearanceQueueRow>[] = [
+    {
+      id: "no",
+      header: "NO",
+      width: "50px",
+      align: "center",
+      sortable: false,
+      cell: (_row, index) => (
+        <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">{index ?? 1}</span>
+      ),
+    },
+    {
+      id: "name",
+      header: "NAME",
+      width: "200px",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-900 dark:text-purple-300 font-bold text-[10px] border border-purple-300/40 uppercase">
+            {(row.full_name || "?").substring(0, 2)}
+          </div>
+          <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[180px] text-xs">
+            {row.full_name || "—"}
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "passport",
+      header: "PASSPORT",
+      width: "120px",
+      cell: (row) => (
+        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">{row.passport_number || "—"}</span>
+      ),
+    },
+    {
+      id: "embassy",
+      header: "DESTINATION EMBASSY",
+      width: "160px",
+      cell: (row) => (
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">{row.destination_country === "Kuwait" ? "🇰🇼" : "🇸🇦"}</span>
+          <span className="text-xs text-slate-700 dark:text-zinc-300 font-medium">{row.destination_country || "Saudi Arabia"} Embassy</span>
+        </div>
+      ),
+    },
+    {
+      id: "contractor",
+      header: "CONTRACTOR",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-xs text-slate-700 dark:text-zinc-300 uppercase truncate block max-w-[130px] font-medium">{row.contractor_name || "—"}</span>
+      ),
+    },
+    {
+      id: "refNo",
+      header: "REF / VISA NO",
+      width: "130px",
+      cell: (row) => (
+        <span className="font-mono text-slate-700 dark:text-zinc-300 font-medium text-xs">{row.reference_no || "—"}</span>
+      ),
+    },
+    {
+      id: "submissionDate",
+      header: "SUBMISSION DATE",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-slate-600 dark:text-zinc-400 font-medium text-xs">{row.date_started || "—"}</span>
+      ),
+    },
+    {
+      id: "feeStatus",
+      header: "FEE STATUS",
+      width: "110px",
+      align: "center",
+      cell: (row) => {
+        const isPaid = (row.payment_status || "").toLowerCase().includes("paid");
+        return (
+          <Badge className={isPaid ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-rose-500 text-white font-bold text-[10px]"}>
+            {isPaid ? "PAID" : "UNPAID"}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: "STATUS",
+      width: "120px",
+      align: "center",
+      cell: (row) => {
+        const st = row.status || "Pending";
+        return (
+          <Badge
+            className={
+              st === "Stamped" || st === "Issued" || st === "Complete" || st === "Completed"
+                ? "bg-emerald-600 text-white font-semibold text-[10px]"
+                : st === "Rejected" || st === "Cancelled"
+                ? "bg-rose-600 text-white font-semibold text-[10px]"
+                : st === "Submitted"
+                ? "bg-purple-600 text-white font-semibold text-[10px]"
+                : st === "In Progress"
+                ? "bg-blue-600 text-white font-semibold text-[10px]"
+                : "bg-amber-500 text-white font-semibold text-[10px]"
+            }
+          >
+            {st === "Stamped" ? "Visa Stamped" : st}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "remark",
+      header: "REMARK",
+      width: "140px",
+      cell: (row) => (
+        <span className="text-slate-500 dark:text-zinc-400 truncate block max-w-[130px] text-xs">{row.rejection_remark || "—"}</span>
+      ),
+    },
+    {
+      id: "action",
+      header: "ACTION",
+      width: "80px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); handleRowClick(row); }}
+          className="h-7 px-2.5 text-xs font-semibold border-purple-300 dark:border-purple-800 text-purple-800 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+        >
+          Open
+        </Button>
+      ),
+    },
+  ];
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Operational Table Columns — All view (generic)
+  // ──────────────────────────────────────────────────────────────────────────
+  const allColumns: OperationalColumn<V2ClearanceQueueRow>[] = [
     {
       id: "step_info",
       header: "Clearance Step",
@@ -539,6 +970,15 @@ export function V2ClearanceQueueWorkspace() {
     },
   ];
 
+  // Select active column set based on sheet tab
+  const columns = React.useMemo(() => {
+    if (activeSheetTab === "lmis") return lmisColumns;
+    if (activeSheetTab === "taeshir") return taeshirColumns;
+    if (activeSheetTab === "embassy") return embassyColumns;
+    return allColumns;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSheetTab, handleRowClick]);
+
   // Active corridor definition for visual corridor tracker
   const activeCorridorSteps = React.useMemo<V2CorridorStepDefinition[]>(() => {
     if (selectedRow?.destination_country === "Kuwait") {
@@ -651,11 +1091,82 @@ export function V2ClearanceQueueWorkspace() {
       </div>
 
       {/* ------------------------------------------------------------- */}
+      {/* Sheet-Style Section Tab Bar                                   */}
+      {/* ------------------------------------------------------------- */}
+      <div className="flex items-center gap-0.5 overflow-x-auto border-b border-slate-200 dark:border-[#272730] pb-0 scrollbar-none">
+        {(
+          [
+            { id: "all",      label: "All Steps",  emoji: "📋", accentClass: "border-slate-700 dark:border-white text-slate-900 dark:text-white bg-slate-50/60 dark:bg-[#1a1a20]" },
+            { id: "lmis",     label: "LMIS",       emoji: "🟢", accentClass: "border-emerald-700 dark:border-emerald-500 text-emerald-900 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30" },
+            { id: "taeshir",  label: "Te'shir",    emoji: "🔵", accentClass: "border-blue-700 dark:border-blue-500 text-blue-900 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-950/30" },
+            { id: "embassy",  label: "Embassy",    emoji: "🟣", accentClass: "border-purple-700 dark:border-purple-500 text-purple-900 dark:text-purple-400 bg-purple-50/60 dark:bg-purple-950/30" },
+          ] as const
+        ).map((tab) => {
+          const isActive = activeSheetTab === tab.id;
+          const count =
+            tab.id === "all"
+              ? enrichedRows.length
+              : enrichedRows.filter((r) => {
+                  const st = r.step_type.toLowerCase();
+                  if (tab.id === "lmis") return st.includes("lmis");
+                  if (tab.id === "taeshir") return st.includes("taeshir") || st.includes("telesign");
+                  if (tab.id === "embassy") return st.includes("embassy");
+                  return false;
+                }).length;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveSheetTab(tab.id);
+                setSelectedStepTypeFilter("All");
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap",
+                isActive
+                  ? tab.accentClass
+                  : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-[#181820]"
+              )}
+            >
+              <span>{tab.emoji}</span>
+              <span>{tab.label}</span>
+              <span
+                className={cn(
+                  "text-[10px] font-bold px-1.5 py-0 rounded-full",
+                  isActive
+                    ? "bg-slate-900/10 dark:bg-white/10"
+                    : "bg-slate-200 dark:bg-[#252530] text-slate-600 dark:text-zinc-400"
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ------------------------------------------------------------- */}
       {/* Operational Clearance Table                                   */}
       {/* ------------------------------------------------------------- */}
       <OperationalTable<V2ClearanceQueueRow>
-        title="Clearance Queue"
-        subtitle="Role-scoped clearance pipeline for candidates in Processing stage"
+        title={
+          activeSheetTab === "lmis"
+            ? "LMIS / Labor Market Information System"
+            : activeSheetTab === "taeshir"
+            ? "Te'shir — Injaz Biometrics & Appointment Tracking"
+            : activeSheetTab === "embassy"
+            ? "Embassy — Visa Submission & Diplomatic Clearance"
+            : "Clearance Queue"
+        }
+        subtitle={
+          activeSheetTab === "lmis"
+            ? "Ministry of Labor quota clearance and labor permit issuance."
+            : activeSheetTab === "taeshir"
+            ? "Saudi / Kuwait Te'shir appointments, Injaz reference numbers, and biometrics payment tracking."
+            : activeSheetTab === "embassy"
+            ? "Saudi / Kuwait Embassy dossier submission, visa fee status, and stamp recording."
+            : "Role-scoped clearance pipeline for candidates in Processing stage"
+        }
         columns={columns}
         data={filteredRows}
         isLoading={isQueueLoading || isQueueRefetching}
@@ -667,7 +1178,7 @@ export function V2ClearanceQueueWorkspace() {
         availableCorridors={["All", "Saudi Arabia", "Kuwait"]}
         extraHeaderActions={
           <div className="flex items-center gap-2">
-            {availableStepTypes.length > 0 && (
+            {activeSheetTab === "all" && availableStepTypes.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-slate-500 dark:text-zinc-400 hidden sm:inline">Step:</span>
                 <select

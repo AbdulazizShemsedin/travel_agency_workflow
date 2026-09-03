@@ -45,3 +45,64 @@ export interface V2ClearanceQueueRow {
   gender?: string;
   [key: string]: any;
 }
+
+export type OperationalStreamType = "lms" | "injaz" | "wakala" | "embassy" | "departure";
+
+export interface WorkspaceApplicantRow {
+  applicantId: string;
+  applicant: any;
+  dossier?: any | null;
+  dsrName?: string;
+  destinationCountry: string;
+  fullName: string;
+  passportNumber: string;
+  phone?: string;
+  medicalStatus?: string;
+  medicalDate?: string;
+  medicalExpiryDate?: string;
+  jobApplied?: string;
+  lockedContractor?: string;
+  sponsorName?: string;
+  sponsorId?: string;
+  visaNumber?: string;
+  contractNumber?: string;
+  contractIssueDate?: string;
+  salary?: number | string;
+  contractPeriod?: string;
+
+  // Normalized / Sheet Computed Fields
+  laborId?: string;
+  contractDate?: string;
+  duration?: number;
+  medicalRemaining?: string;
+  medicalRemainingDays?: number;
+  examRemainingDays?: number;
+  injazPayment?: string;
+  appointmentDate?: string;
+  contact?: string;
+  remark?: string;
+  wakalaStatus?: string;
+  embassyStatus?: string;
+  telephone?: string;
+  company?: string;
+  lmisStatus?: string;
+  issueDate?: string;
+  ticketStatus?: string;
+  ticketNumber?: string;
+
+  // Stream-specific records
+  lms?: any | null;
+  injaz?: any | null;
+  wakala?: any | null;
+  embassy?: any | null;
+  telesign?: any | null;
+  stamp?: any | null;
+  ticket?: any | null;
+  departure?: any | null;
+
+  // V2 linkage
+  placementId?: string;
+  clearanceStepName?: string;
+  [key: string]: any;
+}
+

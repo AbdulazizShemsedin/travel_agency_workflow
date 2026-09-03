@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         authUser,
-        roles: authUser?.roles || [],
+        roles: authUser?.roles || EMPTY_ROLES,
         agencyContext,
         isLoading,
         login,
@@ -211,6 +211,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+const EMPTY_ROLES: string[] = [];
+
 export function useAuth() {
+
   return React.useContext(AuthContext);
 }
