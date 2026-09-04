@@ -14,6 +14,7 @@ import {
   CalendarDays,
   FileText,
   FileDown,
+  Printer,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -563,12 +564,12 @@ export function InjazWorkspace({
                 {isGeneratingInjaz ? (
                   <>
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Generating Injaz PDF...
+                    Generating PDF...
                   </>
                 ) : (
                   <>
                     <FileDown className="mr-1.5 h-3.5 w-3.5" />
-                    Injaz document
+                    Save as PDF
                   </>
                 )}
               </Button>
@@ -578,10 +579,10 @@ export function InjazWorkspace({
                 size="sm"
                 onClick={handleOpenInjazDoc}
                 disabled={isGeneratingInjaz}
-                className="text-xs border-slate-300 dark:border-[#2a2a32]"
+                className="text-xs border-slate-300 dark:border-[#2a2a32] font-semibold text-slate-800 dark:text-zinc-200"
               >
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                Open Injaz in New Tab
+                <Printer className="mr-1.5 h-3.5 w-3.5 text-slate-600 dark:text-zinc-400" />
+                Print Document
               </Button>
               <Button
                 type="button"

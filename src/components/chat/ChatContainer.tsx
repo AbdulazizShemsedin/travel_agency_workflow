@@ -84,18 +84,36 @@ function WhatsAppDoubleCheck({ className }: { className?: string }) {
 
 export function ChatContainer() {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { user, authUser, roles } = useAuth();
   const currentEmail = (authUser?.email || "").toLowerCase().trim();
 
   // Role detection
+  // Role detection: strict Foreign Agency check
   const isForeignAgency = React.useMemo(() => {
-    const hasRole = (roles || []).some((r) => String(r).toLowerCase().trim() === "foreign agency");
-    return hasRole && authUser?.is_internal_staff === false;
-  }, [roles, authUser]);
+    const userRoles = (roles || []).map((r) => String(r).toLowerCase().trim());
+    const authUserRoles = (authUser?.roles || []).map((r: any) =>
+      typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
+    );
+    const allRoles = new Set([...userRoles, ...authUserRoles]);
+    const hasAdmin =
+      allRoles.has("administrator") ||
+      allRoles.has("system manager") ||
+      allRoles.has("admin") ||
+      currentEmail === "administrator";
+    if (hasAdmin) return false;
 
-  // Executive oversight permission: Administrator, System Manager, Admin, or Communication Manager
-  const isSupervisorOrAdmin = React.useMemo(() => {
-    const adminRoles = ["administrator", "system manager", "admin", "communication manager"];
+    return (
+      allRoles.has("foreign agency") ||
+      allRoles.has("foreign agent") ||
+      allRoles.has("agent") ||
+      Boolean((authUser as any)?.contractor) ||
+      (authUser as any)?.is_internal_staff === false
+    );
+  }, [roles, authUser, currentEmail]);
+
+  // Executive Admin check: strictly Administrator, System Manager, or Admin only
+  const isAdmin = React.useMemo(() => {
+    const adminRoles = ["administrator", "system manager", "admin"];
     const userRoles = (roles || []).map((r) => String(r).toLowerCase().trim());
     const authUserRoles = (authUser?.roles || []).map((r: any) =>
       typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
@@ -105,7 +123,25 @@ export function ChatContainer() {
     return adminRoles.some((role) => allUserRoles.has(role));
   }, [roles, authUser, currentEmail]);
 
-  // View Mode: "my" (only communicating parties) vs "oversight" (Admin & Communication Manager supervision)
+  // Communication Manager check
+  const isCommunicationManager = React.useMemo(() => {
+    const userRoles = (roles || []).map((r) => String(r).toLowerCase().trim());
+    const authUserRoles = (authUser?.roles || []).map((r: any) =>
+      typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
+    );
+    const allUserRoles = new Set([...userRoles, ...authUserRoles]);
+    return allUserRoles.has("communication manager");
+  }, [roles, authUser]);
+
+  // Permission to communicate with Foreign Agencies: Admin OR Communication Manager
+  const canCommunicateWithForeignAgents = React.useMemo(() => {
+    return isAdmin || isCommunicationManager;
+  }, [isAdmin, isCommunicationManager]);
+
+  // Audit and Oversight is strictly for users with Admin role only
+  const isSupervisorOrAdmin = isAdmin;
+
+  // View Mode: "my" (only communicating parties) vs "oversight" (Admin supervision)
   const [viewMode, setViewMode] = React.useState<"my" | "oversight">("my");
   const [oversightStaffFilter, setOversightStaffFilter] = React.useState<string>("all");
 
@@ -128,30 +164,64 @@ export function ChatContainer() {
   const [isNewThreadModalOpen, setIsNewThreadModalOpen] = React.useState<boolean>(false);
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = React.useState<boolean>(false);
 
-  // New Thread Form State
-  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">(
-    isForeignAgency ? "Agency" : "Internal"
-  );
+  // New Thread Form State: default to "Agency" for Foreign Agency or for staff communicating with agencies
+  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">("Agency");
   const [newThreadRecipient, setNewThreadRecipient] = React.useState<string>("");
   const [selectedContractorId, setSelectedContractorId] = React.useState<string>("");
   const [newThreadContextType, setNewThreadContextType] = React.useState<string>("General");
   const [newThreadContextRef, setNewThreadContextRef] = React.useState<string>("");
 
+  // Sync initial thread type when roles resolve
+  React.useEffect(() => {
+    if (isForeignAgency) {
+      setNewThreadType("Agency");
+    } else if (canCommunicateWithForeignAgents) {
+      // Default to Agency if staff can chat with Foreign Agencies, or Internal if preferred
+      setNewThreadType("Agency");
+    } else {
+      setNewThreadType("Internal");
+    }
+  }, [isForeignAgency, canCommunicateWithForeignAgents]);
+
   // Add Participant Form State
   const [newParticipantEmail, setNewParticipantEmail] = React.useState<string>("");
 
-  // Queries for internal staff and foreign agency selection
+  // Queries for internal staff and authorized contacts
   const { data: internalEmployees = [] } = useQuery({
     queryKey: ["v2_employees_chat_dropdown"],
     queryFn: listEmployeesV2,
-    enabled: !isForeignAgency,
     staleTime: 60000,
   });
+
+  // Foreign agents can ONLY communicate with Administrator / Admin and Communication Manager
+  const allowedStaffForAgency = React.useMemo(() => {
+    const targetRoles = ["administrator", "admin", "system manager", "communication manager"];
+    const filtered = internalEmployees.filter((emp: any) => {
+      const empRoles = (emp.roles || []).map((r: string) => String(r).toLowerCase().trim());
+      const isEligible =
+        emp.email?.toLowerCase() === "administrator" ||
+        emp.name?.toLowerCase() === "administrator" ||
+        empRoles.some((r: string) => targetRoles.includes(r));
+      return isEligible && emp.email?.toLowerCase() !== currentEmail;
+    });
+
+    if (filtered.length === 0) {
+      return [
+        {
+          name: "Administrator",
+          email: "Administrator",
+          full_name: "Agency Headquarters Administrator",
+          roles: ["Administrator"],
+        },
+      ];
+    }
+    return filtered;
+  }, [internalEmployees, currentEmail]);
 
   const { data: availableContractors = [], isLoading: isContractorsLoading } = useQuery({
     queryKey: ["v2_contractors_chat_dropdown"],
     queryFn: () => listContractorsV2(),
-    enabled: !isForeignAgency,
+    enabled: canCommunicateWithForeignAgents,
     staleTime: 60000,
   });
 
@@ -188,7 +258,7 @@ export function ChatContainer() {
     refetchInterval: 15000,
   });
 
-  // 2. Fetch All Organization Threads for Oversight (Admin & Communication Manager only)
+  // 2. Fetch All Organization Threads for Oversight (strictly Admin only)
   const {
     data: allOversightThreads = [],
     isLoading: isOversightLoading,
@@ -206,15 +276,9 @@ export function ChatContainer() {
     if (isSupervisorOrAdmin && viewMode === "oversight") {
       return allOversightThreads;
     }
-    // Strict privacy for "my" conversations: ensure user is participant or owner
-    return myThreads.filter((t) => {
-      if (t.owner?.toLowerCase().trim() === currentEmail) return true;
-      const participants = (t.participants || []).map((p) => p.toLowerCase().trim());
-      if (participants.includes(currentEmail)) return true;
-      if (isForeignAgency && t.thread_type === "Agency") return true;
-      return false;
-    });
-  }, [isSupervisorOrAdmin, viewMode, allOversightThreads, myThreads, currentEmail, isForeignAgency]);
+    // Return all user's participating threads directly from backend without client-side dropping
+    return myThreads;
+  }, [isSupervisorOrAdmin, viewMode, allOversightThreads, myThreads]);
 
   // Oversight Statistics
   const oversightStats = React.useMemo(() => {
@@ -224,28 +288,88 @@ export function ChatContainer() {
     return { total, internal, agency };
   }, [allOversightThreads]);
 
-  // Resolves any user email/identifier to full name and role
+  // Priority role resolution: Admin/Administrator > Communication Manager > Operations Manager > Supervisor > other
+  const resolvePrimaryRole = React.useCallback((rolesList: string[] = []): string => {
+    const cleanRoles = rolesList.map((r) => String(r).toLowerCase().trim());
+    if (
+      cleanRoles.some((r) => r === "administrator" || r === "system manager" || r === "admin")
+    ) {
+      return "Admin";
+    }
+    if (cleanRoles.some((r) => r.includes("communication manager") || r === "communication")) {
+      return "Communication Manager";
+    }
+    if (cleanRoles.some((r) => r.includes("operations manager"))) {
+      return "Operations Manager";
+    }
+    if (cleanRoles.some((r) => r.includes("supervisor"))) {
+      return "Supervisor";
+    }
+    const filtered = rolesList.filter((r) => {
+      const l = String(r).toLowerCase().trim();
+      return l !== "desk user" && l !== "all";
+    });
+    return filtered[0] || "Internal Staff";
+  }, []);
+
+  // Resolves any user email/identifier to full name and primary role
   const resolveUserDisplay = React.useCallback(
     (emailOrUsername: string) => {
       if (!emailOrUsername) return { name: "Unknown", email: "", role: "User", isStaff: true };
       const clean = emailOrUsername.toLowerCase().trim();
-      if (clean === "administrator") {
-        return { name: "System Administrator", email: "Administrator", role: "Administrator", isStaff: true };
-      }
-
-      const emp = internalEmployees.find(
-        (e) => (e.email || e.name || "").toLowerCase().trim() === clean
-      );
-      if (emp) {
-        const staffRoles = (emp.roles || []).filter((r: string) => r !== "Desk User");
+      
+      // 1. If Administrator
+      if (clean === "administrator" || clean === "admin") {
         return {
-          name: emp.full_name || emp.name,
-          email: emp.email || emp.name,
-          role: staffRoles[0] || "Internal Staff",
+          name: authUser?.full_name || user || "System Administrator",
+          email: "Administrator",
+          role: "Admin",
           isStaff: true,
         };
       }
 
+      // 2. Check if this is the current logged-in user (e.g. tutu)
+      const currentAuthEmail = (authUser?.email || "").toLowerCase().trim();
+      const currentUserName = (user || "").toLowerCase().trim();
+      const currentAuthFullName = (authUser?.full_name || "").toLowerCase().trim();
+      if (
+        clean === currentAuthEmail ||
+        clean === currentUserName ||
+        (currentAuthFullName && clean === currentAuthFullName) ||
+        clean === currentEmail
+      ) {
+        const primaryRole = isAdmin
+          ? "Admin"
+          : isCommunicationManager
+          ? "Communication Manager"
+          : resolvePrimaryRole(roles as string[]);
+
+        return {
+          name: authUser?.full_name || user || "You",
+          email: authUser?.email || user || clean,
+          role: primaryRole,
+          isStaff: true,
+        };
+      }
+
+      // 3. Search in internalEmployees
+      const emp = internalEmployees.find(
+        (e) =>
+          (e.email || "").toLowerCase().trim() === clean ||
+          (e.name || "").toLowerCase().trim() === clean ||
+          (e.full_name || "").toLowerCase().trim() === clean
+      );
+      if (emp) {
+        const primaryRole = resolvePrimaryRole(emp.roles || []);
+        return {
+          name: emp.full_name || emp.name,
+          email: emp.email || emp.name,
+          role: primaryRole,
+          isStaff: true,
+        };
+      }
+
+      // 4. Search in availableContractors
       const con = availableContractors.find(
         (c) =>
           (c.user || "").toLowerCase().trim() === clean ||
@@ -261,14 +385,19 @@ export function ChatContainer() {
         };
       }
 
+      // 5. Fallback: clean up username from email
+      const fallbackName = emailOrUsername.includes("@")
+        ? emailOrUsername.split("@")[0]
+        : emailOrUsername;
+
       return {
-        name: emailOrUsername.split("@")[0] || emailOrUsername,
+        name: fallbackName,
         email: emailOrUsername,
         role: "Staff Member",
         isStaff: true,
       };
     },
-    [internalEmployees, availableContractors]
+    [user, authUser, currentEmail, isAdmin, isCommunicationManager, roles, internalEmployees, availableContractors, resolvePrimaryRole]
   );
 
   // Resolves communicating parties for any thread: who communicated with whom
@@ -293,11 +422,19 @@ export function ChatContainer() {
         // Identify internal staff participant
         const staffParticipants = participants.filter((p) => {
           const cleanP = p.toLowerCase().trim();
-          return cleanP !== conUser && cleanP !== (thread.owner || "").toLowerCase().trim();
+          return cleanP !== conUser && cleanP !== (con?.name || "").toLowerCase().trim();
         });
 
-        const staffEmail = staffParticipants[0] || (thread.owner !== conUser ? thread.owner : "") || "";
-        const staffInfo = staffEmail ? resolveUserDisplay(staffEmail) : { name: "Communication Manager", role: "HQ Staff" };
+        // Resolve staff participant: prefer participant, then thread owner, then current auth user if staff
+        const staffEmail =
+          staffParticipants[0] ||
+          ((thread.owner || "").toLowerCase().trim() !== conUser ? thread.owner : "") ||
+          (authUser?.is_internal_staff ? (authUser.email || user) : "") ||
+          "";
+
+        const staffInfo = staffEmail
+          ? resolveUserDisplay(staffEmail)
+          : { name: authUser?.full_name || user || "Staff Member", role: isAdmin ? "Admin" : "Communication Manager" };
 
         return {
           type: "Agency" as const,
@@ -306,7 +443,7 @@ export function ChatContainer() {
           agencyName,
           agencyCountry,
           badgeLabel: "Staff ↔ Foreign Agency",
-          partyLine: `${staffInfo.name} (${staffInfo.role}) ⟷ ${agencyName}${agencyCountry}`,
+          partyLine: `${staffInfo.name} ⟷ ${agencyName}${agencyCountry}`,
           shortParties: `${staffInfo.name} ⟷ ${agencyName}`,
           participantsList: participants,
         };
@@ -324,7 +461,7 @@ export function ChatContainer() {
           p2Name: p2.name,
           p2Role: p2.role,
           badgeLabel: "Staff ↔ Staff",
-          partyLine: `${p1.name} (${p1.role}) ⟷ ${p2.name} (${p2.role})${extras}`,
+          partyLine: `${p1.name} ⟷ ${p2.name}${extras}`,
           shortParties: `${p1.name} ⟷ ${p2.name}${extras}`,
           participantsList: participants,
         };
@@ -627,33 +764,27 @@ export function ChatContainer() {
   const createThreadMutation = useMutation({
     mutationFn: async () => {
       if (isForeignAgency) {
+        // Foreign Agency initiates communication with internal staff (Admin / Communication Manager)
+        // Strictly uses createAgencyThreadV2 to prevent "A Foreign Agency user can only be a participant in an Agency-type thread"
         return await createAgencyThreadV2();
-      } else if (newThreadType === "Agency") {
-        if (!selectedContractorId) {
-          throw new Error("Please select a registered foreign agency from the list.");
-        }
-        // Check if an existing thread for this contractor already exists
-        const existing = (allOversightThreads.length > 0 ? allOversightThreads : myThreads).find(
-          (t) =>
-            t.thread_type === "Agency" &&
-            (t.contractor === selectedContractorId ||
-              t.title?.toLowerCase().includes(selectedContractorId.toLowerCase()) ||
-              t.name.includes(selectedContractorId))
-        );
-        if (existing) {
-          return { name: existing.name, thread_name: existing.name, existed: true };
-        }
-        // Connect directly to the selected contractor
-        return await createAgencyThreadV2(selectedContractorId);
       } else {
-        if (!newThreadRecipient.trim() || !newThreadRecipient.includes("@")) {
-          throw new Error("Please select a staff colleague from the dropdown.");
+        if (canCommunicateWithForeignAgents && newThreadType === "Agency") {
+          // Internal staff (Admin or Communication Manager) initiating thread with Foreign Agency partner
+          if (!selectedContractorId) {
+            throw new Error("Please select a Foreign Agency partner.");
+          }
+          return await createAgencyThreadV2(selectedContractorId);
+        } else {
+          // Internal staff colleague discussion
+          if (!newThreadRecipient.trim() || (!newThreadRecipient.includes("@") && newThreadRecipient.trim() !== "Administrator")) {
+            throw new Error("Please select an internal colleague from the dropdown.");
+          }
+          return await createInternalThreadV2(
+            newThreadRecipient.trim(),
+            newThreadContextType,
+            newThreadContextRef.trim() || undefined
+          );
         }
-        return await createInternalThreadV2(
-          newThreadRecipient.trim(),
-          newThreadContextType,
-          newThreadContextRef.trim() || undefined
-        );
       }
     },
     onSuccess: (res: any) => {
@@ -661,7 +792,7 @@ export function ChatContainer() {
         isForeignAgency
           ? "Staff conversation ready"
           : newThreadType === "Agency"
-          ? "Foreign agency channel active"
+          ? "Foreign Agency partner channel opened"
           : "Conversation thread initialized successfully"
       );
       setIsNewThreadModalOpen(false);
@@ -671,12 +802,14 @@ export function ChatContainer() {
       setNewThreadContextType("General");
 
       queryClient.invalidateQueries({ queryKey: ["chat_threads_my"] });
-      queryClient.invalidateQueries({ queryKey: ["chat_threads_oversight"] });
+      if (isSupervisorOrAdmin) {
+        queryClient.invalidateQueries({ queryKey: ["chat_threads_oversight"] });
+      }
       const threadName = res?.name || res?.thread_name;
       if (threadName) {
         setSelectedThread({
           name: threadName,
-          thread_type: isForeignAgency ? "Agency" : newThreadType,
+          thread_type: isForeignAgency || newThreadType === "Agency" ? "Agency" : "Internal",
         });
         setIsMobileThreadOpen(true);
       }
@@ -724,13 +857,13 @@ export function ChatContainer() {
   const selectedParties = selectedThread ? getThreadParties(selectedThread) : null;
 
   return (
-    <div className="h-[calc(100dvh-56px)] md:h-[calc(100vh-120px)] -m-3 sm:m-0 flex flex-col rounded-none md:rounded-2xl border-0 md:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none md:shadow-sm">
+    <div className="h-[calc(100dvh-56px)] lg:h-[calc(100vh-120px)] w-full min-w-0 max-w-full -m-3 sm:m-0 flex flex-col rounded-none lg:rounded-2xl border-0 lg:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none lg:shadow-sm">
       {/* ------------------------------------------------------------- */}
-      {/* Mobile WhatsApp Header (Thread List)                          */}
+      {/* Mobile & Tablet Header (Thread List)                          */}
       {/* ------------------------------------------------------------- */}
       <div
         className={cn(
-          "md:hidden bg-[#008069] dark:bg-[#1f2c34] text-white px-4 py-3 flex items-center justify-between shadow-xs select-none",
+          "lg:hidden bg-[#008069] dark:bg-[#1f2c34] text-white px-4 py-3 flex items-center justify-between shadow-xs select-none",
           isMobileThreadOpen ? "hidden" : "flex"
         )}
       >
@@ -756,26 +889,23 @@ export function ChatContainer() {
               type="button"
               onClick={() => setViewMode((prev) => (prev === "my" ? "oversight" : "my"))}
               className={cn(
-                "p-2 rounded-full transition-colors",
+                "p-1.5 sm:p-2 rounded-full transition-colors flex items-center gap-1",
                 viewMode === "oversight" ? "bg-white/25 text-white" : "text-white/80 hover:text-white"
               )}
               title={viewMode === "my" ? "Switch to Oversight" : "Switch to My Discussions"}
             >
-              <Shield className="h-4 w-4" />
+              <Shield className="h-4 w-4 shrink-0" />
+              {viewMode === "oversight" && (
+                <span className="text-[10px] font-bold uppercase tracking-wider pr-1">Audit</span>
+              )}
             </button>
           )}
           <button
             type="button"
-            onClick={() => {
-              if (isForeignAgency) {
-                createThreadMutation.mutate();
-              } else {
-                setIsNewThreadModalOpen(true);
-              }
-            }}
+            onClick={() => setIsNewThreadModalOpen(true)}
             disabled={createThreadMutation.isPending}
-            className="p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors"
-            title={isForeignAgency ? "Connect with Staff" : "New Conversation"}
+            className="p-1.5 sm:p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors"
+            title={isForeignAgency ? "Contact Headquarters Staff" : "New Conversation"}
           >
             <Plus className="h-5 w-5" />
           </button>
@@ -785,7 +915,7 @@ export function ChatContainer() {
       {/* ------------------------------------------------------------- */}
       {/* Desktop Top Banner & Quick Header                             */}
       {/* ------------------------------------------------------------- */}
-      <div className="hidden md:flex px-5 py-3 border-b border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#141419] items-center justify-between">
+      <div className="hidden lg:flex px-5 py-3 border-b border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#141419] items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-emerald-900 dark:bg-emerald-600 text-white flex items-center justify-center">
             {isSupervisorOrAdmin && viewMode === "oversight" ? (
@@ -824,13 +954,7 @@ export function ChatContainer() {
           <Button
             type="button"
             size="sm"
-            onClick={() => {
-              if (isForeignAgency) {
-                createThreadMutation.mutate();
-              } else {
-                setIsNewThreadModalOpen(true);
-              }
-            }}
+            onClick={() => setIsNewThreadModalOpen(true)}
             disabled={createThreadMutation.isPending}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs h-8 shadow-xs font-semibold"
           >
@@ -841,7 +965,7 @@ export function ChatContainer() {
             ) : (
               <Plus className="mr-1.5 h-3.5 w-3.5" />
             )}
-            {isForeignAgency ? "Connect with Staff" : "New Conversation"}
+            {isForeignAgency ? "Contact Headquarters Staff" : "New Conversation"}
           </Button>
         </div>
       </div>
@@ -855,8 +979,8 @@ export function ChatContainer() {
         {/* ============================================================= */}
         <div
           className={cn(
-            "w-full md:w-84 lg:w-96 border-r border-slate-200 dark:border-[#202027] flex flex-col bg-slate-50/30 dark:bg-[#121217]",
-            isMobileThreadOpen ? "hidden md:flex" : "flex"
+            "w-full lg:w-80 xl:w-96 shrink-0 border-r border-slate-200 dark:border-[#202027] flex flex-col bg-slate-50/30 dark:bg-[#121217]",
+            isMobileThreadOpen ? "hidden lg:flex" : "flex"
           )}
         >
           {/* Executive View Switcher: Admin & Communication Manager Only */}
@@ -895,7 +1019,7 @@ export function ChatContainer() {
           )}
 
           {/* Thread Search & Supervision Filters */}
-          <div className="p-3 border-b border-slate-200 dark:border-[#202027] space-y-2">
+          <div className="p-2.5 sm:p-3 border-b border-slate-200 dark:border-[#202027] space-y-2">
             <div className="relative">
               <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-slate-400" />
               <Input
@@ -920,9 +1044,9 @@ export function ChatContainer() {
                 <select
                   value={oversightStaffFilter}
                   onChange={(e) => setOversightStaffFilter(e.target.value)}
-                  className="w-full h-7.5 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a38] bg-white dark:bg-[#161622] text-slate-800 dark:text-zinc-200 font-medium"
+                  className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a38] bg-white dark:bg-[#161622] text-slate-800 dark:text-zinc-200 font-medium truncate"
                 >
-                  <option value="all">-- All Internal Staff ({internalEmployees.length}) --</option>
+                  <option value="all">-- All Staff ({internalEmployees.length}) --</option>
                   {internalEmployees.map((emp: any) => {
                     const roleStr = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
                     return (
@@ -941,17 +1065,20 @@ export function ChatContainer() {
                 {[
                   {
                     id: "All",
-                    label: "All",
+                    labelShort: "All",
+                    labelFull: "All",
                     count: isSupervisorOrAdmin && viewMode === "oversight" ? oversightStats.total : undefined,
                   },
                   {
                     id: "Internal",
-                    label: "Staff ↔ Staff",
+                    labelShort: "Staff",
+                    labelFull: "Staff ↔ Staff",
                     count: isSupervisorOrAdmin && viewMode === "oversight" ? oversightStats.internal : undefined,
                   },
                   {
                     id: "Agency",
-                    label: "Staff ↔ Agency",
+                    labelShort: "Agency",
+                    labelFull: "Staff ↔ Agency",
                     count: isSupervisorOrAdmin && viewMode === "oversight" ? oversightStats.agency : undefined,
                   },
                 ].map((type) => {
@@ -962,15 +1089,16 @@ export function ChatContainer() {
                       type="button"
                       onClick={() => setThreadTypeFilter(type.id as "All" | "Agency" | "Internal")}
                       className={cn(
-                        "flex-1 px-2 py-1 text-[10px] font-semibold rounded-md transition-all flex items-center justify-center gap-1",
+                        "flex-1 px-1.5 sm:px-2 py-1 text-[10px] font-semibold rounded-md transition-all flex items-center justify-center gap-1 truncate",
                         active
-                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs"
                           : "text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#20202a]"
                       )}
                     >
-                      <span>{type.label}</span>
+                      <span className="hidden sm:inline">{type.labelFull}</span>
+                      <span className="sm:hidden">{type.labelShort}</span>
                       {type.count !== undefined && (
-                        <span className="opacity-75 font-mono">({type.count})</span>
+                        <span className="opacity-75 font-mono text-[9px]">({type.count})</span>
                       )}
                     </button>
                   );
@@ -1108,56 +1236,55 @@ export function ChatContainer() {
         {/* ============================================================= */}
         <div
           className={cn(
-            "flex-1 flex flex-col bg-white dark:bg-[#0e0e12]",
-            !isMobileThreadOpen ? "hidden md:flex" : "flex"
+            "flex-1 min-w-0 flex flex-col bg-white dark:bg-[#0e0e12]",
+            !isMobileThreadOpen ? "hidden lg:flex" : "flex"
           )}
         >
           {selectedThread ? (
             <>
               {/* Supervisory Mode Audit Banner: Highlight when viewing outside participant scope */}
               {isSupervisorOrAdmin && viewMode === "oversight" && (
-                <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between gap-2 text-xs text-amber-900 dark:text-amber-300">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                    <div className="truncate">
-                      <span className="font-bold">Supervisory Oversight Stream:</span>{" "}
-                      <span>{selectedParties?.partyLine}</span>
-                    </div>
+                <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 text-xs text-amber-900 dark:text-amber-300">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="font-semibold truncate text-[11px] sm:text-xs">
+                      Supervisory Stream: {selectedParties?.partyLine}
+                    </span>
                   </div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-900 dark:text-amber-200 shrink-0">
-                    Audit & Compliance View
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-900 dark:text-amber-200 shrink-0">
+                    Audit & Compliance
                   </span>
                 </div>
               )}
 
               {/* Thread Header: Styled as WhatsApp header on mobile, standard card header on desktop */}
-              <div className="p-2.5 sm:p-3.5 border-b border-slate-200 dark:border-[#202027] flex items-center justify-between gap-2 bg-[#008069] dark:bg-[#1f2c34] md:bg-white md:dark:bg-[#111116] text-white md:text-slate-900 md:dark:text-white shadow-xs md:shadow-none select-none">
+              <div className="p-2.5 sm:p-3.5 border-b border-slate-200 dark:border-[#202027] flex items-center justify-between gap-2 bg-[#008069] dark:bg-[#1f2c34] lg:bg-white lg:dark:bg-[#111116] text-white lg:text-slate-900 lg:dark:text-white shadow-xs lg:shadow-none select-none">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsMobileThreadOpen(false)}
-                    className="md:hidden -ml-1 p-1 h-8 w-8 text-white hover:bg-white/15 rounded-full shrink-0"
+                    className="lg:hidden -ml-1 p-1 h-8 w-8 text-white lg:text-slate-700 hover:bg-white/15 lg:hover:bg-slate-100 rounded-full shrink-0"
                     aria-label="Back to conversations list"
                   >
-                    <ArrowLeft className="h-5 w-5 text-white" />
+                    <ArrowLeft className="h-5 w-5 text-white lg:text-slate-700" />
                   </Button>
 
                   {/* Circular Contact Avatar */}
-                  <div className="h-9 w-9 rounded-full md:rounded-xl bg-white/20 md:bg-slate-100 md:dark:bg-[#191922] border-0 md:border md:border-slate-200 md:dark:border-[#272734] flex items-center justify-center shrink-0">
+                  <div className="h-9 w-9 rounded-full lg:rounded-xl bg-white/20 lg:bg-slate-100 lg:dark:bg-[#191922] border-0 lg:border lg:border-slate-200 lg:dark:border-[#272734] flex items-center justify-center shrink-0">
                     {isAgencyThread ? (
-                      <Globe2 className="h-4 w-4 text-white md:text-blue-600 md:dark:text-blue-400" />
+                      <Globe2 className="h-4 w-4 text-white lg:text-blue-600 lg:dark:text-blue-400" />
                     ) : (
-                      <Building2 className="h-4 w-4 text-white md:text-emerald-700 md:dark:text-emerald-400" />
+                      <Building2 className="h-4 w-4 text-white lg:text-emerald-700 lg:dark:text-emerald-400" />
                     )}
                   </div>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h2 className="text-sm font-bold text-white md:text-slate-900 md:dark:text-white truncate">
+                      <h2 className="text-sm font-bold text-white lg:text-slate-900 lg:dark:text-white truncate">
                         {isAgencyThread && isForeignAgency
-                          ? "Agency Communication Desk"
+                          ? `Headquarters • ${selectedParties?.staffName || "Staff"}`
                           : selectedParties?.partyLine || selectedThread.title || selectedThread.name}
                       </h2>
                       <Badge
@@ -1165,20 +1292,20 @@ export function ChatContainer() {
                         className={cn(
                           "hidden sm:inline-flex text-[10px] px-2 py-0 font-semibold shrink-0",
                           isAgencyThread
-                            ? "border-white/40 md:border-blue-300 text-white md:text-blue-700 md:dark:text-blue-400 bg-white/10 md:bg-blue-50/50"
-                            : "border-white/40 md:border-emerald-300 text-white md:text-emerald-800 md:dark:text-emerald-400 bg-white/10 md:bg-emerald-50/50"
+                            ? "border-white/40 lg:border-blue-300 text-white lg:text-blue-700 lg:dark:text-blue-400 bg-white/10 lg:bg-blue-50/50"
+                            : "border-white/40 lg:border-emerald-300 text-white lg:text-emerald-800 lg:dark:text-emerald-400 bg-white/10 lg:bg-emerald-50/50"
                         )}
                       >
                         {selectedParties?.badgeLabel || selectedThread.thread_type || "Internal"}
                       </Badge>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-[11px] md:text-xs text-emerald-100 md:text-slate-500 dark:text-emerald-200/80 md:dark:text-zinc-400 mt-0.5 truncate">
+                    <div className="flex items-center gap-1.5 text-[11px] lg:text-xs text-emerald-100 lg:text-slate-500 dark:text-emerald-200/80 lg:dark:text-zinc-400 mt-0.5 truncate">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#25d366] shrink-0" />
                       <span className="truncate">
                         {isAgencyThread
-                          ? `Online • ${selectedParties?.agencyName || "Foreign Agency"}`
-                          : `Active • ${(selectedThread.participants || []).join(", ") || "Staff"}`}
+                          ? `Online • ${selectedParties?.agencyName || "Foreign Agency"} ↔ ${selectedParties?.staffName || "Staff"}`
+                          : `Active • ${(selectedThread.participants || []).map((p) => resolveUserDisplay(p).name).filter(Boolean).join(", ") || "Internal Staff"}`}
                       </span>
                     </div>
                   </div>
@@ -1189,7 +1316,7 @@ export function ChatContainer() {
                   {selectedThread.context_type === "Applicant" && selectedThread.context_reference && (
                     <Link
                       href={isForeignAgency ? "/agent" : `/applicants/${selectedThread.context_reference}`}
-                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/15 md:bg-slate-100 text-white md:text-slate-700 border border-white/20 md:border-slate-200 hover:underline"
+                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/15 lg:bg-slate-100 text-white lg:text-slate-700 border border-white/20 lg:border-slate-200 hover:underline"
                     >
                       <User className="h-3 w-3" />
                       Dossier: {selectedThread.context_reference}
@@ -1204,7 +1331,7 @@ export function ChatContainer() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setIsAddParticipantModalOpen(true)}
-                      className="h-8 text-xs text-white md:text-slate-700 hover:bg-white/15 md:hover:bg-slate-100 md:border md:border-slate-300 md:dark:border-[#282835]"
+                      className="h-8 text-xs text-white lg:text-slate-700 hover:bg-white/15 lg:hover:bg-slate-100 lg:border lg:border-slate-300 lg:dark:border-[#282835]"
                     >
                       <UserPlus className="h-3.5 w-3.5 mr-1" />
                       <span className="hidden sm:inline">Add Colleague</span>
@@ -1220,7 +1347,7 @@ export function ChatContainer() {
                       refetchMyThreads();
                       if (isSupervisorOrAdmin) refetchOversightThreads();
                     }}
-                    className="h-8 w-8 text-white md:text-slate-500 hover:bg-white/15 md:hover:bg-slate-100 rounded-full"
+                    className="h-8 w-8 text-white lg:text-slate-500 hover:bg-white/15 lg:hover:bg-slate-100 rounded-full"
                     title="Refresh conversation"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -1229,7 +1356,7 @@ export function ChatContainer() {
               </div>
 
               {/* Messages Stream Area: Styled with WhatsApp wallpaper background on mobile */}
-              <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-2.5 md:space-y-3.5 bg-[#efeae2] dark:bg-[#0b141a] md:bg-white md:dark:bg-[#0e0e12]">
+              <div className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-2.5 lg:space-y-3.5 bg-[#efeae2] dark:bg-[#0b141a] lg:bg-white lg:dark:bg-[#0e0e12]">
                 {/* Date separator */}
                 <div className="flex justify-center my-1">
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium tracking-wide uppercase bg-white/80 dark:bg-[#182229] text-[#54656f] dark:text-[#8696a0] shadow-2xs select-none">
@@ -1265,10 +1392,10 @@ export function ChatContainer() {
                           isOutgoing ? "ml-auto items-end" : "mr-auto items-start"
                         )}
                       >
-                        {/* Desktop Sender info showing Name & Role */}
-                        <div className="hidden md:flex items-center gap-1.5 mb-1 px-1 text-[10px]">
+                        {/* Sender info showing Name & Role */}
+                        <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px]">
                           <span className="font-semibold text-slate-700 dark:text-zinc-300">
-                            {isOutgoing ? "You" : senderInfo.name}
+                            {isOutgoing ? `You (${senderInfo.name})` : senderInfo.name}
                           </span>
                           <span className="px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-[#20202c] text-slate-600 dark:text-zinc-400 font-medium">
                             {senderInfo.role}
@@ -1281,22 +1408,12 @@ export function ChatContainer() {
                         {/* WhatsApp Message bubble */}
                         <div
                           className={cn(
-                            "p-2.5 md:p-3 rounded-2xl text-xs space-y-1.5 leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] md:shadow-2xs",
+                            "p-2.5 lg:p-3 rounded-2xl text-xs space-y-1.5 leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] lg:shadow-2xs",
                             isOutgoing
-                              ? "bg-[#d9fdd3] dark:bg-[#005c4b] md:bg-emerald-900 text-[#111b21] dark:text-[#e9edef] md:text-white rounded-tr-xs"
-                              : "bg-white dark:bg-[#202c33] md:bg-slate-100 md:dark:bg-[#181822] text-[#111b21] dark:text-[#e9edef] md:text-zinc-100 rounded-tl-xs border-0 md:border md:border-slate-200/80 md:dark:border-[#262634]"
+                              ? "bg-[#d9fdd3] dark:bg-[#005c4b] lg:bg-emerald-900 text-[#111b21] dark:text-[#e9edef] lg:text-white rounded-tr-xs"
+                              : "bg-white dark:bg-[#202c33] lg:bg-slate-100 lg:dark:bg-[#181822] text-[#111b21] dark:text-[#e9edef] lg:text-zinc-100 rounded-tl-xs border-0 lg:border lg:border-slate-200/80 lg:dark:border-[#262634]"
                           )}
                         >
-                          {/* Sender name for incoming messages on mobile */}
-                          {!isOutgoing && (
-                            <div className="md:hidden text-[11px] font-bold text-[#008069] dark:text-[#25d366] flex items-center gap-1 mb-0.5">
-                              <span>{senderInfo.name}</span>
-                              <span className="text-[9px] font-normal opacity-70">
-                                ({senderInfo.role})
-                              </span>
-                            </div>
-                          )}
-
                           {msg.message && (
                             <p className="whitespace-pre-wrap text-[13px] md:text-xs">
                               {msg.message}
@@ -1634,160 +1751,192 @@ export function ChatContainer() {
       {/* New Conversation Thread Dialog                                */}
       {/* ============================================================= */}
       <Dialog open={isNewThreadModalOpen} onOpenChange={setIsNewThreadModalOpen}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-5 sm:p-6">
           <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-3">
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-emerald-600" />
-              Initialize Conversation Thread
+              {isForeignAgency
+                ? "Contact Headquarters Staff"
+                : canCommunicateWithForeignAgents
+                ? "New Conversation Channel"
+                : "New Staff Discussion"}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Create an internal staff discussion or connect with registered foreign agency partners.
+              {isForeignAgency
+                ? "Communicate directly with Agency Administrator or Communication Manager."
+                : canCommunicateWithForeignAgents
+                ? "Initiate a channel with a Foreign Agency partner or internal agency colleague."
+                : "Coordinate directly with an internal agency colleague."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
-            {/* Thread Type Selector */}
-            {!isForeignAgency ? (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNewThreadType("Internal")}
-                  className={cn(
-                    "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
-                    newThreadType === "Internal"
-                      ? "border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 ring-1 ring-emerald-800"
-                      : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
-                  )}
-                >
-                  <Building2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
-                  <div>
-                    <span className="font-bold block">Internal Staff Thread</span>
-                    <span className="text-[11px] opacity-80">Coordination between agency colleagues</span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setNewThreadType("Agency")}
-                  className={cn(
-                    "p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all",
-                    newThreadType === "Agency"
-                      ? "border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 ring-1 ring-blue-800"
-                      : "border-slate-200 dark:border-[#262634] text-slate-600 dark:text-zinc-400"
-                  )}
-                >
-                  <Globe2 className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
-                  <div>
-                    <span className="font-bold block">Foreign Agency Channel</span>
-                    <span className="text-[11px] opacity-80">Direct agency partner thread</span>
-                  </div>
-                </button>
-              </div>
-            ) : null}
-
-            {/* Internal Thread Fields or Agency Selector */}
-            {!isForeignAgency && newThreadType === "Internal" ? (
+            {isForeignAgency ? (
+              /* Foreign Agency Modal: Only Admin and Communication Manager allowed */
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                    Recipient Colleague (Staff Username / Email):
+                    Select Headquarters Personnel (Admin or Communication Manager):
                   </label>
                   <select
                     value={newThreadRecipient}
                     onChange={(e) => setNewThreadRecipient(e.target.value)}
-                    className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
+                    className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
                   >
-                    <option value="">-- Select Internal Staff Member --</option>
-                    {internalEmployees
-                      .filter((emp: any) => emp.email !== currentEmail)
-                      .map((emp: any) => {
-                        const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
-                        return (
-                          <option key={emp.email || emp.name} value={emp.email || emp.name}>
-                            {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
-                          </option>
-                        );
-                      })}
+                    <option value="">-- Select Headquarters Contact --</option>
+                    {allowedStaffForAgency.map((emp: any) => {
+                      const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
+                      return (
+                        <option key={emp.email || emp.name} value={emp.email || emp.name}>
+                          {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                      Context Type:
-                    </label>
-                    <select
-                      value={newThreadContextType}
-                      onChange={(e) => setNewThreadContextType(e.target.value)}
-                      className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-                    >
-                      <option value="General">General Coordination</option>
-                      <option value="Applicant">Applicant Specific</option>
-                      <option value="Placement">Placement Specific</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                      Context Reference (Optional):
-                    </label>
-                    <Input
-                      value={newThreadContextRef}
-                      onChange={(e) => setNewThreadContextRef(e.target.value)}
-                      placeholder="e.g. APP-00001"
-                      className="h-8 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : !isForeignAgency && newThreadType === "Agency" ? (
-              <div className="space-y-3 pt-1">
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                    Select Foreign Agency to Communicate With:
-                  </label>
-                  {isContractorsLoading ? (
-                    <div className="h-8.5 px-3 flex items-center gap-2 text-xs text-slate-500 border rounded-lg bg-slate-50 dark:bg-[#161622]">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                      Loading registered foreign agencies...
-                    </div>
-                  ) : availableContractors.length > 0 ? (
-                    <select
-                      value={selectedContractorId}
-                      onChange={(e) => setSelectedContractorId(e.target.value)}
-                      className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
-                    >
-                      <option value="">-- Select Registered Foreign Agency ({availableContractors.length} Available) --</option>
-                      {availableContractors.map((c: any) => {
-                        const countryStr = c.country ? ` — ${c.country}` : "";
-                        const contactStr = c.contact_person ? ` (Contact: ${c.contact_person})` : "";
-                        const userStr = c.user ? ` • [${c.user}]` : "";
-                        return (
-                          <option key={c.name} value={c.name}>
-                            {c.company_name || c.contractor_name || c.name}{countryStr}{contactStr}{userStr}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  ) : (
-                    <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 text-xs">
-                      No registered foreign agencies found. Register contractors in the Contractors module.
-                    </div>
-                  )}
-                </div>
-                <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 text-xs text-blue-900 dark:text-blue-300 space-y-1">
-                  <p className="font-semibold">Dedicated Foreign Agency Channel</p>
+                <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/50 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    Authorized Headquarters Channel
+                  </p>
                   <p className="text-[11px] leading-relaxed">
-                    Selecting a registered foreign agency opens or establishes direct coordination between agency headquarters and the partner contractor. Only the communicating parties and oversight administrators can inspect these threads.
+                    Foreign partners communicate exclusively with authorized Agency Administrators and Communication Managers. Messages sent here are delivered directly to headquarters management.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
-                <p className="font-semibold">Direct Agency Communication Channel</p>
-                <p className="text-[11px] leading-relaxed">
-                  Foreign Agency channels connect directly with headquarters Communication Managers on the backend. Click Initialize to establish or refresh this live channel.
-                </p>
+              /* Internal Staff Modal */
+              <div className="space-y-3 pt-1">
+                {/* Channel Selector for Staff with Admin or Communication Manager Role */}
+                {canCommunicateWithForeignAgents && (
+                  <div className="flex rounded-lg bg-slate-100 dark:bg-[#1a1a24] p-1 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewThreadType("Agency");
+                        setNewThreadRecipient("");
+                      }}
+                      className={cn(
+                        "flex-1 py-1 px-2.5 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors",
+                        newThreadType === "Agency"
+                          ? "bg-white dark:bg-[#252535] text-emerald-800 dark:text-emerald-300 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:text-zinc-400"
+                      )}
+                    >
+                      <Globe2 className="h-3.5 w-3.5" />
+                      Foreign Agency Partner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewThreadType("Internal");
+                        setSelectedContractorId("");
+                      }}
+                      className={cn(
+                        "flex-1 py-1 px-2.5 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors",
+                        newThreadType === "Internal"
+                          ? "bg-white dark:bg-[#252535] text-emerald-800 dark:text-emerald-300 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:text-zinc-400"
+                      )}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      Internal Colleague
+                    </button>
+                  </div>
+                )}
+
+                {/* Option A: Foreign Agency Partner */}
+                {canCommunicateWithForeignAgents && newThreadType === "Agency" ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                        Select Foreign Agency Partner:
+                      </label>
+                      <select
+                        value={selectedContractorId}
+                        onChange={(e) => setSelectedContractorId(e.target.value)}
+                        className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
+                      >
+                        <option value="">-- Select Registered Foreign Agency --</option>
+                        {availableContractors.map((c: any) => (
+                          <option key={c.name} value={c.name}>
+                            {c.company_name || c.contractor_name || c.name} {c.country ? `(${c.country})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-800/50 text-xs text-blue-900 dark:text-blue-300 space-y-1">
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <Globe2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                        Bilateral Foreign Agency Channel
+                      </p>
+                      <p className="text-[11px] leading-relaxed">
+                        Authorized staff (Admin and Communication Manager) can maintain direct operational communication with registered foreign agencies.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* Option B: Internal Colleague */
+                  <div className="space-y-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                        Recipient Colleague (Staff Username / Email):
+                      </label>
+                      <select
+                        value={newThreadRecipient}
+                        onChange={(e) => setNewThreadRecipient(e.target.value)}
+                        className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
+                      >
+                        <option value="">-- Select Internal Staff Member --</option>
+                        {internalEmployees
+                          .filter((emp: any) => {
+                            const isSelf = emp.email?.toLowerCase() === currentEmail || emp.name?.toLowerCase() === currentEmail;
+                            const isForeignAgent = (emp.roles || []).some((r: string) => r.toLowerCase().trim() === "foreign agency" || r.toLowerCase().trim() === "foreign agent");
+                            return !isSelf && !isForeignAgent;
+                          })
+                          .map((emp: any) => {
+                            const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
+                            return (
+                              <option key={emp.email || emp.name} value={emp.email || emp.name}>
+                                {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
+                              </option>
+                            );
+                          })}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                          Context Type:
+                        </label>
+                        <select
+                          value={newThreadContextType}
+                          onChange={(e) => setNewThreadContextType(e.target.value)}
+                          className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                        >
+                          <option value="General">General Coordination</option>
+                          <option value="Applicant">Applicant Specific</option>
+                          <option value="Placement">Placement Specific</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                          Context Reference (Optional):
+                        </label>
+                        <Input
+                          value={newThreadContextRef}
+                          onChange={(e) => setNewThreadContextRef(e.target.value)}
+                          placeholder="e.g. APP-00001"
+                          className="h-8 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1804,7 +1953,12 @@ export function ChatContainer() {
             <Button
               type="button"
               onClick={() => createThreadMutation.mutate()}
-              disabled={createThreadMutation.isPending}
+              disabled={
+                createThreadMutation.isPending ||
+                (isForeignAgency && !newThreadRecipient.trim()) ||
+                (!isForeignAgency && canCommunicateWithForeignAgents && newThreadType === "Agency" && !selectedContractorId) ||
+                (!isForeignAgency && (newThreadType === "Internal" || !canCommunicateWithForeignAgents) && !newThreadRecipient.trim())
+              }
               className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-8 shadow-xs"
             >
               {createThreadMutation.isPending ? (
@@ -1812,7 +1966,11 @@ export function ChatContainer() {
               ) : (
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
               )}
-              Initialize Discussion
+              {isForeignAgency
+                ? "Start Conversation"
+                : canCommunicateWithForeignAgents && newThreadType === "Agency"
+                ? "Open Agency Channel"
+                : "Initialize Discussion"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1845,7 +2003,12 @@ export function ChatContainer() {
               >
                 <option value="">-- Select Colleague to Add --</option>
                 {internalEmployees
-                  .filter((emp: any) => emp.email !== currentEmail && !(selectedThread?.participants || []).includes(emp.email))
+                  .filter((emp: any) => {
+                    const isSelf = emp.email?.toLowerCase() === currentEmail;
+                    const isForeignAgent = (emp.roles || []).some((r: string) => r.toLowerCase().trim() === "foreign agency");
+                    const isAlreadyParticipant = (selectedThread?.participants || []).includes(emp.email);
+                    return !isSelf && !isForeignAgent && !isAlreadyParticipant;
+                  })
                   .map((emp: any) => (
                     <option key={emp.email || emp.name} value={emp.email || emp.name}>
                       {emp.full_name || emp.name} ({emp.email || emp.name})

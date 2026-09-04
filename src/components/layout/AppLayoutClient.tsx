@@ -37,8 +37,14 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
   const isForeignAgency =
     Boolean(authUser) &&
-    (authUser?.roles || []).some((r) => String(r).toLowerCase().trim() === "foreign agency") &&
-    authUser?.is_internal_staff === false;
+    (authUser?.roles || []).some((r: any) => {
+      const roleStr = typeof r === "string" ? r : r?.role || "";
+      return roleStr.toLowerCase().trim() === "foreign agency";
+    }) &&
+    !(authUser?.roles || []).some((r: any) => {
+      const roleStr = typeof r === "string" ? r : r?.role || "";
+      return ["administrator", "system manager", "admin"].includes(roleStr.toLowerCase().trim());
+    });
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -55,7 +61,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   }
 
   return (
-    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden flex-col bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 transition-colors duration-200">
+    <div className="flex min-h-screen w-full max-w-full overflow-x-clip flex-col bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 transition-colors duration-200">
       <AppSidebar
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileMenuOpen}

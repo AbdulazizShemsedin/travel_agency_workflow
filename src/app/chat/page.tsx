@@ -21,7 +21,7 @@ export default function ChatPage() {
   }, [isLoading, isPureForeignAgency, router]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0 w-full max-w-full overflow-hidden">
       <ChatContainer />
     </div>
   );

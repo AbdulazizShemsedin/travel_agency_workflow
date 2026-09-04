@@ -52,7 +52,7 @@ export function AppNavbar({
   const { user, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-4 transition-colors">
+    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-4 transition-colors shadow-2xs">
       {/* Left: Mobile Toggle & Sidebar Collapse Trigger */}
       <div className="flex items-center gap-2">
         <Button

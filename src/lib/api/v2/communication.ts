@@ -78,13 +78,14 @@ export async function createInternalThreadV2(
  * Lists the current user's threads.
  */
 export async function listThreadsV2(): Promise<V2ChatThread[]> {
-  const result = await requestV2<V2ChatThread[] | { threads?: V2ChatThread[] }>(
+  const result = await requestV2<V2ChatThread[] | { threads?: V2ChatThread[]; message?: V2ChatThread[] }>(
     "/api/method/agency_tracking.chat_api.list_threads",
     { method: "POST" }
   );
 
   if (Array.isArray(result)) return result;
   if (result && Array.isArray((result as any).threads)) return (result as any).threads;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
   return [];
 }
 

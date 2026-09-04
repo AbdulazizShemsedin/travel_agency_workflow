@@ -79,6 +79,39 @@ function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | 
   }
 }
 
+async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
+  try {
+    const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
+      method: "POST",
+      headers: forwardHeaders,
+      body: "{}",
+    });
+    const whoData = await whoRes.json().catch(() => ({}));
+    const loggedUser = (whoData.message || "").toLowerCase().trim();
+    if (!loggedUser || loggedUser === "guest") return false;
+    if (loggedUser === "administrator") return true;
+
+    // Check user roles via system token
+    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+    const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: systemAuthHeader,
+      },
+      body: JSON.stringify({ doctype: "User", name: whoData.message }),
+    });
+    const userDoc = await userDocRes.json().catch(() => ({}));
+    const userRoles: string[] = (userDoc.message?.roles || []).map((r: any) =>
+      String(r.role || "").toLowerCase().trim()
+    );
+    const allowed = ["administrator", "system manager", "admin"];
+    return allowed.some((ar) => userRoles.includes(ar));
+  } catch {
+    return false;
+  }
+}
+
 async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
   try {
     const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
@@ -151,13 +184,13 @@ export async function POST(
       "Content-Type": "application/json",
     };
 
-    // Dedicated Oversight Endpoint: List all system threads with participants for Admin & Communication Manager
+    // Dedicated Oversight Endpoint: List all system threads with participants for Admin only
     if (methodPath === "agency_tracking.chat_api.list_all_threads") {
-      // Strictly enforce authorization: Only Admin, System Manager, or Communication Manager
-      const isAuthorized = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
+      // Strictly enforce authorization: Only Admin, Administrator, or System Manager
+      const isAuthorized = await checkIsAdminOnly(config, forwardHeaders);
       if (!isAuthorized) {
         return NextResponse.json(
-          { message: "Forbidden: Thread oversight is restricted to Administrator and Communication Managers." },
+          { message: "Forbidden: Thread oversight is strictly restricted to Administrator and Admin roles only." },
           { status: 403 }
         );
       }

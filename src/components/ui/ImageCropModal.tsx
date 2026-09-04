@@ -32,7 +32,7 @@ export function getInitialCropAspectRatio(
 ): number | null {
   if (defaultRatio !== undefined && defaultRatio !== null) return defaultRatio;
   if (mode === "portrait") return 35 / 45; // ~0.778 standard 35x45mm passport/visa headshot
-  if (mode === "fullbody") return 3 / 4;   // 0.75 standing full body portrait
+  if (mode === "fullbody") return 9 / 16;  // ~0.5625 standard vertical full-length standing posture
   if (mode === "passport") return 1.42;    // Landscape passport spread
   return null;
 }

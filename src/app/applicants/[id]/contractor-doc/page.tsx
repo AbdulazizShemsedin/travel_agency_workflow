@@ -19,6 +19,7 @@ import {
   FileCheck2,
   RefreshCw,
   Download,
+  Printer,
   AlertCircle,
   ExternalLink,
   Sparkles,
@@ -673,13 +674,52 @@ export default function PlacementDocumentCenterPage() {
           <div>
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
+                <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
                     <Eye className="h-4 w-4 text-slate-500" />
                     Document Viewer
                   </span>
-                  {previewFileUrl && (
-                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">
+                  {(contractPreviewUrl || previewFileUrl) && (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = contractPreviewUrl || previewFileUrl;
+                          const win = window.open(url, "_blank");
+                          win?.focus();
+                        }}
+                        className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
+                        title="Print Document"
+                      >
+                        <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                        Print
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const url = contractPreviewUrl || previewFileUrl;
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `Contract_${applicantId || "candidate"}.pdf`;
+                          a.target = "_blank";
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          toast.success("Document downloaded!");
+                        }}
+                        className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
+                        title="Save as PDF"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Save as PDF
+                      </Button>
+                    </div>
+                  )}
+                  {previewFileUrl && !contractPreviewUrl && (
+                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
                       {previewFileUrl}
                     </span>
                   )}
@@ -897,13 +937,52 @@ export default function PlacementDocumentCenterPage() {
               <div>
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold flex items-center justify-between">
+                    <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
                       <span className="flex items-center gap-2">
                         <Eye className="h-4 w-4 text-slate-500" />
                         Visa Document Viewer
                       </span>
-                      {previewFileUrl && (
-                        <span className="text-[10px] font-mono text-slate-400 truncate max-w-[200px]">
+                      {(visaPreviewUrl || previewFileUrl) && (
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const url = visaPreviewUrl || previewFileUrl;
+                              const win = window.open(url, "_blank");
+                              win?.focus();
+                            }}
+                            className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
+                            title="Print Visa Document"
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                            Print
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              const url = visaPreviewUrl || previewFileUrl;
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `eVisa_${applicantId || "candidate"}.pdf`;
+                              a.target = "_blank";
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              toast.success("Visa document downloaded!");
+                            }}
+                            className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
+                            title="Save as PDF"
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1" />
+                            Save as PDF
+                          </Button>
+                        </div>
+                      )}
+                      {previewFileUrl && !visaPreviewUrl && (
+                        <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
                           {previewFileUrl}
                         </span>
                       )}
