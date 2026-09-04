@@ -41,11 +41,15 @@ export interface V2ChatMessage {
 
 /**
  * Creates/fetches this foreign agency's thread with the Communication Manager.
+ * If called by staff, 'contractor' name must be passed to target the specific contractor.
  */
-export async function createAgencyThreadV2(): Promise<{ thread_name: string; [key: string]: any }> {
+export async function createAgencyThreadV2(contractor?: string): Promise<{ thread_name: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.chat_api.create_agency_thread",
-    { method: "POST" }
+    {
+      method: "POST",
+      body: contractor ? { contractor } : undefined,
+    }
   );
 }
 
@@ -81,6 +85,22 @@ export async function listThreadsV2(): Promise<V2ChatThread[]> {
 
   if (Array.isArray(result)) return result;
   if (result && Array.isArray((result as any).threads)) return (result as any).threads;
+  return [];
+}
+
+/**
+ * Lists all threads across the entire agency for Admin & Communication Manager oversight.
+ * Returns each thread enriched with participants, contractor link, and initiator details.
+ */
+export async function listAllThreadsForOversightV2(): Promise<V2ChatThread[]> {
+  const result = await requestV2<V2ChatThread[] | { threads?: V2ChatThread[]; message?: V2ChatThread[] }>(
+    "/api/method/agency_tracking.chat_api.list_all_threads",
+    { method: "POST" }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).threads)) return (result as any).threads;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
   return [];
 }
 

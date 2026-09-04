@@ -65,6 +65,7 @@ export async function listContractorsV2(
   );
 
   if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
   if (result && Array.isArray((result as any).contractors)) return (result as any).contractors;
   return [];
 }

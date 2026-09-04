@@ -97,6 +97,7 @@
 | 75 | **Commission Batch Advance Payment & Ledger Posting** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated recordBatchAdvanceV2 with advance modal, financial grid, and Partially Settled state transition. |
 | 76 | **Foreign Agency Mobile Navigation & Dedicated Staff Chat Workspace** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Built mobile quick-nav bar & hamburger drawer in AgentLayout. Integrated dedicated /agent/chat workspace backed by create_agency_thread with auto-init & responsive chat pane. |
 | 77 | **Foreign Agency Wakala UI Terminology & Push Notification Wiring** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Renamed applicant Stepper Ribbon to 'Processing (LMIS, Te'shir, Embassy)'. Purged 'Musaned' from /agent/wakala. Wired real Web Push registration (get_vapid_public_key, subscribe_to_push) & status (get_push_subscription_status). Preserved Monday deadline gate and Fri/Sat/Sun schedule. Verified live browser runtime as foreign agency. |
+| 78 | **Foreign Agency Contractor Chat Selection, Communicating-Party Privacy & Executive Oversight** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Foreign agency selection in New Conversation dialog wired to list_contractors with elevated proxy fallback. Enforced strict communicating-party privacy: regular staff & agencies only view their own participating threads. Implemented executive supervision & audit mode for Administrator and Communication Manager roles, resolving communicating parties ('Who communicated with whom'), staff-specific filtering, and read-only inspection stream. Verified live against production Railway backend. |
 
 ---
 
@@ -126,3 +127,4 @@
 10. **Phase 10: Foreign Agency Mobile Navigation & Staff Chat Workspace Integration** -> [DONE]
 11. **Phase 11: Foreign Agency Wakala & Push Notification Protocol** -> [DONE]
 12. **Phase 12: Comprehensive Corrective Hardening & Multi-Stage RBAC System** -> [DONE]
+13. **Phase 13: Foreign Agency Chat Contractor Selection, Privacy Gating & Admin / Communication Manager Supervision Oversight** -> [DONE]
