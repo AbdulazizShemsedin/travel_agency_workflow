@@ -89,3 +89,42 @@ export async function createContractorV2(
     }
   );
 }
+
+/**
+ * Updates an existing Contractor record in Frappe.
+ */
+export async function updateContractorV2(
+  name: string,
+  payload: {
+    contractor_name?: string;
+    company_name?: string;
+    country?: string;
+    contact_person?: string;
+    communication_manager?: string;
+    phone?: string;
+    whatsapp?: string;
+    email?: string;
+    notes?: string;
+    [key: string]: any;
+  }
+): Promise<any> {
+  const fieldnamePayload: Record<string, any> = {};
+  if (payload.contractor_name !== undefined) fieldnamePayload.contractor_name = payload.contractor_name;
+  if (payload.country !== undefined) fieldnamePayload.country = payload.country;
+  if (payload.communication_manager !== undefined) fieldnamePayload.communication_manager = payload.communication_manager;
+  if (payload.contact_person !== undefined) fieldnamePayload.contact_person = payload.contact_person;
+  if (payload.phone !== undefined) fieldnamePayload.phone = payload.phone;
+  if (payload.whatsapp !== undefined) fieldnamePayload.whatsapp = payload.whatsapp;
+  if (payload.email !== undefined) fieldnamePayload.email = payload.email;
+  if (payload.notes !== undefined) fieldnamePayload.notes = payload.notes;
+
+  return requestV2("/api/method/frappe.client.set_value", {
+    method: "POST",
+    body: {
+      doctype: "Contractor",
+      name,
+      fieldname: fieldnamePayload,
+    },
+  });
+}
+

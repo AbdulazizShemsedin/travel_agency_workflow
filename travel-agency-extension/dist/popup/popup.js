@@ -52,6 +52,10 @@ function validateSelectedApplicant(input) {
     visaNumber: typeof obj.visaNumber === "string" ? obj.visaNumber.trim() : void 0,
     contractNumber: typeof obj.contractNumber === "string" ? obj.contractNumber.trim() : void 0,
     contractorName: typeof obj.contractorName === "string" ? obj.contractorName.trim() : void 0,
+    motherName: typeof obj.motherName === "string" ? obj.motherName.trim() : void 0,
+    injazNumber: typeof obj.injazNumber === "string" ? obj.injazNumber.trim() : void 0,
+    mission: typeof obj.mission === "string" ? obj.mission.trim() : void 0,
+    educationLevel: typeof obj.educationLevel === "string" ? obj.educationLevel.trim() : void 0,
     selectedAt: typeof obj.selectedAt === "string" && obj.selectedAt.trim() ? obj.selectedAt.trim() : (/* @__PURE__ */ new Date()).toISOString()
   };
   return { valid: true, applicant: sanitized };
@@ -161,6 +165,10 @@ function executeAutofill(applicant) {
   const visaNumber = (applicant.visaNumber || "").trim();
   const contractNumber = (applicant.contractNumber || "").trim();
   const address = (applicant.addressLine1 || originCity || "Addis Ababa, Ethiopia").trim();
+  const motherName = (applicant.motherName || "Ayesha Mohammed").trim();
+  const injazNumber = (applicant.injazNumber || `E${passportNumber.replace(/\D/g, "") || "4982104"}`).trim();
+  const mission = (applicant.mission || "Addis Ababa").trim();
+  const educationLevel = (applicant.educationLevel || "Primary School").trim();
   function getElementDescriptor(el) {
     const directParts = [];
     const contextParts = [];
@@ -199,7 +207,7 @@ function executeAutofill(applicant) {
         contextParts.push(heading.textContent);
       }
     }
-    const clean = (arr) => arr.join(" ").replace(/[\u2116\u2117]/g, "no").replace(/[^\w\s@.-]/gi, " ").toLowerCase().replace(/\s+/g, " ").trim();
+    const clean = (arr) => arr.join(" ").replace(/[\u2116\u2117]/g, "no").replace(/[^\w\s@.\u0600-\u06FF-]/gi, " ").toLowerCase().replace(/\s+/g, " ").trim();
     const direct = clean(directParts);
     const context = clean(contextParts);
     const all = `${direct} ${context}`.trim();
@@ -473,43 +481,91 @@ function executeAutofill(applicant) {
       fieldName: "Sponsor Name",
       targetValue: sponsorName,
       calculateScore: (d) => {
-        if (/sponsor[_\s-]?name|kafeel[_\s-]?name|employer[_\s-]?name/i.test(d.all)) return 175;
+        if (/sponsor[_\s-]?name|kafeel[_\s-]?name|employer[_\s-]?name|اسم[_\s-]?الكفيل|اسم[_\s-]?صاحب[_\s-]?العمل|صاحب[_\s-]?العمل|الكفيل/i.test(d.all) && !/id|no|هوية|سجل|رقم/i.test(d.all)) return 195;
         return 0;
       }
     },
-    // 23. Sponsor ID
+    // 23. Sponsor ID / Iqama / National ID
     {
       fieldName: "Sponsor ID",
       targetValue: sponsorId,
       calculateScore: (d) => {
-        if (/sponsor[_\s-]?id|kafeel[_\s-]?id|employer[_\s-]?id|sponsor[_\s-]?nid/i.test(d.all)) return 175;
+        if (/sponsor[_\s-]?id|kafeel[_\s-]?id|employer[_\s-]?id|sponsor[_\s-]?nid|رقم[_\s-]?الهوية|رقم[_\s-]?السجل|هوية[_\s-]?الكفيل|السجل[_\s-]?المدني|سجل[_\s-]?مدني|الاقامة|الإقامة|iqama/i.test(d.all)) return 195;
         return 0;
       }
     },
-    // 24. Visa Number
+    // 24. Sponsor Phone
+    {
+      fieldName: "Sponsor Phone",
+      targetValue: sponsorPhone,
+      calculateScore: (d) => {
+        if (/sponsor[_\s-]?phone|sponsor[_\s-]?mobile|kafeel[_\s-]?mobile|جوال[_\s-]?الكفيل|هاتف[_\s-]?الكفيل|رقم[_\s-]?جوال[_\s-]?الكفيل/i.test(d.all)) return 195;
+        return 0;
+      }
+    },
+    // 25. Visa Number
     {
       fieldName: "Visa Number",
       targetValue: visaNumber,
       calculateScore: (d) => {
-        if (/visa[_\s-]?no|visa[_\s-]?number|entry[_\s-]?visa/i.test(d.all) && !/type/i.test(d.all)) return 175;
+        if (/visa[_\s-]?no|visa[_\s-]?number|entry[_\s-]?visa|visano|رقم[_\s-]?التأشيرة|رقم[_\s-]?التاشيرة|التأشيرة/i.test(d.all) && !/type|نوع/i.test(d.all)) return 195;
+        if (/visa|تأشيرة/i.test(d.all) && !/type|نوع|issue|expir/i.test(d.all)) return 140;
         return 0;
       }
     },
-    // 25. Contract Number
+    // 26. Contract Number
     {
       fieldName: "Contract Number",
       targetValue: contractNumber,
       calculateScore: (d) => {
-        if (/contract[_\s-]?no|contract[_\s-]?number|agreement[_\s-]?no/i.test(d.all)) return 175;
+        if (/contract[_\s-]?no|contract[_\s-]?number|agreement[_\s-]?no|رقم[_\s-]?العقد|عقد/i.test(d.all)) return 190;
         return 0;
       }
     },
-    // 26. Address
+    // 27. Address
     {
       fieldName: "Address",
       targetValue: address,
       calculateScore: (d) => {
-        if (/address[_\s-]?line|street[_\s-]?address|applicant[_\s-]?address|^address$/i.test(d.all)) return 150;
+        if (/address[_\s-]?line|street[_\s-]?address|applicant[_\s-]?address|^address$|العنوان/i.test(d.all)) return 150;
+        return 0;
+      }
+    },
+    // 28. Mother's Name (MOFA / Visa Platform specific)
+    {
+      fieldName: "Mother's Name",
+      targetValue: motherName,
+      calculateScore: (d) => {
+        if (/mother[_\s-]?name|mother|اسم[_\s-]?الأم|اسم[_\s-]?الام|والدة/i.test(d.all)) return 195;
+        return 0;
+      }
+    },
+    // 29. MOFA Application Number / Barcode / Injaz Number
+    {
+      fieldName: "MOFA / Injaz Barcode Number",
+      targetValue: injazNumber,
+      calculateScore: (d) => {
+        if (/injaz[_\s-]?no|injaz[_\s-]?number|mofa[_\s-]?app|application[_\s-]?no|app[_\s-]?no|barcode|رقم[_\s-]?الطلب|رقم[_\s-]?انجاز|إنجاز/i.test(d.all)) return 195;
+        return 0;
+      }
+    },
+    // 30. Mission / Embassy / Consulate / Port of Entry
+    {
+      fieldName: "Mission / Embassy",
+      targetValue: mission,
+      isSelect: true,
+      calculateScore: (d) => {
+        if (/mission|embassy|consulate|port[_\s-]?of[_\s-]?entry|جهة[_\s-]?القدوم|القنصلية|الممثلية/i.test(d.all)) return 185;
+        return 0;
+      }
+    },
+    // 31. Education Level / Qualification
+    {
+      fieldName: "Education Level",
+      targetValue: educationLevel,
+      isSelect: true,
+      calculateScore: (d) => {
+        if (/education[_\s-]?level|qualification|academic|degree|المؤهل|المؤهل[_\s-]?التعليمي/i.test(d.all)) return 180;
         return 0;
       }
     }

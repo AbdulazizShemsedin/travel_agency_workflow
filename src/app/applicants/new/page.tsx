@@ -1,8 +1,43 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, ShieldAlert } from "lucide-react";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { Button } from "@/components/ui/button";
 
 export default function NewApplicantPage() {
+  const router = useRouter();
+  const { can, isLoading } = useAuth();
+  const canRegister = can("registerApplicant");
+
+  React.useEffect(() => {
+    if (!isLoading && !canRegister) {
+      router.replace("/applicants");
+    }
+  }, [isLoading, canRegister, router]);
+
+  if (!isLoading && !canRegister) {
+    return (
+      <div className="p-8 max-w-lg mx-auto text-center space-y-4">
+        <div className="h-12 w-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Permission Denied</h2>
+        <p className="text-xs text-slate-600 dark:text-zinc-400">
+          Your assigned role does not authorize adding new applicants. Only Registrars and Administrators may register candidates.
+        </p>
+        <Link href="/applicants">
+          <Button variant="outline" size="sm">
+            Return to Applicants
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* Breadcrumb & Header matching Figma Page 4 */}

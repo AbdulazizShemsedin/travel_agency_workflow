@@ -512,6 +512,14 @@ export default function EmployeesPage() {
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-slate-400" />
             <Input
+              id="staff_search_query_no_autofill"
+              name="staff_search_query_no_autofill"
+              type="search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search staff by name, email, phone, or role..."
@@ -1123,7 +1131,29 @@ export default function EmployeesPage() {
               </div>
             </DialogHeader>
 
-            <div className="space-y-3 py-2 text-xs">
+            <form
+              autoComplete="off"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newPassword.trim() && !resetPasswordMutation.isPending) {
+                  resetPasswordMutation.mutate({
+                    email: selectedForPassword.email,
+                    newPassword,
+                  });
+                }
+              }}
+              className="space-y-3 py-2 text-xs"
+            >
+              {/* Hidden dummy username input so browser autofill stays bounded inside this form */}
+              <input
+                type="text"
+                name="username"
+                value={selectedForPassword.email}
+                readOnly
+                className="hidden"
+                autoComplete="username"
+                tabIndex={-1}
+              />
               <div className="space-y-1.5">
                 <Label htmlFor="reset_new_pwd" className="text-xs font-semibold">
                   New Secure Password
@@ -1131,8 +1161,11 @@ export default function EmployeesPage() {
                 <div className="relative">
                   <Input
                     id="reset_new_pwd"
+                    name="new_password_field"
                     type={showNewPassword ? "text" : "password"}
                     placeholder="Enter new password"
+                    autoComplete="new-password"
+                    data-lpignore="true"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="h-8.5 text-xs pr-8 font-mono"
@@ -1149,7 +1182,7 @@ export default function EmployeesPage() {
                   Password must be at least 8 characters. The employee can immediately authenticate with these new credentials.
                 </p>
               </div>
-            </div>
+            </form>
 
             <DialogFooter className="border-t border-slate-100 dark:border-[#1e1e24] pt-3 flex items-center justify-end gap-2">
               <Button

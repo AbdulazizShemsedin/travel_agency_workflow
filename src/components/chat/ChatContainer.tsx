@@ -53,6 +53,8 @@ import {
   V2ChatMessage,
 } from "@/lib/api/v2/communication";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
+import { listEmployeesV2 } from "@/lib/api/v2/employees";
+import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { cn } from "@/lib/utils";
 
 export function ChatContainer() {
@@ -65,13 +67,15 @@ export function ChatContainer() {
     return hasRole && authUser?.is_internal_staff === false;
   }, [roles, authUser]);
 
-  // State
+  // Selected Thread State
   const [selectedThread, setSelectedThread] = React.useState<V2ChatThread | null>(null);
+
+  // Search & Filters
   const [searchQuery, setSearchQuery] = React.useState<string>("");
-  const [threadTypeFilter, setThreadTypeFilter] = React.useState<string>("All");
+  const [threadTypeFilter, setThreadTypeFilter] = React.useState<"All" | "Agency" | "Internal">("All");
   const [isMobileThreadOpen, setIsMobileThreadOpen] = React.useState<boolean>(false);
 
-  // Composer State
+  // Message Composition State
   const [messageText, setMessageText] = React.useState<string>("");
   const [mentionedApplicant, setMentionedApplicant] = React.useState<string>("");
   const [mentionedPlacement, setMentionedPlacement] = React.useState<string>("");
@@ -88,11 +92,27 @@ export function ChatContainer() {
     isForeignAgency ? "Agency" : "Internal"
   );
   const [newThreadRecipient, setNewThreadRecipient] = React.useState<string>("");
+  const [selectedContractorId, setSelectedContractorId] = React.useState<string>("");
   const [newThreadContextType, setNewThreadContextType] = React.useState<string>("General");
   const [newThreadContextRef, setNewThreadContextRef] = React.useState<string>("");
 
   // Add Participant Form State
   const [newParticipantEmail, setNewParticipantEmail] = React.useState<string>("");
+
+  // Queries for internal staff and foreign agency selection
+  const { data: internalEmployees = [] } = useQuery({
+    queryKey: ["v2_employees_chat_dropdown"],
+    queryFn: listEmployeesV2,
+    enabled: !isForeignAgency,
+    staleTime: 60000,
+  });
+
+  const { data: availableContractors = [] } = useQuery({
+    queryKey: ["v2_contractors_chat_dropdown"],
+    queryFn: () => listContractorsV2(),
+    enabled: !isForeignAgency,
+    staleTime: 60000,
+  });
 
   // 1. Fetch User's Real Threads List
   const {
@@ -220,11 +240,38 @@ export function ChatContainer() {
 
   const createThreadMutation = useMutation({
     mutationFn: async () => {
-      if (isForeignAgency || newThreadType === "Agency") {
+      if (isForeignAgency) {
+        return await createAgencyThreadV2();
+      } else if (newThreadType === "Agency") {
+        if (!selectedContractorId) {
+          throw new Error("Please select a foreign agency from the list.");
+        }
+        // Check if an existing thread for this contractor already exists
+        const existing = threads.find(
+          (t) =>
+            t.thread_type === "Agency" &&
+            (t.contractor === selectedContractorId ||
+              t.title?.toLowerCase().includes(selectedContractorId.toLowerCase()) ||
+              t.name.includes(selectedContractorId))
+        );
+        if (existing) {
+          return { name: existing.name, thread_name: existing.name, existed: true };
+        }
+        // Check target contractor's linked user account
+        const targetCon = availableContractors.find(
+          (c) => c.name === selectedContractorId || c.company_name === selectedContractorId
+        );
+        if (targetCon?.user || targetCon?.user_email) {
+          return await createInternalThreadV2(
+            targetCon.user || targetCon.user_email!,
+            "General",
+            selectedContractorId
+          );
+        }
         return await createAgencyThreadV2();
       } else {
         if (!newThreadRecipient.trim() || !newThreadRecipient.includes("@")) {
-          throw new Error("Recipient email must be a valid User name (email address).");
+          throw new Error("Please select a staff colleague from the dropdown.");
         }
         return await createInternalThreadV2(
           newThreadRecipient.trim(),
@@ -234,9 +281,16 @@ export function ChatContainer() {
       }
     },
     onSuccess: (res: any) => {
-      toast.success(isForeignAgency ? "Staff conversation ready" : "Conversation thread initialized successfully");
+      toast.success(
+        isForeignAgency
+          ? "Staff conversation ready"
+          : newThreadType === "Agency"
+          ? "Foreign agency channel active"
+          : "Conversation thread initialized successfully"
+      );
       setIsNewThreadModalOpen(false);
       setNewThreadRecipient("");
+      setSelectedContractorId("");
       setNewThreadContextRef("");
       setNewThreadContextType("General");
 
@@ -389,7 +443,7 @@ export function ChatContainer() {
                     <button
                       key={type}
                       type="button"
-                      onClick={() => setThreadTypeFilter(type)}
+                      onClick={() => setThreadTypeFilter(type as "All" | "Agency" | "Internal")}
                       className={cn(
                         "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all",
                         active
@@ -920,19 +974,30 @@ export function ChatContainer() {
               </div>
             ) : null}
 
-            {/* Internal Thread Fields or Agency Message */}
+            {/* Internal Thread Fields or Agency Selector */}
             {!isForeignAgency && newThreadType === "Internal" ? (
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                    Recipient Colleague (User.name = email):
+                    Recipient Colleague (Staff Username / Email):
                   </label>
-                  <Input
+                  <select
                     value={newThreadRecipient}
                     onChange={(e) => setNewThreadRecipient(e.target.value)}
-                    placeholder="colleague@agency.com"
-                    className="h-8 text-xs font-mono"
-                  />
+                    className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
+                  >
+                    <option value="">-- Select Internal Staff Member --</option>
+                    {internalEmployees
+                      .filter((emp: any) => emp.email !== currentEmail)
+                      .map((emp: any) => {
+                        const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
+                        return (
+                          <option key={emp.email || emp.name} value={emp.email || emp.name}>
+                            {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
+                          </option>
+                        );
+                      })}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -962,6 +1027,32 @@ export function ChatContainer() {
                       className="h-8 text-xs font-mono"
                     />
                   </div>
+                </div>
+              </div>
+            ) : !isForeignAgency && newThreadType === "Agency" ? (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                    Select Foreign Agency to Communicate With:
+                  </label>
+                  <select
+                    value={selectedContractorId}
+                    onChange={(e) => setSelectedContractorId(e.target.value)}
+                    className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
+                  >
+                    <option value="">-- Select Registered Foreign Agency --</option>
+                    {availableContractors.map((c: any) => (
+                      <option key={c.name} value={c.name}>
+                        {c.company_name || c.contractor_name || c.name} — {c.country || "GCC"} {c.contact_person ? `(${c.contact_person})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 text-xs text-blue-900 dark:text-blue-300 space-y-1">
+                  <p className="font-semibold">Dedicated Agency Channel</p>
+                  <p className="text-[11px] leading-relaxed">
+                    Connecting to the selected foreign partner agency opens their dedicated communication thread with headquarters Communication Managers.
+                  </p>
                 </div>
               </div>
             ) : (

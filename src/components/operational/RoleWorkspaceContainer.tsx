@@ -26,7 +26,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
 export function RoleWorkspaceContainer() {
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
 
   // Determine if user has administrator or manager privileges
   const isAdmin = React.useMemo<boolean>(() => {
@@ -43,6 +43,8 @@ export function RoleWorkspaceContainer() {
       );
     });
   }, [authUser, roles]);
+
+  const canRegister = can("registerApplicant");
 
   const allTabsConfig = [
     { id: "directory", label: "Directory", icon: Users, desc: "All Candidates" },
@@ -216,7 +218,7 @@ export function RoleWorkspaceContainer() {
         </div>
 
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {canRegister && (
             <Link href="/applicants/new">
               <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-9">
                 <Plus className="mr-1.5 h-4 w-4" />

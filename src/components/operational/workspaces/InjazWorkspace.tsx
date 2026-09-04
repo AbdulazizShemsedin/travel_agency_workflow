@@ -15,6 +15,7 @@ import {
   FileText,
   FileDown,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -37,6 +38,7 @@ import {
   openInjazDocumentInNewTab,
   InjazCandidateData,
 } from "@/lib/pdf/injazDocumentGenerator";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 
 interface InjazWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -567,6 +569,28 @@ export function InjazWorkspace({
               >
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                 Open Injaz in New Tab
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!selectedRow) return;
+                  try {
+                    const res = await sendApplicantToExtension(selectedRow.applicant || (selectedRow as any));
+                    if (res.success) {
+                      toast.success("Candidate sent to extension for MOFA / Visa autofill!");
+                    } else {
+                      toast.info("Candidate loaded into browser extension memory.");
+                    }
+                  } catch (err: any) {
+                    toast.error("Failed to bridge candidate to extension: " + err.message);
+                  }
+                }}
+                className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+              >
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                Send to Extension (MOFA / Visa)
               </Button>
             </div>
           </div>

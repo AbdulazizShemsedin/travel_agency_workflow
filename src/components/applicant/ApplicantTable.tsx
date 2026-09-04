@@ -210,7 +210,7 @@ export function ApplicantTable() {
               }`}
             >
               <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-              Assign Employee ({selectedRows.size})
+              Edit Staff ({selectedRows.size})
             </Button>
           </div>
         </div>

@@ -22,8 +22,11 @@ import { calculateRemainingDays } from "@/lib/validations/applicant.schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function DashboardPage() {
+  const { can } = useAuth();
+  const canRegister = can("registerApplicant");
   const { data: rawApplicants = [], isLoading } = useQuery({
     queryKey: ["applicants_v2_dashboard"],
     queryFn: () => listApplicantsV2(),
@@ -240,14 +243,16 @@ export default function DashboardPage() {
             Dashboard
           </h1>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/applicants/new">
-            <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs">
-              <PlusCircle className="mr-1.5 h-4 w-4" />
-              Add Applicant
-            </Button>
-          </Link>
-        </div>
+        {canRegister && (
+          <div className="flex items-center gap-3">
+            <Link href="/applicants/new">
+              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs">
+                <PlusCircle className="mr-1.5 h-4 w-4" />
+                Add Applicant
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* 1. Top Stat Metric Cards */}

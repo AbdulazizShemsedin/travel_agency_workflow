@@ -153,27 +153,49 @@ export function AppSidebar({
                 : pathname === item.href;
 
             return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={onCloseMobile}
-                title={!showLabels ? item.label : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 font-semibold border-l-4 border-emerald-800 dark:border-emerald-500 rounded-l-none"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white",
-                  !showLabels ? "justify-center px-2" : ""
-                )}
-              >
-                <Icon
+              <React.Fragment key={item.label}>
+                <Link
+                  href={item.href}
+                  onClick={onCloseMobile}
+                  title={!showLabels ? item.label : undefined}
                   className={cn(
-                    "h-4 w-4 shrink-0",
-                    isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 font-semibold border-l-4 border-emerald-800 dark:border-emerald-500 rounded-l-none"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white",
+                    !showLabels ? "justify-center px-2" : ""
                   )}
-                />
-                {showLabels && <span>{item.label}</span>}
-              </Link>
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0",
+                      isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"
+                    )}
+                  />
+                  {showLabels && <span>{item.label}</span>}
+                </Link>
+
+                {item.href === "/reports" && showLabels && (
+                  <div className="ml-7 pl-2.5 border-l border-slate-200 dark:border-zinc-800 py-1 space-y-0.5">
+                    {[
+                      { label: "Daily", period: "daily" },
+                      { label: "Weekly", period: "weekly" },
+                      { label: "Monthly", period: "monthly" },
+                      { label: "Yearly", period: "yearly" },
+                    ].map((sub) => (
+                      <Link
+                        key={sub.period}
+                        href={`/reports?period=${sub.period}`}
+                        onClick={onCloseMobile}
+                        className="flex items-center gap-2 px-2 py-1 rounded text-xs text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-slate-100 dark:hover:bg-zinc-800/50 transition-colors"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-zinc-600" />
+                        <span>{sub.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </nav>

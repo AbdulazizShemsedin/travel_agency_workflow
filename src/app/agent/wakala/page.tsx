@@ -18,17 +18,26 @@ import {
   AlertCircle,
   CheckCircle2,
   BellRing,
+  Bell,
   ExternalLink,
   Calendar,
   AlertTriangle,
   Lock,
   User,
+  MessageCircle,
+  Radio,
 } from "lucide-react";
 import {
   listMyWakalaRequestsV2,
   V2WakalaRequestItem,
 } from "@/lib/api/v2/portal";
-import { triggerWakalaReminderV2 } from "@/lib/api/v2/notifications";
+import {
+  triggerWakalaReminderV2,
+  getPushSubscriptionStatusV2,
+  subscribeToPushV2,
+  getVapidPublicKeyV2,
+  V2PushSubscriptionStatus,
+} from "@/lib/api/v2/notifications";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,9 +46,20 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export default function AgentWakalaRequestsPage() {
   const queryClient = useQueryClient();
-  const { authUser, agencyContext, roles } = useAuth();
+  const { authUser, agencyContext, roles, user } = useAuth();
   const userRoles = Array.isArray(roles) ? roles.map(String) : [];
 
   const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
@@ -53,10 +73,10 @@ export default function AgentWakalaRequestsPage() {
 
   const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
   const isForeignAgency = userRoles.some((r) => r.toLowerCase().includes("foreign agency") || r.toLowerCase().includes("agent"));
-  const isInternalStaff = userRoles.some((r) => ["Administrator", "System Manager", "Manager", "Admin"].includes(r));
 
   const [searchTerm, setSearchTerm] = React.useState("");
   const [remindingStepName, setRemindingStepName] = React.useState<string | null>(null);
+  const [isSubscribingPush, setIsSubscribingPush] = React.useState<boolean>(false);
 
   // 1. Fetch Real Unpaid Wakala Requests from V2 Portal API
   const {
@@ -69,6 +89,18 @@ export default function AgentWakalaRequestsPage() {
   } = useQuery<V2WakalaRequestItem[]>({
     queryKey: ["agency-wakala-requests", effectiveContractor],
     queryFn: () => listMyWakalaRequestsV2(),
+    staleTime: 15000,
+  });
+
+  // 2. Fetch Authoritative Backend Push Subscription Status for Current User
+  const {
+    data: pushStatus,
+    isLoading: isPushStatusLoading,
+    refetch: refetchPushStatus,
+  } = useQuery<V2PushSubscriptionStatus>({
+    queryKey: ["push_subscription_status", user || authUser?.email],
+    queryFn: getPushSubscriptionStatusV2,
+    enabled: Boolean(user || authUser?.email),
     staleTime: 15000,
   });
 
@@ -110,12 +142,83 @@ export default function AgentWakalaRequestsPage() {
     reminderMutation.mutate(stepName);
   };
 
+  // Real Browser Web Push Registration via V2 Backend API
+  const handleEnablePush = async () => {
+    if (typeof window === "undefined") return;
+
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      toast.error("Push Notifications Not Supported", {
+        description: "Your current browser does not support standard Web Push notifications.",
+      });
+      return;
+    }
+
+    setIsSubscribingPush(true);
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        toast.error("Notification Permission Denied", {
+          description: "Browser notification permission was not granted by user.",
+        });
+        return;
+      }
+
+      // 1. Fetch authoritative VAPID public key from live backend
+      const vapidKey = await getVapidPublicKeyV2();
+
+      // 2. Clear stale subscription if present
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) {
+        await existingSub.unsubscribe();
+      }
+
+      // 3. Subscribe with browser PushManager
+      const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as any,
+      });
+
+      const p256dhKey = subscription.getKey("p256dh");
+      const authKey = subscription.getKey("auth");
+      const p256dh = p256dhKey
+        ? btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(p256dhKey))))
+        : "";
+      const auth = authKey
+        ? btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(authKey))))
+        : "";
+
+      // 4. Register browser subscription on Railway backend for this user
+      await subscribeToPushV2(subscription.endpoint, p256dh, auth);
+
+      localStorage.setItem("push_notifications_enabled", "true");
+      await refetchPushStatus();
+      queryClient.invalidateQueries({ queryKey: ["push_subscription_status"] });
+
+      toast.success("Web Push Notifications Activated", {
+        description: "Wakala reminders will now deliver instant alerts to this browser on Friday, Saturday, and Sunday.",
+      });
+    } catch (err: any) {
+      console.error("Failed to enable push notifications:", err);
+      toast.error("Subscription Error", {
+        description: err?.message || "Could not register push subscription with backend.",
+      });
+    } finally {
+      setIsSubscribingPush(false);
+    }
+  };
+
+  const isPushSubscribed = Boolean(pushStatus?.subscribed);
+
   return (
     <AgentLayout
       activeContractor={effectiveContractor}
       onContractorChange={setActiveContractor}
     >
-      <div className="p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-6">
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-[#222227] pb-4">
           <div>
@@ -131,7 +234,7 @@ export default function AgentWakalaRequestsPage() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Review pending Musaned Wakala authorization requests for your agency&apos;s placements before the Monday Embassy submission deadline.
+              Review pending Wakala authorization requests for your agency&apos;s placements before the Monday Embassy submission deadline.
             </p>
           </div>
 
@@ -139,7 +242,10 @@ export default function AgentWakalaRequestsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
+              onClick={() => {
+                refetch();
+                refetchPushStatus();
+              }}
               disabled={isLoading || isRefetching}
               className="text-xs border-slate-300 dark:border-[#26262d]"
             >
@@ -162,25 +268,100 @@ export default function AgentWakalaRequestsPage() {
           </div>
         )}
 
-        {/* Embassy Submission Deadline Notice */}
-        <Card className="border-amber-200/80 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10">
-          <CardHeader className="pb-2">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-600" />
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
-                Saudi Embassy Monday Submission Gate
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="text-xs text-slate-600 dark:text-zinc-300 space-y-1">
-            <p>
-              Musaned Wakala authorization and payment must be completed prior to the <strong>Monday document submission deadline</strong>. Clearance steps without paid Wakala cannot proceed to Embassy stamping.
-            </p>
-            <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-              Automatic payment reminders run every Friday, Saturday, and Sunday via Web Push and WhatsApp to ensure timely submission.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Embassy Submission Gate & Dual-Channel Notification Notice */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Submission Deadline Rule */}
+          <Card className="lg:col-span-2 border-amber-200/80 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                    Saudi Embassy Monday Submission Gate
+                  </CardTitle>
+                </div>
+                <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-100/60 dark:bg-amber-950 text-[10px] font-semibold">
+                  Strict Cutoff
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="text-xs text-slate-600 dark:text-zinc-300 space-y-2">
+              <p className="leading-relaxed">
+                Wakala authorization and payment must be completed prior to the <strong>Monday document submission deadline</strong>. Clearance steps without paid Wakala cannot proceed to Embassy stamping.
+              </p>
+              <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/30 flex flex-wrap items-center gap-4 text-[11px] text-amber-950 dark:text-amber-200 font-medium">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                  <span>Scheduled Reminders: <strong>Friday, Saturday, Sunday</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                  <span>Recipient: <strong>Contractor Linked User</strong></span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Web Push + WhatsApp Delivery Status Card */}
+          <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-emerald-600" />
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                    Delivery Channels
+                  </CardTitle>
+                </div>
+                {isPushSubscribed ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Push Active
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                    Push Inactive
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="text-xs space-y-2.5 pb-4">
+              <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-zinc-400">
+                <Radio className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-semibold text-slate-800 dark:text-zinc-200">Browser Web Push:</span>{" "}
+                  {isPushSubscribed
+                    ? "Subscribed via V2 notification backend."
+                    : "Not subscribed on this device."}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-zinc-400">
+                <MessageCircle className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-semibold text-slate-800 dark:text-zinc-200">WhatsApp Alert:</span>{" "}
+                  Auto-targets Contractor linked user account ({authUser?.email || "linked profile"}).
+                </div>
+              </div>
+
+              {!isPushSubscribed && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleEnablePush}
+                  disabled={isSubscribingPush}
+                  className="w-full mt-1 text-xs h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold shadow-xs"
+                >
+                  {isSubscribingPush ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <BellRing className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Enable Browser Push Alerts
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Filter & Search Bar */}
         <div className="flex items-center justify-between gap-4">

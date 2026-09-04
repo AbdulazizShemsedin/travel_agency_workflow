@@ -45,6 +45,10 @@ export interface SelectedApplicant {
   visaNumber?: string;
   contractNumber?: string;
   contractorName?: string;
+  motherName?: string;
+  injazNumber?: string;
+  mission?: string;
+  educationLevel?: string;
   selectedAt: string; // ISO 8601 timestamp
 }
 

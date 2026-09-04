@@ -40,6 +40,8 @@ import {
   uploadPlacementContractV2,
   uploadVisaV2,
   uploadPlacementVisaV2,
+  recordSelectedMedicalResultV2,
+  advancePlacementV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import {
@@ -66,6 +68,7 @@ export default function PlacementDocumentCenterPage() {
   const [contractPreviewUrl, setContractPreviewUrl] = React.useState<string>("");
   const [isContractUploading, setIsContractUploading] = React.useState(false);
   const [contractParseResult, setContractParseResult] = React.useState<V2ParsedContractData | null>(null);
+  const [isApprovingContract, setIsApprovingContract] = React.useState(false);
 
   // Visa upload state
   const [visaFile, setVisaFile] = React.useState<File | null>(null);
@@ -153,6 +156,9 @@ export default function PlacementDocumentCenterPage() {
       } else {
         // Authoritative upload_contract attachment to Placement
         const res = await uploadContractV2(activePlacement!.name, fileUrl);
+        if (res) {
+          setContractParseResult(res as any);
+        }
         toast.success("Contract Successfully Attached to Placement", {
           description: `Contract attached to ${activePlacement!.name} with extracted dates and terms.`,
         });
@@ -165,6 +171,44 @@ export default function PlacementDocumentCenterPage() {
       });
     } finally {
       setIsContractUploading(false);
+    }
+  };
+
+  // Approve Contract & Advance Placement from Selected -> Processing
+  const handleApproveContractAndAdvance = async () => {
+    if (!activePlacement) {
+      toast.error("No active placement record found.");
+      return;
+    }
+
+    setIsApprovingContract(true);
+    try {
+      // 1. Ensure Medical 1 (Selected stage) is recorded as FIT per state machine rule
+      if (activePlacement.medical_selected_status !== "FIT") {
+        await recordSelectedMedicalResultV2(
+          activePlacement.name,
+          "FIT",
+          activePlacement.medical_selected_examination_date || new Date().toISOString().split("T")[0]
+        );
+      }
+
+      // 2. Advance Placement to Processing stage
+      await advancePlacementV2(activePlacement.name, "Processing");
+
+      toast.success("Contract Approved & Placement Advanced!", {
+        description: `Placement ${activePlacement.name} has moved to Processing stage. Clearance corridor steps are now ready.`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant_v2", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["clearance_queue_workspace"] });
+    } catch (err: any) {
+      toast.error("Failed to Advance Placement", {
+        description: err?.message || "Backend rejected transition to Processing stage.",
+      });
+    } finally {
+      setIsApprovingContract(false);
     }
   };
 
@@ -524,7 +568,14 @@ export default function PlacementDocumentCenterPage() {
                     <span className="font-mono font-semibold text-slate-900 dark:text-white">
                       {isKuwait
                         ? activePlacement?.employment_site || "Kuwait"
-                        : activePlacement?.contract_number || "Pending"}
+                        : activePlacement?.contract_number || contractParseResult?.contract_number || "Pending"}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[10px] text-slate-400 block">Visa Number</span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                      {activePlacement?.visa_number || contractParseResult?.visa_number || "Not Extracted"}
                     </span>
                   </div>
 
@@ -533,14 +584,14 @@ export default function PlacementDocumentCenterPage() {
                       <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[10px] text-slate-400 block">Employer ID / Iqama</span>
                         <span className="font-mono font-semibold text-slate-900 dark:text-white">
-                          {activePlacement?.employer_national_id || "Not Extracted"}
+                          {activePlacement?.employer_national_id || contractParseResult?.sponsor_id || "Not Extracted"}
                         </span>
                       </div>
 
                       <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[10px] text-slate-400 block">Saudi Partner Agency</span>
                         <span className="font-semibold text-slate-900 dark:text-white truncate block">
-                          {activePlacement?.saudi_agency_name || "Not Extracted"}
+                          {activePlacement?.saudi_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
                         </span>
                       </div>
                     </>
@@ -559,6 +610,59 @@ export default function PlacementDocumentCenterPage() {
                       View Attached Contract File ({activePlacement.contract_file})
                       <ExternalLink className="h-3 w-3" />
                     </a>
+                  </div>
+                )}
+
+                {/* Stage Advancement Action Gate */}
+                {activePlacement && (
+                  <div className="pt-3 border-t border-slate-100 dark:border-[#222228] space-y-2">
+                    {activePlacement.status === "Selected" ? (
+                      <>
+                        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-3 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
+                          <div className="font-bold flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            Contract Uploaded — Ready for Stage Approval
+                          </div>
+                          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
+                            Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS, Te&apos;shir, Embassy)</strong>.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          disabled={isApprovingContract || !activePlacement.contract_file}
+                          onClick={handleApproveContractAndAdvance}
+                          className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2"
+                        >
+                          {isApprovingContract ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Approving Contract & Advancing Placement...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-4 w-4" />
+                              Approve Contract & Advance to Next Stage (Processing)
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    ) : activePlacement.status === "Processing" ? (
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 p-3 text-xs text-blue-900 dark:text-blue-300 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span>Placement is active in <strong>Processing</strong> stage.</span>
+                        </div>
+                        <Link href={`/applicants/${encodeURIComponent(applicantId)}`}>
+                          <Button variant="outline" size="sm" className="text-xs h-7">
+                            View Candidate Dossier
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 italic">
+                        Current Placement Status: <strong>{activePlacement.status}</strong>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

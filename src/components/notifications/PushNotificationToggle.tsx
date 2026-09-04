@@ -33,6 +33,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getComplianceNotificationsV2,
+  getForeignAgencyNotificationsV2,
   getPushSubscriptionStatusV2,
   subscribeToPushV2,
   getVapidPublicKeyV2,
@@ -58,7 +59,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export function PushNotificationToggle() {
   const queryClient = useQueryClient();
-  const { user, roles, authUser } = useAuth();
+  const { user, roles, authUser, agencyContext } = useAuth();
   const [isPushEnabled, setIsPushEnabled] = React.useState<boolean>(false);
   const [isSupported, setIsSupported] = React.useState<boolean>(true);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
@@ -66,6 +67,16 @@ export function PushNotificationToggle() {
   const [isPopoverOpen, setIsPopoverOpen] = React.useState<boolean>(false);
   const [modalAction, setModalAction] = React.useState<"enable" | "disable">("enable");
   const [toastFeedback, setToastFeedback] = React.useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Foreign Agency Isolation Check
+  const isForeignAgency = React.useMemo(() => {
+    if (agencyContext?.contractor || authUser?.contractor) return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = String(r).trim().toLowerCase();
+      return norm.includes("foreign agency") || norm === "foreign agent" || norm === "agent";
+    });
+  }, [agencyContext, authUser, roles]);
 
   // Admin Diagnostics States
   const [isRegenVapidModalOpen, setIsRegenVapidModalOpen] = React.useState<boolean>(false);
@@ -85,10 +96,10 @@ export function PushNotificationToggle() {
     });
   }, [authUser, roles]);
 
-  // Fetch in-app notifications
+  // Fetch in-app notifications (isolated for foreign agencies vs internal staff)
   const { data: notifications = [] } = useQuery<V2AppNotification[]>({
-    queryKey: ["notifications"],
-    queryFn: getComplianceNotificationsV2,
+    queryKey: ["notifications", isForeignAgency ? "agency" : "internal", user],
+    queryFn: () => (isForeignAgency ? getForeignAgencyNotificationsV2() : getComplianceNotificationsV2()),
     enabled: Boolean(user),
     refetchInterval: 30000,
   });
@@ -426,19 +437,29 @@ export function PushNotificationToggle() {
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] px-4 py-3 bg-slate-50/80 dark:bg-[#16161b]">
             <div className="flex items-center gap-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                Notifications
+                {isForeignAgency ? "Agency Alerts" : "Notifications"}
               </h4>
               <span className="rounded-full bg-slate-200 dark:bg-[#252530] px-2 py-0.2 text-[10px] font-bold text-slate-700 dark:text-zinc-300">
                 {notifications.length}
               </span>
             </div>
-            <Link
-              href="/notifications"
-              onClick={() => setIsPopoverOpen(false)}
-              className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
-            >
-              View all
-            </Link>
+            {isForeignAgency ? (
+              <Link
+                href="/agent/wakala"
+                onClick={() => setIsPopoverOpen(false)}
+                className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+              >
+                View Wakala
+              </Link>
+            ) : (
+              <Link
+                href="/notifications"
+                onClick={() => setIsPopoverOpen(false)}
+                className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline"
+              >
+                View all
+              </Link>
+            )}
           </div>
 
           {/* 2. Desktop Push Notification Status Sub-Bar */}
@@ -523,17 +544,23 @@ export function PushNotificationToggle() {
 
           {/* 4. Footer */}
           <div className="border-t border-slate-100 dark:border-[#222227] p-2.5 bg-slate-50/50 dark:bg-[#15151a] flex items-center justify-between">
-            <Link
-              href="/notifications"
-              onClick={() => setIsPopoverOpen(false)}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 transition"
-            >
-              <span>Notification Center</span>
-              <ExternalLink className="h-3 w-3" />
-            </Link>
+            {!isForeignAgency ? (
+              <Link
+                href="/notifications"
+                onClick={() => setIsPopoverOpen(false)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 transition"
+              >
+                <span>Notification Center</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            ) : (
+              <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">
+                Foreign Agency Portal
+              </span>
+            )}
 
             {/* Admin Diagnostics quick buttons */}
-            {isSystemManagerOrAdmin && (
+            {!isForeignAgency && isSystemManagerOrAdmin && (
               <div className="flex items-center gap-2">
                 <button
                   type="button"

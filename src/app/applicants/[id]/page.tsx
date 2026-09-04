@@ -656,7 +656,7 @@ export default function ApplicantDetailPage() {
                 onClick={() => setIsAssignModalOpen(true)}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
               >
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Assign Clearance Officers
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
               </Button>
             </div>
           </div>
@@ -669,7 +669,7 @@ export default function ApplicantDetailPage() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: {activePlacement?.status || currentStage} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
+                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing (LMIS, Te'shir, Embassy)" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
                   {activePlacement ? (
@@ -687,7 +687,7 @@ export default function ApplicantDetailPage() {
                 onClick={() => setIsAssignModalOpen(true)}
                 className="text-xs border-slate-300 dark:border-[#26262d] shrink-0"
               >
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Reassign / Update Staff
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
               </Button>
             </div>
 

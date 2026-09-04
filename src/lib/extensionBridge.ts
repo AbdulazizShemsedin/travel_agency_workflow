@@ -47,6 +47,10 @@ export interface ExtensionApplicantPayload {
   visaNumber?: string;
   contractNumber?: string;
   contractorName?: string;
+  motherName?: string;
+  injazNumber?: string;
+  mission?: string;
+  educationLevel?: string;
   selectedAt?: string;
 }
 
@@ -166,12 +170,16 @@ export function sendApplicantToExtension(
     monthlySalary: rawApp.monthly_salary || rawApp.monthlySalary || (rawApp.contractor_doc?.salary) || 1200,
     salaryCurrency: rawApp.salary_currency || rawApp.salaryCurrency || (rawApp.contractor_doc?.currency) || "SAR",
     contractPeriod: rawApp.contract_period || rawApp.contractPeriod || (rawApp.contractor_doc?.contract_period) || "2 Years",
-    sponsorName: rawApp.contractor_doc?.sponsor_name || rawApp.sponsor_name || rawApp.sponsorName || "",
-    sponsorId: rawApp.contractor_doc?.sponsor_id || rawApp.sponsor_id || rawApp.sponsorId || "",
-    sponsorPhone: rawApp.contractor_doc?.sponsor_phone || rawApp.sponsor_phone || rawApp.sponsorPhone || "",
-    visaNumber: rawApp.contractor_doc?.visa_number || rawApp.visa_number || rawApp.visaNumber || "",
-    contractNumber: rawApp.contractor_doc?.contract_number || rawApp.contract_number || rawApp.contractNumber || "",
+    sponsorName: rawApp.contractor_doc?.sponsor_name || rawApp.sponsor_name || rawApp.sponsorName || (rawApp.injaz as any)?.sponsor_name || "",
+    sponsorId: rawApp.contractor_doc?.sponsor_id || rawApp.sponsor_id || rawApp.sponsorId || (rawApp.injaz as any)?.sponsor_id || "",
+    sponsorPhone: rawApp.contractor_doc?.sponsor_phone || rawApp.sponsor_phone || rawApp.sponsorPhone || (rawApp.injaz as any)?.sponsor_phone || "",
+    visaNumber: rawApp.contractor_doc?.visa_number || rawApp.visa_number || rawApp.visaNumber || (rawApp.injaz as any)?.visa_number || "",
+    contractNumber: rawApp.contractor_doc?.contract_number || rawApp.contract_number || rawApp.contractNumber || (rawApp.injaz as any)?.contract_number || "",
     contractorName: rawApp.contractor_doc?.contractor_name || rawApp.locked_contractor || rawApp.contractor || rawApp.contractorName || "",
+    motherName: rawApp.mother_name || rawApp.motherName || "AYESHA MOHAMMED",
+    injazNumber: (rawApp.injaz as any)?.reference_no || (rawApp.injaz as any)?.injaz_number || rawApp.injaz_number || rawApp.mofa_barcode || "",
+    mission: rawApp.destination_city || rawApp.mission || "Addis Ababa",
+    educationLevel: rawApp.education_level || rawApp.qualification || "Primary School",
     selectedAt: new Date().toISOString(),
   };
 

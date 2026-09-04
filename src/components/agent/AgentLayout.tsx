@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { listContractorsV2, V2ContractorRecord } from "@/lib/api/v2/contractors";
+import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
 
 interface AgentLayoutProps {
   children: React.ReactNode;
@@ -114,7 +115,7 @@ export function AgentLayout({
           </span>
           <span className="hidden sm:inline text-emerald-300/80">|</span>
           <span className="hidden sm:inline text-[11px] text-emerald-300/80">
-            Dedicated candidate selection, Musaned contracts & staff coordination
+            Dedicated candidate selection, Wakala processing & staff coordination
           </span>
         </div>
 
@@ -229,6 +230,9 @@ export function AgentLayout({
               <span>{selectedCount} Selected Today</span>
             </div>
           )}
+
+          {/* Push Notifications Popover / Toggle */}
+          <PushNotificationToggle />
 
           {/* Dark Mode Toggle */}
           <Button

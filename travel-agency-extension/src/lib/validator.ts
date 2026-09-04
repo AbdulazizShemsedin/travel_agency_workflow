@@ -68,6 +68,10 @@ export function validateSelectedApplicant(input: unknown): {
     visaNumber: typeof obj.visaNumber === "string" ? obj.visaNumber.trim() : undefined,
     contractNumber: typeof obj.contractNumber === "string" ? obj.contractNumber.trim() : undefined,
     contractorName: typeof obj.contractorName === "string" ? obj.contractorName.trim() : undefined,
+    motherName: typeof obj.motherName === "string" ? obj.motherName.trim() : undefined,
+    injazNumber: typeof obj.injazNumber === "string" ? obj.injazNumber.trim() : undefined,
+    mission: typeof obj.mission === "string" ? obj.mission.trim() : undefined,
+    educationLevel: typeof obj.educationLevel === "string" ? obj.educationLevel.trim() : undefined,
     selectedAt: typeof obj.selectedAt === "string" && obj.selectedAt.trim()
       ? obj.selectedAt.trim()
       : new Date().toISOString(),

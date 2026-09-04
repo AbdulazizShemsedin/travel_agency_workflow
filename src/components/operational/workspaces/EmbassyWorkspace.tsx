@@ -9,11 +9,10 @@ import {
   Calendar,
   CreditCard,
   User,
-  ShieldCheck,
   FileText,
-  FileDown,
-  ExternalLink,
   Loader2,
+  Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -33,11 +32,7 @@ import {
   reassignClearanceStepV2,
 } from "@/lib/api/v2/clearance";
 import { useAuth } from "@/components/providers/AuthProvider";
-import {
-  downloadInjazDocumentPDF,
-  openInjazDocumentInNewTab,
-  InjazCandidateData,
-} from "@/lib/pdf/injazDocumentGenerator";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 
 interface EmbassyWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -89,77 +84,6 @@ export function EmbassyWorkspace({
   const [stampNumber, setStampNumber] = React.useState("");
   const [stampDate, setStampDate] = React.useState("");
   const [rejectionRemark, setRejectionRemark] = React.useState("");
-  const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
-
-  // Helper to extract Injaz Candidate Data
-  const getInjazDataForRow = (row?: WorkspaceApplicantRow | null): InjazCandidateData => {
-    if (!row) return {};
-    const app = row.applicant as any;
-    return {
-      applicantId: row.applicantId,
-      fullName: row.fullName,
-      firstName: app?.first_name || (row.fullName ? row.fullName.split(" ")[0] : ""),
-      middleName: app?.middle_name || (row.fullName ? row.fullName.split(" ")[1] : ""),
-      lastName: app?.last_name || (row.fullName ? row.fullName.split(" ").slice(2).join(" ") : ""),
-      motherName: app?.mother_name || app?.motherName || "AYESHA MOHAMMED",
-      passportNumber: row.passportNumber,
-      passportIssueDate: app?.passport_issue_date || app?.issue_date || "2024-08-14",
-      passportExpiry: app?.passport_expiry || app?.expiry_date || "2029-08-14",
-      placeOfIssue: app?.place_of_issue || "ADDIS ABABA",
-      placeOfBirth: app?.place_of_birth || app?.leaving_town || "ADDIS ABABA",
-      dateOfBirth: app?.date_of_birth || "1997-04-12",
-      nationality: app?.nationality || "ETHIOPIAN",
-      gender: app?.gender || "FEMALE",
-      maritalStatus: app?.marital_status || "SINGLE",
-      religion: app?.religion || "MUSLIM",
-      targetJob: app?.target_job || app?.job_applied || "HOUSEMAID",
-      educationLevel: app?.education_level || app?.qualification || "PRIMARY SCHOOL",
-      phone: row.contact || app?.phone || "+251 91 123 4567",
-      city: app?.city || "ADDIS ABABA",
-      destinationCountry: row.destinationCountry || "Saudi Arabia",
-      sponsorName: row.sponsorName || app?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI",
-      sponsorId: row.sponsorId || app?.sponsor_id || "1130373143",
-      sponsorPhone: app?.sponsor_phone || "966503221802",
-      destinationCity: app?.destination_city || "RIYADH",
-      contractorName: app?.contractor_name || row.lockedContractor || "Tihamat Asir Recruitment company",
-      contractNumber: row.contractNumber || app?.contract_number || "2005450415",
-      visaNumber: row.visaNumber || app?.visa_number || "1908334046",
-      injazNumber: (row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || `E${row.passportNumber?.replace(/\D/g, "") || "4982104"}`,
-      paymentNo: (row.injaz as any)?.payment_no || "99281401",
-      appointmentDate: row.appointmentDate || (row.injaz as any)?.appointment_date || "2026-08-25",
-    };
-  };
-
-  const handleGenerateInjazDoc = async () => {
-    if (!selectedRow) return;
-    try {
-      setIsGeneratingInjaz(true);
-      toast.info("Generating official Injaz Document...");
-      await downloadInjazDocumentPDF(getInjazDataForRow(selectedRow));
-      toast.success("Injaz document downloaded successfully!", {
-        description: `Official Visa Application Form for ${selectedRow.fullName}`,
-      });
-    } catch (err: any) {
-      console.error("Injaz generation error:", err);
-      toast.error("Failed to generate Injaz document", { description: err?.message || "Generation error" });
-    } finally {
-      setIsGeneratingInjaz(false);
-    }
-  };
-
-  const handleOpenInjazDoc = async () => {
-    if (!selectedRow) return;
-    try {
-      setIsGeneratingInjaz(true);
-      await openInjazDocumentInNewTab(getInjazDataForRow(selectedRow));
-      toast.success("Injaz document opened in new tab!");
-    } catch (err: any) {
-      console.error("Injaz open error:", err);
-      toast.error("Failed to open Injaz document", { description: err?.message || "Open error" });
-    } finally {
-      setIsGeneratingInjaz(false);
-    }
-  };
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -367,26 +291,6 @@ export function EmbassyWorkspace({
           >
             Edit
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async (e) => {
-              e.stopPropagation();
-              try {
-                toast.info("Generating Injaz document...");
-                await downloadInjazDocumentPDF(getInjazDataForRow(row));
-                toast.success("Injaz document downloaded!");
-              } catch (err: any) {
-                toast.error("Failed to generate Injaz document: " + err.message);
-              }
-            }}
-            className="h-6 px-2 text-[11px] font-semibold border-blue-600/30 text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50"
-            title="Download Injaz Document"
-          >
-            <FileDown className="h-3 w-3 mr-1" />
-            Injaz
-          </Button>
         </div>
       ),
     },
@@ -442,7 +346,7 @@ export function EmbassyWorkspace({
           <DrawerField label="Contract Number" value={selectedRow?.contractNumber || "—"} isReadOnly />
         </DrawerSection>
 
-        <DrawerSection title="Musaned Wakala & Attestation" icon={FileText}>
+        <DrawerSection title="Wakala & Attestation" icon={FileText}>
           <DrawerField label="Wakala Authorization Status" value={selectedRow?.wakalaStatus || "Authorized"} isReadOnly />
           <DrawerField label="Contract Attestation №" value={selectedRow?.contractNumber || "2005450415"} isReadOnly />
           <DrawerField label="Foreign Agency Partner" value={selectedRow?.company || selectedRow?.lockedContractor || "Tihamat Asir Recruitment company"} isReadOnly />
@@ -556,42 +460,33 @@ export function EmbassyWorkspace({
           </DrawerField>
         </DrawerSection>
 
-        <DrawerSection title="Official Injaz Document" icon={FileText}>
-          <div className="space-y-2.5">
-            <p className="text-xs text-slate-600 dark:text-zinc-400">
-              Generate and download the official pre-populated Saudi MOFA Injaz visa application form for embassy submission.
+        <DrawerSection title="Browser Extension Autofill" icon={Sparkles}>
+          <div className="space-y-2 text-xs">
+            <p className="text-slate-500 dark:text-zinc-400">
+              Load this candidate into the Travel Agency browser extension for instant 1-click autofill into MOFA, Enjaz, or the Embassy Visa Platform.
             </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                type="button"
-                onClick={handleGenerateInjazDoc}
-                disabled={isGeneratingInjaz}
-                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs"
-              >
-                {isGeneratingInjaz ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Generating Injaz PDF...
-                  </>
-                ) : (
-                  <>
-                    <FileDown className="mr-1.5 h-3.5 w-3.5" />
-                    Injaz document
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleOpenInjazDoc}
-                disabled={isGeneratingInjaz}
-                className="text-xs border-slate-300 dark:border-[#2a2a32]"
-              >
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                Open Injaz in New Tab
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!selectedRow) return;
+                try {
+                  const res = await sendApplicantToExtension(selectedRow.applicant || (selectedRow as any));
+                  if (res.success) {
+                    toast.success("Candidate loaded into Browser Extension for Visa Platform autofill!");
+                  } else {
+                    toast.info("Candidate ready in browser extension storage.");
+                  }
+                } catch (err: any) {
+                  toast.error("Failed to bridge candidate: " + err.message);
+                }
+              }}
+              className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              Send to Extension (MOFA / Visa Platform)
+            </Button>
           </div>
         </DrawerSection>
       </OperationalDrawer>

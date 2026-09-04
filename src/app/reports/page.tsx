@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -96,31 +97,47 @@ export default function ReportsPage() {
   // Active Tab
   const [activeTab, setActiveTab] = React.useState<ReportTab>("operations");
 
-  // Date Filters
+  // Period / Date Filters
+  const searchParams = useSearchParams();
+  const periodParam = searchParams.get("period");
+  const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "custom">("yearly");
+
   const [fromDate, setFromDate] = React.useState<string>("2026-01-01");
   const [toDate, setToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
   const [isExportingXlsx, setIsExportingXlsx] = React.useState<boolean>(false);
 
-  // Quick Preset Helper
-  const setPreset = (preset: "week" | "month" | "ytd" | "all") => {
+  // Quick Preset Helper (Daily, Weekly, Monthly, Yearly)
+  const setPreset = React.useCallback((preset: "daily" | "weekly" | "monthly" | "yearly" | "all") => {
+    setActivePeriod(preset === "all" ? "custom" : preset);
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
     setToDate(todayStr);
 
-    if (preset === "week") {
+    if (preset === "daily") {
+      setFromDate(todayStr);
+    } else if (preset === "weekly") {
       const d = new Date(today);
       d.setDate(d.getDate() - 7);
       setFromDate(d.toISOString().split("T")[0]);
-    } else if (preset === "month") {
-      const d = new Date(today);
-      d.setDate(d.getDate() - 30);
+    } else if (preset === "monthly") {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1);
       setFromDate(d.toISOString().split("T")[0]);
-    } else if (preset === "ytd") {
+    } else if (preset === "yearly") {
       setFromDate(`${today.getFullYear()}-01-01`);
     } else {
       setFromDate("2025-01-01");
     }
-  };
+  }, []);
+
+  // Sync with ?period= from sidebar navigation links
+  React.useEffect(() => {
+    if (periodParam === "daily" || periodParam === "weekly" || periodParam === "monthly" || periodParam === "yearly") {
+      setPreset(periodParam);
+      if (periodParam === "daily") {
+        setActiveTab("daily_work");
+      }
+    }
+  }, [periodParam, setPreset]);
 
   const dateParams = React.useMemo(() => ({ from_date: fromDate, to_date: toDate }), [fromDate, toDate]);
 
@@ -323,34 +340,24 @@ export default function ReportsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreset("week")}
-              className="text-[11px] h-8 px-2"
-            >
-              7D
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreset("month")}
-              className="text-[11px] h-8 px-2"
-            >
-              30D
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreset("ytd")}
-              className="text-[11px] h-8 px-2"
-            >
-              YTD
-            </Button>
+          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
+            {(["daily", "weekly", "monthly", "yearly"] as const).map((p) => (
+              <Button
+                key={p}
+                type="button"
+                variant={activePeriod === p ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setPreset(p)}
+                className={cn(
+                  "text-[11px] h-7 px-2.5 capitalize font-medium",
+                  activePeriod === p
+                    ? "bg-emerald-900 text-white dark:bg-emerald-700 shadow-xs"
+                    : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                {p}
+              </Button>
+            ))}
           </div>
 
           {isManagerOrAdmin && (

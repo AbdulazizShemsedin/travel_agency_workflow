@@ -45,14 +45,48 @@ export function CandidateDetailModal({
   const hasPassport = !passportImgError && Boolean(candidate.photo_passport);
   const hasFullBody = !fullBodyImgError && Boolean(candidate.photo_full_body);
 
+  const checkSkill = (keys: string[], label: string): boolean => {
+    const cand = candidate as any;
+    for (const k of keys) {
+      const v = cand[k];
+      if (
+        v === 1 ||
+        v === "1" ||
+        v === true ||
+        v === "YES" ||
+        v === "Yes" ||
+        v === "yes" ||
+        v === "true"
+      ) {
+        return true;
+      }
+    }
+    // Also check if candidate.skills is an array or string
+    const rawSkills = cand.skills || cand.skills_list || cand.qualification_skills;
+    if (Array.isArray(rawSkills)) {
+      const norm = rawSkills.map((s) => String(s).toLowerCase().trim());
+      if (norm.some((s) => keys.some((k) => k.replace(/^skill_/, "").includes(s)) || label.toLowerCase().includes(s))) {
+        return true;
+      }
+    } else if (typeof rawSkills === "string") {
+      const norm = rawSkills.toLowerCase();
+      if (keys.some((k) => norm.includes(k.replace(/^skill_/, ""))) || norm.includes(label.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const skills = [
-    { label: "Cleaning & Housekeeping", value: candidate.skill_cleaning },
-    { label: "Cooking", value: candidate.skill_cooking },
-    { label: "Arabic Cooking", value: candidate.skill_arabic_cooking },
-    { label: "Babysitting & Child Care", value: candidate.skill_baby_sitting },
-    { label: "Washing & Laundry", value: candidate.skill_washing },
-    { label: "Ironing", value: candidate.skill_ironing },
-    { label: "Elderly Care", value: candidate.skill_elderly_care },
+    { label: "Cleaning & Housekeeping", isVerified: checkSkill(["skill_cleaning", "cleaning", "housekeeping"], "Cleaning") },
+    { label: "Cooking", isVerified: checkSkill(["skill_cooking", "cooking"], "Cooking") },
+    { label: "Arabic Cooking", isVerified: checkSkill(["skill_arabic_cooking", "arabic_cooking"], "Arabic Cooking") },
+    { label: "Babysitting & Child Care", isVerified: checkSkill(["skill_baby_sitting", "skill_babysitting", "baby_sitting", "babysitting", "skill_children_care", "children_care"], "Babysitting") },
+    { label: "Washing & Laundry", isVerified: checkSkill(["skill_washing", "washing", "laundry"], "Washing") },
+    { label: "Ironing", isVerified: checkSkill(["skill_ironing", "ironing"], "Ironing") },
+    { label: "Elderly Care", isVerified: checkSkill(["skill_elderly_care", "elderly_care", "elderly"], "Elderly Care") },
+    { label: "Sewing", isVerified: checkSkill(["skill_sewing", "sewing"], "Sewing") },
+    { label: "Driving", isVerified: checkSkill(["skill_driving", "driving"], "Driving") },
   ];
 
   return (
@@ -217,7 +251,7 @@ export function CandidateDetailModal({
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {skills.map((s) => {
-                const isVerified = s.value === 1 || s.value === "1" || s.value === "YES" || s.value === "Yes" || s.value === true;
+                const isVerified = Boolean(s.isVerified);
                 return (
                   <div
                     key={s.label}

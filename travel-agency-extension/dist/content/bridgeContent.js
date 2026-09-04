@@ -59,6 +59,10 @@ function validateSelectedApplicant(input) {
     visaNumber: typeof obj.visaNumber === "string" ? obj.visaNumber.trim() : void 0,
     contractNumber: typeof obj.contractNumber === "string" ? obj.contractNumber.trim() : void 0,
     contractorName: typeof obj.contractorName === "string" ? obj.contractorName.trim() : void 0,
+    motherName: typeof obj.motherName === "string" ? obj.motherName.trim() : void 0,
+    injazNumber: typeof obj.injazNumber === "string" ? obj.injazNumber.trim() : void 0,
+    mission: typeof obj.mission === "string" ? obj.mission.trim() : void 0,
+    educationLevel: typeof obj.educationLevel === "string" ? obj.educationLevel.trim() : void 0,
     selectedAt: typeof obj.selectedAt === "string" && obj.selectedAt.trim() ? obj.selectedAt.trim() : (/* @__PURE__ */ new Date()).toISOString()
   };
   return { valid: true, applicant: sanitized };

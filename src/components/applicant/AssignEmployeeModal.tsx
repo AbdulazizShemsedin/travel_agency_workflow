@@ -24,8 +24,10 @@ import {
   getPlacementOfficersV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
+  listEmployeesV2,
   V2PlacementRecord,
   V2ClearanceStepItem,
+  V2EmployeeRecord,
 } from "@/lib/api/v2";
 import {
   Dialog,
@@ -156,6 +158,14 @@ export function AssignEmployeeModal({
     queryFn: () => (activePlacement?.name ? getPlacementOfficersV2(activePlacement.name) : Promise.resolve([])),
     enabled: isOpen && !!activePlacement?.name,
     staleTime: 15000,
+  });
+
+  // 5. Fetch all system employees (any role can be assigned)
+  const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<V2EmployeeRecord[]>({
+    queryKey: ["v2_employees_for_assign"],
+    queryFn: () => listEmployeesV2(),
+    enabled: isOpen,
+    staleTime: 30000,
   });
 
   // Selected Clearance Step state
@@ -293,10 +303,10 @@ export function AssignEmployeeModal({
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                Clearance Step Reassignment
+                Edit Staff Assignment (Clearance & Tasks)
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Execute V2 backend officer reassignment using authoritative User email identifiers.
+                Assign any internal staff member regardless of their role to candidate clearance steps and operational stages.
               </DialogDescription>
             </div>
           </div>
@@ -309,7 +319,7 @@ export function AssignEmployeeModal({
               <Lock className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
                 <span className="font-semibold">Authorization Restriction: </span>
-                Clearance step reassignment is restricted to <strong>Manager</strong> and{" "}
+                Staff assignment editing is restricted to <strong>Manager</strong> and{" "}
                 <strong>System Administrator</strong> roles. Your current account does not have write
                 permission to reassign clearance officers.
               </div>
@@ -357,7 +367,7 @@ export function AssignEmployeeModal({
           {/* Step Selection */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-              <span>Target Clearance Step (DocType: Clearance Step)</span>
+              <span>Target Clearance Step / Stage (DocType: Clearance Step)</span>
               {currentStepRecord && (
                 <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400">
                   Seq {currentStepRecord.sequence_order || 1} • {currentStepRecord.is_mandatory ? "Mandatory" : "Optional"}
@@ -390,7 +400,7 @@ export function AssignEmployeeModal({
           <div className="p-3 rounded-xl border border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between text-xs">
             <div className="space-y-0.5">
               <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                Current Assigned Officer
+                Current Assigned Staff Officer
               </span>
               <div className="font-mono font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                 <UserCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
@@ -407,10 +417,40 @@ export function AssignEmployeeModal({
             )}
           </div>
 
-          {/* Proposed Assignee Input */}
+          {/* Employee Dropdown Selection (Any Role) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+              <span>Assign Staff Member (Any Registered Role)</span>
+              {isEmployeesLoading && (
+                <span className="text-[10px] text-slate-400">Loading staff accounts...</span>
+              )}
+            </Label>
+            <select
+              aria-label="Select staff member"
+              value={proposedOfficer}
+              onChange={(e) => setProposedOfficer(e.target.value)}
+              disabled={!isManagerOrAdmin || reassignMutation.isPending}
+              className="w-full h-9 px-3 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+            >
+              <option value="">-- Choose Employee (Any Role) --</option>
+              {employees.map((emp) => {
+                const empName = emp.full_name || [emp.first_name, emp.last_name].filter(Boolean).join(" ") || emp.name;
+                const empRole = Array.isArray(emp.roles) && emp.roles.length > 0
+                  ? emp.roles.filter((r: string) => r !== "Desk User").join(", ") || "Staff"
+                  : "Staff";
+                return (
+                  <option key={emp.name} value={emp.name}>
+                    {empName} ({empRole}) — {emp.name}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Manual Proposed Assignee Input */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-              Proposed Assignee Officer (User.name = email)
+              Or Specify Staff Email (User.name = email)
             </Label>
             <div className="relative">
               <Mail className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
@@ -496,12 +536,12 @@ export function AssignEmployeeModal({
             {reassignMutation.isPending ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Executing Reassignment...
+                Updating Staff Assignment...
               </>
             ) : (
               <>
                 <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                Reassign Officer
+                Save Staff Assignment
               </>
             )}
           </Button>

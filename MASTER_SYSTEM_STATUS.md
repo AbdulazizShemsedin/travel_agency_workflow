@@ -96,6 +96,7 @@
 | 74 | **Authoritative Complaints Filtering (All / Status Slices)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated listComplaintsV2 with status query parameter and filtering UI. |
 | 75 | **Commission Batch Advance Payment & Ledger Posting** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated recordBatchAdvanceV2 with advance modal, financial grid, and Partially Settled state transition. |
 | 76 | **Foreign Agency Mobile Navigation & Dedicated Staff Chat Workspace** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Built mobile quick-nav bar & hamburger drawer in AgentLayout. Integrated dedicated /agent/chat workspace backed by create_agency_thread with auto-init & responsive chat pane. |
+| 77 | **Foreign Agency Wakala UI Terminology & Push Notification Wiring** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Renamed applicant Stepper Ribbon to 'Processing (LMIS, Te'shir, Embassy)'. Purged 'Musaned' from /agent/wakala. Wired real Web Push registration (get_vapid_public_key, subscribe_to_push) & status (get_push_subscription_status). Preserved Monday deadline gate and Fri/Sat/Sun schedule. Verified live browser runtime as foreign agency. |
 
 ---
 
@@ -123,3 +124,5 @@
 8. **Phase 8: Critical Production Debug & Post-Fix Smoke Verification** -> [DONE]
 9. **Phase 9: V2 Backend Hardening & New Features (2026-09) Integration & Verification** -> [DONE]
 10. **Phase 10: Foreign Agency Mobile Navigation & Staff Chat Workspace Integration** -> [DONE]
+11. **Phase 11: Foreign Agency Wakala & Push Notification Protocol** -> [DONE]
+12. **Phase 12: Comprehensive Corrective Hardening & Multi-Stage RBAC System** -> [DONE]
