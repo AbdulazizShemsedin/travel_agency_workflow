@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2 } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2 } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
@@ -62,6 +62,28 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   // Manual MRZ Dialog State
   const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
   const [mrzInputText, setMrzInputText] = React.useState("");
+
+  // Photo Removal Confirmation State
+  const [photoToRemove, setPhotoToRemove] = React.useState<"portrait" | "fullbody" | "passport" | null>(null);
+
+  const handleConfirmRemovePhoto = () => {
+    if (photoToRemove === "portrait") {
+      setValue("profile_photo_url", "" as any, { shouldDirty: true });
+      setValue("photo_passport", "" as any, { shouldDirty: true });
+      setPhotoPreview(null);
+      toast.success("Passport photo removed");
+    } else if (photoToRemove === "fullbody") {
+      setValue("photo_full_body", "" as any, { shouldDirty: true });
+      setFullBodyPreview(null);
+      toast.success("Full-body photo removed");
+    } else if (photoToRemove === "passport") {
+      setValue("passport_scan", "" as any, { shouldDirty: true });
+      setPassportScanPreview(null);
+      setOcrSuccessData(null);
+      toast.success("Passport scan document cleared");
+    }
+    setPhotoToRemove(null);
+  };
 
   React.useEffect(() => {
     if (profilePhotoValue && !photoPreview) {
@@ -342,6 +364,20 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   }}
                 />
               </label>
+
+              {(passportScanPreview || ocrSuccessData) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPhotoToRemove("passport")}
+                  className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50"
+                  title="Clear scanned passport"
+                >
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                  Clear Scan
+                </Button>
+              )}
             </div>
           </div>
 
@@ -509,8 +545,27 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   disabled={isUploadingPassport}
                 />
               </label>
-              <p className="mt-3 text-center text-xs text-slate-500 dark:text-zinc-400">
-                JPG, PNG format (passport photo)
+
+              {photoPreview && !isUploadingPassport && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPhotoToRemove("portrait");
+                  }}
+                  className="mt-2.5 h-7 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
+                  title="Remove candidate passport photo"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Remove Photo
+                </Button>
+              )}
+
+              <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
+                JPG, PNG format (passport photo 35x45mm)
               </p>
             </CardContent>
           </Card>
@@ -568,8 +623,27 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   disabled={isUploadingFullBody}
                 />
               </label>
+
+              {fullBodyPreview && !isUploadingFullBody && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPhotoToRemove("fullbody");
+                  }}
+                  className="mt-2.5 h-7 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
+                  title="Remove candidate full-body photo"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Remove Photo
+                </Button>
+              )}
+
               <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
-                Standing full-body portrait
+                Standing full-body portrait (3:4 ratio)
               </p>
             </CardContent>
           </Card>
@@ -1182,6 +1256,45 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       </div>
     </div>
 
+    {/* Photo Removal Confirmation Dialog */}
+    <Dialog open={photoToRemove !== null} onOpenChange={(open) => !open && setPhotoToRemove(null)}>
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-rose-600" />
+            Are you sure you want to remove this photo?
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+            {photoToRemove === "portrait"
+              ? "This will remove the candidate's passport-size photo from the registration form."
+              : photoToRemove === "fullbody"
+              ? "This will remove the candidate's full-body standing photo from the registration form."
+              : "This will remove the uploaded passport scan and any extracted data."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPhotoToRemove(null)}
+            className="text-xs"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={handleConfirmRemovePhoto}
+            className="text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+          >
+            Yes, Remove Photo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     {/* Universal Document Preview & Cropper Modal */}
     <ImageCropModal
       open={cropModalState.open}
@@ -1191,15 +1304,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         cropModalState.type === "passport"
           ? "Passport Scan Preview & Cropper"
           : cropModalState.type === "portrait"
-          ? "Candidate Portrait Photo Preview & Cropper"
-          : "Full Body Photo Preview & Cropper"
+          ? "Candidate Portrait Photo (Passport 35x45mm) Preview & Cropper"
+          : "Full Body Photo (3:4) Preview & Cropper"
       }
       description={
         cropModalState.type === "passport"
           ? "Preview, rotate, or crop the passport / MRZ zone. Note: Ensure the image is sharp, clear, and well-aligned for accurate data extraction."
           : cropModalState.type === "portrait"
-          ? "Preview, rotate, or crop candidate face portrait (passport photo size)."
-          : "Preview, rotate, or crop candidate standing full-body portrait."
+          ? "Preview, rotate, or crop candidate face portrait (standard passport photo 35x45mm)."
+          : "Preview, rotate, or crop candidate standing full-body portrait (3:4 vertical)."
       }
       confirmLabel={
         cropModalState.type === "passport"
@@ -1208,7 +1321,13 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       }
       cropMode={cropModalState.type}
       defaultAspectRatio={
-        cropModalState.type === "portrait" ? 1 : cropModalState.type === "passport" ? 1.4 : null
+        cropModalState.type === "portrait"
+          ? 35 / 45
+          : cropModalState.type === "fullbody"
+          ? 3 / 4
+          : cropModalState.type === "passport"
+          ? 1.42
+          : null
       }
       onConfirm={async (resultFile) => {
         if (cropModalState.type === "passport") {

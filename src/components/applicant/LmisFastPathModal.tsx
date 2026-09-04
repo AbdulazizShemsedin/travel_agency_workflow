@@ -164,7 +164,7 @@ export function LmisFastPathModal({
               Role Authorization Required
             </div>
             <p className="leading-relaxed text-[11px]">
-              The <code>update_applicant_for_lmis</code> endpoint is strictly restricted to <strong>Saudi LMIS</strong>, <strong>Kuwait LMIS</strong>, <strong>Manager</strong>, or <strong>Admin</strong> officers. Your active roles do not permit this update.
+              LMIS data updates are strictly restricted to <strong>Saudi LMIS</strong>, <strong>Kuwait LMIS</strong>, <strong>Manager</strong>, or <strong>Admin</strong> officers. Your active roles do not permit this update.
             </p>
             <div className="pt-2 flex justify-end">
               <Button type="button" variant="outline" size="sm" onClick={onClose} className="text-xs h-7">

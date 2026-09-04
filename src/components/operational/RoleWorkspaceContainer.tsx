@@ -60,7 +60,7 @@ export function RoleWorkspaceContainer() {
     if (isAdmin) {
       return {
         availableTabs: allTabsConfig,
-        defaultTab: "lms",
+        defaultTab: "directory",
         defaultCorridor: "All",
       };
     }
@@ -109,10 +109,9 @@ export function RoleWorkspaceContainer() {
       prefTab = "lms";
     }
 
-    // 7. General fallback
-    if (allowed.length === 0) {
-      allowed.push("directory");
-      prefTab = "directory";
+    // Always ensure directory tab is visible as the primary overview
+    if (!allowed.includes("directory")) {
+      allowed.unshift("directory");
     }
 
     // Always ensure clearance queue tab is visible for clearance roles
@@ -123,7 +122,7 @@ export function RoleWorkspaceContainer() {
     const filteredTabs = allTabsConfig.filter((tab) => allowed.includes(tab.id));
     return {
       availableTabs: filteredTabs,
-      defaultTab: prefTab || filteredTabs[0]?.id || "lms",
+      defaultTab: "directory",
       defaultCorridor: prefCorridor,
     };
   }, [isAdmin, roles]);

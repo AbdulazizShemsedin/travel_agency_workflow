@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import {
   UserCheck,
   ShieldCheck,
@@ -231,9 +232,9 @@ export function AssignEmployeeModal({
       if (onSuccess) onSuccess();
     },
     onError: (err: any) => {
-      const errMsg = err?.message || "Failed to reassign clearance step. Backend state rejected mutation.";
+      const errMsg = formatCleanErrorMessage(err) || "Failed to reassign clearance step. Please try again.";
       setFeedback({ type: "error", message: errMsg });
-      toast.error("Reassignment rejected by backend", {
+      toast.error("Reassignment could not be completed", {
         description: errMsg,
       });
     },
@@ -241,14 +242,14 @@ export function AssignEmployeeModal({
 
   const handleExecute = () => {
     if (!selectedStepName) {
-      setFeedback({ type: "error", message: "Please select a valid Clearance Step record." });
+      setFeedback({ type: "error", message: "Please select a valid clearance task." });
       return;
     }
 
     if (!selectedStepName.startsWith("CLR-")) {
       setFeedback({
         type: "error",
-        message: "Invalid Clearance Step identifier. Step names must be real Frappe records (e.g. CLR-00001).",
+        message: "Please select a valid clearance task from the list.",
       });
       return;
     }
@@ -257,7 +258,7 @@ export function AssignEmployeeModal({
     if (!email || !email.includes("@")) {
       setFeedback({
         type: "error",
-        message: "Officer identifier must be a valid User name (email address) per the backend contract.",
+        message: "Please enter a valid officer email address.",
       });
       return;
     }

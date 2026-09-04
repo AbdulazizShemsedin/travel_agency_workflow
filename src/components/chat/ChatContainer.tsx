@@ -65,6 +65,23 @@ import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { listPortalCandidatesV2 } from "@/lib/api/v2/portal";
 import { cn } from "@/lib/utils";
 
+function WhatsAppDoubleCheck({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 11"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "h-3.5 w-3.5 text-[#53bdeb] shrink-0"}
+    >
+      <path d="M1 6.2L4.2 9.5L11.5 2" />
+      <path d="M5.5 6.2L8.7 9.5L16 2" />
+    </svg>
+  );
+}
+
 export function ChatContainer() {
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
@@ -102,7 +119,7 @@ export function ChatContainer() {
 
   // Message Composition State
   const [messageText, setMessageText] = React.useState<string>("");
-  const [mentionedApplicant, setMentionedApplicant] = React.useState<string>("");
+  const [mentionedApplicants, setMentionedApplicants] = React.useState<string[]>([]);
   const [showMentionInputs, setShowMentionInputs] = React.useState<boolean>(false);
   const [pendingAttachment, setPendingAttachment] = React.useState<{ file: File; url?: string } | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = React.useState<boolean>(false);
@@ -425,7 +442,7 @@ export function ChatContainer() {
 
   // Reset mention inputs on thread switch
   React.useEffect(() => {
-    setMentionedApplicant("");
+    setMentionedApplicants([]);
     setShowMentionInputs(false);
   }, [selectedThread?.name]);
 
@@ -574,10 +591,18 @@ export function ChatContainer() {
         }
       }
 
+      // Support multi-applicant mentions
+      const primaryApplicant = mentionedApplicants[0];
+      let composedText = messageText.trim();
+      if (mentionedApplicants.length > 1) {
+        const otherMentions = mentionedApplicants.slice(1).join(", ");
+        composedText = `[Mentioned Candidates: ${mentionedApplicants.join(", ")}]\n${composedText}`.trim();
+      }
+
       return await sendMessageV2(
         selectedThread.name,
-        messageText.trim() || undefined,
-        mentionedApplicant.trim() || undefined,
+        composedText || undefined,
+        primaryApplicant || undefined,
         undefined,
         attachmentUrl
       );
@@ -585,7 +610,7 @@ export function ChatContainer() {
     onSuccess: () => {
       setMessageText("");
       setPendingAttachment(null);
-      setMentionedApplicant("");
+      setMentionedApplicants([]);
       setShowMentionInputs(false);
 
       queryClient.invalidateQueries({ queryKey: ["chat_messages", selectedThread?.name] });
@@ -699,11 +724,68 @@ export function ChatContainer() {
   const selectedParties = selectedThread ? getThreadParties(selectedThread) : null;
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col rounded-2xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-sm">
+    <div className="h-[calc(100dvh-56px)] md:h-[calc(100vh-120px)] -m-3 sm:m-0 flex flex-col rounded-none md:rounded-2xl border-0 md:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none md:shadow-sm">
       {/* ------------------------------------------------------------- */}
-      {/* Top Banner & Quick Header                                     */}
+      {/* Mobile WhatsApp Header (Thread List)                          */}
       {/* ------------------------------------------------------------- */}
-      <div className="px-5 py-3 border-b border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#141419] flex items-center justify-between">
+      <div
+        className={cn(
+          "md:hidden bg-[#008069] dark:bg-[#1f2c34] text-white px-4 py-3 flex items-center justify-between shadow-xs select-none",
+          isMobileThreadOpen ? "hidden" : "flex"
+        )}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-full bg-white/15 flex items-center justify-center text-white">
+            <MessageSquare className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-white tracking-tight leading-tight">
+              {isForeignAgency ? "Agency Chat" : "Discussions"}
+            </h1>
+            <p className="text-[10px] text-emerald-100 dark:text-[#8696a0]">
+              {isForeignAgency
+                ? "Direct HQ Coordination"
+                : `${activeThreads.length} active conversation${activeThreads.length === 1 ? "" : "s"}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {isSupervisorOrAdmin && (
+            <button
+              type="button"
+              onClick={() => setViewMode((prev) => (prev === "my" ? "oversight" : "my"))}
+              className={cn(
+                "p-2 rounded-full transition-colors",
+                viewMode === "oversight" ? "bg-white/25 text-white" : "text-white/80 hover:text-white"
+              )}
+              title={viewMode === "my" ? "Switch to Oversight" : "Switch to My Discussions"}
+            >
+              <Shield className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (isForeignAgency) {
+                createThreadMutation.mutate();
+              } else {
+                setIsNewThreadModalOpen(true);
+              }
+            }}
+            disabled={createThreadMutation.isPending}
+            className="p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors"
+            title={isForeignAgency ? "Connect with Staff" : "New Conversation"}
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Desktop Top Banner & Quick Header                             */}
+      {/* ------------------------------------------------------------- */}
+      <div className="hidden md:flex px-5 py-3 border-b border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#141419] items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-emerald-900 dark:bg-emerald-600 text-white flex items-center justify-center">
             {isSupervisorOrAdmin && viewMode === "oversight" ? (
@@ -919,62 +1001,75 @@ export function ChatContainer() {
                       setIsMobileThreadOpen(true);
                     }}
                     className={cn(
-                      "w-full p-3 text-left transition-all flex flex-col gap-1.5",
+                      "w-full p-3 text-left transition-all flex items-start gap-3",
                       isSelected
-                        ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-l-4 border-l-emerald-800 dark:border-l-emerald-500"
+                        ? "bg-emerald-50/70 dark:bg-emerald-950/30 md:border-l-4 md:border-l-emerald-800 md:dark:border-l-emerald-500"
                         : "hover:bg-slate-100/60 dark:hover:bg-[#181820]"
                     )}
                   >
-                    {/* Header: Communicating Parties Breakdown */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {isAgency ? (
-                          <Globe2 className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                        ) : (
-                          <Building2 className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                    {/* WhatsApp-style Contact Avatar */}
+                    <div className="relative shrink-0 mt-0.5">
+                      <div
+                        className={cn(
+                          "h-11 w-11 rounded-full flex items-center justify-center font-bold text-xs shadow-2xs",
+                          isAgency
+                            ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60"
+                            : "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60"
                         )}
-                        <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      >
+                        {isAgency ? (
+                          <Globe2 className="h-5 w-5" />
+                        ) : (
+                          <Building2 className="h-5 w-5" />
+                        )}
+                      </div>
+                      {thread.unread_count ? (
+                        <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-[#25d366] border-2 border-white dark:border-[#121217]" />
+                      ) : null}
+                    </div>
+
+                    {/* Chat Info */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13px] md:text-xs font-semibold text-slate-900 dark:text-white truncate">
                           {isAgency && isForeignAgency
                             ? "Agency Communication Desk"
                             : parties.partyLine}
                         </span>
+                        <span className="text-[11px] md:text-[10px] text-slate-400 dark:text-zinc-500 shrink-0 font-medium">
+                          {thread.last_message_time || "Recent"}
+                        </span>
                       </div>
 
-                      {thread.unread_count ? (
-                        <span className="h-5 min-w-5 px-1.5 rounded-full bg-emerald-800 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                          {thread.unread_count}
-                        </span>
-                      ) : null}
-                    </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[12px] md:text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-1 flex-1">
+                          {thread.last_message || "No messages yet"}
+                        </p>
+                        {thread.unread_count ? (
+                          <span className="h-5 min-w-5 px-1.5 rounded-full bg-[#25d366] text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs">
+                            {thread.unread_count}
+                          </span>
+                        ) : null}
+                      </div>
 
-                    {/* Who Communicated With Whom Summary Badge */}
-                    <div className="flex items-center justify-between text-[10px] gap-1">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[9px] px-1.5 py-0 font-medium",
-                          isAgency
-                            ? "border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
-                            : "border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30"
+                      <div className="flex items-center gap-1.5 text-[10px] pt-0.5">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] px-1.5 py-0 font-medium",
+                            isAgency
+                              ? "border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
+                              : "border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30"
+                          )}
+                        >
+                          {parties.badgeLabel}
+                        </Badge>
+                        {thread.context_type && thread.context_type !== "General" && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-200/80 dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300">
+                            {thread.context_type}: {thread.context_reference || "Linked"}
+                          </span>
                         )}
-                      >
-                        {parties.badgeLabel}
-                      </Badge>
-                      <span className="font-mono text-slate-400 text-[10px]">{thread.name}</span>
-                    </div>
-
-                    {/* Last message snippet */}
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-1">
-                      {thread.last_message || "No messages yet"}
-                    </p>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-                      <span>{thread.last_message_time || "Recent"}</span>
-                      {thread.context_type && thread.context_type !== "General" && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-200/80 dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300">
-                          {thread.context_type}: {thread.context_reference || "Linked"}
-                        </span>
-                      )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -1035,31 +1130,32 @@ export function ChatContainer() {
                 </div>
               )}
 
-              {/* Thread Header */}
-              <div className="p-3.5 border-b border-slate-200 dark:border-[#202027] flex items-center justify-between gap-3 bg-white dark:bg-[#111116]">
+              {/* Thread Header: Styled as WhatsApp header on mobile, standard card header on desktop */}
+              <div className="p-2.5 sm:p-3.5 border-b border-slate-200 dark:border-[#202027] flex items-center justify-between gap-2 bg-[#008069] dark:bg-[#1f2c34] md:bg-white md:dark:bg-[#111116] text-white md:text-slate-900 md:dark:text-white shadow-xs md:shadow-none select-none">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsMobileThreadOpen(false)}
-                    className="md:hidden -ml-1.5 mr-0.5 p-1.5 h-8 w-8 text-slate-600 dark:text-zinc-300 shrink-0"
+                    className="md:hidden -ml-1 p-1 h-8 w-8 text-white hover:bg-white/15 rounded-full shrink-0"
                     aria-label="Back to conversations list"
                   >
-                    <ArrowLeft className="h-4 w-4" />
+                    <ArrowLeft className="h-5 w-5 text-white" />
                   </Button>
 
-                  <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-[#191922] border border-slate-200 dark:border-[#272734] flex items-center justify-center shrink-0">
+                  {/* Circular Contact Avatar */}
+                  <div className="h-9 w-9 rounded-full md:rounded-xl bg-white/20 md:bg-slate-100 md:dark:bg-[#191922] border-0 md:border md:border-slate-200 md:dark:border-[#272734] flex items-center justify-center shrink-0">
                     {isAgencyThread ? (
-                      <Globe2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <Globe2 className="h-4 w-4 text-white md:text-blue-600 md:dark:text-blue-400" />
                     ) : (
-                      <Building2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                      <Building2 className="h-4 w-4 text-white md:text-emerald-700 md:dark:text-emerald-400" />
                     )}
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    <div className="flex items-center gap-1.5">
+                      <h2 className="text-sm font-bold text-white md:text-slate-900 md:dark:text-white truncate">
                         {isAgencyThread && isForeignAgency
                           ? "Agency Communication Desk"
                           : selectedParties?.partyLine || selectedThread.title || selectedThread.name}
@@ -1067,33 +1163,33 @@ export function ChatContainer() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "text-[10px] px-2 py-0 font-semibold shrink-0",
+                          "hidden sm:inline-flex text-[10px] px-2 py-0 font-semibold shrink-0",
                           isAgencyThread
-                            ? "border-blue-300 text-blue-700 dark:text-blue-400 bg-blue-50/50"
-                            : "border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50"
+                            ? "border-white/40 md:border-blue-300 text-white md:text-blue-700 md:dark:text-blue-400 bg-white/10 md:bg-blue-50/50"
+                            : "border-white/40 md:border-emerald-300 text-white md:text-emerald-800 md:dark:text-emerald-400 bg-white/10 md:bg-emerald-50/50"
                         )}
                       >
                         {selectedParties?.badgeLabel || selectedThread.thread_type || "Internal"}
                       </Badge>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
-                      <Users className="h-3 w-3 shrink-0 text-slate-400" />
+                    <div className="flex items-center gap-1.5 text-[11px] md:text-xs text-emerald-100 md:text-slate-500 dark:text-emerald-200/80 md:dark:text-zinc-400 mt-0.5 truncate">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#25d366] shrink-0" />
                       <span className="truncate">
                         {isAgencyThread
-                          ? `Bilateral Line: ${selectedParties?.agencyName || "Foreign Agency"} ↔ HQ Staff`
-                          : (selectedThread.participants || []).join(", ") || "Active Participants"}
+                          ? `Online • ${selectedParties?.agencyName || "Foreign Agency"}`
+                          : `Active • ${(selectedThread.participants || []).join(", ") || "Staff"}`}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   {/* Context Link */}
                   {selectedThread.context_type === "Applicant" && selectedThread.context_reference && (
                     <Link
                       href={isForeignAgency ? "/agent" : `/applicants/${selectedThread.context_reference}`}
-                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-[#1a1a24] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#292938] hover:underline"
+                      className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/15 md:bg-slate-100 text-white md:text-slate-700 border border-white/20 md:border-slate-200 hover:underline"
                     >
                       <User className="h-3 w-3" />
                       Dossier: {selectedThread.context_reference}
@@ -1106,12 +1202,12 @@ export function ChatContainer() {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => setIsAddParticipantModalOpen(true)}
-                      className="h-8 text-xs border-slate-300 dark:border-[#282835]"
+                      className="h-8 text-xs text-white md:text-slate-700 hover:bg-white/15 md:hover:bg-slate-100 md:border md:border-slate-300 md:dark:border-[#282835]"
                     >
                       <UserPlus className="h-3.5 w-3.5 mr-1" />
-                      Add Colleague
+                      <span className="hidden sm:inline">Add Colleague</span>
                     </Button>
                   )}
 
@@ -1124,7 +1220,7 @@ export function ChatContainer() {
                       refetchMyThreads();
                       if (isSupervisorOrAdmin) refetchOversightThreads();
                     }}
-                    className="h-8 w-8 text-slate-500"
+                    className="h-8 w-8 text-white md:text-slate-500 hover:bg-white/15 md:hover:bg-slate-100 rounded-full"
                     title="Refresh conversation"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -1132,8 +1228,15 @@ export function ChatContainer() {
                 </div>
               </div>
 
-              {/* Messages Stream Area */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+              {/* Messages Stream Area: Styled with WhatsApp wallpaper background on mobile */}
+              <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-2.5 md:space-y-3.5 bg-[#efeae2] dark:bg-[#0b141a] md:bg-white md:dark:bg-[#0e0e12]">
+                {/* Date separator */}
+                <div className="flex justify-center my-1">
+                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-medium tracking-wide uppercase bg-white/80 dark:bg-[#182229] text-[#54656f] dark:text-[#8696a0] shadow-2xs select-none">
+                    Messages History
+                  </span>
+                </div>
+
                 {isMessagesLoading ? (
                   <div className="h-full flex items-center justify-center text-xs text-slate-400 gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
@@ -1147,17 +1250,23 @@ export function ChatContainer() {
                       msg.sender === authUser?.email;
 
                     const senderInfo = resolveUserDisplay(msg.sender);
+                    const formattedTime = msg.creation
+                      ? new Date(msg.creation).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
 
                     return (
                       <div
                         key={msg.name}
                         className={cn(
-                          "flex flex-col max-w-[85%] sm:max-w-[75%]",
+                          "flex flex-col max-w-[88%] sm:max-w-[75%]",
                           isOutgoing ? "ml-auto items-end" : "mr-auto items-start"
                         )}
                       >
-                        {/* Sender info showing Name, Role & Time */}
-                        <div className="flex items-center gap-1.5 mb-1 px-1 text-[10px]">
+                        {/* Desktop Sender info showing Name & Role */}
+                        <div className="hidden md:flex items-center gap-1.5 mb-1 px-1 text-[10px]">
                           <span className="font-semibold text-slate-700 dark:text-zinc-300">
                             {isOutgoing ? "You" : senderInfo.name}
                           </span>
@@ -1165,26 +1274,34 @@ export function ChatContainer() {
                             {senderInfo.role}
                           </span>
                           <span className="text-slate-400">
-                            •{" "}
-                            {msg.creation
-                              ? new Date(msg.creation).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : ""}
+                            • {formattedTime}
                           </span>
                         </div>
 
-                        {/* Message bubble */}
+                        {/* WhatsApp Message bubble */}
                         <div
                           className={cn(
-                            "p-3 rounded-2xl text-xs space-y-2 leading-relaxed shadow-2xs",
+                            "p-2.5 md:p-3 rounded-2xl text-xs space-y-1.5 leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] md:shadow-2xs",
                             isOutgoing
-                              ? "bg-emerald-900 text-white rounded-tr-xs"
-                              : "bg-slate-100 dark:bg-[#181822] text-slate-900 dark:text-zinc-100 rounded-tl-xs border border-slate-200/80 dark:border-[#262634]"
+                              ? "bg-[#d9fdd3] dark:bg-[#005c4b] md:bg-emerald-900 text-[#111b21] dark:text-[#e9edef] md:text-white rounded-tr-xs"
+                              : "bg-white dark:bg-[#202c33] md:bg-slate-100 md:dark:bg-[#181822] text-[#111b21] dark:text-[#e9edef] md:text-zinc-100 rounded-tl-xs border-0 md:border md:border-slate-200/80 md:dark:border-[#262634]"
                           )}
                         >
-                          {msg.message && <p className="whitespace-pre-wrap">{msg.message}</p>}
+                          {/* Sender name for incoming messages on mobile */}
+                          {!isOutgoing && (
+                            <div className="md:hidden text-[11px] font-bold text-[#008069] dark:text-[#25d366] flex items-center gap-1 mb-0.5">
+                              <span>{senderInfo.name}</span>
+                              <span className="text-[9px] font-normal opacity-70">
+                                ({senderInfo.role})
+                              </span>
+                            </div>
+                          )}
+
+                          {msg.message && (
+                            <p className="whitespace-pre-wrap text-[13px] md:text-xs">
+                              {msg.message}
+                            </p>
+                          )}
 
                           {/* Mentions pills */}
                           {(msg.mentioned_applicant || msg.mentioned_placement) && (
@@ -1195,8 +1312,8 @@ export function ChatContainer() {
                                   className={cn(
                                     "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border",
                                     isOutgoing
-                                      ? "bg-emerald-800 text-emerald-100 border-emerald-700"
-                                      : "bg-white dark:bg-[#1e1e28] text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                                      ? "bg-[#c4ecc0] dark:bg-[#025243] md:bg-emerald-800 text-emerald-950 dark:text-emerald-100 md:text-emerald-100 border-emerald-300 dark:border-emerald-700 md:border-emerald-700"
+                                      : "bg-slate-100 dark:bg-[#182229] md:bg-white md:dark:bg-[#1e1e28] text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
                                   )}
                                 >
                                   <User className="h-2.5 w-2.5" />
@@ -1208,8 +1325,8 @@ export function ChatContainer() {
                                   className={cn(
                                     "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border",
                                     isOutgoing
-                                      ? "bg-emerald-800 text-emerald-100 border-emerald-700"
-                                      : "bg-white dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#323242]"
+                                      ? "bg-[#c4ecc0] dark:bg-[#025243] md:bg-emerald-800 text-emerald-950 dark:text-emerald-100 md:text-emerald-100 border-emerald-300 dark:border-emerald-700 md:border-emerald-700"
+                                      : "bg-slate-100 dark:bg-[#182229] md:bg-white md:dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-[#323242]"
                                   )}
                                 >
                                   <Briefcase className="h-2.5 w-2.5" />
@@ -1229,8 +1346,8 @@ export function ChatContainer() {
                                 className={cn(
                                   "inline-flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold border transition-all",
                                   isOutgoing
-                                    ? "bg-emerald-800 text-white border-emerald-700 hover:bg-emerald-700"
-                                    : "bg-white dark:bg-[#1f1f2a] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#2f2f3d] hover:bg-slate-50"
+                                    ? "bg-[#c4ecc0] dark:bg-[#025243] md:bg-emerald-800 text-emerald-950 dark:text-white md:text-white border-emerald-300 dark:border-emerald-700 md:border-emerald-700 hover:opacity-90"
+                                    : "bg-slate-50 dark:bg-[#182229] md:bg-white md:dark:bg-[#1f1f2a] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#2f2f3d] hover:bg-slate-100"
                                 )}
                               >
                                 <FileText className="h-3.5 w-3.5" />
@@ -1241,6 +1358,21 @@ export function ChatContainer() {
                               </a>
                             </div>
                           )}
+
+                          {/* Timestamp and WhatsApp read receipts checkmark */}
+                          <div
+                            className={cn(
+                              "flex items-center justify-end gap-1 text-[10px] select-none pt-0.5",
+                              isOutgoing
+                                ? "text-[#667781] dark:text-emerald-200/80 md:text-emerald-200"
+                                : "text-[#667781] dark:text-[#8696a0]"
+                            )}
+                          >
+                            <span>{formattedTime}</span>
+                            {isOutgoing && (
+                              <WhatsAppDoubleCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1257,8 +1389,8 @@ export function ChatContainer() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Composer Area */}
-              <div className="p-3 border-t border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#111116] space-y-2">
+              {/* Message Composer Area: WhatsApp Capsule Input on Mobile */}
+              <div className="p-2 md:p-3 border-t border-slate-200 dark:border-[#202027] bg-[#f0f2f5] dark:bg-[#1f2c34] md:bg-slate-50/50 md:dark:bg-[#111116] space-y-2">
                 {/* Active Chips Area (Attachment & Mention) */}
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Pending Attachment Chip */}
@@ -1279,32 +1411,34 @@ export function ChatContainer() {
                     </div>
                   )}
 
-                  {/* Active Mention Chip */}
-                  {mentionedApplicant && (
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 text-xs text-sky-900 dark:text-sky-300">
-                      <AtSign className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                      <span className="font-semibold">
-                        Mentioning:{" "}
-                        <span className="font-mono font-bold text-sky-700 dark:text-sky-300">
-                          {mentionedApplicant}
-                        </span>
-                        {(() => {
-                          const cand = mentionableApplicants.find(
-                            (a) => a.id === mentionedApplicant
-                          );
-                          return cand ? ` (${cand.name})` : "";
-                        })()}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setMentionedApplicant("")}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                        title="Clear applicant mention"
+                  {/* Active Mention Chips */}
+                  {mentionedApplicants.map((appId) => {
+                    const cand = mentionableApplicants.find((a) => a.id === appId);
+                    return (
+                      <div
+                        key={appId}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 text-xs text-sky-900 dark:text-sky-300"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                        <AtSign className="h-3 w-3 text-sky-600 dark:text-sky-400" />
+                        <span className="font-semibold font-mono">{appId}</span>
+                        {cand && (
+                          <span className="truncate max-w-[150px] text-slate-600 dark:text-zinc-300">
+                            ({cand.name})
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMentionedApplicants((prev) => prev.filter((id) => id !== appId))
+                          }
+                          className="text-slate-400 hover:text-slate-600 dark:hover:text-white ml-0.5"
+                          title="Remove mention"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Optional Mention Dropdown */}
@@ -1313,7 +1447,7 @@ export function ChatContainer() {
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
                         <AtSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                        Mention Applicant:
+                        Mention Applicant(s):
                       </label>
                       <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
                         {isCurrentChatWithForeignAgency
@@ -1323,16 +1457,28 @@ export function ChatContainer() {
                     </div>
 
                     <select
-                      value={mentionedApplicant}
-                      onChange={(e) => setMentionedApplicant(e.target.value)}
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && !mentionedApplicants.includes(val)) {
+                          setMentionedApplicants((prev) => [...prev, val]);
+                        }
+                      }}
                       className="w-full h-8 text-xs rounded-md border border-slate-200 dark:border-[#2b2b3b] bg-white dark:bg-[#14141a] text-slate-900 dark:text-zinc-100 px-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
-                      <option value="">-- Select an applicant to mention (None) --</option>
-                      {mentionableApplicants.map((cand) => (
-                        <option key={cand.id} value={cand.id}>
-                          {cand.id} — {cand.name} [{cand.tag}] ({cand.detail})
-                        </option>
-                      ))}
+                      <option value="">-- Add an applicant to mention --</option>
+                      {mentionableApplicants.map((cand) => {
+                        const isAlreadyMentioned = mentionedApplicants.includes(cand.id);
+                        return (
+                          <option
+                            key={cand.id}
+                            value={cand.id}
+                            disabled={isAlreadyMentioned}
+                          >
+                            {isAlreadyMentioned ? "✓ " : ""}{cand.id} — {cand.name} [{cand.tag}] ({cand.detail})
+                          </option>
+                        );
+                      })}
                     </select>
 
                     {isCurrentChatWithForeignAgency && mentionableApplicants.length === 0 && (
@@ -1343,7 +1489,7 @@ export function ChatContainer() {
                   </div>
                 )}
 
-                <div className="flex items-end gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -1351,33 +1497,40 @@ export function ChatContainer() {
                     className="hidden"
                   />
 
+                  {/* Attachment Button */}
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
                     onClick={() => fileInputRef.current?.click()}
                     title="Attach document or file"
-                    className="h-9 w-9 text-slate-500 shrink-0"
+                    className="h-9 w-9 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-white rounded-full shrink-0"
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
 
+                  {/* Mention Button */}
                   <Button
                     type="button"
                     size="icon"
                     variant="ghost"
                     onClick={() => setShowMentionInputs(!showMentionInputs)}
-                    title={mentionedApplicant ? `Mentioning ${mentionedApplicant}` : "Mention applicant"}
+                    title={
+                      mentionedApplicants.length > 0
+                        ? `Mentioning ${mentionedApplicants.length} applicant(s)`
+                        : "Mention applicant(s)"
+                    }
                     className={cn(
-                      "h-9 w-9 shrink-0 transition-colors",
-                      showMentionInputs || mentionedApplicant
-                        ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-300 dark:ring-emerald-800/60"
-                        : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-200"
+                      "h-9 w-9 rounded-full shrink-0 transition-colors",
+                      showMentionInputs || mentionedApplicants.length > 0
+                        ? "text-[#00a884] bg-white dark:bg-[#2a3942] shadow-2xs"
+                        : "text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-white"
                     )}
                   >
                     <AtSign className="h-4 w-4" />
                   </Button>
 
+                  {/* Input Field: Rounded-full WhatsApp style on mobile */}
                   <Textarea
                     rows={1}
                     value={messageText}
@@ -1390,10 +1543,30 @@ export function ChatContainer() {
                         }
                       }
                     }}
-                    placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
-                    className="flex-1 min-h-[36px] max-h-32 text-xs py-2 bg-white dark:bg-[#15151c]"
+                    placeholder="Type a message..."
+                    className="flex-1 min-h-[40px] max-h-32 text-xs py-2.5 px-4 rounded-full md:rounded-md bg-white dark:bg-[#2a3942] md:dark:bg-[#15151c] text-[#111b21] dark:text-[#e9edef] border-0 md:border shadow-2xs focus-visible:ring-0 focus-visible:outline-none placeholder:text-[#8696a0]"
                   />
 
+                  {/* Mobile WhatsApp Circular Send Button */}
+                  <button
+                    type="button"
+                    disabled={
+                      (!messageText.trim() && !pendingAttachment) ||
+                      sendMessageMutation.isPending ||
+                      isUploadingAttachment
+                    }
+                    onClick={() => sendMessageMutation.mutate()}
+                    className="md:hidden h-10 w-10 rounded-full bg-[#00a884] hover:bg-[#008f6f] disabled:opacity-40 disabled:hover:bg-[#00a884] text-white flex items-center justify-center shadow-md shrink-0 transition-transform active:scale-95"
+                    title="Send message"
+                  >
+                    {sendMessageMutation.isPending || isUploadingAttachment ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    ) : (
+                      <Send className="h-4 w-4 ml-0.5 text-white" />
+                    )}
+                  </button>
+
+                  {/* Desktop Send Button */}
                   <Button
                     type="button"
                     disabled={
@@ -1402,7 +1575,7 @@ export function ChatContainer() {
                       isUploadingAttachment
                     }
                     onClick={() => sendMessageMutation.mutate()}
-                    className="h-9 px-3 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shrink-0"
+                    className="hidden md:inline-flex h-9 px-3 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shrink-0"
                   >
                     {sendMessageMutation.isPending || isUploadingAttachment ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

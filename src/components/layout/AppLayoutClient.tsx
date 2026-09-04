@@ -55,7 +55,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 transition-colors duration-200">
+    <div className="flex min-h-screen w-full max-w-full overflow-x-hidden flex-col bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 transition-colors duration-200">
       <AppSidebar
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileMenuOpen}
@@ -63,7 +63,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
         onToggleCollapse={toggleSidebar}
       />
       <div
-        className={`flex flex-1 flex-col transition-all duration-300 ${
+        className={`flex flex-1 min-w-0 w-full max-w-full flex-col transition-all duration-300 ${
           isSidebarCollapsed ? "md:pl-20" : "md:pl-64"
         }`}
       >
@@ -72,7 +72,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
           onToggleSidebar={toggleSidebar}
           onMobileMenuToggle={toggleMobileMenu}
         />
-        <main className="flex-1 w-full p-3 sm:p-5 lg:p-6 animate-in fade-in duration-150">
+        <main className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-5 lg:p-6 animate-in fade-in duration-150">
           {children}
         </main>
       </div>

@@ -129,12 +129,12 @@ export function ApplicantTable() {
 
     // Check if ALL selected applicants are in "Selected" stage
     const nonSelectedCandidates = selectedApplicants.filter(
-      (a) => a.applicant_state !== "Selected"
+      (a) => (a.status || a.applicant_state) !== "Selected"
     );
 
     if (nonSelectedCandidates.length > 0) {
       const invalidNames = nonSelectedCandidates
-        .map((a) => `${a.full_name || a.name} (${a.applicant_state || "Draft"})`)
+        .map((a) => `${a.full_name || a.name} (${a.status || a.applicant_state || "Draft"})`)
         .slice(0, 3)
         .join(", ");
 
@@ -262,8 +262,8 @@ export function ApplicantTable() {
 
       {/* Table Container with Clickable Rows */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
+          <table className="w-full min-w-[850px] text-left text-xs">
             <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
               <tr>
                 <th className="px-4 py-3.5 w-10">
@@ -282,6 +282,7 @@ export function ApplicantTable() {
                 <th className="px-4 py-3.5">Passport No.</th>
                 <th className="px-4 py-3.5">Contract & Visa</th>
                 <th className="px-4 py-3.5">Sponsor (Kafeel)</th>
+                <th className="px-4 py-3.5 text-center">Duration from Contract</th>
                 <th className="px-4 py-3.5">Current Stage</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
@@ -289,19 +290,19 @@ export function ApplicantTable() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
                     Loading applicants...
                   </td>
                 </tr>
               ) : paginatedApplicants.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-slate-500">
                     No applicants found matching criteria.
                   </td>
                 </tr>
               ) : (
                 paginatedApplicants.map((applicant) => {
-                  const stage = applicant.applicant_state || "Draft";
+                  const stage = applicant.status || applicant.applicant_state || "Draft";
                   const badge = getStageBadgeVariant(stage);
                   const isSelected = selectedRows.has(applicant.name);
                   const isSelectedStage = stage === "Selected";
@@ -372,6 +373,16 @@ export function ApplicantTable() {
                           </span>
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
+                          {(() => {
+                            const contractDateStr = (applicant as any).contract_date || (applicant as any).contract_signed_date;
+                            if (!contractDateStr) return "—";
+                            const days = Math.max(0, Math.floor((Date.now() - new Date(contractDateStr).getTime()) / (1000 * 60 * 60 * 24)));
+                            return `${days} DAYS`;
+                          })()}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <Badge variant={badge.variant} dotColor={badge.dotColor}>
                           {stage}
@@ -407,7 +418,7 @@ export function ApplicantTable() {
                           )}
 
                           {/* 3. Preview CV Action */}
-                          {applicant.applicant_state !== "Draft" && (
+                          {(applicant.status || applicant.applicant_state) !== "Draft" && (
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"

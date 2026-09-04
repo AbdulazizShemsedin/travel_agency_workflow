@@ -2,19 +2,21 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { GraduationCap, Briefcase, Award, User, Globe, Car, Check } from "lucide-react";
+import { GraduationCap, Briefcase, Award, User, Globe, Car, Check, Film, Loader2, CheckCircle2 } from "lucide-react";
 import {
   BaseApplicantFormValues,
   EDUCATION_OPTIONS,
   JOB_APPLIED_OPTIONS,
   DESTINATION_COUNTRY_OPTIONS,
 } from "@/lib/validations/applicant.schema";
+import { uploadFileV2 } from "@/lib/api/v2";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 
 interface Step2EducationExperienceProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,7 +24,7 @@ interface Step2EducationExperienceProps {
   isRegistrationAttempt?: boolean;
 }
 
-const LANGUAGE_OPTIONS = ["None", "Basic", "Fair", "Good", "Fluent"];
+const LANGUAGE_OPTIONS = ["None", "Basic", "Good", "Fluent"];
 const COMPLEXION_OPTIONS = ["", "FAIR", "MEDIUM", "DARK"];
 
 export function Step2EducationExperience({
@@ -43,6 +45,28 @@ export function Step2EducationExperience({
   const [hasExperience, setHasExperience] = React.useState<boolean>(() => {
     return Boolean(expCountry || expPeriod || (yearsExp && Number(yearsExp) > 0));
   });
+
+  const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
+  const videoUrl = watch("video_url" as any) || watch("intro_video" as any);
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingVideo(true);
+      const res = await uploadFileV2(file, false, "Applicant");
+      const url = res.file_url || (res as any).message?.file_url;
+      if (url) {
+        setValue("video_url" as any, url, { shouldDirty: true });
+        setValue("intro_video" as any, url, { shouldDirty: true });
+        toast.success("Candidate video uploaded successfully!");
+      }
+    } catch (err: any) {
+      toast.error("Video upload failed", { description: err.message || "Failed to upload video file" });
+    } finally {
+      setIsUploadingVideo(false);
+    }
+  };
 
   React.useEffect(() => {
     if (expCountry || expPeriod || (yearsExp && Number(yearsExp) > 0)) {
@@ -528,29 +552,67 @@ export function Step2EducationExperience({
             />
           </div>
 
-          {/* Overseas Experience Country & Period (Only when toggled ON) */}
+          {/* Overseas Experience Country & Period & Video (Only when toggled ON) */}
           {hasExperience && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="experience_country" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Previous Work Country
-                </Label>
-                <Input
-                  id="experience_country"
-                  placeholder="e.g., Saudi Arabia, UAE, Kuwait, Jordan"
-                  {...register("experience_country")}
-                />
+            <div className="space-y-4 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="experience_country" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Previous Work Country
+                  </Label>
+                  <Input
+                    id="experience_country"
+                    placeholder="e.g., Saudi Arabia, UAE, Kuwait, Jordan"
+                    {...register("experience_country")}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="experience_period" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Experience Duration
+                  </Label>
+                  <Input
+                    id="experience_period"
+                    placeholder="e.g., 2 Years, 4 Years"
+                    {...register("experience_period")}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="experience_period" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Experience Duration
-                </Label>
-                <Input
-                  id="experience_period"
-                  placeholder="e.g., 2 Years, 4 Years"
-                  {...register("experience_period")}
-                />
+              {/* Video Upload Field (Conditionally shown for experienced applicants) */}
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#2a2a35] bg-slate-50/50 dark:bg-[#141419] p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="video_upload" className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Film className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+                    Candidate Introduction / Skill Video <span className="text-slate-400 font-normal">(Optional)</span>
+                  </Label>
+                  {videoUrl && (
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                      <CheckCircle2 className="h-3 w-3" /> Video Attached
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Input
+                    id="video_upload"
+                    type="file"
+                    accept="video/*"
+                    disabled={isUploadingVideo}
+                    onChange={handleVideoUpload}
+                    className="text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-800 hover:file:bg-emerald-100 dark:file:bg-emerald-950 dark:file:text-emerald-300 cursor-pointer"
+                  />
+                  {isUploadingVideo && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-400 shrink-0">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Uploading...</span>
+                    </div>
+                  )}
+                </div>
+                {videoUrl && (
+                  <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 truncate">
+                    Attached URL: {videoUrl}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -571,7 +633,7 @@ export function Step2EducationExperience({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="height" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                Height <span className="text-rose-500">*</span>
+                Height <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="height"
@@ -586,7 +648,7 @@ export function Step2EducationExperience({
 
             <div className="space-y-1.5">
               <Label htmlFor="weight" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                Weight <span className="text-rose-500">*</span>
+                Weight <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="weight"
@@ -600,8 +662,8 @@ export function Step2EducationExperience({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="complexion" className="text-xs font-bold text-slate-900 dark:text-white">
-                Complexion / Skin <span className="text-rose-500">*</span>
+              <Label htmlFor="complexion" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                Complexion / Skin <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Select id="complexion" {...register("complexion")} error={!!errors.complexion}>
                 {COMPLEXION_OPTIONS.map((c) => (
@@ -631,7 +693,7 @@ export function Step2EducationExperience({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="monthly_salary" className="text-xs font-bold text-slate-900 dark:text-white">
-                  Monthly Salary (SAR) <span className="text-rose-500">*</span>
+                  Monthly Salary (SAR)
                 </Label>
                 <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
                   1,000 fresh / 1,200 exp
@@ -651,56 +713,31 @@ export function Step2EducationExperience({
         </CardContent>
       </Card>
 
-      {/* 5. Education Background & Remarks Card */}
+      {/* 5. Education Background & Remarks Card (Duplicate education level removed) */}
       <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">
-                Education Background & Remarks
+                Education Institution & Remarks
               </CardTitle>
             </div>
-            <span className="rounded-md bg-amber-50 dark:bg-amber-950/60 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-              Education Level *
+            <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-slate-700">
+              Institution & Notes
             </span>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5 sm:col-span-1">
-              <Label htmlFor="highest_education" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                Highest Education Level <span className="text-amber-600 font-bold">*</span>
-              </Label>
-              <Select
-                id="highest_education"
-                placeholder="Select highest level"
-                {...register("highest_education")}
-                error={!!errors.highest_education}
-              >
-                {EDUCATION_OPTIONS.map((edu) => (
-                  <option key={edu} value={edu}>
-                    {edu}
-                  </option>
-                ))}
-              </Select>
-              {errors.highest_education && (
-                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                  {errors.highest_education.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="institution" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                Institution Name <span className="text-slate-400 font-normal">(Optional)</span>
-              </Label>
-              <Input
-                id="institution"
-                placeholder="e.g., Primary School, High School"
-                {...register("institution")}
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="institution" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Institution Name <span className="text-slate-400 font-normal">(Optional)</span>
+            </Label>
+            <Input
+              id="institution"
+              placeholder="e.g., Primary School, High School, Vocational Center"
+              {...register("institution")}
+            />
           </div>
 
           <div className="space-y-1.5">

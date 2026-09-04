@@ -456,7 +456,7 @@ export default function PlacementDocumentCenterPage() {
                   )}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Upload signed employment contract. The backend automatically parses dates, salary, and sponsor details via <code>contract_parser</code>.
+                  Upload signed employment contract. The system automatically parses dates, salary, and sponsor details from the uploaded document.
                 </CardDescription>
               </CardHeader>
 
@@ -532,7 +532,7 @@ export default function PlacementDocumentCenterPage() {
                   Extracted Contract Terms
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Structured values stored on the Placement record per backend contract schema.
+                  Structured values stored on the candidate placement record.
                 </CardDescription>
               </CardHeader>
 
@@ -724,7 +724,7 @@ export default function PlacementDocumentCenterPage() {
               </div>
               <p className="leading-relaxed">
                 Candidate <strong>{applicant?.full_name}</strong> is designated for <strong>{destinationCountry}</strong>.
-                Direct eVisa document upload and parsing via <code>upload_visa</code> is implemented exclusively for the Kuwait corridor.
+                Direct eVisa document upload and parsing is implemented exclusively for the Kuwait corridor.
                 For Saudi Arabia, consular visa clearance is coordinated via the <strong>Taeshir</strong> biometric gate and <strong>Saudi Embassy Stamping</strong> clearance steps.
               </p>
             </div>

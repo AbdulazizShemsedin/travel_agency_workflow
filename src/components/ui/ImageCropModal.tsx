@@ -23,6 +23,56 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+// Helper to determine default aspect ratio by crop mode
+export function getInitialCropAspectRatio(
+  mode: "passport" | "portrait" | "fullbody" | "free" = "passport",
+  defaultRatio?: number | null
+): number | null {
+  if (defaultRatio !== undefined && defaultRatio !== null) return defaultRatio;
+  if (mode === "portrait") return 35 / 45; // ~0.778 standard 35x45mm passport/visa headshot
+  if (mode === "fullbody") return 3 / 4;   // 0.75 standing full body portrait
+  if (mode === "passport") return 1.42;    // Landscape passport spread
+  return null;
+}
+
+// Calculate normalized (0..1) crop rectangle respecting aspect ratio and rotation
+export function calculateNormalizedCropBox(
+  targetRatio: number | null,
+  imgWidth: number,
+  imgHeight: number,
+  rot: number
+): { x: number; y: number; width: number; height: number } {
+  if (!targetRatio) {
+    return { x: 0.05, y: 0.05, width: 0.9, height: 0.9 };
+  }
+  const is90or270 = rot === 90 || rot === 270;
+  const effW = is90or270 ? (imgHeight || 600) : (imgWidth || 800);
+  const effH = is90or270 ? (imgWidth || 800) : (imgHeight || 600);
+  const canvasRatio = effW / effH;
+
+  // Normalized width / normalized height K
+  const K = targetRatio / canvasRatio;
+
+  let newW = 0.85;
+  let newH = newW / K;
+
+  if (newH > 0.85) {
+    newH = 0.85;
+    newW = newH * K;
+  }
+
+  newW = Math.min(0.95, Math.max(0.08, newW));
+  newH = Math.min(0.95, Math.max(0.08, newH));
+
+  return {
+    x: Math.max(0.02, (1 - newW) / 2),
+    y: Math.max(0.02, (1 - newH) / 2),
+    width: newW,
+    height: newH,
+  };
+}
 
 export interface ImageCropModalProps {
   open: boolean;
@@ -74,8 +124,8 @@ export function ImageCropModal({
   // Transform states
   const [rotation, setRotation] = React.useState<number>(0); // 0, 90, 180, 270
   const [zoom, setZoom] = React.useState<number>(1);
-  const [aspectRatio, setAspectRatio] = React.useState<number | null>(
-    cropMode === "portrait" ? 1 : cropMode === "passport" ? 1.4 : defaultAspectRatio
+  const [aspectRatio, setAspectRatio] = React.useState<number | null>(() =>
+    getInitialCropAspectRatio(cropMode, defaultAspectRatio)
   );
 
   // Normalized crop rectangle: 0 to 1 inside the displayed image bounds
@@ -113,15 +163,8 @@ export function ImageCropModal({
     // Reset controls
     setRotation(0);
     setZoom(1);
-    setAspectRatio(
-      cropMode === "portrait" ? 1 : cropMode === "passport" ? 1.4 : defaultAspectRatio
-    );
-    setCropRect({
-      x: 0.05,
-      y: 0.05,
-      width: 0.9,
-      height: 0.9,
-    });
+    const initialRatio = getInitialCropAspectRatio(cropMode, defaultAspectRatio);
+    setAspectRatio(initialRatio);
 
     return () => {
       if (objectUrl) {
@@ -133,59 +176,45 @@ export function ImageCropModal({
   const handleImageLoaded = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     setImageEl(img);
+    const natW = img.naturalWidth || 800;
+    const natH = img.naturalHeight || 600;
     setImgNaturalSize({
-      width: img.naturalWidth || 800,
-      height: img.naturalHeight || 600,
+      width: natW,
+      height: natH,
     });
 
-    // Default crop box according to aspect ratio
-    if (aspectRatio) {
-      const imgRatio = (img.naturalWidth || 800) / (img.naturalHeight || 600);
-      if (aspectRatio > imgRatio) {
-        // Target is wider than image
-        const h = 0.85 * (imgRatio / aspectRatio);
-        setCropRect({
-          x: 0.075,
-          y: Math.max(0.05, (1 - h) / 2),
-          width: 0.85,
-          height: Math.min(0.9, h),
-        });
-      } else {
-        // Target is taller than image
-        const w = 0.85 * (aspectRatio / imgRatio);
-        setCropRect({
-          x: Math.max(0.05, (1 - w) / 2),
-          y: 0.075,
-          width: Math.min(0.9, w),
-          height: 0.85,
-        });
-      }
-    } else {
-      setCropRect({
-        x: 0.05,
-        y: 0.05,
-        width: 0.9,
-        height: 0.9,
-      });
-    }
+    const activeRatio = getInitialCropAspectRatio(cropMode, defaultAspectRatio);
+    setAspectRatio(activeRatio);
+    const box = calculateNormalizedCropBox(activeRatio, natW, natH, rotation);
+    setCropRect(box);
   };
 
   const handleRotate = (direction: "cw" | "ccw") => {
-    setRotation((prev) => {
-      if (direction === "cw") return (prev + 90) % 360;
-      return (prev - 90 + 360) % 360;
-    });
+    const nextRot = (direction === "cw" ? rotation + 90 : rotation - 90 + 360) % 360;
+    setRotation(nextRot);
+    if (aspectRatio) {
+      const box = calculateNormalizedCropBox(
+        aspectRatio,
+        imgNaturalSize.width,
+        imgNaturalSize.height,
+        nextRot
+      );
+      setCropRect(box);
+    }
   };
 
   const handleReset = () => {
     setRotation(0);
     setZoom(1);
-    setCropRect({
-      x: 0.05,
-      y: 0.05,
-      width: 0.9,
-      height: 0.9,
-    });
+    const initRatio = getInitialCropAspectRatio(cropMode, defaultAspectRatio);
+    setAspectRatio(initRatio);
+    const box = calculateNormalizedCropBox(
+      initRatio,
+      imgNaturalSize.width,
+      imgNaturalSize.height,
+      0
+    );
+    setCropRect(box);
   };
 
   // Dragging logic for Pointer events
@@ -212,7 +241,8 @@ export function ImageCropModal({
     if (activeHandle === "move") {
       newRect.x = Math.max(0, Math.min(1 - initialRect.width, initialRect.x + dx));
       newRect.y = Math.max(0, Math.min(1 - initialRect.height, initialRect.y + dy));
-    } else {
+    } else if (!aspectRatio) {
+      // Freeform dragging
       if (activeHandle.includes("left")) {
         const potentialX = Math.min(initialRect.x + initialRect.width - MIN_SIZE, Math.max(0, initialRect.x + dx));
         newRect.width = initialRect.width + (initialRect.x - potentialX);
@@ -228,6 +258,65 @@ export function ImageCropModal({
       }
       if (activeHandle.includes("bottom")) {
         newRect.height = Math.max(MIN_SIZE, Math.min(1 - initialRect.y, initialRect.height + dy));
+      }
+    } else {
+      // Ratio-locked corner dragging
+      const is90or270 = rotation === 90 || rotation === 270;
+      const natW = imgNaturalSize.width || 800;
+      const natH = imgNaturalSize.height || 600;
+      const effW = is90or270 ? natH : natW;
+      const effH = is90or270 ? natW : natH;
+      const canvasRatio = effW / effH;
+      const K = aspectRatio / canvasRatio;
+
+      if (activeHandle === "bottom-right") {
+        let w = Math.max(MIN_SIZE, Math.min(1 - initialRect.x, initialRect.width + dx));
+        let h = w / K;
+        if (initialRect.y + h > 1) {
+          h = 1 - initialRect.y;
+          w = h * K;
+        }
+        newRect.width = Math.max(MIN_SIZE, w);
+        newRect.height = Math.max(MIN_SIZE, h);
+      } else if (activeHandle === "bottom-left") {
+        let w = Math.max(MIN_SIZE, initialRect.width - dx);
+        let h = w / K;
+        if (initialRect.y + h > 1) {
+          h = 1 - initialRect.y;
+          w = h * K;
+        }
+        if (initialRect.x + initialRect.width - w < 0) {
+          w = initialRect.x + initialRect.width;
+          h = w / K;
+        }
+        newRect.width = Math.max(MIN_SIZE, w);
+        newRect.height = Math.max(MIN_SIZE, h);
+        newRect.x = initialRect.x + initialRect.width - newRect.width;
+      } else if (activeHandle === "top-right") {
+        let w = Math.max(MIN_SIZE, Math.min(1 - initialRect.x, initialRect.width + dx));
+        let h = w / K;
+        if (initialRect.y + initialRect.height - h < 0) {
+          h = initialRect.y + initialRect.height;
+          w = h * K;
+        }
+        newRect.width = Math.max(MIN_SIZE, w);
+        newRect.height = Math.max(MIN_SIZE, h);
+        newRect.y = initialRect.y + initialRect.height - newRect.height;
+      } else if (activeHandle === "top-left") {
+        let w = Math.max(MIN_SIZE, initialRect.width - dx);
+        let h = w / K;
+        if (initialRect.y + initialRect.height - h < 0) {
+          h = initialRect.y + initialRect.height;
+          w = h * K;
+        }
+        if (initialRect.x + initialRect.width - w < 0) {
+          w = initialRect.x + initialRect.width;
+          h = w / K;
+        }
+        newRect.width = Math.max(MIN_SIZE, w);
+        newRect.height = Math.max(MIN_SIZE, h);
+        newRect.x = initialRect.x + initialRect.width - newRect.width;
+        newRect.y = initialRect.y + initialRect.height - newRect.height;
       }
     }
 
@@ -412,54 +501,76 @@ export function ImageCropModal({
             </Button>
           </div>
 
-          {/* Aspect Ratio Options */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 mr-1">Aspect:</span>
-            <button
-              type="button"
-              onClick={() => setAspectRatio(null)}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                aspectRatio === null
-                  ? "bg-emerald-800 text-white font-bold"
-                  : "bg-white dark:bg-[#141418] border border-slate-200 dark:border-[#33333f] text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
-              }`}
-            >
-              Free
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAspectRatio(1.4);
-                setCropRect((r) => ({ ...r, width: 0.85, height: 0.85 / 1.4 }));
-              }}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                aspectRatio === 1.4
-                  ? "bg-emerald-800 text-white font-bold"
-                  : "bg-white dark:bg-[#141418] border border-slate-200 dark:border-[#33333f] text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
-              }`}
-            >
-              Passport (4:3)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAspectRatio(1);
-                setCropRect((r) => ({ ...r, width: 0.7, height: 0.7 }));
-              }}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium transition ${
-                aspectRatio === 1
-                  ? "bg-emerald-800 text-white font-bold"
-                  : "bg-white dark:bg-[#141418] border border-slate-200 dark:border-[#33333f] text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
-              }`}
-            >
-              1:1 Square
-            </button>
+          {/* Dynamic Aspect Ratio Options per Crop Mode */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 mr-1">Preset:</span>
+            {(() => {
+              const presets: { label: string; ratio: number | null }[] =
+                cropMode === "portrait"
+                  ? [
+                      { label: "35x45mm (Passport)", ratio: 35 / 45 },
+                      { label: "3:4 Portrait", ratio: 3 / 4 },
+                      { label: "1:1 Square", ratio: 1 },
+                      { label: "Free", ratio: null },
+                    ]
+                  : cropMode === "fullbody"
+                  ? [
+                      { label: "3:4 Full Body", ratio: 3 / 4 },
+                      { label: "2:3 Standing", ratio: 2 / 3 },
+                      { label: "9:16 Tall", ratio: 9 / 16 },
+                      { label: "Free", ratio: null },
+                    ]
+                  : cropMode === "passport"
+                  ? [
+                      { label: "1.42 Spread", ratio: 1.42 },
+                      { label: "4:3 Document", ratio: 4 / 3 },
+                      { label: "A4 (1.414)", ratio: 1.414 },
+                      { label: "Free", ratio: null },
+                    ]
+                  : [
+                      { label: "Free", ratio: null },
+                      { label: "1:1 Square", ratio: 1 },
+                      { label: "4:3", ratio: 4 / 3 },
+                      { label: "16:9", ratio: 16 / 9 },
+                    ];
+
+              return presets.map((p) => {
+                const isSelected =
+                  (aspectRatio === null && p.ratio === null) ||
+                  (aspectRatio !== null && p.ratio !== null && Math.abs(aspectRatio - p.ratio) < 0.01);
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setAspectRatio(p.ratio);
+                      const box = calculateNormalizedCropBox(
+                        p.ratio,
+                        imgNaturalSize.width,
+                        imgNaturalSize.height,
+                        rotation
+                      );
+                      setCropRect(box);
+                    }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer",
+                      isSelected
+                        ? "bg-emerald-800 text-white shadow-xs"
+                        : "bg-white dark:bg-[#141418] border border-slate-200 dark:border-[#33333f] text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c22]"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              });
+            })()}
+
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={handleReset}
-              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900 ml-1"
+              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900 dark:hover:text-white ml-1"
             >
               <Maximize2 className="h-3 w-3 mr-1" /> Reset
             </Button>
@@ -541,23 +652,27 @@ export function ImageCropModal({
                     onPointerDown={(e) => onPointerDown("bottom-right", e)}
                   />
 
-                  {/* Edge Handles */}
-                  <div
-                    className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
-                    onPointerDown={(e) => onPointerDown("top", e)}
-                  />
-                  <div
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
-                    onPointerDown={(e) => onPointerDown("bottom", e)}
-                  />
-                  <div
-                    className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
-                    onPointerDown={(e) => onPointerDown("left", e)}
-                  />
-                  <div
-                    className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
-                    onPointerDown={(e) => onPointerDown("right", e)}
-                  />
+                  {/* Edge Handles (Only active in Freeform mode to prevent aspect ratio distortion) */}
+                  {aspectRatio === null && (
+                    <>
+                      <div
+                        className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
+                        onPointerDown={(e) => onPointerDown("top", e)}
+                      />
+                      <div
+                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
+                        onPointerDown={(e) => onPointerDown("bottom", e)}
+                      />
+                      <div
+                        className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
+                        onPointerDown={(e) => onPointerDown("left", e)}
+                      />
+                      <div
+                        className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
+                        onPointerDown={(e) => onPointerDown("right", e)}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>

@@ -135,7 +135,7 @@ export function AgentLayout({
               {isAgencyDropdownOpen && (
                 <div className="absolute right-0 top-full mt-1 w-64 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-[#222229] bg-white dark:bg-[#15151a] p-1.5 shadow-xl z-50 text-slate-800 dark:text-zinc-200">
                   <div className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">
-                    Real Backend Contractors
+                    Registered Partner Agencies
                   </div>
                   {contractorsList.map((c) => (
                     <button

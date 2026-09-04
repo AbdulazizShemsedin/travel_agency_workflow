@@ -289,7 +289,11 @@ export default function ApplicantDetailPage() {
   const passStatus = getExpiryBadgeStatus(passDays);
 
   // Authoritative State Machine Resolution
-  const currentStage = applicant.applicant_state || "Draft";
+  const currentStage =
+    activePlacement?.status ||
+    applicant.status ||
+    applicant.applicant_state ||
+    "Draft";
   const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
 
   const destination = (applicant.destination_country || "").trim().toLowerCase();

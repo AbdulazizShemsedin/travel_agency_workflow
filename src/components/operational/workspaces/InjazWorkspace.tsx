@@ -24,6 +24,7 @@ import {
   DrawerField,
   DrawerSection,
 } from "../OperationalDrawer";
+import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -281,6 +282,18 @@ export function InjazWorkspace({
             ID: {row.sponsorId || (row.applicant as any)?.sponsor_id || "1130373143"}
           </span>
         </div>
+      ),
+    },
+    {
+      id: "duration",
+      header: "DURATION FROM CONTRACT",
+      accessorKey: "duration",
+      width: "140px",
+      align: "center",
+      cell: (row) => (
+        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
+          {row.duration ?? 0} DAYS
+        </span>
       ),
     },
     {
@@ -595,6 +608,13 @@ export function InjazWorkspace({
             </div>
           </div>
         </DrawerSection>
+
+        {/* Stage Fee Required Logging (Routes to Finance) */}
+        <StageFeeSection
+          placementId={selectedRow?.dsrName}
+          stageName="Te'shir / Injaz Clearance"
+          defaultDirection="Expense"
+        />
       </OperationalDrawer>
     </>
   );

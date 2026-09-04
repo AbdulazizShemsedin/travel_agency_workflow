@@ -521,8 +521,8 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative overflow-x-auto min-h-[360px]">
-        <table className="w-full text-left text-xs border-collapse">
+      <div className="relative w-full max-w-full min-w-0 overflow-x-auto min-h-[360px] touch-pan-x">
+        <table className="w-full min-w-[720px] text-left text-xs border-collapse">
           {/* Sticky Header */}
           <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100/90 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (

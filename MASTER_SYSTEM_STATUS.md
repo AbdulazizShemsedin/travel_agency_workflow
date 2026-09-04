@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **75** | **11** | **63** | **0** | **0** | **0** | **1** |
+| **80** | **24** | **55** | **0** | **0** | **0** | **1** |
 
 ---
 
@@ -60,12 +60,12 @@
 | 38 | **User & System Employee Management** | YES | NO | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | In-app staff creation, editing, role assignment, and password reset via native frappe.client.* RPCs without Frappe Desk. |
 | 39 | **Stage Expense & Income Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on logging error; honest ApiV2Error thrown. |
 | 40 | **Transaction Approval Queue & Actions (Approve/Reject/Void)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pending approval queue tab integrated in /expenses-income calling approve_transaction, reject_transaction, and void_transaction (TODO-P1-05). |
-| 41 | **Owed Commissions Retrieval** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on owed commission query error; honest ApiV2Error thrown. |
-| 42 | **Commission Batch Creation** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Multi-select unbatched owed commissions calling createCommissionBatchV2 in /commission (TODO-P1-04). |
-| 43 | **Commission Batch Invoice PDF Generation** | YES | YES | YES | `NOT RUNTIME-VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | On-demand binary PDF download action calling getBatchInvoicePdfV2 in /commission (TODO-P1-04). |
-| 44 | **Commission Payment Proof Upload & Fuzzy Matching** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Upload proof action via uploadFileV2 and uploadBatchPaymentProofV2 in /commission (TODO-P1-04). |
-| 45 | **Per-Item Partial Commission Settlement** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Checkbox multi-select partial settlement calling settleBatchItemsV2 in /commission (TODO-P1-04). |
-| 46 | **Full Commission Batch Settlement** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Settle whole batch action with settlement_reference calling settleBatchV2 in /commission (TODO-P1-04). |
+| 41 | **Owed Commissions Retrieval** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified via get_owed_commissions returning unbatched approved commissions per contractor and corridor. |
+| 42 | **Commission Batch Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified create_commission_batch generating CBR-##### records in Draft status. |
+| 43 | **Commission Batch Invoice PDF Generation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified get_batch_invoice_pdf streaming on-demand binary PDF for CBR records. |
+| 44 | **Commission Payment Proof Upload & Fuzzy Matching** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified upload_batch_payment_proof returning matched_items and unmatched_names. |
+| 45 | **Per-Item Partial Commission Settlement** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified settle_batch_items marking individual items Paid and updating batch status. |
+| 46 | **Full Commission Batch Settlement** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified settle_batch setting settled_on and settlement_reference, marking batch Settled. |
 | 47 | **Bank Statement Reconciliation & Line Matching** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Bank Statement Reconciliation tab with CSV upload calling upload_bank_statement & manual matching calling manually_match_line in /expenses-income (TODO-P2-02). |
 | 48 | **FX Rate Management (Get / Set Manual Rate)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | FxRateModal integrated in /expenses-income calling get_fx_rate and set_fx_rate for Finance Managers/Admins (TODO-P2-04). |
 | 49 | **Daily Work Report (Date-Windowed)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Integrated getDailyWorkReportV2 in reports page with date filters and stats cards (TODO-P1-03). |
@@ -99,6 +99,8 @@
 | 77 | **Foreign Agency Wakala UI Terminology & Push Notification Wiring** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Renamed applicant Stepper Ribbon to 'Processing (LMIS, Te'shir, Embassy)'. Purged 'Musaned' from /agent/wakala. Wired real Web Push registration (get_vapid_public_key, subscribe_to_push) & status (get_push_subscription_status). Preserved Monday deadline gate and Fri/Sat/Sun schedule. Verified live browser runtime as foreign agency. |
 | 78 | **Foreign Agency Contractor Chat Selection, Communicating-Party Privacy & Executive Oversight** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Foreign agency selection in New Conversation dialog wired to list_contractors with elevated proxy fallback. Enforced strict communicating-party privacy: regular staff & agencies only view their own participating threads. Implemented executive supervision & audit mode for Administrator and Communication Manager roles, resolving communicating parties ('Who communicated with whom'), staff-specific filtering, and read-only inspection stream. Verified live against production Railway backend. |
 | 79 | **Chat Contextual Candidate Mention Dropdown & Placement Mention Removal** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Replaced free-text Mention Applicant ID with dynamic dropdown (<select>). Strict context-based scoping: when communicating with a foreign agency (either via agency portal or internal staff in agency thread), options are strictly restricted to candidates on that agency's interface (selected placements & portal discovery candidates for their country). Omitted completely all unrelated/draft/other agency applicants. For staff-to-staff threads, all active applicants are selectable. Completely removed obsolete Mention Placement field. Verified live against production Railway backend. |
+| 80 | **Real V2 Commission Batch Workflow & Contractor Configuration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 7 dedicated tabs on /commission (Owed Commissions, Batch Requests, Batch Details, Invoice & PDF, Payment & Settlement, Partial & Advances, Contractor Config). Integrated get_owed_commissions, create_commission_batch, settle_batch, settle_batch_items, upload_batch_payment_proof, get_batch_invoice_pdf, record_batch_advance, trigger_early_commission_accrual, and frappe.client.save on Contractor. Formally audited and documented threshold auto-notification absence as BACKEND GAP. Verified live against production Railway backend. |
+| 81 | **Mobile Responsiveness, Touch Horizontal Scrolling, WhatsApp Chat Look & Crop Ratio Normalization** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 1. Eliminated mobile right-gutter whitespace with device-width Viewport, overflow-x-hidden, and min-w-0 container bounds. 2. Restored horizontal table scrolling on touch devices with touch-pan-x and minimum table widths. 3. Added explicit confirmation popups for candidate selection, photo removals, and batch/rate deletions. 4. Added country filtering for foreign contractors. 5. Overhauled ImageCropModal with canvas aspect ratio normalization (35x45mm, 3:4, 1.42) and locked corner handles. 6. Redesigned mobile chat (<md) to match WhatsApp aesthetics (emerald header, doodle wallpaper, mint outgoing bubbles, blue read receipt ticks, and capsule composer). |
 
 ---
 
@@ -130,4 +132,6 @@
 12. **Phase 12: Comprehensive Corrective Hardening & Multi-Stage RBAC System** -> [DONE]
 13. **Phase 13: Foreign Agency Chat Contractor Selection, Privacy Gating & Admin / Communication Manager Supervision Oversight** -> [DONE]
 14. **Phase 14: Chat Contextual Candidate Mention Dropdown & Placement Mention Removal** -> [DONE]
+15. **Phase 15: Mobile Responsiveness, WhatsApp Chat Look, Touch Pan Tables & Photo Crop Ratios** -> [DONE]
+
 

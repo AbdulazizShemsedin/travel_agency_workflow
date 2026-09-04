@@ -311,13 +311,13 @@ export default function ReportsPage() {
             </h1>
             <Badge
               variant="outline"
-              className="text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+              className="text-[10px] font-mono border-emerald-600/30 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30"
             >
-              V2 REPORT API (10 ENDPOINTS)
+              OPERATIONAL REPORT SUITE
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Authoritative operational funnels, daily work logs, staff SLAs, financial ledgers, and aging queues sourced directly from <code>report_api</code>.
+            Authoritative operational funnels, daily work logs, staff SLAs, financial ledgers, and aging queues.
           </p>
         </div>
 
@@ -540,7 +540,7 @@ export default function ReportsPage() {
                 </span>
               </CardTitle>
               <CardDescription className="text-xs">
-                Candidate progression counts across each lifecycle stage computed authoritatively by <code>get_operations_summary</code>.
+                Candidate progression counts across each lifecycle stage computed authoritatively.
               </CardDescription>
             </CardHeader>
 
@@ -601,7 +601,7 @@ export default function ReportsPage() {
               <CardTitle className="text-sm font-bold flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-emerald-600" />
-                  Staff Output Breakdown (get_staff_performance_report)
+                  Staff Output Breakdown
                 </span>
                 <span className="text-xs font-normal text-slate-400">
                   {fromDate} to {toDate}
@@ -790,7 +790,7 @@ export default function ReportsPage() {
                 <h3 className="text-sm font-bold">Financial Ledgers are Role-Restricted</h3>
               </div>
               <p className="leading-relaxed">
-                Access to <code>get_financial_overview</code>, <code>get_cost_breakdown_report</code>, and <code>get_employee_financial_report</code> is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
+                Access to Financial Overview, Cost Breakdown, and Employee Financial reports is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
               </p>
             </div>
           ) : (
@@ -847,7 +847,7 @@ export default function ReportsPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-emerald-600" />
-                    Approved Expenses by Destination Country (get_cost_breakdown_report)
+                    Approved Expenses by Destination Country
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -876,7 +876,7 @@ export default function ReportsPage() {
               <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-bold">
-                    Per-Employee Net Expense & Approval Volume (get_employee_financial_report)
+                    Per-Employee Net Expense & Approval Volume
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -929,7 +929,7 @@ export default function ReportsPage() {
                 <h3 className="text-sm font-bold">Approval Queue is Admin-Restricted</h3>
               </div>
               <p className="leading-relaxed">
-                Access to <code>get_pending_approval_queue</code> is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
+                Access to Pending Approval Queue is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
               </p>
             </div>
           ) : (

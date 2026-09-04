@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast as sonnerToast } from "sonner";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -187,8 +188,90 @@ export function PushNotificationToggle() {
     }
   }, [user, isSupported, isPushEnabled]);
 
+  // Real-time Watchdog Alert Dispatcher: Pushes native device notifications & alerts for all watchdogs
+  React.useEffect(() => {
+    if (!notifications || notifications.length === 0) return;
+    if (typeof window === "undefined") return;
+
+    const seenKey = `watchdogs_notified_${user || "anon"}`;
+    let seenNotifs: string[] = [];
+    try {
+      seenNotifs = JSON.parse(sessionStorage.getItem(seenKey) || "[]");
+    } catch {
+      seenNotifs = [];
+    }
+
+    const unnotifiedWatchdogs = notifications.filter(
+      (n) =>
+        (n.id.includes("watchdog") || n.id.includes("expiry") || n.id.includes("reminder") || n.severity === "urgent") &&
+        !seenNotifs.includes(n.id)
+    );
+
+    if (unnotifiedWatchdogs.length === 0) return;
+
+    unnotifiedWatchdogs.forEach((n) => {
+      seenNotifs.push(n.id);
+
+      // 1. Browser Native Push Notification (if permission granted)
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification(n.title, {
+            body: n.description,
+            icon: "/favicon.ico",
+            tag: n.id,
+          });
+        } catch {
+          // If constructor restricted, try service worker
+          navigator.serviceWorker?.ready.then((reg) => {
+            reg.showNotification(n.title, {
+              body: n.description,
+              icon: "/favicon.ico",
+              tag: n.id,
+            });
+          }).catch(() => {});
+        }
+      }
+
+      // 2. High-priority UI sonner toast
+      if (n.severity === "urgent") {
+        sonnerToast.error(n.title, {
+          description: n.description,
+          action: n.action_url
+            ? {
+                label: n.action_label || "View",
+                onClick: () => {
+                  window.location.href = n.action_url!;
+                },
+              }
+            : undefined,
+          duration: 9000,
+        });
+      } else if (n.severity === "warning") {
+        sonnerToast.warning(n.title, {
+          description: n.description,
+          action: n.action_url
+            ? {
+                label: n.action_label || "View",
+                onClick: () => {
+                  window.location.href = n.action_url!;
+                },
+              }
+            : undefined,
+          duration: 7000,
+        });
+      }
+    });
+
+    try {
+      sessionStorage.setItem(seenKey, JSON.stringify(seenNotifs));
+    } catch {
+      // ignore
+    }
+  }, [notifications, user]);
+
   const showFeedback = (text: string, type: "success" | "error" = "success") => {
-    setToastFeedback({ text, type });
+    const cleanText = type === "error" ? formatCleanErrorMessage(text) : text;
+    setToastFeedback({ text: cleanText, type });
     setTimeout(() => setToastFeedback(null), 4500);
   };
 

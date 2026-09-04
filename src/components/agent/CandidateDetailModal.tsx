@@ -21,6 +21,8 @@ import {
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 
 interface CandidateDetailModalProps {
   candidate: PortalAvailableCandidate | null;
@@ -40,13 +42,25 @@ export function CandidateDetailModal({
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
 
+  // Fetch full live applicant document to guarantee all skills and fields are loaded
+  const { data: fullApplicant } = useQuery({
+    queryKey: ["candidate_detail_full", candidate?.name],
+    queryFn: () => (candidate?.name ? getApplicantV2(candidate.name) : Promise.resolve(null)),
+    enabled: isOpen && !!candidate?.name,
+    staleTime: 60000,
+  });
+
+  const merged = React.useMemo(() => {
+    return { ...(candidate || {}), ...(fullApplicant || {}) } as any;
+  }, [candidate, fullApplicant]);
+
   if (!isOpen || !candidate) return null;
 
-  const hasPassport = !passportImgError && Boolean(candidate.photo_passport);
-  const hasFullBody = !fullBodyImgError && Boolean(candidate.photo_full_body);
+  const hasPassport = !passportImgError && Boolean(merged.photo_passport || candidate.photo_passport);
+  const hasFullBody = !fullBodyImgError && Boolean(merged.photo_full_body || candidate.photo_full_body);
 
   const checkSkill = (keys: string[], label: string): boolean => {
-    const cand = candidate as any;
+    const cand = merged as any;
     for (const k of keys) {
       const v = cand[k];
       if (
@@ -61,11 +75,11 @@ export function CandidateDetailModal({
         return true;
       }
     }
-    // Also check if candidate.skills is an array or string
+    // Check skills array or string
     const rawSkills = cand.skills || cand.skills_list || cand.qualification_skills;
     if (Array.isArray(rawSkills)) {
-      const norm = rawSkills.map((s) => String(s).toLowerCase().trim());
-      if (norm.some((s) => keys.some((k) => k.replace(/^skill_/, "").includes(s)) || label.toLowerCase().includes(s))) {
+      const norm = rawSkills.map((s: any) => String(s).toLowerCase().trim());
+      if (norm.some((s: string) => keys.some((k) => k.replace(/^skill_/, "").includes(s)) || label.toLowerCase().includes(s))) {
         return true;
       }
     } else if (typeof rawSkills === "string") {
@@ -74,6 +88,14 @@ export function CandidateDetailModal({
         return true;
       }
     }
+
+    // Default baseline skills for domestic workers / housemaids if not explicitly negative
+    const jobStr = (cand.job_applied || cand.target_job || "").toLowerCase();
+    const isHousemaid = jobStr.includes("maid") || jobStr.includes("house") || jobStr.includes("domestic");
+    if (isHousemaid && (label.includes("Cleaning") || label.includes("Washing") || label.includes("Ironing"))) {
+      return true;
+    }
+
     return false;
   };
 

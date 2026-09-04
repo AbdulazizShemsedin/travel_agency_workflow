@@ -9,19 +9,24 @@
  * 5. Session cookies transmitted with credentials: "include".
  */
 
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+
 export class ApiV2Error extends Error {
   public statusCode: number;
   public excType?: string;
   public serverMessages?: string;
   public rawResponse?: any;
+  public technicalDetails?: string;
 
   constructor(message: string, statusCode: number, excType?: string, serverMessages?: string, rawResponse?: any) {
-    super(message);
+    const cleanMsg = formatCleanErrorMessage(message);
+    super(cleanMsg);
     this.name = "ApiV2Error";
     this.statusCode = statusCode;
     this.excType = excType;
     this.serverMessages = serverMessages;
     this.rawResponse = rawResponse;
+    this.technicalDetails = message;
   }
 }
 

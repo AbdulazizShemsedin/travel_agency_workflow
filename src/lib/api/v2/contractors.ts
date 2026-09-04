@@ -8,6 +8,15 @@
 
 import { requestV2 } from "./client";
 
+export interface V2ContractorCommissionRate {
+  name?: string;
+  destination_country: string;
+  rate: number;
+  currency: "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR" | string;
+  gender?: "Both" | "Male" | "Female" | string;
+  [key: string]: any;
+}
+
 export interface V2ContractorRecord {
   name: string;
   contractor_name: string;
@@ -22,6 +31,9 @@ export interface V2ContractorRecord {
   whatsapp?: string;
   email?: string;
   active_status?: number | boolean;
+  batch_mode?: "Manual Only" | "Auto-Threshold" | string;
+  batch_threshold?: number;
+  default_commission_rates?: V2ContractorCommissionRate[];
   notes?: string;
   creation?: string;
   modified?: string;
@@ -92,7 +104,8 @@ export async function createContractorV2(
 }
 
 /**
- * Updates an existing Contractor record in Frappe.
+ * Updates an existing Contractor record and its linked foreign agency contact details
+ * via the dedicated whitelisted contractor_api.update_contractor endpoint.
  */
 export async function updateContractorV2(
   name: string,
@@ -106,26 +119,83 @@ export async function updateContractorV2(
     whatsapp?: string;
     email?: string;
     notes?: string;
+    user?: string;
     [key: string]: any;
   }
 ): Promise<any> {
-  const fieldnamePayload: Record<string, any> = {};
-  if (payload.contractor_name !== undefined) fieldnamePayload.contractor_name = payload.contractor_name;
-  if (payload.country !== undefined) fieldnamePayload.country = payload.country;
-  if (payload.communication_manager !== undefined) fieldnamePayload.communication_manager = payload.communication_manager;
-  if (payload.contact_person !== undefined) fieldnamePayload.contact_person = payload.contact_person;
-  if (payload.phone !== undefined) fieldnamePayload.phone = payload.phone;
-  if (payload.whatsapp !== undefined) fieldnamePayload.whatsapp = payload.whatsapp;
-  if (payload.email !== undefined) fieldnamePayload.email = payload.email;
-  if (payload.notes !== undefined) fieldnamePayload.notes = payload.notes;
+  return await requestV2(
+    "/api/method/agency_tracking.contractor_api.update_contractor",
+    {
+      method: "POST",
+      body: {
+        name,
+        contractor_name: payload.contractor_name || payload.company_name,
+        country: payload.country,
+        contact_person: payload.contact_person,
+        communication_manager: payload.communication_manager,
+        phone: payload.phone,
+        whatsapp: payload.whatsapp,
+        email: payload.email,
+        notes: payload.notes,
+      },
+    }
+  );
+}
 
-  return requestV2("/api/method/frappe.client.set_value", {
+/**
+ * Fetches a single Contractor record by name, including child default_commission_rates.
+ */
+export async function getContractorV2(name: string): Promise<V2ContractorRecord | null> {
+  const result = await requestV2<any>("/api/method/frappe.client.get", {
     method: "POST",
     body: {
       doctype: "Contractor",
       name,
-      fieldname: fieldnamePayload,
     },
   });
+  return result || null;
 }
+
+/**
+ * Updates Contractor batch configuration (batch_mode, batch_threshold) and default commission rates
+ * via frappe.client.save.
+ */
+export async function updateContractorBatchConfigV2(
+  contractorName: string,
+  config: {
+    batch_mode?: "Manual Only" | "Auto-Threshold" | string;
+    batch_threshold?: number;
+    default_commission_rates?: Array<{
+      destination_country: string;
+      rate: number;
+      currency: string;
+      gender?: "Both" | "Male" | "Female" | string;
+    }>;
+  }
+): Promise<V2ContractorRecord> {
+  // First fetch current doc to preserve other fields
+  const current = await getContractorV2(contractorName);
+  if (!current) {
+    throw new Error(`Contractor "${contractorName}" not found.`);
+  }
+
+  const updatedDoc = {
+    ...current,
+    ...(config.batch_mode !== undefined ? { batch_mode: config.batch_mode } : {}),
+    ...(config.batch_threshold !== undefined ? { batch_threshold: config.batch_threshold } : {}),
+    ...(config.default_commission_rates !== undefined
+      ? { default_commission_rates: config.default_commission_rates }
+      : {}),
+  };
+
+  const saveRes = await requestV2<any>("/api/method/frappe.client.save", {
+    method: "POST",
+    body: {
+      doc: updatedDoc,
+    },
+  });
+
+  return saveRes;
+}
+
 

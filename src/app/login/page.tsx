@@ -6,6 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Lock, Mail, ArrowRight, ShieldCheck, Plane, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function LoginPage() {
         setIsSubmitting(false);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to sign in. Please verify your credentials.");
+      setError(formatCleanErrorMessage(err) || "Failed to sign in. Please verify your credentials.");
       setIsSubmitting(false);
     }
   };

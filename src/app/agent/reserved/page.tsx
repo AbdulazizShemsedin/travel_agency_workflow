@@ -18,6 +18,7 @@ import {
   Building2,
   ArrowRight,
   ShieldCheck,
+  ExternalLink,
 } from "lucide-react";
 import {
   listPlacementsV2,
@@ -34,6 +35,11 @@ export default function MyReservedCandidatesPage() {
 
   const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
   const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
+
+  // Contract submission choice per candidate: "musaned_website" | "upload_here"
+  const [uploadMethodByCandidate, setUploadMethodByCandidate] = React.useState<
+    Record<string, "musaned_website" | "upload_here">
+  >({});
 
   React.useEffect(() => {
     if (defaultContractor && !activeContractor) {
@@ -250,16 +256,108 @@ export default function MyReservedCandidatesPage() {
 
                       {/* Primary Next Action */}
                       <td className="px-4 py-3.5 text-right border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        <Link href={`/applicants/${encodeURIComponent(c.name)}/contractor-doc`}>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-2xs whitespace-nowrap"
-                          >
-                            <FileUp className="mr-1.5 h-3.5 w-3.5" />
-                            Upload Musaned Contract
-                          </Button>
-                        </Link>
+                        {(() => {
+                          const candidateKey = c.name || c.applicant;
+                          const selectedOption = uploadMethodByCandidate[candidateKey];
+
+                          if (selectedOption === "upload_here") {
+                            return (
+                              <div className="flex flex-col items-end gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <Link href={`/applicants/${encodeURIComponent(c.name)}/contractor-doc`}>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white shadow-2xs whitespace-nowrap h-7 px-3"
+                                    >
+                                      <FileUp className="mr-1.5 h-3.5 w-3.5" />
+                                      Upload Musaned Contract
+                                    </Button>
+                                  </Link>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setUploadMethodByCandidate((prev) => {
+                                        const next = { ...prev };
+                                        delete next[candidateKey];
+                                        return next;
+                                      })
+                                    }
+                                    className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 underline"
+                                  >
+                                    Change
+                                  </button>
+                                </div>
+                                <span className="text-[10px] text-emerald-800 dark:text-emerald-300">
+                                  Selected: Upload here
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          if (selectedOption === "musaned_website") {
+                            return (
+                              <div className="flex flex-col items-end gap-1.5">
+                                <div className="flex items-center gap-1.5">
+                                  <a
+                                    href="https://musaned.com.sa"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs font-semibold rounded-xl border-emerald-300 text-emerald-900 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shadow-2xs whitespace-nowrap h-7 px-3"
+                                    >
+                                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                      Open Musaned Website
+                                    </Button>
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setUploadMethodByCandidate((prev) => {
+                                        const next = { ...prev };
+                                        delete next[candidateKey];
+                                        return next;
+                                      })
+                                    }
+                                    className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 underline"
+                                  >
+                                    Change
+                                  </button>
+                                </div>
+                                <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                                  Selected: Upload on &apos;Musaned website&apos;
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-col items-end gap-1">
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value as "musaned_website" | "upload_here";
+                                  if (val) {
+                                    setUploadMethodByCandidate((prev) => ({
+                                      ...prev,
+                                      [candidateKey]: val,
+                                    }));
+                                  }
+                                }}
+                                className="h-7 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-[11px] font-medium text-slate-700 dark:text-zinc-300"
+                              >
+                                <option value="">Musaned Contract Option...</option>
+                                <option value="musaned_website">Upload on &apos;Musaned website&apos;</option>
+                                <option value="upload_here">Upload here</option>
+                              </select>
+                              <span className="text-[9px] text-slate-400">Musaned contract is optional</span>
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))}

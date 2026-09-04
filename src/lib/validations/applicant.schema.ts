@@ -142,6 +142,10 @@ export const baseApplicantSchema = z.object({
   photo_full_body: z.string().optional().or(z.literal("")),
   passport_scan: z.string().optional().or(z.literal("")),
 
+  // Video & Intro Attachments
+  video_url: z.string().optional().or(z.literal("")),
+  intro_video: z.string().optional().or(z.literal("")),
+
   // Fees & Registration (Applicant Fee)
   fee_required: optionalBoolean,
   registration_fee_amount: optionalNumber(z.number().min(0)),
@@ -332,48 +336,23 @@ export const stage2RegistrationSchema = stage1DraftSchema
       .trim()
       .min(1, "Please select or enter the Job / Position Applied"),
 
-    highest_education: z.enum(EDUCATION_OPTIONS, {
-      errorMap: () => ({
-        message: "Highest Education Level is required for registration",
-      }),
-    }),
+    highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).optional(),
 
-    english_level: z
-      .string({ required_error: "English Level is required for registration" })
-      .min(1, "English Level is required"),
+    english_level: z.string().optional().or(z.literal("")),
 
-    arabic_level: z
-      .string({ required_error: "Arabic Level is required for registration" })
-      .min(1, "Arabic Level is required"),
+    arabic_level: z.string().optional().or(z.literal("")),
 
-    height: z
-      .string({ required_error: "Height is required for registration" })
-      .trim()
-      .min(1, "Height is required (e.g. 160 CM)"),
+    height: z.string().trim().optional().or(z.literal("")),
 
-    weight: z
-      .string({ required_error: "Weight is required for registration" })
-      .trim()
-      .min(1, "Weight is required (e.g. 55 KG)"),
+    weight: z.string().trim().optional().or(z.literal("")),
 
-    complexion: z
-      .string({ required_error: "Complexion is required for registration" })
-      .trim()
-      .min(1, "Complexion is required"),
+    complexion: z.string().trim().optional().or(z.literal("")),
 
-    place_of_birth: z
-      .string({ required_error: "Place of Birth is required for registration" })
-      .trim()
-      .min(2, "Place of Birth is required (e.g. Addis Ababa)"),
+    place_of_birth: z.string().trim().optional().or(z.literal("")),
 
-    monthly_salary: z
-      .string({ required_error: "Monthly Salary is required for registration" })
-      .trim()
-      .min(1, "Monthly Salary is required"),
+    monthly_salary: z.string().trim().optional().or(z.literal("")),
 
-    passport_scan: z
-      .string({ required_error: "Passport document scan is mandatory" })
-      .min(1, "Passport document scan is mandatory for CV generation"),
+    passport_scan: z.string().optional().or(z.literal("")),
 
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
@@ -386,9 +365,80 @@ export const stage2RegistrationSchema = stage1DraftSchema
         return isValid(parseISO(val));
       }, "Please enter a valid Medical Expiration Date"),
   })
-  .refine((data) => !data.medical_status || data.medical_status !== "UNFIT", {
-    message: "Applicant cannot be registered while medical status is UNFIT.",
-    path: ["medical_status"],
+  .superRefine((data, ctx) => {
+    const isMuayena = data.applicant_type === "Muayena";
+
+    // For Standard applicants: CV generation fields and salary are mandatory
+    if (!isMuayena) {
+      if (!data.highest_education) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Highest Education Level is required for registration",
+          path: ["highest_education"],
+        });
+      }
+
+      if (!data.english_level || !data.english_level.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "English Level is required",
+          path: ["english_level"],
+        });
+      }
+
+      if (!data.arabic_level || !data.arabic_level.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Arabic Level is required",
+          path: ["arabic_level"],
+        });
+      }
+
+      if (!data.monthly_salary || !data.monthly_salary.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Monthly Salary is required for registration",
+          path: ["monthly_salary"],
+        });
+      }
+
+      if (!data.passport_scan || !data.passport_scan.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Passport document scan is mandatory for CV generation",
+          path: ["passport_scan"],
+        });
+      }
+
+      // Mandatory photo for registration / CV generation (no AI placeholder allowed)
+      const hasPhoto = Boolean(
+        (data.photo_passport && data.photo_passport.trim()) ||
+        (data.profile_photo_url && data.profile_photo_url.trim())
+      );
+      if (!hasPhoto) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Passport size photograph is mandatory for CV generation",
+          path: ["photo_passport"],
+        });
+      }
+
+      if (!data.place_of_birth || !data.place_of_birth.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Place of Birth is required for registration",
+          path: ["place_of_birth"],
+        });
+      }
+    }
+
+    if (data.medical_status === "UNFIT") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Applicant cannot be registered while medical status is UNFIT.",
+        path: ["medical_status"],
+      });
+    }
   });
 
 export type BaseApplicantFormValues = z.infer<typeof baseApplicantSchema>;

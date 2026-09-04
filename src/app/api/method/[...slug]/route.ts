@@ -222,6 +222,118 @@ export async function POST(
       }
     }
 
+    // Dedicated Whitelisted Endpoint: Update Contractor Agency and linked Foreign Agency User
+    if (methodPath === "agency_tracking.contractor_api.update_contractor") {
+      // 1. Explicit RBAC Check: Admin, System Manager, or Communication Manager only
+      const isAuthorized = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
+      if (!isAuthorized) {
+        return NextResponse.json(
+          { message: "You do not have permission to update contractor agency details." },
+          { status: 403 }
+        );
+      }
+
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      const elevatedHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: systemAuthHeader,
+      };
+
+      try {
+        const parsedBody = JSON.parse(bodyText || "{}");
+        const contractorName = parsedBody.name || parsedBody.contractor_name;
+        if (!contractorName) {
+          return NextResponse.json(
+            { message: "Contractor name is required for updates." },
+            { status: 400 }
+          );
+        }
+
+        // 2. Fetch existing Contractor record to verify existence & resolve linked User
+        const getConRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+          method: "POST",
+          headers: elevatedHeaders,
+          body: JSON.stringify({
+            doctype: "Contractor",
+            name: contractorName,
+          }),
+        });
+        const getConData = await getConRes.json().catch(() => ({}));
+        if (!getConRes.ok || !getConData.message) {
+          return NextResponse.json(
+            { message: "Contractor record could not be found." },
+            { status: 404 }
+          );
+        }
+
+        const existingCon = getConData.message;
+
+        // 3. Update Contractor fields (country, communication_manager, contractor_name)
+        const contractorUpdates: Record<string, any> = {};
+        if (parsedBody.country && parsedBody.country !== existingCon.country) {
+          contractorUpdates.country = parsedBody.country;
+        }
+        if (parsedBody.communication_manager !== undefined) {
+          contractorUpdates.communication_manager = parsedBody.communication_manager || "";
+        }
+        if (parsedBody.contractor_name && parsedBody.contractor_name !== existingCon.contractor_name) {
+          contractorUpdates.contractor_name = parsedBody.contractor_name;
+        }
+
+        if (Object.keys(contractorUpdates).length > 0) {
+          await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
+            method: "POST",
+            headers: elevatedHeaders,
+            body: JSON.stringify({
+              doctype: "Contractor",
+              name: contractorName,
+              fieldname: contractorUpdates,
+            }),
+          });
+        }
+
+        // 4. Update linked Foreign Agency User if contact person, phone, or whatsapp provided
+        // RBAC & Tenant Isolation Safety: NEVER mutate root "Administrator" or non-agency users
+        const linkedUser = existingCon.user;
+        const isSystemAccount = !linkedUser ||
+          linkedUser.toLowerCase() === "administrator" ||
+          linkedUser.toLowerCase() === "guest";
+
+        if (linkedUser && !isSystemAccount) {
+          const userUpdates: Record<string, any> = {};
+          if (parsedBody.contact_person) userUpdates.first_name = parsedBody.contact_person;
+          if (parsedBody.phone !== undefined) userUpdates.phone = parsedBody.phone;
+          if (parsedBody.whatsapp !== undefined) userUpdates.mobile_no = parsedBody.whatsapp;
+
+          if (Object.keys(userUpdates).length > 0) {
+            await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
+              method: "POST",
+              headers: elevatedHeaders,
+              body: JSON.stringify({
+                doctype: "User",
+                name: linkedUser,
+                fieldname: userUpdates,
+              }),
+            });
+          }
+        }
+
+        return NextResponse.json({
+          message: {
+            success: true,
+            name: contractorName,
+            contractor_name: parsedBody.contractor_name || existingCon.contractor_name,
+          },
+        }, { status: 200 });
+      } catch (err: any) {
+        console.error("[PROXY ERROR update_contractor]", err);
+        return NextResponse.json(
+          { message: "Failed to update contractor agency details." },
+          { status: 500 }
+        );
+      }
+    }
+
     const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
       method: "POST",
       headers: forwardHeaders,
@@ -326,6 +438,80 @@ export async function POST(
           forwardSetCookieHeaders(res, response);
           return response;
         }
+      } else if (methodPath === "agency_tracking.chat_api.send_message") {
+        // Elevate message sending if caller is Admin, Communication Manager, or authorized thread member
+        try {
+          const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
+            method: "POST",
+            headers: forwardHeaders,
+            body: "{}",
+          });
+          const whoData = await whoRes.json().catch(() => ({}));
+          const loggedUser = (whoData.message || "").toLowerCase().trim();
+
+          if (loggedUser && loggedUser !== "guest") {
+            const isAuthorized = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
+            const parsedBody = JSON.parse(bodyText || "{}");
+            const threadName = parsedBody.thread_name;
+
+            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+            const elevatedHeaders: Record<string, string> = {
+              "Content-Type": "application/json",
+              Authorization: systemAuthHeader,
+            };
+
+            // Check if thread exists or user is owner
+            let canSend = isAuthorized;
+            if (!canSend && threadName) {
+              const threadRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+                method: "POST",
+                headers: elevatedHeaders,
+                body: JSON.stringify({ doctype: "Chat Thread", name: threadName }),
+              });
+              const threadDoc = await threadRes.json().catch(() => ({}));
+              const owner = (threadDoc.message?.owner || "").toLowerCase().trim();
+              if (owner === loggedUser) canSend = true;
+            }
+
+            if (canSend && threadName) {
+              const insertRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.insert`, {
+                method: "POST",
+                headers: elevatedHeaders,
+                body: JSON.stringify({
+                  doc: {
+                    doctype: "Chat Message",
+                    thread: threadName,
+                    sender: whoData.message,
+                    message: parsedBody.message || "",
+                    mentioned_applicant: parsedBody.mentioned_applicant || null,
+                    attachment: parsedBody.attachment || null,
+                  },
+                }),
+              });
+
+              if (insertRes.ok) {
+                const inserted = await insertRes.json();
+                const nowStr = new Date().toISOString().replace("T", " ").replace("Z", "").slice(0, 19);
+                await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
+                  method: "POST",
+                  headers: elevatedHeaders,
+                  body: JSON.stringify({
+                    doctype: "Chat Thread",
+                    name: threadName,
+                    fieldname: "last_message_at",
+                    value: nowStr,
+                  }),
+                }).catch(() => {});
+
+                const response = NextResponse.json(inserted, { status: 200 });
+                forwardSetCookieHeaders(res, response);
+                return response;
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error("[PROXY ERROR send_message elevation]", err);
+        }
       }
     }
 
@@ -352,6 +538,91 @@ export async function POST(
     }
 
     const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+
+    // Post-query enrichment for contractor user details and portal candidate skills
+    if (res.ok && data) {
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      const elevatedHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: systemAuthHeader,
+      };
+
+      if (methodPath === "agency_tracking.contractor_api.list_contractors") {
+        const list: any[] = Array.isArray(data.message) ? data.message : Array.isArray(data) ? data : [];
+        if (list.length > 0) {
+          const enriched = await Promise.all(
+            list.map(async (c) => {
+              if (!c.user) return c;
+              try {
+                const uRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+                  method: "POST",
+                  headers: elevatedHeaders,
+                  body: JSON.stringify({ doctype: "User", name: c.user }),
+                });
+                const uData = await uRes.json().catch(() => ({}));
+                const u = uData.message || {};
+                return {
+                  ...c,
+                  contact_person: c.contact_person || u.first_name || "",
+                  phone: c.phone || u.phone || u.mobile_no || "",
+                  whatsapp: c.whatsapp || u.mobile_no || u.phone || "",
+                  email: c.email || u.email || c.user,
+                };
+              } catch {
+                return c;
+              }
+            })
+          );
+          if (Array.isArray(data.message)) data.message = enriched;
+          else if (Array.isArray(data)) (data as any) = enriched;
+        }
+      } else if (methodPath === "agency_tracking.portal_api.list_portal_candidates") {
+        const rawCands: any[] = Array.isArray(data.message?.candidates)
+          ? data.message.candidates
+          : Array.isArray(data.message)
+          ? data.message
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        if (rawCands.length > 0) {
+          const enriched = await Promise.all(
+            rawCands.map(async (cand) => {
+              // If skills already present, return
+              if (cand.skill_cleaning !== undefined || cand.skill_cooking !== undefined) return cand;
+              try {
+                const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+                  method: "POST",
+                  headers: elevatedHeaders,
+                  body: JSON.stringify({ doctype: "Applicant", name: cand.name }),
+                });
+                const aData = await aRes.json().catch(() => ({}));
+                const a = aData.message || {};
+                return {
+                  ...cand,
+                  skill_cleaning: a.skill_cleaning ?? 0,
+                  skill_cooking: a.skill_cooking ?? 0,
+                  skill_washing: a.skill_washing ?? 0,
+                  skill_ironing: a.skill_ironing ?? 0,
+                  skill_baby_sitting: a.skill_baby_sitting ?? 0,
+                  skill_children_care: a.skill_children_care ?? 0,
+                  skill_arabic_cooking: a.skill_arabic_cooking ?? 0,
+                  skill_elderly_care: a.skill_elderly_care ?? 0,
+                  skill_driving: a.skill_driving ?? 0,
+                  skill_sewing: a.skill_sewing ?? 0,
+                };
+              } catch {
+                return cand;
+              }
+            })
+          );
+          if (Array.isArray(data.message?.candidates)) data.message.candidates = enriched;
+          else if (Array.isArray(data.message)) data.message = enriched;
+          else if (Array.isArray(data)) (data as any) = enriched;
+        }
+      }
+    }
+
     if (!res.ok) {
       console.error("[PROXY ERROR POST]", methodPath, res.status, data);
     }
@@ -363,7 +634,7 @@ export async function POST(
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",
-        message: `Unable to connect to backend engine: ${err.message}`,
+        message: "Unable to connect to the server. Please check your network connection and try again.",
       },
       { status: 502 }
     );
@@ -419,7 +690,7 @@ export async function GET(
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",
-        message: `Unable to connect to backend engine: ${err.message}`,
+        message: "Unable to connect to the server. Please check your network connection and try again.",
       },
       { status: 502 }
     );

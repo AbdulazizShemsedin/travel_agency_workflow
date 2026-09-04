@@ -32,6 +32,7 @@ import { CandidateDetailModal } from "@/components/agent/CandidateDetailModal";
 import { CandidateFilters } from "@/components/agent/CandidateFilters";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 export default function AgentDiscoveryPage() {
   const queryClient = useQueryClient();
@@ -58,6 +59,8 @@ export default function AgentDiscoveryPage() {
 
   // Selection & Detail Modal State
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] =
+    React.useState<PortalAvailableCandidate | null>(null);
+  const [candidateToConfirm, setCandidateToConfirm] =
     React.useState<PortalAvailableCandidate | null>(null);
   const [selectingCandidateId, setSelectingCandidateId] = React.useState<string | null>(null);
   const [successToast, setSuccessToast] = React.useState<string | null>(null);
@@ -145,14 +148,21 @@ export default function AgentDiscoveryPage() {
         );
         setTimeout(() => setConflictToast(null), 6000);
       } else {
-        setConflictToast(err?.message || "Failed to reserve candidate.");
+        setConflictToast(formatCleanErrorMessage(err) || "Failed to reserve candidate.");
         setTimeout(() => setConflictToast(null), 6000);
       }
     },
   });
 
   const handleSelectCandidate = (candidate: PortalAvailableCandidate) => {
-    selectMutation.mutate(candidate);
+    setCandidateToConfirm(candidate);
+  };
+
+  const handleConfirmSelection = () => {
+    if (candidateToConfirm) {
+      selectMutation.mutate(candidateToConfirm);
+      setCandidateToConfirm(null);
+    }
   };
 
   const handleResetFilters = () => {
@@ -463,6 +473,76 @@ export default function AgentDiscoveryPage() {
         onSelect={handleSelectCandidate}
         isSelecting={selectingCandidateId === selectedCandidateForDetail?.name}
       />
+
+      {/* Candidate Selection Confirmation Dialog */}
+      {candidateToConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#16161b] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-[#222227]">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Are you sure you want to select this candidate?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Please confirm to reserve and allocate this applicant to your agency
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-[#1a1a22] border border-slate-100 dark:border-[#22222b] p-3 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Applicant:</span>
+                <strong className="text-slate-900 dark:text-white">{candidateToConfirm.full_name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Applicant ID:</span>
+                <span className="font-mono">{candidateToConfirm.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Job Role:</span>
+                <span>{candidateToConfirm.job_applied || "Housemaid"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Destination:</span>
+                <span>{candidateToConfirm.destination_country || "Saudi Arabia"}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
+              Once confirmed, this candidate will be exclusively allocated to your agency and advanced to Selected stage in the workflow pipeline.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCandidateToConfirm(null)}
+                className="text-xs h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirmSelection}
+                disabled={selectMutation.isPending}
+                className="text-xs h-8 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
+              >
+                {selectMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Yes, Select Candidate
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AgentLayout>
   );
 }

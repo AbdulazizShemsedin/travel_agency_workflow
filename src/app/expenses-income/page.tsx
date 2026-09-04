@@ -31,6 +31,9 @@ import {
   HelpCircle,
   AlertCircle,
   FileCheck2,
+  CheckSquare,
+  Square,
+  Users,
 } from "lucide-react";
 import {
   logStageExpenseV2,
@@ -40,6 +43,10 @@ import {
   voidTransactionV2,
   uploadBankStatementV2,
   manuallyMatchLineV2,
+  listCommissionBatchesV2,
+  getCommissionBatchV2,
+  settleBatchItemsV2,
+  V2CommissionBatch,
   V2SupportedCurrency,
 } from "@/lib/api/v2/finance";
 import { getFinancialOverviewV2, getPendingApprovalQueueV2, V2PendingApprovalItem } from "@/lib/api/v2/reports";
@@ -101,8 +108,29 @@ export default function ExpensesIncomePage() {
   const [manualBatchName, setManualBatchName] = React.useState<string>("");
   const [isManualMatching, setIsManualMatching] = React.useState<boolean>(false);
 
+  // Batch Candidates Multi-Select & Settlement State
+  const [selectedBatchId, setSelectedBatchId] = React.useState<string>("");
+  const [loadedBatch, setLoadedBatch] = React.useState<V2CommissionBatch | null>(null);
+  const [isLoadingBatch, setIsLoadingBatch] = React.useState<boolean>(false);
+  const [selectedApplicantItemNames, setSelectedApplicantItemNames] = React.useState<string[]>([]);
+  const [depositedAmount, setDepositedAmount] = React.useState<string>("");
+  const [agencyExpense, setAgencyExpense] = React.useState<string>("");
+  const [settlementCurrency, setSettlementCurrency] = React.useState<V2SupportedCurrency>("ETB");
+  const [settlementReference, setSettlementReference] = React.useState<string>("");
+  const [statementLineRef, setStatementLineRef] = React.useState<string>("");
+  const [settlementNotes, setSettlementNotes] = React.useState<string>("");
+  const [isSettlingBatchItems, setIsSettlingBatchItems] = React.useState<boolean>(false);
+
   // FX Rate Management Modal State
   const [isFxModalOpen, setIsFxModalOpen] = React.useState<boolean>(false);
+
+  // Fetch Available Commission Batches for Matching
+  const { data: availableBatches = [] } = useQuery({
+    queryKey: ["v2_available_batches_for_reconciliation"],
+    queryFn: () => listCommissionBatchesV2(),
+    staleTime: 30000,
+    enabled: isFinanceManagerOrAdmin,
+  });
 
   // 1. Fetch Financial Overview Ledger
   const {
@@ -310,6 +338,120 @@ export default function ExpensesIncomePage() {
       });
     } finally {
       setIsManualMatching(false);
+    }
+  };
+
+  // ACTION: Load Commission Batch with Items
+  const handleLoadBatch = async (batchId: string) => {
+    if (!batchId.trim()) return;
+    setIsLoadingBatch(true);
+    try {
+      const batchDoc = await getCommissionBatchV2(batchId.trim());
+      if (!batchDoc) {
+        toast.error("Batch Not Found", { description: `Commission batch ${batchId} was not found.` });
+        setLoadedBatch(null);
+      } else {
+        setLoadedBatch(batchDoc);
+        setSelectedBatchId(batchDoc.name);
+        if (batchDoc.currency) {
+          setSettlementCurrency(batchDoc.currency as V2SupportedCurrency);
+        }
+        // Auto-select unsettled items by default
+        const unsettled = (batchDoc.items || [])
+          .filter((it: any) => it.status !== "Paid" && it.settled !== 1 && it.settled !== true)
+          .map((it: any) => it.name)
+          .filter(Boolean);
+        setSelectedApplicantItemNames(unsettled);
+        toast.success("Batch Loaded", {
+          description: `Loaded ${batchDoc.name} with ${batchDoc.items?.length || 0} candidate(s).`,
+        });
+      }
+    } catch (err: any) {
+      toast.error("Failed to Load Batch", {
+        description: err?.message || "Could not retrieve batch details.",
+      });
+      setLoadedBatch(null);
+    } finally {
+      setIsLoadingBatch(false);
+    }
+  };
+
+  // ACTION: Settle Selected Batch Candidates & Record Financial Entries
+  const handleSettleAndRecordFinancials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loadedBatch) {
+      toast.error("Please load a commission batch first.");
+      return;
+    }
+    if (selectedApplicantItemNames.length === 0) {
+      toast.error("No candidates selected", {
+        description: "Please select one or more candidates from the batch to settle.",
+      });
+      return;
+    }
+
+    setIsSettlingBatchItems(true);
+    try {
+      // 1. Settle selected batch items
+      await settleBatchItemsV2(selectedApplicantItemNames);
+
+      // 2. If deposited amount entered, log income
+      const depAmt = parseFloat(depositedAmount);
+      if (!isNaN(depAmt) && depAmt > 0) {
+        await logStageIncomeV2(
+          depAmt,
+          settlementCurrency,
+          `Commission deposit matched: ${loadedBatch.name} (${selectedApplicantItemNames.length} candidates${settlementReference ? ` - Ref: ${settlementReference}` : ""})`,
+          undefined,
+          "Settlement"
+        );
+      }
+
+      // 3. If agency expense entered, log expense
+      const expAmt = parseFloat(agencyExpense);
+      if (!isNaN(expAmt) && expAmt > 0) {
+        await logStageExpenseV2(
+          expAmt,
+          settlementCurrency,
+          `Agency expense for batch: ${loadedBatch.name} (${selectedApplicantItemNames.length} candidates${settlementNotes ? ` - ${settlementNotes}` : ""})`,
+          undefined,
+          "Settlement"
+        );
+      }
+
+      // 4. If statement line specified, match line
+      if (statementLineRef.trim()) {
+        try {
+          await manuallyMatchLineV2(statementLineRef.trim(), loadedBatch.name);
+        } catch (matchErr: any) {
+          console.warn("Statement line match notice:", matchErr?.message);
+        }
+      }
+
+      toast.success("Settlement & Financials Recorded", {
+        description: `Successfully settled ${selectedApplicantItemNames.length} candidate(s). Financial records submitted for review.`,
+      });
+
+      // Clear inputs & refresh
+      setDepositedAmount("");
+      setAgencyExpense("");
+      setSettlementReference("");
+      setStatementLineRef("");
+      setSettlementNotes("");
+      setSelectedApplicantItemNames([]);
+
+      queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_pending_approval_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_available_batches_for_reconciliation"] });
+
+      // Refresh loaded batch
+      await handleLoadBatch(loadedBatch.name);
+    } catch (err: any) {
+      toast.error("Settlement Failed", {
+        description: err?.message || "Backend rejected batch settlement request.",
+      });
+    } finally {
+      setIsSettlingBatchItems(false);
     }
   };
 
@@ -757,17 +899,17 @@ export default function ExpensesIncomePage() {
                   </CardContent>
                 </Card>
 
-                {/* Panel 2: Manual Line Matching Form */}
+                {/* Panel 2: Direct Line Matching Form */}
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
                     <div className="flex items-center gap-2">
                       <Link2 className="h-4 w-4 text-emerald-600" />
                       <div>
                         <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-                          Manual Line Matching
+                          Direct Line Matching
                         </CardTitle>
                         <CardDescription className="text-xs mt-0.5">
-                          Resolve ambiguous statement lines to batches.
+                          Quick link an ambiguous statement line to a batch.
                         </CardDescription>
                       </div>
                     </div>
@@ -803,7 +945,7 @@ export default function ExpensesIncomePage() {
                       </div>
 
                       <p className="text-[10px] text-slate-400 leading-relaxed">
-                        Matches the selected statement line directly to the target batch via <code>manually_match_line</code>, updating settlement records.
+                        Matches the selected statement line directly to the target batch, updating settlement and ledger records.
                       </p>
 
                       <Button
@@ -824,6 +966,312 @@ export default function ExpensesIncomePage() {
                 </Card>
               </div>
 
+              {/* Panel 3: Multi-Applicant Batch Settlement & Expense Entry */}
+              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-emerald-600" />
+                      <div>
+                        <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                          Manual Matching: Select Applicants from Batch & Settle
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-0.5">
+                          Multi-select applicants from a batch, enter deposited bank amount and agency expense, and submit for settlement.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {availableBatches.length > 0 && (
+                        <select
+                          value={selectedBatchId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedBatchId(val);
+                            if (val) handleLoadBatch(val);
+                          }}
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono max-w-xs"
+                        >
+                          <option value="">-- Select Active Batch --</option>
+                          {availableBatches.map((b) => (
+                            <option key={b.name} value={b.name}>
+                              {b.name} • {b.contractor_name || b.contractor} ({b.status})
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <Input
+                          placeholder="Batch ID (CBR-00007)"
+                          value={selectedBatchId}
+                          onChange={(e) => setSelectedBatchId(e.target.value)}
+                          className="h-8 w-40 text-xs font-mono"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLoadBatch(selectedBatchId)}
+                          disabled={!selectedBatchId.trim() || isLoadingBatch}
+                          className="h-8 text-xs font-semibold px-2.5"
+                        >
+                          {isLoadingBatch ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : null}
+                          Load Batch
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {loadedBatch ? (
+                    <div className="space-y-4">
+                      {/* Batch Header Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-[#16161e] border border-slate-200 dark:border-[#262632] text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white font-mono text-sm">
+                            {loadedBatch.name}
+                          </span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {loadedBatch.status}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 text-slate-600 dark:text-zinc-300 text-xs">
+                          <div>
+                            <span className="text-slate-400">Foreign Agent:</span>{" "}
+                            <strong>{loadedBatch.contractor_name || loadedBatch.contractor}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Destination:</span>{" "}
+                            <strong>{loadedBatch.destination_country || "Saudi Arabia"}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Batch Total:</span>{" "}
+                            <strong className="text-emerald-700 dark:text-emerald-400 font-mono">
+                              {Number(loadedBatch.total_amount).toLocaleString()} {loadedBatch.currency}
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">Total Applicants:</span>{" "}
+                            <strong>{loadedBatch.items?.length || 0}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Applicants Multi-select Table */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                            Applicants in Batch ({selectedApplicantItemNames.length} of {loadedBatch.items?.length || 0} selected)
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allIds = (loadedBatch.items || []).map((it: any) => it.name).filter(Boolean);
+                                setSelectedApplicantItemNames(allIds);
+                              }}
+                              className="text-[11px] text-emerald-800 dark:text-emerald-300 hover:underline font-semibold"
+                            >
+                              Select All
+                            </button>
+                            <span className="text-slate-300 dark:text-zinc-600">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedApplicantItemNames([])}
+                              className="text-[11px] text-slate-500 hover:underline font-semibold"
+                            >
+                              Deselect All
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="border border-slate-200 dark:border-[#262632] rounded-xl overflow-hidden">
+                          <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-[#22222b]">
+                            {(!loadedBatch.items || loadedBatch.items.length === 0) ? (
+                              <div className="p-4 text-center text-xs text-slate-400">
+                                No applicant items found in this commission batch.
+                              </div>
+                            ) : (
+                              loadedBatch.items.map((it: any) => {
+                                const isSelected = selectedApplicantItemNames.includes(it.name);
+                                const isPaid = it.status === "Paid" || it.settled === 1 || it.settled === true;
+                                return (
+                                  <div
+                                    key={it.name || it.applicant}
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setSelectedApplicantItemNames(selectedApplicantItemNames.filter((id) => id !== it.name));
+                                      } else {
+                                        setSelectedApplicantItemNames([...selectedApplicantItemNames, it.name]);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex items-center justify-between px-3.5 py-2.5 text-xs cursor-pointer transition-colors",
+                                      isSelected
+                                        ? "bg-emerald-50/60 dark:bg-emerald-950/25"
+                                        : "hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <button type="button" className="text-emerald-800 dark:text-emerald-300">
+                                        {isSelected ? (
+                                          <CheckSquare className="h-4 w-4" />
+                                        ) : (
+                                          <Square className="h-4 w-4 text-slate-400" />
+                                        )}
+                                      </button>
+                                      <div>
+                                        <div className="font-semibold text-slate-900 dark:text-white">
+                                          {it.applicant_name || it.full_name || it.applicant || "Applicant"}
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
+                                          {it.applicant} • Placement: {it.placement || "N/A"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">
+                                        {Number(it.amount).toLocaleString()} {it.currency || loadedBatch.currency}
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[10px]",
+                                          isPaid
+                                            ? "bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                            : "bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300"
+                                        )}
+                                      >
+                                        {isPaid ? "Settled / Paid" : "Unsettled"}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Settlement Form */}
+                      <form onSubmit={handleSettleAndRecordFinancials} className="space-y-3.5 pt-2 border-t border-slate-100 dark:border-[#22222b]">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="space-y-1">
+                            <Label htmlFor="deposited_amount" className="text-xs font-semibold">
+                              Deposited Amount
+                            </Label>
+                            <Input
+                              id="deposited_amount"
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={depositedAmount}
+                              onChange={(e) => setDepositedAmount(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                            <span className="text-[10px] text-slate-400">Incoming wire from foreign agent</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label htmlFor="agency_expense" className="text-xs font-semibold">
+                              Agency Expense
+                            </Label>
+                            <Input
+                              id="agency_expense"
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={agencyExpense}
+                              onChange={(e) => setAgencyExpense(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                            <span className="text-[10px] text-slate-400">Operational costs from agency</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label htmlFor="settlement_currency" className="text-xs font-semibold">
+                              Currency
+                            </Label>
+                            <select
+                              id="settlement_currency"
+                              value={settlementCurrency}
+                              onChange={(e) => setSettlementCurrency(e.target.value as V2SupportedCurrency)}
+                              className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
+                            >
+                              <option value="ETB">ETB (Ethiopian Birr)</option>
+                              <option value="SAR">SAR (Saudi Riyal)</option>
+                              <option value="USD">USD (US Dollar)</option>
+                              <option value="KWD">KWD (Kuwaiti Dinar)</option>
+                              <option value="AED">AED (UAE Dirham)</option>
+                              <option value="QAR">QAR (Qatari Riyal)</option>
+                            </select>
+                            <span className="text-[10px] text-slate-400">Ledger posting currency</span>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label htmlFor="statement_line_ref" className="text-xs font-semibold">
+                              Statement / Wire Ref
+                            </Label>
+                            <Input
+                              id="statement_line_ref"
+                              placeholder="e.g. WIRE-89472 or CBE-TRANS"
+                              value={statementLineRef}
+                              onChange={(e) => setStatementLineRef(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                            <span className="text-[10px] text-slate-400">Statement line or bank reference</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor="settlement_notes" className="text-xs font-semibold">
+                            Settlement Remarks & Notes (Optional)
+                          </Label>
+                          <Input
+                            id="settlement_notes"
+                            placeholder="e.g. Reconciled via CBE wire statement, deducting agency logistical expenses"
+                            value={settlementNotes}
+                            onChange={(e) => setSettlementNotes(e.target.value)}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                            Settles selected applicants and routes deposit/expense records to Finance for approval.
+                          </p>
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={selectedApplicantItemNames.length === 0 || isSettlingBatchItems}
+                            className="w-full sm:w-auto bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-8 px-4 shadow-xs"
+                          >
+                            {isSettlingBatchItems ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            Settle {selectedApplicantItemNames.length} Applicant(s) & Record Financials
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center border border-dashed border-slate-200 dark:border-[#262632] rounded-xl space-y-2">
+                      <Users className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto" />
+                      <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                        No Commission Batch Loaded
+                      </h4>
+                      <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                        Select a batch from the dropdown above or enter a Batch ID (e.g. CBR-00007) and click Load Batch to view applicant items, select multiple applicants, and record bank deposits or agency expenses.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Format Guide & System Compliance Card */}
               <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                 <CardHeader className="pb-3">
@@ -834,13 +1282,13 @@ export default function ExpensesIncomePage() {
                 </CardHeader>
                 <CardContent className="text-xs text-slate-600 dark:text-zinc-300 space-y-2">
                   <p>
-                    <strong>CSV Columns:</strong> <code>date</code> (YYYY-MM-DD), <code>reference</code> (string text), <code>amount</code> (number in ETB).
+                    <strong>CSV Columns:</strong> Date (YYYY-MM-DD), Reference (wire code or transaction detail), Amount (number in ETB).
                   </p>
                   <p>
-                    <strong>Matching Logic:</strong> The auto-matcher scans all unsettled <code>Commission Batch Request</code> records. It matches statement rows by exact amount. If equal-amount collisions exist, it resolves ambiguity by inspecting if the reference text contains the batch name or contractor name. Ambiguous collisions remain in <strong>Unmatched</strong> state for manual resolution.
+                    <strong>Matching Logic:</strong> The auto-matcher scans all unsettled Commission Batches. It matches statement rows by exact amount. If equal-amount collisions exist, it resolves ambiguity by inspecting if the reference text contains the batch name or foreign agent name. Ambiguous collisions remain in <strong>Unmatched</strong> state for manual resolution.
                   </p>
                   <p>
-                    <strong>Financial Auditability:</strong> Manual matches are permanently recorded in the audit trail without hard deletions.
+                    <strong>Financial Auditability:</strong> Manual matches and settlements are permanently recorded in the audit trail without hard deletions.
                   </p>
                 </CardContent>
               </Card>

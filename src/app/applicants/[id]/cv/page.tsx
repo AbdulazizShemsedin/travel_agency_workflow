@@ -26,6 +26,7 @@ import {
   FileText,
 } from "lucide-react";
 import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -228,6 +229,15 @@ export default function CandidateCvPreviewPage() {
         </div>
       )}
 
+      {/* Stage Fee Logging (Print Hidden - Routes to Finance) */}
+      <div className="print:hidden max-w-4xl mx-auto">
+        <StageFeeSection
+          placementId={applicant.active_placement}
+          stageName="CV Generation & Processing"
+          defaultDirection="Expense"
+        />
+      </div>
+
       {/* ========================================================================= */}
       {/* PAGE 1: OFFICIAL BILATERAL RECRUITMENT CV (EXACT MATCH TO ASNEKECH SAMPLE)*/}
       {/* ========================================================================= */}
@@ -254,26 +264,14 @@ export default function CandidateCvPreviewPage() {
             </div>
           </div>
 
-          {/* Right Center: Saudi Partner Office Logo & Passport Portrait */}
-          <div className="flex items-center gap-3">
-            {/* Al-Qurashi Partner Emblem */}
-            <div className="w-16 h-16 rounded-full border-2 border-emerald-800 bg-white flex flex-col items-center justify-center p-1 text-center shadow-xs">
-              <div className="w-5 h-5 rounded-full bg-emerald-700/10 flex items-center justify-center mb-0.5">
-                <span className="text-emerald-800 font-bold text-[10px]">قرشي</span>
-              </div>
-              <span className="text-[6px] font-bold text-emerald-950 leading-tight">مكتب القرشي للإستقدام</span>
-              <span className="text-[5px] text-slate-400">Al-Qurashi Recruitment Office</span>
-            </div>
-
+          {/* Right: Candidate Oval Passport Photo (Middle emblem removed per requirements) */}
+          <div className="flex items-center">
             {/* Passport Oval Photo */}
             <div className="w-16 h-20 rounded-full overflow-hidden border-2 border-blue-900 bg-slate-100 flex items-center justify-center shadow-xs">
               <img
                 src={applicant.photo_passport || applicant.photo_url || applicant.profile_photo_url || "/placeholder-user.jpg"}
                 alt={fullName}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=500&fit=crop";
-                }}
               />
             </div>
           </div>
@@ -290,12 +288,9 @@ export default function CandidateCvPreviewPage() {
             {/* Full Length Photo */}
             <div className="w-full h-[330px] rounded-lg border-2 border-black overflow-hidden bg-slate-50 flex items-center justify-center shadow-xs">
               <img
-                src={applicant.photo_full_body || applicant.photo_url || "/placeholder-user.jpg"}
+                src={applicant.photo_full_body || applicant.photo_url || applicant.profile_photo_url || "/placeholder-user.jpg"}
                 alt="Full Body Posture"
                 className="w-full h-full object-cover object-top"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=600&fit=crop";
-                }}
               />
             </div>
 
@@ -548,6 +543,21 @@ export default function CandidateCvPreviewPage() {
           </p>
         </div>
 
+        {/* Uploaded Passport Scan Document (If uploaded by user during registration) */}
+        {applicant.passport_scan && (
+          <div className="mx-auto max-w-xl mb-6 rounded-xl border border-slate-300 overflow-hidden bg-slate-50 p-3 shadow-sm">
+            <div className="text-[11px] font-bold text-slate-800 mb-2 flex items-center justify-between border-b pb-1">
+              <span>Original Uploaded Passport Scan</span>
+              <span className="text-[10px] text-slate-500 font-mono">Biometric Source Document</span>
+            </div>
+            <img
+              src={applicant.passport_scan}
+              alt="Official Passport Scan"
+              className="w-full h-auto max-h-[460px] object-contain rounded border border-slate-200 bg-white"
+            />
+          </div>
+        )}
+
         {/* Passport Page Graphic Reproduction */}
         <div className="mx-auto max-w-xl rounded-xl border-2 border-slate-400 bg-amber-50/40 p-4 sm:p-6 shadow-inner relative overflow-hidden font-mono">
           
@@ -562,12 +572,9 @@ export default function CandidateCvPreviewPage() {
             <div className="col-span-4 flex flex-col items-center">
               <div className="w-28 h-36 rounded border border-slate-400 overflow-hidden bg-slate-200 shadow-xs">
                 <img
-                  src={applicant.photo_passport || applicant.photo_url || "/placeholder-user.jpg"}
+                  src={applicant.photo_passport || applicant.photo_url || applicant.profile_photo_url || "/placeholder-user.jpg"}
                   alt="Passport Photo"
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=500&fit=crop";
-                  }}
                 />
               </div>
             </div>

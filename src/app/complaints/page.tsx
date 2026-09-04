@@ -38,6 +38,7 @@ import {
   COMPLAINT_SEVERITIES,
   COMPLAINT_OUTCOMES,
 } from "@/types/applicant";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -172,7 +173,7 @@ export default function AdminComplaintsPage() {
       setTimeout(() => setToastMessage(null), 5000);
     },
     onError: (err: any) => {
-      setErrorMessage(err?.message || "Failed to submit complaint. Please verify applicant exists.");
+      setErrorMessage(formatCleanErrorMessage(err) || "Failed to submit complaint. Please verify applicant exists.");
       setTimeout(() => setErrorMessage(null), 6000);
     },
   });
@@ -187,7 +188,7 @@ export default function AdminComplaintsPage() {
       setTimeout(() => setToastMessage(null), 5000);
     },
     onError: (err: any) => {
-      setErrorMessage(err?.message || "Failed to acknowledge complaint.");
+      setErrorMessage(formatCleanErrorMessage(err) || "Failed to acknowledge complaint.");
       setTimeout(() => setErrorMessage(null), 6000);
     },
   });
@@ -204,7 +205,7 @@ export default function AdminComplaintsPage() {
       setTimeout(() => setToastMessage(null), 5000);
     },
     onError: (err: any) => {
-      setErrorMessage(err?.message || "Failed to resolve complaint on backend.");
+      setErrorMessage(formatCleanErrorMessage(err) || "Failed to resolve complaint.");
       setTimeout(() => setErrorMessage(null), 6000);
     },
   });

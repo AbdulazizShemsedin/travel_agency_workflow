@@ -19,6 +19,7 @@ import {
   DrawerField,
   DrawerSection,
 } from "../OperationalDrawer";
+import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -249,13 +250,13 @@ export function DepartureWorkspace({
     },
     {
       id: "duration",
-      header: "DURATION",
+      header: "DURATION FROM CONTRACT",
       accessorKey: "duration",
-      width: "90px",
+      width: "140px",
       align: "center",
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
-          {row.duration ?? 0}
+          {row.duration ?? 0} DAYS
         </span>
       ),
     },
@@ -677,6 +678,13 @@ export function DepartureWorkspace({
             </div>
           )}
         </DrawerSection>
+
+        {/* Stage Fee Required Logging (Routes to Finance) */}
+        <StageFeeSection
+          placementId={selectedRow?.dsrName}
+          stageName="Ticketing & Departure"
+          defaultDirection="Expense"
+        />
       </OperationalDrawer>
     </>
   );

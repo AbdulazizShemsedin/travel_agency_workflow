@@ -56,7 +56,7 @@ export default function AgentCommissionPage() {
 
   const summary = {
     total_departed: candidateList.length,
-    agreed_rate: candidateList[0]?.commission_amount || 1500,
+    agreed_rate: Number(candidateList[0]?.amount || candidateList[0]?.commission_amount) || 0,
     total_outstanding: totalOutstanding,
     currency: candidateList[0]?.currency || "SAR",
   };
@@ -136,7 +136,9 @@ export default function AgentCommissionPage() {
               </div>
             </div>
             <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
-              {(summary.agreed_rate || 1500).toLocaleString()} {summary.currency || "SAR"}
+              {summary.agreed_rate > 0
+                ? `${summary.agreed_rate.toLocaleString()} ${summary.currency}`
+                : "Per Corridor"}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
               Contractor agreement rate
@@ -153,7 +155,7 @@ export default function AgentCommissionPage() {
               </div>
             </div>
             <p className="text-2xl font-extrabold text-emerald-950 dark:text-emerald-200 mt-2">
-              {(summary.total_outstanding || (summary.total_departed || candidateList.length) * (summary.agreed_rate || 1500)).toLocaleString()} {summary.currency || "SAR"}
+              {summary.total_outstanding.toLocaleString()} {summary.currency}
             </p>
             <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400 mt-1">
               Ready for billing reconciliation
@@ -211,8 +213,14 @@ export default function AgentCommissionPage() {
               <span className="ml-2 text-xs text-slate-500">Loading commission records...</span>
             </div>
           ) : candidateList.length === 0 ? (
-            <div className="p-16 text-center text-xs text-slate-400">
-              No unpaid departed candidates found for this billing cycle.
+            <div className="p-16 text-center text-xs text-slate-400 space-y-1.5">
+              <Receipt className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-1" />
+              <p className="font-semibold text-slate-600 dark:text-zinc-300">
+                No unpaid departed candidates found for this billing cycle.
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-md mx-auto leading-relaxed">
+                Commissions accrue automatically upon candidate departure. Reconciled placements are bundled into official batch statements by headquarters finance.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto relative">
@@ -233,24 +241,26 @@ export default function AgentCommissionPage() {
                     <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                       {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
                       <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-5 py-3.5 min-w-[180px] sm:min-w-[220px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white transition-colors truncate">
-                        {cand.full_name || cand.name}
+                        {cand.full_name || cand.applicant_name || cand.name}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {cand.passport_number || "EP-VERIFIED"}
+                        {cand.passport_number || "—"}
                       </td>
                       <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {cand.departure_date || "2026-08-20"}
+                        {cand.departure_date || cand.accrual_date || "—"}
                       </td>
                       <td className="px-5 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                         <p className="font-semibold text-slate-800 dark:text-zinc-200">
-                          {cand.destination_country || "Saudi Arabia"}
+                          {cand.destination_country || "—"}
                         </p>
-                        <p className="text-[10px] text-slate-400">
-                          {cand.sponsor_name || "Sponsor Assigned"}
-                        </p>
+                        {cand.sponsor_name && (
+                          <p className="text-[10px] text-slate-400">
+                            {cand.sponsor_name}
+                          </p>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {(cand.rate || 1500).toLocaleString()} {cand.currency || "SAR"}
+                        {(Number(cand.amount || cand.commission_amount || cand.rate) || 0).toLocaleString()} {cand.currency || "SAR"}
                       </td>
                     </tr>
                   ))}

@@ -33,6 +33,7 @@ import {
   advancePlacementV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
+import { StageFeeSection } from "@/components/operational/StageFeeSection";
 
 interface TicketingDepartureModalProps {
   isOpen: boolean;
@@ -287,6 +288,12 @@ export function TicketingDepartureModal({
               </p>
             </div>
 
+            <StageFeeSection
+              placementId={placement?.name}
+              stageName="Ticketing"
+              defaultDirection="Expense"
+            />
+
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
                 Cancel
@@ -437,6 +444,12 @@ export function TicketingDepartureModal({
                 <li>Locks placement into permanent terminal state.</li>
               </ul>
             </div>
+
+            <StageFeeSection
+              placementId={placement?.name}
+              stageName="Departure"
+              defaultDirection="Expense"
+            />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>

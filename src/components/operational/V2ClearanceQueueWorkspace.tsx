@@ -490,6 +490,21 @@ export function V2ClearanceQueueWorkspace() {
       ),
     },
     {
+      id: "duration",
+      header: "DURATION FROM CONTRACT",
+      width: "130px",
+      align: "center",
+      cell: (row) => {
+        const contractDate = (row as any).contract_date || (row as any).contract_signed_date || (row as any).creation;
+        const days = contractDate ? Math.max(0, Math.floor((Date.now() - new Date(contractDate).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+        return (
+          <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
+            {days} DAYS
+          </span>
+        );
+      },
+    },
+    {
       id: "medical",
       header: "MEDICAL",
       width: "90px",
@@ -1008,7 +1023,7 @@ export function V2ClearanceQueueWorkspace() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Corridor stages are dynamically fetched from the Frappe backend engine. Sequence orders and mandatory gates are strictly enforced.
+              Corridor stages are dynamically configured. Sequence orders and mandatory gates are strictly enforced.
             </p>
           </div>
 

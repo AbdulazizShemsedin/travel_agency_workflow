@@ -335,14 +335,6 @@ export default function AgentWakalaRequestsPage() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-zinc-400">
-                <MessageCircle className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
-                <div>
-                  <span className="font-semibold text-slate-800 dark:text-zinc-200">WhatsApp Alert:</span>{" "}
-                  Auto-targets Contractor linked user account ({authUser?.email || "linked profile"}).
-                </div>
-              </div>
-
               {!isPushSubscribed && (
                 <Button
                   type="button"

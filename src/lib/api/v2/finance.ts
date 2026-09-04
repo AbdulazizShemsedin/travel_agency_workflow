@@ -286,6 +286,61 @@ export async function createCommissionBatchV2(
 }
 
 /**
+ * Lists Commission Batch Requests from the system.
+ */
+export async function listCommissionBatchesV2(
+  filters?: Record<string, any>
+): Promise<V2CommissionBatch[]> {
+  const result = await requestV2<any[]>("/api/method/frappe.client.get_list", {
+    method: "POST",
+    body: {
+      doctype: "Commission Batch Request",
+      fields: JSON.stringify([
+        "name",
+        "contractor",
+        "destination_country",
+        "total_amount_birr",
+        "status",
+        "advance_amount",
+        "advance_reference",
+        "advance_received_on",
+        "balance_due_birr",
+        "settled_on",
+        "settlement_reference",
+        "creation",
+        "modified",
+      ]),
+      filters: filters ? JSON.stringify(filters) : undefined,
+      order_by: "creation desc",
+      limit_page_length: 50,
+    },
+  });
+  if (!Array.isArray(result)) return [];
+  return result.map((b: any) => ({
+    ...b,
+    contractor_name: b.contractor_name || b.contractor,
+    total_amount: b.total_amount || b.total_amount_birr || 0,
+    currency: b.currency || "ETB",
+  }));
+}
+
+/**
+ * Fetches a single Commission Batch Request by name with child items.
+ */
+export async function getCommissionBatchV2(
+  batchName: string
+): Promise<V2CommissionBatch | null> {
+  const result = await requestV2<any>("/api/method/frappe.client.get", {
+    method: "POST",
+    body: {
+      doctype: "Commission Batch Request",
+      name: batchName,
+    },
+  });
+  return result || null;
+}
+
+/**
  * Renders a Commission Batch invoice PDF on demand.
  */
 export async function getBatchInvoicePdfV2(batchName: string): Promise<Blob> {

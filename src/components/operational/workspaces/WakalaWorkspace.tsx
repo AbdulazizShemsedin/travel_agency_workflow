@@ -199,6 +199,18 @@ export function WakalaWorkspace({
       ),
     },
     {
+      id: "duration",
+      header: "DURATION FROM CONTRACT",
+      accessorKey: "duration",
+      width: "130px",
+      align: "center",
+      cell: (row) => (
+        <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
+          {row.duration ?? 0} DAYS
+        </span>
+      ),
+    },
+    {
       id: "contractor",
       header: "PARTNER AGENCY",
       accessorKey: "lockedContractor",

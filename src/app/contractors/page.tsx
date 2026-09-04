@@ -19,6 +19,8 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  Search,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -73,6 +75,49 @@ export default function ContractorsPage() {
     queryKey: ["contractors_v2_page"],
     queryFn: () => listContractorsV2(),
   });
+
+  // Country & Search Filter State
+  const [selectedCountry, setSelectedCountry] = React.useState<string>("All");
+  const [searchQuery, setSearchQuery] = React.useState<string>("");
+
+  // Unique Countries from dataset
+  const availableCountries = React.useMemo(() => {
+    const set = new Set<string>();
+    contractors.forEach((c) => {
+      if (c.country && typeof c.country === "string" && c.country.trim()) {
+        set.add(c.country.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  // Filtered Contractors
+  const filteredContractors = React.useMemo(() => {
+    return contractors.filter((c) => {
+      if (selectedCountry !== "All") {
+        const cCountry = (c.country || "Saudi Arabia").toLowerCase().trim();
+        if (cCountry !== selectedCountry.toLowerCase().trim()) return false;
+      }
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const name = (c.contractor_name || c.company_name || c.name || "").toLowerCase();
+        const contact = (c.contact_person || "").toLowerCase();
+        const email = (c.email || c.user_email || c.user || "").toLowerCase();
+        const phone = (c.phone || c.whatsapp || c.whatsapp_phone || "").toLowerCase();
+        const country = (c.country || "").toLowerCase();
+        if (
+          !name.includes(query) &&
+          !contact.includes(query) &&
+          !email.includes(query) &&
+          !phone.includes(query) &&
+          !country.includes(query)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [contractors, selectedCountry, searchQuery]);
 
   // Mutation 1: Add Contractor
   const addContractorMutation = useMutation({
@@ -235,6 +280,56 @@ export default function ContractorsPage() {
         </div>
       )}
 
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <Input
+            type="search"
+            placeholder="Search contractor, contact, email, phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9 text-xs bg-white dark:bg-[#141418] border-slate-200 dark:border-[#26262d]"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Country:</span>
+          </div>
+          <select
+            value={selectedCountry}
+            onChange={(e) => setSelectedCountry(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+            aria-label="Filter Contractors by Country"
+          >
+            {availableCountries.map((country) => {
+              const count =
+                country === "All"
+                  ? contractors.length
+                  : contractors.filter((c) => (c.country || "Saudi Arabia").toLowerCase().trim() === country.toLowerCase().trim()).length;
+              return (
+                <option key={country} value={country}>
+                  {country === "All" ? `All Countries (${count})` : `${country} (${count})`}
+                </option>
+              );
+            })}
+          </select>
+          {selectedCountry !== "All" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedCountry("All")}
+              className="h-9 px-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200"
+            >
+              Reset
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Contractors Table */}
       <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
         {isLoading ? (
@@ -243,21 +338,22 @@ export default function ContractorsPage() {
             <span className="ml-2 text-xs text-slate-500">Loading contractors...</span>
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="px-4 py-3.5">Contractor ID</th>
-                <th className="px-4 py-3.5">Name / Agency</th>
-                <th className="px-4 py-3.5">Country</th>
-                <th className="px-4 py-3.5">Portal User Account</th>
-                <th className="px-4 py-3.5">Contact & Phone</th>
-                <th className="px-4 py-3.5 text-center">Status</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-              {contractors.length > 0 ? (
-                contractors.map((c) => {
+          <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
+            <table className="w-full min-w-[750px] text-left text-xs">
+              <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="px-4 py-3.5">Contractor ID</th>
+                  <th className="px-4 py-3.5">Name / Agency</th>
+                  <th className="px-4 py-3.5">Country</th>
+                  <th className="px-4 py-3.5">Portal User Account</th>
+                  <th className="px-4 py-3.5">Contact & Phone</th>
+                  <th className="px-4 py-3.5 text-center">Status</th>
+                  <th className="px-4 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
+                {filteredContractors.length > 0 ? (
+                  filteredContractors.map((c) => {
                   const portalUser = c.user || c.user_email || c.email;
                   return (
                     <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
@@ -321,14 +417,17 @@ export default function ContractorsPage() {
               ) : (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    No contractors registered.
+                    {searchQuery || selectedCountry !== "All"
+                      ? "No contractors match the selected filter criteria."
+                      : "No contractors registered."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
+    </div>
 
       {/* ------------------------------------------------------------- */}
       {/* Modal 1: Add Contractor Agency Modal                           */}
