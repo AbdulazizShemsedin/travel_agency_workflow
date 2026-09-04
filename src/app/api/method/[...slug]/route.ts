@@ -237,6 +237,8 @@ export async function POST(
           ...forwardHeaders,
           Authorization: systemAuthHeader,
         };
+        delete elevatedHeaders["cookie"];
+        delete elevatedHeaders["Cookie"];
 
         const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
           method: "POST",
@@ -259,6 +261,8 @@ export async function POST(
             ...forwardHeaders,
             Authorization: systemAuthHeader,
           };
+          delete elevatedHeaders["cookie"];
+          delete elevatedHeaders["Cookie"];
 
           const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
             method: "POST",
@@ -272,6 +276,55 @@ export async function POST(
             forwardSetCookieHeaders(res, response);
             return response;
           }
+        }
+      } else if (methodPath === "agency_tracking.placement_api.list_placements") {
+        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+        const elevatedHeaders: Record<string, string> = {
+          ...forwardHeaders,
+          Authorization: systemAuthHeader,
+        };
+        delete elevatedHeaders["cookie"];
+        delete elevatedHeaders["Cookie"];
+
+        let reqBody = bodyText || "{}";
+        try {
+          const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
+            method: "POST",
+            headers: forwardHeaders,
+            body: "{}",
+          });
+          const whoData = await whoRes.json().catch(() => ({}));
+          const loggedUser = (whoData.message || "").toLowerCase().trim();
+
+          if (loggedUser && loggedUser !== "administrator" && loggedUser !== "guest") {
+            const conListRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.contractor_api.list_contractors`, {
+              method: "POST",
+              headers: elevatedHeaders,
+              body: "{}",
+            });
+            const conData = await conListRes.json().catch(() => ({}));
+            const contractors: any[] = conData.message || conData.contractors || (Array.isArray(conData) ? conData : []);
+            const matchedCon = contractors.find((c: any) => (c.user || "").toLowerCase().trim() === loggedUser);
+
+            if (matchedCon) {
+              const parsedBody = JSON.parse(reqBody);
+              parsedBody.filters = { ...(parsedBody.filters || {}), contractor: matchedCon.name };
+              reqBody = JSON.stringify(parsedBody);
+            }
+          }
+        } catch {}
+
+        const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
+          method: "POST",
+          headers: elevatedHeaders,
+          body: reqBody,
+        });
+
+        if (retryRes.ok) {
+          const retryData = await retryRes.json().catch(() => ({ message: [] }));
+          const response = NextResponse.json(retryData, { status: 200 });
+          forwardSetCookieHeaders(res, response);
+          return response;
         }
       }
     }

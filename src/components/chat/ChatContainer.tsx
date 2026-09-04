@@ -60,6 +60,9 @@ import {
 import { uploadFileV2 } from "@/lib/api/v2/documents";
 import { listEmployeesV2 } from "@/lib/api/v2/employees";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
+import { listApplicantsV2 } from "@/lib/api/v2/applicants";
+import { listPlacementsV2 } from "@/lib/api/v2/placements";
+import { listPortalCandidatesV2 } from "@/lib/api/v2/portal";
 import { cn } from "@/lib/utils";
 
 export function ChatContainer() {
@@ -100,7 +103,6 @@ export function ChatContainer() {
   // Message Composition State
   const [messageText, setMessageText] = React.useState<string>("");
   const [mentionedApplicant, setMentionedApplicant] = React.useState<string>("");
-  const [mentionedPlacement, setMentionedPlacement] = React.useState<string>("");
   const [showMentionInputs, setShowMentionInputs] = React.useState<boolean>(false);
   const [pendingAttachment, setPendingAttachment] = React.useState<{ file: File; url?: string } | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = React.useState<boolean>(false);
@@ -133,6 +135,27 @@ export function ChatContainer() {
     queryKey: ["v2_contractors_chat_dropdown"],
     queryFn: () => listContractorsV2(),
     enabled: !isForeignAgency,
+    staleTime: 60000,
+  });
+
+  // Queries for Mention Applicant Dropdown Filtering
+  const { data: allApplicants = [] } = useQuery({
+    queryKey: ["v2_applicants_chat_mentions"],
+    queryFn: () => listApplicantsV2(undefined, 250),
+    enabled: !isForeignAgency,
+    staleTime: 60000,
+  });
+
+  const { data: allPlacements = [] } = useQuery({
+    queryKey: ["v2_placements_chat_mentions"],
+    queryFn: () => listPlacementsV2(),
+    staleTime: 60000,
+  });
+
+  const { data: portalCandidates = [] } = useQuery({
+    queryKey: ["v2_portal_candidates_chat_mentions"],
+    queryFn: () => listPortalCandidatesV2(),
+    enabled: isForeignAgency,
     staleTime: 60000,
   });
 
@@ -400,6 +423,134 @@ export function ChatContainer() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Reset mention inputs on thread switch
+  React.useEffect(() => {
+    setMentionedApplicant("");
+    setShowMentionInputs(false);
+  }, [selectedThread?.name]);
+
+  // Determine if active chat is with a foreign agency
+  const isCurrentChatWithForeignAgency = React.useMemo(() => {
+    if (isForeignAgency) return true;
+    if (selectedThread?.thread_type === "Agency") return true;
+    return false;
+  }, [isForeignAgency, selectedThread]);
+
+  // Identify foreign contractor involved in this channel
+  const currentForeignContractor = React.useMemo(() => {
+    if (isForeignAgency) {
+      return (
+        availableContractors.find(
+          (c) => (c.user || "").toLowerCase().trim() === currentEmail
+        ) || null
+      );
+    }
+    if (selectedThread?.thread_type === "Agency") {
+      return (
+        availableContractors.find(
+          (c) =>
+            c.name === selectedThread.contractor ||
+            c.company_name === selectedThread.contractor ||
+            (selectedThread.title && selectedThread.title.toLowerCase().includes(c.name.toLowerCase())) ||
+            (selectedThread.owner && (c.user || "").toLowerCase() === selectedThread.owner.toLowerCase())
+        ) || null
+      );
+    }
+    return null;
+  }, [isForeignAgency, selectedThread, currentEmail, availableContractors]);
+
+  // Compute mentionable applicants based on communication context:
+  // If communicating with foreign agent: STRICTLY ONLY applicants listed on their page and/or selected by them!
+  // If internal staff: all agency applicants
+  const mentionableApplicants = React.useMemo(() => {
+    if (isCurrentChatWithForeignAgency) {
+      const contractorName = currentForeignContractor?.name || selectedThread?.contractor || "";
+      const contractorCountry = currentForeignContractor?.country || "";
+
+      const candidateMap = new Map<string, { id: string; name: string; tag: string; detail: string }>();
+
+      // 1. Applicants Selected by this Foreign Agency (their Placements)
+      const contractorPlacements = allPlacements.filter((p) => {
+        if (!contractorName) return false;
+        return (
+          (p.contractor || "").toLowerCase().trim() === contractorName.toLowerCase().trim() ||
+          (currentForeignContractor?.company_name &&
+            (p.contractor || "").toLowerCase().trim() === currentForeignContractor.company_name.toLowerCase().trim())
+        );
+      });
+
+      for (const p of contractorPlacements) {
+        if (p.applicant) {
+          const appInfo = allApplicants.find((a) => a.name === p.applicant);
+          const fullName = appInfo?.full_name || p.full_name || p.applicant_name || p.applicant;
+          candidateMap.set(p.applicant, {
+            id: p.applicant,
+            name: fullName,
+            tag: "Selected Candidate",
+            detail: `Placement: ${p.name} • ${p.status || "Selected"}`,
+          });
+        }
+      }
+
+      // 2. Applicants Listed on their Portal Discovery Page
+      if (isForeignAgency) {
+        for (const c of portalCandidates) {
+          if (!candidateMap.has(c.name)) {
+            candidateMap.set(c.name, {
+              id: c.name,
+              name: c.full_name || c.applicant_name || c.name,
+              tag: "Available on Portal",
+              detail: `${c.target_job || c.job_applied || "Candidate"} • ${c.destination_country || contractorCountry || "GCC"}`,
+            });
+          }
+        }
+      } else {
+        // Internal staff communicating with this foreign agency:
+        // Include candidates listed on that agency's interface (matching contractor country, CV Generated, not taken by another agency)
+        for (const a of allApplicants) {
+          const matchesCountry =
+            !contractorCountry ||
+            (a.destination_country || "").toLowerCase().trim() === contractorCountry.toLowerCase().trim();
+          const isCVGenerated = a.status === "CV Generated";
+          const hasNoOtherPlacement =
+            !a.active_placement || contractorPlacements.some((p) => p.applicant === a.name);
+
+          if (matchesCountry && isCVGenerated && hasNoOtherPlacement) {
+            if (!candidateMap.has(a.name)) {
+              candidateMap.set(a.name, {
+                id: a.name,
+                name: a.full_name || a.name,
+                tag: "Available on Portal",
+                detail: `${a.target_job || a.job_applied || "Candidate"} • ${a.destination_country || "Approved"}`,
+              });
+            }
+          }
+        }
+      }
+
+      return Array.from(candidateMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+    } else {
+      // Internal Staff-to-Staff Communication Context:
+      // Can mention any active applicant in the agency workflow
+      return allApplicants
+        .map((a) => ({
+          id: a.name,
+          name: a.full_name || a.name,
+          tag: a.status || "Registered",
+          detail: `${a.destination_country || "General"} • ${a.target_job || a.job_applied || "Candidate"}`,
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+    }
+  }, [
+    isCurrentChatWithForeignAgency,
+    currentForeignContractor,
+    selectedThread,
+    allPlacements,
+    allApplicants,
+    portalCandidates,
+    isForeignAgency,
+  ]);
+
   // Mutations
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -427,7 +578,7 @@ export function ChatContainer() {
         selectedThread.name,
         messageText.trim() || undefined,
         mentionedApplicant.trim() || undefined,
-        mentionedPlacement.trim() || undefined,
+        undefined,
         attachmentUrl
       );
     },
@@ -435,7 +586,6 @@ export function ChatContainer() {
       setMessageText("");
       setPendingAttachment(null);
       setMentionedApplicant("");
-      setMentionedPlacement("");
       setShowMentionInputs(false);
 
       queryClient.invalidateQueries({ queryKey: ["chat_messages", selectedThread?.name] });
@@ -1109,48 +1259,87 @@ export function ChatContainer() {
 
               {/* Message Composer Area */}
               <div className="p-3 border-t border-slate-200 dark:border-[#202027] bg-slate-50/50 dark:bg-[#111116] space-y-2">
-                {/* Pending Attachment Chip */}
-                {pendingAttachment && (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-300">
-                    <FileText className="h-3.5 w-3.5" />
-                    <span className="font-semibold truncate max-w-[220px]">
-                      {pendingAttachment.file.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPendingAttachment(null)}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
+                {/* Active Chips Area (Attachment & Mention) */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Pending Attachment Chip */}
+                  {pendingAttachment && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-300">
+                      <FileText className="h-3.5 w-3.5" />
+                      <span className="font-semibold truncate max-w-[220px]">
+                        {pendingAttachment.file.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingAttachment(null)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                        title="Remove attachment"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
 
-                {/* Optional Mention Inputs */}
+                  {/* Active Mention Chip */}
+                  {mentionedApplicant && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 text-xs text-sky-900 dark:text-sky-300">
+                      <AtSign className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                      <span className="font-semibold">
+                        Mentioning:{" "}
+                        <span className="font-mono font-bold text-sky-700 dark:text-sky-300">
+                          {mentionedApplicant}
+                        </span>
+                        {(() => {
+                          const cand = mentionableApplicants.find(
+                            (a) => a.id === mentionedApplicant
+                          );
+                          return cand ? ` (${cand.name})` : "";
+                        })()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMentionedApplicant("")}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                        title="Clear applicant mention"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional Mention Dropdown */}
                 {showMentionInputs && (
-                  <div className="p-2 rounded-lg bg-white dark:bg-[#16161f] border border-slate-200 dark:border-[#262635] grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-                        Mention Applicant (ID):
+                  <div className="p-3 rounded-lg bg-white dark:bg-[#16161f] border border-slate-200 dark:border-[#262635] text-xs shadow-sm space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                        <AtSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Mention Applicant:
                       </label>
-                      <Input
-                        value={mentionedApplicant}
-                        onChange={(e) => setMentionedApplicant(e.target.value)}
-                        placeholder="e.g. APP-00001"
-                        className="h-7 text-xs font-mono mt-0.5"
-                      />
+                      <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                        {isCurrentChatWithForeignAgency
+                          ? `${mentionableApplicants.length} candidate${mentionableApplicants.length === 1 ? "" : "s"} available for this agency`
+                          : `${mentionableApplicants.length} registered applicant${mentionableApplicants.length === 1 ? "" : "s"}`}
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-                        Mention Placement (ID):
-                      </label>
-                      <Input
-                        value={mentionedPlacement}
-                        onChange={(e) => setMentionedPlacement(e.target.value)}
-                        placeholder="e.g. PLM-00006"
-                        className="h-7 text-xs font-mono mt-0.5"
-                      />
-                    </div>
+
+                    <select
+                      value={mentionedApplicant}
+                      onChange={(e) => setMentionedApplicant(e.target.value)}
+                      className="w-full h-8 text-xs rounded-md border border-slate-200 dark:border-[#2b2b3b] bg-white dark:bg-[#14141a] text-slate-900 dark:text-zinc-100 px-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value="">-- Select an applicant to mention (None) --</option>
+                      {mentionableApplicants.map((cand) => (
+                        <option key={cand.id} value={cand.id}>
+                          {cand.id} — {cand.name} [{cand.tag}] ({cand.detail})
+                        </option>
+                      ))}
+                    </select>
+
+                    {isCurrentChatWithForeignAgency && mentionableApplicants.length === 0 && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        No candidates are currently listed on this agency&apos;s portal discovery or in active placements.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1178,12 +1367,12 @@ export function ChatContainer() {
                     size="icon"
                     variant="ghost"
                     onClick={() => setShowMentionInputs(!showMentionInputs)}
-                    title="Mention applicant or placement"
+                    title={mentionedApplicant ? `Mentioning ${mentionedApplicant}` : "Mention applicant"}
                     className={cn(
-                      "h-9 w-9 shrink-0",
-                      showMentionInputs
-                        ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30"
-                        : "text-slate-500"
+                      "h-9 w-9 shrink-0 transition-colors",
+                      showMentionInputs || mentionedApplicant
+                        ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 ring-1 ring-emerald-300 dark:ring-emerald-800/60"
+                        : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-200"
                     )}
                   >
                     <AtSign className="h-4 w-4" />

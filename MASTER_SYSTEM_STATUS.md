@@ -98,6 +98,7 @@
 | 76 | **Foreign Agency Mobile Navigation & Dedicated Staff Chat Workspace** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Built mobile quick-nav bar & hamburger drawer in AgentLayout. Integrated dedicated /agent/chat workspace backed by create_agency_thread with auto-init & responsive chat pane. |
 | 77 | **Foreign Agency Wakala UI Terminology & Push Notification Wiring** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Renamed applicant Stepper Ribbon to 'Processing (LMIS, Te'shir, Embassy)'. Purged 'Musaned' from /agent/wakala. Wired real Web Push registration (get_vapid_public_key, subscribe_to_push) & status (get_push_subscription_status). Preserved Monday deadline gate and Fri/Sat/Sun schedule. Verified live browser runtime as foreign agency. |
 | 78 | **Foreign Agency Contractor Chat Selection, Communicating-Party Privacy & Executive Oversight** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Foreign agency selection in New Conversation dialog wired to list_contractors with elevated proxy fallback. Enforced strict communicating-party privacy: regular staff & agencies only view their own participating threads. Implemented executive supervision & audit mode for Administrator and Communication Manager roles, resolving communicating parties ('Who communicated with whom'), staff-specific filtering, and read-only inspection stream. Verified live against production Railway backend. |
+| 79 | **Chat Contextual Candidate Mention Dropdown & Placement Mention Removal** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Replaced free-text Mention Applicant ID with dynamic dropdown (<select>). Strict context-based scoping: when communicating with a foreign agency (either via agency portal or internal staff in agency thread), options are strictly restricted to candidates on that agency's interface (selected placements & portal discovery candidates for their country). Omitted completely all unrelated/draft/other agency applicants. For staff-to-staff threads, all active applicants are selectable. Completely removed obsolete Mention Placement field. Verified live against production Railway backend. |
 
 ---
 
@@ -128,3 +129,5 @@
 11. **Phase 11: Foreign Agency Wakala & Push Notification Protocol** -> [DONE]
 12. **Phase 12: Comprehensive Corrective Hardening & Multi-Stage RBAC System** -> [DONE]
 13. **Phase 13: Foreign Agency Chat Contractor Selection, Privacy Gating & Admin / Communication Manager Supervision Oversight** -> [DONE]
+14. **Phase 14: Chat Contextual Candidate Mention Dropdown & Placement Mention Removal** -> [DONE]
+
