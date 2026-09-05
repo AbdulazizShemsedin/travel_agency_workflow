@@ -117,8 +117,11 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     if (d.passport_number) {
       setValue("passport_number", d.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
-    if (d.date_of_birth) {
-      setValue("date_of_birth", d.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    const dob = d.date_of_birth || d.dob || d.birth_date;
+    if (dob) {
+      setValue("date_of_birth", dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      setValue("dob" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      setValue("birth_date" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
     if (d.gender) {
       setValue("gender", d.gender, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
@@ -126,17 +129,27 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     if (d.nationality) {
       setValue("nationality", d.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
-    if (d.passport_expiry) {
-      setValue("passport_expiry", d.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-      if (d.passport_issue_date) {
-        setValue("passport_issue_date", d.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    const expiry = d.passport_expiry || d.passport_expiry_date || d.expiry_date;
+    if (expiry) {
+      setValue("passport_expiry", expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      setValue("passport_expiry_date" as any, expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      const issueDate = d.passport_issue_date || d.issue_date;
+      if (issueDate) {
+        setValue("passport_issue_date", issueDate, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
       }
     }
-    if (d.place_of_issue) {
-      setValue("place_of_issue", d.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    const placeOfIssue = d.place_of_issue || d.passport_issue_place;
+    if (placeOfIssue) {
+      setValue("place_of_issue", placeOfIssue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
 
-    setOcrSuccessData(d);
+    setOcrSuccessData({
+      ...d,
+      date_of_birth: dob || d.date_of_birth,
+      passport_expiry: expiry || d.passport_expiry,
+      passport_expiry_date: expiry || d.passport_expiry_date,
+      place_of_issue: placeOfIssue || d.place_of_issue,
+    });
     setIsOcrReviewOpen(false);
     toast.success("Applicant personal info auto-populated from passport scan!");
   };
@@ -169,7 +182,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
       if (uploadedUrl) {
         try {
           const ocrRes = await parsePassportFileV2(uploadedUrl);
-          if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth)) {
+          if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth || ocrRes.passport_expiry || ocrRes.passport_expiry_date)) {
             extractedData = ocrRes;
           }
         } catch (backendErr) {
@@ -177,11 +190,36 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         }
       }
 
-      // 3. If backend didn't return complete data, execute client-side OCR fallback
-      if (!extractedData) {
-        const clientOcr = await performOpticalPassportOCR(file);
-        if (clientOcr && (clientOcr.passport_number || clientOcr.first_name || clientOcr.date_of_birth)) {
-          extractedData = clientOcr;
+      // 3. If backend didn't return complete data (e.g. missing DOB or Expiry), run optical OCR to enrich missing fields
+      const hasDob = Boolean(extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date);
+      const hasExpiry = Boolean(extractedData?.passport_expiry || extractedData?.passport_expiry_date || extractedData?.expiry_date);
+      const hasPassportNumber = Boolean(extractedData?.passport_number);
+      const hasName = Boolean(extractedData?.first_name);
+
+      if (!extractedData || !hasDob || !hasExpiry || !hasPassportNumber || !hasName) {
+        try {
+          const clientOcr = await performOpticalPassportOCR(file);
+          if (clientOcr) {
+            extractedData = {
+              ...(clientOcr || {}),
+              ...(extractedData || {}),
+              date_of_birth: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
+              dob: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
+              birth_date: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
+              passport_expiry: extractedData?.passport_expiry || extractedData?.passport_expiry_date || clientOcr.passport_expiry || clientOcr.passport_expiry_date || "",
+              passport_expiry_date: extractedData?.passport_expiry || extractedData?.passport_expiry_date || clientOcr.passport_expiry || clientOcr.passport_expiry_date || "",
+              passport_issue_date: extractedData?.passport_issue_date || clientOcr.passport_issue_date || "",
+              passport_number: extractedData?.passport_number || clientOcr.passport_number || "",
+              first_name: extractedData?.first_name || clientOcr.first_name || "",
+              last_name: extractedData?.last_name || clientOcr.last_name || "",
+              middle_name: extractedData?.middle_name || clientOcr.middle_name || "",
+              gender: extractedData?.gender || clientOcr.gender || "Female",
+              nationality: extractedData?.nationality || clientOcr.nationality || "Ethiopia",
+              place_of_issue: extractedData?.place_of_issue || extractedData?.passport_issue_place || clientOcr.place_of_issue || "Addis Ababa",
+            };
+          }
+        } catch (clientErr) {
+          console.warn("Client OCR fallback warning:", clientErr);
         }
       }
 
@@ -211,11 +249,18 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         if (parsed.middle_name) setValue("middle_name", parsed.middle_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
         if (parsed.last_name) setValue("last_name", parsed.last_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
         if (parsed.passport_number) setValue("passport_number", parsed.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.date_of_birth) setValue("date_of_birth", parsed.date_of_birth, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        const dob = parsed.date_of_birth || parsed.dob;
+        if (dob) {
+          setValue("date_of_birth", dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+          setValue("dob" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+          setValue("birth_date" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        }
         if (parsed.gender) setValue("gender", parsed.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
         if (parsed.nationality) setValue("nationality", parsed.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.passport_expiry) {
-          setValue("passport_expiry", parsed.passport_expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+        const expiry = parsed.passport_expiry || parsed.passport_expiry_date;
+        if (expiry) {
+          setValue("passport_expiry", expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+          setValue("passport_expiry_date" as any, expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
           if (parsed.passport_issue_date) {
             setValue("passport_issue_date", parsed.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
           }
@@ -393,9 +438,9 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   Passport: <strong>{ocrSuccessData.passport_number}</strong>
                 </span>
               )}
-              {ocrSuccessData.date_of_birth && (
+              {(ocrSuccessData.date_of_birth || ocrSuccessData.dob || ocrSuccessData.birth_date) && (
                 <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
-                  DOB: <strong>{ocrSuccessData.date_of_birth}</strong>
+                  DOB: <strong>{ocrSuccessData.date_of_birth || ocrSuccessData.dob || ocrSuccessData.birth_date}</strong>
                 </span>
               )}
               {ocrSuccessData.gender && (
@@ -403,9 +448,9 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   Gender: <strong>{ocrSuccessData.gender}</strong>
                 </span>
               )}
-              {ocrSuccessData.passport_expiry && (
+              {(ocrSuccessData.passport_expiry || ocrSuccessData.passport_expiry_date || ocrSuccessData.expiry_date) && (
                 <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
-                  Expiry: <strong>{ocrSuccessData.passport_expiry}</strong>
+                  Expiry: <strong>{ocrSuccessData.passport_expiry || ocrSuccessData.passport_expiry_date || ocrSuccessData.expiry_date}</strong>
                 </span>
               )}
             </div>
@@ -442,7 +487,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 block">Date of Birth:</span>
-                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.date_of_birth || "—"}</strong>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.date_of_birth || pendingOcrData.dob || pendingOcrData.birth_date || "—"}</strong>
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 block">Gender:</span>
@@ -454,11 +499,11 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 block">Passport Expiry:</span>
-                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.passport_expiry || "—"}</strong>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.passport_expiry || pendingOcrData.passport_expiry_date || pendingOcrData.expiry_date || "—"}</strong>
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 block">Place of Issue:</span>
-                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.place_of_issue || "Addis Ababa"}</strong>
+                  <strong className="text-slate-900 dark:text-white">{pendingOcrData.place_of_issue || pendingOcrData.passport_issue_place || "Addis Ababa"}</strong>
                 </div>
               </div>
             </div>
@@ -990,21 +1035,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="place_of_issue" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Place of Issue <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    id="place_of_issue"
-                    placeholder="e.g., Addis Ababa"
-                    {...register("place_of_issue")}
-                    className={errors.place_of_issue ? "border-rose-500" : ""}
-                  />
-                  {errors.place_of_issue && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_issue.message}</p>
-                  )}
-                </div>
-
                 <div className="space-y-1.5">
                   <Label htmlFor="passport_issue_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Passport Issue Date <span className="text-rose-500">*</span>

@@ -326,10 +326,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
         return isValid(parsed) && isPast(startOfDay(parsed));
       }, "Passport Issue Date must be in the past"),
 
-    place_of_issue: z
-      .string({ required_error: "Place of Issue is required for registration" })
-      .trim()
-      .min(2, "Place of Issue is required (e.g. Addis Ababa)"),
+    place_of_issue: z.string().trim().optional().or(z.literal("")),
 
     job_applied: z
       .string({ required_error: "Job / Position Applied is required for registration" })

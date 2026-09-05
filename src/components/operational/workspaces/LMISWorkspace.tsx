@@ -110,7 +110,13 @@ export function LMISWorkspace({
   const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState("");
 
   const currentLmisStatus = selectedRow?.lms?.status;
-  const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentLmisStatus || "");
+  const isPlacementDeparted =
+    selectedRow?.placementStatus === "Departed" ||
+    selectedRow?.ticketStatus === "Departed" ||
+    Boolean((selectedRow as any)?.isDeparted);
+  const isTerminal =
+    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentLmisStatus || "") ||
+    isPlacementDeparted;
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -126,10 +132,13 @@ export function LMISWorkspace({
       }
 
       setIssuedOn(lms?.date_completed || lms?.issued_on || "");
-      setLaborRefNo(selectedRow.laborId || lms?.reference_no || "");
+      const app = (selectedRow.applicant as any) || {};
+      const cleanLaborId = selectedRow.laborId && !selectedRow.laborId.toUpperCase().startsWith("APP-")
+        ? selectedRow.laborId
+        : (app.labor_id && !app.labor_id.toUpperCase().startsWith("APP-") ? app.labor_id : "");
+      setLaborRefNo(cleanLaborId || "");
       setEmployee(lms?.assigned_officer || lms?.employee || lms?.completed_by || "");
 
-      const app = (selectedRow.applicant as any) || {};
       setNationalId(app.national_id || lms?.national_id || "");
       setEmergencyContactName(app.emergency_contact_name || app.contact_person || "");
       setEmergencyContactPhone(app.emergency_contact_phone || app.contact_phone || selectedRow.phone || "");
@@ -155,14 +164,22 @@ export function LMISWorkspace({
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.lms?.name;
       const stepStatus = selectedRow.lms?.status;
-      const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
+      const isRowDeparted =
+        selectedRow.placementStatus === "Departed" ||
+        selectedRow.ticketStatus === "Departed" ||
+        Boolean((selectedRow as any)?.isDeparted);
+      const isStepTerminal =
+        ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
+        isRowDeparted;
 
       // 1. Scoped narrow LMIS fields (labor_id, national_id, exam_date, coc_status, emergency contacts, payments)
       const cleanCocForSave = cocStatus === "Passed" ? "Issued" : (["Pending", "Issued", "Not Started"].includes(cocStatus) ? cocStatus : "Not Started");
+      const cleanLaborForSave = laborRefNo.trim();
+      const safeLaborId = cleanLaborForSave && !cleanLaborForSave.toUpperCase().startsWith("APP-") ? cleanLaborForSave : undefined;
       try {
         await updateApplicantForLmisV2({
           applicant_name: selectedRow.applicantId,
-          labor_id: laborRefNo.trim() || undefined,
+          labor_id: safeLaborId,
           national_id: nationalId.trim() || undefined,
           emergency_contact_name: emergencyContactName.trim() || undefined,
           emergency_contact_phone: emergencyContactPhone.trim() || undefined,
@@ -220,10 +237,10 @@ export function LMISWorkspace({
         }
       }
 
-      // 3. Authoritative Clearance Step State Machine (only for active/non-terminal steps)
-      if (stepName && !isTerminal) {
+      // 3. Authoritative Clearance Step State Machine (only for active/non-terminal steps and non-departed placements)
+      if (stepName && !isStepTerminal && !isRowDeparted) {
         if (status === "Issued" && stepStatus !== "Issued") {
-          await completeClearanceStepV2(stepName, laborRefNo);
+          await completeClearanceStepV2(stepName, safeLaborId);
         } else if (status === "Pending" && stepStatus === "Pending") {
           await startClearanceStepV2(stepName);
         }
@@ -523,12 +540,17 @@ export function LMISWorkspace({
 
         {/* Section 2: Editable LMS Clearance Fields */}
         <DrawerSection title="LMS Clearance Processing" icon={FileCheck2}>
-          {isTerminal && (
+          {isPlacementDeparted ? (
+            <div className="sm:col-span-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Placement has already Departed. Clearance step is finalized and locked.</span>
+            </div>
+          ) : isTerminal ? (
             <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
               <span>This LMIS clearance step is finalized ({currentLmisStatus}). Status and handler assignments are locked.</span>
             </div>
-          )}
+          ) : null}
 
           <DrawerField label="LMS Status" isReadOnly={false}>
             <select

@@ -272,9 +272,16 @@ export async function updateApplicantForLmisV2(
     sanitizedCocStatus = "Not Started";
   }
 
+  // Ensure applicant ID (APP-XXXXX) is never saved into labor_id
+  let sanitizedLaborId = payload.labor_id;
+  if (sanitizedLaborId && sanitizedLaborId.toUpperCase().startsWith("APP-")) {
+    sanitizedLaborId = undefined;
+  }
+
   const cleanPayload = {
     ...payload,
     ...(payload.coc_status !== undefined ? { coc_status: sanitizedCocStatus } : {}),
+    ...(payload.labor_id !== undefined ? { labor_id: sanitizedLaborId } : {}),
   };
 
   return requestV2(

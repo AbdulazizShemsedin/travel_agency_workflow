@@ -466,9 +466,14 @@ export function V2ClearanceQueueWorkspace() {
       id: "laborId",
       header: "LABOR ID",
       width: "130px",
-      cell: (row) => (
-        <span className="font-mono text-slate-600 dark:text-zinc-400 font-medium text-xs">{row.reference_no || row.labor_id || "—"}</span>
-      ),
+      cell: (row) => {
+        const displayLabor = (row.labor_id && !row.labor_id.toUpperCase().startsWith("APP-"))
+          ? row.labor_id
+          : (row.reference_no && !row.reference_no.toUpperCase().startsWith("APP-") ? row.reference_no : "—");
+        return (
+          <span className="font-mono text-slate-600 dark:text-zinc-400 font-medium text-xs">{displayLabor}</span>
+        );
+      },
     },
     {
       id: "destination",

@@ -265,30 +265,69 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
     },
     ref
   ) => {
-    // 1. Extract options from children
-    const options: SelectOptionItem[] = React.useMemo(() => {
+    // 1. Extract options from children with deduplication and detect default
+    const { options, defaultFromOptions } = React.useMemo(() => {
       const items: SelectOptionItem[] = [];
+      const seenValues = new Set<string>();
+      let defaultVal: string | undefined;
+
+      // If placeholder prop is provided, reserve the empty string value
+      if (placeholder) {
+        seenValues.add("");
+      }
+
       React.Children.forEach(children, (child) => {
         if (!React.isValidElement(child)) return;
         if (child.type === "option" || (child.props as any)?.value !== undefined) {
           const props = child.props as any;
-          items.push({
-            value: String(props.value ?? ""),
-            label: props.children ?? props.label ?? String(props.value),
-            disabled: Boolean(props.disabled),
-          });
+          const val = String(props.value ?? "");
+          const label = props.children ?? props.label ?? String(props.value);
+          const labelStr = typeof label === "string" ? label : "";
+
+          if (props.selected || props.defaultSelected || labelStr.includes("(Default)")) {
+            if (!defaultVal && val !== "") {
+              defaultVal = val;
+            }
+          }
+
+          if (!seenValues.has(val)) {
+            seenValues.add(val);
+            items.push({
+              value: val,
+              label,
+              disabled: Boolean(props.disabled),
+            });
+          }
         }
       });
-      return items;
-    }, [children]);
+
+      // If no placeholder and no empty-string option exists, standard HTML select picks the first option
+      if (!defaultVal && !placeholder && items.length > 0 && !items.some((o) => o.value === "")) {
+        defaultVal = items[0].value;
+      }
+
+      return { options: items, defaultFromOptions: defaultVal };
+    }, [children, placeholder]);
 
     // Internal value handling
-    const [uncontrolledValue, setUncontrolledValue] = React.useState<string>(() => {
+    const initialDefault = React.useMemo(() => {
       if (defaultValue !== undefined) return String(defaultValue);
+      if (defaultFromOptions !== undefined) return defaultFromOptions;
       return "";
-    });
+    }, [defaultValue, defaultFromOptions]);
+
+    const [uncontrolledValue, setUncontrolledValue] = React.useState<string>(initialDefault);
 
     const isControlled = controlledValue !== undefined;
+
+    React.useEffect(() => {
+      if (defaultValue !== undefined && !isControlled) {
+        setUncontrolledValue(String(defaultValue));
+      } else if (defaultFromOptions !== undefined && !isControlled && !uncontrolledValue) {
+        setUncontrolledValue(defaultFromOptions);
+      }
+    }, [defaultValue, defaultFromOptions, isControlled, uncontrolledValue]);
+
     const rawValue = isControlled ? String(controlledValue ?? "") : uncontrolledValue;
     const radixValue = rawValue === "" ? EMPTY_VALUE_KEY : rawValue;
 
@@ -297,13 +336,32 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
     const setRefs = React.useCallback(
       (node: HTMLSelectElement | null) => {
         hiddenSelectRef.current = node;
+        if (node) {
+          if (node.value && !isControlled && (!uncontrolledValue || uncontrolledValue === "")) {
+            setUncontrolledValue(node.value);
+          }
+          const descriptor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+          if (descriptor && descriptor.set) {
+            const originalSet = descriptor.set;
+            Object.defineProperty(node, "value", {
+              set: function (newVal) {
+                originalSet.call(this, newVal);
+                setUncontrolledValue(String(newVal));
+              },
+              get: function () {
+                return descriptor.get ? descriptor.get.call(this) : this.getAttribute("value");
+              },
+              configurable: true,
+            });
+          }
+        }
         if (typeof ref === "function") {
           ref(node);
         } else if (ref) {
           (ref as React.MutableRefObject<HTMLSelectElement | null>).current = node;
         }
       },
-      [ref]
+      [ref, isControlled, uncontrolledValue]
     );
 
     const handleValueChange = (newRadixVal: string) => {
@@ -349,8 +407,8 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
           {...props}
         >
           {placeholder && <option value="">{placeholder}</option>}
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+          {options.map((opt, idx) => (
+            <option key={`native-opt-${opt.value}-${idx}`} value={opt.value} disabled={opt.disabled}>
               {typeof opt.label === "string" ? opt.label : opt.value}
             </option>
           ))}
@@ -381,17 +439,18 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
           <SelectContent className="border border-slate-200/90 dark:border-[#272732] shadow-2xl bg-white dark:bg-[#131317] rounded-xl max-h-72 z-50">
             {placeholder && (
               <SelectItem
+                key="select-placeholder-item"
                 value={EMPTY_VALUE_KEY}
                 className="text-slate-400 dark:text-zinc-500 text-xs italic py-2 px-3"
               >
                 {placeholder}
               </SelectItem>
             )}
-            {options.map((opt) => {
+            {options.map((opt, idx) => {
               const itemVal = opt.value === "" ? EMPTY_VALUE_KEY : opt.value;
               return (
                 <SelectItem
-                  key={itemVal}
+                  key={`select-opt-${itemVal}-${idx}`}
                   value={itemVal}
                   disabled={opt.disabled}
                   className="py-2.5 px-3 text-xs font-medium cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f28]"

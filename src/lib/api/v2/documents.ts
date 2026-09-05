@@ -108,14 +108,33 @@ export async function uploadFileV2(
  * Extracts ICAO 9303 MRZ fields from a passport scan file.
  */
 export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPassportData> {
-  const result = await requestV2<V2ParsedPassportData>(
+  const raw = await requestV2<any>(
     "/api/method/agency_tracking.passport_parser.parse_passport_file",
     {
       method: "POST",
       body: { file_url: fileUrl },
     }
   );
-  return { status: "success", message: "Passport parsed successfully", ...result };
+
+  const data = raw?.message && typeof raw.message === "object" ? raw.message : raw || {};
+
+  const expiry = data.passport_expiry || data.passport_expiry_date || data.expiry_date || "";
+  const dob = data.date_of_birth || data.dob || data.birth_date || "";
+  const issueDate = data.passport_issue_date || data.issue_date || "";
+  const placeOfIssue = data.place_of_issue || data.passport_issue_place || "";
+
+  return {
+    status: "success",
+    message: "Passport parsed successfully",
+    ...data,
+    passport_expiry: expiry,
+    passport_expiry_date: expiry,
+    date_of_birth: dob,
+    dob: dob,
+    passport_issue_date: issueDate,
+    place_of_issue: placeOfIssue,
+    passport_issue_place: placeOfIssue,
+  };
 }
 
 /**

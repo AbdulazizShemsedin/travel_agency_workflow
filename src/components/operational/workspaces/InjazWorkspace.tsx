@@ -118,7 +118,13 @@ export function InjazWorkspace({
   const [rescheduleCause, setRescheduleCause] = React.useState("");
 
   const currentInjazStatus = selectedRow?.injaz?.status;
-  const isInjazTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "");
+  const isPlacementDeparted =
+    selectedRow?.placementStatus === "Departed" ||
+    selectedRow?.ticketStatus === "Departed" ||
+    Boolean((selectedRow as any)?.isDeparted);
+  const isInjazTerminal =
+    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "") ||
+    isPlacementDeparted;
   const [isRescheduling, setIsRescheduling] = React.useState(false);
 
   // Forfeit and Restart Dialog State
@@ -339,9 +345,15 @@ export function InjazWorkspace({
         }
 
         const stepStatus = selectedRow.injaz?.status;
-        const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
+        const isRowDeparted =
+          selectedRow.placementStatus === "Departed" ||
+          selectedRow.ticketStatus === "Departed" ||
+          Boolean((selectedRow as any)?.isDeparted);
+        const isTerminal =
+          ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
+          isRowDeparted;
 
-        if (!isTerminal) {
+        if (!isTerminal && !isRowDeparted) {
           if (status === "Completed" && stepStatus !== "Completed" && stepStatus !== "Complete") {
             await completeClearanceStepV2(stepName, injazNumber);
           } else if (status === "Pending" && stepStatus === "Pending") {

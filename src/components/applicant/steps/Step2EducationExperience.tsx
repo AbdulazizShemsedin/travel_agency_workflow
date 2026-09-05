@@ -38,6 +38,7 @@ export function Step2EducationExperience({
   } = form;
 
   const currentJob = watch("job_applied") || "House worker";
+  const currentComplexion = watch("complexion") || "FAIR";
   const expCountry = watch("experience_country");
   const expPeriod = watch("experience_period");
   const yearsExp = watch("years_of_experience");
@@ -198,6 +199,7 @@ export function Step2EducationExperience({
               </Label>
               <Select
                 id="job_applied"
+                defaultValue={currentJob}
                 {...register("job_applied")}
                 error={!!errors.job_applied}
               >
@@ -665,10 +667,15 @@ export function Step2EducationExperience({
               <Label htmlFor="complexion" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                 Complexion / Skin <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
-              <Select id="complexion" {...register("complexion")} error={!!errors.complexion}>
+              <Select
+                id="complexion"
+                defaultValue={currentComplexion}
+                {...register("complexion")}
+                error={!!errors.complexion}
+              >
                 {COMPLEXION_OPTIONS.map((c) => (
                   <option key={c} value={c}>
-                    {c === "" ? "Select Complexion" : c}
+                    {c === "" ? "Select Complexion" : c === "FAIR" ? "Fair (Default)" : c === "MEDIUM" ? "Medium" : c === "DARK" ? "Dark" : c}
                   </option>
                 ))}
               </Select>

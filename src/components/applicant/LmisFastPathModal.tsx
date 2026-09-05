@@ -68,8 +68,9 @@ export function LmisFastPathModal({
     ].includes(r)
   );
 
+  const getCleanLaborId = (val?: string) => (val && !val.toUpperCase().startsWith("APP-") ? val : "");
   const [nationalId, setNationalId] = React.useState(initialValues?.national_id || "");
-  const [laborId, setLaborId] = React.useState(initialValues?.labor_id || "");
+  const [laborId, setLaborId] = React.useState(getCleanLaborId(initialValues?.labor_id));
   const [emergencyName, setEmergencyName] = React.useState(initialValues?.emergency_contact_name || "");
   const [emergencyPhone, setEmergencyPhone] = React.useState(initialValues?.emergency_contact_phone || "");
   const [emergencyAddress, setEmergencyAddress] = React.useState(initialValues?.emergency_contact_address || "");
@@ -80,7 +81,7 @@ export function LmisFastPathModal({
   React.useEffect(() => {
     if (initialValues) {
       setNationalId(initialValues.national_id || "");
-      setLaborId(initialValues.labor_id || "");
+      setLaborId(getCleanLaborId(initialValues.labor_id));
       setEmergencyName(initialValues.emergency_contact_name || "");
       setEmergencyPhone(initialValues.emergency_contact_phone || "");
       setEmergencyAddress(initialValues.emergency_contact_address || "");

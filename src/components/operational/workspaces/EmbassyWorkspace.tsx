@@ -143,9 +143,15 @@ export function EmbassyWorkspace({
       }
 
       const stepStatus = selectedRow.embassy?.status;
-      const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
+      const isRowDeparted =
+        selectedRow.placementStatus === "Departed" ||
+        selectedRow.ticketStatus === "Departed" ||
+        Boolean((selectedRow as any)?.isDeparted);
+      const isTerminal =
+        ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
+        isRowDeparted;
 
-      if (stepName && !isTerminal) {
+      if (stepName && !isTerminal && !isRowDeparted) {
         if (status === "Submitted" && stepStatus !== "Submitted") {
           const isSaudi = (selectedRow.destinationCountry || "").toLowerCase().includes("saudi");
           const isWakalaPaid = selectedRow.wakalaStatus === "Paid";
