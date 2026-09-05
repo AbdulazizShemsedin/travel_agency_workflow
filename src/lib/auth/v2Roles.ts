@@ -30,6 +30,7 @@ export interface V2AuthUser {
   full_name: string;
   roles: string[];
   contractor?: string | null;
+  is_internal_staff?: boolean;
 }
 
 /**

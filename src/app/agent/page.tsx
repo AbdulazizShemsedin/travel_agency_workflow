@@ -94,9 +94,9 @@ export default function AgentDiscoveryPage() {
     return (candidates as any[])
       .filter((c) => !locallyRemovedIds.includes(c.name))
       .filter((c) => {
-        if (destinationCountry !== "All Countries" && c.destination_country !== destinationCountry) return false;
-        if (jobApplied !== "All Jobs" && (c.job_applied !== jobApplied && c.target_job !== jobApplied)) return false;
-        if (religion !== "All Religions" && c.religion !== religion) return false;
+        if (destinationCountry !== "All Countries" && (c.destination_country || "").toLowerCase() !== destinationCountry.toLowerCase()) return false;
+        if (jobApplied !== "All Jobs" && ((c.job_applied || "").toLowerCase() !== jobApplied.toLowerCase() && (c.target_job || "").toLowerCase() !== jobApplied.toLowerCase())) return false;
+        if (religion !== "All Religions" && (c.religion || "").toLowerCase() !== religion.toLowerCase()) return false;
         if (!searchTerm.trim()) return true;
         const q = searchTerm.toLowerCase();
         return (
@@ -360,7 +360,7 @@ export default function AgentDiscoveryPage() {
                   <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
                     <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
-                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
                           Candidate
                         </th>
                         <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -373,24 +373,24 @@ export default function AgentDiscoveryPage() {
                     <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                       {visibleCandidates.map((candidate) => (
                         <tr key={candidate.name} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                          {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
-                            <div className="flex items-center gap-3">
+                          {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile, compact width) */}
+                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                            <div className="flex items-center gap-1.5 sm:gap-3">
                               {candidate.photo_passport ? (
                                 <img
                                   src={candidate.photo_passport}
                                   alt={candidate.full_name}
-                                  className="h-10 w-10 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                                  className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
                                 />
                               ) : (
-                                <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-xs shrink-0">
+                                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-[10px] sm:text-xs shrink-0">
                                   {candidate.full_name?.slice(0, 2) || "CA"}
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <p className="font-bold text-slate-900 dark:text-white truncate">{candidate.full_name || candidate.name}</p>
-                                <p className="text-[10px] text-slate-400 font-mono truncate">
-                                  {candidate.name} • {candidate.passport_number || "Verified"}
+                                <p className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate leading-tight">{candidate.full_name || candidate.name}</p>
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate leading-tight mt-0.5">
+                                  {candidate.passport_number || candidate.name}
                                 </p>
                               </div>
                             </div>
@@ -398,14 +398,30 @@ export default function AgentDiscoveryPage() {
 
                           {/* Job & Destination */}
                           <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                            <p className="font-semibold text-slate-800 dark:text-zinc-200">{candidate.job_applied || "Housemaid"}</p>
-                            <p className="text-[10px] text-slate-400">{candidate.destination_country || "Saudi Arabia"}</p>
+                            <p className="font-semibold text-slate-800 dark:text-zinc-200">{candidate.job_applied || candidate.target_job || "Domestic Worker"}</p>
+                            <p className="text-[10px] text-slate-400">{candidate.destination_country || "Not Specified"}</p>
                           </td>
 
                           {/* Demographics */}
                           <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap text-[11px] text-slate-600 dark:text-zinc-300">
-                            <div>{candidate.religion || "Muslim"} • {candidate.age ? `${candidate.age} yrs` : "Adult"}</div>
-                            <div className="text-[10px] text-slate-400">{candidate.marital_status || "Single"}</div>
+                            <div>{candidate.religion || "Not Specified"} • {(() => {
+                              const directAge = Number(candidate.age);
+                              if (directAge > 0) return `${directAge} yrs`;
+                              if (candidate.date_of_birth) {
+                                const birth = new Date(candidate.date_of_birth);
+                                if (!isNaN(birth.getTime())) {
+                                  const today = new Date();
+                                  let diff = today.getFullYear() - birth.getFullYear();
+                                  const m = today.getMonth() - birth.getMonth();
+                                  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                                    diff--;
+                                  }
+                                  if (diff > 0) return `${diff} yrs`;
+                                }
+                              }
+                              return "N/A";
+                            })()}</div>
+                            <div className="text-[10px] text-slate-400">{candidate.marital_status || "Not Specified"}</div>
                           </td>
 
                           {/* Experience */}

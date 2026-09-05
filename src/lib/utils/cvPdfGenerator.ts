@@ -185,7 +185,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
   const personalRows = [
     [
       { label: "Gender", val: clean(applicant.gender || "Female") },
-      { label: "Religion", val: clean(applicant.religion || "Muslim") },
+      { label: "Religion", val: clean(applicant.religion || "N/A") },
       { label: "Marital Status", val: clean(applicant.marital_status || "Single") },
     ],
     [

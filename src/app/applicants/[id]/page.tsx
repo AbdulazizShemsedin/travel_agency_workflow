@@ -53,8 +53,10 @@ import {
   removeCountryBanV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
+  listEmployeesV2,
   recordSelectedMedicalResultV2,
   advancePlacementV2,
+  autoAssignPlacementCorridorSteps,
   triggerEarlyCommissionAccrualV2,
   V2ApplicantDetails,
 } from "@/lib/api/v2";
@@ -68,7 +70,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
 import { MusanedVerificationModal } from "@/components/applicant/MusanedVerificationModal";
-import { LmisFastPathModal } from "@/components/applicant/LmisFastPathModal";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
 import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import {
@@ -104,7 +105,6 @@ export default function ApplicantDetailPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
   const [isMusanedModalOpen, setIsMusanedModalOpen] = React.useState(false);
-  const [isLmisModalOpen, setIsLmisModalOpen] = React.useState(false);
   const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
   const [isTicketingModalOpen, setIsTicketingModalOpen] = React.useState(false);
   const [ticketingInitialTab, setTicketingInitialTab] = React.useState<"ticket" | "reschedule" | "medical2" | "departure">("ticket");
@@ -231,10 +231,35 @@ export default function ApplicantDetailPage() {
       if (!activePlacement) throw new Error("No active placement found");
       return advancePlacementV2(activePlacement.name, "Processing");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       toast.success("Placement advanced to Processing");
+
+      // Auto-assign corridor steps using default roles
+      if (activePlacement?.name) {
+        try {
+          const [steps, emps] = await Promise.all([
+            listMyClearanceStepsV2().catch(() => []),
+            listEmployeesV2().catch(() => []),
+          ]);
+          if (steps.length > 0 && emps.length > 0) {
+            const result = await autoAssignPlacementCorridorSteps(
+              activePlacement.name,
+              activePlacement.destination_country || (applicant as any)?.destination_country || "Saudi Arabia",
+              steps,
+              emps
+            );
+            if (result.assignedCount > 0) {
+              toast.info(`Default staff assigned to ${result.assignedCount} clearance steps.`);
+              queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+              queryClient.invalidateQueries({ queryKey: ["placement_officers"] });
+            }
+          }
+        } catch (e) {
+          console.warn("Corridor auto-assignment notice:", e);
+        }
+      }
     },
     onError: (err: any) => {
       toast.error("Failed to advance placement", { description: err.message });
@@ -304,6 +329,12 @@ export default function ApplicantDetailPage() {
     destination === "ksa" ||
     (!destination && !isKuwaitApplicant);
 
+  const isMuayenaApplicant =
+    String(applicant.entry_track || "").trim().toLowerCase() === "muayena" ||
+    String((applicant as any).applicant_type || "").trim().toLowerCase() === "muayena" ||
+    Boolean((applicant as any).is_muayena) ||
+    Boolean(activePlacement?.is_muayena);
+
   const isPostCvStage = [
     "CV Generated",
     "Request Pending",
@@ -321,6 +352,68 @@ export default function ApplicantDetailPage() {
     applicant.is_uploaded_to_musaned === true ||
     applicant.musaned_status === "Registered" ||
     Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
+
+  // Unified Financial & Fee Records derivation (including intake registration fee)
+  const allApplicantFees = React.useMemo(() => {
+    const list: any[] = [];
+
+    // 1. Initial Registration Fee entered during applicant intake
+    const regFeeAmount = Number(applicant.registration_fee_amount);
+    if (applicant.fee_required || (regFeeAmount && regFeeAmount > 0)) {
+      list.push({
+        description: `${applicant.fee_type || "Registration Fee"}${applicant.fee_status ? ` (${applicant.fee_status})` : ""}${applicant.fee_notes ? ` - ${applicant.fee_notes}` : ""}`,
+        source_doctype: "Applicant Registration",
+        transaction_type: applicant.fee_direction || "Income",
+        amount: regFeeAmount || 0,
+        date: applicant.fee_payment_date || (applicant.creation ? String(applicant.creation).slice(0, 10) : "At Registration"),
+        status: applicant.fee_status || "Pending",
+        notes: applicant.fee_notes || "",
+        currency: applicant.fee_currency || "ETB",
+      });
+    }
+
+    // 2. Child fee logs (if any on the Applicant document)
+    if (Array.isArray(applicant.fee_log)) {
+      applicant.fee_log.forEach((f: any) => {
+        list.push({
+          description: f.fee_type || f.description || "Fee Log Entry",
+          source_doctype: f.source_doctype || "Fee Log",
+          transaction_type: f.direction || f.transaction_type || "Income",
+          amount: Number(f.amount) || 0,
+          date: f.date || (f.creation ? String(f.creation).slice(0, 10) : ""),
+          status: f.status || "Paid",
+          notes: f.notes || "",
+          currency: f.currency || applicant.fee_currency || "ETB",
+        });
+      });
+    }
+
+    // 3. Any additional clearance / stage income_expense_logs
+    if (Array.isArray(applicant.income_expense_logs)) {
+      applicant.income_expense_logs.forEach((f: any) => {
+        list.push({
+          ...f,
+          amount: Number(f.amount) || 0,
+        });
+      });
+    }
+
+    return list;
+  }, [applicant]);
+
+  const totalCandidateIncome = React.useMemo(() => {
+    return allApplicantFees
+      .filter((f) => f.transaction_type === "Income")
+      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  }, [allApplicantFees]);
+
+  const totalCandidateExpense = React.useMemo(() => {
+    return allApplicantFees
+      .filter((f) => f.transaction_type === "Expense")
+      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  }, [allApplicantFees]);
+
+  const netCandidateFinancials = totalCandidateIncome - totalCandidateExpense;
 
   return (
     <div className="space-y-6 pb-20">
@@ -404,20 +497,8 @@ export default function ApplicantDetailPage() {
             </Button>
           </Link>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsLmisModalOpen(true)}
-            className="text-xs border-emerald-300 text-emerald-900 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
-            title="Update allowlisted LMIS metadata (National ID, Labor ID, COC, Emergency Contacts)"
-          >
-            <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-            LMIS Fast-Path
-          </Button>
-
-          {/* Muayena Track Direct Placement Creator */}
-          {!activePlacement && (
+          {/* Muayena Track Direct Placement Creator (Muayena applicants only) */}
+          {!activePlacement && isMuayenaApplicant && (
             <Button
               type="button"
               variant="outline"
@@ -469,7 +550,7 @@ export default function ApplicantDetailPage() {
                         : "text-slate-400 dark:text-zinc-500"
                     }`}
                   >
-                    {stage === "Processing" ? "Processing (LMIS, Te'shir, Embassy)" : stage}
+                    {stage === "Processing" ? "Processing (LMIS & Te'shir)" : stage}
                   </span>
                 </div>
                 {idx !== CANONICAL_STAGES.length - 1 && (
@@ -673,7 +754,7 @@ export default function ApplicantDetailPage() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing (LMIS, Te'shir, Embassy)" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
+                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing (LMIS & Te'shir)" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
                   {activePlacement ? (
@@ -998,15 +1079,15 @@ export default function ApplicantDetailPage() {
               </CardTitle>
               <div className="text-right text-xs">
                 <span className="text-slate-500 dark:text-zinc-400">Net: </span>
-                <strong className="font-mono text-emerald-700 dark:text-emerald-400">
-                  ${((Number(applicant.total_income) || 0) - (Number(applicant.total_expense) || 0)).toLocaleString()}
+                <strong className={`font-mono ${netCandidateFinancials >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                  {netCandidateFinancials >= 0 ? "+" : "-"}${Math.abs(netCandidateFinancials).toLocaleString()}
                 </strong>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100 dark:divide-[#222227] text-xs">
-                {(applicant.income_expense_logs || []).length > 0 ? (
-                  (applicant.income_expense_logs as any[])?.map((log: any, i: number) => (
+                {allApplicantFees.length > 0 ? (
+                  allApplicantFees.map((log: any, i: number) => (
                     <div key={i} className="flex items-center justify-between p-3">
                       <div>
                         <span className={`font-bold mr-2 ${log.transaction_type === "Income" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
@@ -1065,80 +1146,68 @@ export default function ApplicantDetailPage() {
           </Card>
 
           {/* Candidate Fees & Financials Ledger */}
-          {(() => {
-            const allFees = (applicant.income_expense_logs || []) as any[];
-            const candidateIncome = allFees
-              .filter((f: any) => f.transaction_type === "Income")
-              .reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
-            const candidateExpense = allFees
-              .filter((f: any) => f.transaction_type === "Expense")
-              .reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
+                  Candidate Fees & Expenses
+                </CardTitle>
+                <Badge variant={totalCandidateExpense > 0 || totalCandidateIncome > 0 ? "success" : "neutral"}>
+                  {allApplicantFees.length} Record{allApplicantFees.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-[#16161b] border border-slate-200/60 dark:border-[#26262d]">
+                <div>
+                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Income</span>
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 font-mono">
+                    +${totalCandidateIncome.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Expense</span>
+                  <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">
+                    -${totalCandidateExpense.toLocaleString()}
+                  </p>
+                </div>
+              </div>
 
-            return (
-              <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                      Candidate Fees & Expenses
-                    </CardTitle>
-                    <Badge variant={candidateExpense > 0 || candidateIncome > 0 ? "success" : "neutral"}>
-                      {allFees.length} Record{allFees.length === 1 ? "" : "s"}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-3 text-xs">
-                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-[#16161b] border border-slate-200/60 dark:border-[#26262d]">
-                    <div>
-                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Income</span>
-                      <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 font-mono">
-                        +${candidateIncome.toLocaleString()}
-                      </p>
+              {allApplicantFees.length === 0 ? (
+                <p className="text-[11px] text-slate-400 dark:text-zinc-500 italic py-1 text-center">
+                  No fees or clearance expenses recorded yet.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {allApplicantFees.map((fee: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 rounded-md border border-slate-100 dark:border-[#222227] bg-white dark:bg-[#121215]"
+                    >
+                      <div className="space-y-0.5 max-w-[70%]">
+                        <p className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
+                          {fee.description || fee.source_doctype || "Clearance Fee"}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {fee.date || "Today"} • {fee.source_doctype || "Clearance"}
+                        </p>
+                      </div>
+                      <span
+                        className={`font-mono font-bold text-xs ${
+                          fee.transaction_type === "Income"
+                            ? "text-emerald-700 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400"
+                        }`}
+                      >
+                        {fee.transaction_type === "Income" ? "+" : "-"}${Number(fee.amount).toLocaleString()}
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">Total Expense</span>
-                      <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">
-                        -${candidateExpense.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  {allFees.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 dark:text-zinc-500 italic py-1 text-center">
-                      No fees or clearance expenses recorded yet.
-                    </p>
-                  ) : (
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                      {allFees.map((fee: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2 rounded-md border border-slate-100 dark:border-[#222227] bg-white dark:bg-[#121215]"
-                        >
-                          <div className="space-y-0.5 max-w-[70%]">
-                            <p className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
-                              {fee.description || fee.source_doctype || "Clearance Fee"}
-                            </p>
-                            <p className="text-[10px] text-slate-400">
-                              {fee.date || "Today"} • {fee.source_doctype || "Clearance"}
-                            </p>
-                          </div>
-                          <span
-                            className={`font-mono font-bold text-xs ${
-                              fee.transaction_type === "Income"
-                                ? "text-emerald-700 dark:text-emerald-400"
-                                : "text-rose-600 dark:text-rose-400"
-                            }`}
-                          >
-                            {fee.transaction_type === "Income" ? "+" : "-"}${Number(fee.amount).toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
@@ -1207,24 +1276,6 @@ export default function ApplicantDetailPage() {
           onSuccess={() => refetch()}
         />
       )}
-
-      {/* LMIS Fast-Path Intake Modal */}
-      <LmisFastPathModal
-        isOpen={isLmisModalOpen}
-        onClose={() => setIsLmisModalOpen(false)}
-        applicantId={applicant.name}
-        applicantName={applicant.full_name || applicant.name}
-        initialValues={{
-          national_id: applicant.national_id,
-          labor_id: applicant.labor_id,
-          emergency_contact_name: applicant.emergency_contact_name,
-          emergency_contact_phone: applicant.emergency_contact_phone,
-          emergency_contact_address: applicant.emergency_contact_address,
-          coc_status: applicant.coc_status,
-          exam_date: applicant.exam_date,
-        }}
-        onSuccess={() => refetch()}
-      />
 
       {/* Muayena Direct Placement Modal */}
       <MuayenaPlacementModal

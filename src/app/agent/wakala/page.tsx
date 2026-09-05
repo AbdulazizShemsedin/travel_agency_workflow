@@ -392,7 +392,7 @@ export default function AgentWakalaRequestsPage() {
               <table className="w-full text-xs text-left min-w-[760px] border-separate border-spacing-0">
                 <thead className="text-[11px] text-slate-500 dark:text-zinc-400 bg-slate-50/95 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2.5 px-3.5 min-w-[170px] sm:min-w-[200px] border-b border-r border-slate-200 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-200 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
                       Candidate
                     </th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Step ID</th>
@@ -422,11 +422,11 @@ export default function AgentWakalaRequestsPage() {
                     filteredRequests.map((req) => (
                       <tr key={req.clearance_step_name} className="group hover:bg-slate-50 dark:hover:bg-[#15151c]">
                         {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2.5 px-3.5 min-w-[170px] sm:min-w-[200px] border-b border-r border-slate-100 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-100 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                          <div className="font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs truncate">
                             {req.full_name || req.applicant_name || "Candidate"}
                           </div>
-                          <div className="text-[10px] font-mono text-slate-400 truncate">
+                          <div className="text-[9px] sm:text-[10px] font-mono text-slate-400 truncate">
                             {req.passport_number || req.applicant_name || "Passport"}
                           </div>
                         </td>

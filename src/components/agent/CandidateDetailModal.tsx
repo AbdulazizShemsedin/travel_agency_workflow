@@ -111,6 +111,24 @@ export function CandidateDetailModal({
     { label: "Driving", isVerified: checkSkill(["skill_driving", "driving"], "Driving") },
   ];
 
+  const ageDisplay = (() => {
+    const directAge = Number(candidate?.age);
+    if (directAge > 0) return `${directAge} yrs`;
+    if (candidate?.date_of_birth) {
+      const birth = new Date(candidate.date_of_birth);
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let diff = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+          diff--;
+        }
+        if (diff > 0) return `${diff} yrs`;
+      }
+    }
+    return "N/A";
+  })();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
       <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#121216] shadow-2xl my-8">
@@ -195,14 +213,14 @@ export function CandidateDetailModal({
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Age / DOB</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                {candidate.age} yrs {candidate.date_of_birth ? `(${candidate.date_of_birth})` : ""}
+                {ageDisplay} {candidate.date_of_birth ? `(${candidate.date_of_birth})` : ""}
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Religion</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                {candidate.religion || "Muslim"}
+                {candidate.religion || "Not Specified"}
               </p>
             </div>
 

@@ -121,17 +121,35 @@ export function CandidateCard({
             : "First Time";
           const priorWorkDisplay = isExperienced ? rawCountry : "First Time Applicant";
 
+          const ageDisplay = (() => {
+            const directAge = Number(candidate.age);
+            if (directAge > 0) return `${directAge} yrs`;
+            if (candidate.date_of_birth) {
+              const birth = new Date(candidate.date_of_birth);
+              if (!isNaN(birth.getTime())) {
+                const today = new Date();
+                let diff = today.getFullYear() - birth.getFullYear();
+                const m = today.getMonth() - birth.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                  diff--;
+                }
+                if (diff > 0) return `${diff} yrs`;
+              }
+            }
+            return "N/A";
+          })();
+
           return (
             <>
               <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span>Age: <strong className="text-slate-900 dark:text-white">{candidate.age} yrs</strong></span>
+                  <span>Age: <strong className="text-slate-900 dark:text-white">{ageDisplay}</strong></span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Muslim"}</strong></span>
+                  <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Not Specified"}</strong></span>
                 </div>
 
                 <div className="flex items-center gap-1.5">

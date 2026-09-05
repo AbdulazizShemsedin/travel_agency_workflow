@@ -177,7 +177,7 @@ export default function MyReservedCandidatesPage() {
               <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
                 <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
                       Candidate
                     </th>
                     <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -190,24 +190,24 @@ export default function MyReservedCandidatesPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                   {filteredCandidates.map((c) => (
                     <tr key={c.name} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                      {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-4 py-3.5 min-w-[190px] sm:min-w-[240px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
-                        <div className="flex items-center gap-3">
+                      {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile, compact width) */}
+                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                        <div className="flex items-center gap-1.5 sm:gap-3">
                           {c.photo_passport ? (
                             <img
                               src={c.photo_passport}
                               alt={c.full_name}
-                              className="h-10 w-10 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                              className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-xs shrink-0">
+                            <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-[10px] sm:text-xs shrink-0">
                               {c.full_name?.slice(0, 2) || "CA"}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-900 dark:text-white truncate">{c.full_name || c.name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono truncate">
-                              {c.name} • {c.passport_number || "Passport Verified"}
+                            <p className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate leading-tight">{c.full_name || c.name}</p>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate leading-tight mt-0.5">
+                              {c.passport_number || c.name}
                             </p>
                           </div>
                         </div>

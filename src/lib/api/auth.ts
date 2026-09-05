@@ -51,31 +51,62 @@ export async function fetchCurrentUserContext(): Promise<AuthUser | null> {
     }
 
     const rawRoles = Array.isArray(user.roles) ? user.roles : [];
-    const hasInternalStaffRole = rawRoles.some((r) => {
+    const isForeignAgency = rawRoles.some((r) => {
       const norm = (typeof r === "string" ? r : "").toLowerCase().trim();
-      return (
-        norm === "system manager" ||
-        norm === "administrator" ||
-        norm === "admin" ||
-        norm === "manager" ||
-        norm === "registrar" ||
-        norm === "clearance officer" ||
-        norm === "finance manager" ||
-        norm === "complaint manager" ||
-        norm === "ticketer"
-      );
+      return norm === "foreign agency";
     });
+    const internalStaffRoles = [
+      "system manager",
+      "administrator",
+      "admin",
+      "manager",
+      "registrar",
+      "clearance officer",
+      "finance manager",
+      "complaint manager",
+      "ticketer",
+      "communication manager",
+      "contract parser",
+      "saudi lmis",
+      "saudi taeshir",
+      "saudi embassy",
+      "kuwait lmis",
+      "kuwait telesign",
+      "kuwait embassy",
+    ];
 
-    const isForeignAgency =
-      !hasInternalStaffRole &&
-      rawRoles.some((r) => (typeof r === "string" ? r.toLowerCase().trim() : "") === "foreign agency");
+    const usernameLower = (user.user || "").toLowerCase().trim();
+    const hasInternalStaffRole =
+      usernameLower === "administrator" ||
+      usernameLower.startsWith("admin") ||
+      rawRoles.some((r) => {
+        const norm = (typeof r === "string" ? r : "").toLowerCase().trim();
+        return internalStaffRoles.includes(norm);
+      });
+
+    const isInternalStaff =
+      hasInternalStaffRole ||
+      (typeof user.is_internal_staff === "boolean"
+        ? user.is_internal_staff
+        : !isForeignAgency);
+
+    // Use server-provided contractor context directly from auth_api.get_current_user
+    const serverContractor = user.contractor;
+    let contractorObj: any = null;
+    if (serverContractor) {
+      contractorObj = typeof serverContractor === "object"
+        ? serverContractor
+        : { name: serverContractor, contractor_name: serverContractor };
+    } else if (isForeignAgency && !hasInternalStaffRole) {
+      contractorObj = { name: user.user, contractor_name: user.full_name || user.user };
+    }
 
     return {
       email: user.user,
       full_name: user.full_name || user.user,
       roles: rawRoles,
-      is_internal_staff: hasInternalStaffRole || !isForeignAgency,
-      contractor: isForeignAgency ? { name: user.user } : user.contractor || null,
+      is_internal_staff: isInternalStaff,
+      contractor: contractorObj,
       enabled: true,
     };
   } catch (err) {

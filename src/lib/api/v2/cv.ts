@@ -40,3 +40,20 @@ export async function generateCvV2(
     ...res,
   };
 }
+
+/**
+ * Renders the authoritative compiled CV PDF as a binary download stream.
+ * Authoritative Backend Endpoint: cv_api.render_cv_pdf
+ */
+export async function renderCvPdfV2(applicantName?: string): Promise<Blob> {
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.cv_api.render_cv_pdf",
+    {
+      method: "POST",
+      body: applicantName ? { applicant_name: applicantName } : {},
+      headers: {
+        Accept: "application/pdf, application/octet-stream, */*",
+      },
+    }
+  );
+}

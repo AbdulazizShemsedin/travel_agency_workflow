@@ -19,9 +19,11 @@ import {
   CheckCircle2,
   Mail,
   User,
+  Sparkles,
 } from "lucide-react";
 import {
   reassignClearanceStepV2,
+  assignClearanceStepV2,
   getPlacementOfficersV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
@@ -29,6 +31,9 @@ import {
   V2PlacementRecord,
   V2ClearanceStepItem,
   V2EmployeeRecord,
+  resolveDefaultEmployeeForRole,
+  mapStepToRole,
+  autoAssignPlacementCorridorSteps,
 } from "@/lib/api/v2";
 import {
   Dialog,
@@ -294,6 +299,63 @@ export function AssignEmployeeModal({
     return Array.from(list);
   }, [placementOfficers, activePlacement, propCountry]);
 
+  // Determine corridor role and default employee for current selected step
+  const targetStepRole = React.useMemo(() => {
+    const stepLabel = currentStepRecord?.step_type || currentStepRecord?.name || "";
+    return mapStepToRole(stepLabel, activePlacement?.destination_country || propCountry);
+  }, [currentStepRecord, activePlacement, propCountry]);
+
+  const defaultOfficerForStep = React.useMemo(() => {
+    return resolveDefaultEmployeeForRole(targetStepRole, employees);
+  }, [targetStepRole, employees]);
+
+  // Auto-fill proposedOfficer if empty and default officer is found
+  React.useEffect(() => {
+    if (!proposedOfficer && defaultOfficerForStep?.name) {
+      setProposedOfficer(defaultOfficerForStep.name);
+    }
+  }, [defaultOfficerForStep, proposedOfficer]);
+
+  // Auto-Assign All Corridor Steps
+  const [isAutoAssigning, setIsAutoAssigning] = React.useState(false);
+
+  const handleAutoAssignAll = async () => {
+    if (!activePlacement?.name) {
+      toast.error("No active placement found to auto-assign corridor steps.");
+      return;
+    }
+
+    setIsAutoAssigning(true);
+    try {
+      const result = await autoAssignPlacementCorridorSteps(
+        activePlacement.name,
+        activePlacement.destination_country || propCountry || "Saudi Arabia",
+        availablePlacementSteps,
+        employees
+      );
+
+      if (result.assignedCount > 0) {
+        toast.success(`Successfully assigned ${result.assignedCount} corridor steps!`, {
+          description: "Clearance specialists have been assigned based on corridor default roles.",
+        });
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+        queryClient.invalidateQueries({ queryKey: ["placement_officers"] });
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_for_reassign"] });
+        if (onSuccess) onSuccess();
+      } else if (result.errors.length > 0) {
+        toast.error("Could not auto-assign corridor steps", {
+          description: result.errors[0],
+        });
+      }
+    } catch (err: any) {
+      toast.error("Auto-assignment failed", {
+        description: err.message || "Please try again.",
+      });
+    } finally {
+      setIsAutoAssigning(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-xl bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6">
@@ -365,6 +427,40 @@ export function AssignEmployeeModal({
             </div>
           </div>
 
+          {/* Quick Auto-Assign All Corridor Steps */}
+          {isManagerOrAdmin && availablePlacementSteps.length > 1 && (
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-xs">
+              <div>
+                <span className="font-semibold text-emerald-900 dark:text-emerald-300 block">
+                  Corridor Default Auto-Assignment
+                </span>
+                <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Assign all {availablePlacementSteps.length} corridor steps to designated default specialists.
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleAutoAssignAll}
+                disabled={isAutoAssigning || reassignMutation.isPending}
+                className="h-7 text-xs font-semibold bg-white dark:bg-[#15151c] text-emerald-800 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
+              >
+                {isAutoAssigning ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3 mr-1 text-emerald-600" />
+                    Auto-Assign All
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
           {/* Step Selection */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
@@ -396,6 +492,27 @@ export function AssignEmployeeModal({
               </div>
             )}
           </div>
+
+          {/* Default Role Suggestion Banner for current step */}
+          {defaultOfficerForStep && (
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#282835] text-xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 truncate">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span className="text-slate-700 dark:text-zinc-300 truncate">
+                  Default <strong>{targetStepRole}</strong> specialist: <strong>{defaultOfficerForStep.full_name || defaultOfficerForStep.name}</strong>
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setProposedOfficer(defaultOfficerForStep.name)}
+                className="h-6 px-2 text-[11px] bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 shrink-0"
+              >
+                Use Default
+              </Button>
+            </div>
+          )}
 
           {/* Current Assignee Display */}
           <div className="p-3 rounded-xl border border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between text-xs">

@@ -227,7 +227,7 @@ export default function AgentCommissionPage() {
               <table className="w-full text-left text-xs min-w-[740px] border-separate border-spacing-0">
                 <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-5 py-3.5 min-w-[180px] sm:min-w-[220px] max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
                       Candidate Name
                     </th>
                     <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport Number</th>
@@ -240,7 +240,7 @@ export default function AgentCommissionPage() {
                   {candidateList.map((cand, idx) => (
                     <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                       {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-5 py-3.5 min-w-[180px] sm:min-w-[220px] max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white transition-colors truncate">
+                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
                         {cand.full_name || cand.applicant_name || cand.name}
                       </td>
                       <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">

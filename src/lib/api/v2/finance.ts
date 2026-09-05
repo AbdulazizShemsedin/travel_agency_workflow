@@ -504,3 +504,47 @@ export async function recordBatchAdvanceV2(
   }
   return result as V2CommissionBatch;
 }
+
+export interface V2FetchFxRatesNowResponse {
+  recorded: Record<string, number>;
+  count: number;
+}
+
+/**
+ * Manually pulls live FX rates now from the backend exchange provider (Global mode).
+ * Authoritative Backend Endpoint: finance_api.fetch_fx_rates_now
+ * Roles: Finance Manager, Admin, System Manager
+ */
+export async function fetchFxRatesNowV2(): Promise<V2FetchFxRatesNowResponse> {
+  try {
+    const result = await requestV2<V2FetchFxRatesNowResponse | { message: V2FetchFxRatesNowResponse }>(
+      "/api/method/agency_tracking.finance_api.fetch_fx_rates_now",
+      {
+        method: "POST",
+        body: {},
+      }
+    );
+
+    const payload = (result && "message" in result && (result as any).message) ? (result as any).message : result;
+    return {
+      recorded: (payload && typeof payload.recorded === "object" && payload.recorded !== null) ? payload.recorded : {},
+      count: Number(payload?.count) || 0,
+    };
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (
+      msg.includes("fetch_fx_rates_now") ||
+      msg.includes("has no attribute") ||
+      msg.includes("get_method") ||
+      err?.status === 417 ||
+      err?.status === 404
+    ) {
+      console.warn("[Finance] finance_api.fetch_fx_rates_now unavailable on server:", msg);
+      return {
+        recorded: {},
+        count: 0,
+      };
+    }
+    throw err;
+  }
+}

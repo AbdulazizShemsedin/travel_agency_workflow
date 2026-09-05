@@ -299,3 +299,68 @@ export async function recordRescheduleV2(
     }
   );
 }
+
+/**
+ * Fetches the full Placement document.
+ * Authoritative Backend Endpoint: placement_api.get_placement
+ */
+export async function getPlacementV2(
+  placementName?: string
+): Promise<V2PlacementRecord> {
+  const result = await requestV2<V2PlacementRecord | { message: V2PlacementRecord }>(
+    "/api/method/agency_tracking.placement_api.get_placement",
+    {
+      method: "POST",
+      body: placementName ? { placement_name: placementName } : {},
+    }
+  );
+
+  if (result && "message" in result && result.message) {
+    return result.message as V2PlacementRecord;
+  }
+  return result as V2PlacementRecord;
+}
+
+/**
+ * Updates parsed contract and visa fields on a Placement.
+ * Authoritative Backend Endpoint: placement_api.update_placement_parsed_fields
+ * Roles: Contract Parser, Manager, Admin, System Manager
+ */
+export async function updatePlacementParsedFieldsV2(
+  placementName: string,
+  fields: {
+    visa_number?: string;
+    visa_type?: string;
+    visa_issue_date?: string;
+    visa_expiry_date?: string;
+    visa_reference_number?: string;
+    contract_number?: string;
+    contract_signed_date?: string;
+    employer_name?: string;
+    employer_national_id?: string;
+    employer_address?: string;
+    saudi_agency_name?: string;
+    saudi_agency_license?: string;
+    kuwait_agency_name?: string;
+    kuwait_agency_license?: string;
+    employment_site?: string;
+    contract_duration?: string;
+    [key: string]: any;
+  }
+): Promise<V2PlacementRecord> {
+  const result = await requestV2<V2PlacementRecord | { message: V2PlacementRecord }>(
+    "/api/method/agency_tracking.placement_api.update_placement_parsed_fields",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...fields,
+      },
+    }
+  );
+
+  if (result && "message" in result && result.message) {
+    return result.message as V2PlacementRecord;
+  }
+  return result as V2PlacementRecord;
+}

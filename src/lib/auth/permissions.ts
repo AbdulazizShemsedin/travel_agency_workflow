@@ -117,6 +117,10 @@ export function hasExactRole(user: AuthUser | null | undefined, targetRole: stri
  */
 export function isPureForeignAgency(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
+  const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
+  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return false;
+  if (user.is_internal_staff === true) return false;
+
   const internalRoles = [
     "system manager",
     "administrator",
@@ -139,10 +143,10 @@ export function isPureForeignAgency(user: AuthUser | null | undefined): boolean 
   const hasInternalRole = (user.roles || []).some((r) =>
     internalRoles.includes(extractRoleName(r))
   );
-  if (hasInternalRole || user.is_internal_staff === true) {
+  if (hasInternalRole) {
     return false;
   }
-  return hasExactRole(user, "Foreign Agency") || Boolean(user.contractor);
+  return hasExactRole(user, "Foreign Agency");
 }
 
 /**
@@ -217,12 +221,14 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "System Manager",
     "Administrator",
     "Admin",
+    "Manager",
     "Finance Manager",
   ],
   manageCommission: [
     "System Manager",
     "Administrator",
     "Admin",
+    "Manager",
     "Finance Manager",
   ],
   manageComplaints: [

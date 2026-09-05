@@ -198,3 +198,57 @@ export async function getPlacementOfficersV2(
   if (result && Array.isArray((result as any).officers)) return (result as any).officers;
   return [];
 }
+
+/**
+ * Assigns or reassigns a clearance step to an officer (creates the officer's ToDo).
+ * Authoritative Backend Endpoint: clearance_api.assign_clearance_step
+ * Roles: Manager, Admin, Clearance Officer, System Manager
+ */
+export async function assignClearanceStepV2(
+  clearanceStepName: string,
+  user: string
+): Promise<{ status?: string; clearance_step?: string; assigned_to?: string; message?: string }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.assign_clearance_step",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        user,
+      },
+    }
+  );
+}
+
+/**
+ * Lists clearance steps assigned to the calling officer with placement/applicant context.
+ * Authoritative Backend Endpoint: clearance_api.list_assigned_steps (alias of list_my_clearance_steps)
+ */
+export async function listAssignedStepsV2(): Promise<V2ClearanceStepItem[]> {
+  const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
+    "/api/method/agency_tracking.clearance_api.list_assigned_steps",
+    { method: "POST" }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).steps)) return (result as any).steps;
+  return [];
+}
+
+/**
+ * Renders the official Injaz PDF document for Saudi Arabia placements.
+ * Authoritative Backend Endpoint: clearance_api.render_injaz_pdf
+ * Roles: Management, assigned officer, or step's mapped country role
+ */
+export async function renderInjazPdfV2(clearanceStepName: string): Promise<Blob> {
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.clearance_api.render_injaz_pdf",
+    {
+      method: "POST",
+      body: { clearance_step_name: clearanceStepName },
+      headers: {
+        Accept: "application/pdf, application/octet-stream, */*",
+      },
+    }
+  );
+}

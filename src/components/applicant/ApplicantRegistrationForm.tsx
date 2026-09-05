@@ -62,6 +62,117 @@ const SECTIONS = [
   { id: "section-medical", label: "4. Medical & COC", icon: HeartPulse },
 ];
 
+// Map every form field to its respective wizard section
+const FIELD_TO_SECTION_MAP: Record<string, string> = {
+  applicant_type: "section-personal",
+  destination_country: "section-personal",
+  first_name: "section-personal",
+  middle_name: "section-personal",
+  last_name: "section-personal",
+  gender: "section-personal",
+  date_of_birth: "section-personal",
+  religion: "section-personal",
+  marital_status: "section-personal",
+  children: "section-personal",
+  nationality: "section-personal",
+  passport_number: "section-personal",
+  passport_issue_date: "section-personal",
+  passport_expiry: "section-personal",
+  passport_issue_place: "section-personal",
+  photo_passport: "section-personal",
+  profile_photo_url: "section-personal",
+  photo_full_body: "section-personal",
+  passport_scan: "section-personal",
+  leaving_town: "section-personal",
+  city: "section-personal",
+  country: "section-personal",
+  phone_number: "section-personal",
+  email: "section-personal",
+  fee_required: "section-personal",
+  registration_fee_amount: "section-personal",
+  fee_type: "section-personal",
+  fee_direction: "section-personal",
+  fee_status: "section-personal",
+
+  job_applied: "section-education",
+  highest_education: "section-education",
+  education: "section-education",
+  english_level: "section-education",
+  arabic_level: "section-education",
+  experience_country: "section-education",
+  experience_period: "section-education",
+  years_of_experience: "section-education",
+  height: "section-education",
+  weight: "section-education",
+  complexion: "section-education",
+  skill_cleaning: "section-education",
+  skill_cooking: "section-education",
+  skill_washing: "section-education",
+  skill_ironing: "section-education",
+  skill_baby_sitting: "section-education",
+  skill_children_care: "section-education",
+  skill_arabic_cooking: "section-education",
+  skill_elderly_care: "section-education",
+  skill_driving: "section-education",
+  skill_sewing: "section-education",
+
+  national_id: "section-identification",
+  labor_id: "section-identification",
+  target_job: "section-identification",
+  monthly_salary: "section-identification",
+  contact_person_name: "section-identification",
+  contact_person_phone: "section-identification",
+  emergency_relationship: "section-identification",
+  applicant_address: "section-identification",
+
+  medical_status: "section-medical",
+  medical_issue_date: "section-medical",
+  medical_expiry_date: "section-medical",
+  coc_status: "section-medical",
+  exam_date: "section-medical",
+};
+
+// Friendly user-facing field titles in simple English
+const FIELD_FRIENDLY_NAMES: Record<string, string> = {
+  first_name: "First Name",
+  middle_name: "Father's Name",
+  last_name: "Grandfather's Name",
+  gender: "Gender",
+  date_of_birth: "Date of Birth",
+  religion: "Religion",
+  marital_status: "Marital Status",
+  destination_country: "Destination Country",
+  applicant_type: "Applicant Type",
+  photo_passport: "Passport Photo",
+  profile_photo_url: "Passport Photo",
+  photo_full_body: "Full-Body Photo",
+  passport_scan: "Passport Scan Copy",
+  passport_number: "Passport Number",
+  passport_issue_date: "Passport Issue Date",
+  passport_expiry: "Passport Expiry Date",
+  phone_number: "Primary Phone Number",
+  job_applied: "Job Position",
+  highest_education: "Education Level",
+  english_level: "English Level",
+  arabic_level: "Arabic Level",
+  national_id: "National ID (Fayda)",
+  contact_person_name: "Emergency Contact Name",
+  contact_person_phone: "Emergency Contact Phone",
+  emergency_relationship: "Emergency Relationship",
+  medical_status: "Medical Status",
+};
+
+function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
+  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
+  if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1")) {
+    return `Please fill in or select ${title}.`;
+  }
+  if (rawMessage.toLowerCase().includes("invalid enum") || rawMessage.toLowerCase().includes("expected")) {
+    return `Please choose an option for ${title}.`;
+  }
+  return rawMessage;
+}
+
 export function ApplicantRegistrationForm({
   initialData,
   existingApplicantId,
@@ -241,24 +352,55 @@ export function ApplicantRegistrationForm({
     }
   }, [initialData, existingApplicantId]);
 
-  // Smooth scroll directly to input element on error
+  // Smooth scroll directly to input element on error & switch active section
   const scrollToFieldWithError = (fieldName?: string) => {
     if (!fieldName) return;
+    const targetSection = FIELD_TO_SECTION_MAP[fieldName] || "section-personal";
+    setActiveSection(targetSection);
+
+    // Scroll to section container first
+    const secEl = document.getElementById(targetSection);
+    if (secEl) {
+      const offset = 80;
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = secEl.getBoundingClientRect().top;
+      const offsetPosition = elementRect - bodyRect - offset;
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+    }
+
     setTimeout(() => {
+      // Find element or its trigger / wrapper
       const el =
+        document.getElementById(`trigger-${fieldName}`) ||
+        document.getElementById(`select-wrapper-${fieldName}`) ||
         document.getElementById(fieldName) ||
         document.querySelector(`[name="${fieldName}"]`) ||
-        document.getElementById(`field-${fieldName}`);
+        document.getElementById(`field-${fieldName}`) ||
+        document.querySelector(`[data-field="${fieldName}"]`);
 
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         (el as HTMLElement).focus?.();
-        el.classList.add("ring-4", "ring-rose-500", "ring-offset-2", "transition-all", "duration-500");
+        el.classList.add(
+          "ring-4",
+          "ring-rose-500",
+          "ring-offset-2",
+          "bg-rose-50/70",
+          "dark:bg-rose-950/40",
+          "transition-all",
+          "duration-500"
+        );
         setTimeout(() => {
-          el.classList.remove("ring-4", "ring-rose-500", "ring-offset-2");
-        }, 3500);
+          el.classList.remove(
+            "ring-4",
+            "ring-rose-500",
+            "ring-offset-2",
+            "bg-rose-50/70",
+            "dark:bg-rose-950/40"
+          );
+        }, 4500);
       }
-    }, 150);
+    }, 180);
   };
 
   const scrollToSection = (sectionId: string) => {
@@ -299,7 +441,8 @@ export function ApplicantRegistrationForm({
         const errorField = firstError?.path[0] as string;
         scrollToFieldWithError(errorField);
 
-        throw new Error(firstError?.message || "Please complete required Stage 1 draft fields.");
+        const friendlyMsg = formatSimpleErrorMessage(errorField, firstError?.message);
+        throw new Error(friendlyMsg || "Please fill in all required fields marked in red.");
       }
 
       const payload = {
@@ -450,17 +593,10 @@ export function ApplicantRegistrationForm({
 
       scrollToFieldWithError(errorField);
 
-      const fieldTitle = errorField
-        ? errorField
-            .split("_")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" ")
-        : "Field";
+      const simpleMsg = formatSimpleErrorMessage(errorField, firstError?.message);
 
-      toast.error("Registration Requirements Incomplete", {
-        description: `Please check "${fieldTitle}": ${
-          firstError?.message || "Please complete this field"
-        }.`,
+      toast.error("Please complete the required information", {
+        description: simpleMsg,
         duration: 6000,
       });
       return;
@@ -468,9 +604,9 @@ export function ApplicantRegistrationForm({
 
     if (formData.medical_status === "UNFIT") {
       scrollToFieldWithError("medical_status");
-      toast.error("Medical Status is UNFIT", {
+      toast.error("Medical Status is Unfit", {
         description:
-          "Applicant cannot be registered while medical status is UNFIT. Please update once cleared.",
+          "The applicant cannot be registered while medical status is Unfit. You can save as Draft until cleared.",
       });
       return;
     }

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Search,
   Filter,
+  Coins,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -34,12 +35,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 
 export default function ContractorsPage() {
   const queryClient = useQueryClient();
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [editingContractor, setEditingContractor] = React.useState<V2ContractorItem | null>(null);
   const [credentialsContractor, setCredentialsContractor] = React.useState<V2ContractorItem | null>(null);
+  const [rateMatrixContractor, setRateMatrixContractor] = React.useState<V2ContractorItem | null>(null);
 
   // Add Form State
   const [formData, setFormData] = React.useState({
@@ -157,9 +160,34 @@ export default function ContractorsPage() {
   const updateContractorMutation = useMutation({
     mutationFn: (payload: { name: string; values: any }) =>
       updateContractorV2(payload.name, payload.values),
-    onSuccess: () => {
+    onSuccess: (res: any, variables) => {
+      // Optimistically / immediately update the React Query cache so the UI reflects changes instantly
+      queryClient.setQueryData<V2ContractorItem[]>(["contractors_v2_page"], (old = []) => {
+        return old.map((con) => {
+          if (con.name === variables.name) {
+            const updatedName = variables.values.contractor_name || con.contractor_name;
+            return {
+              ...con,
+              ...variables.values,
+              name: res?.name || variables.name,
+              contractor_name: updatedName,
+              company_name: updatedName,
+              country: variables.values.country || con.country,
+              contact_person: variables.values.contact_person !== undefined ? variables.values.contact_person : con.contact_person,
+              phone: variables.values.phone !== undefined ? variables.values.phone : con.phone,
+              whatsapp: variables.values.whatsapp !== undefined ? variables.values.whatsapp : con.whatsapp,
+              communication_manager: variables.values.communication_manager !== undefined ? variables.values.communication_manager : con.communication_manager,
+              notes: variables.values.notes !== undefined ? variables.values.notes : con.notes,
+            };
+          }
+          return con;
+        });
+      });
       queryClient.invalidateQueries({ queryKey: ["contractors_v2_page"] });
+      queryClient.refetchQueries({ queryKey: ["contractors_v2_page"] });
       setEditingContractor(null);
+      setSuccessMessage(`Agency "${variables.values.contractor_name || variables.name}" updated successfully!`);
+      setTimeout(() => setSuccessMessage(null), 4000);
       toast.success("Contractor agency details updated successfully!");
     },
     onError: (err: any) => {
@@ -387,6 +415,17 @@ export default function ContractorsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRateMatrixContractor(c)}
+                            className="h-7 px-2.5 text-xs border-emerald-500/40 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-medium"
+                            title="Manage Default Commission Rates"
+                          >
+                            <Coins className="h-3 w-3 mr-1 text-emerald-600" />
+                            Rates
+                          </Button>
                           <Button
                             type="button"
                             variant="outline"
@@ -651,6 +690,18 @@ export default function ContractorsPage() {
                 />
               </div>
 
+              <div className="space-y-1">
+                <Label htmlFor="edit_notes" className="text-xs font-semibold">
+                  Agency Notes / Special Terms
+                </Label>
+                <Input
+                  id="edit_notes"
+                  placeholder="Additional remarks or agency notes"
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-[#222227]">
                 <Button
                   type="button"
@@ -831,6 +882,25 @@ export default function ContractorsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Modal 4: Contractor Default Commission Rates Matrix           */}
+      {/* ------------------------------------------------------------- */}
+      {rateMatrixContractor && (
+        <ContractorRateMatrixModal
+          contractor={rateMatrixContractor.name}
+          contractorName={
+            rateMatrixContractor.contractor_name ||
+            rateMatrixContractor.company_name ||
+            rateMatrixContractor.name
+          }
+          isOpen={Boolean(rateMatrixContractor)}
+          onClose={() => setRateMatrixContractor(null)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["contractors_v2_page"] });
+          }}
+        />
       )}
     </div>
   );

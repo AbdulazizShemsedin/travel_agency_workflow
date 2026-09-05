@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { PermissionAction } from "@/lib/auth/permissions";
+import { PermissionAction, isPureForeignAgency } from "@/lib/auth/permissions";
 
 interface NavItemConfig {
   label: string;
@@ -60,8 +60,7 @@ export function AppSidebar({
   const { user, authUser, can, roles } = useAuth();
 
   // Check if current user is an external Foreign Agency partner
-  const hasForeignAgencyRole = roles.some((r) => String(r).toLowerCase().trim() === "foreign agency");
-  const isForeignAgency = hasForeignAgencyRole && authUser?.is_internal_staff === false;
+  const isForeignAgency = isPureForeignAgency(authUser);
 
   // If user is authenticated, filter nav items based on verified backend roles
   const visibleNavItems = React.useMemo(() => {
@@ -70,11 +69,18 @@ export function AppSidebar({
       return [];
     }
     if (!user) return navItems; // Unauthenticated preview
-    return navItems.filter((item) => can(item.action));
-  }, [user, can, isForeignAgency]);
+    const filtered = navItems.filter((item) => can(item.action));
+    // If the user is authenticated internal staff or admin, always provide operational navigation
+    if (filtered.length === 0 && (authUser?.is_internal_staff || user === "Administrator")) {
+      return navItems;
+    }
+    return filtered;
+  }, [user, authUser, can, isForeignAgency]);
 
-  const canRegister = !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
-  const canAccessAgentPortal = can("accessAgentPortal") || hasForeignAgencyRole;
+  const canRegister =
+    !isForeignAgency &&
+    (Boolean(user) ? can("registerApplicant") || Boolean(authUser?.is_internal_staff) || user === "Administrator" : false);
+  const canAccessAgentPortal = can("accessAgentPortal") || isForeignAgency;
   const showLabels = isMobileOpen || !isCollapsed;
 
   return (
@@ -174,27 +180,6 @@ export function AppSidebar({
                   />
                   {showLabels && <span>{item.label}</span>}
                 </Link>
-
-                {item.href === "/reports" && showLabels && (
-                  <div className="ml-7 pl-2.5 border-l border-slate-200 dark:border-zinc-800 py-1 space-y-0.5">
-                    {[
-                      { label: "Daily", period: "daily" },
-                      { label: "Weekly", period: "weekly" },
-                      { label: "Monthly", period: "monthly" },
-                      { label: "Yearly", period: "yearly" },
-                    ].map((sub) => (
-                      <Link
-                        key={sub.period}
-                        href={`/reports?period=${sub.period}`}
-                        onClick={onCloseMobile}
-                        className="flex items-center gap-2 px-2 py-1 rounded text-xs text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:bg-slate-100 dark:hover:bg-zinc-800/50 transition-colors"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-zinc-600" />
-                        <span>{sub.label}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
               </React.Fragment>
             );
           })}

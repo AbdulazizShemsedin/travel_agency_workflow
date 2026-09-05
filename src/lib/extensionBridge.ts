@@ -153,8 +153,23 @@ export function sendApplicantToExtension(
     visaType: rawApp.visa_type || rawApp.visaType || "Work",
     gender: rawApp.gender || "Female",
     dateOfBirth: rawApp.date_of_birth || rawApp.dateOfBirth || "",
-    age: rawApp.age || 25,
-    religion: rawApp.religion || "Muslim",
+    age: (() => {
+      const directAge = Number(rawApp.age);
+      if (directAge > 0) return directAge;
+      const dob = rawApp.date_of_birth || rawApp.dateOfBirth;
+      if (dob) {
+        const birth = new Date(dob);
+        if (!isNaN(birth.getTime())) {
+          const today = new Date();
+          let diff = today.getFullYear() - birth.getFullYear();
+          const m = today.getMonth() - birth.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) diff--;
+          if (diff > 0) return diff;
+        }
+      }
+      return 25;
+    })(),
+    religion: rawApp.religion || "",
     placeOfBirth: rawApp.place_of_birth || rawApp.leaving_town || rawApp.placeOfBirth || rawApp.city || "Addis Ababa",
     leavingTown: rawApp.leaving_town || rawApp.leavingTown || rawApp.city || "",
     maritalStatus: rawApp.marital_status || rawApp.maritalStatus || "Single",

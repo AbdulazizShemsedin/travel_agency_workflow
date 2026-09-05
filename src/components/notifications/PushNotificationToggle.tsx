@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast as sonnerToast } from "sonner";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { isPureForeignAgency } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -71,13 +72,8 @@ export function PushNotificationToggle() {
 
   // Foreign Agency Isolation Check
   const isForeignAgency = React.useMemo(() => {
-    if (agencyContext?.contractor || authUser?.contractor) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return norm.includes("foreign agency") || norm === "foreign agent" || norm === "agent";
-    });
-  }, [agencyContext, authUser, roles]);
+    return isPureForeignAgency(authUser);
+  }, [authUser]);
 
   // Admin Diagnostics States
   const [isRegenVapidModalOpen, setIsRegenVapidModalOpen] = React.useState<boolean>(false);

@@ -69,13 +69,34 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
     { method: "POST" }
   );
 
+  let list: V2PortalCandidate[] = [];
   if (Array.isArray(result)) {
-    return result;
+    list = result;
+  } else if (result && Array.isArray((result as any).candidates)) {
+    list = (result as any).candidates;
+  } else if (result && Array.isArray((result as any).message)) {
+    list = (result as any).message;
   }
-  if (result && Array.isArray((result as any).candidates)) {
-    return (result as any).candidates;
-  }
-  return [];
+
+  return list.map((cand) => {
+    let computedAge = Number(cand.age) || 0;
+    if (!computedAge && cand.date_of_birth) {
+      const birth = new Date(cand.date_of_birth);
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+          age--;
+        }
+        if (age > 0) computedAge = age;
+      }
+    }
+    return {
+      ...cand,
+      age: computedAge || cand.age,
+    };
+  });
 }
 
 /**

@@ -146,18 +146,32 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   // 1. Strip HTML tags and decode entities
   text = stripHtml(text);
 
-  // 2. Handle Python Traceback - strip out stack trace lines
+  // 2. Missing RPC method / Unimplemented / Server Module attribute errors (Handle before any other parsing)
+  if (
+    /Failed to get method for command|has no attribute|module '[^']+' has no attribute|cannot import name|No module named|ImportError|execute_cmd|get_attr|AttributeError/i.test(
+      text
+    )
+  ) {
+    return "This service is currently unavailable or undergoing an update. Please try again later or contact your administrator.";
+  }
+
+  // 3. Handle Python Traceback - strip out stack trace lines
   if (text.includes("Traceback (most recent call last):")) {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     const lastLine = lines[lines.length - 1] || "";
-    if (lastLine && !lastLine.startsWith("File ") && !lastLine.startsWith("Traceback")) {
+    if (
+      lastLine &&
+      !lastLine.startsWith("File ") &&
+      !lastLine.startsWith("Traceback") &&
+      !/AttributeError|TypeError|KeyError|ImportError|SyntaxError|NameError/i.test(lastLine)
+    ) {
       text = lastLine;
     } else {
       return "The system encountered an unexpected issue. Please try again or refresh the page.";
     }
   }
 
-  // 3. Strip Python / Database / Frappe Exception names anywhere they appear
+  // 4. Strip Python / Database / Frappe Exception names anywhere they appear
   text = text.replace(
     /(?:frappe\.)?(?:exceptions\.)?(?:pymysql\.err\.)?(?:ValidationError|DoesNotExistError|PermissionError|AuthenticationError|DuplicateEntryError|LinkValidationError|CharacterLengthExceededError|MandatoryError|IntegrityError|OperationalError|InternalServerError|AttributeError|KeyError|TypeError|ValueError|NameError|IndexError|JSONDecodeError):\s*/gi,
     ""
@@ -167,7 +181,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   text = text.replace(/^Error:\s*/gi, "");
   text = text.replace(/Exception in [a-zA-Z0-9_.]+:?\s*/gi, "");
 
-  // 4. Known Specific High-Impact Error Mappings
+  // 5. Known Specific High-Impact Error Mappings
   // English Level mismatch
   if (/Value 'Fair' not in allowed values/i.test(text) || (/english_level/i.test(text) && /not in allowed values/i.test(text))) {
     return "English proficiency level must be one of: None, Basic, Good, or Fluent.";
@@ -332,13 +346,21 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   text = text.replace(/per the backend contract/gi, "per system guidelines");
   text = text.replace(/Frappe/gi, "System");
 
-  // 9. Clean up leftover code syntax or punctuation artifacts
+  // 9. Scrub any remaining technical terms, module names, or function identifiers
+  text = text.replace(/Failed to get method for command [^\n\r.]+/gi, "The requested feature is currently unavailable on the server");
+  text = text.replace(/module '[^']+' has no attribute '[^']+'/gi, "the service is currently undergoing an update");
+  text = text.replace(/has no attribute '[^']+'/gi, "is currently unavailable");
+  text = text.replace(/module '[^']+'/gi, "the system");
+  text = text.replace(/\b(?:attribute|method|rpc|endpoint|doctypes?)\b/gi, "service");
+  text = text.replace(/\b(?:get|set|fetch)_[a-z0-9_]+\b/gi, "the requested action");
+
+  // 10. Clean up leftover code syntax or punctuation artifacts
   text = text.replace(/[{}[\]]/g, "");
   text = text.replace(/\s*:\s*\./g, ".");
   text = text.replace(/\s*•\s*/g, ". ");
   text = text.replace(/\s+/g, " ").trim();
 
-  // If text became empty or still looks like raw code
+  // If text became empty or still looks like raw code / technical exception
   if (
     !text ||
     text.length < 3 ||
@@ -346,9 +368,14 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     text.includes("SyntaxError") ||
     text.includes("TypeError") ||
     text.includes("KeyError") ||
-    text.includes("pymysql")
+    text.includes("AttributeError") ||
+    text.includes("ImportError") ||
+    text.includes("pymysql") ||
+    text.includes("execute_cmd") ||
+    text.includes("get_attr") ||
+    /module\s*'|attribute\s*'/i.test(text)
   ) {
-    return "An unexpected error occurred while processing your request. Please try again.";
+    return "The system encountered an unexpected issue while processing your request. Please try again later or contact your administrator.";
   }
 
   // Capitalize first character

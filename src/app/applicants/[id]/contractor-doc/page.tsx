@@ -625,7 +625,7 @@ export default function PlacementDocumentCenterPage() {
                             Contract Uploaded — Ready for Stage Approval
                           </div>
                           <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
-                            Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS, Te&apos;shir, Embassy)</strong>.
+                            Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS &amp; Te&apos;shir)</strong>.
                           </p>
                         </div>
                         <Button

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { AppNavbar } from "@/components/layout/AppNavbar";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { isPureForeignAgency } from "@/lib/auth/permissions";
 
 interface AppLayoutClientProps {
   children: React.ReactNode;
@@ -35,16 +36,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
 
   const isAgentRoute = pathname?.startsWith("/agent");
   const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
-  const isForeignAgency =
-    Boolean(authUser) &&
-    (authUser?.roles || []).some((r: any) => {
-      const roleStr = typeof r === "string" ? r : r?.role || "";
-      return roleStr.toLowerCase().trim() === "foreign agency";
-    }) &&
-    !(authUser?.roles || []).some((r: any) => {
-      const roleStr = typeof r === "string" ? r : r?.role || "";
-      return ["administrator", "system manager", "admin"].includes(roleStr.toLowerCase().trim());
-    });
+  const isForeignAgency = isPureForeignAgency(authUser);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);

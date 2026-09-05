@@ -234,38 +234,174 @@ export function SimpleSelect({
 /* 3. Themed Native Form Select (Direct RHF Support with Styled UI)          */
 /* ------------------------------------------------------------------------- */
 
-export interface NativeSelectProps
-  extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  placeholder?: string;
-  error?: boolean;
+export interface SelectOptionItem {
+  value: string;
+  label: React.ReactNode;
+  disabled?: boolean;
 }
 
+export interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+  error?: boolean;
+  placeholder?: string;
+}
+
+const EMPTY_VALUE_KEY = "__select_empty__";
+
 const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
-  ({ className, children, placeholder, error, ...props }, ref) => {
+  (
+    {
+      className,
+      children,
+      placeholder,
+      error,
+      id,
+      name,
+      value: controlledValue,
+      defaultValue,
+      onChange,
+      onBlur,
+      disabled,
+      ...props
+    },
+    ref
+  ) => {
+    // 1. Extract options from children
+    const options: SelectOptionItem[] = React.useMemo(() => {
+      const items: SelectOptionItem[] = [];
+      React.Children.forEach(children, (child) => {
+        if (!React.isValidElement(child)) return;
+        if (child.type === "option" || (child.props as any)?.value !== undefined) {
+          const props = child.props as any;
+          items.push({
+            value: String(props.value ?? ""),
+            label: props.children ?? props.label ?? String(props.value),
+            disabled: Boolean(props.disabled),
+          });
+        }
+      });
+      return items;
+    }, [children]);
+
+    // Internal value handling
+    const [uncontrolledValue, setUncontrolledValue] = React.useState<string>(() => {
+      if (defaultValue !== undefined) return String(defaultValue);
+      return "";
+    });
+
+    const isControlled = controlledValue !== undefined;
+    const rawValue = isControlled ? String(controlledValue ?? "") : uncontrolledValue;
+    const radixValue = rawValue === "" ? EMPTY_VALUE_KEY : rawValue;
+
+    const hiddenSelectRef = React.useRef<HTMLSelectElement | null>(null);
+
+    const setRefs = React.useCallback(
+      (node: HTMLSelectElement | null) => {
+        hiddenSelectRef.current = node;
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref) {
+          (ref as React.MutableRefObject<HTMLSelectElement | null>).current = node;
+        }
+      },
+      [ref]
+    );
+
+    const handleValueChange = (newRadixVal: string) => {
+      const realVal = newRadixVal === EMPTY_VALUE_KEY ? "" : newRadixVal;
+      if (!isControlled) {
+        setUncontrolledValue(realVal);
+      }
+      if (hiddenSelectRef.current) {
+        hiddenSelectRef.current.value = realVal;
+        const event = new Event("change", { bubbles: true });
+        hiddenSelectRef.current.dispatchEvent(event);
+      }
+      if (onChange) {
+        const syntheticEvent = {
+          target: { name: name || id || "", value: realVal },
+          currentTarget: { name: name || id || "", value: realVal },
+        } as React.ChangeEvent<HTMLSelectElement>;
+        onChange(syntheticEvent);
+      }
+    };
+
+    // Find display label
+    const selectedOption = options.find((opt) => opt.value === rawValue);
+    const displayLabel =
+      selectedOption?.label && rawValue !== ""
+        ? selectedOption.label
+        : placeholder || selectedOption?.label || "Select...";
+
     return (
-      <div className="relative w-full">
+      <div className="relative w-full" id={id ? `select-wrapper-${id}` : undefined}>
+        {/* Hidden select to preserve standard form submission and RHF ref registration */}
         <select
-          ref={ref}
-          className={cn(
-            "flex h-9.5 w-full appearance-none rounded-lg border bg-white dark:bg-[#141418] px-3.5 pr-10 py-2 text-xs font-medium text-slate-900 dark:text-zinc-100 shadow-xs transition-all duration-150 cursor-pointer",
-            "border-slate-300 dark:border-[#26262d] hover:border-slate-400 dark:hover:border-[#383842]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/20 dark:focus-visible:ring-emerald-500/20 focus-visible:border-emerald-700 dark:focus-visible:border-emerald-500",
-            "disabled:cursor-not-allowed disabled:bg-slate-50 dark:disabled:bg-[#0e0e11] disabled:text-slate-400 dark:disabled:text-zinc-600",
-            error && "border-rose-500 focus-visible:ring-rose-500/20 focus-visible:border-rose-500",
-            className
-          )}
+          ref={setRefs}
+          id={id}
+          name={name}
+          value={rawValue}
+          onChange={onChange}
+          onBlur={onBlur}
+          disabled={disabled}
+          className="sr-only opacity-0 pointer-events-none absolute h-0 w-0"
+          tabIndex={-1}
+          aria-hidden="true"
           {...props}
         >
-          {placeholder && (
-            <option value="" disabled className="text-slate-400 dark:text-zinc-500 bg-white dark:bg-[#141418]">
-              {placeholder}
+          {placeholder && <option value="">{placeholder}</option>}
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+              {typeof opt.label === "string" ? opt.label : opt.value}
             </option>
-          )}
-          {children}
+          ))}
         </select>
-        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
-          <ChevronDown className="h-4 w-4 text-slate-400 dark:text-zinc-400" />
-        </div>
+
+        {/* Custom Themed Radix UI Dropdown */}
+        <RadixSelect
+          value={radixValue}
+          onValueChange={handleValueChange}
+          disabled={disabled}
+        >
+          <SelectTrigger
+            className={cn(
+              "flex h-9.5 w-full items-center justify-between rounded-lg border bg-white dark:bg-[#141418] px-3.5 py-2 text-xs font-medium text-slate-900 dark:text-zinc-100 shadow-xs transition-all duration-150 cursor-pointer select-none",
+              "border-slate-300 dark:border-[#26262d] hover:border-slate-400 dark:hover:border-[#383842]",
+              "focus:outline-none focus:ring-2 focus:ring-emerald-700/20 dark:focus:ring-emerald-500/20 focus:border-emerald-700 dark:focus:border-emerald-500",
+              error && "border-rose-500 focus:ring-rose-500/20 focus:border-rose-500 ring-1 ring-rose-500",
+              disabled && "cursor-not-allowed opacity-50 bg-slate-50 dark:bg-[#101014]",
+              className
+            )}
+            error={error}
+            id={id ? `trigger-${id}` : undefined}
+          >
+            <span className={cn("truncate", !rawValue && "text-slate-400 dark:text-zinc-500")}>
+              {displayLabel}
+            </span>
+          </SelectTrigger>
+          <SelectContent className="border border-slate-200/90 dark:border-[#272732] shadow-2xl bg-white dark:bg-[#131317] rounded-xl max-h-72 z-50">
+            {placeholder && (
+              <SelectItem
+                value={EMPTY_VALUE_KEY}
+                className="text-slate-400 dark:text-zinc-500 text-xs italic py-2 px-3"
+              >
+                {placeholder}
+              </SelectItem>
+            )}
+            {options.map((opt) => {
+              const itemVal = opt.value === "" ? EMPTY_VALUE_KEY : opt.value;
+              return (
+                <SelectItem
+                  key={itemVal}
+                  value={itemVal}
+                  disabled={opt.disabled}
+                  className="py-2.5 px-3 text-xs font-medium cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f28]"
+                >
+                  {opt.label}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </RadixSelect>
       </div>
     );
   }

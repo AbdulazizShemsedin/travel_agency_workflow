@@ -680,16 +680,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   <Label htmlFor="fee_type" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                     Fee Type
                   </Label>
-                  <select
+                  <Select
                     id="fee_type"
                     {...register("fee_type")}
-                    className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2.5 text-xs text-slate-900 dark:text-slate-100"
                   >
                     <option value="Registration Fee">Registration Fee</option>
                     <option value="Processing Fee">Processing Fee</option>
                     <option value="Visa Fee">Visa Fee</option>
                     <option value="Other">Other</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -717,14 +716,13 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     <Label htmlFor="fee_direction" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                       Direction
                     </Label>
-                    <select
+                    <Select
                       id="fee_direction"
                       {...register("fee_direction")}
-                      className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 text-xs text-slate-900 dark:text-slate-100"
                     >
                       <option value="Income">Income (Agency Received)</option>
                       <option value="Expense">Expense (Agency Paid)</option>
-                    </select>
+                    </Select>
                   </div>
                 </div>
 
@@ -733,16 +731,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     <Label htmlFor="fee_status" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                       Payment Status
                     </Label>
-                    <select
+                    <Select
                       id="fee_status"
                       {...register("fee_status")}
-                      className="w-full h-8 rounded-md border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] px-2 text-xs text-slate-900 dark:text-slate-100"
                     >
                       <option value="Pending">Pending</option>
                       <option value="Paid">Paid</option>
                       <option value="Expired">Expired</option>
                       <option value="Refunded">Refunded</option>
-                    </select>
+                    </Select>
                   </div>
 
                   <div className="space-y-1">

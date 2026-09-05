@@ -11,9 +11,10 @@ import { requestV2 } from "./client";
 export interface V2ContractorCommissionRate {
   name?: string;
   destination_country: string;
+  entry_track: "Standard" | "Muayena" | string;
+  gender: "Male" | "Female" | string;
   rate: number;
-  currency: "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR" | string;
-  gender?: "Both" | "Male" | "Female" | string;
+  currency: "Country Currency" | "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR" | string;
   [key: string]: any;
 }
 
@@ -123,23 +124,71 @@ export async function updateContractorV2(
     [key: string]: any;
   }
 ): Promise<any> {
-  return await requestV2(
-    "/api/method/agency_tracking.contractor_api.update_contractor",
-    {
-      method: "POST",
-      body: {
-        name,
-        contractor_name: payload.contractor_name || payload.company_name,
-        country: payload.country,
-        contact_person: payload.contact_person,
-        communication_manager: payload.communication_manager,
-        phone: payload.phone,
-        whatsapp: payload.whatsapp,
-        email: payload.email,
-        notes: payload.notes,
-      },
+  try {
+    return await requestV2(
+      "/api/method/agency_tracking.contractor_api.update_contractor",
+      {
+        method: "POST",
+        body: {
+          name,
+          contractor_name: payload.contractor_name || payload.company_name,
+          company_name: payload.company_name,
+          country: payload.country,
+          contact_person: payload.contact_person,
+          communication_manager: payload.communication_manager,
+          phone: payload.phone,
+          whatsapp: payload.whatsapp,
+          email: payload.email,
+          notes: payload.notes,
+        },
+      }
+    );
+  } catch (err: any) {
+    // If the dedicated endpoint fails or is in a direct backend environment, fallback to direct frappe.client updates
+    try {
+      const current = await getContractorV2(name);
+      if (!current) throw err;
+
+      const fieldUpdates: Record<string, any> = {};
+      if (payload.country) fieldUpdates.country = payload.country;
+      if (payload.communication_manager !== undefined) fieldUpdates.communication_manager = payload.communication_manager;
+      if (payload.notes !== undefined) fieldUpdates.notes = payload.notes;
+
+      if (Object.keys(fieldUpdates).length > 0) {
+        await requestV2("/api/method/frappe.client.set_value", {
+          method: "POST",
+          body: {
+            doctype: "Contractor",
+            name,
+            fieldname: fieldUpdates,
+          },
+        });
+      }
+
+      // Update linked User if present
+      if (current.user && current.user.toLowerCase() !== "administrator") {
+        const userUpdates: Record<string, any> = {};
+        if (payload.contact_person) userUpdates.first_name = payload.contact_person;
+        if (payload.phone !== undefined) userUpdates.phone = payload.phone;
+        if (payload.whatsapp !== undefined) userUpdates.mobile_no = payload.whatsapp;
+
+        if (Object.keys(userUpdates).length > 0) {
+          await requestV2("/api/method/frappe.client.set_value", {
+            method: "POST",
+            body: {
+              doctype: "User",
+              name: current.user,
+              fieldname: userUpdates,
+            },
+          });
+        }
+      }
+
+      return { success: true, name };
+    } catch {
+      throw err;
     }
-  );
+  }
 }
 
 /**
@@ -170,6 +219,7 @@ export async function updateContractorBatchConfigV2(
       rate: number;
       currency: string;
       gender?: "Both" | "Male" | "Female" | string;
+      entry_track?: "Standard" | "Muayena" | string;
     }>;
   }
 ): Promise<V2ContractorRecord> {
@@ -196,6 +246,103 @@ export async function updateContractorBatchConfigV2(
   });
 
   return saveRes;
+}
+
+/**
+ * Reads a Contractor's configured default commission rate table.
+ * Authoritative Backend Endpoint: contractor_api.get_commission_rates
+ * Roles: Manager, Admin, Finance Manager, Registrar, System Manager
+ * Falls back to reading Contractor.default_commission_rates cleanly without noisy warnings.
+ */
+export async function getCommissionRatesV2(
+  contractor: string
+): Promise<V2ContractorCommissionRate[]> {
+  try {
+    const result = await requestV2<V2ContractorCommissionRate[] | { message: V2ContractorCommissionRate[] }>(
+      "/api/method/agency_tracking.contractor_api.get_commission_rates",
+      {
+        method: "POST",
+        body: { contractor },
+      }
+    );
+
+    if (Array.isArray(result)) return result;
+    if (result && Array.isArray((result as any).message)) return (result as any).message;
+  } catch {
+    // Quietly continue to read from Contractor record
+  }
+
+  try {
+    const contractorDoc = await getContractorV2(contractor);
+    if (contractorDoc && Array.isArray(contractorDoc.default_commission_rates)) {
+      return contractorDoc.default_commission_rates.map((r: any) => ({
+        destination_country: r.destination_country || "Saudi Arabia",
+        entry_track: (r.entry_track || "Standard") as "Standard" | "Muayena",
+        gender: (r.gender || "Female") as "Female" | "Male" | "Both",
+        rate: Number(r.rate) || 0,
+        currency: r.currency || "Country Currency",
+      }));
+    }
+  } catch {
+    // Return empty array if not configured
+  }
+
+  return [];
+}
+
+/**
+ * Replaces (full overwrite) an agency's default commission rate table.
+ * Authoritative Backend Endpoint: contractor_api.set_commission_rates
+ * Roles: Manager, Admin, Finance Manager, Registrar, System Manager
+ * Note: This is a full replacement, not a merge. Always send the complete desired table.
+ * Falls back to persisting via frappe.client.save on Contractor DocType if the endpoint is not yet enabled on the server.
+ */
+export async function setCommissionRatesV2(
+  contractor: string,
+  rates: V2ContractorCommissionRate[]
+): Promise<V2ContractorCommissionRate[]> {
+  const cleanedRates = rates.map((r) => ({
+    destination_country: r.destination_country,
+    entry_track: r.entry_track,
+    gender: r.gender,
+    rate: Number(r.rate) || 0,
+    currency: r.currency || "Country Currency",
+  }));
+
+  try {
+    const result = await requestV2<V2ContractorCommissionRate[] | { message: V2ContractorCommissionRate[] }>(
+      "/api/method/agency_tracking.contractor_api.set_commission_rates",
+      {
+        method: "POST",
+        body: {
+          contractor,
+          rates: cleanedRates,
+        },
+      }
+    );
+
+    if (Array.isArray(result)) return result;
+    if (result && Array.isArray((result as any).message)) return (result as any).message;
+    return cleanedRates;
+  } catch (err: any) {
+    const errMsg = String(err?.message || err);
+    if (
+      errMsg.includes("get_commission_rates") ||
+      errMsg.includes("set_commission_rates") ||
+      errMsg.includes("get_method") ||
+      errMsg.includes("has no attribute") ||
+      errMsg.includes("417") ||
+      err?.status === 417 ||
+      err?.status === 404
+    ) {
+      console.warn(`[Contractors] contractor_api.set_commission_rates unavailable on server, saving directly to Contractor doc:`, errMsg);
+      await updateContractorBatchConfigV2(contractor, {
+        default_commission_rates: cleanedRates,
+      });
+      return cleanedRates;
+    }
+    throw err;
+  }
 }
 
 

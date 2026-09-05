@@ -22,6 +22,7 @@ export interface V2CurrentUserResponse {
   full_name: string;
   roles: string[];
   contractor?: string | null;
+  is_internal_staff?: boolean;
 }
 
 /**
@@ -91,7 +92,24 @@ export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
     full_name: data.full_name || data.user,
     roles: normalizedRoles,
     contractor: data.contractor || null,
+    is_internal_staff: typeof data.is_internal_staff === "boolean" ? data.is_internal_staff : undefined,
   };
+}
+
+/**
+ * Returns assignable app-specific roles for role-assignment pickers.
+ * Authoritative Backend Endpoint: auth_api.get_assignable_roles
+ * Roles: Manager, Admin, Finance Manager, System Manager
+ */
+export async function getAssignableRolesV2(): Promise<string[]> {
+  const result = await requestV2<string[] | { message: string[] }>(
+    "/api/method/agency_tracking.auth_api.get_assignable_roles",
+    { method: "POST" }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
+  return [];
 }
 
 /**

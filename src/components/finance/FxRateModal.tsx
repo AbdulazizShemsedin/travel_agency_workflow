@@ -17,9 +17,13 @@ import { Label } from "@/components/ui/label";
 import {
   getFxRateV2,
   setFxRateV2,
+  fetchFxRatesNowV2,
   V2SupportedCurrency,
+  V2FetchFxRatesNowResponse,
 } from "@/lib/api/v2/finance";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 interface FxRateModalProps {
   isOpen: boolean;
@@ -50,6 +54,8 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
   const [currentActiveRate, setCurrentActiveRate] = React.useState<number | null>(null);
   const [isLoadingCurrent, setIsLoadingCurrent] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isFetchingLive, setIsFetchingLive] = React.useState(false);
+  const [liveRatesResult, setLiveRatesResult] = React.useState<V2FetchFxRatesNowResponse | null>(null);
 
   // Fetch active rate when selected currency changes
   const fetchCurrentRate = React.useCallback(async (curr: Exclude<V2SupportedCurrency, "ETB">) => {
@@ -73,8 +79,43 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
   React.useEffect(() => {
     if (isOpen) {
       fetchCurrentRate(selectedCurrency);
+      setLiveRatesResult(null);
     }
   }, [isOpen, selectedCurrency, fetchCurrentRate]);
+
+  // Action: Pull live FX rates now from server (Global mode)
+  const handleFetchRatesNow = async () => {
+    if (!canMutate) {
+      toast.error("Permission Denied", {
+        description: "Pulling live FX rates requires Finance Manager or Administrator privileges.",
+      });
+      return;
+    }
+
+    setIsFetchingLive(true);
+    try {
+      const result = await fetchFxRatesNowV2();
+      setLiveRatesResult(result);
+
+      if (result.count > 0 && result.recorded && Object.keys(result.recorded).length > 0) {
+        toast.success("Live FX Rates Synchronized", {
+          description: `Successfully pulled ${result.count} currency rates from backend exchange provider.`,
+        });
+        fetchCurrentRate(selectedCurrency);
+        onSuccess?.();
+      } else {
+        toast.info("Source Temporarily Unavailable", {
+          description: "Live FX source unreachable; existing cached rates stand.",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Live Fetch Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsFetchingLive(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +142,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
       onClose();
     } catch (err: any) {
       toast.error("Failed to Update Rate", {
-        description: err?.message || "Backend rejected FX rate mutation.",
+        description: formatCleanErrorMessage(err),
       });
     } finally {
       setIsSubmitting(false);
@@ -110,7 +151,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[440px] bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
+      <DialogContent className="sm:max-w-[480px] bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-emerald-600" />
@@ -119,7 +160,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            View active backend FX conversion rates or manually record new conversion multipliers against ETB (Birr).
+            View active backend FX conversion rates, pull real-time exchange rates, or manually record conversion multipliers against ETB (Birr).
           </DialogDescription>
         </DialogHeader>
 
@@ -127,6 +168,67 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
           <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-300 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
             <span>View-Only Mode: Mutating FX conversion rates requires Finance Manager or Administrator role.</span>
+          </div>
+        )}
+
+        {/* Live FX Sync Section */}
+        {canMutate && (
+          <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                  <RefreshCw className={cn("h-3.5 w-3.5 text-emerald-600", isFetchingLive && "animate-spin")} />
+                  Real-Time FX Synchronization
+                </span>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Fetch live rates from the authoritative backend currency engine now.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isFetchingLive}
+                onClick={handleFetchRatesNow}
+                className="text-xs h-7 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950"
+              >
+                {isFetchingLive ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Fetching...
+                  </>
+                ) : (
+                  "Fetch Rates Now"
+                )}
+              </Button>
+            </div>
+
+            {liveRatesResult && (
+              <div className="pt-1.5 border-t border-emerald-200/60 dark:border-emerald-900/30">
+                {liveRatesResult.count > 0 && Object.keys(liveRatesResult.recorded).length > 0 ? (
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">
+                      Live Rates Recorded ({liveRatesResult.count} currencies):
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(liveRatesResult.recorded).map(([curr, rate]) => (
+                        <Badge
+                          key={curr}
+                          variant="outline"
+                          className="text-[10px] font-mono border-emerald-300 text-emerald-800 bg-white dark:bg-[#15151c] dark:text-emerald-300"
+                        >
+                          1 {curr} = {Number(rate).toFixed(2)} ETB
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500 italic">
+                    Live source unreachable; existing cached rates stand.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

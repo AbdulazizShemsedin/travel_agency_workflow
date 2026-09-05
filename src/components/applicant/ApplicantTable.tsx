@@ -344,9 +344,11 @@ export function ApplicantTable() {
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
-                            <span className="text-[11px] text-slate-400">
-                              {applicant.phone_number} • {applicant.city}
-                            </span>
+                            {applicant.phone_number ? (
+                              <span className="text-[11px] text-slate-400">
+                                {applicant.phone_number}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -432,11 +434,11 @@ export function ApplicantTable() {
                           {/* 4. Contractor Document Action */}
                           <Link
                             href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
-                            title="View Official Contract Document (PDF)"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
+                            title="View Official Contract Document"
                           >
                             <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                            <span>Contract</span>
+                            <span>Contract document</span>
                           </Link>
                         </div>
                       </td>

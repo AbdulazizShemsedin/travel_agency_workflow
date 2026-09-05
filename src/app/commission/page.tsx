@@ -73,11 +73,16 @@ import {
   listContractorsV2,
   getContractorV2,
   updateContractorBatchConfigV2,
+  getCommissionRatesV2,
+  setCommissionRatesV2,
   V2ContractorRecord,
   V2ContractorCommissionRate,
 } from "@/lib/api/v2/contractors";
 import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
+import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
+import { FxRateModal } from "@/components/finance/FxRateModal";
+import { Coins, TrendingUp } from "lucide-react";
 
 type CommissionTab =
   | "owed"
@@ -107,6 +112,11 @@ export default function AdminCommissionPage() {
   // Multi-select for Batch Creation (Unbatched Owed Commissions)
   const [selectedTxNames, setSelectedTxNames] = React.useState<string[]>([]);
   const [isCreatingBatch, setIsCreatingBatch] = React.useState<boolean>(false);
+  const [isBatchConfirmOpen, setIsBatchConfirmOpen] = React.useState<boolean>(false);
+
+  // Rate Matrix and FX Modals
+  const [isRateMatrixModalOpen, setIsRateMatrixModalOpen] = React.useState<boolean>(false);
+  const [isFxModalOpen, setIsFxModalOpen] = React.useState<boolean>(false);
 
   // Active Selected Batch (CBR-#####) for Detailed Inspection / Settlement / Invoice
   const [selectedBatchName, setSelectedBatchName] = React.useState<string>("");
@@ -210,18 +220,21 @@ export default function AdminCommissionPage() {
     if (currentContractorDoc) {
       setConfigBatchMode(currentContractorDoc.batch_mode || "Manual Only");
       setConfigBatchThreshold(Number(currentContractorDoc.batch_threshold) || 10);
-      setConfigRates(
-        Array.isArray(currentContractorDoc.default_commission_rates)
-          ? currentContractorDoc.default_commission_rates.map((r: any) => ({
-              destination_country: r.destination_country || "Saudi Arabia",
-              gender: r.gender || "Both",
-              rate: Number(r.rate) || 0,
-              currency: r.currency || "SAR",
-            }))
-          : []
-      );
     }
   }, [currentContractorDoc]);
+
+  // Fetch Authoritative Contractor Default Commission Rates via contractor_api.get_commission_rates
+  const {
+    data: contractorRates = [],
+    isLoading: isContractorRatesLoading,
+    refetch: refetchContractorRates,
+  } = useQuery<V2ContractorCommissionRate[]>({
+    queryKey: ["v2_contractor_rates", configContractorName || selectedContractor],
+    queryFn: () => getCommissionRatesV2(configContractorName || selectedContractor),
+    enabled: Boolean(configContractorName || selectedContractor),
+    staleTime: 30000,
+    retry: false,
+  });
 
   // =========================================================================
   // 3. Fetch Owed (Unbatched, Approved) Commissions
@@ -619,11 +632,10 @@ export default function AdminCommissionPage() {
       await updateContractorBatchConfigV2(targetContractor, {
         batch_mode: configBatchMode as "Manual Only" | "Auto-Threshold",
         batch_threshold: Number(configBatchThreshold) || 10,
-        default_commission_rates: configRates.filter((r) => r.rate > 0),
       });
 
       toast.success("Configuration Saved", {
-        description: `Updated batch mode and commission rates for ${targetContractor}.`,
+        description: `Updated batch mode and threshold for ${targetContractor}.`,
       });
       refetchContractorDoc();
     } catch (err: any) {
@@ -714,6 +726,20 @@ export default function AdminCommissionPage() {
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
             Refresh
           </Button>
+
+          {isFinanceManagerOrAdmin && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFxModalOpen(true)}
+              className="text-xs h-8 border-slate-300 dark:border-[#2a2a34]"
+              title="Foreign Exchange Rate Management"
+            >
+              <TrendingUp className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+              FX Rates
+            </Button>
+          )}
 
           <Button
             type="button"
@@ -1029,7 +1055,7 @@ export default function AdminCommissionPage() {
                     type="button"
                     size="sm"
                     disabled={filteredOwed.length === 0 || isCreatingBatch}
-                    onClick={handleCreateBatch}
+                    onClick={() => setIsBatchConfirmOpen(true)}
                     className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
                   >
                     {isCreatingBatch ? (
@@ -1131,7 +1157,7 @@ export default function AdminCommissionPage() {
                     ) : (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-slate-400">
-                          Zero unbatched owed commissions found for {selectedContractor || "selected contractor"} ({selectedCountry}).
+                          No unbatched owed commissions for this Contractor in {selectedCountry}.
                         </td>
                       </tr>
                     )}
@@ -2216,11 +2242,14 @@ export default function AdminCommissionPage() {
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                      Default Corridor Commission Rates
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>Default Corridor Commission Rates</span>
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                        {contractorRates.length} configured
+                      </Badge>
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      Authoritative rate applied when candidates in Standard processing reach Departed. (Muayena uses manual rates set per placement).
+                      Authoritative matrix: Destination Country × Entry Track (Standard, Muayena) × Gender (Female, Male) × Rate × Currency.
                     </p>
                   </div>
 
@@ -2228,11 +2257,11 @@ export default function AdminCommissionPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={handleAddRateRow}
-                    className="text-xs h-7"
+                    onClick={() => setIsRateMatrixModalOpen(true)}
+                    className="text-xs h-8 border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300"
                   >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add Corridor Rate
+                    <Coins className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                    Configure Rate Matrix (5 Dimensions)
                   </Button>
                 </div>
 
@@ -2240,91 +2269,72 @@ export default function AdminCommissionPage() {
                   <table className="w-full text-xs text-left">
                     <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
-                        <th className="py-2 px-3">Destination Country</th>
-                        <th className="py-2 px-3">Rate Type (Gender)</th>
-                        <th className="py-2 px-3">Commission Rate</th>
-                        <th className="py-2 px-3">Currency</th>
-                        <th className="py-2 px-3 text-right">Remove</th>
+                        <th className="py-2.5 px-3">Destination Country</th>
+                        <th className="py-2.5 px-3">Entry Track</th>
+                        <th className="py-2.5 px-3">Gender</th>
+                        <th className="py-2.5 px-3">Commission Rate</th>
+                        <th className="py-2.5 px-3">Currency</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                      {configRates.length > 0 ? (
-                        configRates.map((rateRow, idx) => (
-                          <tr key={idx}>
-                            <td className="py-2 px-3">
-                              <select
-                                value={rateRow.destination_country}
-                                onChange={(e) =>
-                                  handleUpdateRateRow(idx, "destination_country", e.target.value)
-                                }
-                                className="h-7 px-2 rounded-md border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
-                              >
-                                <option value="Saudi Arabia" className="dark:bg-[#121217]">Saudi Arabia</option>
-                                <option value="Kuwait" className="dark:bg-[#121217]">Kuwait</option>
-                                <option value="United Arab Emirates" className="dark:bg-[#121217]">United Arab Emirates</option>
-                                <option value="Qatar" className="dark:bg-[#121217]">Qatar</option>
-                                <option value="Jordan" className="dark:bg-[#121217]">Jordan</option>
-                                <option value="Bahrain" className="dark:bg-[#121217]">Bahrain</option>
-                                <option value="Oman" className="dark:bg-[#121217]">Oman</option>
-                              </select>
+                      {isContractorRatesLoading ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-slate-400">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto text-emerald-600 mb-1" />
+                            Loading commission rates...
+                          </td>
+                        </tr>
+                      ) : contractorRates.length > 0 ? (
+                        contractorRates.map((rateRow, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-[#161620]">
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
+                              {rateRow.destination_country}
                             </td>
-                            <td className="py-2 px-3">
-                              <select
-                                value={rateRow.gender || "Both"}
-                                onChange={(e) =>
-                                  handleUpdateRateRow(idx, "gender", e.target.value)
-                                }
-                                className="h-7 px-2 rounded-md border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs font-medium"
+                            <td className="py-2.5 px-3">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-medium",
+                                  rateRow.entry_track === "Muayena"
+                                    ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300"
+                                    : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
+                                )}
                               >
-                                <option value="Both" className="dark:bg-[#121217]">Both (Unified Rate)</option>
-                                <option value="Male" className="dark:bg-[#121217]">Male Candidate</option>
-                                <option value="Female" className="dark:bg-[#121217]">Female Candidate</option>
-                              </select>
+                                {rateRow.entry_track || "Standard"}
+                              </Badge>
                             </td>
-                            <td className="py-2 px-3">
-                              <Input
-                                type="number"
-                                step="any"
-                                min="0"
-                                value={rateRow.rate}
-                                onChange={(e) =>
-                                  handleUpdateRateRow(idx, "rate", Number(e.target.value))
-                                }
-                                className="h-7 text-xs w-32"
-                              />
-                            </td>
-                            <td className="py-2 px-3">
-                              <select
-                                value={rateRow.currency}
-                                onChange={(e) =>
-                                  handleUpdateRateRow(idx, "currency", e.target.value)
-                                }
-                                className="h-7 px-2 rounded-md border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
+                            <td className="py-2.5 px-3">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-medium",
+                                  rateRow.gender === "Female"
+                                    ? "bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-300"
+                                    : rateRow.gender === "Male"
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-zinc-300"
+                                )}
                               >
-                                <option value="SAR" className="dark:bg-[#121217]">SAR</option>
-                                <option value="KWD" className="dark:bg-[#121217]">KWD</option>
-                                <option value="USD" className="dark:bg-[#121217]">USD</option>
-                                <option value="ETB" className="dark:bg-[#121217]">ETB</option>
-                                <option value="AED" className="dark:bg-[#121217]">AED</option>
-                                <option value="QAR" className="dark:bg-[#121217]">QAR</option>
-                              </select>
+                                {rateRow.gender || "Female"}
+                              </Badge>
                             </td>
-                            <td className="py-2 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setRateIndexToRemove(idx)}
-                                className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-                                title="Remove Rate"
+                            <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
+                              {Number(rateRow.rate).toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-mono bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                                {rateRow.currency}
+                              </Badge>
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="py-6 text-center text-slate-400">
-                            Zero default commission rates configured for this contractor.
+                          <td colSpan={5} className="py-8 text-center text-slate-400">
+                            No default commission rates configured for this contractor.
                           </td>
                         </tr>
                       )}
@@ -2637,6 +2647,110 @@ export default function AdminCommissionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Batch Creation Confirmation Dialog */}
+      <Dialog open={isBatchConfirmOpen} onOpenChange={setIsBatchConfirmOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-600" />
+              Confirm Commission Batch Creation
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Review the commission batch details before generating the official Commission Batch Request.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#26262f] space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-zinc-400">Partner Agency:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {contractors.find((c: any) => c.name === selectedContractor)?.contractor_name || selectedContractor}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-zinc-400">Destination Corridor:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{selectedCountry}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 dark:text-zinc-400">Commission Items:</span>
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                  {selectedTxNames.length > 0 ? selectedTxNames.length : filteredOwed.length} records
+                  {selectedTxNames.length > 0 ? " (Selected)" : " (All Owed)"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-200 dark:border-[#2a2a35] pt-2">
+                <span className="text-slate-700 dark:text-zinc-300 font-semibold">Subtotal Amount:</span>
+                <span className="font-bold text-base text-emerald-800 dark:text-emerald-300">
+                  {(selectedTxNames.length > 0
+                    ? selectedOwedTotalAmount
+                    : filteredOwed.reduce((sum, item) => sum + (Number(item.commission_amount || item.amount) || 0), 0)
+                  ).toLocaleString()}{" "}
+                  {filteredOwed[0]?.currency || "SAR"}
+                </span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              The backend will create an authoritative Commission Batch Request (CBR-#####) with status <strong>Draft</strong>.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBatchConfirmOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isCreatingBatch}
+              onClick={async () => {
+                setIsBatchConfirmOpen(false);
+                await handleCreateBatch();
+              }}
+              className="text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-bold"
+            >
+              {isCreatingBatch ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Generating Batch...
+                </>
+              ) : (
+                "Generate Commission Batch"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Contractor Rate Matrix Modal */}
+      {(configContractorName || selectedContractor) && (
+        <ContractorRateMatrixModal
+          isOpen={isRateMatrixModalOpen}
+          onClose={() => {
+            setIsRateMatrixModalOpen(false);
+            refetchContractorRates();
+          }}
+          contractor={configContractorName || selectedContractor}
+          contractorName={
+            contractors.find((c: any) => c.name === (configContractorName || selectedContractor))?.contractor_name ||
+            configContractorName ||
+            selectedContractor
+          }
+        />
+      )}
+
+      {/* FX Rates Live Management Modal */}
+      <FxRateModal
+        isOpen={isFxModalOpen}
+        onClose={() => setIsFxModalOpen(false)}
+      />
     </div>
   );
 }
