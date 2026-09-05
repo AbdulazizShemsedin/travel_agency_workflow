@@ -115,16 +115,24 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
  */
 export async function selectCandidateV2(
   applicantName: string,
-  freeReplacementForComplaint?: string
+  freeReplacementForComplaint?: string,
+  contractorName?: string
 ): Promise<V2SelectCandidateResponse> {
+  const body: Record<string, any> = {
+    applicant_name: applicantName,
+  };
+  if (contractorName) {
+    body.contractor_name = contractorName;
+    body.contractor = contractorName;
+  }
+  if (freeReplacementForComplaint) {
+    body.free_replacement_for_complaint = freeReplacementForComplaint;
+  }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.portal_api.select_candidate",
     {
       method: "POST",
-      body: {
-        applicant_name: applicantName,
-        ...(freeReplacementForComplaint ? { free_replacement_for_complaint: freeReplacementForComplaint } : {}),
-      },
+      body,
     }
   );
 }

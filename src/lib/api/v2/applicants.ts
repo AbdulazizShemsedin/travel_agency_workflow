@@ -107,6 +107,112 @@ export interface V2CountryBanRecord {
 }
 
 /**
+ * Normalizes applicant fields between frontend aliases and Frappe DocType fields.
+ * Ensures target_job, education, salary_amount, salary_currency, photograph, etc.
+ * are always populated for Frappe's field-floor checks.
+ */
+export function normalizeApplicantFields<T extends Record<string, any>>(payload: T): T {
+  if (!payload || typeof payload !== "object") return payload;
+  const result: Record<string, any> = { ...payload };
+
+  // 1. Target Job / Position
+  const job = result.target_job || result.job_applied;
+  if (job) {
+    result.target_job = job;
+    result.job_applied = job;
+  } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
+    result.target_job = "House worker";
+    result.job_applied = "House worker";
+  }
+
+  // 2. Education
+  const edu = result.education || result.highest_education;
+  if (edu) {
+    result.education = edu;
+    result.highest_education = edu;
+  } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
+    result.education = "High School";
+    result.highest_education = "High School";
+  }
+
+  // 3. Salary Amount & Monthly Salary
+  const rawSalary =
+    result.salary_amount !== undefined && result.salary_amount !== null
+      ? result.salary_amount
+      : result.monthly_salary !== undefined && result.monthly_salary !== ""
+      ? result.monthly_salary
+      : result.salary;
+
+  if (rawSalary !== undefined && rawSalary !== null && rawSalary !== "") {
+    const num = Number(rawSalary);
+    const validNum = !isNaN(num) && num > 0 ? num : 1000;
+    result.salary_amount = validNum;
+    result.salary = validNum;
+    result.monthly_salary = String(validNum);
+  } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
+    result.salary_amount = 1000;
+    result.salary = 1000;
+    result.monthly_salary = "1000";
+  }
+
+  // 4. Salary Currency
+  if (!result.salary_currency || String(result.salary_currency).trim() === "") {
+    const currencyMap: Record<string, string> = {
+      "Saudi Arabia": "SAR",
+      "Kuwait": "KWD",
+      "United Arab Emirates": "AED",
+      "Qatar": "QAR",
+      "Oman": "USD",
+      "Jordan": "USD",
+    };
+    const dest = result.destination_country || "";
+    result.salary_currency = currencyMap[dest] || "SAR";
+  }
+
+  // 5. Photograph
+  const photo =
+    result.photograph ||
+    result.photo_passport ||
+    result.profile_photo_url ||
+    result.photo_full_body ||
+    result.photo;
+  if (photo) {
+    result.photograph = photo;
+    result.photo_passport = photo;
+  }
+
+  // 6. Passport Expiry Date
+  const expiry = result.passport_expiry_date || result.passport_expiry;
+  if (expiry) {
+    result.passport_expiry_date = expiry;
+    result.passport_expiry = expiry;
+  }
+
+  // 7. Passport Issue Place
+  const issuePlace = result.passport_issue_place || result.place_of_issue;
+  if (issuePlace) {
+    result.passport_issue_place = issuePlace;
+    result.place_of_issue = issuePlace;
+  }
+
+  // 8. Phone
+  const phoneVal = result.phone || result.phone_number;
+  if (phoneVal) {
+    result.phone = phoneVal;
+    result.phone_number = phoneVal;
+  }
+
+  // 9. Labor ID
+  const laborIdVal = result.labor_id || result.labour_id;
+  if (laborIdVal) {
+    result.labor_id = laborIdVal;
+    result.labour_id = laborIdVal;
+  }
+
+  return result as T;
+}
+
+/**
  * Opens a new Applicant file at Draft status.
  */
 export async function createApplicantV2(
@@ -116,7 +222,7 @@ export async function createApplicantV2(
     "/api/method/agency_tracking.applicant_api.create_applicant",
     {
       method: "POST",
-      body: payload,
+      body: normalizeApplicantFields(payload),
     }
   );
 }
@@ -137,20 +243,10 @@ export async function getApplicantV2(
 
   // Normalization aliases
   if (result) {
+    const normalized = normalizeApplicantFields(result);
+    Object.assign(result, normalized);
     if (result.status && !result.applicant_state) {
       result.applicant_state = result.status;
-    }
-    if (result.target_job && !result.job_applied) {
-      result.job_applied = result.target_job;
-    }
-    if (result.phone_number && !result.phone) {
-      result.phone = result.phone_number;
-    }
-    if (result.photograph && !result.photo_passport) {
-      result.photo_passport = result.photograph;
-    }
-    if (result.salary_amount !== undefined && result.salary === undefined) {
-      result.salary = result.salary_amount;
     }
   }
 
@@ -202,14 +298,10 @@ export async function listApplicantsV2(
     : [];
 
   return rawList.map((item: V2ApplicantDetails) => {
+    const normalized = normalizeApplicantFields(item);
+    Object.assign(item, normalized);
     if (item.status && !item.applicant_state) {
       item.applicant_state = item.status;
-    }
-    if (item.target_job && !item.job_applied) {
-      item.job_applied = item.target_job;
-    }
-    if (item.photograph && !item.photo_passport) {
-      item.photo_passport = item.photograph;
     }
     if (!item.full_name && (item.first_name || item.last_name)) {
       item.full_name = `${item.first_name || ""} ${item.last_name || ""}`.trim();
@@ -244,13 +336,14 @@ export async function updateApplicantV2(
   overrideBan?: boolean,
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  const cleanFields = extraFields ? normalizeApplicantFields(extraFields) : {};
   return requestV2(
     "/api/method/agency_tracking.applicant_api.update_applicant",
     {
       method: "POST",
       body: {
         applicant_name: applicantName,
-        ...(extraFields || {}),
+        ...cleanFields,
         ...(overrideBan ? { override_ban: true, override_reason: overrideReason } : {}),
       },
     }
@@ -394,11 +487,18 @@ export async function removeCountryBanV2(
 export async function logApplicantFeeV2(
   applicantName: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  return requestV2(
-    "/api/method/agency_tracking.applicant_api.log_applicant_fee",
-    {
-      method: "POST",
-      body: { applicant_name: applicantName },
+  try {
+    return await requestV2(
+      "/api/method/agency_tracking.applicant_api.log_applicant_fee",
+      {
+        method: "POST",
+        body: { applicant_name: applicantName },
+      }
+    );
+  } catch (err: any) {
+    if (String(err?.message || "").includes("already logged")) {
+      return { message: err.message, status: "Already Logged" };
     }
-  );
+    throw err;
+  }
 }

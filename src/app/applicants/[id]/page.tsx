@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import {
   getApplicantV2,
+  updateApplicantV2,
   registerApplicantV2,
   generateCvV2,
   cancelApplicantV2,
@@ -58,6 +59,10 @@ import {
   listPlacementsV2,
   listMyClearanceStepsV2,
   listEmployeesV2,
+  getPlacementOfficersV2,
+  resolveDefaultEmployeeForRole,
+  mapStepToRole,
+  V2ClearanceStepItem,
   recordSelectedMedicalResultV2,
   advancePlacementV2,
   autoAssignPlacementCorridorSteps,
@@ -256,6 +261,29 @@ export default function ApplicantDetailPage() {
 
   const activePlacement = placements[0] || null;
 
+  React.useEffect(() => {
+    if (activePlacement?.medical_selected_status === "FIT" || activePlacement?.medical_selected_status === "UNFIT") {
+      setMed1Status(activePlacement.medical_selected_status);
+    } else if (applicant?.medical_status === "FIT" || applicant?.medical_status === "UNFIT") {
+      setMed1Status(applicant.medical_status as "FIT" | "UNFIT");
+    }
+    const initialDate = activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date;
+    if (initialDate) {
+      setMed1Date(initialDate);
+    }
+    const initialExpiry = activePlacement?.medical_selected_expiry_date || applicant?.medical_expiry_date;
+    if (initialExpiry) {
+      setMed1Expiry(initialExpiry);
+    }
+  }, [
+    activePlacement?.medical_selected_status,
+    activePlacement?.medical_selected_examination_date,
+    activePlacement?.medical_selected_expiry_date,
+    applicant?.medical_status,
+    applicant?.medical_issue_date,
+    applicant?.medical_expiry_date,
+  ]);
+
   const applicantClearanceSteps = React.useMemo(() => {
     return clearanceSteps.filter(
       (s) =>
@@ -266,6 +294,72 @@ export default function ApplicantDetailPage() {
         s.applicant_name === applicant?.name
     );
   }, [clearanceSteps, activePlacement?.name, applicantId, applicant?.name]);
+
+  // Query assigned placement officers via chat_engine
+  const { data: placementOfficers = [] } = useQuery({
+    queryKey: ["placement_officers", activePlacement?.name],
+    queryFn: () => (activePlacement?.name ? getPlacementOfficersV2(activePlacement.name) : Promise.resolve([])),
+    enabled: Boolean(activePlacement?.name),
+  });
+
+  // Query all employees to resolve names and default specialists
+  const { data: employees = [] } = useQuery({
+    queryKey: ["v2_employees_for_assign"],
+    queryFn: () => listEmployeesV2(),
+    staleTime: 30000,
+  });
+
+  const corridorCountry = activePlacement?.destination_country || applicant?.destination_country || "Saudi Arabia";
+
+  // Filter clearance steps specifically for the Processing Stage (LMIS & Te'shir only - Embassy belongs to Stamped stage)
+  const processingClearanceSteps = React.useMemo(() => {
+    return applicantClearanceSteps.filter((s) => {
+      const norm = (s.step_type || "").toLowerCase().trim();
+      return (
+        !norm.includes("embassy") &&
+        !norm.includes("stamping") &&
+        !norm.includes("ticket") &&
+        !norm.includes("departure")
+      );
+    });
+  }, [applicantClearanceSteps]);
+
+  // Embassy Clearance Step for Stamped Stage
+  const embassyClearanceStep = React.useMemo(() => {
+    return applicantClearanceSteps.find((s) => {
+      const norm = (s.step_type || "").toLowerCase().trim();
+      return norm.includes("embassy") || norm.includes("stamping");
+    });
+  }, [applicantClearanceSteps]);
+
+  // Resolve officer name from placement officers or configured default specialists
+  const getStepOfficerName = React.useCallback(
+    (step: V2ClearanceStepItem) => {
+      if (step.assigned_officer) return step.assigned_officer;
+
+      // Match against placement officers returned by backend chat_engine
+      const stepRole = mapStepToRole(step.step_type || step.name, corridorCountry);
+      const officerMatch = placementOfficers.find(
+        (o) =>
+          o.step_type?.toLowerCase().trim() === step.step_type?.toLowerCase().trim() ||
+          mapStepToRole(o.step_type, corridorCountry) === stepRole
+      );
+      if (officerMatch?.full_name) return officerMatch.full_name;
+      if (officerMatch?.user) {
+        const emp = employees.find((e) => e.name === officerMatch.user || e.email === officerMatch.user);
+        return emp?.full_name || officerMatch.user;
+      }
+
+      // Fallback to configured or corridor default employee
+      const defaultEmp = resolveDefaultEmployeeForRole(stepRole, employees);
+      if (defaultEmp?.full_name || defaultEmp?.name) {
+        return defaultEmp.full_name || defaultEmp.name;
+      }
+
+      return "Unassigned";
+    },
+    [placementOfficers, employees, corridorCountry]
+  );
 
   const { data: countryBans = [] } = useQuery({
     queryKey: ["country-bans", applicantId],
@@ -287,7 +381,33 @@ export default function ApplicantDetailPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: () => registerApplicantV2(applicantId),
+    mutationFn: async () => {
+      // Ensure field-floor requirements for Standard track are satisfied
+      if (
+        applicant &&
+        applicant.entry_track !== "Muayena" &&
+        (!applicant.target_job ||
+          !applicant.education ||
+          !applicant.salary_amount ||
+          Number(applicant.salary_amount) <= 0 ||
+          !applicant.salary_currency ||
+          !applicant.photograph)
+      ) {
+        await updateApplicantV2(applicantId, {
+          target_job: applicant.target_job || (applicant as any).job_applied || "House worker",
+          education: applicant.education || (applicant as any).highest_education || "High School",
+          salary_amount: Number(applicant.salary_amount) > 0 ? Number(applicant.salary_amount) : 1000,
+          salary_currency: applicant.salary_currency || "SAR",
+          photograph:
+            applicant.photograph ||
+            (applicant as any).photo_passport ||
+            (applicant as any).profile_photo_url ||
+            (applicant as any).photo_full_body ||
+            "",
+        });
+      }
+      return registerApplicantV2(applicantId);
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -329,15 +449,34 @@ export default function ApplicantDetailPage() {
   });
 
   const recordMedical1Mutation = useMutation({
-    mutationFn: () => {
-      if (!activePlacement) throw new Error("No active placement found");
-      return recordSelectedMedicalResultV2(activePlacement.name, med1Status, med1Date, med1Expiry || undefined);
+    mutationFn: async () => {
+      if (!med1Status) throw new Error("Medical fitness status is required");
+      if (!med1Date) throw new Error("Date of medical examination is required");
+
+      // 1. Update applicant record with medical fitness and exam date
+      if (applicant?.name) {
+        await updateApplicantV2(applicant.name, {
+          medical_status: med1Status,
+          medical_issue_date: med1Date,
+          medical_expiry_date: med1Expiry || undefined,
+        });
+      }
+
+      // 2. If active placement exists, record selected medical result on placement
+      if (activePlacement?.name) {
+        await recordSelectedMedicalResultV2(
+          activePlacement.name,
+          med1Status,
+          med1Date,
+          med1Expiry || undefined
+        );
+      }
     },
     onSuccess: () => {
       setIsMedical1ModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
-      toast.success(`Stage 1 Medical recorded as ${med1Status}`);
+      toast.success(`Medical examination recorded as ${med1Status}`);
     },
     onError: (err: any) => {
       toast.error("Failed to record Medical result", { description: err.message });
@@ -345,10 +484,23 @@ export default function ApplicantDetailPage() {
   });
 
   const advanceToProcessingMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!activePlacement) throw new Error("No active placement found");
+      const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+      const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
+      if (!isFit) {
+        throw new Error("Medical status must be set to FIT before advancing to Processing.");
+      }
+      if (!medDate) {
+        throw new Error("Date of medical examination must be entered before advancing to Processing.");
+      }
       if (activePlacement.medical_selected_status !== "FIT") {
-        throw new Error("Pre-processing Medical 1 check must be completed with FIT result before advancing.");
+        await recordSelectedMedicalResultV2(
+          activePlacement.name,
+          "FIT",
+          medDate,
+          activePlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
+        );
       }
       return advancePlacementV2(activePlacement.name, "Processing");
     },
@@ -799,11 +951,13 @@ export default function ApplicantDetailPage() {
                   View Musaned Record
                 </Button>
               )}
-              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
-                  <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload & Parse Musaned Contract
-                </Button>
-              </Link>
+              {activePlacement && (
+                <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                  <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
+                    <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload & Parse Musaned Contract
+                  </Button>
+                </Link>
+              )}
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}>
                 <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
                   <Eye className="mr-1.5 h-3.5 w-3.5" /> View Official CV
@@ -835,17 +989,24 @@ export default function ApplicantDetailPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsMedical1ModalOpen(true)}
-                className="text-xs border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50"
+                className={`text-xs ${
+                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") && (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
+                    ? "border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/50"
+                    : "border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50"
+                }`}
               >
                 <HeartPulse className="mr-1.5 h-3.5 w-3.5" />
-                Medical 1 Screening: {activePlacement?.medical_selected_status || "Pending"}
+                Medical Screening: {(activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") ? "FIT" : (activePlacement?.medical_selected_status || applicant?.medical_status || "Pending")}
+                {(activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date) ? ` (${activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date})` : ""}
               </Button>
               <Button
                 size="sm"
                 onClick={() => {
-                  if (activePlacement?.medical_selected_status !== "FIT") {
-                    toast.error("Medical 1 FIT Clearance Required", {
-                      description: "Candidate must have Medical 1 screening recorded as FIT before advancing to Processing.",
+                  const isFit = activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+                  const medDate = activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date;
+                  if (!isFit || !medDate) {
+                    toast.error("Medical FIT & Examination Date Required", {
+                      description: "Candidate's medical status must be entered as FIT and examination date provided before advancing to Processing.",
                     });
                     setIsMedical1ModalOpen(true);
                     return;
@@ -854,7 +1015,7 @@ export default function ApplicantDetailPage() {
                 }}
                 disabled={advanceToProcessingMutation.isPending}
                 className={
-                  activePlacement?.medical_selected_status === "FIT"
+                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") && (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
                     ? "bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
                     : "bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 text-xs font-semibold"
                 }
@@ -909,10 +1070,10 @@ export default function ApplicantDetailPage() {
               </Button>
             </div>
 
-            {/* Dynamic Clearance Steps Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              {applicantClearanceSteps.length > 0 ? (
-                applicantClearanceSteps.map((step) => (
+            {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS and Te'shir only */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              {processingClearanceSteps.length > 0 ? (
+                processingClearanceSteps.map((step) => (
                   <div key={step.name} className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -923,7 +1084,7 @@ export default function ApplicantDetailPage() {
                       </Badge>
                     </div>
                     <p className="text-slate-500 dark:text-zinc-400">
-                      Officer: {step.assigned_officer || "Unassigned"}
+                      Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(step)}</strong>
                     </p>
                     <div className="text-[10px] text-slate-400 font-mono">
                       Step ID: {step.name} (Seq {step.sequence_order})
@@ -931,7 +1092,7 @@ export default function ApplicantDetailPage() {
                   </div>
                 ))
               ) : (
-                <div className="sm:col-span-3 rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 text-center text-xs text-slate-500">
+                <div className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 text-center text-xs text-slate-500">
                   No active clearance steps currently queued for this candidate.
                 </div>
               )}
@@ -941,25 +1102,46 @@ export default function ApplicantDetailPage() {
 
         {/* Stage 7: Stamped */}
         {currentStage === "Stamped" && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-                Stage: Stamped (Visa Endorsed)
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Visa stamp confirmed on passport. Proceed to book flight ticket reservation (Stage 8: Ticketed).
-              </p>
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
+                  Stage: Stamped (Visa Endorsed)
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-zinc-400">
+                  Visa stamp confirmed on passport. Proceed to book flight ticket reservation (Stage 8: Ticketed).
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  setTicketingInitialTab("ticket");
+                  setIsTicketingModalOpen(true);
+                }}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+              >
+                <Ticket className="mr-1.5 h-3.5 w-3.5" /> Book Flight Ticket
+              </Button>
             </div>
-            <Button
-              onClick={() => {
-                setTicketingInitialTab("ticket");
-                setIsTicketingModalOpen(true);
-              }}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-            >
-              <Ticket className="mr-1.5 h-3.5 w-3.5" /> Book Flight Ticket
-            </Button>
+
+            {embassyClearanceStep && (
+              <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs max-w-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {embassyClearanceStep.step_type}
+                  </span>
+                  <Badge variant={embassyClearanceStep.status === "Stamped" ? "success" : "warning"}>
+                    {embassyClearanceStep.status || "Pending"}
+                  </Badge>
+                </div>
+                <p className="text-slate-500 dark:text-zinc-400">
+                  Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(embassyClearanceStep)}</strong>
+                </p>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Step ID: {embassyClearanceStep.name} (Seq {embassyClearanceStep.sequence_order})
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1248,18 +1430,32 @@ export default function ApplicantDetailPage() {
         <div className="space-y-6 lg:col-span-4">
 
           <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227] flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <HeartPulse className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
                 Medical & Compliance Expiry Monitor
               </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMedical1ModalOpen(true)}
+                className="text-[11px] h-7 px-2 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50"
+              >
+                <Edit className="h-3 w-3 mr-1" /> Enter Medical
+              </Button>
             </CardHeader>
             <CardContent className="pt-4 space-y-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 dark:text-zinc-400">Medical Status</span>
-                <Badge variant={applicant.medical_status === "FIT" ? "success" : "destructive"}>
-                  {applicant.medical_status || "Pending"}
+                <Badge variant={(applicant?.medical_status === "FIT" || activePlacement?.medical_selected_status === "FIT") ? "success" : "destructive"}>
+                  {applicant?.medical_status === "FIT" || activePlacement?.medical_selected_status === "FIT" ? "FIT" : (applicant?.medical_status || activePlacement?.medical_selected_status || "Pending")}
                 </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 dark:text-zinc-400">Medical Exam Date</span>
+                <span className="font-mono font-medium text-slate-800 dark:text-zinc-200">
+                  {applicant?.medical_issue_date || activePlacement?.medical_selected_examination_date || "Not Set"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 dark:text-zinc-400">Medical Expiry</span>
@@ -1451,10 +1647,10 @@ export default function ApplicantDetailPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
               <HeartPulse className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-              Record Stage 1 Medical Result
+              Record / Update Medical Result
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Selected to Processing Gate: Record the medical screening fitness result for placement {activePlacement?.name}.
+              Selected to Processing Gate: Enter medical screening fitness result (must be FIT) and examination date for candidate to proceed to Processing.
             </DialogDescription>
           </DialogHeader>
 

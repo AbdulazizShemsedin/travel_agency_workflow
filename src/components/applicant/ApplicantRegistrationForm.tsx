@@ -33,6 +33,7 @@ import {
   generateCvV2,
   getApplicantV2,
   logApplicantFeeV2,
+  normalizeApplicantFields,
   ApiV2Error,
 } from "@/lib/api/v2";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
@@ -188,6 +189,16 @@ export function ApplicantRegistrationForm({
   const [applicantState, setApplicantState] = React.useState<string>("Draft");
   const [activeSection, setActiveSection] = React.useState<string>("section-personal");
 
+  // Session-level guard: once the fee is successfully logged (in this form session),
+  // never attempt to log it again regardless of stale initialData.
+  const feeAlreadyLoggedRef = React.useRef<boolean>(
+    Boolean(
+      initialData?.fee_transaction ||
+      (initialData?.fee_status && initialData.fee_status !== "Pending") ||
+      (initialData as any)?.registration_fee_status === "Paid"
+    )
+  );
+
   // Dialog state
   const [isConfirmRegisterOpen, setIsConfirmRegisterOpen] = React.useState(false);
 
@@ -216,10 +227,12 @@ export function ApplicantRegistrationForm({
       date_of_birth: initialData?.date_of_birth || "",
       passport_number: initialData?.passport_number || "",
       passport_issue_date: initialData?.passport_issue_date || "",
-      passport_expiry: initialData?.passport_expiry || "",
-      place_of_issue: initialData?.place_of_issue || "",
-      job_applied: initialData?.job_applied || "House worker",
-      highest_education: initialData?.highest_education || "",
+      passport_expiry: initialData?.passport_expiry || initialData?.passport_expiry_date || "",
+      place_of_issue: initialData?.place_of_issue || initialData?.passport_issue_place || "",
+      job_applied: initialData?.job_applied || initialData?.target_job || "House worker",
+      target_job: initialData?.target_job || initialData?.job_applied || "House worker",
+      highest_education: initialData?.highest_education || initialData?.education || "",
+      education: initialData?.education || initialData?.highest_education || "",
       institution: initialData?.institution || "",
       graduation_year: initialData?.graduation_year ?? undefined,
       current_employer: initialData?.current_employer || "",
@@ -228,7 +241,9 @@ export function ApplicantRegistrationForm({
       arabic_level: initialData?.arabic_level || "",
       experience_country: initialData?.experience_country || "",
       experience_period: initialData?.experience_period || "",
-      monthly_salary: initialData?.monthly_salary || "1000",
+      monthly_salary: initialData?.monthly_salary || (initialData?.salary_amount ? String(initialData.salary_amount) : "1000"),
+      salary_amount: initialData?.salary_amount || (initialData?.monthly_salary ? Number(initialData.monthly_salary) : 1000),
+      salary_currency: initialData?.salary_currency || "SAR",
       complexion: initialData?.complexion || "FAIR",
       skill_cleaning:
         initialData?.skill_cleaning !== undefined
@@ -333,8 +348,11 @@ export function ApplicantRegistrationForm({
       education_remarks: initialData?.education_remarks || "",
       fee_required: initialData?.fee_required || false,
       registration_fee_amount: initialData?.registration_fee_amount || 0,
-      profile_photo_url: initialData?.profile_photo_url || "",
-      photo_passport: initialData?.photo_passport || "",
+      fee_transaction: initialData?.fee_transaction || "",
+      fee_status: initialData?.fee_status || "Pending",
+      profile_photo_url: initialData?.profile_photo_url || initialData?.photograph || "",
+      photo_passport: initialData?.photo_passport || initialData?.photograph || "",
+      photograph: initialData?.photograph || initialData?.photo_passport || initialData?.profile_photo_url || "",
       photo_full_body: initialData?.photo_full_body || "",
       passport_scan: initialData?.passport_scan || "",
     },
@@ -344,9 +362,22 @@ export function ApplicantRegistrationForm({
 
   React.useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
+      const normalizedInit = normalizeApplicantFields(initialData);
       reset({
         ...getValues(),
-        ...initialData,
+        ...normalizedInit,
+        job_applied: normalizedInit.job_applied || normalizedInit.target_job || getValues("job_applied") || "House worker",
+        target_job: normalizedInit.target_job || normalizedInit.job_applied || getValues("target_job") || "House worker",
+        highest_education: normalizedInit.highest_education || normalizedInit.education || getValues("highest_education") || "High School",
+        education: normalizedInit.education || normalizedInit.highest_education || getValues("education") || "High School",
+        monthly_salary: normalizedInit.monthly_salary || (normalizedInit.salary_amount ? String(normalizedInit.salary_amount) : getValues("monthly_salary") || "1000"),
+        salary_amount: normalizedInit.salary_amount || (normalizedInit.monthly_salary ? Number(normalizedInit.monthly_salary) : getValues("salary_amount") || 1000),
+        salary_currency: normalizedInit.salary_currency || getValues("salary_currency") || "SAR",
+        complexion: normalizedInit.complexion || getValues("complexion") || "FAIR",
+        fee_transaction: normalizedInit.fee_transaction || initialData?.fee_transaction || getValues("fee_transaction") || "",
+        fee_status: normalizedInit.fee_status || initialData?.fee_status || getValues("fee_status") || "Pending",
+        photograph: normalizedInit.photograph || normalizedInit.photo_passport || normalizedInit.profile_photo_url || normalizedInit.photo_full_body || getValues("photograph") || "",
+        photo_passport: normalizedInit.photo_passport || normalizedInit.photograph || normalizedInit.profile_photo_url || normalizedInit.photo_full_body || getValues("photo_passport") || "",
       });
       if (existingApplicantId) {
         setDraftApplicantId(existingApplicantId);
@@ -447,14 +478,22 @@ export function ApplicantRegistrationForm({
         throw new Error(friendlyMsg || "Please fill in all required fields marked in red.");
       }
 
-      const payload = {
+      const payload = normalizeApplicantFields({
         ...formData,
         full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
         gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
         nationality: formData.nationality || "Ethiopia",
         entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
         destination_country: formData.destination_country || "Saudi Arabia",
-      };
+        target_job: formData.target_job || formData.job_applied || "House worker",
+        job_applied: formData.job_applied || formData.target_job || "House worker",
+        education: formData.education || formData.highest_education || "High School",
+        highest_education: formData.highest_education || formData.education || "High School",
+        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+        salary_currency: formData.salary_currency || "SAR",
+        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+      });
 
       let res;
       if (draftApplicantId) {
@@ -464,11 +503,25 @@ export function ApplicantRegistrationForm({
       }
 
       const activeId = res?.name || draftApplicantId;
-      if (activeId && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
+      const isFeeAlreadyLoggedOnDraft =
+        feeAlreadyLoggedRef.current ||
+        Boolean(
+          formData.fee_transaction ||
+          (formData.fee_status && formData.fee_status !== "Pending") ||
+          initialData?.fee_transaction ||
+          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
+          (initialData as any)?.registration_fee_status === "Paid"
+        );
+      if (activeId && !isFeeAlreadyLoggedOnDraft && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
         try {
           await logApplicantFeeV2(activeId);
+          feeAlreadyLoggedRef.current = true;
         } catch (feeErr: any) {
-          console.warn("Auto-log applicant fee on draft save:", feeErr);
+          if (String(feeErr?.message || "").includes("already logged")) {
+            feeAlreadyLoggedRef.current = true;
+          } else {
+            console.warn("Auto-log applicant fee on draft save:", feeErr);
+          }
         }
       }
       return res;
@@ -496,16 +549,38 @@ export function ApplicantRegistrationForm({
     mutationFn: async () => {
       if (!draftApplicantId) throw new Error("No applicant ID available to update.");
       const formData = getValues();
-      const payload = {
+      const payload = normalizeApplicantFields({
         ...formData,
         full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-      };
+        target_job: formData.target_job || formData.job_applied || "House worker",
+        job_applied: formData.job_applied || formData.target_job || "House worker",
+        education: formData.education || formData.highest_education || "High School",
+        highest_education: formData.highest_education || formData.education || "High School",
+        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+        salary_currency: formData.salary_currency || "SAR",
+        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+      });
       const res = await updateApplicantV2(draftApplicantId, payload);
-      if (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0)) {
+      const isFeeAlreadyLoggedOnSave =
+        feeAlreadyLoggedRef.current ||
+        Boolean(
+          formData.fee_transaction ||
+          (formData.fee_status && formData.fee_status !== "Pending") ||
+          initialData?.fee_transaction ||
+          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
+          (initialData as any)?.registration_fee_status === "Paid"
+        );
+      if (!isFeeAlreadyLoggedOnSave && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
         try {
           await logApplicantFeeV2(draftApplicantId);
+          feeAlreadyLoggedRef.current = true;
         } catch (feeErr: any) {
-          console.warn("Auto-log applicant fee on save changes:", feeErr);
+          if (String(feeErr?.message || "").includes("already logged")) {
+            feeAlreadyLoggedRef.current = true;
+          } else {
+            console.warn("Auto-log applicant fee on save changes:", feeErr);
+          }
         }
       }
       return res;
@@ -553,14 +628,22 @@ export function ApplicantRegistrationForm({
       }
 
       let activeId = draftApplicantId;
-      const payload = {
+      const payload = normalizeApplicantFields({
         ...formData,
         full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
         gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
         nationality: formData.nationality || "Ethiopia",
         entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
         destination_country: formData.destination_country || "Saudi Arabia",
-      };
+        target_job: formData.target_job || formData.job_applied || "House worker",
+        job_applied: formData.job_applied || formData.target_job || "House worker",
+        education: formData.education || formData.highest_education || "High School",
+        highest_education: formData.highest_education || formData.education || "High School",
+        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+        salary_currency: formData.salary_currency || "SAR",
+        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+      });
 
       if (!activeId) {
         const draft = await createApplicantV2(payload);
@@ -571,11 +654,25 @@ export function ApplicantRegistrationForm({
       }
 
       const regRes = await registerApplicantV2(activeId);
-      if (activeId && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
+      const isFeeAlreadyLoggedOnRegister =
+        feeAlreadyLoggedRef.current ||
+        Boolean(
+          formData.fee_transaction ||
+          (formData.fee_status && formData.fee_status !== "Pending") ||
+          initialData?.fee_transaction ||
+          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
+          (initialData as any)?.registration_fee_status === "Paid"
+        );
+      if (activeId && !isFeeAlreadyLoggedOnRegister && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
         try {
           await logApplicantFeeV2(activeId);
+          feeAlreadyLoggedRef.current = true;
         } catch (feeErr: any) {
-          console.warn("Auto-log applicant fee on registration:", feeErr);
+          if (String(feeErr?.message || "").includes("already logged")) {
+            feeAlreadyLoggedRef.current = true;
+          } else {
+            console.warn("Auto-log applicant fee on registration:", feeErr);
+          }
         }
       }
       return regRes;

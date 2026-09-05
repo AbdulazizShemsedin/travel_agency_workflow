@@ -28,6 +28,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     register,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = form;
 
@@ -70,6 +71,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     if (photoToRemove === "portrait") {
       setValue("profile_photo_url", "" as any, { shouldDirty: true });
       setValue("photo_passport", "" as any, { shouldDirty: true });
+      setValue("photograph" as any, "" as any, { shouldDirty: true });
       setPhotoPreview(null);
       toast.success("Passport photo removed");
     } else if (photoToRemove === "fullbody") {
@@ -292,6 +294,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         if (fileUrl) {
           setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
           setValue("photo_passport", fileUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("photograph" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
           toast.success("Portrait photo uploaded successfully!");
         } else {
           toast.error("Failed to obtain server file URL for photo. Please retry.");
@@ -316,6 +319,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         const fileUrl = res?.file_url || "";
         if (fileUrl) {
           setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });
+          if (!getValues("photograph")) {
+            setValue("photograph" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+          }
+          if (!getValues("photo_passport")) {
+            setValue("photo_passport" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+          }
+          if (!getValues("profile_photo_url")) {
+            setValue("profile_photo_url" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+          }
           toast.success("Full body photo uploaded successfully!");
         } else {
           toast.error("Failed to obtain server file URL for full-body photo. Please retry.");

@@ -193,13 +193,24 @@ export default function PlacementDocumentCenterPage() {
 
     setIsApprovingContract(true);
     try {
-      // 1. Enforce Medical 1 (Selected stage) is recorded as FIT per state machine rule
-      if (activePlacement.medical_selected_status !== "FIT") {
-        toast.error("Medical 1 FIT Clearance Required", {
-          description: "Candidate's Stage 1 Medical examination must be recorded as FIT before approving the contract and advancing to Processing.",
+      // 1. Enforce Medical (Selected stage) is recorded as FIT with an exam date per state machine rule
+      const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+      const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
+      if (!isFit || !medDate) {
+        toast.error("Medical FIT Clearance Required", {
+          description: "Candidate's Medical examination must be recorded as FIT with an examination date before approving the contract and advancing to Processing.",
         });
         setIsApprovingContract(false);
         return;
+      }
+
+      if (activePlacement.medical_selected_status !== "FIT") {
+        await recordSelectedMedicalResultV2(
+          activePlacement.name,
+          "FIT",
+          medDate,
+          activePlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
+        );
       }
 
       // 2. Advance Placement to Processing stage

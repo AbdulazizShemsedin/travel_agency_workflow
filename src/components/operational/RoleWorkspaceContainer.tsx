@@ -32,6 +32,8 @@ export function RoleWorkspaceContainer() {
   const isAdmin = React.useMemo<boolean>(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
     if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    // Use the authoritative permission check (covers System Manager, Administrator, Admin, Manager, Agency Admin)
+    if (can("manageUsers")) return true;
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
       const norm = String(r).trim().toLowerCase();
@@ -39,10 +41,13 @@ export function RoleWorkspaceContainer() {
         norm === "system manager" ||
         norm === "administrator" ||
         norm === "manager" ||
+        norm === "agency admin" ||
+        norm === "admin" ||
         norm === "agency admin"
       );
     });
-  }, [authUser, roles]);
+  }, [authUser, roles, can]);
+
 
   const canRegister = can("registerApplicant");
 
@@ -121,6 +126,18 @@ export function RoleWorkspaceContainer() {
       prefTab = "lms";
     }
 
+    // Fallback: internal staff member with unrecognized role → grant full access
+    // This handles production admin users whose Frappe role names don't match the keyword list above
+    const isInternalStaff = authUser?.is_internal_staff === true;
+    const hasNoSpecialistRole = allowed.filter((t) => t !== "directory" && t !== "clearance").length === 0;
+    if (isInternalStaff && hasNoSpecialistRole) {
+      return {
+        availableTabs: allTabsConfig,
+        defaultTab: "directory",
+        defaultCorridor: prefCorridor,
+      };
+    }
+
     // Always ensure directory tab is visible as the primary overview
     if (!allowed.includes("directory")) {
       allowed.unshift("directory");
@@ -137,7 +154,7 @@ export function RoleWorkspaceContainer() {
       defaultTab: "directory",
       defaultCorridor: prefCorridor,
     };
-  }, [isAdmin, roles]);
+  }, [isAdmin, roles, authUser, can]);
 
   const rolesKey = React.useMemo(() => (roles || []).join(","), [roles]);
 

@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **80** | **27** | **52** | **0** | **0** | **0** | **1** |
+| **80** | **29** | **50** | **0** | **0** | **0** | **1** |
 
 ---
 
@@ -24,7 +24,7 @@
 | 2 | **CSRF Token Lifecycle & Caching** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. In-memory caching and transparent header attachment operational. |
 | 3 | **Current User Context & Role Rehydration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. AuthProvider rehydrates 16 canonical V2 roles. |
 | 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
-| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. Auto-submits registration fee to finance. |
+| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified on Railway backend: field-floor normalization for Standard track (target_job, education, salary_amount, salary_currency, photograph with full-body photo support) prevents 417 floor validation errors. |
 | 6 | **Applicant Profile Retrieval & Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on query error; empty list preserved as empty. |
 | 7 | **Applicant Full Editing & Uniqueness Validation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Multi-entry fee logging integrated with auto-save submission. |
 | 8 | **Applicant LMIS Fast-Path Editing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Reusable LmisFastPathModal built & integrated into clearance queue drawer & applicant profile calling update_applicant_for_lmis (TODO-P2-01). |
@@ -56,7 +56,7 @@
 | 34 | **Embassy Step Thursday Stamping Outcome** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls stamp_embassy_step with visa sticker reference. |
 | 35 | **Embassy Step Thursday Rejection Outcome** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls reject_embassy_step with required remark. |
 | 36 | **Clearance Step Reassignment to Officer** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Replaces legacy assignment with V2 reassign_clearance_step, CLR-.##### identifiers, User.name convention, and Manager/Admin RBAC. |
-| 37 | **Placement Officers Assigned Introspection** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced from chat_engine.get_placement_officers; populates active officers in reassignment modal. |
+| 37 | **Placement Officers Assigned Introspection** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Sourced from chat_engine.get_placement_officers; populates active officers in reassignment modal and dynamically resolves Officer name tag on clearance step cards with default specialist fallback. |
 | 38 | **User & System Employee Management** | YES | NO | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | In-app staff creation, editing, role assignment, and password reset via native frappe.client.* RPCs without Frappe Desk. |
 | 39 | **Stage Expense & Income Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on logging error; honest ApiV2Error thrown. |
 | 40 | **Transaction Approval Queue & Actions (Approve/Reject/Void)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pending approval queue tab integrated in /expenses-income calling approve_transaction, reject_transaction, and void_transaction (TODO-P1-05). |
@@ -82,8 +82,8 @@
 | 60 | **Complaint Acknowledgment (New -> Unresolved)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Test live state transition on live complaint. |
 | 61 | **Complaint Resolution & Free Replacement (90d Window)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify free replacement complaint link to new candidate selection. |
 | 62 | **Chat Workspace & Thread Listing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Complete /chat page with reactive thread list and sidebar link (TODO-P1-01). |
-| 63 | **Foreign Agency Chat Thread Isolation** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Agency threads isolated and routed automatically server-side via create_agency_thread (TODO-P1-01). |
-| 64 | **Internal Staff Thread Creation & Participant Management** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via create_internal_thread and add_participant dialogs in /chat (TODO-P1-01). |
+| 63 | **Foreign Agency Chat Thread Isolation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified bilateral routing via create_agency_thread returning Agency thread with strict contractor boundary isolation. |
+| 64 | **Internal Staff Thread Creation & Participant Management** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified create_internal_thread with clean separation of internal colleagues and contractor partners, preventing 417 ValidationError. |
 | 65 | **Chat Messaging, Attachments, and Mentions** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via send_message with upload_file attachment pipeline and applicant/placement mentions (TODO-P1-01). |
 | 66 | **Thread Mark Read & Unread Badge Tracking** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Auto-triggered mark_read on thread selection with real-time unread badge counts (TODO-P1-01). |
 | 67 | **Web Push Notification Subscription & Status** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Sourced via getPushSubscriptionStatusV2, subscribeToPushV2, and getVapidPublicKeyV2 with dynamic key discovery. |

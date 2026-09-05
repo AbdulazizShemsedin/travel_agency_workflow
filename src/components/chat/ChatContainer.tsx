@@ -164,8 +164,8 @@ export function ChatContainer() {
   const [isNewThreadModalOpen, setIsNewThreadModalOpen] = React.useState<boolean>(false);
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = React.useState<boolean>(false);
 
-  // New Thread Form State: default to "Agency" for Foreign Agency or for staff communicating with agencies
-  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">("Agency");
+  // New Thread Form State: default to "Internal" for internal staff, "Agency" for Foreign Agency
+  const [newThreadType, setNewThreadType] = React.useState<"Internal" | "Agency">("Internal");
   const [newThreadRecipient, setNewThreadRecipient] = React.useState<string>("");
   const [selectedContractorId, setSelectedContractorId] = React.useState<string>("");
   const [newThreadContextType, setNewThreadContextType] = React.useState<string>("General");
@@ -175,13 +175,10 @@ export function ChatContainer() {
   React.useEffect(() => {
     if (isForeignAgency) {
       setNewThreadType("Agency");
-    } else if (canCommunicateWithForeignAgents) {
-      // Default to Agency if staff can chat with Foreign Agencies, or Internal if preferred
-      setNewThreadType("Agency");
     } else {
       setNewThreadType("Internal");
     }
-  }, [isForeignAgency, canCommunicateWithForeignAgents]);
+  }, [isForeignAgency]);
 
   // Add Participant Form State
   const [newParticipantEmail, setNewParticipantEmail] = React.useState<string>("");
@@ -224,6 +221,36 @@ export function ChatContainer() {
     enabled: canCommunicateWithForeignAgents,
     staleTime: 60000,
   });
+
+  // Filter internal staff for internal-to-internal colleague chats (excludes contractor logins & foreign agents)
+  const internalColleagues = React.useMemo(() => {
+    const contractorEmails = new Set<string>();
+    availableContractors.forEach((c: any) => {
+      if (c.user) contractorEmails.add(c.user.toLowerCase().trim());
+      if (c.user_email) contractorEmails.add(c.user_email.toLowerCase().trim());
+      if (c.email) contractorEmails.add(c.email.toLowerCase().trim());
+      if (c.name) contractorEmails.add(c.name.toLowerCase().trim());
+    });
+
+    return internalEmployees.filter((emp: any) => {
+      const email = (emp.email || "").toLowerCase().trim();
+      const name = (emp.name || "").toLowerCase().trim();
+      const isSelf = email === currentEmail || name === currentEmail;
+      if (isSelf) return false;
+
+      // Exclude contractor logins
+      if (contractorEmails.has(email) || contractorEmails.has(name)) return false;
+
+      // Exclude users with Foreign Agency / Agent role
+      const empRoles = (emp.roles || []).map((r: string) => String(r).toLowerCase().trim());
+      const isForeignAgent = empRoles.some(
+        (r: string) => r === "foreign agency" || r === "foreign agent" || r === "agent"
+      );
+      if (isForeignAgent) return false;
+
+      return true;
+    });
+  }, [internalEmployees, availableContractors, currentEmail]);
 
   // Queries for Mention Applicant Dropdown Filtering
   const { data: allApplicants = [] } = useQuery({
@@ -785,19 +812,31 @@ export function ChatContainer() {
         // Strictly uses createAgencyThreadV2 to prevent "A Foreign Agency user can only be a participant in an Agency-type thread"
         return await createAgencyThreadV2();
       } else {
-        if (canCommunicateWithForeignAgents && newThreadType === "Agency") {
+        const trimmedRecipient = newThreadRecipient.trim();
+        const matchingContractor = availableContractors.find((c: any) => {
+          const rec = trimmedRecipient.toLowerCase();
+          return (
+            (c.name && c.name.toLowerCase() === rec) ||
+            (c.user && c.user.toLowerCase() === rec) ||
+            (c.user_email && c.user_email.toLowerCase() === rec) ||
+            (c.email && c.email.toLowerCase() === rec)
+          );
+        });
+
+        if (canCommunicateWithForeignAgents && (newThreadType === "Agency" || matchingContractor || selectedContractorId)) {
           // Internal staff (Admin or Communication Manager) initiating thread with Foreign Agency partner
-          if (!selectedContractorId) {
+          const contractorTarget = selectedContractorId || matchingContractor?.name;
+          if (!contractorTarget) {
             throw new Error("Please select a Foreign Agency partner.");
           }
-          return await createAgencyThreadV2(selectedContractorId);
+          return await createAgencyThreadV2(contractorTarget);
         } else {
           // Internal staff colleague discussion
-          if (!newThreadRecipient.trim() || (!newThreadRecipient.includes("@") && newThreadRecipient.trim() !== "Administrator")) {
+          if (!trimmedRecipient || (!trimmedRecipient.includes("@") && trimmedRecipient !== "Administrator")) {
             throw new Error("Please select an internal colleague from the dropdown.");
           }
           return await createInternalThreadV2(
-            newThreadRecipient.trim(),
+            trimmedRecipient,
             newThreadContextType,
             newThreadContextRef.trim() || undefined
           );
@@ -805,10 +844,11 @@ export function ChatContainer() {
       }
     },
     onSuccess: (res: any) => {
+      const isAgencyThread = isForeignAgency || newThreadType === "Agency" || Boolean(selectedContractorId);
       toast.success(
         isForeignAgency
           ? "Staff conversation ready"
-          : newThreadType === "Agency"
+          : isAgencyThread
           ? "Foreign Agency partner channel opened"
           : "Conversation thread initialized successfully"
       );
@@ -826,7 +866,7 @@ export function ChatContainer() {
       if (threadName) {
         setSelectedThread({
           name: threadName,
-          thread_type: isForeignAgency || newThreadType === "Agency" ? "Agency" : "Internal",
+          thread_type: isAgencyThread ? "Agency" : "Internal",
         });
         setIsMobileThreadOpen(true);
       }
@@ -1907,20 +1947,14 @@ export function ChatContainer() {
                         className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
                       >
                         <option value="">-- Select Internal Staff Member --</option>
-                        {internalEmployees
-                          .filter((emp: any) => {
-                            const isSelf = emp.email?.toLowerCase() === currentEmail || emp.name?.toLowerCase() === currentEmail;
-                            const isForeignAgent = (emp.roles || []).some((r: string) => r.toLowerCase().trim() === "foreign agency" || r.toLowerCase().trim() === "foreign agent");
-                            return !isSelf && !isForeignAgent;
-                          })
-                          .map((emp: any) => {
-                            const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
-                            return (
-                              <option key={emp.email || emp.name} value={emp.email || emp.name}>
-                                {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
-                              </option>
-                            );
-                          })}
+                        {internalColleagues.map((emp: any) => {
+                          const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
+                          return (
+                            <option key={emp.email || emp.name} value={emp.email || emp.name}>
+                              {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
 

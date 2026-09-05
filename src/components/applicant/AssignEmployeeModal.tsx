@@ -7,18 +7,12 @@ import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import {
   UserCheck,
   ShieldCheck,
-  Building2,
-  Check,
-  Layers,
-  Loader2,
+  FileCheck2,
   Globe2,
-  ArrowRight,
+  Plane,
+  Loader2,
+  Check,
   UserCog,
-  AlertCircle,
-  Lock,
-  CheckCircle2,
-  Mail,
-  User,
   Sparkles,
 } from "lucide-react";
 import {
@@ -33,7 +27,8 @@ import {
   V2EmployeeRecord,
   resolveDefaultEmployeeForRole,
   mapStepToRole,
-  autoAssignPlacementCorridorSteps,
+  getSavedDefaultRoleAssignments,
+  saveDefaultRoleAssignments,
 } from "@/lib/api/v2";
 import {
   Dialog,
@@ -46,9 +41,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { useAuth } from "@/components/providers/AuthProvider";
-import { cn } from "@/lib/utils";
 
 export interface AssignEmployeeModalProps {
   isOpen: boolean;
@@ -67,6 +59,14 @@ export interface AssignEmployeeModalProps {
   onSuccess?: () => void;
 }
 
+interface StageDefinition {
+  key: "lmis" | "teshir" | "embassy" | "ticket";
+  title: string;
+  roleName: string;
+  description: string;
+  icon: React.ElementType;
+}
+
 export function AssignEmployeeModal({
   isOpen,
   onClose,
@@ -82,32 +82,15 @@ export function AssignEmployeeModal({
   onSuccess,
 }: AssignEmployeeModalProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
 
-  // 1. RBAC Check: Manager / Admin only per contract
-  const isManagerOrAdmin = React.useMemo<boolean>(() => {
-    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return (
-        norm === "system manager" ||
-        norm === "administrator" ||
-        norm === "manager" ||
-        norm === "agency admin"
-      );
-    });
-  }, [authUser, roles]);
-
-  // Target candidate name & id
+  // Target candidate name & ID
   const targetApplicantId = propApplicantId || applicantIds[0];
   const targetApplicantName =
     propApplicantName ||
     applicantNames[0] ||
     (targetApplicantId ? `Candidate ${targetApplicantId}` : "Selected Candidate");
 
-  // 2. Fetch Placements to find linked active placement
+  // 1. Fetch Placements to find active placement
   const { data: placements = [] } = useQuery<V2PlacementRecord[]>({
     queryKey: ["v2_placements_for_reassign"],
     queryFn: () => listPlacementsV2(),
@@ -115,58 +98,46 @@ export function AssignEmployeeModal({
     staleTime: 10000,
   });
 
-  const activePlacement = React.useMemo(() => {
-    if (propPlacementName) {
-      return { name: propPlacementName, destination_country: propCountry };
-    }
+  const placementRecord = React.useMemo(() => {
     if (targetApplicantId) {
-      return placements.find((p) => p.applicant === targetApplicantId);
+      return placements.find((p) => p.applicant === targetApplicantId) || null;
     }
     return null;
-  }, [propPlacementName, propCountry, targetApplicantId, placements]);
+  }, [targetApplicantId, placements]);
 
-  // 3. Fetch Clearance Steps linked to active placement / queue
-  const { data: clearanceSteps = [], isLoading: isStepsLoading } = useQuery<V2ClearanceStepItem[]>({
+  const activePlacementName = propPlacementName || placementRecord?.name || "";
+  const resolvedCountry =
+    propCountry || placementRecord?.destination_country || "Saudi Arabia";
+  const isKuwait = resolvedCountry.toLowerCase().includes("kuwait");
+
+  // 2. Fetch clearance steps
+  const { data: clearanceSteps = [] } = useQuery<V2ClearanceStepItem[]>({
     queryKey: ["v2_clearance_steps_for_reassign"],
     queryFn: listMyClearanceStepsV2,
     enabled: isOpen,
     staleTime: 10000,
   });
 
-  // Filter steps for this placement if placement known
   const availablePlacementSteps = React.useMemo<V2ClearanceStepItem[]>(() => {
-    if (propStepName) {
-      const found = clearanceSteps.find((s) => s.name === propStepName);
-      if (found) return [found];
-      return [
-        {
-          name: propStepName,
-          step_type: propStepType || "Clearance Step",
-          placement: activePlacement?.name || "",
-          sequence_order: 1,
-          is_mandatory: 1,
-          status: "Pending",
-        },
-      ];
-    }
-
-    if (activePlacement?.name) {
-      const matched = clearanceSteps.filter((s) => s.placement === activePlacement.name);
+    if (activePlacementName) {
+      const matched = clearanceSteps.filter(
+        (s) => s.placement === activePlacementName || s.placement_name === activePlacementName
+      );
       if (matched.length > 0) return matched;
     }
-
     return clearanceSteps;
-  }, [propStepName, propStepType, activePlacement, clearanceSteps]);
+  }, [activePlacementName, clearanceSteps]);
 
-  // 4. Fetch placement officers via chat_engine.get_placement_officers
+  // 3. Fetch placement officers via chat_engine
   const { data: placementOfficers = [] } = useQuery({
-    queryKey: ["placement_officers", activePlacement?.name],
-    queryFn: () => (activePlacement?.name ? getPlacementOfficersV2(activePlacement.name) : Promise.resolve([])),
-    enabled: isOpen && !!activePlacement?.name,
+    queryKey: ["placement_officers", activePlacementName],
+    queryFn: () =>
+      activePlacementName ? getPlacementOfficersV2(activePlacementName) : Promise.resolve([]),
+    enabled: isOpen && !!activePlacementName,
     staleTime: 15000,
   });
 
-  // 5. Fetch all system employees (any role can be assigned)
+  // 4. Fetch all internal employees
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<V2EmployeeRecord[]>({
     queryKey: ["v2_employees_for_assign"],
     queryFn: () => listEmployeesV2(),
@@ -174,459 +145,281 @@ export function AssignEmployeeModal({
     staleTime: 30000,
   });
 
-  // Selected Clearance Step state
-  const [selectedStepName, setSelectedStepName] = React.useState<string>(
-    propStepName || (availablePlacementSteps[0]?.name ?? "")
+  // Canonical 4 Stages definition (LMIS, Te'shir, Embassy, Ticket)
+  const stages: StageDefinition[] = React.useMemo(
+    () => [
+      {
+        key: "lmis",
+        title: isKuwait ? "Kuwait LMIS" : "LMIS Clearance",
+        roleName: isKuwait ? "Kuwait LMIS" : "Saudi LMIS",
+        description: isKuwait
+          ? "Ministry work permit & labor clearance approval"
+          : "Ministry of Labor clearance, COC test tracking & approval",
+        icon: FileCheck2,
+      },
+      {
+        key: "teshir",
+        title: isKuwait ? "Kuwait Telesign" : "Te'shir Biometrics",
+        roleName: isKuwait ? "Kuwait Telesign" : "Saudi Taeshir",
+        description: isKuwait
+          ? "Telesign authentication & documentation references"
+          : "VFS Taeshir biometric appointments & Injaz fees",
+        icon: ShieldCheck,
+      },
+      {
+        key: "embassy",
+        title: isKuwait ? "Kuwait Embassy" : "Embassy Visa Stamping",
+        roleName: isKuwait ? "Kuwait Embassy" : "Saudi Embassy",
+        description: isKuwait
+          ? "Consular submission & document attestation"
+          : "Consular visa submission and stamping verification",
+        icon: Globe2,
+      },
+      {
+        key: "ticket",
+        title: "Ticketing & Departure",
+        roleName: "Ticketer",
+        description: "Flight reservation, final medical clearance & departure dispatch",
+        icon: Plane,
+      },
+    ],
+    [isKuwait]
   );
 
+  // Selected assignees for each of the 4 stages
+  const [stageAssignments, setStageAssignments] = React.useState<Record<string, string>>({
+    lmis: "",
+    teshir: "",
+    embassy: "",
+    ticket: "",
+  });
+
+  // Pre-fill dropdowns with respective default/assigned staff on modal open
   React.useEffect(() => {
-    if (propStepName) {
-      setSelectedStepName(propStepName);
-    } else if (availablePlacementSteps.length > 0 && !selectedStepName) {
-      setSelectedStepName(availablePlacementSteps[0].name);
-    }
-  }, [propStepName, availablePlacementSteps, selectedStepName]);
+    if (!isOpen || employees.length === 0) return;
 
-  const currentStepRecord = React.useMemo(() => {
-    return availablePlacementSteps.find((s) => s.name === selectedStepName);
-  }, [availablePlacementSteps, selectedStepName]);
+    const savedDefaults = getSavedDefaultRoleAssignments();
+    const resolvedDefaults: Record<string, string> = {};
 
-  // Proposed Assignee Officer email state
-  const [proposedOfficer, setProposedOfficer] = React.useState<string>("");
-  const [feedback, setFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null);
-
-  // Determine current assignee for selected step
-  const resolvedCurrentAssignee = React.useMemo<string>(() => {
-    if (propCurrentAssignee) return propCurrentAssignee;
-    if (currentStepRecord?.completed_by) return currentStepRecord.completed_by;
-
-    // Check if placementOfficers has an open assignment for this step type
-    const stepType = currentStepRecord?.step_type;
-    if (stepType && placementOfficers.length > 0) {
-      const match = placementOfficers.find(
-        (o) => o.step_type?.toLowerCase() === stepType.toLowerCase()
+    stages.forEach((stage) => {
+      // 1. Check if placement step exists with an already assigned officer
+      const existingStep = availablePlacementSteps.find(
+        (s) => mapStepToRole(s.step_type || s.name, resolvedCountry) === stage.roleName
       );
-      if (match?.user) return match.user;
-    }
+      if (existingStep?.assigned_officer) {
+        resolvedDefaults[stage.key] = existingStep.assigned_officer;
+        return;
+      }
 
-    return "Unassigned";
-  }, [propCurrentAssignee, currentStepRecord, placementOfficers]);
+      // 2. Check placement officers from chat_engine
+      const officerMatch = placementOfficers.find(
+        (o) => mapStepToRole(o.step_type, resolvedCountry) === stage.roleName
+      );
+      if (officerMatch?.user) {
+        resolvedDefaults[stage.key] = officerMatch.user;
+        return;
+      }
 
-  // Reset feedback on step change
-  React.useEffect(() => {
-    setFeedback(null);
-  }, [selectedStepName]);
+      // 3. Check configured default or role default from defaultRoles engine
+      const defaultEmp = resolveDefaultEmployeeForRole(stage.roleName, employees, savedDefaults);
+      if (defaultEmp?.name) {
+        resolvedDefaults[stage.key] = defaultEmp.name;
+        return;
+      }
 
-  // Reassignment Mutation executing reassign_clearance_step
-  const reassignMutation = useMutation({
-    mutationFn: async ({ stepName, officerEmail }: { stepName: string; officerEmail: string }) => {
-      setFeedback(null);
-      return await reassignClearanceStepV2(stepName, officerEmail.trim());
+      // 4. Fallback to first active employee holding this role
+      const roleMatch = employees.find((e) => {
+        if (!e.enabled) return false;
+        const userRoles = Array.isArray(e.roles) ? e.roles : [];
+        return userRoles.some(
+          (r) => r.toLowerCase().trim() === stage.roleName.toLowerCase().trim()
+        );
+      });
+      resolvedDefaults[stage.key] = roleMatch?.name || "";
+    });
+
+    setStageAssignments((prev) => {
+      const isIdentical =
+        prev.lmis === resolvedDefaults.lmis &&
+        prev.teshir === resolvedDefaults.teshir &&
+        prev.embassy === resolvedDefaults.embassy &&
+        prev.ticket === resolvedDefaults.ticket;
+      if (isIdentical) return prev;
+      return resolvedDefaults;
+    });
+  }, [isOpen, employees, availablePlacementSteps, placementOfficers, stages, resolvedCountry]);
+
+  // Handle dropdown value change for a stage
+  const handleStageChange = (stageKey: string, officerEmail: string) => {
+    setStageAssignments((prev) => ({
+      ...prev,
+      [stageKey]: officerEmail,
+    }));
+  };
+
+  // Save staff assignments for all 4 stages
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      let assignedCount = 0;
+      const errors: string[] = [];
+
+      // If active placement steps exist, assign/reassign directly via V2 API
+      if (activePlacementName) {
+        for (const stage of stages) {
+          const selectedOfficer = stageAssignments[stage.key];
+          if (!selectedOfficer) continue;
+
+          const matchingStep = availablePlacementSteps.find(
+            (s) => mapStepToRole(s.step_type || s.name, resolvedCountry) === stage.roleName
+          );
+
+          if (matchingStep?.name) {
+            try {
+              await assignClearanceStepV2(matchingStep.name, selectedOfficer);
+              assignedCount++;
+            } catch (err: any) {
+              try {
+                await reassignClearanceStepV2(matchingStep.name, selectedOfficer);
+                assignedCount++;
+              } catch (reErr: any) {
+                errors.push(`${stage.title}: ${reErr.message || "Failed to assign"}`);
+              }
+            }
+          }
+        }
+      }
+
+      // Also persist to default role assignments so advance_placement auto-assigns these exact specialists
+      const savedConfig = getSavedDefaultRoleAssignments();
+      const updatedConfig = { ...savedConfig };
+      stages.forEach((stage) => {
+        if (stageAssignments[stage.key]) {
+          updatedConfig[stage.roleName] = stageAssignments[stage.key];
+        }
+      });
+      saveDefaultRoleAssignments(updatedConfig);
+
+      return { assignedCount, errors };
     },
-    onSuccess: (data, variables) => {
-      const successMsg = `Successfully reassigned ${variables.stepName} to ${variables.officerEmail}`;
-      setFeedback({ type: "success", message: successMsg });
-      toast.success(successMsg);
-
-      // Invalidate relevant queries
+    onSuccess: ({ assignedCount, errors }) => {
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       queryClient.invalidateQueries({ queryKey: ["placement_officers"] });
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_for_reassign"] });
+      queryClient.invalidateQueries({ queryKey: ["my-clearance-steps"] });
       queryClient.invalidateQueries({ queryKey: ["placements"] });
 
-      if (onSuccess) onSuccess();
+      if (errors.length > 0 && assignedCount === 0) {
+        toast.error("Could not assign staff members", {
+          description: errors.join(" • "),
+        });
+      } else {
+        toast.success("Staff assignments updated successfully", {
+          description:
+            assignedCount > 0
+              ? `${assignedCount} clearance steps updated.`
+              : "Corridor specialists successfully configured for this candidate.",
+        });
+        if (onSuccess) onSuccess();
+        onClose();
+      }
     },
     onError: (err: any) => {
-      const errMsg = formatCleanErrorMessage(err) || "Failed to reassign clearance step. Please try again.";
-      setFeedback({ type: "error", message: errMsg });
-      toast.error("Reassignment could not be completed", {
-        description: errMsg,
+      toast.error("Failed to update staff assignments", {
+        description: formatCleanErrorMessage(err),
       });
     },
   });
 
-  const handleExecute = () => {
-    if (!selectedStepName) {
-      setFeedback({ type: "error", message: "Please select a valid clearance task." });
-      return;
-    }
-
-    if (!selectedStepName.startsWith("CLR-")) {
-      setFeedback({
-        type: "error",
-        message: "Please select a valid clearance task from the list.",
-      });
-      return;
-    }
-
-    const email = proposedOfficer.trim();
-    if (!email || !email.includes("@")) {
-      setFeedback({
-        type: "error",
-        message: "Please enter a valid officer email address.",
-      });
-      return;
-    }
-
-    reassignMutation.mutate({
-      stepName: selectedStepName,
-      officerEmail: email,
-    });
-  };
-
-  // Canonical role accounts suggestions
-  const suggestedOfficers = React.useMemo(() => {
-    const list = new Set<string>();
-
-    // From active placement officers
-    placementOfficers.forEach((o) => {
-      if (o.user) list.add(o.user);
-    });
-
-    // Country-specific canonical suggested roles
-    const dest = (activePlacement?.destination_country || propCountry || "").toLowerCase();
-    if (dest.includes("kuwait")) {
-      list.add("kuwait.lmis@agency.com");
-      list.add("kuwait.telesign@agency.com");
-      list.add("kuwait.embassy@agency.com");
-    } else {
-      list.add("saudi.lmis@agency.com");
-      list.add("saudi.taeshir@agency.com");
-      list.add("saudi.embassy@agency.com");
-    }
-    list.add("clearance.officer@agency.com");
-
-    return Array.from(list);
-  }, [placementOfficers, activePlacement, propCountry]);
-
-  // Determine corridor role and default employee for current selected step
-  const targetStepRole = React.useMemo(() => {
-    const stepLabel = currentStepRecord?.step_type || currentStepRecord?.name || "";
-    return mapStepToRole(stepLabel, activePlacement?.destination_country || propCountry);
-  }, [currentStepRecord, activePlacement, propCountry]);
-
-  const defaultOfficerForStep = React.useMemo(() => {
-    return resolveDefaultEmployeeForRole(targetStepRole, employees);
-  }, [targetStepRole, employees]);
-
-  // Auto-fill proposedOfficer if empty and default officer is found
-  React.useEffect(() => {
-    if (!proposedOfficer && defaultOfficerForStep?.name) {
-      setProposedOfficer(defaultOfficerForStep.name);
-    }
-  }, [defaultOfficerForStep, proposedOfficer]);
-
-  // Auto-Assign All Corridor Steps
-  const [isAutoAssigning, setIsAutoAssigning] = React.useState(false);
-
-  const handleAutoAssignAll = async () => {
-    if (!activePlacement?.name) {
-      toast.error("No active placement found to auto-assign corridor steps.");
-      return;
-    }
-
-    setIsAutoAssigning(true);
-    try {
-      const result = await autoAssignPlacementCorridorSteps(
-        activePlacement.name,
-        activePlacement.destination_country || propCountry || "Saudi Arabia",
-        availablePlacementSteps,
-        employees
-      );
-
-      if (result.assignedCount > 0) {
-        toast.success(`Successfully assigned ${result.assignedCount} corridor steps!`, {
-          description: "Clearance specialists have been assigned based on corridor default roles.",
-        });
-        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-        queryClient.invalidateQueries({ queryKey: ["placement_officers"] });
-        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_for_reassign"] });
-        if (onSuccess) onSuccess();
-      } else if (result.errors.length > 0) {
-        toast.error("Could not auto-assign corridor steps", {
-          description: result.errors[0],
-        });
-      }
-    } catch (err: any) {
-      toast.error("Auto-assignment failed", {
-        description: err.message || "Please try again.",
-      });
-    } finally {
-      setIsAutoAssigning(false);
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-xl bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6">
-        <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-4">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-800 dark:text-emerald-400">
+        <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
               <UserCog className="h-5 w-5" />
             </div>
             <div>
               <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                Edit Staff Assignment (Clearance & Tasks)
+                Edit Staff Assignment
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                Assign any internal staff member regardless of their role to candidate clearance steps and operational stages.
+              <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                Candidate: <strong className="text-slate-800 dark:text-zinc-200">{targetApplicantName}</strong> • Corridor:{" "}
+                <strong className="text-emerald-700 dark:text-emerald-400">{resolvedCountry}</strong>
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          {/* RBAC Warning Banner if user is not Manager/Admin */}
-          {!isManagerOrAdmin && (
-            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-              <Lock className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Authorization Restriction: </span>
-                Staff assignment editing is restricted to <strong>Manager</strong> and{" "}
-                <strong>System Administrator</strong> roles. Your current account does not have write
-                permission to reassign clearance officers.
-              </div>
-            </div>
-          )}
+        {/* 4 Clearance Stages Dropdowns */}
+        <div className="space-y-3.5 py-3">
+          {stages.map((stage, idx) => {
+            const Icon = stage.icon;
+            const currentVal = stageAssignments[stage.key] || "";
+            const savedDefaults = getSavedDefaultRoleAssignments();
+            const defaultEmp = resolveDefaultEmployeeForRole(stage.roleName, employees, savedDefaults);
+            const isSelectedDefault = Boolean(
+              defaultEmp?.name && currentVal && (defaultEmp.name === currentVal || defaultEmp.email === currentVal)
+            );
 
-          {/* Context Card: Placement & Candidate Context */}
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#18181f] border border-slate-200/80 dark:border-[#24242e] text-xs space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-slate-400" />
-                <span className="text-slate-500 dark:text-zinc-400">Candidate:</span>
-                <strong className="text-slate-900 dark:text-white font-semibold">
-                  {targetApplicantName}
-                </strong>
-              </div>
+            return (
+              <div
+                key={stage.key}
+                className="p-3 rounded-xl border border-slate-200/90 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#16161c] space-y-2 transition hover:border-slate-300 dark:hover:border-[#2e2e3a]"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/70 dark:bg-[#22222a] text-[11px] font-bold text-slate-700 dark:text-zinc-300">
+                      {idx + 1}
+                    </span>
+                    <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 dark:text-white">
+                      <Icon className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                      {stage.title}
+                    </div>
+                  </div>
 
-              {activePlacement?.name && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-mono border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
-                >
-                  Placement: {activePlacement.name}
-                </Badge>
-              )}
-            </div>
+                  {isSelectedDefault && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 dark:bg-emerald-950/70 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      <Sparkles className="h-3 w-3" />
+                      Default Specialist
+                    </span>
+                  )}
+                </div>
 
-            <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-zinc-400">
-              {targetApplicantId && (
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                  {stage.description}
+                </p>
+
                 <div>
-                  Applicant ID: <span className="font-mono text-slate-700 dark:text-zinc-300">{targetApplicantId}</span>
-                </div>
-              )}
-              {activePlacement?.destination_country && (
-                <div>
-                  Corridor:{" "}
-                  <span className="font-semibold text-slate-700 dark:text-zinc-300">
-                    {activePlacement.destination_country}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+                  <select
+                    aria-label={`Select staff for ${stage.title}`}
+                    value={currentVal}
+                    onChange={(e) => handleStageChange(stage.key, e.target.value)}
+                    disabled={isEmployeesLoading || saveMutation.isPending}
+                    className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#141419] text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition"
+                  >
+                    <option value="">-- Choose Assigned Staff --</option>
+                    {employees.map((emp) => {
+                      const empName =
+                        emp.full_name ||
+                        [emp.first_name, emp.last_name].filter(Boolean).join(" ") ||
+                        emp.name;
+                      const empRole =
+                        Array.isArray(emp.roles) && emp.roles.length > 0
+                          ? emp.roles.filter((r: string) => r !== "Desk User").join(", ") || "Staff"
+                          : "Staff";
+                      const isDefault = Boolean(defaultEmp?.name && (emp.name === defaultEmp.name || emp.email === defaultEmp.name));
 
-          {/* Quick Auto-Assign All Corridor Steps */}
-          {isManagerOrAdmin && availablePlacementSteps.length > 1 && (
-            <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-xs">
-              <div>
-                <span className="font-semibold text-emerald-900 dark:text-emerald-300 block">
-                  Corridor Default Auto-Assignment
-                </span>
-                <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                  Assign all {availablePlacementSteps.length} corridor steps to designated default specialists.
-                </span>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleAutoAssignAll}
-                disabled={isAutoAssigning || reassignMutation.isPending}
-                className="h-7 text-xs font-semibold bg-white dark:bg-[#15151c] text-emerald-800 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
-              >
-                {isAutoAssigning ? (
-                  <>
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Assigning...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-3 w-3 mr-1 text-emerald-600" />
-                    Auto-Assign All
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {/* Step Selection */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-              <span>Target Clearance Step / Stage (DocType: Clearance Step)</span>
-              {currentStepRecord && (
-                <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400">
-                  Seq {currentStepRecord.sequence_order || 1} • {currentStepRecord.is_mandatory ? "Mandatory" : "Optional"}
-                </span>
-              )}
-            </Label>
-
-            {availablePlacementSteps.length > 0 ? (
-              <select
-                aria-label="Select clearance step"
-                value={selectedStepName}
-                onChange={(e) => setSelectedStepName(e.target.value)}
-                disabled={!isManagerOrAdmin || reassignMutation.isPending}
-                className="w-full h-9 px-3 text-xs font-mono rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-              >
-                {availablePlacementSteps.map((step) => (
-                  <option key={step.name} value={step.name}>
-                    {step.name} — {step.step_type || step.step_name} ({step.status || "Pending"})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="p-3 rounded-lg border border-slate-200 dark:border-[#262630] bg-slate-50 dark:bg-[#16161c] text-xs text-slate-500">
-                No active clearance steps found for this candidate. Candidate must be in Processing stage with an active Placement.
-              </div>
-            )}
-          </div>
-
-          {/* Default Role Suggestion Banner for current step */}
-          {defaultOfficerForStep && (
-            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#282835] text-xs flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 truncate">
-                <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span className="text-slate-700 dark:text-zinc-300 truncate">
-                  Default <strong>{targetStepRole}</strong> specialist: <strong>{defaultOfficerForStep.full_name || defaultOfficerForStep.name}</strong>
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setProposedOfficer(defaultOfficerForStep.name)}
-                className="h-6 px-2 text-[11px] bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 shrink-0"
-              >
-                Use Default
-              </Button>
-            </div>
-          )}
-
-          {/* Current Assignee Display */}
-          <div className="p-3 rounded-xl border border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between text-xs">
-            <div className="space-y-0.5">
-              <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-                Current Assigned Staff Officer
-              </span>
-              <div className="font-mono font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <UserCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
-                {resolvedCurrentAssignee}
-              </div>
-            </div>
-            {currentStepRecord?.status && (
-              <Badge
-                variant="outline"
-                className="text-[10px] font-semibold border-slate-300 dark:border-zinc-700 text-slate-600 dark:text-zinc-400"
-              >
-                Status: {currentStepRecord.status}
-              </Badge>
-            )}
-          </div>
-
-          {/* Employee Dropdown Selection (Any Role) */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-              <span>Assign Staff Member (Any Registered Role)</span>
-              {isEmployeesLoading && (
-                <span className="text-[10px] text-slate-400">Loading staff accounts...</span>
-              )}
-            </Label>
-            <select
-              aria-label="Select staff member"
-              value={proposedOfficer}
-              onChange={(e) => setProposedOfficer(e.target.value)}
-              disabled={!isManagerOrAdmin || reassignMutation.isPending}
-              className="w-full h-9 px-3 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-            >
-              <option value="">-- Choose Employee (Any Role) --</option>
-              {employees.map((emp) => {
-                const empName = emp.full_name || [emp.first_name, emp.last_name].filter(Boolean).join(" ") || emp.name;
-                const empRole = Array.isArray(emp.roles) && emp.roles.length > 0
-                  ? emp.roles.filter((r: string) => r !== "Desk User").join(", ") || "Staff"
-                  : "Staff";
-                return (
-                  <option key={emp.name} value={emp.name}>
-                    {empName} ({empRole}) — {emp.name}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          {/* Manual Proposed Assignee Input */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-              Or Specify Staff Email (User.name = email)
-            </Label>
-            <div className="relative">
-              <Mail className="h-4 w-4 absolute left-3 top-2.5 text-slate-400" />
-              <Input
-                value={proposedOfficer}
-                onChange={(e) => setProposedOfficer(e.target.value)}
-                placeholder="officer@agency.com"
-                disabled={!isManagerOrAdmin || reassignMutation.isPending}
-                className="pl-9 h-9 text-xs font-mono"
-              />
-            </div>
-
-            {/* Quick-Pick Suggestions */}
-            {suggestedOfficers.length > 0 && (
-              <div className="pt-1">
-                <span className="text-[10px] text-slate-400 font-medium block mb-1">
-                  Quick-pick officer accounts:
-                </span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {suggestedOfficers.map((email) => (
-                    <button
-                      key={email}
-                      type="button"
-                      disabled={!isManagerOrAdmin || reassignMutation.isPending}
-                      onClick={() => setProposedOfficer(email)}
-                      className={cn(
-                        "px-2 py-0.5 text-[10px] font-mono rounded border transition-all",
-                        proposedOfficer === email
-                          ? "bg-emerald-800 text-white border-emerald-900 dark:bg-emerald-600"
-                          : "bg-slate-100 dark:bg-[#1a1a24] text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-[#262630] hover:bg-slate-200 dark:hover:bg-[#222230]"
-                      )}
-                    >
-                      {email}
-                    </button>
-                  ))}
+                      return (
+                        <option key={emp.name} value={emp.name}>
+                          {empName} ({empRole}) {isDefault ? "★ [Default]" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Inline Feedback Banner */}
-          {feedback && (
-            <div
-              className={cn(
-                "p-3 rounded-xl border text-xs flex items-start gap-2",
-                feedback.type === "success"
-                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300"
-                  : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/60 text-rose-900 dark:text-rose-300"
-              )}
-            >
-              {feedback.type === "success" ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-              )}
-              <div className="font-medium break-all">{feedback.message}</div>
-            </div>
-          )}
+            );
+          })}
         </div>
 
         <DialogFooter className="border-t border-slate-100 dark:border-[#1e1e24] pt-3 flex items-center justify-between sm:justify-between">
@@ -634,7 +427,7 @@ export function AssignEmployeeModal({
             type="button"
             variant="ghost"
             onClick={onClose}
-            disabled={reassignMutation.isPending}
+            disabled={saveMutation.isPending}
             className="text-xs h-9"
           >
             Cancel
@@ -642,24 +435,19 @@ export function AssignEmployeeModal({
 
           <Button
             type="button"
-            onClick={handleExecute}
-            disabled={
-              !isManagerOrAdmin ||
-              !selectedStepName ||
-              !proposedOfficer.trim() ||
-              reassignMutation.isPending
-            }
-            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-9 shadow-xs"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-9 shadow-xs px-5"
           >
-            {reassignMutation.isPending ? (
+            {saveMutation.isPending ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Updating Staff Assignment...
+                Saving Staff Assignments...
               </>
             ) : (
               <>
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                Save Staff Assignment
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                Save Staff Assignments
               </>
             )}
           </Button>

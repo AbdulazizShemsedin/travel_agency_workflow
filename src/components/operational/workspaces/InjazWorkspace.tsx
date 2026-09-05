@@ -50,6 +50,7 @@ import {
   forfeitInjazAndRestartV2,
   renderInjazPdfV2,
 } from "@/lib/api/v2/clearance";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -138,6 +139,17 @@ export function InjazWorkspace({
   const getInjazDataForRow = (row?: WorkspaceApplicantRow | null): InjazCandidateData => {
     if (!row) return {};
     const app = (row.applicant as any) || {};
+    const photo =
+      app?.photo_passport ||
+      app?.photograph ||
+      app?.profile_photo_url ||
+      app?.photo_full_body ||
+      app?.photo ||
+      (row as any)?.photo_passport ||
+      (row as any)?.photograph ||
+      (row as any)?.photo ||
+      "";
+
     return {
       applicantId: row.applicantId || "",
       fullName: row.fullName || "",
@@ -170,7 +182,31 @@ export function InjazWorkspace({
       injazNumber: injazNumber || (row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "",
       paymentNo: paymentNo || (row.injaz as any)?.payment_no || "",
       appointmentDate: appointmentDate || row.appointmentDate || (row.injaz as any)?.appointment_date || "",
+      photoUrl: photo,
     };
+  };
+
+  // Resolves candidate data guaranteeing a fresh applicant record fetch if photo is missing
+  const resolveInjazDataWithFreshPhoto = async (row?: WorkspaceApplicantRow | null): Promise<InjazCandidateData> => {
+    const injazData = getInjazDataForRow(row);
+    if (!injazData.photoUrl && row?.applicantId) {
+      try {
+        const freshApp = await getApplicantV2(row.applicantId);
+        const photo =
+          freshApp?.photo_passport ||
+          freshApp?.photograph ||
+          freshApp?.profile_photo_url ||
+          freshApp?.photo_full_body ||
+          freshApp?.photo ||
+          "";
+        if (photo) {
+          injazData.photoUrl = photo;
+        }
+      } catch (appErr) {
+        console.warn("Could not fetch fresh applicant record for photo:", appErr);
+      }
+    }
+    return injazData;
   };
 
   const handleGenerateInjazDoc = async () => {
@@ -178,12 +214,16 @@ export function InjazWorkspace({
     const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
     try {
       setIsGeneratingInjaz(true);
-      // Attempt authoritative backend render_injaz_pdf first
+      const injazData = await resolveInjazDataWithFreshPhoto(selectedRow);
+
+      // Attempt authoritative backend render_injaz_pdf with fast race timeout
       if (stepName) {
         try {
-          setIsGeneratingInjaz(true);
           toast.info("Rendering Injaz PDF...");
-          const blob = await renderInjazPdfV2(stepName);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Backend render timeout")), 2500)
+          );
+          const blob = await Promise.race([renderInjazPdfV2(stepName), timeoutPromise]);
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
@@ -200,7 +240,7 @@ export function InjazWorkspace({
       }
 
       toast.info("Generating Injaz Document...");
-      await downloadInjazDocumentPDF(getInjazDataForRow(selectedRow));
+      await downloadInjazDocumentPDF(injazData);
       toast.success("Injaz document downloaded successfully!", {
         description: `Official Visa Application Form for ${selectedRow.fullName}`,
       });
@@ -216,7 +256,8 @@ export function InjazWorkspace({
     if (!selectedRow) return;
     try {
       setIsGeneratingInjaz(true);
-      await openInjazDocumentInNewTab(getInjazDataForRow(selectedRow));
+      const injazData = await resolveInjazDataWithFreshPhoto(selectedRow);
+      await openInjazDocumentInNewTab(injazData);
       toast.success("Injaz document opened in new tab!");
     } catch (err: any) {
       console.error("Injaz open error:", err);
@@ -525,7 +566,8 @@ export function InjazWorkspace({
               e.stopPropagation();
               try {
                 toast.info("Generating Injaz document...");
-                await downloadInjazDocumentPDF(getInjazDataForRow(row));
+                const injazData = await resolveInjazDataWithFreshPhoto(row);
+                await downloadInjazDocumentPDF(injazData);
                 toast.success("Injaz document downloaded!");
               } catch (err: any) {
                 toast.error("Failed to generate Injaz document: " + err.message);

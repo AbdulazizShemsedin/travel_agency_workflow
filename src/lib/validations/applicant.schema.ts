@@ -136,6 +136,16 @@ export const baseApplicantSchema = z.object({
   medical_issue_date: z.string().optional().or(z.literal("")),
   medical_expiry_date: z.string().optional().or(z.literal("")),
 
+  // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
+  target_job: z.string().trim().optional().or(z.literal("")),
+  education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
+  salary_amount: optionalNumber(z.number().min(0)),
+  salary_currency: z.enum(["SAR", "KWD", "USD", "ETB", "AED", "QAR"]).default("SAR"),
+  photograph: z.string().optional().or(z.literal("")),
+  passport_expiry_date: z.string().optional().or(z.literal("")),
+  passport_issue_place: z.string().trim().optional().or(z.literal("")),
+  labor_id: z.string().optional().or(z.literal("")),
+
   // Photos & Attachments
   profile_photo_url: z.string().optional().or(z.literal("")),
   photo_passport: z.string().optional().or(z.literal("")),
@@ -155,6 +165,7 @@ export const baseApplicantSchema = z.object({
   fee_payment_date: z.string().optional().or(z.literal("")),
   fee_expiry_date: z.string().optional().or(z.literal("")),
   fee_status: z.enum(["Pending", "Paid", "Expired", "Refunded"]).default("Pending"),
+  fee_transaction: z.string().optional().or(z.literal("")),
   fee_notes: z.string().optional().or(z.literal("")),
 
   // Physical & CV Attributes
@@ -367,7 +378,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
 
     // For Standard applicants: CV generation fields and salary are mandatory
     if (!isMuayena) {
-      if (!data.highest_education) {
+      if (!data.highest_education && !(data as any).education) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Highest Education Level is required for registration",
@@ -391,7 +402,8 @@ export const stage2RegistrationSchema = stage1DraftSchema
         });
       }
 
-      if (!data.monthly_salary || !data.monthly_salary.trim()) {
+      const salaryVal = data.monthly_salary || (data as any).salary_amount;
+      if (!salaryVal || !String(salaryVal).trim()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Monthly Salary is required for registration",
@@ -410,12 +422,14 @@ export const stage2RegistrationSchema = stage1DraftSchema
       // Mandatory photo for registration / CV generation (no AI placeholder allowed)
       const hasPhoto = Boolean(
         (data.photo_passport && data.photo_passport.trim()) ||
-        (data.profile_photo_url && data.profile_photo_url.trim())
+        (data.profile_photo_url && data.profile_photo_url.trim()) ||
+        ((data as any).photograph && (data as any).photograph.trim()) ||
+        ((data as any).photo_full_body && (data as any).photo_full_body.trim())
       );
       if (!hasPhoto) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Passport size photograph is mandatory for CV generation",
+          message: "Passport size or full-body photograph is mandatory for CV generation",
           path: ["photo_passport"],
         });
       }

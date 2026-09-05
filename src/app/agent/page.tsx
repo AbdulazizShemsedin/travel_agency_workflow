@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
   selectCandidateV2,
+  listContractorsV2,
   V2PortalCandidate,
   ApiV2Error,
 } from "@/lib/api/v2";
@@ -38,17 +39,46 @@ export default function AgentDiscoveryPage() {
   const queryClient = useQueryClient();
   const { authUser, agencyContext } = useAuth();
 
+  const resolveContractorString = (c: any): string => {
+    if (!c) return "";
+    if (typeof c === "string") return c.trim();
+    if (typeof c === "object") {
+      return (c.name || c.contractor_name || c.company_name || "").trim();
+    }
+    return String(c).trim();
+  };
+
   // Contractor context: authoritative from auth, with state for internal staff switching
-  const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
-  const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
+  const defaultContractor = resolveContractorString(
+    agencyContext?.contractor?.name || authUser?.contractor
+  );
+  const [activeContractor, setActiveContractor] = React.useState<string>(defaultContractor);
+
+  // Query contractors for internal users without an authoritative contractor to guarantee selection works
+  const { data: contractors = [] } = useQuery({
+    queryKey: ["contractors-list"],
+    queryFn: () => listContractorsV2(),
+    enabled: !defaultContractor,
+  });
+
+  const fallbackContractor =
+    contractors.length > 0
+      ? resolveContractorString(contractors[0]?.name || contractors[0]?.contractor_name)
+      : "";
 
   React.useEffect(() => {
     if (defaultContractor && !activeContractor) {
       setActiveContractor(defaultContractor);
+    } else if (!activeContractor && fallbackContractor) {
+      setActiveContractor(fallbackContractor);
     }
-  }, [defaultContractor, activeContractor]);
+  }, [defaultContractor, activeContractor, fallbackContractor]);
 
-  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
+  const effectiveContractor =
+    resolveContractorString(agencyContext?.contractor?.name) ||
+    resolveContractorString(authUser?.contractor) ||
+    activeContractor ||
+    fallbackContractor;
 
   // Filters State
   const [searchTerm, setSearchTerm] = React.useState("");
@@ -59,8 +89,6 @@ export default function AgentDiscoveryPage() {
 
   // Selection & Detail Modal State
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] =
-    React.useState<PortalAvailableCandidate | null>(null);
-  const [candidateToConfirm, setCandidateToConfirm] =
     React.useState<PortalAvailableCandidate | null>(null);
   const [selectingCandidateId, setSelectingCandidateId] = React.useState<string | null>(null);
   const [successToast, setSuccessToast] = React.useState<string | null>(null);
@@ -114,7 +142,19 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
-      return await selectCandidateV2(candidate.name);
+      let targetContractor = effectiveContractor;
+      if (!targetContractor) {
+        try {
+          const fetched = await listContractorsV2();
+          if (Array.isArray(fetched) && fetched.length > 0) {
+            targetContractor = resolveContractorString(fetched[0].name || fetched[0].contractor_name);
+            setActiveContractor(targetContractor);
+          }
+        } catch {
+          // Ignore
+        }
+      }
+      return await selectCandidateV2(candidate.name, undefined, targetContractor || undefined);
     },
     onSuccess: (res, candidate) => {
       setSelectingCandidateId(null);
@@ -155,14 +195,7 @@ export default function AgentDiscoveryPage() {
   });
 
   const handleSelectCandidate = (candidate: PortalAvailableCandidate) => {
-    setCandidateToConfirm(candidate);
-  };
-
-  const handleConfirmSelection = () => {
-    if (candidateToConfirm) {
-      selectMutation.mutate(candidateToConfirm);
-      setCandidateToConfirm(null);
-    }
+    selectMutation.mutate(candidate);
   };
 
   const handleResetFilters = () => {
@@ -489,76 +522,6 @@ export default function AgentDiscoveryPage() {
         onSelect={handleSelectCandidate}
         isSelecting={selectingCandidateId === selectedCandidateForDetail?.name}
       />
-
-      {/* Candidate Selection Confirmation Dialog */}
-      {candidateToConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#16161b] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-[#222227]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Are you sure you want to select this candidate?
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  Please confirm to reserve and allocate this applicant to your agency
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-slate-50 dark:bg-[#1a1a22] border border-slate-100 dark:border-[#22222b] p-3 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Applicant:</span>
-                <strong className="text-slate-900 dark:text-white">{candidateToConfirm.full_name}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Applicant ID:</span>
-                <span className="font-mono">{candidateToConfirm.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Job Role:</span>
-                <span>{candidateToConfirm.job_applied || "Housemaid"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Destination:</span>
-                <span>{candidateToConfirm.destination_country || "Saudi Arabia"}</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
-              Once confirmed, this candidate will be exclusively allocated to your agency and advanced to Selected stage in the workflow pipeline.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCandidateToConfirm(null)}
-                className="text-xs h-8"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleConfirmSelection}
-                disabled={selectMutation.isPending}
-                className="text-xs h-8 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
-              >
-                {selectMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Yes, Select Candidate
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </AgentLayout>
   );
 }
