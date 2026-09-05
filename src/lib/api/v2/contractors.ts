@@ -297,6 +297,23 @@ export async function getCommissionRatesV2(
  * Note: This is a full replacement, not a merge. Always send the complete desired table.
  * Falls back to persisting via frappe.client.save on Contractor DocType if the endpoint is not yet enabled on the server.
  */
+function normalizeRateCurrency(currency: string | undefined, country: string): string {
+  const allowed = ["SAR", "KWD", "USD", "ETB", "AED", "QAR"];
+  if (currency && allowed.includes(currency)) return currency;
+  switch (country) {
+    case "Saudi Arabia":
+      return "SAR";
+    case "Kuwait":
+      return "KWD";
+    case "United Arab Emirates":
+      return "AED";
+    case "Qatar":
+      return "QAR";
+    default:
+      return "USD";
+  }
+}
+
 export async function setCommissionRatesV2(
   contractor: string,
   rates: V2ContractorCommissionRate[]
@@ -306,7 +323,7 @@ export async function setCommissionRatesV2(
     entry_track: r.entry_track,
     gender: r.gender,
     rate: Number(r.rate) || 0,
-    currency: r.currency || "Country Currency",
+    currency: normalizeRateCurrency(r.currency, r.destination_country),
   }));
 
   try {
@@ -326,14 +343,10 @@ export async function setCommissionRatesV2(
     return cleanedRates;
   } catch (err: any) {
     const errMsg = String(err?.message || err);
+    // Only attempt legacy DocType fallback if the server specifically lacks the endpoint method attribute
     if (
-      errMsg.includes("get_commission_rates") ||
-      errMsg.includes("set_commission_rates") ||
-      errMsg.includes("get_method") ||
-      errMsg.includes("has no attribute") ||
-      errMsg.includes("417") ||
-      err?.status === 417 ||
-      err?.status === 404
+      errMsg.includes("has no attribute 'set_commission_rates'") ||
+      errMsg.includes("Failed to get method for command agency_tracking.contractor_api.set_commission_rates")
     ) {
       console.warn(`[Contractors] contractor_api.set_commission_rates unavailable on server, saving directly to Contractor doc:`, errMsg);
       await updateContractorBatchConfigV2(contractor, {

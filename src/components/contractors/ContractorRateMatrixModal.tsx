@@ -54,10 +54,24 @@ const SUPPORTED_COUNTRIES = [
   "Oman",
 ];
 
+export function getDefaultCurrencyForCountry(country: string): "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR" {
+  switch (country) {
+    case "Saudi Arabia":
+      return "SAR";
+    case "Kuwait":
+      return "KWD";
+    case "United Arab Emirates":
+      return "AED";
+    case "Qatar":
+      return "QAR";
+    default:
+      return "USD";
+  }
+}
+
 const ENTRY_TRACKS = ["Standard", "Muayena"] as const;
 const GENDERS = ["Female", "Male"] as const;
 const CURRENCIES = [
-  "Country Currency",
   "SAR",
   "KWD",
   "USD",
@@ -100,7 +114,14 @@ export function ContractorRateMatrixModal({
     setIsLoading(true);
     try {
       const data = await getCommissionRatesV2(contractor);
-      setRates(Array.isArray(data) ? data : []);
+      const raw = Array.isArray(data) ? data : [];
+      const normalized = raw.map((r) => ({
+        ...r,
+        currency: (CURRENCIES as readonly string[]).includes(r.currency)
+          ? r.currency
+          : getDefaultCurrencyForCountry(r.destination_country),
+      }));
+      setRates(normalized);
     } catch (err: any) {
       toast.error("Failed to Load Commission Rates", {
         description: formatCleanErrorMessage(err),
@@ -158,9 +179,25 @@ export function ContractorRateMatrixModal({
     field: keyof V2ContractorCommissionRate,
     value: any
   ) => {
-    setRates((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
-    );
+    setRates((prev) => {
+      const copy = [...prev];
+      const current = { ...copy[index] };
+      if (field === "destination_country") {
+        const oldCountry = current.destination_country;
+        current.destination_country = value;
+        if (
+          !current.currency ||
+          current.currency === "Country Currency" ||
+          current.currency === getDefaultCurrencyForCountry(oldCountry)
+        ) {
+          current.currency = getDefaultCurrencyForCountry(value);
+        }
+      } else {
+        (current as any)[field] = value;
+      }
+      copy[index] = current;
+      return copy;
+    });
   };
 
   const handleRemoveRow = (index: number) => {
@@ -168,14 +205,15 @@ export function ContractorRateMatrixModal({
   };
 
   const handleAddSingleRow = () => {
+    const targetCountry = presetCountry || "Saudi Arabia";
     setRates((prev) => [
       ...prev,
       {
-        destination_country: presetCountry || "Saudi Arabia",
+        destination_country: targetCountry,
         entry_track: "Standard",
         gender: "Female",
         rate: 0,
-        currency: "Country Currency",
+        currency: getDefaultCurrencyForCountry(targetCountry),
       },
     ]);
   };
@@ -206,7 +244,7 @@ export function ContractorRateMatrixModal({
           entry_track: combo.entry_track,
           gender: combo.gender,
           rate: 0,
-          currency: "Country Currency",
+          currency: getDefaultCurrencyForCountry(countryToAdd),
         });
       }
     });
@@ -329,7 +367,7 @@ export function ContractorRateMatrixModal({
                 <br />
                 • <strong>Resolution Order</strong>: Manual placement commission overrides (both amount and currency) take precedence. Otherwise, the matching standard rate (Country + Track + Gender) is applied.
                 <br />
-                • <strong>Currency</strong>: Automatically resolves to <strong>SAR</strong> for Saudi Arabia and <strong>KWD</strong> for Kuwait upon commission generation.
+                • <strong>Currency</strong>: Standard currencies default to <strong>SAR</strong> for Saudi Arabia, <strong>KWD</strong> for Kuwait, and supported international currencies (USD, AED, QAR, ETB).
               </p>
             </div>
           )}

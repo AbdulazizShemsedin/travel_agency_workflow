@@ -278,10 +278,10 @@ export async function fetchOperationalWorkspaceDataV2(
           plc?.contract_number ||
           (applicant as any).contract_number ||
           "—",
-        contractIssueDate: contractDate || "2026-08-13",
+        contractIssueDate: contractDate || "—",
 
-        // Sheet normalized properties
-        laborId: applicant.labor_id || applicant.national_id || applicant.name,
+        // Sheet normalized properties (labor_id is strictly applicant.labor_id, NEVER applicant ID or national ID)
+        laborId: applicant.labor_id && !applicant.labor_id.toUpperCase().startsWith("APP-") ? applicant.labor_id : "",
         contractDate: contractDate || "—",
         duration: duration || 0,
         medicalRemaining,
@@ -325,7 +325,9 @@ export async function fetchOperationalWorkspaceDataV2(
 
         // V2 Context
         placementId: plc?.name,
+        placementStatus: plc?.status,
         clearanceStepName: activeStep?.name,
+        isDeparted: plc?.status === "Departed" || applicant.applicant_state === "Departed" || applicant.status === "Departed",
       };
 
       rows.push(row);

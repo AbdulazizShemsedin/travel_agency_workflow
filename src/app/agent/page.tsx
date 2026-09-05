@@ -376,9 +376,9 @@ export default function AgentDiscoveryPage() {
                           {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile, compact width) */}
                           <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
                             <div className="flex items-center gap-1.5 sm:gap-3">
-                              {candidate.photo_passport ? (
+                              {candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo ? (
                                 <img
-                                  src={candidate.photo_passport}
+                                  src={candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo}
                                   alt={candidate.full_name}
                                   className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
                                 />

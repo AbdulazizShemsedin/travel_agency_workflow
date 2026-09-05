@@ -209,6 +209,8 @@ export default function EmployeesPage() {
   const [roleFilter, setRoleFilter] = React.useState<string>("All");
   const [statusFilter, setStatusFilter] = React.useState<string>("All");
   const [showRoleDocs, setShowRoleDocs] = React.useState<boolean>(false);
+  const [showAllSessionRoles, setShowAllSessionRoles] = React.useState<boolean>(false);
+  const [expandedRoleEmpIds, setExpandedRoleEmpIds] = React.useState<Record<string, boolean>>({});
 
   // Default Role Assignments State
   const [defaultAssignments, setDefaultAssignments] = React.useState<Record<string, string>>({});
@@ -532,13 +534,24 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          <div className="flex flex-col items-start sm:items-end gap-1">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-              Active Session Security Roles:
-            </span>
-            <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex flex-col items-start sm:items-end gap-1.5 max-w-xl">
+            <div className="flex items-center justify-between w-full sm:justify-end gap-2">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                Active Session Security Roles:
+              </span>
+              {Array.isArray(roles) && roles.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSessionRoles((prev) => !prev)}
+                  className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 hover:underline cursor-pointer"
+                >
+                  {showAllSessionRoles ? "Show less" : `+${roles.length - 4} more`}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
               {Array.isArray(roles) && roles.length > 0 ? (
-                roles.map((role: string) => (
+                (showAllSessionRoles ? roles : roles.slice(0, 4)).map((role: string) => (
                   <Badge
                     key={role}
                     variant="outline"
@@ -550,6 +563,15 @@ export default function EmployeesPage() {
                 ))
               ) : (
                 <span className="text-xs text-slate-400">Standard Staff Access</span>
+              )}
+              {Array.isArray(roles) && roles.length > 4 && !showAllSessionRoles && (
+                <Badge
+                  variant="outline"
+                  onClick={() => setShowAllSessionRoles(true)}
+                  className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                >
+                  +{roles.length - 4} more
+                </Badge>
               )}
             </div>
           </div>
@@ -788,27 +810,43 @@ export default function EmployeesPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1 flex-wrap max-w-md">
                           {displayRoles.length > 0 ? (
-                            displayRoles.map((role) => {
-                              const isCore = ["Administrator", "System Manager", "Admin", "Manager"].includes(role);
-                              const isPipeline = ["Clearance Officer", "Saudi LMIS", "Saudi Taeshir", "Saudi Embassy", "Kuwait LMIS", "Kuwait Telesign", "Kuwait Embassy"].includes(role);
-                              const isFinance = ["Finance Manager", "Complaint Manager", "Communication Manager", "Ticketer"].includes(role);
+                            <>
+                              {(expandedRoleEmpIds[emp.name] ? displayRoles : displayRoles.slice(0, 3)).map((role) => {
+                                const isCore = ["Administrator", "System Manager", "Admin", "Manager"].includes(role);
+                                const isPipeline = ["Clearance Officer", "Saudi LMIS", "Saudi Taeshir", "Saudi Embassy", "Kuwait LMIS", "Kuwait Telesign", "Kuwait Embassy"].includes(role);
+                                const isFinance = ["Finance Manager", "Complaint Manager", "Communication Manager", "Ticketer"].includes(role);
 
-                              return (
-                                <Badge
-                                  key={role}
-                                  variant="outline"
-                                  className={cn(
-                                    "text-[10px] px-1.5 py-0 font-medium",
-                                    isCore && "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
-                                    isPipeline && "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
-                                    isFinance && "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-                                    !isCore && !isPipeline && !isFinance && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
-                                  )}
+                                return (
+                                  <Badge
+                                    key={role}
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] px-1.5 py-0 font-medium",
+                                      isCore && "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+                                      isPipeline && "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+                                      isFinance && "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+                                      !isCore && !isPipeline && !isFinance && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+                                    )}
+                                  >
+                                    {role}
+                                  </Badge>
+                                );
+                              })}
+                              {displayRoles.length > 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedRoleEmpIds((prev) => ({
+                                      ...prev,
+                                      [emp.name]: !prev[emp.name],
+                                    }))
+                                  }
+                                  className="text-[10px] font-semibold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 hover:underline px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 transition-colors cursor-pointer"
                                 >
-                                  {role}
-                                </Badge>
-                              );
-                            })
+                                  {expandedRoleEmpIds[emp.name] ? "Show less" : `+${displayRoles.length - 3} more`}
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <span className="text-[11px] text-slate-400">Standard Staff</span>
                           )}

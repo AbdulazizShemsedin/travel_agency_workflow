@@ -400,6 +400,69 @@ export default function ApplicantDetailPage() {
     },
   });
 
+  // Unified Financial & Fee Records derivation (including intake registration fee)
+  const allApplicantFees = React.useMemo(() => {
+    if (!applicant) return [];
+    const list: any[] = [];
+
+    // 1. Initial Registration Fee entered during applicant intake
+    const regFeeAmount = Number(applicant.registration_fee_amount);
+    if (applicant.fee_required || (regFeeAmount && regFeeAmount > 0)) {
+      list.push({
+        description: `${applicant.fee_type || "Registration Fee"}${applicant.fee_status ? ` (${applicant.fee_status})` : ""}${applicant.fee_notes ? ` - ${applicant.fee_notes}` : ""}`,
+        source_doctype: "Applicant Registration",
+        transaction_type: applicant.fee_direction || "Income",
+        amount: regFeeAmount || 0,
+        date: applicant.fee_payment_date || (applicant.creation ? String(applicant.creation).slice(0, 10) : "At Registration"),
+        status: applicant.fee_status || "Pending",
+        notes: applicant.fee_notes || "",
+        currency: applicant.fee_currency || "ETB",
+      });
+    }
+
+    // 2. Child fee logs (if any on the Applicant document)
+    if (Array.isArray(applicant.fee_log)) {
+      applicant.fee_log.forEach((f: any) => {
+        list.push({
+          description: f.fee_type || f.description || "Fee Log Entry",
+          source_doctype: f.source_doctype || "Fee Log",
+          transaction_type: f.direction || f.transaction_type || "Income",
+          amount: Number(f.amount) || 0,
+          date: f.date || (f.creation ? String(f.creation).slice(0, 10) : ""),
+          status: f.status || "Paid",
+          notes: f.notes || "",
+          currency: f.currency || applicant.fee_currency || "ETB",
+        });
+      });
+    }
+
+    // 3. Any additional clearance / stage income_expense_logs
+    if (Array.isArray(applicant.income_expense_logs)) {
+      applicant.income_expense_logs.forEach((f: any) => {
+        list.push({
+          ...f,
+          amount: Number(f.amount) || 0,
+        });
+      });
+    }
+
+    return list;
+  }, [applicant]);
+
+  const totalCandidateIncome = React.useMemo(() => {
+    return allApplicantFees
+      .filter((f) => f.transaction_type === "Income")
+      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  }, [allApplicantFees]);
+
+  const totalCandidateExpense = React.useMemo(() => {
+    return allApplicantFees
+      .filter((f) => f.transaction_type === "Expense")
+      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+  }, [allApplicantFees]);
+
+  const netCandidateFinancials = totalCandidateIncome - totalCandidateExpense;
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -473,68 +536,6 @@ export default function ApplicantDetailPage() {
     applicant.is_uploaded_to_musaned === true ||
     applicant.musaned_status === "Registered" ||
     Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
-
-  // Unified Financial & Fee Records derivation (including intake registration fee)
-  const allApplicantFees = React.useMemo(() => {
-    const list: any[] = [];
-
-    // 1. Initial Registration Fee entered during applicant intake
-    const regFeeAmount = Number(applicant.registration_fee_amount);
-    if (applicant.fee_required || (regFeeAmount && regFeeAmount > 0)) {
-      list.push({
-        description: `${applicant.fee_type || "Registration Fee"}${applicant.fee_status ? ` (${applicant.fee_status})` : ""}${applicant.fee_notes ? ` - ${applicant.fee_notes}` : ""}`,
-        source_doctype: "Applicant Registration",
-        transaction_type: applicant.fee_direction || "Income",
-        amount: regFeeAmount || 0,
-        date: applicant.fee_payment_date || (applicant.creation ? String(applicant.creation).slice(0, 10) : "At Registration"),
-        status: applicant.fee_status || "Pending",
-        notes: applicant.fee_notes || "",
-        currency: applicant.fee_currency || "ETB",
-      });
-    }
-
-    // 2. Child fee logs (if any on the Applicant document)
-    if (Array.isArray(applicant.fee_log)) {
-      applicant.fee_log.forEach((f: any) => {
-        list.push({
-          description: f.fee_type || f.description || "Fee Log Entry",
-          source_doctype: f.source_doctype || "Fee Log",
-          transaction_type: f.direction || f.transaction_type || "Income",
-          amount: Number(f.amount) || 0,
-          date: f.date || (f.creation ? String(f.creation).slice(0, 10) : ""),
-          status: f.status || "Paid",
-          notes: f.notes || "",
-          currency: f.currency || applicant.fee_currency || "ETB",
-        });
-      });
-    }
-
-    // 3. Any additional clearance / stage income_expense_logs
-    if (Array.isArray(applicant.income_expense_logs)) {
-      applicant.income_expense_logs.forEach((f: any) => {
-        list.push({
-          ...f,
-          amount: Number(f.amount) || 0,
-        });
-      });
-    }
-
-    return list;
-  }, [applicant]);
-
-  const totalCandidateIncome = React.useMemo(() => {
-    return allApplicantFees
-      .filter((f) => f.transaction_type === "Income")
-      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-  }, [allApplicantFees]);
-
-  const totalCandidateExpense = React.useMemo(() => {
-    return allApplicantFees
-      .filter((f) => f.transaction_type === "Expense")
-      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-  }, [allApplicantFees]);
-
-  const netCandidateFinancials = totalCandidateIncome - totalCandidateExpense;
 
   return (
     <div className="space-y-6 pb-20">

@@ -95,6 +95,17 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
     return {
       ...cand,
       age: computedAge || cand.age,
+      photo_passport:
+        cand.photo_passport ||
+        (cand as any).photograph ||
+        (cand as any).photo ||
+        (cand as any).profile_photo_url ||
+        "",
+      photo_full_body:
+        cand.photo_full_body ||
+        (cand as any).photo_portrait ||
+        (cand as any).full_body_photo ||
+        "",
     };
   });
 }

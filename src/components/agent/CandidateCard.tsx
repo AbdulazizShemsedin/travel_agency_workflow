@@ -49,7 +49,8 @@ export function CandidateCard({
   const passportPhotoSrc = normalizePhotoUrl(
     candidate.photo_passport ||
     (candidate as any).photograph ||
-    (candidate as any).photo
+    (candidate as any).photo ||
+    (candidate as any).profile_photo_url
   );
 
   const fullBodyPhotoSrc = normalizePhotoUrl(

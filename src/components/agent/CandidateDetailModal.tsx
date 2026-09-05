@@ -56,8 +56,40 @@ export function CandidateDetailModal({
 
   if (!isOpen || !candidate) return null;
 
-  const hasPassport = !passportImgError && Boolean(merged.photo_passport || candidate.photo_passport);
-  const hasFullBody = !fullBodyImgError && Boolean(merged.photo_full_body || candidate.photo_full_body);
+  const normalizePhotoUrl = (url?: string) => {
+    if (!url) return "";
+    const trimmed = String(url).trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+      return trimmed;
+    }
+    if (!trimmed.startsWith("/")) {
+      return `/${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const passportPhotoSrc = normalizePhotoUrl(
+    merged.photo_passport ||
+    merged.photograph ||
+    merged.photo ||
+    merged.profile_photo_url ||
+    candidate.photo_passport ||
+    (candidate as any).photograph ||
+    (candidate as any).photo
+  );
+
+  const fullBodyPhotoSrc = normalizePhotoUrl(
+    merged.photo_full_body ||
+    merged.photo_portrait ||
+    merged.full_body_photo ||
+    candidate.photo_full_body ||
+    (candidate as any).photo_portrait ||
+    (candidate as any).full_body_photo
+  );
+
+  const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
+  const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);
 
   const checkSkill = (keys: string[], label: string): boolean => {
     const cand = merged as any;
@@ -169,7 +201,7 @@ export function CandidateDetailModal({
               <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028] flex items-center justify-center">
                 {hasPassport ? (
                   <img
-                    src={candidate.photo_passport}
+                    src={passportPhotoSrc}
                     alt={`${candidate.full_name} Passport`}
                     onError={() => setPassportImgError(true)}
                     className="h-full w-full object-cover object-top"
@@ -190,7 +222,7 @@ export function CandidateDetailModal({
               <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028] flex items-center justify-center">
                 {hasFullBody ? (
                   <img
-                    src={candidate.photo_full_body}
+                    src={fullBodyPhotoSrc}
                     alt={`${candidate.full_name} Full Body`}
                     onError={() => setFullBodyImgError(true)}
                     className="h-full w-full object-cover object-top"

@@ -58,8 +58,10 @@ export async function GET(
     systemHeaders["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
   }
 
-  // Candidates for URLs to attempt
+  // Candidates for URLs to attempt (including authoritative download_file RPC)
   const attempts = [
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${filePath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${filePath}`)}`, headers: systemHeaders },
     { url: `${config.url}/files/${filePath}`, headers: config.headers },
     { url: `${config.url}/files/${filePath}`, headers: systemHeaders },
     { url: `${config.url}/private/files/${filePath}`, headers: systemHeaders },

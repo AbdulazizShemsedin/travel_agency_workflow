@@ -92,7 +92,7 @@ async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, stri
     if (loggedUser === "administrator") return true;
 
     // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
     const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
       method: "POST",
       headers: {
@@ -125,7 +125,7 @@ async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: R
     if (loggedUser === "administrator") return true;
 
     // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
     const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
       method: "POST",
       headers: {
@@ -214,7 +214,7 @@ export async function POST(
         );
       }
 
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
       const elevatedHeaders: Record<string, string> = {
         "Content-Type": "application/json",
         Authorization: systemAuthHeader,
@@ -285,7 +285,7 @@ export async function POST(
         );
       }
 
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
       const elevatedHeaders: Record<string, string> = {
         "Content-Type": "application/json",
         Authorization: systemAuthHeader,
@@ -428,84 +428,6 @@ export async function POST(
       }
     }
 
-    // Dedicated Handler: contractor_api.get_commission_rates
-    if (methodPath === "agency_tracking.contractor_api.get_commission_rates") {
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
-      const elevatedHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      };
-
-      try {
-        const parsedBody = JSON.parse(bodyText || "{}");
-        const contractorName = parsedBody.contractor || parsedBody.name;
-        if (!contractorName) {
-          return NextResponse.json({ message: [] }, { status: 200 });
-        }
-
-        const conRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: JSON.stringify({ doctype: "Contractor", name: contractorName }),
-        });
-        const conData = await conRes.json().catch(() => ({}));
-        const rawRates = conData.message?.default_commission_rates || [];
-        const cleanedRates = Array.isArray(rawRates) ? rawRates.map((r: any) => ({
-          destination_country: r.destination_country || "Saudi Arabia",
-          entry_track: r.entry_track || "Standard",
-          gender: r.gender || "Female",
-          rate: Number(r.rate) || 0,
-          currency: r.currency || "Country Currency",
-        })) : [];
-
-        return NextResponse.json({ message: cleanedRates }, { status: 200 });
-      } catch (err: any) {
-        console.error("[PROXY get_commission_rates]", err);
-        return NextResponse.json({ message: [] }, { status: 200 });
-      }
-    }
-
-    // Dedicated Handler: contractor_api.set_commission_rates
-    if (methodPath === "agency_tracking.contractor_api.set_commission_rates") {
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
-      const elevatedHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      };
-
-      try {
-        const parsedBody = JSON.parse(bodyText || "{}");
-        const contractorName = parsedBody.contractor || parsedBody.name;
-        const rates = parsedBody.rates || [];
-
-        const conRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: JSON.stringify({ doctype: "Contractor", name: contractorName }),
-        });
-        const conData = await conRes.json().catch(() => ({}));
-        if (!conData.message) {
-          return NextResponse.json({ message: "Contractor not found" }, { status: 404 });
-        }
-
-        const updated = {
-          ...conData.message,
-          default_commission_rates: rates,
-        };
-
-        await fetchWithRetry(`${config.url}/api/method/frappe.client.save`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: JSON.stringify({ doc: updated }),
-        });
-
-        return NextResponse.json({ message: rates }, { status: 200 });
-      } catch (err: any) {
-        console.error("[PROXY set_commission_rates]", err);
-        return NextResponse.json({ message: "Failed to set commission rates" }, { status: 500 });
-      }
-    }
-
     const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
       method: "POST",
       headers: forwardHeaders,
@@ -513,10 +435,14 @@ export async function POST(
     });
 
     // Elevated Retry for whitelisted internal queries blocked by Frappe role restrictions
-    // (e.g. list_contractors for staff & get_thread_messages for Admin/Oversight only)
+    // (e.g. list_contractors & commission rate management for staff, get_thread_messages for Admin/Oversight)
     if (res.status === 403) {
-      if (methodPath === "agency_tracking.contractor_api.list_contractors") {
-        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      if (
+        methodPath === "agency_tracking.contractor_api.list_contractors" ||
+        methodPath === "agency_tracking.contractor_api.get_commission_rates" ||
+        methodPath === "agency_tracking.contractor_api.set_commission_rates"
+      ) {
+        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
         const elevatedHeaders: Record<string, string> = {
           ...forwardHeaders,
           Authorization: systemAuthHeader,
@@ -540,7 +466,7 @@ export async function POST(
         // Only elevate message viewing if user is Admin or Communication Manager
         const isSupervisor = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
         if (isSupervisor) {
-          const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+          const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
           const elevatedHeaders: Record<string, string> = {
             ...forwardHeaders,
             Authorization: systemAuthHeader,
@@ -562,7 +488,7 @@ export async function POST(
           }
         }
       } else if (methodPath === "agency_tracking.placement_api.list_placements") {
-        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
         const elevatedHeaders: Record<string, string> = {
           ...forwardHeaders,
           Authorization: systemAuthHeader,
@@ -626,7 +552,7 @@ export async function POST(
             const parsedBody = JSON.parse(bodyText || "{}");
             const threadName = parsedBody.thread_name;
 
-            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
             const elevatedHeaders: Record<string, string> = {
               "Content-Type": "application/json",
               Authorization: systemAuthHeader,
@@ -713,7 +639,7 @@ export async function POST(
 
     // Post-query enrichment for contractor user details and portal candidate skills
     if (res.ok && data) {
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "4b650f0d4cc82df"}:${process.env.FRAPPE_API_SECRET || "b20da7f87521048"}`;
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
       const elevatedHeaders: Record<string, string> = {
         "Content-Type": "application/json",
         Authorization: systemAuthHeader,
