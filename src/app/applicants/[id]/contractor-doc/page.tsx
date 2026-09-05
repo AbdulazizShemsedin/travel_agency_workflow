@@ -184,13 +184,13 @@ export default function PlacementDocumentCenterPage() {
 
     setIsApprovingContract(true);
     try {
-      // 1. Ensure Medical 1 (Selected stage) is recorded as FIT per state machine rule
+      // 1. Enforce Medical 1 (Selected stage) is recorded as FIT per state machine rule
       if (activePlacement.medical_selected_status !== "FIT") {
-        await recordSelectedMedicalResultV2(
-          activePlacement.name,
-          "FIT",
-          activePlacement.medical_selected_examination_date || new Date().toISOString().split("T")[0]
-        );
+        toast.error("Medical 1 FIT Clearance Required", {
+          description: "Candidate's Stage 1 Medical examination must be recorded as FIT before approving the contract and advancing to Processing.",
+        });
+        setIsApprovingContract(false);
+        return;
       }
 
       // 2. Advance Placement to Processing stage
@@ -302,7 +302,7 @@ export default function PlacementDocumentCenterPage() {
               variant="outline"
               className="text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
             >
-              V2 Contract & Visa Architecture
+              Verified Placement Documents
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">

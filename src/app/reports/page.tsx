@@ -981,12 +981,12 @@ export default function ReportsPage() {
                               </Badge>
                             </td>
                             <td className="py-2.5 px-3 font-bold">
-                              {tx.amount} {tx.currency || "ETB"}
+                              {(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} {tx.currency || "ETB"}
                             </td>
                             <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-300">
                               {tx.description}
                             </td>
-                            <td className="py-2.5 px-3 font-mono">{tx.owner}</td>
+                            <td className="py-2.5 px-3 font-mono">{tx.logged_by || tx.owner || "System"}</td>
                             <td className="py-2.5 px-3 text-slate-400">
                               {new Date(tx.creation).toLocaleDateString()}
                             </td>

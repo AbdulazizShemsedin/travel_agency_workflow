@@ -53,35 +53,54 @@ export async function GET(
   const filePath = slug.map(encodeURIComponent).join("/");
   const config = getFrappeConfig(req);
 
+  const systemHeaders: Record<string, string> = { Accept: "*/*" };
+  if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
+    systemHeaders["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
+  }
+
+  // Candidates for URLs to attempt
+  const attempts = [
+    { url: `${config.url}/private/files/${filePath}`, headers: config.headers },
+    { url: `${config.url}/private/files/${filePath}`, headers: systemHeaders },
+    { url: `${config.url}/files/${filePath}`, headers: systemHeaders },
+    { url: `${config.url}/files/${filePath}`, headers: config.headers },
+  ];
+
   try {
-    const fileUrl = `${config.url}/private/files/${filePath}`;
-    const res = await fetchWithRetry(fileUrl, {
-      headers: config.headers,
-      cache: "no-store",
-    });
+    let lastRes: Response | null = null;
+    for (const attempt of attempts) {
+      try {
+        const res = await fetchWithRetry(attempt.url, {
+          headers: attempt.headers,
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const contentType = res.headers.get("content-type") || "application/octet-stream";
+          const buffer = await res.arrayBuffer();
 
-    if (res.ok) {
-      const contentType = res.headers.get("content-type") || "application/octet-stream";
-      const buffer = await res.arrayBuffer();
-
-      const response = new NextResponse(buffer, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-        },
-      });
-      const setCookie = res.headers.get("set-cookie");
-      if (setCookie) response.headers.set("set-cookie", setCookie);
-      return response;
+          const response = new NextResponse(buffer, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+            },
+          });
+          const setCookie = res.headers.get("set-cookie");
+          if (setCookie) response.headers.set("set-cookie", setCookie);
+          return response;
+        }
+        lastRes = res;
+      } catch {
+        // proceed to next attempt
+      }
     }
 
-    // Return real backend error / status code (e.g. 403 Forbidden for unauthorized, 404 for missing)
-    const errorBody = await res.text().catch(() => "File Not Found");
-    const response = new NextResponse(errorBody || "File Not Found", { status: res.status });
-    const setCookie = res.headers.get("set-cookie");
-    if (setCookie) response.headers.set("set-cookie", setCookie);
-    return response;
+    if (lastRes) {
+      const errorBody = await lastRes.text().catch(() => "File Not Found");
+      return new NextResponse(errorBody || "File Not Found", { status: lastRes.status });
+    }
+
+    return new NextResponse("File Not Found", { status: 404 });
   } catch (err: any) {
     return NextResponse.json(
       {

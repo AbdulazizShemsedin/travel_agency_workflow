@@ -705,6 +705,9 @@ export function ChatContainer() {
     isForeignAgency,
   ]);
 
+  // Synchronous send lock to prevent multi-send on fast Enter/clicks
+  const isSendingRef = React.useRef(false);
+
   // Mutations
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -759,7 +762,21 @@ export function ChatContainer() {
         description: err?.message || "Backend rejected message transmission.",
       });
     },
+    onSettled: () => {
+      isSendingRef.current = false;
+    },
   });
+
+  const handleSendMessage = React.useCallback(() => {
+    if (isSendingRef.current || sendMessageMutation.isPending || isUploadingAttachment) {
+      return;
+    }
+    if (!messageText.trim() && !pendingAttachment) {
+      return;
+    }
+    isSendingRef.current = true;
+    sendMessageMutation.mutate();
+  }, [messageText, pendingAttachment, sendMessageMutation, isUploadingAttachment]);
 
   const createThreadMutation = useMutation({
     mutationFn: async () => {
@@ -1655,9 +1672,7 @@ export function ChatContainer() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        if (messageText.trim() || pendingAttachment) {
-                          sendMessageMutation.mutate();
-                        }
+                        handleSendMessage();
                       }
                     }}
                     placeholder="Type a message..."
@@ -1670,9 +1685,10 @@ export function ChatContainer() {
                     disabled={
                       (!messageText.trim() && !pendingAttachment) ||
                       sendMessageMutation.isPending ||
-                      isUploadingAttachment
+                      isUploadingAttachment ||
+                      isSendingRef.current
                     }
-                    onClick={() => sendMessageMutation.mutate()}
+                    onClick={handleSendMessage}
                     className="md:hidden h-10 w-10 rounded-full bg-[#00a884] hover:bg-[#008f6f] disabled:opacity-40 disabled:hover:bg-[#00a884] text-white flex items-center justify-center shadow-md shrink-0 transition-transform active:scale-95"
                     title="Send message"
                   >
@@ -1689,9 +1705,10 @@ export function ChatContainer() {
                     disabled={
                       (!messageText.trim() && !pendingAttachment) ||
                       sendMessageMutation.isPending ||
-                      isUploadingAttachment
+                      isUploadingAttachment ||
+                      isSendingRef.current
                     }
-                    onClick={() => sendMessageMutation.mutate()}
+                    onClick={handleSendMessage}
                     className="hidden md:inline-flex h-9 px-3 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shrink-0"
                   >
                     {sendMessageMutation.isPending || isUploadingAttachment ? (

@@ -724,7 +724,7 @@ export default function ExpensesIncomePage() {
                               </Badge>
                             </td>
                             <td className="py-2.5 px-3 font-bold font-mono">
-                              {tx.amount} {tx.currency || "ETB"}
+                              {(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} {tx.currency || "ETB"}
                             </td>
                             <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs truncate">
                               {tx.description}
@@ -733,7 +733,7 @@ export default function ExpensesIncomePage() {
                               {tx.placement || tx.applicant || "General"}
                             </td>
                             <td className="py-2.5 px-3 font-mono text-slate-500">
-                              {tx.owner}
+                              {tx.logged_by || tx.owner || "System"}
                             </td>
                             <td className="py-2.5 px-3 text-slate-400">
                               {new Date(tx.creation).toLocaleDateString()}
@@ -1464,7 +1464,7 @@ export default function ExpensesIncomePage() {
 
             <form onSubmit={handleReject} className="space-y-3.5">
               <p className="text-xs text-slate-500">
-                Rejecting transaction of <strong>{rejectingTx.amount} {rejectingTx.currency}</strong> ({rejectingTx.description}). Please state the audit reason for this rejection.
+                Rejecting transaction of <strong>{(rejectingTx.amount_birr ?? rejectingTx.amount ?? 0).toLocaleString()} {rejectingTx.currency || "ETB"}</strong> ({rejectingTx.description}). Please state the audit reason for this rejection.
               </p>
 
               <div className="space-y-1">

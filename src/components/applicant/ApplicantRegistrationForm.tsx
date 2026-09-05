@@ -32,6 +32,7 @@ import {
   registerApplicantV2,
   generateCvV2,
   getApplicantV2,
+  logApplicantFeeV2,
   ApiV2Error,
 } from "@/lib/api/v2";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
@@ -325,6 +326,7 @@ export function ApplicantRegistrationForm({
       coc_status: initialData?.coc_status || "",
       exam_date: initialData?.exam_date || "",
       medical_status: initialData?.medical_status || "",
+      medical_issue_date: initialData?.medical_issue_date || "",
       medical_expiry_date: initialData?.medical_expiry_date || "",
       remarks: initialData?.remarks || "",
       medical_remarks: initialData?.medical_remarks || "",
@@ -454,11 +456,22 @@ export function ApplicantRegistrationForm({
         destination_country: formData.destination_country || "Saudi Arabia",
       };
 
+      let res;
       if (draftApplicantId) {
-        return await updateApplicantV2(draftApplicantId, payload);
+        res = await updateApplicantV2(draftApplicantId, payload);
       } else {
-        return await createApplicantV2(payload);
+        res = await createApplicantV2(payload);
       }
+
+      const activeId = res?.name || draftApplicantId;
+      if (activeId && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
+        try {
+          await logApplicantFeeV2(activeId);
+        } catch (feeErr: any) {
+          console.warn("Auto-log applicant fee on draft save:", feeErr);
+        }
+      }
+      return res;
     },
     onSuccess: (data) => {
       const savedName = data.name || draftApplicantId;
@@ -487,7 +500,15 @@ export function ApplicantRegistrationForm({
         ...formData,
         full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
       };
-      return await updateApplicantV2(draftApplicantId, payload);
+      const res = await updateApplicantV2(draftApplicantId, payload);
+      if (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0)) {
+        try {
+          await logApplicantFeeV2(draftApplicantId);
+        } catch (feeErr: any) {
+          console.warn("Auto-log applicant fee on save changes:", feeErr);
+        }
+      }
+      return res;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -549,7 +570,15 @@ export function ApplicantRegistrationForm({
         await updateApplicantV2(activeId, payload);
       }
 
-      return await registerApplicantV2(activeId);
+      const regRes = await registerApplicantV2(activeId);
+      if (activeId && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
+        try {
+          await logApplicantFeeV2(activeId);
+        } catch (feeErr: any) {
+          console.warn("Auto-log applicant fee on registration:", feeErr);
+        }
+      }
+      return regRes;
     },
     onSuccess: (data) => {
       setApplicantState("Registered");

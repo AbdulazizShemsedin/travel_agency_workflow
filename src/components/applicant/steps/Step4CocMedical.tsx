@@ -147,7 +147,7 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="medical_status" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                 Medical Status <span className="text-slate-400 font-normal">(Optional)</span>
@@ -171,9 +171,24 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
             </div>
 
             <div className="space-y-1.5">
+              <Label htmlFor="medical_issue_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                Medical Exam Date <span className="text-slate-400 font-normal">(Optional)</span>
+              </Label>
+              <Input
+                id="medical_issue_date"
+                type="date"
+                {...register("medical_issue_date")}
+                className={errors.medical_issue_date ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+              />
+              {errors.medical_issue_date && (
+                <p className="text-xs text-rose-600">{errors.medical_issue_date.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="medical_expiry_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Medical Expiration Date <span className="text-slate-400 font-normal">(Optional)</span>
+                  Medical Expiry Date <span className="text-slate-400 font-normal">(Optional)</span>
                 </Label>
                 {medicalExpiryDate && (
                   <span

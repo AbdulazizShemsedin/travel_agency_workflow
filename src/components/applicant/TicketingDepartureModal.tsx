@@ -62,6 +62,7 @@ export function TicketingDepartureModal({
   // Ticketing Form State
   const [ticketNumber, setTicketNumber] = React.useState(placement?.ticket_number || "");
   const [flightDate, setFlightDate] = React.useState(placement?.flight_date || "");
+  const [flightTime, setFlightTime] = React.useState("");
   const [ticketCost, setTicketCost] = React.useState<string>(placement?.ticket_cost ? String(placement.ticket_cost) : "");
 
   // Reschedule Form State
@@ -86,7 +87,8 @@ export function TicketingDepartureModal({
     setIsSubmitting(true);
     try {
       const parsedCost = ticketCost ? parseFloat(ticketCost) : undefined;
-      const res = await recordTicketDetailsV2(placement.name, ticketNumber.trim(), flightDate, parsedCost);
+      const fullFlightDate = flightDate ? (flightTime ? `${flightDate} ${flightTime}` : flightDate) : "";
+      const res = await recordTicketDetailsV2(placement.name, ticketNumber.trim(), fullFlightDate, parsedCost);
       toast.success("Ticket Details Recorded", {
         description: res?.message || `Flight details logged for placement ${placement.name}. Stage moved to Ticketed.`,
       });
@@ -250,7 +252,7 @@ export function TicketingDepartureModal({
         {/* Tab 1: Ticketing Form */}
         {activeTab === "ticket" && (
           <form onSubmit={handleRecordTicket} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Ticket / E-Ticket Number *</Label>
                 <Input
@@ -268,6 +270,15 @@ export function TicketingDepartureModal({
                   required
                   value={flightDate}
                   onChange={(e) => setFlightDate(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Departure Flight Time</Label>
+                <Input
+                  type="time"
+                  value={flightTime}
+                  onChange={(e) => setFlightTime(e.target.value)}
                   className="h-9 text-xs"
                 />
               </div>

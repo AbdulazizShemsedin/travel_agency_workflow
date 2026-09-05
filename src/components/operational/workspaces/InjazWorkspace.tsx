@@ -28,12 +28,14 @@ import {
 import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   startClearanceStepV2,
   completeClearanceStepV2,
   reassignClearanceStepV2,
 } from "@/lib/api/v2/clearance";
+import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   downloadInjazDocumentPDF,
@@ -90,45 +92,47 @@ export function InjazWorkspace({
   const [injazNumber, setInjazNumber] = React.useState("");
   const [paymentStatus, setPaymentStatus] = React.useState<"PAID" | "UNPAID">("UNPAID");
   const [paymentNo, setPaymentNo] = React.useState("");
+  const [injazFee, setInjazFee] = React.useState("");
+  const [paymentDate, setPaymentDate] = React.useState("");
   const [remark, setRemark] = React.useState("");
   const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
 
   // Helper to extract Injaz Candidate Data for PDF generation
   const getInjazDataForRow = (row?: WorkspaceApplicantRow | null): InjazCandidateData => {
     if (!row) return {};
-    const app = row.applicant as any;
+    const app = (row.applicant as any) || {};
     return {
-      applicantId: row.applicantId,
-      fullName: row.fullName,
+      applicantId: row.applicantId || "",
+      fullName: row.fullName || "",
       firstName: app?.first_name || (row.fullName ? row.fullName.split(" ")[0] : ""),
       middleName: app?.middle_name || (row.fullName ? row.fullName.split(" ")[1] : ""),
       lastName: app?.last_name || (row.fullName ? row.fullName.split(" ").slice(2).join(" ") : ""),
-      motherName: app?.mother_name || app?.motherName || "AYESHA MOHAMMED",
-      passportNumber: row.passportNumber,
-      passportIssueDate: app?.passport_issue_date || app?.issue_date || "2024-08-14",
-      passportExpiry: app?.passport_expiry || app?.expiry_date || "2029-08-14",
-      placeOfIssue: app?.place_of_issue || "ADDIS ABABA",
-      placeOfBirth: app?.place_of_birth || app?.leaving_town || "ADDIS ABABA",
-      dateOfBirth: app?.date_of_birth || "1997-04-12",
+      motherName: app?.mother_name || app?.motherName || "",
+      passportNumber: row.passportNumber || "",
+      passportIssueDate: app?.passport_issue_date || app?.issue_date || "",
+      passportExpiry: app?.passport_expiry || app?.expiry_date || "",
+      placeOfIssue: app?.place_of_issue || "",
+      placeOfBirth: app?.place_of_birth || app?.leaving_town || "",
+      dateOfBirth: app?.date_of_birth || "",
       nationality: app?.nationality || "ETHIOPIAN",
       gender: app?.gender || "FEMALE",
-      maritalStatus: app?.marital_status || "SINGLE",
-      religion: app?.religion || "MUSLIM",
-      targetJob: app?.target_job || app?.job_applied || "HOUSEMAID",
-      educationLevel: app?.education_level || app?.qualification || "PRIMARY SCHOOL",
-      phone: row.contact || app?.phone || "+251 91 123 4567",
-      city: app?.city || "ADDIS ABABA",
+      maritalStatus: app?.marital_status || "",
+      religion: app?.religion || "",
+      targetJob: app?.target_job || app?.job_applied || "",
+      educationLevel: app?.education_level || app?.qualification || "",
+      phone: row.contact || app?.phone || "",
+      city: app?.city || "",
       destinationCountry: row.destinationCountry || "Saudi Arabia",
-      sponsorName: row.sponsorName || app?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI",
-      sponsorId: row.sponsorId || app?.sponsor_id || "1130373143",
-      sponsorPhone: app?.sponsor_phone || "966503221802",
-      destinationCity: app?.destination_city || "RIYADH",
-      contractorName: app?.contractor_name || "Tihamat Asir Recruitment company",
-      contractNumber: row.contractNumber || app?.contract_number || "2005450415",
-      visaNumber: row.visaNumber || app?.visa_number || "1908334046",
-      injazNumber: injazNumber || (row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || `E${row.passportNumber?.replace(/\D/g, "") || "4982104"}`,
-      paymentNo: paymentNo || (row.injaz as any)?.payment_no || "99281401",
-      appointmentDate: appointmentDate || row.appointmentDate || (row.injaz as any)?.appointment_date || "2026-08-25",
+      sponsorName: row.sponsorName || app?.sponsor_name || "",
+      sponsorId: row.sponsorId || app?.sponsor_id || "",
+      sponsorPhone: app?.sponsor_phone || "",
+      destinationCity: app?.destination_city || "",
+      contractorName: app?.contractor_name || "",
+      contractNumber: row.contractNumber || app?.contract_number || "",
+      visaNumber: row.visaNumber || app?.visa_number || "",
+      injazNumber: injazNumber || (row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "",
+      paymentNo: paymentNo || (row.injaz as any)?.payment_no || "",
+      appointmentDate: appointmentDate || row.appointmentDate || (row.injaz as any)?.appointment_date || "",
     };
   };
 
@@ -173,19 +177,21 @@ export function InjazWorkspace({
       setAppointmentDate(
         selectedRow.appointmentDate && selectedRow.appointmentDate !== "—"
           ? selectedRow.appointmentDate
-          : (injaz as any)?.appointment_date || (injaz as any)?.due_date || "2026-08-25"
+          : (injaz as any)?.appointment_date || ""
       );
       setInjazNumber(
         injaz?.reference_no ||
         (injaz as any)?.injaz_number ||
-        `E${selectedRow.passportNumber?.replace(/\D/g, "") || "4982104"}`
+        ""
       );
       const isPaid =
         selectedRow.injazPayment === "PAID" ||
         (injaz?.payment_status || "").toLowerCase().includes("paid");
       setPaymentStatus(isPaid ? "PAID" : "UNPAID");
-      setPaymentNo((injaz as any)?.payment_no || "99281401");
-      setRemark(selectedRow.remark || (injaz as any)?.notes || "Biometrics Scheduled");
+      setPaymentNo((injaz as any)?.payment_no || "");
+      setPaymentDate((injaz as any)?.payment_date || "");
+      setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "");
+      setRemark(selectedRow.remark && selectedRow.remark !== "—" ? selectedRow.remark : (injaz as any)?.notes || "");
     }
   }, [selectedRow]);
 
@@ -194,6 +200,20 @@ export function InjazWorkspace({
     mutationFn: async () => {
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+
+      if (injazFee && Number(injazFee) > 0 && selectedRow.dsrName) {
+        try {
+          await logStageExpenseV2(
+            Number(injazFee),
+            "USD",
+            "Taeshir / Injaz Fee",
+            selectedRow.dsrName,
+            "Taeshir"
+          );
+        } catch (err: any) {
+          console.warn("logStageExpenseV2 error:", err);
+        }
+      }
 
       if (stepName) {
         if (status === "Completed") {
@@ -482,13 +502,13 @@ export function InjazWorkspace({
           </DrawerField>
 
           <DrawerField label="Injaz Application (E-Number)" isReadOnly={false}>
-            <input
+            <Input
               type="text"
               placeholder="e.g. E4982104"
               value={injazNumber}
               disabled={!canEdit || mutation.isPending}
               onChange={(e) => setInjazNumber(e.target.value)}
-              className="h-9 w-full px-3 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+              className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
           </DrawerField>
 
@@ -504,25 +524,52 @@ export function InjazWorkspace({
             </select>
           </DrawerField>
 
+          <DrawerField label="Injaz Fee (USD)" isReadOnly={false}>
+            <div className="relative">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="10.5"
+                value={injazFee}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setInjazFee(e.target.value)}
+                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                USD
+              </span>
+            </div>
+          </DrawerField>
+
           <DrawerField label="Injaz Payment № / Receipt" isReadOnly={false}>
-            <input
+            <Input
               type="text"
-              placeholder="e.g. 99281401"
+              placeholder="Enter receipt number (No default)"
               value={paymentNo}
               disabled={!canEdit || mutation.isPending}
               onChange={(e) => setPaymentNo(e.target.value)}
-              className="h-9 w-full px-3 text-xs font-mono bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+              className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Injaz Payment Date" isReadOnly={false}>
+            <Input
+              type="date"
+              value={paymentDate}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
           </DrawerField>
 
           <DrawerField label="Processing Remark / Notes" isReadOnly={false}>
-            <input
+            <Input
               type="text"
-              placeholder="e.g. Biometrics scheduled at Addis center"
+              placeholder="Enter processing remarks (No default)"
               value={remark}
               disabled={!canEdit || mutation.isPending}
               onChange={(e) => setRemark(e.target.value)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
           </DrawerField>
 

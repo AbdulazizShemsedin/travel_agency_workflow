@@ -134,8 +134,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
     }
     if (d.place_of_issue) {
       setValue("place_of_issue", d.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-    } else {
-      setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
 
     setOcrSuccessData(d);
@@ -224,8 +222,6 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         }
         if (parsed.place_of_issue) {
           setValue("place_of_issue", parsed.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        } else {
-          setValue("place_of_issue", "Addis Ababa", { shouldDirty: true, shouldValidate: true, shouldTouch: true });
         }
 
         setOcrSuccessData(parsed);

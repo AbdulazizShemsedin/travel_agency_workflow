@@ -382,7 +382,7 @@ export default function AgentWakalaRequestsPage() {
                 </CardTitle>
               </div>
               <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50 text-[10px]">
-                portal_api.list_my_wakala_requests
+                Wakala Authorization Queue
               </Badge>
             </div>
           </CardHeader>

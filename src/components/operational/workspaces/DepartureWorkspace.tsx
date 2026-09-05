@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   recordTicketDetailsV2,
   recordRescheduleV2,
+  recordPredepartureMedicalResultV2,
   advancePlacementV2,
 } from "@/lib/api/v2/placements";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -78,6 +79,7 @@ export function DepartureWorkspace({
   const [ticketNumber, setTicketNumber] = React.useState("");
   const [airline, setAirline] = React.useState("Ethiopian Airlines");
   const [flightDate, setFlightDate] = React.useState("");
+  const [flightTime, setFlightTime] = React.useState("");
   const [ticketCost, setTicketCost] = React.useState<number | "">("");
   const [ticketCurrency, setTicketCurrency] = React.useState("USD");
   const [ticketDetails, setTicketDetails] = React.useState("");
@@ -105,13 +107,15 @@ export function DepartureWorkspace({
       setTicketNumber(selectedRow.ticketNumber && selectedRow.ticketNumber !== "—" ? selectedRow.ticketNumber : tkt?.ticket_number || "");
       setAirline((tkt as any)?.airline || "Ethiopian Airlines");
       setFlightDate(tkt?.flight_date || "");
+      setFlightTime((tkt as any)?.flight_time || (dep as any)?.flight_time || "");
       setTicketCost((tkt as any)?.ticket_cost || "");
       setTicketCurrency((tkt as any)?.currency || "USD");
       setTicketDetails((tkt as any)?.ticket_details || "");
       setEmployee((tkt as any)?.employee || (dep as any)?.employee || "");
 
-      setMedical2Result((dep as any)?.medical_2_result || "");
-      setMedical2Date((dep as any)?.medical_2_date || "");
+      const med2Val = (dep as any)?.medical_2_result || (dep as any)?.medical_2_status;
+      setMedical2Result(med2Val === "FIT" || med2Val === "Pass" ? "Pass" : med2Val === "UNFIT" || med2Val === "Fail" ? "Fail" : "");
+      setMedical2Date((dep as any)?.medical_2_date || (dep as any)?.medical_2_examination_date || "");
       setMedical2Remark((dep as any)?.medical_2_remark || "");
 
       const isDep = Boolean(dep?.departed_on);
@@ -135,24 +139,35 @@ export function DepartureWorkspace({
 
       // 1. Record Ticket Details
       if (ticketNumber.trim()) {
+        const fullFlightDate = flightDate
+          ? flightTime
+            ? `${flightDate} ${flightTime}`
+            : flightDate
+          : new Date().toISOString().split("T")[0];
+
         await recordTicketDetailsV2(
           placementName,
           ticketNumber.trim(),
-          flightDate || new Date().toISOString().split("T")[0],
+          fullFlightDate,
           typeof ticketCost === "number" ? ticketCost : undefined,
           ticketCurrency
         );
 
         if (ticketStatus === "Booked") {
-          try {
-            await advancePlacementV2(placementName, "Ticketed");
-          } catch (err: any) {
-            console.warn("advancePlacementV2 (Ticketed) warning:", err);
-          }
+          await advancePlacementV2(placementName, "Ticketed");
         }
       }
 
-      // 2. Record Reschedule if applicable
+      // 2. Record Pre-Departure Medical 2 Check
+      if (medical2Result) {
+        await recordPredepartureMedicalResultV2(
+          placementName,
+          medical2Result === "Pass" ? "FIT" : "UNFIT",
+          medical2Date || undefined
+        );
+      }
+
+      // 3. Record Reschedule if applicable
       if (departureStatus === "Rescheduled" && rescheduleDate) {
         await recordRescheduleV2(
           placementName,
@@ -163,13 +178,12 @@ export function DepartureWorkspace({
         );
       }
 
-      // 3. Record Departure
+      // 4. Record Departure Gate with Honest Error Propagation
       if (departureStatus === "Departed") {
-        try {
-          await advancePlacementV2(placementName, "Departed");
-        } catch (err: any) {
-          console.warn("advancePlacementV2 (Departed) warning:", err);
+        if (medical2Result !== "Pass" && (selectedRow.departure as any)?.medical_2_result !== "FIT" && (selectedRow.departure as any)?.medical_2_result !== "Pass") {
+          throw new Error("Cannot complete Departure: Pre-departure Medical 2 check must be recorded and passed (FIT).");
         }
+        await advancePlacementV2(placementName, "Departed");
       }
     },
     onSuccess: () => {
@@ -519,15 +533,26 @@ export function DepartureWorkspace({
             </select>
           </DrawerField>
 
-          <DrawerField label="Flight Date" isReadOnly={false}>
-            <Input
-              type="date"
-              value={flightDate}
-              disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setFlightDate(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
+          <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+            <DrawerField label="Flight Date" isReadOnly={false}>
+              <Input
+                type="date"
+                value={flightDate}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setFlightDate(e.target.value)}
+                className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </DrawerField>
+            <DrawerField label="Flight Departure Time" isReadOnly={false}>
+              <Input
+                type="time"
+                value={flightTime}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setFlightTime(e.target.value)}
+                className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </DrawerField>
+          </div>
 
           <DrawerField label="Ticket Cost" isReadOnly={false}>
             <div className="flex gap-1.5">
@@ -622,8 +647,7 @@ export function DepartureWorkspace({
 
           <DrawerField label="Scheduled Departure Time" isReadOnly={false}>
             <Input
-              type="text"
-              placeholder="YYYY-MM-DD HH:MM:SS"
+              type="time"
               value={departureTime}
               disabled={!canEdit || mutation.isPending}
               onChange={(e) => setDepartureTime(e.target.value)}

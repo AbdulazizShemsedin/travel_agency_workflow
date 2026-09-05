@@ -40,6 +40,7 @@ import {
   Plus,
   Ticket,
   XCircle,
+  Trash2,
 } from "lucide-react";
 import {
   getApplicantV2,
@@ -48,6 +49,9 @@ import {
   cancelApplicantV2,
   restartApplicantV2,
   logApplicantFeeV2,
+  logStageExpenseV2,
+  logStageIncomeV2,
+  V2SupportedCurrency,
   listCountryBansV2,
   setCountryBanV2,
   removeCountryBanV2,
@@ -113,6 +117,120 @@ export default function ApplicantDetailPage() {
   const [med1Date, setMed1Date] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [med1Expiry, setMed1Expiry] = React.useState("");
   const [cancelRemarks, setCancelRemarks] = React.useState("");
+
+  // Multiple Fee & Expense logging state for candidate profile
+  const [isLogFeeModalOpen, setIsLogFeeModalOpen] = React.useState(false);
+  const [profileFees, setProfileFees] = React.useState<
+    Array<{
+      id: string;
+      direction: "Expense" | "Income";
+      amount: string;
+      currency: V2SupportedCurrency;
+      description: string;
+      stage: string;
+    }>
+  >([
+    {
+      id: "fee-init-1",
+      direction: "Income",
+      amount: "",
+      currency: "ETB",
+      description: "",
+      stage: "Intake",
+    },
+  ]);
+  const [isSubmittingProfileFees, setIsSubmittingProfileFees] = React.useState(false);
+
+  const handleAddProfileFeeRow = () => {
+    setProfileFees((prev) => [
+      ...prev,
+      {
+        id: `fee-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        direction: "Expense",
+        amount: "",
+        currency: "ETB",
+        description: "",
+        stage: "Processing",
+      },
+    ]);
+  };
+
+  const handleRemoveProfileFeeRow = (id: string) => {
+    setProfileFees((prev) => {
+      if (prev.length <= 1) {
+        return [
+          {
+            id: `fee-${Date.now()}`,
+            direction: "Income",
+            amount: "",
+            currency: "ETB",
+            description: "",
+            stage: "Intake",
+          },
+        ];
+      }
+      return prev.filter((f) => f.id !== id);
+    });
+  };
+
+  const handleUpdateProfileFeeRow = (
+    id: string,
+    updates: Partial<{
+      direction: "Expense" | "Income";
+      amount: string;
+      currency: V2SupportedCurrency;
+      description: string;
+      stage: string;
+    }>
+  ) => {
+    setProfileFees((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+  };
+
+  const handleSubmitProfileFees = async () => {
+    const validFees = profileFees.filter((f) => parseFloat(f.amount) > 0);
+    if (validFees.length === 0) {
+      toast.error("Please enter a valid amount greater than 0 for at least one fee entry.");
+      return;
+    }
+
+    try {
+      setIsSubmittingProfileFees(true);
+      let successCount = 0;
+      for (const item of validFees) {
+        const amt = parseFloat(item.amount);
+        const desc = item.description.trim() || `Candidate ${item.direction} fee (${item.stage || "General"})`;
+        if (item.direction === "Expense") {
+          await logStageExpenseV2(amt, item.currency, desc, activePlacement?.name, item.stage);
+        } else {
+          await logStageIncomeV2(amt, item.currency, desc, activePlacement?.name, item.stage);
+        }
+        successCount++;
+      }
+
+      toast.success(`Logged ${successCount} fee ${successCount === 1 ? "entry" : "entries"} to Finance!`, {
+        description: "Transactions submitted to Finance approval queue.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+      setIsLogFeeModalOpen(false);
+      setProfileFees([
+        {
+          id: `fee-${Date.now()}`,
+          direction: "Income",
+          amount: "",
+          currency: "ETB",
+          description: "",
+          stage: "Intake",
+        },
+      ]);
+    } catch (err: any) {
+      toast.error("Failed to log fee entries", { description: err?.message });
+    } finally {
+      setIsSubmittingProfileFees(false);
+    }
+  };
 
   const {
     data: applicant,
@@ -229,6 +347,9 @@ export default function ApplicantDetailPage() {
   const advanceToProcessingMutation = useMutation({
     mutationFn: () => {
       if (!activePlacement) throw new Error("No active placement found");
+      if (activePlacement.medical_selected_status !== "FIT") {
+        throw new Error("Pre-processing Medical 1 check must be completed with FIT result before advancing.");
+      }
       return advancePlacementV2(activePlacement.name, "Processing");
     },
     onSuccess: async () => {
@@ -718,16 +839,27 @@ export default function ApplicantDetailPage() {
                 <HeartPulse className="mr-1.5 h-3.5 w-3.5" />
                 Medical 1 Screening: {activePlacement?.medical_selected_status || "Pending"}
               </Button>
-              {activePlacement?.medical_selected_status === "FIT" && (
-                <Button
-                  size="sm"
-                  onClick={() => advanceToProcessingMutation.mutate()}
-                  disabled={advanceToProcessingMutation.isPending}
-                  className="bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
-                >
-                  <Clock className="mr-1.5 h-3.5 w-3.5" /> Advance to Processing
-                </Button>
-              )}
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (activePlacement?.medical_selected_status !== "FIT") {
+                    toast.error("Medical 1 FIT Clearance Required", {
+                      description: "Candidate must have Medical 1 screening recorded as FIT before advancing to Processing.",
+                    });
+                    setIsMedical1ModalOpen(true);
+                    return;
+                  }
+                  advanceToProcessingMutation.mutate();
+                }}
+                disabled={advanceToProcessingMutation.isPending}
+                className={
+                  activePlacement?.medical_selected_status === "FIT"
+                    ? "bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
+                    : "bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 text-xs font-semibold"
+                }
+              >
+                <Clock className="mr-1.5 h-3.5 w-3.5" /> Advance to Processing
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1153,9 +1285,19 @@ export default function ApplicantDetailPage() {
                   <DollarSign className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
                   Candidate Fees & Expenses
                 </CardTitle>
-                <Badge variant={totalCandidateExpense > 0 || totalCandidateIncome > 0 ? "success" : "neutral"}>
-                  {allApplicantFees.length} Record{allApplicantFees.length === 1 ? "" : "s"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsLogFeeModalOpen(true)}
+                    className="h-6 px-2 text-[11px] font-semibold border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  >
+                    <Plus className="mr-1 h-3 w-3" /> Log Fee
+                  </Button>
+                  <Badge variant={totalCandidateExpense > 0 || totalCandidateIncome > 0 ? "success" : "neutral"}>
+                    {allApplicantFees.length} Record{allApplicantFees.length === 1 ? "" : "s"}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-3 text-xs">
@@ -1369,6 +1511,147 @@ export default function ApplicantDetailPage() {
               className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
             >
               {recordMedical1Mutation.isPending ? "Recording..." : "Save Medical Result"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log Multiple Candidate Fees / Expenses Dialog */}
+      <Dialog open={isLogFeeModalOpen} onOpenChange={setIsLogFeeModalOpen}>
+        <DialogContent className="max-w-2xl bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <DollarSign className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
+              Log Candidate Fees &amp; Clearance Expenses
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Record multiple income entries or operational clearance expenses for candidate {applicant?.full_name || applicantId}. Entries are forwarded directly to the Finance ledger approval queue.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+            {profileFees.map((entry, idx) => (
+              <div
+                key={entry.id}
+                className="space-y-2 p-3 rounded-lg border border-slate-200 dark:border-[#2b2b35] bg-slate-50/60 dark:bg-[#17171e]"
+              >
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/60 dark:border-[#25252e]">
+                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Fee Item #{idx + 1}
+                  </span>
+                  {profileFees.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProfileFeeRow(entry.id)}
+                      className="text-slate-400 hover:text-rose-600 p-0.5 text-xs flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Remove
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                  <div>
+                    <Label className="text-[11px] font-semibold">Direction</Label>
+                    <select
+                      value={entry.direction}
+                      onChange={(e) =>
+                        handleUpdateProfileFeeRow(entry.id, {
+                          direction: e.target.value as "Expense" | "Income",
+                        })
+                      }
+                      className="h-8 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-2 text-xs"
+                    >
+                      <option value="Expense">Expense (Agency Paid)</option>
+                      <option value="Income">Income (Candidate Paid)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold">Amount *</Label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={entry.amount}
+                      onChange={(e) => handleUpdateProfileFeeRow(entry.id, { amount: e.target.value })}
+                      className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20]"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold">Currency</Label>
+                    <select
+                      value={entry.currency}
+                      onChange={(e) =>
+                        handleUpdateProfileFeeRow(entry.id, {
+                          currency: e.target.value as V2SupportedCurrency,
+                        })
+                      }
+                      className="h-8 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-2 text-xs"
+                    >
+                      <option value="ETB">ETB</option>
+                      <option value="USD">USD</option>
+                      <option value="SAR">SAR</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] font-semibold">Stage / Category</Label>
+                    <select
+                      value={entry.stage}
+                      onChange={(e) => handleUpdateProfileFeeRow(entry.id, { stage: e.target.value })}
+                      className="h-8 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-2 text-xs"
+                    >
+                      <option value="Registration">Registration</option>
+                      <option value="Selected">Selected / Contract</option>
+                      <option value="LMIS Clearance">LMIS Clearance</option>
+                      <option value="Taeshir / Biometrics">Taeshir / Injaz</option>
+                      <option value="Embassy Clearance">Embassy Clearance</option>
+                      <option value="Departure">Departure / Ticketing</option>
+                      <option value="General">General Administrative</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-semibold">Description / Receipt Note</Label>
+                  <Input
+                    placeholder="e.g. GAMCA medical screening fee, Biometrics appointment receipt"
+                    value={entry.description}
+                    onChange={(e) => handleUpdateProfileFeeRow(entry.id, { description: e.target.value })}
+                    className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20]"
+                  />
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddProfileFeeRow}
+              className="h-7 text-xs border-dashed border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300"
+            >
+              <Plus className="mr-1 h-3 w-3" /> Add Another Fee Entry
+            </Button>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" onClick={() => setIsLogFeeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitProfileFees}
+              disabled={isSubmittingProfileFees}
+              className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs"
+            >
+              {isSubmittingProfileFees ? (
+                <>
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Submitting...
+                </>
+              ) : (
+                `Submit ${profileFees.filter((f) => parseFloat(f.amount) > 0).length || profileFees.length} Fee Entry to Finance`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

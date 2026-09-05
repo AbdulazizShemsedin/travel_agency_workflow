@@ -143,13 +143,15 @@ export interface V2EmployeeFinancialItem {
 export interface V2PendingApprovalItem {
   name: string;
   transaction_type: "Expense" | "Income";
-  amount: number;
-  currency: string;
+  amount?: number;
+  amount_birr?: number;
+  currency?: string;
   description: string;
   placement?: string;
   applicant?: string;
   full_name?: string;
-  logged_by: string;
+  logged_by?: string;
+  owner?: string;
   stage_logged_at?: string;
   creation: string;
   [key: string]: any;

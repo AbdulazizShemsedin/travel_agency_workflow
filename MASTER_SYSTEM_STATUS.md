@@ -4,7 +4,7 @@
 **Backend Authority**: `https://agencytracking-production.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-02T07:15:00Z  
+**Last Updated**: 2026-09-05T01:35:00Z  
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **80** | **24** | **55** | **0** | **0** | **0** | **1** |
+| **80** | **27** | **52** | **0** | **0** | **0** | **1** |
 
 ---
 
@@ -24,30 +24,30 @@
 | 2 | **CSRF Token Lifecycle & Caching** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. In-memory caching and transparent header attachment operational. |
 | 3 | **Current User Context & Role Rehydration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. AuthProvider rehydrates 16 canonical V2 roles. |
 | 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
-| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
+| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. Auto-submits registration fee to finance. |
 | 6 | **Applicant Profile Retrieval & Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on query error; empty list preserved as empty. |
-| 7 | **Applicant Full Editing & Uniqueness Validation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Ensure passport_issue_date is omitted from editable inputs. |
+| 7 | **Applicant Full Editing & Uniqueness Validation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Multi-entry fee logging integrated with auto-save submission. |
 | 8 | **Applicant LMIS Fast-Path Editing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Reusable LmisFastPathModal built & integrated into clearance queue drawer & applicant profile calling update_applicant_for_lmis (TODO-P2-01). |
 | 9 | **Applicant Cancellation & Re-intake Cycle** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify cycle_number increment side effect at runtime. |
 | 10 | **Applicant Country Ban Enforcement & Listing** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Test ban override permission gating for Manager/Admin. |
-| 11 | **Applicant Registration Fee Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify auto-creation of linked Applicant Transaction. |
-| 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Client-side fallback removed in cv.ts. Sourced purely from live backend. |
+| 11 | **Applicant Registration Fee Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Auto-submits to finance on Save Changes and candidate intake; multi-entry logging on candidate profile. |
+| 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Dummy fallbacks eliminated; Ref No. empty by default; honest demographic & skills mapping. |
 | 13 | **Passport MRZ Parsing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified parse_passport_file returns 200 without lifecycle mutation side-effects. |
 | 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_contract_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
 | 15 | **Kuwait eVisa Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_visa_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
 | 16 | **Saudi Injaz Paper Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Injaz OCR inspector integrated into V2ClearanceQueueWorkspace drawer calling parse_injaz_file (TODO-P2-04). |
-| 17 | **Foreign Agency Candidate Catalog** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on catalog query error; honest ApiV2Error thrown. |
+| 17 | **Foreign Agency Candidate Catalog** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on catalog query error; photo resolution via proxy fallback. |
 | 18 | **Atomic Candidate Selection & Placement Row-Lock** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Handle 409 conflict gracefully in candidate card UI. |
 | 19 | **Foreign Agency Reserved Placements Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verify contractor scoping isolation. |
-| 20 | **Foreign Agency Wakala Requests Queue** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Dedicated /agent/wakala page calling portal_api.list_my_wakala_requests with contractor linkage checks and reminder trigger (TODO-P2-03). |
+| 20 | **Foreign Agency Wakala Requests Queue** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Dedicated /agent/wakala page with manual authorization and reminder trigger (TODO-P2-03). |
 | 21 | **Placement Creation (Muayena Track)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | MuayenaPlacementModal integrated in applicant profile calling create_muayena_placement directly (TODO-P2-04). |
-| 22 | **Placement Stage 1 Medical Gate (Selected -> Processing)** | YES | YES | YES | `UNVERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verify 417 error display when medical is not FIT. |
+| 22 | **Placement Stage 1 Medical Gate (Selected -> Processing)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Explicit Medical 1 FIT gate enforced in /applicants/[id] and contractor-doc; prompted if unverified. |
 | 23 | **Placement Contract Upload & Field Binding** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via placement_api.upload_contract and upload_file in Placement Document Center (TODO-P1-02). |
 | 24 | **Placement Visa Upload & KA Verification (Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Sourced via placement_api.upload_visa and upload_file in Placement Document Center (TODO-P1-02). |
-| 25 | **Placement Ticketing & Cost Auto-Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | TicketingDepartureModal integrated in candidate profile calling record_ticket_details with auto-logged pending expense (TODO-P2-04). |
+| 25 | **Placement Ticketing & Cost Auto-Logging** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | TicketingDepartureModal integrated with dedicated departure time picker and cost tracking. |
 | 26 | **Placement Flight Rescheduling** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Flight reschedule form integrated in TicketingDepartureModal calling record_reschedule with internal cost auto-logging (TODO-P2-04). |
-| 27 | **Placement Predeparture Medical (Ticketed -> Departed)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Pre-departure Medical 2 screening integrated in TicketingDepartureModal calling record_predeparture_medical_result (TODO-P2-04). |
-| 28 | **Placement Departure & Terminal State Guard** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Final departure clearance integrated in TicketingDepartureModal calling advance_placement to Departed, stamping departed_on (TODO-P2-04). |
+| 27 | **Placement Predeparture Medical (Ticketed -> Departed)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Pre-departure Medical 2 screening persisted via record_predeparture_medical_result; strictly gates departure. |
+| 28 | **Placement Departure & Terminal State Guard** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Final departure clearance strictly requires Medical 2 FIT; dedicated time selection; honest errors surfaced. |
 | 29 | **Dynamic Corridor Step Discovery** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Ensure dynamic rendering is used everywhere. |
 | 30 | **Clearance Queue Retrieval (list_my_clearance_steps)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated across recovered Excel-like Workspaces (LMIS, Te'shir, Embassy, Departure) and V2ClearanceQueueWorkspace. |
 | 31 | **Clearance Step Start & In-Progress Marking** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls start_clearance_step. |

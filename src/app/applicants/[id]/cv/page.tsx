@@ -409,11 +409,11 @@ export default function CandidateCvPreviewPage() {
                 <tbody>
                   {[
                     { en: "Coocking", ar: "الطبخ", check: checkSkill(applicant.skill_cooking) },
-                    { en: "Cleaning", ar: "التنظيف", check: checkSkill(applicant.skill_cleaning) || true },
-                    { en: "Washing", ar: "الغسيل", check: checkSkill(applicant.skill_washing) || true },
-                    { en: "Ironing", ar: "الكوي", check: checkSkill(applicant.skill_ironing) || true },
-                    { en: "Baby Sitting", ar: "عناية الرضيع", check: checkSkill(applicant.skill_baby_sitting) || true },
-                    { en: "Children Care", ar: "عناية الأطفال", check: checkSkill(applicant.skill_children_care) || true },
+                    { en: "Cleaning", ar: "التنظيف", check: checkSkill(applicant.skill_cleaning) },
+                    { en: "Washing", ar: "الغسيل", check: checkSkill(applicant.skill_washing) },
+                    { en: "Ironing", ar: "الكوي", check: checkSkill(applicant.skill_ironing) },
+                    { en: "Baby Sitting", ar: "عناية الرضيع", check: checkSkill(applicant.skill_baby_sitting) },
+                    { en: "Children Care", ar: "عناية الأطفال", check: checkSkill(applicant.skill_children_care) },
                     { en: "Arabic Cooking", ar: "الطبخ العربي", check: checkSkill(applicant.skill_arabic_cooking) },
                     { en: "Sewing", ar: "خياطة", check: checkSkill(applicant.skill_sewing) },
                   ].map((s) => (
@@ -427,7 +427,7 @@ export default function CandidateCvPreviewPage() {
                   ))}
                   <tr className="border-t border-black bg-slate-50 font-bold">
                     <td className="py-1 px-2 border-r border-black text-left">Remarks</td>
-                    <td className="py-1 px-2 text-center text-[#002f6c]">{isExperienced ? "EXP" : "FED"}</td>
+                    <td className="py-1 px-2 text-center text-[#002f6c]">{applicant.remarks || applicant.cv_remarks || ""}</td>
                     <td className="py-1 px-2 text-right font-arabic border-l border-black" dir="rtl">ملاحظات</td>
                   </tr>
                 </tbody>
@@ -447,7 +447,7 @@ export default function CandidateCvPreviewPage() {
                 <tbody>
                   <tr className="border-b border-black">
                     <td className="w-1/4 py-1 px-2 font-bold border-r border-black">Ref No.</td>
-                    <td className="w-1/2 py-1 px-2 font-mono font-bold text-center text-[#002f6c]">{applicant.name}</td>
+                    <td className="w-1/2 py-1 px-2 font-mono font-bold text-center text-[#002f6c]">{applicant.ref_no || applicant.reference_number || ""}</td>
                     <td className="w-1/4 py-1 px-2 text-right font-arabic border-l border-black" dir="rtl"></td>
                   </tr>
                   <tr className="border-b border-black">
@@ -494,7 +494,7 @@ export default function CandidateCvPreviewPage() {
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-1 px-2 font-bold border-r border-black">Place of Issue</td>
-                    <td className="py-1 px-2 font-extrabold text-center uppercase">{applicant.place_of_issue || "ADDIS ABABA"}</td>
+                    <td className="py-1 px-2 font-extrabold text-center uppercase">{applicant.place_of_issue || ""}</td>
                     <td className="py-1 px-2 text-right font-arabic border-l border-black" dir="rtl">مكان الإصدار</td>
                   </tr>
                 </tbody>
@@ -511,12 +511,12 @@ export default function CandidateCvPreviewPage() {
                 <tbody>
                   <tr className="border-t border-black">
                     <td className="w-1/4 py-1 px-2 font-bold border-r border-black">English</td>
-                    <td className="w-1/2 py-1 px-2 text-center font-bold text-[#002f6c]">{applicant.english_level || "Fair"}</td>
+                    <td className="w-1/2 py-1 px-2 text-center font-bold text-[#002f6c]">{applicant.english_level || ""}</td>
                     <td className="w-1/4 py-1 px-2 text-right font-arabic border-l border-black" dir="rtl">الإنجليزية</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-1 px-2 font-bold border-r border-black">Arabic</td>
-                    <td className="py-1 px-2 text-center font-bold text-[#002f6c]">{applicant.arabic_level || "Fair"}</td>
+                    <td className="py-1 px-2 text-center font-bold text-[#002f6c]">{applicant.arabic_level || ""}</td>
                     <td className="py-1 px-2 text-right font-arabic border-l border-black" dir="rtl">العربية</td>
                   </tr>
                 </tbody>
@@ -530,7 +530,7 @@ export default function CandidateCvPreviewPage() {
                 <span className="font-arabic" dir="rtl">المؤهل العلمي</span>
               </div>
               <div className="py-1.5 px-2 text-center font-extrabold text-xs uppercase bg-white text-black">
-                {applicant.education_level || "Primary School"}
+                {applicant.education || applicant.education_level || ""}
               </div>
             </div>
 
@@ -559,42 +559,42 @@ export default function CandidateCvPreviewPage() {
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Place of Birth</td>
-                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.place_of_birth || applicant.leaving_town || "ANGECHA"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.place_of_birth || applicant.leaving_town || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">مكان الولادة</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Leaving Town</td>
-                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.leaving_town || applicant.place_of_birth || "ADDIS ABABA"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.leaving_town || applicant.place_of_birth || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">مغادرة المدينة</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Civil Status</td>
-                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.marital_status || "Single"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.marital_status || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">العنوان الكامل</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">No. of Children</td>
-                    <td className="py-0.5 px-2 font-bold text-center">{applicant.number_of_children ?? applicant.children_count ?? 0}</td>
+                    <td className="py-0.5 px-2 font-bold text-center">{applicant.number_of_children ?? applicant.children_count ?? ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">عدد الاطفال</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Height</td>
-                    <td className="py-0.5 px-2 font-bold text-center">{applicant.height ? `${applicant.height} cm` : "160 cm"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center">{applicant.height ? `${applicant.height} cm` : ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">ارتفاع</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Weight</td>
-                    <td className="py-0.5 px-2 font-bold text-center">{applicant.weight ? `${applicant.weight} kg` : "55 kg"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center">{applicant.weight ? `${applicant.weight} kg` : ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">الوزن</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Complexion</td>
-                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.complexion || "FAIR"}</td>
+                    <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.complexion || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">البشرة</td>
                   </tr>
                   <tr className="border-t border-black">
                     <td className="py-0.5 px-2 font-bold border-r border-black">Age</td>
-                    <td className="py-0.5 px-2 font-extrabold text-center text-[#002f6c]">{applicant.age || 25}</td>
+                    <td className="py-0.5 px-2 font-extrabold text-center text-[#002f6c]">{applicant.age || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl"></td>
                   </tr>
                   <tr className="border-t border-black">

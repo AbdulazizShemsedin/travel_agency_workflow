@@ -63,7 +63,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
     color: rgb(1, 1, 1),
   });
 
-  page.drawText(`REF: ${applicant.name || "APP-00001"}`, {
+  page.drawText(applicant.ref_no || applicant.reference_number ? `REF: ${applicant.ref_no || applicant.reference_number}` : "", {
     x: width - 170,
     y: height - 60,
     size: 9,
@@ -99,7 +99,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
   page.drawText(candName || "CANDIDATE", { x: 90, y: cursorY - 18, size: 10, font: fontBold, color: primaryDark });
 
   page.drawText("ROLE APPLIED:", { x: 340, y: cursorY - 18, size: 8, font: fontBold, color: textMuted });
-  page.drawText((applicant.job_applied || "HOUSE MAID").replace(/[^\x00-\x7F]/g, "").toUpperCase(), { x: 420, y: cursorY - 18, size: 10, font: fontBold, color: textDark });
+  page.drawText((applicant.job_applied || applicant.target_job || "HOUSE MAID").replace(/[^\x00-\x7F]/g, "").toUpperCase(), { x: 420, y: cursorY - 18, size: 10, font: fontBold, color: textDark });
 
   cursorY -= 50;
 
@@ -127,7 +127,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
   const idRows = [
     [
       { label: "Passport Number", val: clean(applicant.passport_number) },
-      { label: "Place of Issue", val: clean(applicant.place_of_issue || "Addis Ababa") },
+      { label: "Place of Issue", val: clean(applicant.place_of_issue) },
       { label: "Nationality", val: clean(applicant.nationality || "Ethiopia") },
     ],
     [
@@ -184,19 +184,19 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
 
   const personalRows = [
     [
-      { label: "Gender", val: clean(applicant.gender || "Female") },
-      { label: "Religion", val: clean(applicant.religion || "N/A") },
-      { label: "Marital Status", val: clean(applicant.marital_status || "Single") },
+      { label: "Gender", val: clean(applicant.gender) },
+      { label: "Religion", val: clean(applicant.religion) },
+      { label: "Marital Status", val: clean(applicant.marital_status) },
     ],
     [
-      { label: "Children Count", val: String(applicant.children ?? 0) },
-      { label: "Primary Phone", val: clean(applicant.phone_number) },
-      { label: "City / Country", val: clean(applicant.city ? `${applicant.city}, Ethiopia` : "Addis Ababa, Ethiopia") },
+      { label: "Children Count", val: applicant.children !== undefined && applicant.children !== null ? String(applicant.children) : "-" },
+      { label: "Primary Phone", val: clean(applicant.phone_number || applicant.phone) },
+      { label: "City / Country", val: clean(applicant.city ? `${applicant.city}, Ethiopia` : applicant.leaving_town) },
     ],
     [
-      { label: "Emergency Contact", val: clean(applicant.contact_person_name || "Family Reference") },
-      { label: "Emergency Phone", val: clean(applicant.contact_person_phone) },
-      { label: "Target Country", val: clean(applicant.destination_country || "Saudi Arabia") },
+      { label: "Emergency Contact", val: clean(applicant.contact_person_name || applicant.emergency_contact_name) },
+      { label: "Emergency Phone", val: clean(applicant.contact_person_phone || applicant.emergency_contact_phone) },
+      { label: "Target Country", val: clean(applicant.destination_country) },
     ],
   ];
 
@@ -240,13 +240,19 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
 
   cursorY -= 20;
 
+  const evalSkill = (val: any) => {
+    if (val === 1 || val === "1" || val === true || val === "true" || val === "YES") return "YES";
+    if (val === 0 || val === "0" || val === false || val === "false" || val === "NO") return "NO";
+    return "-";
+  };
+
   const skills = [
-    { name: "Cleaning & Housekeeping", rating: "YES / Experienced" },
-    { name: "Cooking & Kitchen Work", rating: "YES / Standard" },
-    { name: "Arabic Cooking", rating: "Basic / Familiar" },
-    { name: "Baby Sitting & Child Care", rating: "YES / Experienced" },
-    { name: "Washing & Laundry", rating: "YES / Fluent" },
-    { name: "Ironing & Garment Care", rating: "YES / Standard" },
+    { name: "Cleaning & Housekeeping", rating: evalSkill(applicant.skill_cleaning) },
+    { name: "Cooking & Kitchen Work", rating: evalSkill(applicant.skill_cooking) },
+    { name: "Arabic Cooking", rating: evalSkill(applicant.skill_arabic_cooking) },
+    { name: "Baby Sitting & Child Care", rating: evalSkill(applicant.skill_baby_sitting) },
+    { name: "Washing & Laundry", rating: evalSkill(applicant.skill_washing) },
+    { name: "Ironing & Garment Care", rating: evalSkill(applicant.skill_ironing) },
   ];
 
   for (let i = 0; i < skills.length; i += 2) {
@@ -304,17 +310,18 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
     borderWidth: 0.8,
   });
 
+  const medStatus = applicant.medical_status || "-";
   page.drawText("Medical Fitness Status:", { x: 30, y: cursorY - 18, size: 8, font: fontRegular, color: textMuted });
-  page.drawText(applicant.medical_status === "FIT" ? "FIT / PASSED (Approved for Overseas Placement)" : "FIT / VERIFIED", {
+  page.drawText(medStatus === "FIT" ? "FIT / PASSED (Approved for Overseas Placement)" : medStatus === "UNFIT" ? "UNFIT / REJECTED" : clean(medStatus), {
     x: 140,
     y: cursorY - 18,
     size: 8.5,
     font: fontBold,
-    color: primaryDark,
+    color: medStatus === "FIT" ? primaryDark : textDark,
   });
 
   page.drawText("Medical Expiry:", { x: 30, y: cursorY - 34, size: 8, font: fontRegular, color: textMuted });
-  page.drawText(clean(applicant.medical_expiry_date || "Valid for 90 Days"), {
+  page.drawText(clean(applicant.medical_expiry_date), {
     x: 140,
     y: cursorY - 34,
     size: 8.5,
@@ -323,10 +330,10 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
   });
 
   page.drawText("COC Certification:", { x: 340, y: cursorY - 18, size: 8, font: fontRegular, color: textMuted });
-  page.drawText(clean(applicant.coc_status || "Issued / Certified"), { x: 440, y: cursorY - 18, size: 8.5, font: fontBold, color: primaryDark });
+  page.drawText(clean(applicant.coc_status), { x: 440, y: cursorY - 18, size: 8.5, font: fontBold, color: primaryDark });
 
   page.drawText("Process Workflow Stage:", { x: 340, y: cursorY - 34, size: 8, font: fontRegular, color: textMuted });
-  page.drawText(clean(applicant.applicant_state || "CV Generated"), { x: 440, y: cursorY - 34, size: 8.5, font: fontBold, color: goldAccent });
+  page.drawText(clean(applicant.applicant_state || applicant.status || "-"), { x: 440, y: cursorY - 34, size: 8.5, font: fontBold, color: goldAccent });
 
   // 7. FOOTER STAMP & ATTESTATION
   page.drawLine({

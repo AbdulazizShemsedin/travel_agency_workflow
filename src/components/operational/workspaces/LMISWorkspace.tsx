@@ -14,6 +14,9 @@ import {
   XCircle,
   FileText,
   ShieldAlert,
+  Award,
+  CreditCard,
+  Phone,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -27,7 +30,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   startClearanceStepV2,
@@ -35,6 +37,7 @@ import {
   reassignClearanceStepV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
+import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 interface LMISWorkspaceProps {
@@ -83,10 +86,15 @@ export function LMISWorkspace({
   const [issuedOn, setIssuedOn] = React.useState("");
   const [laborRefNo, setLaborRefNo] = React.useState("");
   const [employee, setEmployee] = React.useState("");
-  const [missingDataRequested, setMissingDataRequested] = React.useState(false);
-  const [missingDataType, setMissingDataType] = React.useState("GAMCA Medical");
-  const [missingDataStatus, setMissingDataStatus] = React.useState<"Pending" | "Received">("Pending");
-  const [missingDataNotes, setMissingDataNotes] = React.useState("");
+
+  // LMIS Compliance & Candidate Details
+  const [nationalId, setNationalId] = React.useState("");
+  const [emergencyContactName, setEmergencyContactName] = React.useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = React.useState("");
+  const [cocStatus, setCocStatus] = React.useState("Not Started");
+  const [examDate, setExamDate] = React.useState("");
+  const [insurancePayment, setInsurancePayment] = React.useState("");
+  const [lmisPayment, setLmisPayment] = React.useState("");
 
   // Kuwait LMIS / Police Ashara fields
   const [policeClearanceNo, setPoliceClearanceNo] = React.useState("");
@@ -108,11 +116,17 @@ export function LMISWorkspace({
       setIssuedOn(lms?.date_completed || lms?.issued_on || "");
       setLaborRefNo(selectedRow.laborId || lms?.reference_no || "");
       setEmployee(lms?.assigned_officer || lms?.employee || lms?.completed_by || "");
-      setMissingDataRequested(Boolean(lms?.missing_data_requested));
-      setMissingDataType(lms?.missing_data_type || "GAMCA Medical");
-      setMissingDataStatus((lms?.missing_data_status as any) || "Pending");
-      setMissingDataNotes(lms?.notes || lms?.rejection_remark || "");
-      setPoliceClearanceNo(lms?.police_clearance_no || (selectedRow.applicant as any)?.police_clearance_no || "");
+
+      const app = (selectedRow.applicant as any) || {};
+      setNationalId(app.national_id || lms?.national_id || "");
+      setEmergencyContactName(app.emergency_contact_name || app.contact_person || "");
+      setEmergencyContactPhone(app.emergency_contact_phone || app.contact_phone || selectedRow.phone || "");
+      setCocStatus(app.coc_status || lms?.coc_status || "Not Started");
+      setExamDate(app.exam_date || lms?.exam_date || "");
+      setInsurancePayment(app.insurance_payment ? String(app.insurance_payment) : "");
+      setLmisPayment(app.lmis_payment ? String(app.lmis_payment) : "");
+
+      setPoliceClearanceNo(lms?.police_clearance_no || app.police_clearance_no || "");
       setPoliceClearanceStatus((lms?.police_clearance_status as any) || "Pending");
     }
   }, [selectedRow]);
@@ -123,15 +137,50 @@ export function LMISWorkspace({
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.lms?.name;
 
-      // 1. Scoped narrow LMIS fields (labor_id, national_id, exam_date, coc_status)
-      if (laborRefNo && laborRefNo !== selectedRow.laborId) {
-        try {
-          await updateApplicantForLmisV2({
-            applicant_name: selectedRow.applicantId,
-            labor_id: laborRefNo,
-          });
-        } catch (err: any) {
-          console.warn("updateApplicantForLmisV2 warning:", err);
+      // 1. Scoped narrow LMIS fields (labor_id, national_id, exam_date, coc_status, emergency contacts, payments)
+      try {
+        await updateApplicantForLmisV2({
+          applicant_name: selectedRow.applicantId,
+          labor_id: laborRefNo.trim() || undefined,
+          national_id: nationalId.trim() || undefined,
+          emergency_contact_name: emergencyContactName.trim() || undefined,
+          emergency_contact_phone: emergencyContactPhone.trim() || undefined,
+          coc_status: cocStatus || undefined,
+          exam_date: examDate || undefined,
+          insurance_payment: insurancePayment ? Number(insurancePayment) : undefined,
+          lmis_payment: lmisPayment ? Number(lmisPayment) : undefined,
+        });
+      } catch (err: any) {
+        console.warn("updateApplicantForLmisV2 warning:", err);
+      }
+
+      // If insurance or LMIS payment entered and placement exists, also log stage expenses
+      if (selectedRow.dsrName) {
+        if (insurancePayment && Number(insurancePayment) > 0) {
+          try {
+            await logStageExpenseV2(
+              Number(insurancePayment),
+              "ETB",
+              "Insurance Payment",
+              selectedRow.dsrName,
+              "LMIS Clearance"
+            );
+          } catch (err: any) {
+            console.warn("logStageExpenseV2 insurance error:", err);
+          }
+        }
+        if (lmisPayment && Number(lmisPayment) > 0) {
+          try {
+            await logStageExpenseV2(
+              Number(lmisPayment),
+              "ETB",
+              "LMIS Ministry Payment",
+              selectedRow.dsrName,
+              "LMIS Clearance"
+            );
+          } catch (err: any) {
+            console.warn("logStageExpenseV2 lmis payment error:", err);
+          }
         }
       }
 
@@ -529,67 +578,108 @@ export function LMISWorkspace({
           )}
         </DrawerSection>
 
-        {/* Section 3: Missing Data Request Hub */}
-        <DrawerSection title="Missing Data Request Management" icon={AlertTriangle}>
-          <div className="sm:col-span-2 flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/70 dark:bg-[#16161c]">
-            <div>
-              <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                Flag Missing Information
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                Notify intake team that the Ministry requires additional documents.
+        {/* Section 3: LMIS Credentials, COC & Ministry Compliance */}
+        <DrawerSection title="LMIS Credentials, COC & Payments" icon={Award}>
+          <DrawerField label="National ID" isReadOnly={false}>
+            <Input
+              type="text"
+              placeholder="e.g. 100029384812"
+              value={nationalId}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setNationalId(e.target.value)}
+              className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Labour ID / Ministry Ref No" isReadOnly={false}>
+            <Input
+              type="text"
+              placeholder="Enter Labour ID (No default)"
+              value={laborRefNo}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setLaborRefNo(e.target.value)}
+              className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="COC Status" isReadOnly={false}>
+            <select
+              value={cocStatus}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setCocStatus(e.target.value)}
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+            >
+              <option value="Not Started">Not Started</option>
+              <option value="In Training">In Training</option>
+              <option value="Scheduled">Scheduled</option>
+              <option value="Passed">Passed</option>
+              <option value="Failed">Failed</option>
+            </select>
+          </DrawerField>
+
+          <DrawerField label="Exam Date" isReadOnly={false}>
+            <Input
+              type="date"
+              value={examDate}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setExamDate(e.target.value)}
+              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Contact Person Name" isReadOnly={false}>
+            <Input
+              type="text"
+              placeholder="Emergency contact person"
+              value={emergencyContactName}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setEmergencyContactName(e.target.value)}
+              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Contact Person Phone" isReadOnly={false}>
+            <Input
+              type="tel"
+              placeholder="+251 9..."
+              value={emergencyContactPhone}
+              disabled={!canEdit || mutation.isPending}
+              onChange={(e) => setEmergencyContactPhone(e.target.value)}
+              className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            />
+          </DrawerField>
+
+          <DrawerField label="Insurance Payment (ETB)" isReadOnly={false}>
+            <div className="relative">
+              <Input
+                type="number"
+                placeholder="504"
+                value={insurancePayment}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setInsurancePayment(e.target.value)}
+                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                ETB
               </span>
             </div>
-            <Switch
-              checked={missingDataRequested}
-              disabled={!canEdit || mutation.isPending}
-              onCheckedChange={setMissingDataRequested}
-            />
-          </div>
+          </DrawerField>
 
-          {missingDataRequested && (
-            <>
-              <DrawerField label="Missing Document Type" isReadOnly={false}>
-                <select
-                  value={missingDataType}
-                  disabled={!canEdit || mutation.isPending}
-                  onChange={(e) => setMissingDataType(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200"
-                >
-                  <option value="GAMCA Medical">GAMCA Medical</option>
-                  <option value="Police Clearance">Police Clearance</option>
-                  <option value="Birth Certificate">Birth Certificate</option>
-                  <option value="COC Certificate">COC Certificate</option>
-                  <option value="Passport Copy">Passport Copy</option>
-                  <option value="Yellow Card">Yellow Card</option>
-                </select>
-              </DrawerField>
-
-              <DrawerField label="Missing Data Status" isReadOnly={false}>
-                <select
-                  value={missingDataStatus}
-                  disabled={!canEdit || mutation.isPending}
-                  onChange={(e) => setMissingDataStatus(e.target.value as any)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200"
-                >
-                  <option value="Pending">Pending (Awaiting Document)</option>
-                  <option value="Received">Received (Resolved)</option>
-                </select>
-              </DrawerField>
-
-              <div className="sm:col-span-2">
-                <DrawerField label="Operational Notes / Ministry Remarks" isReadOnly={false}>
-                  <Textarea
-                    placeholder="Enter details on why the ministry rejected or requested extra documentation..."
-                    value={missingDataNotes}
-                    disabled={!canEdit || mutation.isPending}
-                    onChange={(e) => setMissingDataNotes(e.target.value)}
-                    className="min-h-[70px] text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-                  />
-                </DrawerField>
-              </div>
-            </>
-          )}
+          <DrawerField label="LMIS Payment (ETB)" isReadOnly={false}>
+            <div className="relative">
+              <Input
+                type="number"
+                placeholder="510"
+                value={lmisPayment}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setLmisPayment(e.target.value)}
+                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                ETB
+              </span>
+            </div>
+          </DrawerField>
         </DrawerSection>
 
         {/* Section 4: Stage Fee Required Logging (Routes to Finance) */}

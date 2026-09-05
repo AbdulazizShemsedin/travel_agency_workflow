@@ -33,8 +33,33 @@ export function CandidateCard({
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
 
-  const hasPassport = !passportImgError && Boolean(candidate.photo_passport);
-  const hasFullBody = !fullBodyImgError && Boolean(candidate.photo_full_body);
+  const normalizePhotoUrl = (url?: string) => {
+    if (!url) return "";
+    const trimmed = String(url).trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+      return trimmed;
+    }
+    if (!trimmed.startsWith("/")) {
+      return `/${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const passportPhotoSrc = normalizePhotoUrl(
+    candidate.photo_passport ||
+    (candidate as any).photograph ||
+    (candidate as any).photo
+  );
+
+  const fullBodyPhotoSrc = normalizePhotoUrl(
+    candidate.photo_full_body ||
+    (candidate as any).photo_portrait ||
+    (candidate as any).full_body_photo
+  );
+
+  const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
+  const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);
 
   return (
     <div
@@ -42,12 +67,12 @@ export function CandidateCard({
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs hover:shadow-lg hover:-translate-y-0.5 hover:border-emerald-700/50 dark:hover:border-emerald-500/40 transition-all duration-200 cursor-pointer"
     >
       {/* 1. Clean Two-Photo Area */}
-      <div className="relative grid grid-cols-2 gap-1.5 p-2.5 bg-slate-100/70 dark:bg-[#18181e]/60 border-b border-slate-100 dark:border-[#202026]">
+      <div className="relative grid grid-cols-2 gap-1.5 p-2.5 bg-slate-100/70 dark:bg-[#18181e]/60 border-b border-slate-100 dark:border-[#202028]">
         {/* Formal Passport Photo */}
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200/80 dark:bg-[#202028] flex items-center justify-center">
           {hasPassport ? (
             <img
-              src={candidate.photo_passport}
+              src={passportPhotoSrc}
               alt={`${candidate.full_name} - Passport Photo`}
               onError={() => setPassportImgError(true)}
               className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
@@ -68,7 +93,7 @@ export function CandidateCard({
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200/80 dark:bg-[#202028] flex items-center justify-center">
           {hasFullBody ? (
             <img
-              src={candidate.photo_full_body}
+              src={fullBodyPhotoSrc}
               alt={`${candidate.full_name} - Full Body Photo`}
               onError={() => setFullBodyImgError(true)}
               className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"

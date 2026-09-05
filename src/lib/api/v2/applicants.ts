@@ -86,7 +86,12 @@ export interface V2LmisUpdatePayload {
   labor_id?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
+  emergency_contact_address?: string;
   coc_attachment?: string;
+  coc_status?: string;
+  exam_date?: string;
+  insurance_payment?: number | string;
+  lmis_payment?: number | string;
   [key: string]: any;
 }
 

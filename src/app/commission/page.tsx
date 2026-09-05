@@ -1716,7 +1716,7 @@ export default function AdminCommissionPage() {
                 <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-[11px] text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
                   <Info className="h-4 w-4 shrink-0 text-emerald-600" />
                   <span>
-                    Clicking &quot;Download Invoice PDF&quot; generates a binary PDF directly via <code>agency_tracking.finance_api.get_batch_invoice_pdf</code> with live Frappe formatting and applicant details.
+                    Clicking &quot;Download Invoice PDF&quot; generates an official billing invoice PDF with verified agency details and applicant placement breakdown.
                   </span>
                 </div>
               </CardContent>

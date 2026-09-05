@@ -32,6 +32,7 @@ import {
   rejectEmbassyStepV2,
   reassignClearanceStepV2,
 } from "@/lib/api/v2/clearance";
+import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 
@@ -80,6 +81,7 @@ export function EmbassyWorkspace({
   const [status, setStatus] = React.useState<"Pending" | "Submitted" | "Approved" | "Rejected">("Pending");
   const [submissionDate, setSubmissionDate] = React.useState("");
   const [feeStatus, setFeeStatus] = React.useState<"Unpaid" | "Paid">("Unpaid");
+  const [embassyFee, setEmbassyFee] = React.useState("");
   const [receiptNo, setReceiptNo] = React.useState("");
   const [employee, setEmployee] = React.useState("");
   const [stampNumber, setStampNumber] = React.useState("");
@@ -104,10 +106,11 @@ export function EmbassyWorkspace({
       setSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
       const isPaid = (embassy?.payment_status || "").toLowerCase().includes("paid");
       setFeeStatus(isPaid ? "Paid" : "Unpaid");
+      setEmbassyFee((embassy as any)?.fee ? String((embassy as any).fee) : (embassy as any)?.amount ? String((embassy as any).amount) : "");
       setReceiptNo(embassy?.reference_no || embassy?.receipt_no || "");
       setEmployee(embassy?.assigned_officer || embassy?.employee || "");
-      setStampNumber(selectedRow.visaNumber || (selectedRow.applicant as any)?.visa_number || "1908334046");
-      setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.creation || new Date().toISOString().split("T")[0]);
+      setStampNumber(selectedRow.visaNumber || (selectedRow.applicant as any)?.visa_number || "");
+      setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.stamp_date || "");
       setRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || "");
     }
   }, [selectedRow]);
@@ -117,6 +120,20 @@ export function EmbassyWorkspace({
     mutationFn: async () => {
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
+
+      if (embassyFee && Number(embassyFee) > 0 && selectedRow.dsrName) {
+        try {
+          await logStageExpenseV2(
+            Number(embassyFee),
+            "USD",
+            "Embassy Visa Processing Fee",
+            selectedRow.dsrName,
+            "Embassy"
+          );
+        } catch (err: any) {
+          console.warn("logStageExpenseV2 embassy fee error:", err);
+        }
+      }
 
       if (stepName) {
         if (status === "Submitted") {
@@ -213,10 +230,10 @@ export function EmbassyWorkspace({
       cell: (row) => (
         <div className="space-y-0.5">
           <div className="font-mono text-xs text-blue-900 dark:text-blue-300 font-bold">
-            {row.visaNumber || (row.applicant as any)?.visa_number || "1908334046"}
+            {row.visaNumber || (row.applicant as any)?.visa_number || "—"}
           </div>
           <span className="inline-flex items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            Wakala: {row.wakalaStatus || "Authorized"}
+            Wakala: {row.wakalaStatus || "Pending"}
           </span>
         </div>
       ),
@@ -228,7 +245,7 @@ export function EmbassyWorkspace({
       width: "180px",
       cell: (row) => (
         <span className="text-slate-800 dark:text-zinc-200 uppercase font-medium truncate block max-w-[170px]">
-          {row.sponsorName || (row.applicant as any)?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI"}
+          {row.sponsorName || (row.applicant as any)?.sponsor_name || "—"}
         </span>
       ),
     },
@@ -360,9 +377,9 @@ export function EmbassyWorkspace({
         </DrawerSection>
 
         <DrawerSection title="Wakala & Attestation" icon={FileText}>
-          <DrawerField label="Wakala Authorization Status" value={selectedRow?.wakalaStatus || "Authorized"} isReadOnly />
-          <DrawerField label="Contract Attestation №" value={selectedRow?.contractNumber || "2005450415"} isReadOnly />
-          <DrawerField label="Foreign Agency Partner" value={selectedRow?.company || selectedRow?.lockedContractor || "Tihamat Asir Recruitment company"} isReadOnly />
+          <DrawerField label="Wakala Authorization Status" value={selectedRow?.wakalaStatus || "Pending"} isReadOnly />
+          <DrawerField label="Contract Attestation №" value={selectedRow?.contractNumber || "—"} isReadOnly />
+          <DrawerField label="Foreign Agency Partner" value={selectedRow?.company || selectedRow?.lockedContractor || "—"} isReadOnly />
         </DrawerSection>
 
         <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
@@ -400,6 +417,22 @@ export function EmbassyWorkspace({
               <option value="Unpaid">Unpaid</option>
               <option value="Paid">Paid</option>
             </select>
+          </DrawerField>
+
+          <DrawerField label="Embassy Fee Amount (ETB)" isReadOnly={false}>
+            <div className="relative">
+              <Input
+                type="number"
+                placeholder="Enter embassy fee"
+                value={embassyFee}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setEmbassyFee(e.target.value)}
+                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                ETB
+              </span>
+            </div>
           </DrawerField>
 
           <DrawerField label="Fee Receipt №" isReadOnly={false}>
