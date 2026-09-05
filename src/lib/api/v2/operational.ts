@@ -85,7 +85,7 @@ export async function fetchOperationalWorkspaceDataV2(
       }
 
       // Stream corridor isolation
-      if (streamType === "injaz" || streamType === "wakala") {
+      if (streamType === "wakala") {
         if (dest.toLowerCase() === "kuwait") continue;
       }
 
@@ -129,10 +129,11 @@ export async function fetchOperationalWorkspaceDataV2(
 
       // ---------------------------------------------------------------------
       // WORKSPACE PROGRESSION PREREQUISITES GATING:
-      // "an applicant on LMIS , teshir must not be on embassy or ticket if not finished."
+      // Backend creates all steps simultaneously in Processing; sequence order is for operator display.
+      // Roles work on their respective steps concurrently without artificial sequence blocking.
       // ---------------------------------------------------------------------
       if (streamType === "embassy") {
-        // Must be in Processing or Stamped or have embassy step
+        // Appears if in Processing or Stamped or has embassy step
         if (
           !embassyStep &&
           !plc &&
@@ -141,13 +142,18 @@ export async function fetchOperationalWorkspaceDataV2(
         ) {
           continue;
         }
-        // Strict Gate: Both LMIS and Taeshir/Telesign must be finished (unless direct step exists)
-        if (!embassyStep && (!isLmsFinished || !isInjFinished)) {
-          continue;
-        }
       } else if (streamType === "departure") {
-        // Strict Gate: Embassy (visa stamping) must be finished
-        if (!isEmbassyFinished && plc?.status !== "Ticketed" && plc?.status !== "Departed") {
+        // Departure workspace shows Stamped, Ticketed, or Departed placements
+        const isStampedOrBeyond =
+          isEmbassyFinished ||
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed" ||
+          applicant.applicant_state === "Stamped" ||
+          applicant.applicant_state === "Ticketed" ||
+          applicant.applicant_state === "Departed";
+
+        if (!isStampedOrBeyond) {
           continue;
         }
       } else if (streamType === "injaz") {
@@ -204,7 +210,15 @@ export async function fetchOperationalWorkspaceDataV2(
           : "UNPAID";
 
       const lmisStatus = lmsStep?.status || (plc ? "In Progress" : "Pending");
-      const wakalaStatus = plc ? "Authorized" : "Pending";
+      const wakalaStatus =
+        (embassyStep as any)?.wakala_status ||
+        (plc as any)?.wakala_status ||
+        "Pending";
+      const wakalaAmount =
+        typeof (embassyStep as any)?.wakala_amount === "number"
+          ? (embassyStep as any).wakala_amount
+          : undefined;
+      const wakalaPaidDate = (embassyStep as any)?.wakala_paid_date || undefined;
       const embassyStatus =
         embassyStep?.status ||
         (plc?.status === "Stamped" ? "Approved" : "Pending");
@@ -290,6 +304,8 @@ export async function fetchOperationalWorkspaceDataV2(
           embassyStep?.notes ||
           "",
         wakalaStatus,
+        wakalaAmount,
+        wakalaPaidDate,
         embassyStatus,
         telephone: applicant.phone || applicant.phone_number || "—",
         company: plc?.contractor_name || plc?.contractor || "—",

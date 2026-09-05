@@ -1,7 +1,7 @@
 # MASTER SYSTEM STATUS — V2 CONFORMANCE TRACKER
 
 **Target Branch**: `production_version_non_mock`  
-**Backend Authority**: `https://agencytracking-production.up.railway.app`  
+**Backend Authority**: `https://travelagency-production-b48d.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
 **Last Updated**: 2026-09-05T01:35:00Z  
@@ -102,6 +102,7 @@
 | 80 | **Real V2 Commission Batch Workflow & Contractor Configuration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 7 dedicated tabs on /commission (Owed Commissions, Batch Requests, Batch Details, Invoice & PDF, Payment & Settlement, Partial & Advances, Contractor Config). Integrated get_owed_commissions, create_commission_batch, settle_batch, settle_batch_items, upload_batch_payment_proof, get_batch_invoice_pdf, record_batch_advance, trigger_early_commission_accrual, and frappe.client.save on Contractor. Formally audited and documented threshold auto-notification absence as BACKEND GAP. Verified live against production Railway backend. |
 | 81 | **Mobile Responsiveness, Touch Horizontal Scrolling, WhatsApp Chat Look & Crop Ratio Normalization** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 1. Eliminated mobile right-gutter whitespace with device-width Viewport, overflow-x-hidden, and min-w-0 container bounds. 2. Restored horizontal table scrolling on touch devices with touch-pan-x and minimum table widths. 3. Added explicit confirmation popups for candidate selection, photo removals, and batch/rate deletions. 4. Added country filtering for foreign contractors. 5. Overhauled ImageCropModal with canvas aspect ratio normalization (35x45mm, 3:4, 1.42) and locked corner handles. 6. Redesigned mobile chat (<md) to match WhatsApp aesthetics (emerald header, doodle wallpaper, mint outgoing bubbles, blue read receipt ticks, and capsule composer). |
 | 82 | **Registration Error Navigation, Custom Select Dropdowns, Ledger Fees & Corridor Default Roles Engine** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 1. Registration error automatic section navigation, smooth scrolling, 4.5-second pulsing highlight, and simple plain English error formatting for non-native operators. 2. Custom styled Radix UI Select Dropdown component replacing raw HTML `<select>`. 3. Candidate detail financial ledger synthesizing initial registration fee with logs and accurate net totaling. 4. Applicant directory name column cleaning (removed dot and city name) and renamed Doc button to 'Contract document'. 5. Corridor Default Roles Engine (`defaultRoles.ts`) supporting 17 canonical roles with Saudi vs Kuwait pipeline specializations. 6. Dedicated 'Default Role Assignments' tab on `/employees` with persistence and staff resolvers. 7. 1-click 'Auto-Assign All Corridor Steps' in AssignEmployeeModal and automatic assignment on placement advance to Processing. Clean TypeScript and production build. |
+| 83 | **V2 Operational Workflow Exact Backend Conformance (`message.txt`)** | YES | YES | YES | `IMPLEMENTED` | YES | YES | YES | N/A | **COMPLETE** | Full conformance across all 13 operational domains: 1. Applicant intake & registration fee ledger integration. 2. Selection & Medical 1 gate. 3. Placement state transitions. 4. Dynamic corridor clearance concurrency (sequential gating removed). 5. Country clearance workspaces (Saudi Taeshir embedded Injaz RPCs with binary PDF blob download; Saudi Embassy Wakala unpaid warning banner & accidental submit guard; Kuwait LMIS Police Ashara fields & failure warning). 6. Contract Parser "Edit Parsed Terms" dialog (permitted fields only). 7. Ticketing & departure operations. 8. Pre-departure Medical 2 visual gate and departure blocking. 9. Commission batch lifecycle (write-off batch dialog, release unpaid items action). 10. Financial ledger & approval queue. 11. Foreign agency Wakala workspace. 12. Chat & executive oversight. 13. Canonical RBAC & employee provisioning. Verified clean TypeScript (`npx tsc --noEmit`) and production Next.js build (`npm run build`). |
 
 ---
 
@@ -135,5 +136,7 @@
 14. **Phase 14: Chat Contextual Candidate Mention Dropdown & Placement Mention Removal** -> [DONE]
 15. **Phase 15: Mobile Responsiveness, WhatsApp Chat Look, Touch Pan Tables & Photo Crop Ratios** -> [DONE]
 16. **Phase 16: Registration Error Navigation, Radix Dropdowns, Candidate Registration Fee Ledger, Directory Table Polish & Corridor Default Roles Engine** -> [DONE]
+17. **Phase 17: V2 Operational Workflow Exact Backend Conformance (`message.txt` & 13 Sections)** -> [DONE]
+
 
 

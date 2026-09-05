@@ -82,6 +82,8 @@ export interface WorkspaceApplicantRow {
   contact?: string;
   remark?: string;
   wakalaStatus?: string;
+  wakalaAmount?: number;
+  wakalaPaidDate?: string;
   embassyStatus?: string;
   telephone?: string;
   company?: string;

@@ -13,6 +13,7 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -87,10 +88,12 @@ export function EmbassyWorkspace({
   const [stampNumber, setStampNumber] = React.useState("");
   const [stampDate, setStampDate] = React.useState("");
   const [rejectionRemark, setRejectionRemark] = React.useState("");
+  const [confirmUnpaidWakala, setConfirmUnpaidWakala] = React.useState(false);
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
     if (selectedRow) {
+      setConfirmUnpaidWakala(false);
       const embassy = selectedRow.embassy;
       const st = embassy?.status;
       if (st === "Approved" || st === "Stamped" || selectedRow.embassyStatus === "Approved") {
@@ -137,11 +140,19 @@ export function EmbassyWorkspace({
 
       if (stepName) {
         if (status === "Submitted") {
+          const isSaudi = (selectedRow.destinationCountry || "").toLowerCase().includes("saudi");
+          const isWakalaPaid = selectedRow.wakalaStatus === "Paid";
+          if (isSaudi && !isWakalaPaid && !confirmUnpaidWakala) {
+            throw new Error("Wakala Unpaid — Embassy submission should not proceed. Please check the override box to confirm proceeding.");
+          }
           await submitEmbassyStepV2(stepName);
         } else if (status === "Approved") {
           await stampEmbassyStepV2(stepName, stampNumber || receiptNo);
         } else if (status === "Rejected") {
-          await rejectEmbassyStepV2(stepName, rejectionRemark || "Passport issue / photo mismatch");
+          if (!rejectionRemark.trim()) {
+            throw new Error("Rejection remark is required when rejecting Embassy step.");
+          }
+          await rejectEmbassyStepV2(stepName, rejectionRemark.trim());
         } else if (status === "Pending") {
           if (selectedRow.embassy?.status === "Pending") {
             await startClearanceStepV2(stepName);
@@ -226,15 +237,28 @@ export function EmbassyWorkspace({
       id: "visaNumber",
       header: "WAKALA & VISA NO",
       accessorKey: "visaNumber",
-      width: "160px",
+      width: "170px",
       cell: (row) => (
         <div className="space-y-0.5">
           <div className="font-mono text-xs text-blue-900 dark:text-blue-300 font-bold">
             {row.visaNumber || (row.applicant as any)?.visa_number || "—"}
           </div>
-          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            Wakala: {row.wakalaStatus || "Pending"}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold border ${
+                row.wakalaStatus === "Paid"
+                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                  : "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+              }`}
+            >
+              Wakala: {row.wakalaStatus || "Pending"}
+            </span>
+            {row.wakalaAmount ? (
+              <span className="text-[9px] font-mono font-semibold text-slate-500 dark:text-zinc-400">
+                ${row.wakalaAmount}
+              </span>
+            ) : null}
+          </div>
         </div>
       ),
     },
@@ -377,12 +401,41 @@ export function EmbassyWorkspace({
         </DrawerSection>
 
         <DrawerSection title="Wakala & Attestation" icon={FileText}>
+          {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
+            <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+              <div>
+                <span className="font-bold">Wakala Unpaid — Embassy submission should not proceed</span>
+                <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                  Wakala authorization status is currently {selectedRow?.wakalaStatus || "Pending"}. Embassy submission requires verified Wakala payment.
+                </p>
+              </div>
+            </div>
+          )}
           <DrawerField label="Wakala Authorization Status" value={selectedRow?.wakalaStatus || "Pending"} isReadOnly />
+          <DrawerField label="Wakala Fee Amount" value={selectedRow?.wakalaAmount ? `$${selectedRow.wakalaAmount}` : "—"} isReadOnly />
+          <DrawerField label="Wakala Paid Date" value={selectedRow?.wakalaPaidDate || "—"} isReadOnly />
           <DrawerField label="Contract Attestation №" value={selectedRow?.contractNumber || "—"} isReadOnly />
           <DrawerField label="Foreign Agency Partner" value={selectedRow?.company || selectedRow?.lockedContractor || "—"} isReadOnly />
         </DrawerSection>
 
         <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
+          {status === "Submitted" && selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
+            <div className="sm:col-span-2 p-3 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 text-xs">
+              <label className="flex items-start gap-2 cursor-pointer font-semibold text-rose-800 dark:text-rose-300">
+                <input
+                  type="checkbox"
+                  checked={confirmUnpaidWakala}
+                  onChange={(e) => setConfirmUnpaidWakala(e.target.checked)}
+                  className="mt-0.5 rounded border-rose-400 text-rose-600 focus:ring-rose-500"
+                />
+                <span>
+                  Wakala is Unpaid. Check here to confirm manual override and proceed with Embassy submission.
+                </span>
+              </label>
+            </div>
+          )}
+
           <DrawerField label="Embassy Clearance Status" isReadOnly={false}>
             <select
               value={status}

@@ -29,11 +29,19 @@ import {
   User,
   HelpCircle,
   FileBadge2,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { getApplicantV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import {
   listPlacementsV2,
@@ -43,6 +51,7 @@ import {
   uploadPlacementVisaV2,
   recordSelectedMedicalResultV2,
   advancePlacementV2,
+  updatePlacementParsedFieldsV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import {
@@ -261,6 +270,71 @@ export default function PlacementDocumentCenterPage() {
       });
     } finally {
       setIsVisaUploading(false);
+    }
+  };
+
+  // Edit Parsed Fields Dialog State (Contract Parser)
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
+  const [editFields, setEditFields] = React.useState({
+    contract_number: "",
+    contract_signed_date: "",
+    contract_duration: "",
+    visa_number: "",
+    visa_type: "",
+    visa_issue_date: "",
+    visa_expiry_date: "",
+    visa_reference_number: "",
+    employer_name: "",
+    employer_national_id: "",
+    employer_address: "",
+    saudi_agency_name: "",
+    saudi_agency_license: "",
+    kuwait_agency_name: "",
+    kuwait_agency_license: "",
+    employment_site: "",
+  });
+  const [isSavingParsedFields, setIsSavingParsedFields] = React.useState(false);
+
+  const handleOpenEditModal = () => {
+    if (!activePlacement) return;
+    setEditFields({
+      contract_number: activePlacement.contract_number || "",
+      contract_signed_date: activePlacement.contract_signed_date || "",
+      contract_duration: (activePlacement as any).contract_duration || "",
+      visa_number: activePlacement.visa_number || "",
+      visa_type: (activePlacement as any).visa_type || "",
+      visa_issue_date: (activePlacement as any).visa_issue_date || "",
+      visa_expiry_date: (activePlacement as any).visa_expiry_date || "",
+      visa_reference_number: (activePlacement as any).visa_reference_number || "",
+      employer_name: activePlacement.employer_name || "",
+      employer_national_id: activePlacement.employer_national_id || "",
+      employer_address: (activePlacement as any).employer_address || "",
+      saudi_agency_name: (activePlacement as any).saudi_agency_name || "",
+      saudi_agency_license: (activePlacement as any).saudi_agency_license || "",
+      kuwait_agency_name: (activePlacement as any).kuwait_agency_name || "",
+      kuwait_agency_license: (activePlacement as any).kuwait_agency_license || "",
+      employment_site: activePlacement.employment_site || "",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveParsedFields = async () => {
+    if (!activePlacement) return;
+    setIsSavingParsedFields(true);
+    try {
+      await updatePlacementParsedFieldsV2(activePlacement.name, editFields);
+      toast.success("Placement Parsed Fields Updated", {
+        description: "Permitted contract and visa terms updated successfully.",
+      });
+      setIsEditModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
+    } catch (err: any) {
+      toast.error("Failed to Update Parsed Fields", {
+        description: err?.message || "Backend rejected field update.",
+      });
+    } finally {
+      setIsSavingParsedFields(false);
     }
   };
 
@@ -528,13 +602,29 @@ export default function PlacementDocumentCenterPage() {
             {/* Extracted Contract Fields Card */}
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-amber-500" />
-                  Extracted Contract Terms
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Structured values stored on the candidate placement record.
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      Extracted Contract Terms
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Structured values stored on the candidate placement record.
+                    </CardDescription>
+                  </div>
+                  {activePlacement && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenEditModal}
+                      className="text-xs h-7 px-2.5 gap-1.5 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Edit Terms
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="space-y-3">
@@ -1013,6 +1103,213 @@ export default function PlacementDocumentCenterPage() {
           )}
         </>
       )}
+
+      {/* Edit Parsed Terms Modal (Contract Parser Permitted Fields Only) */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-emerald-600" />
+              Edit Placement Parsed Terms
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Update extracted contract and visa parameters for Placement <strong>{activePlacement?.name}</strong>.
+              <span className="block text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                Note: Only contract and visa terms may be modified here. Lifecycle status and stage gates are strictly backend-managed.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Contract Number</label>
+              <Input
+                value={editFields.contract_number}
+                onChange={(e) => setEditFields({ ...editFields, contract_number: e.target.value })}
+                placeholder="e.g. CON-2026-001"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Contract Signed Date</label>
+              <Input
+                type="date"
+                value={editFields.contract_signed_date}
+                onChange={(e) => setEditFields({ ...editFields, contract_signed_date: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Contract Duration</label>
+              <Input
+                value={editFields.contract_duration}
+                onChange={(e) => setEditFields({ ...editFields, contract_duration: e.target.value })}
+                placeholder="e.g. 2 Years"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Visa Number</label>
+              <Input
+                value={editFields.visa_number}
+                onChange={(e) => setEditFields({ ...editFields, visa_number: e.target.value })}
+                placeholder="e.g. 1908334046"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Visa Type</label>
+              <Input
+                value={editFields.visa_type}
+                onChange={(e) => setEditFields({ ...editFields, visa_type: e.target.value })}
+                placeholder="Work / Employment"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Visa Reference Number</label>
+              <Input
+                value={editFields.visa_reference_number}
+                onChange={(e) => setEditFields({ ...editFields, visa_reference_number: e.target.value })}
+                placeholder="e.g. REF-KUW-881"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Visa Issue Date</label>
+              <Input
+                type="date"
+                value={editFields.visa_issue_date}
+                onChange={(e) => setEditFields({ ...editFields, visa_issue_date: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Visa Expiry Date</label>
+              <Input
+                type="date"
+                value={editFields.visa_expiry_date}
+                onChange={(e) => setEditFields({ ...editFields, visa_expiry_date: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Employer / Sponsor Name</label>
+              <Input
+                value={editFields.employer_name}
+                onChange={(e) => setEditFields({ ...editFields, employer_name: e.target.value })}
+                placeholder="e.g. Mohammed Al-Otaibi"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Employer National ID / Iqama</label>
+              <Input
+                value={editFields.employer_national_id}
+                onChange={(e) => setEditFields({ ...editFields, employer_national_id: e.target.value })}
+                placeholder="e.g. 1098234710"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Employment Site / City</label>
+              <Input
+                value={editFields.employment_site}
+                onChange={(e) => setEditFields({ ...editFields, employment_site: e.target.value })}
+                placeholder="e.g. Riyadh / Kuwait City"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Employer Address</label>
+              <Input
+                value={editFields.employer_address}
+                onChange={(e) => setEditFields({ ...editFields, employer_address: e.target.value })}
+                placeholder="Full address in host country"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {!isKuwait ? (
+              <>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Saudi Agency Partner Name</label>
+                  <Input
+                    value={editFields.saudi_agency_name}
+                    onChange={(e) => setEditFields({ ...editFields, saudi_agency_name: e.target.value })}
+                    placeholder="Partner agency name"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Saudi Agency License №</label>
+                  <Input
+                    value={editFields.saudi_agency_license}
+                    onChange={(e) => setEditFields({ ...editFields, saudi_agency_license: e.target.value })}
+                    placeholder="e.g. LIC-KSA-991"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Kuwait Agency Partner Name</label>
+                  <Input
+                    value={editFields.kuwait_agency_name}
+                    onChange={(e) => setEditFields({ ...editFields, kuwait_agency_name: e.target.value })}
+                    placeholder="Kuwait partner agency"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Kuwait Agency License №</label>
+                  <Input
+                    value={editFields.kuwait_agency_license}
+                    onChange={(e) => setEditFields({ ...editFields, kuwait_agency_license: e.target.value })}
+                    placeholder="e.g. LIC-KUW-882"
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-zinc-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSavingParsedFields}
+              onClick={() => setIsEditModalOpen(false)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSavingParsedFields}
+              onClick={handleSaveParsedFields}
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold flex items-center gap-1.5"
+            >
+              {isSavingParsedFields && <Loader2 className="h-3 w-3 animate-spin" />}
+              Save Parsed Terms
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

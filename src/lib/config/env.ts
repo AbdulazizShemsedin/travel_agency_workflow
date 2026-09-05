@@ -2,7 +2,7 @@
  * Application Environment Configuration
  * 
  * Strict Production Policy:
- * - Real Backend Only (https://agencytracking-production.up.railway.app)
+ * - Real Backend Only (https://travelagency-production-b48d.up.railway.app)
  * - NO Demo Mode
  * - NO Mock Business Data
  * - NO V1 Fallbacks

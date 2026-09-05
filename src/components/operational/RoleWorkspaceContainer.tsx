@@ -103,7 +103,19 @@ export function RoleWorkspaceContainer() {
       if (!prefTab) prefTab = "directory";
     }
 
-    // 6. Generic Clearance Officer fallback
+    // 6. Medical Officer
+    if (r.includes("medical")) {
+      allowed.push("directory", "departure");
+      if (!prefTab) prefTab = "directory";
+    }
+
+    // 7. Contract Parser
+    if (r.includes("contract") || r.includes("parser")) {
+      allowed.push("directory");
+      if (!prefTab) prefTab = "directory";
+    }
+
+    // 8. Generic Clearance Officer fallback
     if (r.includes("clearance") && allowed.length === 0) {
       allowed.push("lms", "injaz", "embassy", "clearance");
       prefTab = "lms";

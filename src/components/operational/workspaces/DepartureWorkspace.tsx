@@ -11,6 +11,7 @@ import {
   Clock,
   User,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -67,7 +68,13 @@ export function DepartureWorkspace({
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
       const norm = String(r).trim().toLowerCase();
-      return norm === "ticketing officer" || norm === "departure officer" || norm === "logistics officer";
+      return (
+        norm === "ticketing officer" ||
+        norm === "ticketer" ||
+        norm === "departure officer" ||
+        norm === "logistics officer" ||
+        norm === "medical officer"
+      );
     });
   }, [isAdmin, roles]);
 
@@ -403,6 +410,33 @@ export function DepartureWorkspace({
       },
     },
     {
+      id: "medical2",
+      header: "MEDICAL 2",
+      width: "120px",
+      align: "center",
+      cell: (row) => {
+        const med2 =
+          (row.departure as any)?.medical_2_result ||
+          (row.departure as any)?.medical_2_status;
+        const isFit = med2 === "FIT" || med2 === "Pass";
+        const isUnfit = med2 === "UNFIT" || med2 === "Fail";
+
+        return (
+          <Badge
+            className={
+              isFit
+                ? "bg-emerald-600 text-white font-semibold text-[10px]"
+                : isUnfit
+                ? "bg-rose-600 text-white font-semibold text-[10px]"
+                : "bg-amber-500 text-white font-semibold text-[10px]"
+            }
+          >
+            {isFit ? "FIT ✓" : isUnfit ? "UNFIT ✕" : "Pending"}
+          </Badge>
+        );
+      },
+    },
+    {
       id: "jobRemark",
       header: "HOUSE / REMARK",
       width: "140px",
@@ -592,6 +626,23 @@ export function DepartureWorkspace({
 
         {/* Section 3: Pre-Departure Medical Check 2 */}
         <DrawerSection title="Pre-Departure Medical 2" icon={HeartPulse}>
+          {medical2Result === "Pass" ? (
+            <div className="sm:col-span-2 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-2.5 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 font-bold">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>Medical 2: FIT ✓ Eligible for Departure</span>
+            </div>
+          ) : medical2Result === "Fail" ? (
+            <div className="sm:col-span-2 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2 font-bold">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+              <span>Medical 2: UNFIT ⚠️ Departure Blocked</span>
+            </div>
+          ) : (
+            <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2 font-medium">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+              <span>Medical 2: Pending — Must be verified FIT prior to departure dispatch</span>
+            </div>
+          )}
+
           <DrawerField label="Medical 2 Result" isReadOnly={false}>
             <select
               value={medical2Result}
@@ -631,6 +682,13 @@ export function DepartureWorkspace({
 
         {/* Section 4: Airport Departure Operations (DSR Departure) */}
         <DrawerSection title="Bole Airport Dispatch (DSR Departure)" icon={Plane}>
+          {departureStatus === "Departed" && medical2Result !== "Pass" && (
+            <div className="sm:col-span-2 p-2.5 rounded border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-xs font-semibold text-rose-800 dark:text-rose-300 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+              <span>Departure Blocked: Candidate must pass Pre-Departure Medical 2 (FIT) prior to departure dispatch.</span>
+            </div>
+          )}
+
           <DrawerField label="Departure Status" isReadOnly={false}>
             <select
               value={departureStatus}

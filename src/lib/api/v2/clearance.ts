@@ -252,3 +252,122 @@ export async function renderInjazPdfV2(clearanceStepName: string): Promise<Blob>
     }
   );
 }
+
+/**
+ * Books or updates a Taeshir appointment and Injaz Application ID (E-number).
+ * Authoritative Backend Endpoint: clearance_api.set_taeshir_appointment
+ */
+export async function setTaeshirAppointmentV2(
+  clearanceStepName: string,
+  appointmentDate: string,
+  injazApplicationId: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.set_taeshir_appointment",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        appointment_date: appointmentDate,
+        injaz_application_id: injazApplicationId,
+      },
+    }
+  );
+}
+
+/**
+ * Reschedules a Taeshir appointment without forfeiting Injaz payment.
+ * Authoritative Backend Endpoint: clearance_api.reschedule_taeshir_appointment
+ */
+export async function rescheduleTaeshirAppointmentV2(
+  clearanceStepName: string,
+  newAppointmentDate: string,
+  cause: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.reschedule_taeshir_appointment",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        new_appointment_date: newAppointmentDate,
+        cause,
+      },
+    }
+  );
+}
+
+/**
+ * Records an Injaz visa fee payment.
+ * Authoritative Backend Endpoint: clearance_api.record_injaz_payment
+ */
+export async function recordInjazPaymentV2(
+  clearanceStepName: string,
+  amount: number,
+  currency: string = "USD",
+  receiptNumber?: string,
+  paidDate?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.record_injaz_payment",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        amount,
+        currency,
+        ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
+        ...(paidDate ? { paid_date: paidDate } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Forfeits a missed Injaz slot and restarts with a fresh application attempt.
+ * Authoritative Backend Endpoint: clearance_api.forfeit_injaz_and_restart
+ */
+export async function forfeitInjazAndRestartV2(
+  clearanceStepName: string,
+  reason: string,
+  newAppointmentDate: string,
+  newInjazApplicationId: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.forfeit_injaz_and_restart",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        reason,
+        new_appointment_date: newAppointmentDate,
+        new_injaz_application_id: newInjazApplicationId,
+      },
+    }
+  );
+}
+
+/**
+ * Updates Kuwait Police Ashara fields on a Kuwait LMIS Clearance Step.
+ */
+export async function updateKuwaitPoliceAsharaV2(
+  clearanceStepName: string,
+  fields: {
+    police_ashara_appointment_date?: string;
+    police_ashara_status?: "Pending" | "Scheduled" | "Completed" | "Failed" | string;
+    police_ashara_amount?: number;
+    police_ashara_remark?: string;
+    reference_no?: string;
+    [key: string]: any;
+  }
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2("/api/method/frappe.client.set_value", {
+    method: "POST",
+    body: {
+      doctype: "Clearance Step",
+      name: clearanceStepName,
+      fieldname: fields,
+    },
+  });
+}
+

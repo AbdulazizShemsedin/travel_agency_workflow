@@ -35,6 +35,7 @@ import {
   startClearanceStepV2,
   completeClearanceStepV2,
   reassignClearanceStepV2,
+  updateKuwaitPoliceAsharaV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
@@ -81,6 +82,11 @@ export function LMISWorkspace({
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
+  const isKuwait = Boolean(
+    (selectedRow?.destinationCountry || "").toLowerCase().includes("kuwait") ||
+    corridorFilter.toLowerCase().includes("kuwait")
+  );
+
   // Form State for Drawer
   const [status, setStatus] = React.useState<"Pending" | "Issued" | "Rejected">("Pending");
   const [issuedOn, setIssuedOn] = React.useState("");
@@ -97,13 +103,16 @@ export function LMISWorkspace({
   const [lmisPayment, setLmisPayment] = React.useState("");
 
   // Kuwait LMIS / Police Ashara fields
-  const [policeClearanceNo, setPoliceClearanceNo] = React.useState("");
-  const [policeClearanceStatus, setPoliceClearanceStatus] = React.useState<"Pending" | "Cleared" | "Rejected">("Pending");
+  const [policeAsharaRefNo, setPoliceAsharaRefNo] = React.useState("");
+  const [policeAsharaStatus, setPoliceAsharaStatus] = React.useState<"Pending" | "Completed" | "Passed" | "Failed" | "Rejected">("Pending");
+  const [policeAsharaDate, setPoliceAsharaDate] = React.useState("");
+  const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState("");
+  const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState("");
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
     if (selectedRow) {
-      const lms = selectedRow.lms;
+      const lms = (selectedRow.lms as any) || {};
       const st = lms?.status;
       if (st === "Issued" || st === "Approved" || st === "Completed" || st === "Complete") {
         setStatus("Issued");
@@ -126,8 +135,11 @@ export function LMISWorkspace({
       setInsurancePayment(app.insurance_payment ? String(app.insurance_payment) : "");
       setLmisPayment(app.lmis_payment ? String(app.lmis_payment) : "");
 
-      setPoliceClearanceNo(lms?.police_clearance_no || app.police_clearance_no || "");
-      setPoliceClearanceStatus((lms?.police_clearance_status as any) || "Pending");
+      setPoliceAsharaRefNo(lms?.police_ashara_reference_no || lms?.reference_no || lms?.police_clearance_no || app.police_clearance_no || "");
+      setPoliceAsharaStatus(lms?.police_ashara_status || (lms?.police_clearance_status as any) || "Pending");
+      setPoliceAsharaDate(lms?.police_ashara_appointment_date || "");
+      setPoliceAsharaAmount(lms?.police_ashara_amount ? String(lms.police_ashara_amount) : "");
+      setPoliceAsharaRemark(lms?.police_ashara_remark || "");
     }
   }, [selectedRow]);
 
@@ -184,7 +196,22 @@ export function LMISWorkspace({
         }
       }
 
-      // 2. Authoritative Clearance Step State Machine
+      // 2. Kuwait Police Ashara persistence if Kuwait corridor
+      if (isKuwait && stepName) {
+        try {
+          await updateKuwaitPoliceAsharaV2(stepName, {
+            police_ashara_appointment_date: policeAsharaDate || undefined,
+            police_ashara_status: policeAsharaStatus,
+            police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
+            police_ashara_remark: policeAsharaRemark.trim() || undefined,
+            reference_no: policeAsharaRefNo.trim() || undefined,
+          });
+        } catch (asharaErr: any) {
+          console.warn("updateKuwaitPoliceAsharaV2 error:", asharaErr);
+        }
+      }
+
+      // 3. Authoritative Clearance Step State Machine
       if (stepName) {
         if (status === "Issued") {
           await completeClearanceStepV2(stepName, laborRefNo);
@@ -436,8 +463,6 @@ export function LMISWorkspace({
     },
   ];
 
-  const isKuwait = selectedRow?.destinationCountry === "Kuwait";
-
   return (
     <>
       <OperationalTable
@@ -531,28 +556,88 @@ export function LMISWorkspace({
           {/* Kuwait Corridor Sub-Flow: Police Ashara */}
           {isKuwait && (
             <>
-              <DrawerField label="Police Ashara Certificate №" isReadOnly={false}>
+              <div className="sm:col-span-2 pt-2 pb-1 border-t border-slate-200 dark:border-zinc-800">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                  Kuwait Clearance — Police Ashara (CID)
+                </span>
+              </div>
+
+              {(policeAsharaStatus === "Failed" || policeAsharaStatus === "Rejected") && (
+                <div className="sm:col-span-2 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Ashara Failed — Applicant disqualified for Kuwait until resolved</span>
+                    <p className="mt-0.5 text-[11px] text-rose-700 dark:text-rose-400">
+                      Police criminal record check failed or was rejected. Clearance cannot proceed for the Kuwait corridor.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <DrawerField label="Ashara Appointment Date" isReadOnly={false}>
                 <Input
-                  type="text"
-                  placeholder="e.g. POL-KUW-88123"
-                  value={policeClearanceNo}
+                  type="date"
+                  value={policeAsharaDate}
                   disabled={!canEdit || mutation.isPending}
-                  onChange={(e) => setPoliceClearanceNo(e.target.value)}
-                  className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  onChange={(e) => setPoliceAsharaDate(e.target.value)}
+                  className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                 />
               </DrawerField>
-              <DrawerField label="Police Clearance Status" isReadOnly={false}>
+
+              <DrawerField label="Ashara Clearance Status" isReadOnly={false}>
                 <select
-                  value={policeClearanceStatus}
+                  value={policeAsharaStatus}
                   disabled={!canEdit || mutation.isPending}
-                  onChange={(e) => setPoliceClearanceStatus(e.target.value as any)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md"
+                  onChange={(e) => setPoliceAsharaStatus(e.target.value as any)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-medium"
                 >
                   <option value="Pending">Pending</option>
-                  <option value="Cleared">Cleared (Verified)</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Passed">Passed (Cleared)</option>
+                  <option value="Failed">Failed (Disqualified)</option>
                   <option value="Rejected">Rejected</option>
                 </select>
               </DrawerField>
+
+              <DrawerField label="Ashara Reference №" isReadOnly={false}>
+                <Input
+                  type="text"
+                  placeholder="e.g. ASH-KUW-9921"
+                  value={policeAsharaRefNo}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setPoliceAsharaRefNo(e.target.value)}
+                  className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </DrawerField>
+
+              <DrawerField label="Ashara Fee Amount (ETB)" isReadOnly={false}>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    placeholder="Amount"
+                    value={policeAsharaAmount}
+                    disabled={!canEdit || mutation.isPending}
+                    onChange={(e) => setPoliceAsharaAmount(e.target.value)}
+                    className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  />
+                  <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
+                    ETB
+                  </span>
+                </div>
+              </DrawerField>
+
+              <div className="sm:col-span-2">
+                <DrawerField label="Ashara Remark / Notes" isReadOnly={false}>
+                  <Input
+                    type="text"
+                    placeholder="Enter CID / Ashara observations or remarks"
+                    value={policeAsharaRemark}
+                    disabled={!canEdit || mutation.isPending}
+                    onChange={(e) => setPoliceAsharaRemark(e.target.value)}
+                    className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  />
+                </DrawerField>
+              </div>
             </>
           )}
 

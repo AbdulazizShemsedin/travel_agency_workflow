@@ -427,6 +427,48 @@ export async function settleBatchV2(
 }
 
 /**
+ * Writes off a discount or reduction on a Commission Batch and records an Expense transaction.
+ * Authoritative Backend Endpoint: finance_api.write_off_batch
+ * Roles: Finance Manager, Administrator, System Manager
+ */
+export async function writeOffBatchV2(
+  batchName: string,
+  writeOffAmount: number,
+  writeOffReason: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.write_off_batch",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        write_off_amount: writeOffAmount,
+        write_off_reason: writeOffReason,
+      },
+    }
+  );
+}
+
+/**
+ * Releases unpaid batch items back to the owed commission pool for future batching.
+ * Authoritative Backend Endpoint: finance_api.release_unpaid_items
+ * Roles: Finance Manager, Administrator, System Manager
+ */
+export async function releaseUnpaidItemsV2(
+  itemNames: string[]
+): Promise<{ message?: string; released_count?: number; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.release_unpaid_items",
+    {
+      method: "POST",
+      body: {
+        item_names: Array.isArray(itemNames) ? JSON.stringify(itemNames) : itemNames,
+      },
+    }
+  );
+}
+
+/**
  * Manually triggers commission accrual early for a placement.
  */
 export async function triggerEarlyCommissionAccrualV2(

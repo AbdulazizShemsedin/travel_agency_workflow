@@ -29,11 +29,25 @@ import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   startClearanceStepV2,
   completeClearanceStepV2,
   reassignClearanceStepV2,
+  setTaeshirAppointmentV2,
+  rescheduleTaeshirAppointmentV2,
+  recordInjazPaymentV2,
+  forfeitInjazAndRestartV2,
+  renderInjazPdfV2,
 } from "@/lib/api/v2/clearance";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -97,6 +111,19 @@ export function InjazWorkspace({
   const [remark, setRemark] = React.useState("");
   const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
 
+  // Reschedule Dialog State
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = React.useState(false);
+  const [rescheduleDate, setRescheduleDate] = React.useState("");
+  const [rescheduleCause, setRescheduleCause] = React.useState("");
+  const [isRescheduling, setIsRescheduling] = React.useState(false);
+
+  // Forfeit and Restart Dialog State
+  const [isForfeitModalOpen, setIsForfeitModalOpen] = React.useState(false);
+  const [forfeitReason, setForfeitReason] = React.useState("");
+  const [forfeitNewDate, setForfeitNewDate] = React.useState("");
+  const [forfeitNewInjazId, setForfeitNewInjazId] = React.useState("");
+  const [isForfeiting, setIsForfeiting] = React.useState(false);
+
   // Helper to extract Injaz Candidate Data for PDF generation
   const getInjazDataForRow = (row?: WorkspaceApplicantRow | null): InjazCandidateData => {
     if (!row) return {};
@@ -138,9 +165,30 @@ export function InjazWorkspace({
 
   const handleGenerateInjazDoc = async () => {
     if (!selectedRow) return;
+    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
     try {
       setIsGeneratingInjaz(true);
-      toast.info("Generating official Injaz Document...");
+      // Attempt authoritative backend render_injaz_pdf first
+      if (stepName) {
+        try {
+          toast.info("Rendering Injaz PDF from backend...");
+          const blob = await renderInjazPdfV2(stepName);
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `Injaz_${selectedRow.passportNumber || selectedRow.applicantId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          toast.success("Official Injaz document downloaded successfully!");
+          return;
+        } catch (backendErr) {
+          console.warn("Backend renderInjazPdfV2 fallback to client generator:", backendErr);
+        }
+      }
+
+      toast.info("Generating Injaz Document...");
       await downloadInjazDocumentPDF(getInjazDataForRow(selectedRow));
       toast.success("Injaz document downloaded successfully!", {
         description: `Official Visa Application Form for ${selectedRow.fullName}`,
@@ -164,6 +212,51 @@ export function InjazWorkspace({
       toast.error("Failed to open Injaz document", { description: err?.message || "Open error" });
     } finally {
       setIsGeneratingInjaz(false);
+    }
+  };
+
+  const handleRescheduleAppointment = async () => {
+    if (!selectedRow) return;
+    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+    if (!stepName || !rescheduleDate) {
+      toast.error("New appointment date is required.");
+      return;
+    }
+    setIsRescheduling(true);
+    try {
+      await rescheduleTaeshirAppointmentV2(stepName, rescheduleDate, rescheduleCause || "Applicant requested reschedule");
+      toast.success("Taeshir appointment rescheduled successfully!");
+      setAppointmentDate(rescheduleDate);
+      setIsRescheduleModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error("Failed to reschedule appointment", { description: err?.message });
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
+
+  const handleForfeitAndRestartInjaz = async () => {
+    if (!selectedRow) return;
+    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+    if (!stepName || !forfeitReason || !forfeitNewDate || !forfeitNewInjazId) {
+      toast.error("Reason, new appointment date, and new Injaz Application ID are required.");
+      return;
+    }
+    setIsForfeiting(true);
+    try {
+      await forfeitInjazAndRestartV2(stepName, forfeitReason, forfeitNewDate, forfeitNewInjazId);
+      toast.success("Injaz forfeited and restarted with new application!");
+      setAppointmentDate(forfeitNewDate);
+      setInjazNumber(forfeitNewInjazId);
+      setIsForfeitModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error("Failed to forfeit and restart Injaz", { description: err?.message });
+    } finally {
+      setIsForfeiting(false);
     }
   };
 
@@ -216,6 +309,30 @@ export function InjazWorkspace({
       }
 
       if (stepName) {
+        // Set Taeshir appointment if details are present
+        if (appointmentDate && injazNumber) {
+          try {
+            await setTaeshirAppointmentV2(stepName, appointmentDate, injazNumber);
+          } catch (err: any) {
+            console.warn("setTaeshirAppointmentV2 warning:", err);
+          }
+        }
+
+        // Record Injaz payment if fee entered
+        if (paymentStatus === "PAID" || (injazFee && Number(injazFee) > 0 && paymentNo)) {
+          try {
+            await recordInjazPaymentV2(
+              stepName,
+              Number(injazFee) || 10.5,
+              "USD",
+              paymentNo || undefined,
+              paymentDate || undefined
+            );
+          } catch (err: any) {
+            console.warn("recordInjazPaymentV2 warning:", err);
+          }
+        }
+
         if (status === "Completed") {
           await completeClearanceStepV2(stepName, injazNumber);
         } else if (status === "Pending") {
@@ -281,10 +398,10 @@ export function InjazWorkspace({
       cell: (row) => (
         <div className="flex flex-col text-xs">
           <span className="font-mono text-slate-900 dark:text-white font-semibold">
-            {row.contractNumber || (row.applicant as any)?.contract_number || "2005450415"}
+            {row.contractNumber || (row.applicant as any)?.contract_number || "—"}
           </span>
           <span className="font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
-            Visa: {row.visaNumber || (row.applicant as any)?.visa_number || "1908334046"}
+            Visa: {row.visaNumber || (row.applicant as any)?.visa_number || "—"}
           </span>
         </div>
       ),
@@ -297,10 +414,10 @@ export function InjazWorkspace({
       cell: (row) => (
         <div className="truncate block max-w-[210px]">
           <span className="font-semibold text-slate-900 dark:text-white uppercase block truncate text-xs">
-            {row.sponsorName || (row.applicant as any)?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI"}
+            {row.sponsorName || (row.applicant as any)?.sponsor_name || "—"}
           </span>
           <span className="text-[10px] text-slate-500 dark:text-zinc-400 block font-mono">
-            ID: {row.sponsorId || (row.applicant as any)?.sponsor_id || "1130373143"}
+            ID: {row.sponsorId || (row.applicant as any)?.sponsor_id || "—"}
           </span>
         </div>
       ),
@@ -324,7 +441,7 @@ export function InjazWorkspace({
       width: "130px",
       cell: (row) => (
         <span className="font-mono text-xs text-blue-950 dark:text-blue-300 font-bold">
-          {(row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || `E${row.passportNumber?.replace(/\D/g, "") || "4982104"}`}
+          {(row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "—"}
         </span>
       ),
     },
@@ -472,7 +589,7 @@ export function InjazWorkspace({
           />
           <DrawerField
             label="Saudi Agency (Contractor)"
-            value={(selectedRow?.applicant as any)?.contractor_name || selectedRow?.lockedContractor || "Tihamat Asir Recruitment company"}
+            value={(selectedRow?.applicant as any)?.contractor_name || selectedRow?.lockedContractor || "—"}
             isReadOnly
           />
         </DrawerSection>
@@ -635,6 +752,35 @@ export function InjazWorkspace({
                 type="button"
                 variant="outline"
                 size="sm"
+                onClick={() => {
+                  setRescheduleDate(appointmentDate);
+                  setRescheduleCause("");
+                  setIsRescheduleModalOpen(true);
+                }}
+                className="text-xs border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+              >
+                <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                Free Reschedule
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setForfeitReason("");
+                  setForfeitNewDate("");
+                  setForfeitNewInjazId("");
+                  setIsForfeitModalOpen(true);
+                }}
+                className="text-xs border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+              >
+                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                Forfeit &amp; Restart
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={async () => {
                   if (!selectedRow) return;
                   try {
@@ -664,6 +810,118 @@ export function InjazWorkspace({
           defaultDirection="Expense"
         />
       </OperationalDrawer>
+
+      {/* Free Reschedule Modal */}
+      <Dialog open={isRescheduleModalOpen} onOpenChange={setIsRescheduleModalOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-amber-500" />
+              Reschedule Taeshir Appointment
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Reschedule the visa center slot without forfeiting paid Injaz consular fees.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="font-semibold text-xs">New Appointment Date *</Label>
+              <Input
+                type="date"
+                value={rescheduleDate}
+                onChange={(e) => setRescheduleDate(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="font-semibold text-xs">Cause / Justification</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Candidate illness / center slot change"
+                value={rescheduleCause}
+                onChange={(e) => setRescheduleCause(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsRescheduleModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isRescheduling || !rescheduleDate}
+              onClick={handleRescheduleAppointment}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
+            >
+              {isRescheduling ? "Rescheduling..." : "Confirm Reschedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Forfeit and Restart Injaz Modal */}
+      <Dialog open={isForfeitModalOpen} onOpenChange={setIsForfeitModalOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-rose-600">
+              <ShieldCheck className="h-4 w-4" />
+              Forfeit Injaz &amp; Restart Application
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Closes the current attempt as forfeited and appends a fresh active attempt with a new Injaz Application ID.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="font-semibold text-xs">Forfeiture Reason *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Missed slot; fee forfeited"
+                value={forfeitReason}
+                onChange={(e) => setForfeitReason(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="font-semibold text-xs">New Appointment Date *</Label>
+              <Input
+                type="date"
+                value={forfeitNewDate}
+                onChange={(e) => setForfeitNewDate(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="font-semibold text-xs">New Injaz Application ID (E-number) *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. E49829911"
+                value={forfeitNewInjazId}
+                onChange={(e) => setForfeitNewInjazId(e.target.value)}
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setIsForfeitModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isForfeiting || !forfeitReason || !forfeitNewDate || !forfeitNewInjazId}
+              onClick={handleForfeitAndRestartInjaz}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs"
+            >
+              {isForfeiting ? "Forfeiting & Restarting..." : "Forfeit & Restart"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

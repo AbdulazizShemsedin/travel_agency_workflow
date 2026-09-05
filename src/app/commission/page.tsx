@@ -64,6 +64,8 @@ import {
   settleBatchItemsV2,
   settleBatchV2,
   recordBatchAdvanceV2,
+  writeOffBatchV2,
+  releaseUnpaidItemsV2,
   triggerEarlyCommissionAccrualV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
@@ -145,6 +147,15 @@ export default function AdminCommissionPage() {
   const [advanceReferenceInput, setAdvanceReferenceInput] = React.useState<string>("");
   const [isSubmittingAdvance, setIsSubmittingAdvance] = React.useState<boolean>(false);
   const [advanceConfirmStep, setAdvanceConfirmStep] = React.useState<boolean>(false);
+
+  // Write-Off Batch Modal States
+  const [isWriteOffModalOpen, setIsWriteOffModalOpen] = React.useState<boolean>(false);
+  const [writeOffAmountInput, setWriteOffAmountInput] = React.useState<string>("");
+  const [writeOffReasonInput, setWriteOffReasonInput] = React.useState<string>("");
+  const [isSubmittingWriteOff, setIsSubmittingWriteOff] = React.useState<boolean>(false);
+
+  // Releasing Unpaid Items State
+  const [isReleasingItems, setIsReleasingItems] = React.useState<boolean>(false);
 
   // Payment Proof File Upload & Fuzzy Match
   const [paymentProofFile, setPaymentProofFile] = React.useState<File | null>(null);
@@ -586,6 +597,68 @@ export default function AdminCommissionPage() {
       });
     } finally {
       setIsSubmittingAdvance(false);
+    }
+  };
+
+  // ACTION: Write-Off Batch
+  const handleWriteOffBatch = async () => {
+    if (!activeBatch?.name) return;
+    const amount = Number(writeOffAmountInput);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast.error("Invalid Amount", { description: "Please enter a valid positive write-off amount." });
+      return;
+    }
+    if (!writeOffReasonInput.trim()) {
+      toast.error("Reason Required", { description: "Please provide a reason for the batch write-off." });
+      return;
+    }
+
+    setIsSubmittingWriteOff(true);
+    try {
+      await writeOffBatchV2(activeBatch.name, amount, writeOffReasonInput.trim());
+      setIsWriteOffModalOpen(false);
+      setWriteOffAmountInput("");
+      setWriteOffReasonInput("");
+      toast.success("Batch Written Off", {
+        description: `Wrote off ${amount.toLocaleString()} Birr for batch ${activeBatch.name}.`,
+      });
+      refetchBatches();
+      await loadBatchDetails(activeBatch.name);
+    } catch (err: any) {
+      toast.error("Write-Off Failed", { description: formatCleanErrorMessage(err) });
+    } finally {
+      setIsSubmittingWriteOff(false);
+    }
+  };
+
+  // ACTION: Release Unpaid Items
+  const handleReleaseUnpaidItems = async (itemNamesToRelease?: string[]) => {
+    const items = itemNamesToRelease || selectedItemRowNames;
+    if (items.length === 0) {
+      toast.error("No Items Selected", {
+        description: "Please select one or more unpaid items to release back to the unbatched pool.",
+      });
+      return;
+    }
+
+    setIsReleasingItems(true);
+    try {
+      const res = await releaseUnpaidItemsV2(items);
+      toast.success("Unpaid Items Released", {
+        description: `Released ${res.count || items.length} unpaid items back to unbatched pool.`,
+      });
+      setSelectedItemRowNames([]);
+      if (activeBatch?.name) {
+        await loadBatchDetails(activeBatch.name);
+      }
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Failed to Release Items", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsReleasingItems(false);
     }
   };
 
@@ -1490,16 +1563,33 @@ export default function AdminCommissionPage() {
                     </span>
 
                     {selectedItemRowNames.length > 0 && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isSettlingItems}
-                        onClick={() => handleSettleBatchItems()}
-                        className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        Settle {selectedItemRowNames.length} Selected Items
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isReleasingItems}
+                          onClick={() => handleReleaseUnpaidItems()}
+                          className="h-7 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                        >
+                          {isReleasingItems ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <X className="h-3 w-3 mr-1" />
+                          )}
+                          Release {selectedItemRowNames.length} Unpaid
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isSettlingItems}
+                          onClick={() => handleSettleBatchItems()}
+                          className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          Settle {selectedItemRowNames.length} Selected Items
+                        </Button>
+                      </div>
                     )}
                   </div>
 
@@ -2148,7 +2238,57 @@ export default function AdminCommissionPage() {
                       )}
                       Mark {selectedItemRowNames.length} Items as Paid
                     </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedItemRowNames.length === 0 || isReleasingItems}
+                      onClick={() => handleReleaseUnpaidItems()}
+                      className="w-full h-8 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs mt-1.5"
+                    >
+                      {isReleasingItems ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <X className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Release {selectedItemRowNames.length} Unpaid Items to Unbatched Pool
+                    </Button>
                   </CardContent>
+                </Card>
+
+                {/* Write-Off Card */}
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] lg:col-span-2">
+                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <AlertTriangle className="h-4 w-4 text-rose-600" />
+                          Write Off Batch Balance (Bad Debt Discharge)
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-0.5">
+                          Invokes authoritative <code>write_off_batch</code> to discharge uncollectible partner debt with required justification reason.
+                        </CardDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off"}
+                        onClick={() => {
+                          const rem =
+                            activeBatch.balance_due_birr ??
+                            (activeBatch.total_amount_birr || activeBatch.total_amount);
+                          setWriteOffAmountInput(String(rem || ""));
+                          setIsWriteOffModalOpen(true);
+                        }}
+                        className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                        Write Off Batch
+                      </Button>
+                    </div>
+                  </CardHeader>
                 </Card>
               </div>
             </div>
@@ -2751,6 +2891,70 @@ export default function AdminCommissionPage() {
         isOpen={isFxModalOpen}
         onClose={() => setIsFxModalOpen(false)}
       />
+
+      {/* Write-Off Confirmation Modal */}
+      <Dialog open={isWriteOffModalOpen} onOpenChange={setIsWriteOffModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-rose-600">
+              <AlertTriangle className="h-5 w-5" />
+              Confirm Commission Batch Write-Off
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Writing off batch <strong>{activeBatch?.name}</strong> will discharge the specified balance as uncollectible debt. This is recorded in the financial audit log.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Write-Off Amount (Birr) *</Label>
+              <Input
+                type="number"
+                step="any"
+                min="1"
+                placeholder="Enter write off amount"
+                value={writeOffAmountInput}
+                onChange={(e) => setWriteOffAmountInput(e.target.value)}
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Write-Off Reason / Justification *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Uncollectible agency bad debt / contractor dispute settled"
+                value={writeOffReasonInput}
+                onChange={(e) => setWriteOffReasonInput(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingWriteOff}
+              onClick={() => setIsWriteOffModalOpen(false)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmittingWriteOff}
+              onClick={handleWriteOffBatch}
+              className="text-xs h-8 bg-rose-700 hover:bg-rose-800 text-white font-semibold flex items-center gap-1.5"
+            >
+              {isSubmittingWriteOff && <Loader2 className="h-3 w-3 animate-spin" />}
+              Confirm Write-Off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
