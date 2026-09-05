@@ -421,7 +421,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
               <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Review Extracted Passport Details
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              The backend decoded the following passport information. Review the values below before applying them to the form.
+              The system scanned the following passport information. Review the values below before applying them to the form.
             </DialogDescription>
           </DialogHeader>
 

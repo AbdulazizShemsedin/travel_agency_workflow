@@ -145,7 +145,7 @@ export default function MyReservedCandidatesPage() {
             <div className="flex items-center justify-center p-16">
               <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
               <span className="ml-2 text-xs font-semibold text-slate-500 dark:text-zinc-400">
-                Loading reserved candidates from backend...
+                Loading reserved candidates...
               </span>
             </div>
           ) : isError ? (

@@ -199,7 +199,7 @@ export default function ExpensesIncomePage() {
     },
     onError: (err: any) => {
       toast.error("Failed to Log Transaction", {
-        description: err?.message || "Backend rejected transaction entry.",
+        description: err?.message || "Failed to log transaction. Please try again.",
       });
     },
   });
@@ -215,7 +215,7 @@ export default function ExpensesIncomePage() {
       queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
     } catch (err: any) {
       toast.error("Approval Failed", {
-        description: err?.message || "Backend rejected transaction approval.",
+        description: err?.message || "Failed to approve transaction. Please try again.",
       });
     }
   };
@@ -243,7 +243,7 @@ export default function ExpensesIncomePage() {
       setRejectionReason("");
     } catch (err: any) {
       toast.error("Rejection Failed", {
-        description: err?.message || "Backend rejected transaction rejection.",
+        description: err?.message || "Failed to reject transaction. Please try again.",
       });
     } finally {
       setIsRejecting(false);
@@ -273,7 +273,7 @@ export default function ExpensesIncomePage() {
       setVoidReason("");
     } catch (err: any) {
       toast.error("Void Failed", {
-        description: err?.message || "Backend rejected transaction void request.",
+        description: err?.message || "Failed to void transaction. Please try again.",
       });
     } finally {
       setIsVoiding(false);
@@ -308,7 +308,7 @@ export default function ExpensesIncomePage() {
       setStatementFile(null);
     } catch (err: any) {
       toast.error("Reconciliation Failed", {
-        description: err?.message || "Backend rejected bank statement file.",
+        description: err?.message || "Failed to process bank statement file. Please verify CSV format.",
       });
     } finally {
       setIsUploadingStatement(false);
@@ -334,7 +334,7 @@ export default function ExpensesIncomePage() {
       setManualBatchName("");
     } catch (err: any) {
       toast.error("Manual Match Failed", {
-        description: err?.message || "Backend rejected manual match request.",
+        description: err?.message || "Failed to match transaction to batch.",
       });
     } finally {
       setIsManualMatching(false);
@@ -448,7 +448,7 @@ export default function ExpensesIncomePage() {
       await handleLoadBatch(loadedBatch.name);
     } catch (err: any) {
       toast.error("Settlement Failed", {
-        description: err?.message || "Backend rejected batch settlement request.",
+        description: err?.message || "Failed to settle batch items.",
       });
     } finally {
       setIsSettlingBatchItems(false);

@@ -17,6 +17,7 @@ import {
   Printer,
   Loader2,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -115,6 +116,9 @@ export function InjazWorkspace({
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = React.useState(false);
   const [rescheduleDate, setRescheduleDate] = React.useState("");
   const [rescheduleCause, setRescheduleCause] = React.useState("");
+
+  const currentInjazStatus = selectedRow?.injaz?.status;
+  const isInjazTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "");
   const [isRescheduling, setIsRescheduling] = React.useState(false);
 
   // Forfeit and Restart Dialog State
@@ -171,7 +175,8 @@ export function InjazWorkspace({
       // Attempt authoritative backend render_injaz_pdf first
       if (stepName) {
         try {
-          toast.info("Rendering Injaz PDF from backend...");
+          setIsGeneratingInjaz(true);
+          toast.info("Rendering Injaz PDF...");
           const blob = await renderInjazPdfV2(stepName);
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
@@ -333,19 +338,22 @@ export function InjazWorkspace({
           }
         }
 
-        if (status === "Completed") {
-          await completeClearanceStepV2(stepName, injazNumber);
-        } else if (status === "Pending") {
-          if (selectedRow.injaz?.status === "Pending") {
+        const stepStatus = selectedRow.injaz?.status;
+        const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
+
+        if (!isTerminal) {
+          if (status === "Completed" && stepStatus !== "Completed" && stepStatus !== "Complete") {
+            await completeClearanceStepV2(stepName, injazNumber);
+          } else if (status === "Pending" && stepStatus === "Pending") {
             await startClearanceStepV2(stepName);
           }
-        }
 
-        if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
-          try {
-            await reassignClearanceStepV2(stepName, employee);
-          } catch (err: any) {
-            console.warn("reassignClearanceStepV2 warning:", err);
+          if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
+            try {
+              await reassignClearanceStepV2(stepName, employee);
+            } catch (err: any) {
+              console.warn("reassignClearanceStepV2 warning:", err);
+            }
           }
         }
       }
@@ -596,6 +604,13 @@ export function InjazWorkspace({
 
         {/* Section 2: Editable Te'shir & Appointment Processing Fields */}
         <DrawerSection title="Te'shir Appointment & Clearance Actions" icon={CalendarDays}>
+          {isInjazTerminal && (
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>This Te'shir clearance step is finalized ({currentInjazStatus}). Status and handler assignments are locked.</span>
+            </div>
+          )}
+
           <DrawerField label="Te'shir Appointment Date" isReadOnly={false}>
             <input
               type="date"
@@ -609,9 +624,9 @@ export function InjazWorkspace({
           <DrawerField label="Te'shir Clearance Status" isReadOnly={false}>
             <select
               value={status}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
               <option value="Pending">Pending (Biometrics Scheduled)</option>
               <option value="Completed">Completed (MOFA Biometrics Endorsed)</option>
@@ -696,9 +711,9 @@ export function InjazWorkspace({
               <DrawerField label="Assigned Te'shir Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending}
+                  disabled={!canEdit || mutation.isPending || isInjazTerminal}
                   onChange={(e) => setEmployee(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
                   <option value="">-- Select Handler Employee --</option>
                   {employees.map((emp) => (

@@ -177,7 +177,7 @@ export default function PlacementDocumentCenterPage() {
       }
     } catch (err: any) {
       toast.error("Contract Upload Failed", {
-        description: err?.message || "Backend rejected contract file attachment.",
+        description: err?.message || "Failed to attach contract file. Please try again.",
       });
     } finally {
       setIsContractUploading(false);
@@ -215,7 +215,7 @@ export default function PlacementDocumentCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["clearance_queue_workspace"] });
     } catch (err: any) {
       toast.error("Failed to Advance Placement", {
-        description: err?.message || "Backend rejected transition to Processing stage.",
+        description: err?.message || "Failed to advance placement to Processing.",
       });
     } finally {
       setIsApprovingContract(false);
@@ -266,7 +266,7 @@ export default function PlacementDocumentCenterPage() {
       }
     } catch (err: any) {
       toast.error("eVisa Upload Failed", {
-        description: err?.message || "Backend rejected visa file attachment.",
+        description: err?.message || "Failed to attach visa file. Please try again.",
       });
     } finally {
       setIsVisaUploading(false);
@@ -331,7 +331,7 @@ export default function PlacementDocumentCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
     } catch (err: any) {
       toast.error("Failed to Update Parsed Fields", {
-        description: err?.message || "Backend rejected field update.",
+        description: err?.message || "Failed to update placement fields. Please try again.",
       });
     } finally {
       setIsSavingParsedFields(false);
@@ -880,7 +880,7 @@ export default function PlacementDocumentCenterPage() {
                       )}
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Upload Kuwait eVisa document. The backend automatically extracts visa number, validity dates, and sponsor civil ID.
+                      Upload Kuwait eVisa document. The system automatically extracts visa number, validity dates, and sponsor civil ID.
                     </CardDescription>
                   </CardHeader>
 
@@ -1115,7 +1115,7 @@ export default function PlacementDocumentCenterPage() {
             <DialogDescription className="text-xs">
               Update extracted contract and visa parameters for Placement <strong>{activePlacement?.name}</strong>.
               <span className="block text-[11px] text-amber-600 dark:text-amber-400 mt-1">
-                Note: Only contract and visa terms may be modified here. Lifecycle status and stage gates are strictly backend-managed.
+                Note: Only contract and visa terms may be modified here. Stage progression is managed automatically through the operational workflow.
               </span>
             </DialogDescription>
           </DialogHeader>

@@ -1369,7 +1369,7 @@ export function V2ClearanceQueueWorkspace() {
                     Terminal State Reached ({selectedRow.status})
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    This clearance step is locked and cannot be mutated further. Backend state transitions are authoritative.
+                    This clearance step is finalized and cannot be modified further.
                   </p>
                   {selectedRow.reference_no && (
                     <div className="font-mono text-xs text-slate-800 dark:text-zinc-200">

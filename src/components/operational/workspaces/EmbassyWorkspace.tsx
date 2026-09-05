@@ -14,6 +14,7 @@ import {
   Sparkles,
   ShieldCheck,
   AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -90,6 +91,9 @@ export function EmbassyWorkspace({
   const [rejectionRemark, setRejectionRemark] = React.useState("");
   const [confirmUnpaidWakala, setConfirmUnpaidWakala] = React.useState(false);
 
+  const currentEmbassyStatus = selectedRow?.embassy?.status;
+  const isEmbassyTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentEmbassyStatus || "");
+
   // Sync drawer form state when row changes
   React.useEffect(() => {
     if (selectedRow) {
@@ -138,25 +142,26 @@ export function EmbassyWorkspace({
         }
       }
 
-      if (stepName) {
-        if (status === "Submitted") {
+      const stepStatus = selectedRow.embassy?.status;
+      const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
+
+      if (stepName && !isTerminal) {
+        if (status === "Submitted" && stepStatus !== "Submitted") {
           const isSaudi = (selectedRow.destinationCountry || "").toLowerCase().includes("saudi");
           const isWakalaPaid = selectedRow.wakalaStatus === "Paid";
           if (isSaudi && !isWakalaPaid && !confirmUnpaidWakala) {
             throw new Error("Wakala Unpaid — Embassy submission should not proceed. Please check the override box to confirm proceeding.");
           }
           await submitEmbassyStepV2(stepName);
-        } else if (status === "Approved") {
+        } else if (status === "Approved" && stepStatus !== "Stamped" && stepStatus !== "Approved") {
           await stampEmbassyStepV2(stepName, stampNumber || receiptNo);
-        } else if (status === "Rejected") {
+        } else if (status === "Rejected" && stepStatus !== "Rejected") {
           if (!rejectionRemark.trim()) {
             throw new Error("Rejection remark is required when rejecting Embassy step.");
           }
           await rejectEmbassyStepV2(stepName, rejectionRemark.trim());
-        } else if (status === "Pending") {
-          if (selectedRow.embassy?.status === "Pending") {
-            await startClearanceStepV2(stepName);
-          }
+        } else if (status === "Pending" && stepStatus === "Pending") {
+          await startClearanceStepV2(stepName);
         }
 
         if (isAdmin && employee && employee !== (selectedRow.embassy?.assigned_officer || selectedRow.embassy?.employee)) {
@@ -420,6 +425,13 @@ export function EmbassyWorkspace({
         </DrawerSection>
 
         <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
+          {isEmbassyTerminal && (
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>This Embassy clearance step is finalized ({currentEmbassyStatus}). Status and handler assignments are locked.</span>
+            </div>
+          )}
+
           {status === "Submitted" && selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
             <div className="sm:col-span-2 p-3 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 text-xs">
               <label className="flex items-start gap-2 cursor-pointer font-semibold text-rose-800 dark:text-rose-300">
@@ -439,9 +451,9 @@ export function EmbassyWorkspace({
           <DrawerField label="Embassy Clearance Status" isReadOnly={false}>
             <select
               value={status}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isEmbassyTerminal}
               onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
               <option value="Pending">Pending (Awaiting Submission)</option>
               <option value="Submitted">Submitted (At Embassy)</option>
@@ -520,9 +532,9 @@ export function EmbassyWorkspace({
               <DrawerField label="Assigned Embassy Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending}
+                  disabled={!canEdit || mutation.isPending || isEmbassyTerminal}
                   onChange={(e) => setEmployee(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
                   <option value="">-- Select Handler Employee --</option>
                   {employees.map((emp) => (

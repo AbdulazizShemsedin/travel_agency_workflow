@@ -1682,7 +1682,7 @@ export default function AdminCommissionPage() {
                   Select a Batch to Generate Invoice
                 </h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Invoices are rendered fresh on-demand by the backend finance engine with authoritative candidate lists and exchange rates.
+                  Invoices are rendered fresh on-demand with official candidate lists and exchange rates.
                 </p>
                 <div className="flex items-center justify-center gap-2 pt-2">
                   <select
@@ -2358,7 +2358,7 @@ export default function AdminCommissionPage() {
                     className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs text-slate-900 dark:text-white"
                   >
                     <option value="Manual Only" className="dark:bg-[#121217]">Manual Only (Finance Staff triggers batch creation)</option>
-                    <option value="Auto-Threshold" className="dark:bg-[#121217]">Auto-Threshold (Backend auto-generates CBR on reaching threshold)</option>
+                    <option value="Auto-Threshold" className="dark:bg-[#121217]">Auto-Threshold (Automatically generates CBR on reaching threshold)</option>
                   </select>
                 </div>
 
@@ -2832,7 +2832,7 @@ export default function AdminCommissionPage() {
               </div>
             </div>
             <p className="text-[11px] text-slate-500">
-              The backend will create an authoritative Commission Batch Request (CBR-#####) with status <strong>Draft</strong>.
+              A Commission Batch Request (CBR-#####) will be created with status <strong>Draft</strong>.
             </p>
           </div>
 

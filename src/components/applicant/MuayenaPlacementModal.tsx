@@ -80,7 +80,7 @@ export function MuayenaPlacementModal({
       onClose();
     } catch (err: any) {
       toast.error("Placement Creation Failed", {
-        description: err?.message || "Backend rejected Muayena placement creation.",
+        description: err?.message || "Failed to create Muayena placement. Please check inputs and try again.",
       });
     } finally {
       setIsSubmitting(false);

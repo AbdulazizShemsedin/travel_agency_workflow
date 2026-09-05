@@ -264,11 +264,24 @@ export async function updateApplicantV2(
 export async function updateApplicantForLmisV2(
   payload: V2LmisUpdatePayload
 ): Promise<{ message?: string; [key: string]: any }> {
+  // Frappe DocType validation strictly allows: "", "Pending", "Issued", "Not Started"
+  let sanitizedCocStatus = payload.coc_status;
+  if (sanitizedCocStatus === "Passed") {
+    sanitizedCocStatus = "Issued";
+  } else if (sanitizedCocStatus && !["Pending", "Issued", "Not Started"].includes(sanitizedCocStatus)) {
+    sanitizedCocStatus = "Not Started";
+  }
+
+  const cleanPayload = {
+    ...payload,
+    ...(payload.coc_status !== undefined ? { coc_status: sanitizedCocStatus } : {}),
+  };
+
   return requestV2(
     "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
     {
       method: "POST",
-      body: payload,
+      body: cleanPayload,
     }
   );
 }

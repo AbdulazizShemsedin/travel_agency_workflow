@@ -99,7 +99,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
 
       if (result.count > 0 && result.recorded && Object.keys(result.recorded).length > 0) {
         toast.success("Live FX Rates Synchronized", {
-          description: `Successfully pulled ${result.count} currency rates from backend exchange provider.`,
+          description: `Successfully updated ${result.count} currency exchange rates.`,
         });
         fetchCurrentRate(selectedCurrency);
         onSuccess?.();
@@ -160,7 +160,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            View active backend FX conversion rates, pull real-time exchange rates, or manually record conversion multipliers against ETB (Birr).
+            View active FX conversion rates, pull real-time exchange rates, or manually record conversion multipliers against ETB (Birr).
           </DialogDescription>
         </DialogHeader>
 
@@ -181,7 +181,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
                   Real-Time FX Synchronization
                 </span>
                 <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Fetch live rates from the authoritative backend currency engine now.
+                  Fetch live market rates from the currency service now.
                 </p>
               </div>
               <Button

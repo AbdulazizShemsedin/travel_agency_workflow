@@ -1654,7 +1654,7 @@ export default function EmployeesPage() {
               Role Permissions & Responsibilities Guide
             </h2>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Role permissions strictly enforced in the backend state machine and API routers.
+              Role permissions strictly enforced throughout the operational workflow.
             </p>
           </div>
 

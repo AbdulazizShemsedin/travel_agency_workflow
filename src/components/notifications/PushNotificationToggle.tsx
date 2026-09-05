@@ -406,7 +406,7 @@ export function PushNotificationToggle() {
       showFeedback("VAPID keypair regenerated. Please re-subscribe.", "success");
     } catch (err: any) {
       sonnerToast.error("Regeneration Failed", {
-        description: err?.message || "Failed to regenerate VAPID keypair on backend.",
+        description: err?.message || "Failed to regenerate notification keypair.",
       });
     } finally {
       setIsRegeneratingVapid(false);
@@ -791,7 +791,7 @@ export function PushNotificationToggle() {
               Regenerate VAPID Push Keys
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-2">
-              Regenerating the VAPID keypair generates a fresh cryptographic keypair on the backend server.
+              Regenerating the notification keypair creates a fresh secure cryptographic keypair.
               <span className="block mt-2 font-semibold text-rose-600 dark:text-rose-400">
                 Warning: This invalidates all active browser push subscriptions across all users. Every team member will need to re-enable push notifications on their devices.
               </span>

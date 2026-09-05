@@ -117,7 +117,7 @@ export function LmisFastPathModal({
     },
     onError: (err: any) => {
       toast.error("LMIS Update Failed", {
-        description: err?.message || "Backend rejected LMIS metadata update.",
+        description: err?.message || "Failed to update LMIS metadata. Please check inputs and try again.",
       });
     },
   });

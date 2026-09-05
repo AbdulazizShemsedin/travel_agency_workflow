@@ -266,7 +266,7 @@ export default function ReportsPage() {
       });
     } catch (err: any) {
       toast.error("Export Failed", {
-        description: err?.message || "Backend rejected spreadsheet export request.",
+        description: err?.message || "Failed to export spreadsheet. Please try again.",
       });
     } finally {
       setIsExportingXlsx(false);

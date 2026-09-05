@@ -759,7 +759,7 @@ export function ChatContainer() {
     },
     onError: (err: any) => {
       toast.error("Failed to send message", {
-        description: err?.message || "Backend rejected message transmission.",
+        description: err?.message || "Unable to send message. Please try again.",
       });
     },
     onSettled: () => {
@@ -856,7 +856,7 @@ export function ChatContainer() {
     },
     onError: (err: any) => {
       toast.error("Failed to add participant", {
-        description: err?.message || "Backend rejected participant addition.",
+        description: err?.message || "Unable to add participant. Please try again.",
       });
     },
   });

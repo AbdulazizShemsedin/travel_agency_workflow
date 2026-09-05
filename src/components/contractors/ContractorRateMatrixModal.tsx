@@ -288,7 +288,7 @@ export function ContractorRateMatrixModal({
                   </span>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Authoritative V2 defaults keyed by Destination Country × Entry Track × Gender. Used when placements have no manual rate overrides.
+                  Standard defaults keyed by Destination Country × Entry Track × Gender. Used when placements have no manual rate overrides.
                 </DialogDescription>
               </div>
             </div>
@@ -300,7 +300,7 @@ export function ContractorRateMatrixModal({
               disabled={isLoading || isSaving}
               onClick={loadRates}
               className="text-xs h-8"
-              title="Reload from backend"
+              title="Reload rates"
             >
               <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isLoading && "animate-spin")} />
               Refresh
@@ -315,21 +315,21 @@ export function ContractorRateMatrixModal({
             <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-300 flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600" />
               <span>
-                View-only mode: Mutating agency commission rates requires Manager, Admin, Finance Manager, or Registrar privileges.
+                View-only mode: Modifying agency commission rates requires Manager, Admin, Finance Manager, or Registrar privileges.
               </span>
             </div>
           ) : (
             <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#181822] border border-slate-200 dark:border-[#262634] space-y-1.5">
               <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-zinc-200">
                 <Info className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span>Backend Resolution & Replacement Architecture</span>
+                <span>Commission Rate Application Rules</span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-zinc-400 leading-relaxed">
-                • <strong>Full Replacement Notice</strong>: Saving sends the complete table to <code>contractor_api.set_commission_rates</code>.
+                • <strong>Rate Schedule</strong>: Saving updates the complete commission rate schedule for this contractor.
                 <br />
-                • <strong>Resolution Order</strong>: Manual placement commission overrides (both amount + currency) take precedence. Otherwise, the matching row (Country + Track + Gender) is applied.
+                • <strong>Resolution Order</strong>: Manual placement commission overrides (both amount and currency) take precedence. Otherwise, the matching standard rate (Country + Track + Gender) is applied.
                 <br />
-                • <strong>Country Currency</strong>: Resolves dynamically to <code>SAR</code> for Saudi Arabia and <code>KWD</code> for Kuwait at accrual time.
+                • <strong>Currency</strong>: Automatically resolves to <strong>SAR</strong> for Saudi Arabia and <strong>KWD</strong> for Kuwait upon commission generation.
               </p>
             </div>
           )}

@@ -96,7 +96,7 @@ export function TicketingDepartureModal({
       setActiveTab("medical2");
     } catch (err: any) {
       toast.error("Ticketing Failed", {
-        description: err?.message || "Backend rejected ticket recording.",
+        description: err?.message || "Failed to record ticket details. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -127,7 +127,7 @@ export function TicketingDepartureModal({
       onClose();
     } catch (err: any) {
       toast.error("Reschedule Failed", {
-        description: err?.message || "Backend rejected reschedule request.",
+        description: err?.message || "Failed to record flight reschedule. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -151,7 +151,7 @@ export function TicketingDepartureModal({
       }
     } catch (err: any) {
       toast.error("Medical 2 Failed", {
-        description: err?.message || "Backend rejected pre-departure medical record.",
+        description: err?.message || "Failed to record pre-departure medical record. Please try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -170,7 +170,7 @@ export function TicketingDepartureModal({
       onClose();
     } catch (err: any) {
       toast.error("Departure Clearance Failed", {
-        description: err?.message || "Backend rejected departure transition (Medical 2 FIT required).",
+        description: err?.message || "Unable to confirm departure. Please verify that Medical 2 is passed (FIT).",
       });
     } finally {
       setIsSubmitting(false);
@@ -450,9 +450,9 @@ export function TicketingDepartureModal({
                 Advancing to <strong>Departed</strong> marks the end of the placement clearance pipeline:
               </p>
               <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-600 dark:text-zinc-400">
-                <li>Stamps authoritative <code>departed_on</code> timestamp on backend.</li>
+                <li>Records official departure timestamp.</li>
                 <li>Anchors the <strong>90-day free-replacement guarantee window</strong> for Foreign Agency complaints.</li>
-                <li>Locks placement into permanent terminal state.</li>
+                <li>Finalizes the placement pipeline.</li>
               </ul>
             </div>
 

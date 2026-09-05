@@ -109,6 +109,9 @@ export function LMISWorkspace({
   const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState("");
   const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState("");
 
+  const currentLmisStatus = selectedRow?.lms?.status;
+  const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentLmisStatus || "");
+
   // Sync drawer form state when row changes
   React.useEffect(() => {
     if (selectedRow) {
@@ -130,7 +133,10 @@ export function LMISWorkspace({
       setNationalId(app.national_id || lms?.national_id || "");
       setEmergencyContactName(app.emergency_contact_name || app.contact_person || "");
       setEmergencyContactPhone(app.emergency_contact_phone || app.contact_phone || selectedRow.phone || "");
-      setCocStatus(app.coc_status || lms?.coc_status || "Not Started");
+      
+      const rawCoc = app.coc_status || lms?.coc_status || "";
+      const cleanCoc = rawCoc === "Passed" ? "Issued" : (["Pending", "Issued", "Not Started"].includes(rawCoc) ? rawCoc : "Not Started");
+      setCocStatus(cleanCoc);
       setExamDate(app.exam_date || lms?.exam_date || "");
       setInsurancePayment(app.insurance_payment ? String(app.insurance_payment) : "");
       setLmisPayment(app.lmis_payment ? String(app.lmis_payment) : "");
@@ -148,8 +154,11 @@ export function LMISWorkspace({
     mutationFn: async () => {
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.lms?.name;
+      const stepStatus = selectedRow.lms?.status;
+      const isTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "");
 
       // 1. Scoped narrow LMIS fields (labor_id, national_id, exam_date, coc_status, emergency contacts, payments)
+      const cleanCocForSave = cocStatus === "Passed" ? "Issued" : (["Pending", "Issued", "Not Started"].includes(cocStatus) ? cocStatus : "Not Started");
       try {
         await updateApplicantForLmisV2({
           applicant_name: selectedRow.applicantId,
@@ -157,7 +166,7 @@ export function LMISWorkspace({
           national_id: nationalId.trim() || undefined,
           emergency_contact_name: emergencyContactName.trim() || undefined,
           emergency_contact_phone: emergencyContactPhone.trim() || undefined,
-          coc_status: cocStatus || undefined,
+          coc_status: cleanCocForSave,
           exam_date: examDate || undefined,
           insurance_payment: insurancePayment ? Number(insurancePayment) : undefined,
           lmis_payment: lmisPayment ? Number(lmisPayment) : undefined,
@@ -211,18 +220,15 @@ export function LMISWorkspace({
         }
       }
 
-      // 3. Authoritative Clearance Step State Machine
-      if (stepName) {
-        if (status === "Issued") {
+      // 3. Authoritative Clearance Step State Machine (only for active/non-terminal steps)
+      if (stepName && !isTerminal) {
+        if (status === "Issued" && stepStatus !== "Issued") {
           await completeClearanceStepV2(stepName, laborRefNo);
-        } else if (status === "Pending") {
-          // If current step is Pending, mark started
-          if (selectedRow.lms?.status === "Pending") {
-            await startClearanceStepV2(stepName);
-          }
+        } else if (status === "Pending" && stepStatus === "Pending") {
+          await startClearanceStepV2(stepName);
         }
 
-        // 3. Reassign officer if modified by Admin
+        // Reassign officer if modified by Admin (only allowed on non-terminal steps)
         if (isAdmin && employee && employee !== (selectedRow.lms?.assigned_officer || selectedRow.lms?.employee)) {
           try {
             await reassignClearanceStepV2(stepName, employee);
@@ -517,12 +523,19 @@ export function LMISWorkspace({
 
         {/* Section 2: Editable LMS Clearance Fields */}
         <DrawerSection title="LMS Clearance Processing" icon={FileCheck2}>
+          {isTerminal && (
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>This LMIS clearance step is finalized ({currentLmisStatus}). Status and handler assignments are locked.</span>
+            </div>
+          )}
+
           <DrawerField label="LMS Status" isReadOnly={false}>
             <select
               value={status}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isTerminal}
               onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
               <option value="Pending">Pending</option>
               <option value="Issued">Issued (Approved)</option>
@@ -647,9 +660,9 @@ export function LMISWorkspace({
               <DrawerField label="Assigned LMIS Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending}
+                  disabled={!canEdit || mutation.isPending || isTerminal}
                   onChange={(e) => setEmployee(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
                   <option value="">-- Select Handler Employee --</option>
                   {employees.map((emp) => (
@@ -695,10 +708,8 @@ export function LMISWorkspace({
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
             >
               <option value="Not Started">Not Started</option>
-              <option value="In Training">In Training</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="Passed">Passed</option>
-              <option value="Failed">Failed</option>
+              <option value="Pending">Pending</option>
+              <option value="Issued">Issued</option>
             </select>
           </DrawerField>
 

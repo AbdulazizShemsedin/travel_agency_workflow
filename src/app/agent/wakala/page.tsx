@@ -131,7 +131,7 @@ export default function AgentWakalaRequestsPage() {
     },
     onError: (err: any) => {
       toast.error("Reminder Failed", {
-        description: err?.message || "Backend rejected Wakala reminder trigger.",
+        description: err?.message || "Failed to send Wakala reminder. Please try again.",
       });
       setRemindingStepName(null);
     },
@@ -204,7 +204,7 @@ export default function AgentWakalaRequestsPage() {
     } catch (err: any) {
       console.error("Failed to enable push notifications:", err);
       toast.error("Subscription Error", {
-        description: err?.message || "Could not register push subscription with backend.",
+        description: err?.message || "Could not activate push notifications. Please check browser permissions.",
       });
     } finally {
       setIsSubscribingPush(false);
@@ -330,7 +330,7 @@ export default function AgentWakalaRequestsPage() {
                 <div>
                   <span className="font-semibold text-slate-800 dark:text-zinc-200">Browser Web Push:</span>{" "}
                   {isPushSubscribed
-                    ? "Subscribed via V2 notification backend."
+                    ? "Active on this device."
                     : "Not subscribed on this device."}
                 </div>
               </div>
