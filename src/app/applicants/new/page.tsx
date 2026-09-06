@@ -65,7 +65,9 @@ export default function NewApplicantPage() {
       </div>
 
       {/* Multi-step Registration Workflow Form */}
-      <ApplicantRegistrationForm />
+      <ApplicantRegistrationForm
+        onSuccessRedirect={(id) => router.push(`/applicants/${encodeURIComponent(id)}`)}
+      />
     </div>
   );
 }

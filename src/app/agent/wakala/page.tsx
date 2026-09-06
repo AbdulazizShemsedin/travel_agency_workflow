@@ -44,6 +44,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { listContractorsV2 } from "@/lib/api/v2/contractors";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { cn } from "@/lib/utils";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -71,6 +73,19 @@ export default function AgentWakalaRequestsPage() {
     }
   }, [defaultContractor, activeContractor]);
 
+  // Fetch available contractors for preview / fallback
+  const { data: contractorsList = [] } = useQuery({
+    queryKey: ["v2_contractors_list_for_wakala"],
+    queryFn: () => listContractorsV2(),
+    staleTime: 60000,
+  });
+
+  React.useEffect(() => {
+    if (!activeContractor && !defaultContractor && contractorsList.length > 0) {
+      setActiveContractor(contractorsList[0].name || contractorsList[0].company_name || "");
+    }
+  }, [activeContractor, defaultContractor, contractorsList]);
+
   const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
   const isForeignAgency = userRoles.some((r) => r.toLowerCase().includes("foreign agency") || r.toLowerCase().includes("agent"));
 
@@ -88,7 +103,7 @@ export default function AgentWakalaRequestsPage() {
     isRefetching,
   } = useQuery<V2WakalaRequestItem[]>({
     queryKey: ["agency-wakala-requests", effectiveContractor],
-    queryFn: () => listMyWakalaRequestsV2(),
+    queryFn: () => listMyWakalaRequestsV2(effectiveContractor || undefined),
     staleTime: 15000,
   });
 
@@ -415,7 +430,7 @@ export default function AgentWakalaRequestsPage() {
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-rose-500">
                         <AlertCircle className="h-5 w-5 mx-auto mb-2 text-rose-600" />
-                        Failed to load Wakala records: {(error as any)?.message || "Server Error"}
+                        Failed to load Wakala records: {formatCleanErrorMessage(error)}
                       </td>
                     </tr>
                   ) : filteredRequests.length > 0 ? (

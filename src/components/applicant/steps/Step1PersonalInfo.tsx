@@ -344,7 +344,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
   return (
     <div className="space-y-6">
       {/* 1. TOP HERO SECTION: PASSPORT FAST SCAN & AUTO-POPULATION */}
-      <Card className="border-2 border-dashed border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 dark:border-emerald-500/30 overflow-hidden">
+      <Card
+        id="field-passport_scan"
+        data-field="passport_scan"
+        className={`border-2 border-dashed ${
+          errors.passport_scan
+            ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20"
+            : "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 dark:border-emerald-500/30"
+        } overflow-hidden transition-all duration-300`}
+      >
         <CardContent className="p-5">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
@@ -369,6 +377,12 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     <strong>Important Note:</strong> Data extraction may not produce accurate results if the passport photo is blurry, dark, rotated, or low quality. Please review and verify all auto-filled fields before proceeding.
                   </span>
                 </div>
+                {errors.passport_scan && (
+                  <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 rounded-lg px-2.5 py-1.5 mt-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                    <span>{errors.passport_scan.message}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -546,7 +560,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
         {/* Left Column: Photo Uploads & Fee Settings */}
         <div className="space-y-6 lg:col-span-4">
           {/* Passport / Portrait Photo Card */}
-          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+          <Card
+            id="field-photo_passport"
+            data-field="photo_passport"
+            className={`border ${
+              errors.photo_passport || errors.profile_photo_url
+                ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/30 dark:bg-rose-950/20"
+                : "border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]"
+            } transition-all duration-300`}
+          >
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
                 Candidate Photo (Passport Size)
@@ -555,7 +577,11 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
             <CardContent className="flex flex-col items-center justify-center pt-2">
               <label
                 htmlFor="profile-photo-upload"
-                className="group relative flex h-36 w-36 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
+                className={`group relative flex h-36 w-36 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-dashed transition overflow-hidden ${
+                  errors.photo_passport || errors.profile_photo_url
+                    ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30"
+                    : "border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] hover:border-emerald-700 hover:bg-emerald-50/50"
+                }`}
               >
                 {isUploadingPassport ? (
                   <div className="flex flex-col items-center justify-center">
@@ -599,6 +625,13 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                 />
               </label>
 
+              {(errors.photo_passport || errors.profile_photo_url) && (
+                <p className="mt-2 text-center text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                  {(errors.photo_passport || errors.profile_photo_url)?.message}
+                </p>
+              )}
+
               {photoPreview && !isUploadingPassport && (
                 <Button
                   type="button"
@@ -624,7 +657,15 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
           </Card>
 
           {/* Full Body Photo Card */}
-          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+          <Card
+            id="field-photo_full_body"
+            data-field="photo_full_body"
+            className={`border ${
+              errors.photo_full_body
+                ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/30 dark:bg-rose-950/20"
+                : "border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]"
+            } transition-all duration-300`}
+          >
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
                 Full Body Photo (CV Page 2)
@@ -633,7 +674,11 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
             <CardContent className="flex flex-col items-center justify-center pt-2">
               <label
                 htmlFor="fullbody-photo-upload"
-                className="group relative flex h-40 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] transition hover:border-emerald-700 hover:bg-emerald-50/50 overflow-hidden"
+                className={`group relative flex h-40 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed transition overflow-hidden ${
+                  errors.photo_full_body
+                    ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30"
+                    : "border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] hover:border-emerald-700 hover:bg-emerald-50/50"
+                }`}
               >
                 {isUploadingFullBody ? (
                   <div className="flex flex-col items-center justify-center">
@@ -676,6 +721,13 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   disabled={isUploadingFullBody}
                 />
               </label>
+
+              {errors.photo_full_body && (
+                <p className="mt-2 text-center text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                  {errors.photo_full_body.message}
+                </p>
+              )}
 
               {fullBodyPreview && !isUploadingFullBody && (
                 <Button
@@ -952,10 +1004,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="first_name"
                   placeholder="e.g., Abebe"
                   {...register("first_name")}
-                  className={errors.first_name ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.first_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.first_name && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.first_name.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.first_name.message}</p>
                 )}
               </div>
 
@@ -967,10 +1019,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="middle_name"
                   placeholder="e.g., Bekele"
                   {...register("middle_name")}
-                  className={errors.middle_name ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.middle_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.middle_name && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.middle_name.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.middle_name.message}</p>
                 )}
               </div>
 
@@ -982,10 +1034,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="last_name"
                   placeholder="e.g., Kebede"
                   {...register("last_name")}
-                  className={errors.last_name ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.last_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.last_name && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.last_name.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.last_name.message}</p>
                 )}
               </div>
             </div>
@@ -1008,10 +1060,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="passport_number"
                     placeholder="e.g., EP1234567"
                     {...register("passport_number")}
-                    className={errors.passport_number ? "border-rose-500 font-mono uppercase font-bold" : "font-mono uppercase font-bold text-slate-900 dark:text-white"}
+                    className={errors.passport_number ? "border-rose-500 ring-1 ring-rose-500 font-mono uppercase font-bold" : "font-mono uppercase font-bold text-slate-900 dark:text-white"}
                   />
                   {errors.passport_number && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_number.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_number.message}</p>
                   )}
                 </div>
 
@@ -1023,10 +1075,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="date_of_birth"
                     type="date"
                     {...register("date_of_birth")}
-                    className={errors.date_of_birth ? "border-rose-500" : ""}
+                    className={errors.date_of_birth ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.date_of_birth && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.date_of_birth.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.date_of_birth.message}</p>
                   )}
                 </div>
 
@@ -1038,10 +1090,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="passport_expiry"
                     type="date"
                     {...register("passport_expiry")}
-                    className={errors.passport_expiry ? "border-rose-500" : ""}
+                    className={errors.passport_expiry ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.passport_expiry && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_expiry.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_expiry.message}</p>
                   )}
                 </div>
               </div>
@@ -1055,10 +1107,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="passport_issue_date"
                     type="date"
                     {...register("passport_issue_date")}
-                    className={errors.passport_issue_date ? "border-rose-500" : ""}
+                    className={errors.passport_issue_date ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.passport_issue_date && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.passport_issue_date.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_issue_date.message}</p>
                   )}
                 </div>
               </div>
@@ -1142,10 +1194,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   min="0"
                   placeholder="0"
                   {...register("children", { valueAsNumber: true })}
-                  className={errors.children ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.children ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.children && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.children.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.children.message}</p>
                 )}
               </div>
 
@@ -1157,10 +1209,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="nationality"
                   placeholder="e.g., Ethiopia"
                   {...register("nationality")}
-                  className={errors.nationality ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.nationality ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.nationality && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.nationality.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.nationality.message}</p>
                 )}
               </div>
             </div>
@@ -1175,10 +1227,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="phone_number"
                   placeholder="+251911223344"
                   {...register("phone_number")}
-                  className={errors.phone_number ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.phone_number ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.phone_number && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.phone_number.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.phone_number.message}</p>
                 )}
               </div>
 
@@ -1202,10 +1254,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   type="email"
                   placeholder="applicant@example.com"
                   {...register("email")}
-                  className={errors.email ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  className={errors.email ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.email && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400">{errors.email.message}</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.email.message}</p>
                 )}
               </div>
             </div>
@@ -1224,10 +1276,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="country"
                     placeholder="e.g., Ethiopia"
                     {...register("country")}
-                    className={errors.country ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                    className={errors.country ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.country && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.country.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.country.message}</p>
                   )}
                 </div>
 
@@ -1239,10 +1291,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="city"
                     placeholder="e.g., Addis Ababa"
                     {...register("city")}
-                    className={errors.city ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                    className={errors.city ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.city && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.city.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.city.message}</p>
                   )}
                 </div>
 
@@ -1254,10 +1306,10 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="place_of_birth"
                     placeholder="e.g., Oromia, Amhara"
                     {...register("place_of_birth")}
-                    className={errors.place_of_birth ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                    className={errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.place_of_birth && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400">{errors.place_of_birth.message}</p>
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
                   )}
                 </div>
               </div>

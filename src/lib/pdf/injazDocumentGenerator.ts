@@ -182,7 +182,7 @@ async function fetchTemplateBytes(): Promise<ArrayBuffer> {
 
 async function fetchImageBytes(url?: string): Promise<Uint8Array | null> {
   if (!url || typeof url !== "string" || !url.trim()) return null;
-  const cleanUrl = url.trim();
+  let cleanUrl = url.trim();
   try {
     // 1. Data URL
     if (cleanUrl.startsWith("data:")) {
@@ -198,8 +198,26 @@ async function fetchImageBytes(url?: string): Promise<Uint8Array | null> {
       }
     }
 
-    // 2. Network URL or relative /files/ path
-    const res = await fetch(cleanUrl);
+    // 2. Strip external backend domain if given as absolute URL to ensure routing through Next.js proxy with session cookies
+    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+      try {
+        const parsed = new URL(cleanUrl);
+        if (
+          parsed.pathname.startsWith("/files/") ||
+          parsed.pathname.startsWith("/private/files/")
+        ) {
+          cleanUrl = parsed.pathname;
+        }
+      } catch {}
+    }
+
+    // 3. Ensure leading slash for relative file paths
+    if (cleanUrl.startsWith("files/") || cleanUrl.startsWith("private/")) {
+      cleanUrl = `/${cleanUrl}`;
+    }
+
+    // 4. Fetch with credentials for /private/files/
+    const res = await fetch(cleanUrl, { credentials: "include" });
     if (!res.ok) {
       console.warn(`Failed to fetch applicant photo from ${cleanUrl}: HTTP ${res.status}`);
       return null;
@@ -309,24 +327,23 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
   const passportNo = (data.passportNumber || "EP4892104").toUpperCase();
   const motherName = (data.motherName || "AYESHA MOHAMMED").toUpperCase();
   const placeOfBirth = (data.placeOfBirth || "ADDIS ABABA").toUpperCase();
-  const dob = formatDateDDMMYYYY(data.dateOfBirth || "1997-04-12");
+  const dob = formatDateDDMMYYYY(data.dateOfBirth || "1997-03-12");
   const nationality = (data.nationality || "ETHIOPIAN").toUpperCase();
   const prevNationality = (data.nationality || "ETHIOPIAN").toUpperCase();
   const gender = (data.gender || "FEMALE").toUpperCase();
   const maritalStatus = (data.maritalStatus || "SINGLE").toUpperCase();
   const religion = (data.religion || "MUSLIM").toUpperCase();
   const profession = (data.targetJob || "HOUSEMAID").toUpperCase();
-  const qualification = (data.educationLevel || "PRIMARY SCHOOL").toUpperCase();
-  const contactPhone = data.phone || "+251 91 123 4567";
-  const homeAddress = `${data.placeOfBirth || data.city || "ADDIS ABABA"}, ETHIOPIA • ${contactPhone}`.toUpperCase();
+  const qualification = (data.educationLevel || "SECONDARY SCHOOL").toUpperCase();
+  const homeAddress = `${data.city || "ADDIS ABABA"} - ${data.phone || "251911223344"}`.toUpperCase();
   const purpose = "WORK";
 
   const placeOfIssue = (data.placeOfIssue || "ADDIS ABABA").toUpperCase();
   const issueDate = formatDateDDMMYYYY(data.passportIssueDate || "2024-08-14");
   const expiryDate = formatDateDDMMYYYY(data.passportExpiry || "2029-08-14");
 
-  const sponsorName = (data.sponsorName || "ABDULLAH AMER MUGHABBIRI ALBARIQI").toUpperCase();
-  const sponsorId = data.sponsorId || "1130373143";
+  const sponsorName = (data.sponsorName || "MOHAMMED ABDULLAH AL-OTAIBI").toUpperCase();
+  const sponsorId = data.sponsorId || "1083920194";
   const sponsorCity = (data.destinationCity || "RIYADH").toUpperCase();
   const sponsorPhone = data.sponsorPhone || "966503221802";
 
@@ -339,28 +356,32 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
   const textColor = rgb(0.05, 0.05, 0.05);
 
   // 0. Applicant Photograph (Top Left Official Placement)
-  // Template photo placeholder: x:30, y:614, w:150, h:168
-  // Photo sits below the barcode header area (barcodes at y:736+)
+  // Placement: x:36, y:618, w:75, h:96 (standard 3:4 aspect ratio)
+  // Strictly sits below Injaz reference text (y:726) and left of barcode (x:115), never overlapping either.
   if (data.photoUrl) {
     try {
       const rawBytes = await fetchImageBytes(data.photoUrl);
       if (rawBytes && rawBytes.length > 0) {
         const photoImage = await embedPhotoSafely(pdfDoc, rawBytes);
         if (photoImage) {
-          // Place photo in the designated placeholder area (below barcodes)
+          const photoW = 75;
+          const photoH = 96;
+          const photoX = 36;
+          const photoY = 618;
+
           page.drawImage(photoImage, {
-            x: 32,
-            y: 616,
-            width: 146,
-            height: 160,
+            x: photoX,
+            y: photoY,
+            width: photoW,
+            height: photoH,
           });
           page.drawRectangle({
-            x: 32,
-            y: 616,
-            width: 146,
-            height: 160,
-            borderColor: rgb(0.65, 0.65, 0.65),
-            borderWidth: 0.6,
+            x: photoX,
+            y: photoY,
+            width: photoW,
+            height: photoH,
+            borderColor: rgb(0.7, 0.7, 0.7),
+            borderWidth: 0.5,
           });
         }
       }

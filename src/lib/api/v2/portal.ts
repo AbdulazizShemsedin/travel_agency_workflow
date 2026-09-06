@@ -140,10 +140,18 @@ export async function selectCandidateV2(
 /**
  * Lists pending Musaned Wakala authorization requests for the current foreign agency.
  */
-export async function listMyWakalaRequestsV2(): Promise<V2WakalaRequestItem[]> {
+export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V2WakalaRequestItem[]> {
+  const body: Record<string, any> = {};
+  if (contractorName) {
+    body.contractor_name = contractorName;
+    body.contractor = contractorName;
+  }
   const result = await requestV2<V2WakalaRequestItem[] | { requests?: V2WakalaRequestItem[] }>(
     "/api/method/agency_tracking.portal_api.list_my_wakala_requests",
-    { method: "POST" }
+    {
+      method: "POST",
+      body: Object.keys(body).length > 0 ? body : undefined,
+    }
   );
 
   if (Array.isArray(result)) return result;

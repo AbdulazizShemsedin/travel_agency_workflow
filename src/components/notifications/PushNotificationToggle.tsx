@@ -94,9 +94,10 @@ export function PushNotificationToggle() {
   }, [authUser, roles]);
 
   // Fetch in-app notifications (isolated for foreign agencies vs internal staff)
+  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
   const { data: notifications = [] } = useQuery<V2AppNotification[]>({
-    queryKey: ["notifications", isForeignAgency ? "agency" : "internal", user],
-    queryFn: () => (isForeignAgency ? getForeignAgencyNotificationsV2() : getComplianceNotificationsV2()),
+    queryKey: ["notifications", isForeignAgency ? "agency" : "internal", user, authUser?.roles, effectiveContractor],
+    queryFn: () => (isForeignAgency ? getForeignAgencyNotificationsV2(effectiveContractor) : getComplianceNotificationsV2(authUser)),
     enabled: Boolean(user),
     refetchInterval: 30000,
   });

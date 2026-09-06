@@ -51,6 +51,9 @@ import {
 } from "@/lib/api/v2/finance";
 import { getFinancialOverviewV2, getPendingApprovalQueueV2, V2PendingApprovalItem } from "@/lib/api/v2/reports";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
+import { listEmployeesV2, V2EmployeeRecord } from "@/lib/api/v2/employees";
+import { listPlacementsV2, V2PlacementRecord } from "@/lib/api/v2/placements";
+import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import { FxRateModal } from "@/components/finance/FxRateModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -153,6 +156,75 @@ export default function ExpensesIncomePage() {
     queryFn: () => getPendingApprovalQueueV2(),
     staleTime: 15000,
   });
+
+  // Fetch Employees for resolving First and Last name of staff who logged transactions
+  const { data: employees = [] } = useQuery<V2EmployeeRecord[]>({
+    queryKey: ["v2_employees_list_for_finance"],
+    queryFn: () => listEmployeesV2(),
+    staleTime: 60000,
+  });
+
+  // Fetch Placements & Applicants for resolving Candidate Name & Stage
+  const { data: placements = [] } = useQuery<V2PlacementRecord[]>({
+    queryKey: ["v2_placements_for_finance"],
+    queryFn: () => listPlacementsV2(),
+    staleTime: 60000,
+  });
+
+  const { data: applicants = [] } = useQuery<V2ApplicantDetails[]>({
+    queryKey: ["v2_applicants_for_finance"],
+    queryFn: () => listApplicantsV2(),
+    staleTime: 60000,
+  });
+
+  const resolveStaffName = React.useCallback(
+    (userId?: string) => {
+      if (!userId) return "System";
+      const cleanUser = userId.toLowerCase().trim();
+      if (cleanUser === "administrator") return "Administrator";
+      const match = employees.find(
+        (e) => (e.email || e.name || "").toLowerCase().trim() === cleanUser
+      );
+      if (match) {
+        const full = `${match.first_name || ""} ${match.last_name || ""}`.trim();
+        return full || match.full_name || userId;
+      }
+      return userId;
+    },
+    [employees]
+  );
+
+  const resolveApplicantInfo = React.useCallback(
+    (tx: V2PendingApprovalItem) => {
+      let applicantId = tx.applicant || "";
+      let applicantName = tx.full_name || tx.applicant_name || "";
+      let stageStatus = tx.stage_logged_at || tx.stage || "";
+
+      if (tx.placement) {
+        const plc = placements.find((p) => p.name === tx.placement);
+        if (plc) {
+          if (!applicantId) applicantId = plc.applicant;
+          if (!applicantName) applicantName = plc.applicant_name || "";
+          if (!stageStatus) stageStatus = plc.status || "";
+        }
+      }
+
+      if (applicantId && !applicantName) {
+        const app = applicants.find((a) => a.name === applicantId);
+        if (app) {
+          applicantName = app.full_name || `${app.first_name || ""} ${app.last_name || ""}`.trim();
+          if (!stageStatus) stageStatus = app.status || "";
+        }
+      }
+
+      return {
+        applicantId: applicantId || "—",
+        applicantName: applicantName || "—",
+        stageStatus: stageStatus || "General",
+      };
+    },
+    [placements, applicants]
+  );
 
   const summary = rawSummary as any;
   const totalIncome = summary?.totals_birr?.income ?? 0;
@@ -683,14 +755,16 @@ export default function ExpensesIncomePage() {
 
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
+                  <table className="w-full text-xs text-left border-collapse">
                     <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
-                        <th className="py-2.5 px-3">Transaction</th>
+                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2.5 px-3 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
                         <th className="py-2.5 px-3">Type</th>
                         <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Description</th>
+                        <th className="py-2.5 px-3">Applicant</th>
                         <th className="py-2.5 px-3">Candidate / Placement</th>
+                        <th className="py-2.5 px-3">Stage Status</th>
+                        <th className="py-2.5 px-3">Description</th>
                         <th className="py-2.5 px-3">Logged By</th>
                         <th className="py-2.5 px-3">Logged At</th>
                         <th className="py-2.5 px-3 text-right">Approval Actions</th>
@@ -699,79 +773,110 @@ export default function ExpensesIncomePage() {
                     <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                       {isQueueLoading ? (
                         <tr>
-                          <td colSpan={8} className="py-8 text-center text-slate-400">
+                          <td colSpan={10} className="py-8 text-center text-slate-400">
                             <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
                             Loading pending approval queue...
                           </td>
                         </tr>
                       ) : pendingQueue.length > 0 ? (
-                        pendingQueue.map((tx) => (
-                          <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
-                            <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                              {tx.name}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px]",
-                                  tx.transaction_type === "Income"
-                                    ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                    : "border-rose-300 text-rose-800 bg-rose-50"
-                                )}
-                              >
-                                {tx.transaction_type}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-3 font-bold font-mono">
-                              {(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} {tx.currency || "ETB"}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs truncate">
-                              {tx.description}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-500">
-                              {tx.placement || tx.applicant || "General"}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-500">
-                              {tx.logged_by || tx.owner || "System"}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-400">
-                              {new Date(tx.creation).toLocaleDateString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => handleApprove(tx.name)}
-                                  className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white px-2.5 shadow-xs"
-                                  title="Approve transaction into ledger"
-                                >
-                                  <Check className="h-3.5 w-3.5 mr-1" />
-                                  Approve
-                                </Button>
+                        pendingQueue.map((tx) => {
+                          const staffName = resolveStaffName(tx.logged_by || tx.owner);
+                          const { applicantId, applicantName, stageStatus } = resolveApplicantInfo(tx);
+                          const formattedAmount = `${(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} ${tx.currency || "ETB"}`;
 
-                                <Button
-                                  type="button"
+                          return (
+                            <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] group">
+                              <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
+                                {tx.name}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <Badge
                                   variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    setRejectingTx(tx);
-                                    setRejectionReason("");
-                                  }}
-                                  className="h-7 text-xs border-rose-300 text-rose-800 hover:bg-rose-50 px-2"
-                                  title="Reject pending transaction with remark"
+                                  className={cn(
+                                    "text-[10px]",
+                                    tx.transaction_type === "Income"
+                                      ? "border-emerald-300 text-emerald-800 bg-emerald-50"
+                                      : "border-rose-300 text-rose-800 bg-rose-50"
+                                  )}
                                 >
-                                  <Ban className="h-3.5 w-3.5 mr-1" />
-                                  Reject
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                                  {tx.transaction_type}
+                                </Badge>
+                              </td>
+                              <td className="py-2.5 px-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
+                                {formattedAmount}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <div className="font-semibold text-slate-900 dark:text-white">
+                                  {applicantName}
+                                </div>
+                                {applicantId !== "—" && (
+                                  <div className="text-[10px] font-mono text-slate-400">
+                                    {applicantId}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">
+                                {tx.placement || applicantId || "General"}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 font-medium"
+                                >
+                                  {stageStatus}
+                                </Badge>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs truncate" title={tx.description}>
+                                {tx.description}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <div className="font-semibold text-slate-900 dark:text-white">
+                                  {staffName}
+                                </div>
+                                {(tx.logged_by || tx.owner) && (tx.logged_by || tx.owner) !== staffName && (
+                                  <div className="text-[10px] font-mono text-slate-400 truncate max-w-[140px]">
+                                    {tx.logged_by || tx.owner}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
+                                {new Date(tx.creation).toLocaleDateString()}
+                              </td>
+                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => handleApprove(tx.name)}
+                                    className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white px-2.5 shadow-xs"
+                                    title="Approve transaction into ledger"
+                                  >
+                                    <Check className="h-3.5 w-3.5 mr-1" />
+                                    Approve
+                                  </Button>
+
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setRejectingTx(tx);
+                                      setRejectionReason("");
+                                    }}
+                                    className="h-7 text-xs border-rose-300 text-rose-800 hover:bg-rose-50 px-2"
+                                    title="Reject pending transaction with remark"
+                                  >
+                                    <Ban className="h-3.5 w-3.5 mr-1" />
+                                    Reject
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
-                          <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <td colSpan={10} className="py-12 text-center text-slate-400">
                             Zero pending transactions in queue. All records are approved or rejected.
                           </td>
                         </tr>

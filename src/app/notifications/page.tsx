@@ -25,10 +25,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getComplianceNotificationsV2, V2AppNotification } from "@/lib/api/v2/notifications";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { toast } from "sonner";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
+  const { authUser } = useAuth();
   const [activeFilter, setActiveFilter] = React.useState<
     "all" | "compliance" | "workflow" | "complaints" | "system"
   >("all");
@@ -40,8 +42,8 @@ export default function NotificationsPage() {
     isRefetching,
     refetch,
   } = useQuery<V2AppNotification[]>({
-    queryKey: ["v2_compliance_notifications"],
-    queryFn: getComplianceNotificationsV2,
+    queryKey: ["v2_compliance_notifications", authUser?.email, authUser?.roles],
+    queryFn: () => getComplianceNotificationsV2(authUser),
     refetchInterval: 30000,
   });
 

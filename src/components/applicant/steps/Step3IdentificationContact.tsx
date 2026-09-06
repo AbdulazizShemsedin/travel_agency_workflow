@@ -84,10 +84,10 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
                 id="contact_person_name"
                 placeholder="e.g., Almaz Bekele"
                 {...register("contact_person_name")}
-                className={errors.contact_person_name ? "border-rose-500" : ""}
+                className={errors.contact_person_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
               />
               {errors.contact_person_name && (
-                <p className="text-xs text-rose-600 dark:text-rose-400">{errors.contact_person_name.message}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.contact_person_name.message}</p>
               )}
             </div>
 
@@ -99,10 +99,10 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
                 id="contact_person_phone"
                 placeholder="+251911002233"
                 {...register("contact_person_phone")}
-                className={errors.contact_person_phone ? "border-rose-500" : ""}
+                className={errors.contact_person_phone ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
               />
               {errors.contact_person_phone && (
-                <p className="text-xs text-rose-600 dark:text-rose-400">{errors.contact_person_phone.message}</p>
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.contact_person_phone.message}</p>
               )}
             </div>
 

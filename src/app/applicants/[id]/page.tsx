@@ -41,6 +41,7 @@ import {
   Ticket,
   XCircle,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getApplicantV2,
@@ -311,13 +312,11 @@ export default function ApplicantDetailPage() {
 
   const corridorCountry = activePlacement?.destination_country || applicant?.destination_country || "Saudi Arabia";
 
-  // Filter clearance steps specifically for the Processing Stage (LMIS & Te'shir only - Embassy belongs to Stamped stage)
+  // Corridor clearance steps for the Processing Stage (LMIS, Te'shir / Telesign, and Embassy Stamping)
   const processingClearanceSteps = React.useMemo(() => {
     return applicantClearanceSteps.filter((s) => {
       const norm = (s.step_type || "").toLowerCase().trim();
       return (
-        !norm.includes("embassy") &&
-        !norm.includes("stamping") &&
         !norm.includes("ticket") &&
         !norm.includes("departure")
       );
@@ -824,7 +823,7 @@ export default function ApplicantDetailPage() {
                         : "text-slate-400 dark:text-zinc-500"
                     }`}
                   >
-                    {stage === "Processing" ? "Processing (LMIS & Te'shir)" : stage}
+                    {stage}
                   </span>
                 </div>
                 {idx !== CANONICAL_STAGES.length - 1 && (
@@ -1048,7 +1047,7 @@ export default function ApplicantDetailPage() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing (LMIS & Te'shir)" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
+                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
                   {activePlacement ? (
@@ -1070,27 +1069,40 @@ export default function ApplicantDetailPage() {
               </Button>
             </div>
 
-            {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS and Te'shir only */}
+            {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS, Te'shir, and Embassy clearance steps */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               {processingClearanceSteps.length > 0 ? (
-                processingClearanceSteps.map((step) => (
-                  <div key={step.name} className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {step.step_type}
-                      </span>
-                      <Badge variant={step.status === "Issued" || step.status === "Complete" || step.status === "Stamped" ? "success" : step.status === "Rejected" ? "destructive" : "warning"}>
-                        {step.status || "Pending"}
-                      </Badge>
+                processingClearanceSteps.map((step) => {
+                  const isEmbassy = (step.step_type || "").toLowerCase().includes("embassy") || (step.step_type || "").toLowerCase().includes("stamping");
+                  const isUnpaidWakala = isEmbassy && step.status !== "Stamped" && step.status !== "Complete";
+
+                  return (
+                    <div key={step.name} className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {step.step_type}
+                        </span>
+                        <Badge variant={step.status === "Issued" || step.status === "Complete" || step.status === "Stamped" ? "success" : step.status === "Rejected" ? "destructive" : "warning"}>
+                          {step.status || "Pending"}
+                        </Badge>
+                      </div>
+                      <p className="text-slate-500 dark:text-zinc-400">
+                        Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(step)}</strong>
+                      </p>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        Step ID: {step.name} (Seq {step.sequence_order})
+                      </div>
+                      {isUnpaidWakala && (
+                        <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 p-2 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5 mt-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 mt-0.5" />
+                          <span>
+                            Wakala authorization status is currently <strong>{(activePlacement as any)?.wakala_payment_status || "Pending"}</strong>. Verified Wakala payment from Foreign Agency is required before Embassy visa stamping can be finalized.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-slate-500 dark:text-zinc-400">
-                      Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(step)}</strong>
-                    </p>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      Step ID: {step.name} (Seq {step.sequence_order})
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="sm:col-span-2 rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 text-center text-xs text-slate-500">
                   No active clearance steps currently queued for this candidate.

@@ -105,13 +105,18 @@ export function AppSidebar({
       >
         {/* Brand Header */}
         <div className="flex h-16 items-center justify-between border-b border-slate-100 dark:border-[#222227] px-4">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-900 dark:bg-emerald-600 text-white shadow-xs">
+          <Link
+            href="/dashboard"
+            onClick={onCloseMobile}
+            className="flex items-center gap-3 overflow-hidden group hover:opacity-90 transition-opacity cursor-pointer"
+            title="Navigate to Dashboard"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-900 dark:bg-emerald-600 text-white shadow-xs group-hover:scale-105 transition-transform">
               <Globe2 className="h-5 w-5" />
             </div>
             {showLabels && (
               <div className="min-w-0 transition-opacity duration-200">
-                <h1 className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">
+                <h1 className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                   Travel Agency
                 </h1>
                 <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
@@ -119,7 +124,7 @@ export function AppSidebar({
                 </p>
               </div>
             )}
-          </div>
+          </Link>
 
           {/* Close button on mobile */}
           <button

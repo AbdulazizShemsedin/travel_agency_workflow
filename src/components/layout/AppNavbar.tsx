@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, LogOut } from "lucide-react";
+import Link from "next/link";
+import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, LogOut, Globe2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -64,6 +65,19 @@ export function AppNavbar({
         >
           <Menu className="h-4 w-4" />
         </Button>
+
+        <Link
+          href="/dashboard"
+          className="flex md:hidden items-center gap-2 hover:opacity-90 transition-opacity"
+          title="Navigate to Dashboard"
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-900 dark:bg-emerald-600 text-white shadow-xs">
+            <Globe2 className="h-4 w-4" />
+          </div>
+          <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+            Travel Agency
+          </span>
+        </Link>
 
         {onToggleSidebar && (
           <Button

@@ -368,3 +368,6 @@ export function can(user: AuthUser | null | undefined, action: PermissionAction)
   if (!allowedRoles) return false;
   return hasAnyRole(user, allowedRoles);
 }
+
+export const hasPermission = can;
+

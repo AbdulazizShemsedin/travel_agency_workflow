@@ -13,6 +13,8 @@ import { listPlacementsV2 } from "./placements";
 import { listUnresolvedComplaintsV2 } from "./complaints";
 import { listMyClearanceStepsV2 } from "./clearance";
 import { listMyWakalaRequestsV2 } from "./portal";
+import { hasPermission } from "@/lib/auth/permissions";
+import { AuthUser } from "@/lib/api/auth";
 
 export interface V2PushSubscriptionStatus {
   subscribed: boolean;
@@ -100,14 +102,16 @@ export async function triggerWakalaReminderV2(
  * 3. wakala_reminder_watchdog (Wakala authorization & payment reminder ahead of Monday Embassy cutoff)
  * 4. taeshir_injaz_reminder_watchdog (3/2/1-day tiers for Saudi Taeshir & Injaz submission)
  */
-export async function getComplianceNotificationsV2(): Promise<V2AppNotification[]> {
+export async function getComplianceNotificationsV2(authUser?: AuthUser | null): Promise<V2AppNotification[]> {
   const notifications: V2AppNotification[] = [];
 
   try {
+    const canManageComplaints = authUser ? hasPermission(authUser, "manageComplaints") : false;
+
     const [applicants, placements, complaints, clearanceSteps] = await Promise.all([
       listApplicantsV2().catch(() => []),
       listPlacementsV2().catch(() => []),
-      listUnresolvedComplaintsV2().catch(() => []),
+      canManageComplaints ? listUnresolvedComplaintsV2().catch(() => []) : Promise.resolve([]),
       listMyClearanceStepsV2().catch(() => []),
     ]);
 
@@ -303,12 +307,12 @@ export async function getComplianceNotificationsV2(): Promise<V2AppNotification[
  * Dynamically computes Foreign Agency portal-isolated notifications.
  * Never exposes internal staff tasks, internal applicant records, or internal system URLs.
  */
-export async function getForeignAgencyNotificationsV2(): Promise<V2AppNotification[]> {
+export async function getForeignAgencyNotificationsV2(contractorName?: string): Promise<V2AppNotification[]> {
   const notifications: V2AppNotification[] = [];
 
   try {
     const [wakalaRequests, placements] = await Promise.all([
-      listMyWakalaRequestsV2().catch(() => []),
+      listMyWakalaRequestsV2(contractorName).catch(() => []),
       listPlacementsV2().catch(() => []),
     ]);
 

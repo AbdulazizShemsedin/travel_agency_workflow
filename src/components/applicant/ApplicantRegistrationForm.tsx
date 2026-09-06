@@ -81,15 +81,21 @@ const FIELD_TO_SECTION_MAP: Record<string, string> = {
   passport_issue_date: "section-personal",
   passport_expiry: "section-personal",
   passport_issue_place: "section-personal",
+  place_of_issue: "section-personal",
+  place_of_birth: "section-personal",
   photo_passport: "section-personal",
   profile_photo_url: "section-personal",
+  photograph: "section-personal",
   photo_full_body: "section-personal",
   passport_scan: "section-personal",
   leaving_town: "section-personal",
   city: "section-personal",
   country: "section-personal",
   phone_number: "section-personal",
+  alternate_phone: "section-personal",
   email: "section-personal",
+  sub_region: "section-personal",
+  address_line_1: "section-personal",
   fee_required: "section-personal",
   registration_fee_amount: "section-personal",
   fee_type: "section-personal",
@@ -97,6 +103,7 @@ const FIELD_TO_SECTION_MAP: Record<string, string> = {
   fee_status: "section-personal",
 
   job_applied: "section-education",
+  target_job: "section-education",
   highest_education: "section-education",
   education: "section-education",
   english_level: "section-education",
@@ -107,6 +114,9 @@ const FIELD_TO_SECTION_MAP: Record<string, string> = {
   height: "section-education",
   weight: "section-education",
   complexion: "section-education",
+  monthly_salary: "section-education",
+  salary_amount: "section-education",
+  salary_currency: "section-education",
   skill_cleaning: "section-education",
   skill_cooking: "section-education",
   skill_washing: "section-education",
@@ -117,14 +127,17 @@ const FIELD_TO_SECTION_MAP: Record<string, string> = {
   skill_elderly_care: "section-education",
   skill_driving: "section-education",
   skill_sewing: "section-education",
+  video_url: "section-education",
+  intro_video: "section-education",
 
   national_id: "section-identification",
   labor_id: "section-identification",
-  target_job: "section-identification",
-  monthly_salary: "section-identification",
+  labour_id: "section-identification",
   contact_person_name: "section-identification",
   contact_person_phone: "section-identification",
   emergency_relationship: "section-identification",
+  emergency_contact_name: "section-identification",
+  emergency_contact_phone: "section-identification",
   applicant_address: "section-identification",
 
   medical_status: "section-medical",
@@ -132,31 +145,40 @@ const FIELD_TO_SECTION_MAP: Record<string, string> = {
   medical_expiry_date: "section-medical",
   coc_status: "section-medical",
   exam_date: "section-medical",
+  medical_remarks: "section-medical",
+  remarks: "section-medical",
 };
 
 // Friendly user-facing field titles in simple English
 const FIELD_FRIENDLY_NAMES: Record<string, string> = {
   first_name: "First Name",
-  middle_name: "Father's Name",
-  last_name: "Grandfather's Name",
+  middle_name: "Father's Name (Middle Name)",
+  last_name: "Grandfather's Name (Last Name)",
   gender: "Gender",
   date_of_birth: "Date of Birth",
   religion: "Religion",
   marital_status: "Marital Status",
+  children: "Number of Children",
+  nationality: "Nationality",
   destination_country: "Destination Country",
   applicant_type: "Applicant Type",
   photo_passport: "Passport Photo",
   profile_photo_url: "Passport Photo",
+  photograph: "Passport Photo",
   photo_full_body: "Full-Body Photo",
   passport_scan: "Passport Scan Copy",
   passport_number: "Passport Number",
   passport_issue_date: "Passport Issue Date",
   passport_expiry: "Passport Expiry Date",
+  place_of_birth: "Place of Birth",
+  city: "City",
+  country: "Country",
   phone_number: "Primary Phone Number",
   job_applied: "Job Position",
   highest_education: "Education Level",
   english_level: "English Level",
   arabic_level: "Arabic Level",
+  monthly_salary: "Monthly Salary",
   national_id: "National ID (Fayda)",
   contact_person_name: "Emergency Contact Name",
   contact_person_phone: "Emergency Contact Phone",
@@ -167,10 +189,10 @@ const FIELD_FRIENDLY_NAMES: Record<string, string> = {
 function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
   const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
   if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1")) {
-    return `Please fill in or select ${title}.`;
+    return `${title} is required. Please enter or select ${title}.`;
   }
   if (rawMessage.toLowerCase().includes("invalid enum") || rawMessage.toLowerCase().includes("expected")) {
-    return `Please choose an option for ${title}.`;
+    return `Please select a valid option for ${title}.`;
   }
   return rawMessage;
 }
@@ -391,49 +413,92 @@ export function ApplicantRegistrationForm({
     const targetSection = FIELD_TO_SECTION_MAP[fieldName] || "section-personal";
     setActiveSection(targetSection);
 
-    // Scroll to section container first
-    const secEl = document.getElementById(targetSection);
-    if (secEl) {
-      const offset = 80;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = secEl.getBoundingClientRect().top;
-      const offsetPosition = elementRect - bodyRect - offset;
-      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
-    }
+    const findFieldElement = (name: string): HTMLElement | null => {
+      // Direct ID or trigger or wrapper
+      const candidates = [
+        `trigger-${name}`,
+        `select-wrapper-${name}`,
+        name,
+        `field-${name}`,
+        `input-${name}`,
+      ];
+      for (const id of candidates) {
+        const found = document.getElementById(id);
+        if (found) return found;
+      }
+      const byName = document.querySelector<HTMLElement>(`[name="${name}"]`);
+      if (byName) return byName;
+      const byData = document.querySelector<HTMLElement>(`[data-field="${name}"]`);
+      if (byData) return byData;
 
-    setTimeout(() => {
-      // Find element or its trigger / wrapper
-      const el =
-        document.getElementById(`trigger-${fieldName}`) ||
-        document.getElementById(`select-wrapper-${fieldName}`) ||
-        document.getElementById(fieldName) ||
-        document.querySelector(`[name="${fieldName}"]`) ||
-        document.getElementById(`field-${fieldName}`) ||
-        document.querySelector(`[data-field="${fieldName}"]`);
+      // Specialized aliases for photos and document scans
+      if (name === "photo_passport" || name === "profile_photo_url" || name === "photograph") {
+        return (
+          document.getElementById("field-photo_passport") ||
+          document.getElementById("profile-photo-upload")?.closest("label") ||
+          document.getElementById("profile-photo-upload") ||
+          null
+        );
+      }
+      if (name === "photo_full_body") {
+        return (
+          document.getElementById("field-photo_full_body") ||
+          document.getElementById("fullbody-photo-upload")?.closest("label") ||
+          document.getElementById("fullbody-photo-upload") ||
+          null
+        );
+      }
+      if (name === "passport_scan") {
+        return (
+          document.getElementById("field-passport_scan") ||
+          document.getElementById("passport-auto-scan-input")?.closest("label") ||
+          document.getElementById("passport-auto-scan-input") ||
+          null
+        );
+      }
+      return null;
+    };
 
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        (el as HTMLElement).focus?.();
-        el.classList.add(
+    const targetEl = findFieldElement(fieldName);
+
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // Focus the input if focusable
+      setTimeout(() => {
+        if (typeof targetEl.focus === "function" && targetEl.tagName !== "DIV") {
+          targetEl.focus({ preventScroll: true });
+        } else {
+          const child = targetEl.querySelector<HTMLElement>("input, select, textarea, button");
+          child?.focus({ preventScroll: true });
+        }
+      }, 50);
+
+      // Add prominent red ring animation
+      targetEl.classList.add(
+        "ring-4",
+        "ring-rose-500",
+        "ring-offset-2",
+        "bg-rose-50/70",
+        "dark:bg-rose-950/40",
+        "transition-all",
+        "duration-500"
+      );
+      setTimeout(() => {
+        targetEl.classList.remove(
           "ring-4",
           "ring-rose-500",
           "ring-offset-2",
           "bg-rose-50/70",
-          "dark:bg-rose-950/40",
-          "transition-all",
-          "duration-500"
+          "dark:bg-rose-950/40"
         );
-        setTimeout(() => {
-          el.classList.remove(
-            "ring-4",
-            "ring-rose-500",
-            "ring-offset-2",
-            "bg-rose-50/70",
-            "dark:bg-rose-950/40"
-          );
-        }, 4500);
+      }, 5000);
+    } else {
+      const secEl = document.getElementById(targetSection);
+      if (secEl) {
+        secEl.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-    }, 180);
+    }
   };
 
   const scrollToSection = (sectionId: string) => {
@@ -532,8 +597,13 @@ export function ApplicantRegistrationForm({
       setApplicantState(data.status || data.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       toast.success(`Draft Saved Successfully (ID: ${savedName || ""})`, {
-        description: "Applicant record saved. You can continue editing or return later.",
+        description: "Applicant record saved. Redirecting to details...",
       });
+      if (onSuccessRedirect && savedName) {
+        onSuccessRedirect(savedName);
+      } else if (savedName) {
+        router.push(`/applicants/${encodeURIComponent(savedName)}`);
+      }
     },
     onError: (error: unknown) => {
       const err = error as ApiV2Error;
@@ -675,18 +745,23 @@ export function ApplicantRegistrationForm({
           }
         }
       }
-      return regRes;
+      return { ...regRes, applicantId: activeId };
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
+      const targetId = data?.applicantId || draftApplicantId || data?.name;
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
-      toast.success(data.message || "Applicant Successfully Registered!", {
-        description: "Status transitioned to Registered. You can now generate an official CV.",
+      if (targetId) {
+        queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
+      }
+      toast.success(data?.message || "Applicant Successfully Registered!", {
+        description: "Status transitioned to Registered. Redirecting to details...",
       });
-      if (onSuccessRedirect && draftApplicantId) {
-        onSuccessRedirect(draftApplicantId);
+      if (onSuccessRedirect && targetId) {
+        onSuccessRedirect(targetId);
+      } else if (targetId) {
+        router.push(`/applicants/${encodeURIComponent(targetId)}`);
       }
     },
     onError: (error: unknown) => {

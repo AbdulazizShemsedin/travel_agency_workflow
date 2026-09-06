@@ -271,31 +271,7 @@ export function AgentLayout({
         </div>
       </header>
 
-      {/* Mobile Horizontal Quick-Nav Strip (Always accessible 1-tap navigation on mobile and tablets) */}
-      <div className="lg:hidden sticky top-16 z-30 flex items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0d0d11]/95 backdrop-blur-md">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            pathname === item.href ||
-            (item.href === "/agent" && (pathname === "/agent/discovery" || pathname === "/agent")) ||
-            (item.href === "/agent/chat" && (pathname === "/agent/chat" || pathname === "/chat"));
 
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex items-center gap-1.5 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                isActive
-                  ? "bg-emerald-900 text-white dark:bg-emerald-800 dark:text-emerald-100 shadow-xs"
-                  : "text-slate-600 dark:text-zinc-400 bg-slate-100/80 dark:bg-[#17171e] hover:bg-slate-200 dark:hover:bg-[#22222b]"
-              }`}
-            >
-              <Icon className={`h-3.5 w-3.5 ${isActive ? "text-emerald-300" : "text-slate-500"}`} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
 
       {/* Mobile Full Slide-Down Navigation Drawer */}
       {isMobileNavOpen && (

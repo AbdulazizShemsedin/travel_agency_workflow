@@ -527,11 +527,12 @@ export function OperationalTable<T extends Record<string, any> = any>({
           <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100/90 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header, colIdx) => {
                   const canSort = header.column.getCanSort();
                   const isSorted = header.column.getIsSorted();
                   const align = (header.column.columnDef.meta as any)?.align || "left";
                   const width = (header.column.columnDef.meta as any)?.width;
+                  const isFirstCol = colIdx === 0;
 
                   return (
                     <th
@@ -540,6 +541,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       style={{ width }}
                       className={cn(
                         "py-2.5 px-3 select-none",
+                        isFirstCol && "sticky left-0 z-20 bg-slate-100 dark:bg-[#181820] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -584,7 +586,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {visibleColumns.map((col, idx) => (
-                    <td key={idx} className="py-3 px-3">
+                    <td key={idx} className={cn("py-3 px-3", idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]")}>
                       <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
                     </td>
                   ))}
@@ -623,14 +625,17 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         : "even:bg-slate-50/30 dark:even:bg-[#141419]/40"
                     )}
                   >
-                    {row.getVisibleCells().map((cell) => {
+                    {row.getVisibleCells().map((cell, colIdx) => {
                       const align = (cell.column.columnDef.meta as any)?.align || "left";
+                      const isFirstCol = colIdx === 0;
 
                       return (
                         <td
                           key={cell.id}
                           className={cn(
                             "py-2 px-3 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs",
+                            isFirstCol && "sticky left-0 z-10 bg-white dark:bg-[#121215] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]",
+                            isSelected && isFirstCol && "bg-emerald-50 dark:bg-[#183428]",
                             align === "center" && "text-center",
                             align === "right" && "text-right"
                           )}

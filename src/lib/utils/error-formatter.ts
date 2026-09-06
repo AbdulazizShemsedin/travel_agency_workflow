@@ -180,8 +180,18 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   text = text.replace(/^\[Errno\s*\d+\]\s*/gi, "");
   text = text.replace(/^Error:\s*/gi, "");
   text = text.replace(/Exception in [a-zA-Z0-9_.]+:?\s*/gi, "");
+  text = text.replace(/\((?:pass|provide|use|specify)\s+[^)]+\)/gi, "");
 
   // 5. Known Specific High-Impact Error Mappings
+  // Contractor / Partner Agency specification error
+  if (
+    /A contractor must be specified|contractor must be specified|A Partner Agency must be specified|Partner Agency must be specified/i.test(
+      text
+    )
+  ) {
+    return "Please select a Partner Agency to proceed.";
+  }
+
   // English Level mismatch
   if (/Value 'Fair' not in allowed values/i.test(text) || (/english_level/i.test(text) && /not in allowed values/i.test(text))) {
     return "English proficiency level must be one of: None, Basic, Good, or Fluent.";
