@@ -127,7 +127,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 text-xs font-medium text-slate-700 dark:text-zinc-200 outline-none transition-colors duration-100",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8.5 pr-3 text-xs font-medium text-slate-700 dark:text-zinc-200 outline-none transition-colors duration-100",
       "hover:bg-slate-100 dark:hover:bg-[#1d1d25] hover:text-slate-900 dark:hover:text-white",
       "focus:bg-emerald-50 dark:focus:bg-emerald-950/60 focus:text-emerald-950 dark:focus:text-emerald-300",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
@@ -441,7 +441,7 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
               <SelectItem
                 key="select-placeholder-item"
                 value={EMPTY_VALUE_KEY}
-                className="text-slate-400 dark:text-zinc-500 text-xs italic py-2 px-3"
+                className="text-slate-400 dark:text-zinc-500 text-xs italic py-2"
               >
                 {placeholder}
               </SelectItem>
@@ -453,7 +453,7 @@ const Select = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
                   key={`select-opt-${itemVal}-${idx}`}
                   value={itemVal}
                   disabled={opt.disabled}
-                  className="py-2.5 px-3 text-xs font-medium cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f28]"
+                  className="py-2.5 text-xs font-medium cursor-pointer rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f28]"
                 >
                   {opt.label}
                 </SelectItem>

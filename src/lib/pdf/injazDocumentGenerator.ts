@@ -347,27 +347,63 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
   const sponsorCity = (data.destinationCity || "RIYADH").toUpperCase();
   const sponsorPhone = data.sponsorPhone || "966503221802";
 
-  const visaNo = data.visaNumber || "1908334046";
-  const injazNo = data.injazNumber || `E${passportNo.replace(/\D/g, "") || "4982104"}`;
+  const visaNo = data.visaNumber || "1908078445";
+  const injazNo = data.injazNumber || `E${passportNo.replace(/\D/g, "") || "822520861"}`;
   const paymentNo = data.paymentNo || "99281401";
   const appDate = formatDateDDMMYYYY(data.appointmentDate || new Date().toISOString().split("T")[0]);
-  const agencyName = "ANWAR SULTAN FOREIGN EMPLOYMENT AGENT (3226)";
+  const agencyName = "ANWAR SULTAN FOREIGN EMPLOYMENT AGENT";
 
   const textColor = rgb(0.05, 0.05, 0.05);
 
-  // 0. Applicant Photograph (Top Left Official Placement)
-  // Placement: x:36, y:618, w:75, h:96 (standard 3:4 aspect ratio)
-  // Strictly sits below Injaz reference text (y:726) and left of barcode (x:115), never overlapping either.
+  // Helper to draw vector Code-128 barcodes directly onto the PDF
+  const drawCode128Barcode = (
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) => {
+    try {
+      const pattern = encodeCode128(text.replace(/[^\x20-\x7E]/g, ""));
+      if (!pattern || pattern.length < 10) return;
+      const barWidth = width / pattern.length;
+      for (let i = 0; i < pattern.length; i++) {
+        if (pattern[i] === "1") {
+          page.drawRectangle({
+            x: x + i * barWidth,
+            y: y,
+            width: barWidth + 0.15, // slight overlap to prevent anti-aliasing gaps
+            height: height,
+            color: rgb(0, 0, 0),
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Vector barcode drawing error:", e);
+    }
+  };
+
+  // 1. TOP-LEFT SECTION: Barcode (Visa No), Visa No text, Sponsor Name, Applicant Photo
+  // 1a. Left Barcode: encodes Visa Number (width: 137, height: 27, y: 747)
+  drawCode128Barcode(visaNo, 35, 747, 137, 27);
+
+  // 1b. Visa Number text positioned immediately BELOW the left barcode (zero overlap)
+  page.drawText(visaNo, { x: 118, y: 735, size: 9, font: fontBold, color: textColor });
+
+  // 1c. Sponsor Name immediately BELOW Visa Number
+  page.drawText(`Sponsor :  ${sponsorName}`, { x: 36, y: 718, size: 8.5, font: fontBold, color: textColor });
+
+  // 1d. Applicant Photo (sits below Sponsor text and strictly above candidate data table)
   if (data.photoUrl) {
     try {
       const rawBytes = await fetchImageBytes(data.photoUrl);
       if (rawBytes && rawBytes.length > 0) {
         const photoImage = await embedPhotoSafely(pdfDoc, rawBytes);
         if (photoImage) {
-          const photoW = 75;
-          const photoH = 96;
-          const photoX = 36;
-          const photoY = 618;
+          const photoW = 100;
+          const photoH = 105;
+          const photoX = 38;
+          const photoY = 605;
 
           page.drawImage(photoImage, {
             x: photoX,
@@ -380,7 +416,7 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
             y: photoY,
             width: photoW,
             height: photoH,
-            borderColor: rgb(0.7, 0.7, 0.7),
+            borderColor: rgb(0.8, 0.8, 0.8),
             borderWidth: 0.5,
           });
         }
@@ -390,104 +426,103 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
     }
   }
 
-  // 1. Barcodes — draw actual Code-128 barcode images at exact template positions
-  // Template white-box positions (from page content stream analysis):
-  //   Left barcode box:  re [115.07, 736.01, 58.97, 16.14]  → payment number barcode
-  //   Right barcode box: re [426.78, 736.01, 60.80, 16.14]  → date barcode
-  //   Below-left box:    re [74.67, 724.49, 91.98, 14.75]   → injaz/e-number text
-  try {
-    // Left barcode: encode the payment number (matches original template top-left)
-    const leftBarcodeBytes = await generateBarcodeImageBytes(paymentNo, 59, 16);
-    if (leftBarcodeBytes) {
-      const leftBarcodeImg = await pdfDoc.embedPng(leftBarcodeBytes);
-      page.drawImage(leftBarcodeImg, { x: 115, y: 736, width: 59, height: 16 });
-    }
+  // 2. TOP-RIGHT SECTION: Barcode (E-Number / Injaz No), E-Number text, Embassy & Agency Details
+  // 2a. Right Barcode: encodes Injaz Number (width: 137, height: 27, y: 747)
+  drawCode128Barcode(injazNo, 388, 747, 137, 27);
 
-    // Right barcode: encode the appointment date (matches original template top-right)
-    const rightBarcodeBytes = await generateBarcodeImageBytes(appDate, 61, 16);
-    if (rightBarcodeBytes) {
-      const rightBarcodeImg = await pdfDoc.embedPng(rightBarcodeBytes);
-      page.drawImage(rightBarcodeImg, { x: 426, y: 736, width: 61, height: 16 });
-    }
-  } catch (bcErr) {
-    console.warn("Could not embed barcodes in Injaz PDF:", bcErr);
+  // 2b. Injaz / E-Number text positioned immediately BELOW the right barcode (zero overlap)
+  page.drawText(injazNo, { x: 428, y: 735, size: 9, font: fontBold, color: textColor });
+
+  // 2c. Embassy Header Details
+  page.drawText("EMBASSY OF SAUDI ARABIA", { x: 400, y: 718, size: 7.5, font: fontRegular, color: textColor });
+  page.drawText("CONSULAR SECTION", { x: 418, y: 706, size: 7.5, font: fontRegular, color: textColor });
+
+  // 2d. Agency Details
+  page.drawText(agencyName, { x: 352, y: 660, size: 8, font: fontBold, color: textColor });
+  page.drawText("rawnasultan03@gmail.com", { x: 406, y: 638, size: 8, font: fontRegular, color: textColor });
+
+  // 3. Section 1: Candidate Personal Data (Left at 125, Right at 400)
+  // Line 1 (y: 585.6): Full Name :
+  page.drawText(fullName, { x: 125, y: 585.6, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 2 (y: 569.2): Date of Birth (left) | Place of Birth (right)
+  page.drawText(dob, { x: 125, y: 569.2, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(placeOfBirth, { x: 400, y: 569.2, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 3 (y: 552.9): Past Nationality (left) | Current Nationality (right)
+  page.drawText(prevNationality, { x: 125, y: 552.9, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(nationality, { x: 400, y: 552.9, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 4 (y: 536.5): Sex / Gender (left) | Marital Status (right)
+  page.drawText(gender, { x: 125, y: 536.5, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(maritalStatus, { x: 400, y: 536.5, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 5 (y: 520.2): Religion (right column)
+  page.drawText(religion, { x: 400, y: 520.2, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 6 (y: 503.8): Qualification / Education (left) | Profession / Target Job (right)
+  page.drawText(qualification, { x: 125, y: 503.8, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(profession, { x: 400, y: 503.8, size: 8.5, font: fontBold, color: textColor });
+
+  // Line 7 (y: 487.5): Home address and telephone No. in Ethiopia
+  if (data.city || data.phone) {
+    page.drawText(homeAddress, { x: 175, y: 487.5, size: 7.8, font: fontRegular, color: textColor });
   }
 
-  // 2. Payment No text (in left barcode area, top-left)
-  page.drawText(paymentNo, { x: 118, y: 739, size: 8.5, font: fontBold, color: textColor });
+  // Line 8 (y: 440.6): Business address and telephone No.
+  if (sponsorPhone || data.phone) {
+    page.drawText(sponsorPhone || data.phone || "", { x: 54, y: 440.6, size: 8, font: fontBold, color: textColor });
+  }
 
-  // 3. Injaz / E-Number text (below-left barcode area)
-  page.drawText(injazNo, { x: 75, y: 726, size: 9, font: fontBold, color: textColor });
+  // 4. Section 2: Travel & Passport Details
+  // Line 9 (y: 412.7): Purpose of Travel — Draw shaded gray box over "Work" column
+  page.drawRectangle({
+    x: 112,
+    y: 412.7,
+    width: 56,
+    height: 22.9,
+    color: rgb(0.72, 0.72, 0.72),
+  });
+  page.drawText("Work", { x: 128, y: 420, size: 8.5, font: fontBold, color: textColor });
 
-  // 4. Application / Appointment Date (top right header)
-  page.drawText(appDate, { x: 429, y: 739, size: 8.5, font: fontBold, color: textColor });
+  // Line 10 (y: 400.9): Place of Issue (left) | Date of Issue (middle) | Passport No (right)
+  page.drawText(placeOfIssue, { x: 88, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(issueDate, { x: 288, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(passportNo, { x: 462, y: 400.9, size: 8.5, font: fontBold, color: textColor });
 
-  // 5. Agency / Dealer Name
-  page.drawText(agencyName, { x: 352, y: 659, size: 8, font: fontBold, color: textColor });
+  // Line 11 (y: 383.8): Date of Expiry
+  page.drawText(expiryDate, { x: 110, y: 383.8, size: 8.5, font: fontBold, color: textColor });
 
-  // 5. Full Name (Applicant Name Header & Line 14)
-  page.drawText(fullName, { x: 407, y: 635, size: 9, font: fontBold, color: textColor });
-  page.drawText(fullName, { x: 125, y: 584, size: 8.5, font: fontBold, color: textColor });
+  // Line 12 (y: 351.3): Duration of stay in the Kingdom : 2 YEARS
+  page.drawText("2 YEARS", { x: 155, y: 351.3, size: 8, font: fontRegular, color: textColor });
 
-  // 7. Place of Birth
-  page.drawText(placeOfBirth, { x: 125, y: 568, size: 8.5, font: fontRegular, color: textColor });
+  // Line 13 (y: 331.9): Mode of Payment | Payment No : | Date :
+  page.drawText("ELECTRONIC", { x: 115, y: 331.9, size: 8, font: fontRegular, color: textColor });
+  page.drawText(paymentNo, { x: 310, y: 331.9, size: 8.5, font: fontBold, color: textColor });
+  page.drawText(appDate, { x: 460, y: 331.9, size: 8.5, font: fontRegular, color: textColor });
 
-  // 8. Date of Birth
-  page.drawText(dob, { x: 399, y: 568, size: 8.5, font: fontRegular, color: textColor });
+  // Line 15 (y: 286.2): Destination (left) | Dealer Name (right)
+  page.drawText(`${sponsorCity || "RIYADH"}, SAUDI ARABIA`, { x: 95, y: 286.2, size: 8, font: fontRegular, color: textColor });
+  page.drawText(agencyName, { x: 330, y: 286.2, size: 8, font: fontBold, color: textColor });
 
-  // 9. Current Nationality
-  page.drawText(nationality, { x: 125, y: 551, size: 8.5, font: fontRegular, color: textColor });
+  // Line 17 (y: 217): Name and address of company or individual in the Kingdom:
+  const sponsorFullInfo = [
+    sponsorName,
+    sponsorCity ? `${sponsorCity}, SAUDI ARABIA` : "SAUDI ARABIA",
+    sponsorId ? `ID: ${sponsorId}` : "",
+    sponsorPhone ? `TEL: ${sponsorPhone}` : "",
+  ].filter(Boolean).join("  -  ");
+  page.drawText(sponsorFullInfo, { x: 210, y: 217, size: 7.5, font: fontRegular, color: textColor });
 
-  // 10. Previous Nationality
-  page.drawText(prevNationality, { x: 399, y: 551, size: 8.5, font: fontRegular, color: textColor });
+  // Line 18 (y: 172.5): Date (left) | Name (right)
+  page.drawText(appDate, { x: 48, y: 172.5, size: 8, font: fontRegular, color: textColor });
+  page.drawText(fullName, { x: 312, y: 172.5, size: 8, font: fontBold, color: textColor });
 
-  // 11. Sex / Gender
-  page.drawText(gender, { x: 125, y: 535, size: 8.5, font: fontRegular, color: textColor });
-
-  // 12. Marital Status
-  page.drawText(maritalStatus, { x: 399, y: 535, size: 8.5, font: fontRegular, color: textColor });
-
-  // 13. Religion
-  page.drawText(religion, { x: 399, y: 518, size: 8.5, font: fontRegular, color: textColor });
-
-  // 14. Profession / Target Job
-  page.drawText(profession, { x: 125, y: 502, size: 8.5, font: fontBold, color: textColor });
-
-  // 15. Qualification / Education
-  page.drawText(qualification, { x: 399, y: 502, size: 8.5, font: fontRegular, color: textColor });
-
-  // 16. Home Address & Phone in Ethiopia
-  page.drawText(homeAddress, { x: 55, y: 439, size: 7.8, font: fontRegular, color: textColor });
-
-  // 17. Purpose of Travel
-  page.drawText(purpose, { x: 126, y: 419, size: 8.5, font: fontBold, color: textColor });
-
-  // 18. Passport Number
-  page.drawText(passportNo, { x: 85, y: 399, size: 8.5, font: fontBold, color: textColor });
-
-  // 19. Place of Issue
-  page.drawText(placeOfIssue, { x: 288, y: 399, size: 8.5, font: fontRegular, color: textColor });
-
-  // 20. Date of Issue
-  page.drawText(issueDate, { x: 463, y: 399, size: 8.5, font: fontRegular, color: textColor });
-
-  // 21. Date of Expiry
-  page.drawText(expiryDate, { x: 110, y: 382, size: 8.5, font: fontRegular, color: textColor });
-
-  // Visa Number & Sponsor ID Context
-  page.drawText(`VISA: ${visaNo}`, { x: 463, y: 382, size: 8, font: fontBold, color: textColor });
-
-  // 22. Sponsor Name (Kafeel)
-  page.drawText(sponsorName, { x: 312, y: 171, size: 7.8, font: fontBold, color: textColor });
-
-  // 23. Sponsor Address / City
-  page.drawText(`${sponsorCity}, SAUDI ARABIA`, { x: 48, y: 171, size: 7.8, font: fontRegular, color: textColor });
-
-  // 24. Sponsor Phone
-  page.drawText(sponsorPhone, { x: 46, y: 121, size: 8, font: fontRegular, color: textColor });
-
-  // 25. Sponsor ID
-  page.drawText(`ID: ${sponsorId}`, { x: 312, y: 153, size: 7.8, font: fontBold, color: textColor });
+  // Line 19 (y: 140): Authorization (Visa No) | Visit / For
+  if (visaNo) {
+    page.drawText(visaNo, { x: 325, y: 140, size: 8, font: fontBold, color: textColor });
+  }
+  page.drawText("Work", { x: 48, y: 122, size: 8, font: fontBold, color: textColor });
 
   return await pdfDoc.save();
 }

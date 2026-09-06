@@ -91,23 +91,23 @@ export function CandidateCard({
         </div>
 
         {/* Full-Body Photo */}
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-200/80 dark:bg-[#202028] flex items-center justify-center">
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-slate-900/10 dark:bg-black/40 flex items-center justify-center">
           {hasFullBody ? (
             <img
               src={fullBodyPhotoSrc}
               alt={`${candidate.full_name} - Full Body Photo`}
               onError={() => setFullBodyImgError(true)}
-              className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-102"
+              className="h-full w-full object-contain object-center transition-transform duration-300 group-hover:scale-102"
               loading="lazy"
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-3 text-center text-slate-400 dark:text-zinc-500">
               <User className="h-8 w-8 stroke-[1.5] mb-1 opacity-60" />
-              <span className="text-[10px] font-medium">Full Portrait</span>
+              <span className="text-[10px] font-medium">Full-Body Photo</span>
             </div>
           )}
           <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white">
-            Full Portrait
+            Full-Body
           </div>
         </div>
       </div>

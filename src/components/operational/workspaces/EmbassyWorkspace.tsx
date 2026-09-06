@@ -478,44 +478,6 @@ export function EmbassyWorkspace({
             />
           </DrawerField>
 
-          <DrawerField label="Embassy Fee Status" isReadOnly={false}>
-            <select
-              value={feeStatus}
-              disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setFeeStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200"
-            >
-              <option value="Unpaid">Unpaid</option>
-              <option value="Paid">Paid</option>
-            </select>
-          </DrawerField>
-
-          <DrawerField label="Embassy Fee Amount (ETB)" isReadOnly={false}>
-            <div className="relative">
-              <Input
-                type="number"
-                placeholder="Enter embassy fee"
-                value={embassyFee}
-                disabled={!canEdit || mutation.isPending}
-                onChange={(e) => setEmbassyFee(e.target.value)}
-                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-              />
-              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
-                ETB
-              </span>
-            </div>
-          </DrawerField>
-
-          <DrawerField label="Fee Receipt №" isReadOnly={false}>
-            <Input
-              type="text"
-              placeholder="e.g. REC-88392"
-              value={receiptNo}
-              disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setReceiptNo(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
 
           {status === "Rejected" && (
             <div className="sm:col-span-2">

@@ -45,7 +45,7 @@ export function calculateNormalizedCropBox(
   rot: number
 ): { x: number; y: number; width: number; height: number } {
   if (!targetRatio) {
-    return { x: 0.05, y: 0.05, width: 0.9, height: 0.9 };
+    return { x: 0.1, y: 0.12, width: 0.8, height: 0.72 };
   }
   const is90or270 = rot === 90 || rot === 270;
   const effW = is90or270 ? (imgHeight || 600) : (imgWidth || 800);
@@ -55,20 +55,24 @@ export function calculateNormalizedCropBox(
   // Normalized width / normalized height K
   const K = targetRatio / canvasRatio;
 
-  let newW = 0.85;
+  let newW = 0.75;
   let newH = newW / K;
 
-  if (newH > 0.85) {
-    newH = 0.85;
+  if (newH > 0.65) {
+    newH = 0.65;
     newW = newH * K;
   }
+  if (newW > 0.85) {
+    newW = 0.85;
+    newH = newW / K;
+  }
 
-  newW = Math.min(0.95, Math.max(0.08, newW));
-  newH = Math.min(0.95, Math.max(0.08, newH));
+  newW = Math.min(0.90, Math.max(0.1, newW));
+  newH = Math.min(0.85, Math.max(0.1, newH));
 
   return {
-    x: Math.max(0.02, (1 - newW) / 2),
-    y: Math.max(0.02, (1 - newH) / 2),
+    x: Math.max(0.04, (1 - newW) / 2),
+    y: Math.max(0.06, (1 - newH) / 2),
     width: newW,
     height: newH,
   };
@@ -221,10 +225,17 @@ export function ImageCropModal({
   const onPointerDown = (handle: DragHandle, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
     setActiveHandle(handle);
     setDragStart({ x: e.clientX, y: e.clientY });
     setInitialRect({ ...cropRect });
+
+    // If an edge handle is dragged, seamlessly switch to freeform to permit unrestricted edge adjustment
+    if (handle === "top" || handle === "bottom" || handle === "left" || handle === "right") {
+      setAspectRatio(null);
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -241,8 +252,14 @@ export function ImageCropModal({
     if (activeHandle === "move") {
       newRect.x = Math.max(0, Math.min(1 - initialRect.width, initialRect.x + dx));
       newRect.y = Math.max(0, Math.min(1 - initialRect.height, initialRect.y + dy));
-    } else if (!aspectRatio) {
-      // Freeform dragging
+    } else if (
+      !aspectRatio ||
+      activeHandle === "top" ||
+      activeHandle === "bottom" ||
+      activeHandle === "left" ||
+      activeHandle === "right"
+    ) {
+      // Freeform or edge dragging
       if (activeHandle.includes("left")) {
         const potentialX = Math.min(initialRect.x + initialRect.width - MIN_SIZE, Math.max(0, initialRect.x + dx));
         newRect.width = initialRect.width + (initialRect.x - potentialX);
@@ -636,43 +653,39 @@ export function ImageCropModal({
 
                   {/* Corner Resize Handles */}
                   <div
-                    className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-emerald-600 rounded-xs cursor-nwse-resize shadow"
+                    className="absolute -top-2 -left-2 h-4 w-4 bg-white border-2 border-emerald-600 rounded-xs cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
                     onPointerDown={(e) => onPointerDown("top-left", e)}
                   />
                   <div
-                    className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-emerald-600 rounded-xs cursor-nesw-resize shadow"
+                    className="absolute -top-2 -right-2 h-4 w-4 bg-white border-2 border-emerald-600 rounded-xs cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
                     onPointerDown={(e) => onPointerDown("top-right", e)}
                   />
                   <div
-                    className="absolute -bottom-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-emerald-600 rounded-xs cursor-nesw-resize shadow"
+                    className="absolute -bottom-2 -left-2 h-4 w-4 bg-white border-2 border-emerald-600 rounded-xs cursor-nesw-resize shadow-md hover:scale-125 transition-transform"
                     onPointerDown={(e) => onPointerDown("bottom-left", e)}
                   />
                   <div
-                    className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-emerald-600 rounded-xs cursor-nwse-resize shadow"
+                    className="absolute -bottom-2 -right-2 h-4 w-4 bg-white border-2 border-emerald-600 rounded-xs cursor-nwse-resize shadow-md hover:scale-125 transition-transform"
                     onPointerDown={(e) => onPointerDown("bottom-right", e)}
                   />
 
-                  {/* Edge Handles (Only active in Freeform mode to prevent aspect ratio distortion) */}
-                  {aspectRatio === null && (
-                    <>
-                      <div
-                        className="absolute -top-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
-                        onPointerDown={(e) => onPointerDown("top", e)}
-                      />
-                      <div
-                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ns-resize"
-                        onPointerDown={(e) => onPointerDown("bottom", e)}
-                      />
-                      <div
-                        className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
-                        onPointerDown={(e) => onPointerDown("left", e)}
-                      />
-                      <div
-                        className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-6 bg-white/90 border border-emerald-600 rounded-xs cursor-ew-resize"
-                        onPointerDown={(e) => onPointerDown("right", e)}
-                      />
-                    </>
-                  )}
+                  {/* Edge Handles (Always active for full 8-handle control) */}
+                  <div
+                    className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-3 w-8 bg-white border-2 border-emerald-600 rounded-xs cursor-ns-resize shadow hover:scale-110 transition-transform"
+                    onPointerDown={(e) => onPointerDown("top", e)}
+                  />
+                  <div
+                    className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-3 w-8 bg-white border-2 border-emerald-600 rounded-xs cursor-ns-resize shadow hover:scale-110 transition-transform"
+                    onPointerDown={(e) => onPointerDown("bottom", e)}
+                  />
+                  <div
+                    className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-3 h-8 bg-white border-2 border-emerald-600 rounded-xs cursor-ew-resize shadow hover:scale-110 transition-transform"
+                    onPointerDown={(e) => onPointerDown("left", e)}
+                  />
+                  <div
+                    className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-8 bg-white border-2 border-emerald-600 rounded-xs cursor-ew-resize shadow hover:scale-110 transition-transform"
+                    onPointerDown={(e) => onPointerDown("right", e)}
+                  />
                 </div>
               </div>
             </div>

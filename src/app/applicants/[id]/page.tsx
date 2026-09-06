@@ -92,6 +92,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 const CANONICAL_STAGES = [
   "Draft",
@@ -104,12 +105,27 @@ const CANONICAL_STAGES = [
   "Departed",
 ];
 
+const STAGE_DISPLAY_LABELS: Record<string, string> = {
+  Draft: "Draft",
+  Registered: "Registered",
+  "CV Generated": "CV Generated",
+  Selected: "Selected",
+  Processing: "Processing(LMIS and Te'shir)",
+  Stamped: "Embassy",
+  Ticketed: "Ticketed",
+  Departed: "Departed",
+};
+
 export default function ApplicantDetailPage() {
   const params = useParams();
   const router = useRouter();
   const rawId = params?.id;
   const applicantId = typeof rawId === "string" ? decodeURIComponent(rawId) : Array.isArray(rawId) ? decodeURIComponent(rawId[0]) : "";
   const queryClient = useQueryClient();
+  const { roles } = useAuth();
+  const isAdminOrOps = roles.some(
+    (r) => r === "Administrator" || r === "System Manager" || r === "Operations Manager"
+  );
 
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
@@ -312,13 +328,15 @@ export default function ApplicantDetailPage() {
 
   const corridorCountry = activePlacement?.destination_country || applicant?.destination_country || "Saudi Arabia";
 
-  // Corridor clearance steps for the Processing Stage (LMIS, Te'shir / Telesign, and Embassy Stamping)
+  // Corridor clearance steps for the Processing Stage (strictly LMIS and Te'shir / Telesign)
   const processingClearanceSteps = React.useMemo(() => {
     return applicantClearanceSteps.filter((s) => {
       const norm = (s.step_type || "").toLowerCase().trim();
       return (
         !norm.includes("ticket") &&
-        !norm.includes("departure")
+        !norm.includes("departure") &&
+        !norm.includes("embassy") &&
+        !norm.includes("stamp")
       );
     });
   }, [applicantClearanceSteps]);
@@ -649,11 +667,21 @@ export default function ApplicantDetailPage() {
   const passStatus = getExpiryBadgeStatus(passDays);
 
   // Authoritative State Machine Resolution
-  const currentStage =
+  const rawStage =
     activePlacement?.status ||
     applicant.status ||
     applicant.applicant_state ||
     "Draft";
+
+  // If local processing steps (LMIS & Te'shir) are all complete, advance active stage to Stamped (Embassy)
+  const allProcessingStepsCompleted =
+    processingClearanceSteps.length > 0 &&
+    processingClearanceSteps.every((s) => s.status === "Complete" || s.status === "Issued");
+
+  const currentStage =
+    rawStage === "Processing" && allProcessingStepsCompleted
+      ? "Stamped"
+      : rawStage;
   const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
 
   const destination = (applicant.destination_country || "").trim().toLowerCase();
@@ -704,7 +732,7 @@ export default function ApplicantDetailPage() {
               {applicant.full_name || [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ") || applicant.name}
             </h1>
             <Badge variant="default" className="text-xs">
-              {currentStage}
+              {STAGE_DISPLAY_LABELS[currentStage] || currentStage}
             </Badge>
             {applicant.applicant_state === "Cancelled" && (
               <Badge variant="destructive">Cancelled</Badge>
@@ -823,7 +851,7 @@ export default function ApplicantDetailPage() {
                         : "text-slate-400 dark:text-zinc-500"
                     }`}
                   >
-                    {stage}
+                    {STAGE_DISPLAY_LABELS[stage] || stage}
                   </span>
                 </div>
                 {idx !== CANONICAL_STAGES.length - 1 && (
@@ -1047,7 +1075,7 @@ export default function ApplicantDetailPage() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <Clock className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                  Stage: {activePlacement?.status === "Processing" || currentStage === "Processing" ? "Processing" : (activePlacement?.status || currentStage)} ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
+                  Stage: Processing(LMIS and Te'shir) ({isKuwaitApplicant ? "Kuwait Corridor Clearances" : "Saudi Corridor Clearances"})
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
                   {activePlacement ? (
@@ -1069,20 +1097,17 @@ export default function ApplicantDetailPage() {
               </Button>
             </div>
 
-            {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS, Te'shir, and Embassy clearance steps */}
+            {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS and Te'shir clearance steps (Embassy is handled in Embassy stage) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               {processingClearanceSteps.length > 0 ? (
                 processingClearanceSteps.map((step) => {
-                  const isEmbassy = (step.step_type || "").toLowerCase().includes("embassy") || (step.step_type || "").toLowerCase().includes("stamping");
-                  const isUnpaidWakala = isEmbassy && step.status !== "Stamped" && step.status !== "Complete";
-
                   return (
                     <div key={step.name} className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                           <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {step.step_type}
                         </span>
-                        <Badge variant={step.status === "Issued" || step.status === "Complete" || step.status === "Stamped" ? "success" : step.status === "Rejected" ? "destructive" : "warning"}>
+                        <Badge variant={step.status === "Issued" || step.status === "Complete" ? "success" : step.status === "Rejected" ? "destructive" : "warning"}>
                           {step.status || "Pending"}
                         </Badge>
                       </div>
@@ -1092,14 +1117,6 @@ export default function ApplicantDetailPage() {
                       <div className="text-[10px] text-slate-400 font-mono">
                         Step ID: {step.name} (Seq {step.sequence_order})
                       </div>
-                      {isUnpaidWakala && (
-                        <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 p-2 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-1.5 mt-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 mt-0.5" />
-                          <span>
-                            Wakala authorization status is currently <strong>{(activePlacement as any)?.wakala_payment_status || "Pending"}</strong>. Verified Wakala payment from Foreign Agency is required before Embassy visa stamping can be finalized.
-                          </span>
-                        </div>
-                      )}
                     </div>
                   );
                 })
@@ -1112,14 +1129,14 @@ export default function ApplicantDetailPage() {
           </div>
         )}
 
-        {/* Stage 7: Stamped */}
+        {/* Stage 7: Stamped (Embassy) */}
         {currentStage === "Stamped" && (
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <ShieldCheck className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
-                  Stage: Stamped (Visa Endorsed)
+                  Stage: Embassy (Visa Endorsed / Stamped)
                 </h3>
                 <p className="text-xs text-slate-600 dark:text-zinc-400">
                   Visa stamp confirmed on passport. Proceed to book flight ticket reservation (Stage 8: Ticketed).
@@ -1136,13 +1153,43 @@ export default function ApplicantDetailPage() {
               </Button>
             </div>
 
+            {isAdminOrOps && isSaudiApplicant && (activePlacement as any)?.wakala_payment_status !== "Paid" && (activePlacement as any)?.wakala_payment_status !== "Authorized" && (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 p-4 space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span>Administrative Notice: Musaned Wakala Authorization Requirement</span>
+                </div>
+                <p className="text-amber-800 dark:text-amber-300">
+                  Wakala authorization status is currently <strong>{(activePlacement as any)?.wakala_payment_status || "Pending"}</strong>. For Saudi Arabia corridor placements, verified Wakala authorization from the Foreign Agency via the Musaned portal is required before Embassy visa stamping can proceed.
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 text-[11px]">
+                  As an Administrator / Operations Manager, you can review authorization, confirm foreign agency payment, or manage operational step clearances in the Wakala Workspace.
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Link href="/operational-workspace?tab=wakala">
+                    <Button size="sm" variant="outline" className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">
+                      Open Wakala Workspace
+                    </Button>
+                  </Link>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsMusanedModalOpen(true)}
+                    className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                  >
+                    Verify Musaned Contract
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {embassyClearanceStep && (
               <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 space-y-2 text-xs max-w-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                     <FileCheck2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> {embassyClearanceStep.step_type}
                   </span>
-                  <Badge variant={embassyClearanceStep.status === "Stamped" ? "success" : "warning"}>
+                  <Badge variant={embassyClearanceStep.status === "Stamped" || embassyClearanceStep.status === "Complete" ? "success" : "warning"}>
                     {embassyClearanceStep.status || "Pending"}
                   </Badge>
                 </div>

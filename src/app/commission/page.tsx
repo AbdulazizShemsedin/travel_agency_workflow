@@ -602,28 +602,32 @@ export default function AdminCommissionPage() {
 
   // ACTION: Write-Off Batch
   const handleWriteOffBatch = async () => {
-    if (!activeBatch?.name) return;
+    const batchName = activeBatch?.name || selectedBatchName;
+    if (!batchName) {
+      toast.error("No Batch Selected", { description: "Please select a commission batch to write off." });
+      return;
+    }
     const amount = Number(writeOffAmountInput);
     if (!amount || isNaN(amount) || amount <= 0) {
-      toast.error("Invalid Amount", { description: "Please enter a valid positive write-off amount." });
+      toast.error("Invalid Amount", { description: "Please enter a valid positive write-off amount in Birr." });
       return;
     }
     if (!writeOffReasonInput.trim()) {
-      toast.error("Reason Required", { description: "Please provide a reason for the batch write-off." });
+      toast.error("Reason Required", { description: "Please provide a reason or justification for the batch write-off." });
       return;
     }
 
     setIsSubmittingWriteOff(true);
     try {
-      await writeOffBatchV2(activeBatch.name, amount, writeOffReasonInput.trim());
+      await writeOffBatchV2(batchName, amount, writeOffReasonInput.trim());
       setIsWriteOffModalOpen(false);
       setWriteOffAmountInput("");
       setWriteOffReasonInput("");
       toast.success("Batch Written Off", {
-        description: `Wrote off ${amount.toLocaleString()} Birr for batch ${activeBatch.name}.`,
+        description: `Wrote off ${amount.toLocaleString()} Birr for batch ${batchName}. Shortfall booked to Expense Applicant Transaction.`,
       });
       refetchBatches();
-      await loadBatchDetails(activeBatch.name);
+      await loadBatchDetails(batchName);
     } catch (err: any) {
       toast.error("Write-Off Failed", { description: formatCleanErrorMessage(err) });
     } finally {
@@ -1392,6 +1396,28 @@ export default function AdminCommissionPage() {
                                     className="h-7 text-xs px-2 bg-emerald-900 hover:bg-emerald-950 text-white"
                                   >
                                     Settle
+                                  </Button>
+                                )}
+
+                                {batch.status !== "Settled" && batch.status !== "Written Off" && isFinanceManagerOrAdmin && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedBatchName(batch.name);
+                                      setActiveBatch(batch);
+                                      const rem =
+                                        batch.balance_due_birr ??
+                                        (batch.total_amount_birr || batch.total_amount);
+                                      setWriteOffAmountInput(String(rem || ""));
+                                      setIsWriteOffModalOpen(true);
+                                    }}
+                                    className="h-7 text-xs px-2 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-medium"
+                                    title="Write Off Agreed Discount (Swagger finance_api.write_off_batch)"
+                                  >
+                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                    Write Off
                                   </Button>
                                 )}
                               </div>
@@ -2900,8 +2926,8 @@ export default function AdminCommissionPage() {
               <AlertTriangle className="h-5 w-5" />
               Confirm Commission Batch Write-Off
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Writing off batch <strong>{activeBatch?.name}</strong> will discharge the specified balance as uncollectible debt. This is recorded in the financial audit log.
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
+              Record an agreed discount on batch <strong>{activeBatch?.name || selectedBatchName}</strong> (or discharge uncollectible partner debt). Books an Expense Applicant Transaction for the shortfall and settles the batch once advance + write-off cover the total.
             </DialogDescription>
           </DialogHeader>
 

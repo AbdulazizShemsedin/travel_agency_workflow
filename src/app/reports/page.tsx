@@ -670,14 +670,14 @@ export default function ReportsPage() {
               <CardTitle className="text-sm font-bold flex items-center justify-between text-red-950 dark:text-red-300">
                 <span className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-red-600" />
-                  Critical Placements Not Departed (30+ Days from Selection)
+                  Critical Placements Not Departed (30+ Days from Selected applicant's Musaned was Uploaded)
                 </span>
                 <Badge variant="outline" className="border-red-300 text-red-800 bg-red-50 text-[10px]">
                   {placementAging?.critical_not_departed?.length || 0} Critical
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                Placements exceeding the standard 30-day turnaround without departure confirmation.
+                Placements exceeding 30 days since candidate's Musaned contract upload without departure confirmation.
               </CardDescription>
             </CardHeader>
 

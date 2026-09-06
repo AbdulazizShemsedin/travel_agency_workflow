@@ -219,13 +219,13 @@ export function CandidateDetailModal({
             </div>
 
             <div className="flex flex-col items-center overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-slate-50 dark:bg-[#17171d] p-3">
-              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-200 dark:bg-[#202028] flex items-center justify-center">
+              <div className="relative aspect-[4/5] w-full max-w-[240px] overflow-hidden rounded-lg bg-slate-900/10 dark:bg-black/40 flex items-center justify-center">
                 {hasFullBody ? (
                   <img
                     src={fullBodyPhotoSrc}
                     alt={`${candidate.full_name} Full Body`}
                     onError={() => setFullBodyImgError(true)}
-                    className="h-full w-full object-cover object-top"
+                    className="h-full w-full object-contain object-center"
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center p-4 text-center text-slate-400">
