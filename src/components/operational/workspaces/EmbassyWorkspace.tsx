@@ -317,26 +317,6 @@ export function EmbassyWorkspace({
       },
     },
     {
-      id: "feeStatus",
-      header: "EMBASSY FEE",
-      width: "110px",
-      align: "center",
-      cell: (row) => {
-        const isPaid = (row.embassy?.payment_status || "").toLowerCase().includes("paid");
-        return (
-          <Badge
-            className={
-              isPaid
-                ? "bg-emerald-600 text-white font-semibold text-[10px]"
-                : "bg-amber-500 text-white font-semibold text-[10px]"
-            }
-          >
-            {isPaid ? "PAID" : "UNPAID"}
-          </Badge>
-        );
-      },
-    },
-    {
       id: "action",
       header: "ACTION",
       width: "140px",

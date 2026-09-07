@@ -389,11 +389,23 @@ export default function ApplicantDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message || "CV generated successfully! Opening preview...");
+      toast.success("CV Generated Successfully", {
+        description: data.message || "Official bilateral CV compiled. Opening preview...",
+      });
       router.push(`/applicants/${encodeURIComponent(applicantId)}/cv`);
     },
     onError: (err: Error) => {
-      toast.error("CV generation failed", { description: err.message });
+      // Backend PDF generation can take up to 2 minutes and may crash with a non-JSON body.
+      // Translate the generic proxy error into a user-friendly message.
+      const rawMsg = err.message || "";
+      const isRenderCrash =
+        rawMsg.includes("Non-JSON response") ||
+        rawMsg.includes("non-JSON") ||
+        rawMsg.includes("HTTP 500");
+      const description = isRenderCrash
+        ? "The server encountered an error while rendering the CV PDF. This may be due to missing print template configuration or a temporary rendering engine issue. Please check that the Print Format is enabled on the backend and try again."
+        : rawMsg;
+      toast.error("CV Generation Failed", { description });
     },
   });
 

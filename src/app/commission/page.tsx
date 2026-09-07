@@ -757,12 +757,6 @@ export default function AdminCommissionPage() {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Commission Batches & Foreign Agency Settlement
             </h1>
-            <Badge
-              variant="outline"
-              className="text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-            >
-              V2 FINANCE PIPELINE
-            </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
             Authoritative commission lifecycle: Owed accumulation • Batch generation (CBR-#####) • On-demand PDF invoices • Full & partial settlements • Contractor threshold rules.

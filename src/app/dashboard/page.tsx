@@ -46,8 +46,7 @@ export default function DashboardPage() {
   const departedCount = applicants.filter((a) => a.applicant_state === "Departed").length;
 
   // Sub-stream breakdown for parallel Processing stage
-  const lmsActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
-  const wakalaActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
+  const lmisActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
   const injazActiveCount = applicants.filter((a) => a.applicant_state === "Processing").length;
 
   const inProgressCount = applicants.filter(
@@ -199,8 +198,7 @@ export default function DashboardPage() {
       accent: "bg-emerald-700",
       isParent: true,
       subBranches: [
-        { name: "LMS", count: lmsActiveCount, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
-        { name: "WAKALA", count: wakalaActiveCount, color: "text-amber-700 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800" },
+        { name: "LMIS", count: lmisActiveCount, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
         { name: "INJAZ", count: injazActiveCount, color: "text-blue-700 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800" },
       ],
       link: "/applicants?filter=Processing",

@@ -53,7 +53,6 @@ import {
 import { getCorridorStepsV2, V2CorridorStepDefinition } from "@/lib/api/v2/corridor";
 import { listPlacementsV2, V2PlacementRecord } from "@/lib/api/v2/placements";
 import { triggerWakalaReminderV2 } from "@/lib/api/v2/notifications";
-import { uploadFileV2, parseInjazFileV2, V2ParsedInjazData } from "@/lib/api/v2/documents";
 import { cn } from "@/lib/utils";
 
 // Mapping authoritative clearance roles to step types per clearance_step.py & ROLE-PERMISSIONS-MATRIX.md
@@ -83,36 +82,8 @@ export function V2ClearanceQueueWorkspace() {
   const [amount, setAmount] = React.useState<string>("");
   const [rejectionRemark, setRejectionRemark] = React.useState<string>("");
 
-  // Wakala reminder & Injaz OCR state
+  // Wakala reminder state
   const [isWakalaReminding, setIsWakalaReminding] = React.useState(false);
-  const [isInjazParsing, setIsInjazParsing] = React.useState(false);
-  const [parsedInjaz, setParsedInjaz] = React.useState<V2ParsedInjazData | null>(null);
-  const injazFileInputRef = React.useRef<HTMLInputElement | null>(null);
-
-  const handleInjazFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsInjazParsing(true);
-    setParsedInjaz(null);
-    try {
-      const uploadRes = await uploadFileV2(file, false);
-      const res = await parseInjazFileV2(uploadRes.file_url);
-      setParsedInjaz(res);
-      toast.success("Injaz Document Parsed", {
-        description: `Extracted App #${res.injaz_application_number || "—"} and MOFA barcode.`,
-      });
-      if (res.injaz_application_number && !referenceNo) {
-        setReferenceNo(res.injaz_application_number);
-      }
-    } catch (err: any) {
-      toast.error("Injaz Parsing Failed", {
-        description: err?.message || "Could not extract data from document.",
-      });
-    } finally {
-      setIsInjazParsing(false);
-      if (e.target) e.target.value = "";
-    }
-  };
 
   // Determine if user has administrative or manager role
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
@@ -1632,56 +1603,6 @@ export function V2ClearanceQueueWorkspace() {
                 </div>
               )}
 
-              {/* Saudi Injaz Paper OCR Parser */}
-              {(isEmbassyStep || selectedRow.step_type.includes("Taeshir") || selectedRow.destination_country === "Saudi Arabia") && (
-                <div className="p-3 rounded-lg border border-slate-200 dark:border-[#222227] bg-slate-50/50 dark:bg-[#15151c] space-y-2 mt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <FileCheck2 className="h-4 w-4 text-emerald-600" /> Saudi Injaz Document OCR
-                    </span>
-                    <Badge variant="outline" className="text-[10px] border-slate-300">
-                      parse_injaz_file
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Upload Injaz paper to extract Application Number, MOFA Barcode, and Applicant Name.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      ref={injazFileInputRef}
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={handleInjazFileUpload}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isInjazParsing}
-                      onClick={() => injazFileInputRef.current?.click()}
-                      className="text-xs border-slate-300 dark:border-[#2a2a35] h-8 flex-1"
-                    >
-                      {isInjazParsing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                      ) : (
-                        <Upload className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      {isInjazParsing ? "Extracting MOFA Data..." : "Upload & Parse Injaz Paper"}
-                    </Button>
-                  </div>
-                  {parsedInjaz && (
-                    <div className="rounded border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-2 text-[11px] space-y-1">
-                      <div className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Injaz Data Extracted:
-                      </div>
-                      <div>App #: <span className="font-mono font-bold">{parsedInjaz.injaz_application_number || "—"}</span></div>
-                      <div>MOFA Barcode: <span className="font-mono font-bold">{parsedInjaz.mofa_barcode || "—"}</span></div>
-                      <div>Candidate: <span className="font-semibold">{parsedInjaz.full_name || "—"}</span></div>
-                    </div>
-                  )}
-                </div>
-              )}
             </DrawerSection>
           </div>
         )}

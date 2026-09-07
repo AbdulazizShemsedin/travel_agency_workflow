@@ -69,6 +69,11 @@ import {
   V2EmployeeFinancialItem,
   V2PendingApprovalItem,
 } from "@/lib/api/v2/reports";
+import {
+  listUnresolvedComplaintsV2,
+  listNewComplaintsV2,
+  V2ComplaintRecord,
+} from "@/lib/api/v2/complaints";
 import { cn } from "@/lib/utils";
 
 type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "approvals";
@@ -199,6 +204,63 @@ export default function ReportsPage() {
     enabled: activeTab === "aging",
     staleTime: 30000,
   });
+
+  // Query active unresolved and new complaints directly to list current records
+  const {
+    data: activeComplaints = [],
+    isLoading: isActiveComplaintsLoading,
+  } = useQuery<V2ComplaintRecord[]>({
+    queryKey: ["report_active_unresolved_complaints"],
+    queryFn: async () => {
+      const [unresolved, newComplaints] = await Promise.all([
+        listUnresolvedComplaintsV2().catch(() => []),
+        listNewComplaintsV2().catch(() => []),
+      ]);
+      const map = new Map<string, V2ComplaintRecord>();
+      [...unresolved, ...newComplaints].forEach((c) => {
+        if (c.name && !map.has(c.name)) map.set(c.name, c);
+      });
+      return Array.from(map.values());
+    },
+    enabled: activeTab === "aging",
+    staleTime: 30000,
+  });
+
+  const displayedComplaints = React.useMemo(() => {
+    if (activeComplaints.length > 0) {
+      return activeComplaints.map((c) => {
+        const daysOpen =
+          typeof c.days_unresolved === "number"
+            ? c.days_unresolved
+            : c.creation
+            ? Math.max(0, Math.floor((Date.now() - new Date(c.creation).getTime()) / (1000 * 60 * 60 * 24)))
+            : 0;
+        return {
+          complaint_name: c.name,
+          full_name: c.full_name || c.applicant || "—",
+          contractor_name: c.contractor_name || c.contractor || "—",
+          days_unresolved: daysOpen,
+          status: c.status || "Unresolved",
+        };
+      });
+    }
+
+    if (Array.isArray(complaintAging?.aging_breakdown) && complaintAging.aging_breakdown.length > 0) {
+      return complaintAging.aging_breakdown;
+    }
+
+    if (Array.isArray((complaintAging as any)?.unresolved) && (complaintAging as any).unresolved.length > 0) {
+      return (complaintAging as any).unresolved.map((u: any) => ({
+        complaint_name: u.name || u.complaint_name,
+        full_name: u.applicant || u.full_name || "—",
+        contractor_name: u.contractor_name || u.contractor || "—",
+        days_unresolved: u.age_days ?? u.days_unresolved ?? 0,
+        status: u.status || "Unresolved",
+      }));
+    }
+
+    return [];
+  }, [activeComplaints, complaintAging]);
 
   // 6. Financial Overview (Admin / Finance Manager)
   const {
@@ -729,7 +791,7 @@ export default function ReportsPage() {
                 </span>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-800 bg-amber-50">
-                    {complaintAging?.unresolved_count || 0} Unresolved
+                    {displayedComplaints.length > 0 ? displayedComplaints.length : (complaintAging?.unresolved_count || 0)} Unresolved
                   </Badge>
                   <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-800 bg-emerald-50">
                     {complaintAging?.resolved_count || 0} Resolved
@@ -751,9 +813,9 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                    {(complaintAging?.aging_breakdown || []).length > 0 ? (
-                      (complaintAging?.aging_breakdown || []).map((c, idx) => (
-                        <tr key={c.complaint_name || idx} className="hover:bg-slate-50">
+                    {displayedComplaints.length > 0 ? (
+                      displayedComplaints.map((c: any, idx: number) => (
+                        <tr key={c.complaint_name || idx} className="hover:bg-slate-50 dark:hover:bg-[#1a1a22]">
                           <td className="py-2.5 px-3 font-mono font-semibold">{c.complaint_name}</td>
                           <td className="py-2.5 px-3">{c.full_name || c.applicant}</td>
                           <td className="py-2.5 px-3">{c.contractor_name || c.contractor}</td>

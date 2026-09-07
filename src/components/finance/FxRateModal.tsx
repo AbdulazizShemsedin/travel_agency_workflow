@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { DollarSign, Loader2, RefreshCw, CheckCircle2, TrendingUp, AlertTriangle } from "lucide-react";
+import { DollarSign, Loader2, RefreshCw, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,45 +32,87 @@ interface FxRateModalProps {
   onSuccess?: () => void;
 }
 
-const SUPPORTED_CURRENCIES: Exclude<V2SupportedCurrency, "ETB">[] = [
-  "SAR",
+type CurrencyKey = Exclude<V2SupportedCurrency, "ETB">;
+
+const SUPPORTED_CURRENCIES: CurrencyKey[] = [
   "USD",
-  "AED",
+  "SAR",
   "KWD",
+  "AED",
   "QAR",
 ];
 
-const CURRENCY_LABELS: Record<Exclude<V2SupportedCurrency, "ETB">, string> = {
-  SAR: "Saudi Riyal (SAR)",
-  USD: "US Dollar (USD)",
-  AED: "UAE Dirham (AED)",
-  KWD: "Kuwaiti Dinar (KWD)",
-  QAR: "Qatari Riyal (QAR)",
+const CURRENCY_CONFIG: Record<CurrencyKey, { label: string; fieldLabel: string; code: string }> = {
+  USD: { label: "US Dollar", fieldLabel: "Dollar to Birr", code: "USD" },
+  SAR: { label: "Saudi Riyal", fieldLabel: "Saudi Riyal to Birr", code: "SAR" },
+  KWD: { label: "Kuwaiti Dinar", fieldLabel: "Kuwaiti Dinar to Birr", code: "KWD" },
+  AED: { label: "UAE Dirham", fieldLabel: "UAE Dirham to Birr", code: "AED" },
+  QAR: { label: "Qatari Riyal", fieldLabel: "Qatari Riyal to Birr", code: "QAR" },
 };
 
 export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: FxRateModalProps) {
-  const [selectedCurrency, setSelectedCurrency] = React.useState<Exclude<V2SupportedCurrency, "ETB">>("SAR");
-  const [rateToBirr, setRateToBirr] = React.useState<string>("");
-  const [currentActiveRate, setCurrentActiveRate] = React.useState<number | null>(null);
+  const [rates, setRates] = React.useState<Record<CurrencyKey, string>>({
+    USD: "",
+    SAR: "",
+    KWD: "",
+    AED: "",
+    QAR: "",
+  });
+
+  const [activeRates, setActiveRates] = React.useState<Record<CurrencyKey, number | null>>({
+    USD: null,
+    SAR: null,
+    KWD: null,
+    AED: null,
+    QAR: null,
+  });
+
   const [isLoadingCurrent, setIsLoadingCurrent] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isFetchingLive, setIsFetchingLive] = React.useState(false);
   const [liveRatesResult, setLiveRatesResult] = React.useState<V2FetchFxRatesNowResponse | null>(null);
 
-  // Fetch active rate when selected currency changes
-  const fetchCurrentRate = React.useCallback(async (curr: Exclude<V2SupportedCurrency, "ETB">) => {
+  // Fetch all active rates on dialog open
+  const fetchAllActiveRates = React.useCallback(async () => {
     setIsLoadingCurrent(true);
     try {
-      const res = await getFxRateV2(curr);
-      if (typeof res === "number") {
-        setCurrentActiveRate(res);
-      } else if (res && typeof (res as any).rate === "number") {
-        setCurrentActiveRate((res as any).rate);
-      } else {
-        setCurrentActiveRate(null);
-      }
-    } catch {
-      setCurrentActiveRate(null);
+      const results = await Promise.all(
+        SUPPORTED_CURRENCIES.map(async (curr) => {
+          try {
+            const res = await getFxRateV2(curr);
+            const val =
+              typeof res === "number"
+                ? res
+                : res && typeof (res as any).rate === "number"
+                ? (res as any).rate
+                : null;
+            return { curr, val };
+          } catch {
+            return { curr, val: null };
+          }
+        })
+      );
+
+      const newActive: Record<CurrencyKey, number | null> = {
+        USD: null,
+        SAR: null,
+        KWD: null,
+        AED: null,
+        QAR: null,
+      };
+
+      setRates((prev) => {
+        const nextRates = { ...prev };
+        results.forEach(({ curr, val }) => {
+          newActive[curr] = val;
+          if (val !== null && (!nextRates[curr] || nextRates[curr] === "")) {
+            nextRates[curr] = String(val);
+          }
+        });
+        return nextRates;
+      });
+
+      setActiveRates(newActive);
     } finally {
       setIsLoadingCurrent(false);
     }
@@ -78,12 +120,12 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
 
   React.useEffect(() => {
     if (isOpen) {
-      fetchCurrentRate(selectedCurrency);
+      fetchAllActiveRates();
       setLiveRatesResult(null);
     }
-  }, [isOpen, selectedCurrency, fetchCurrentRate]);
+  }, [isOpen, fetchAllActiveRates]);
 
-  // Action: Pull live FX rates now from server (Global mode)
+  // Action: Pull live FX rates now from server and automatically fill fields
   const handleFetchRatesNow = async () => {
     if (!canMutate) {
       toast.error("Permission Denied", {
@@ -98,11 +140,20 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
       setLiveRatesResult(result);
 
       if (result.count > 0 && result.recorded && Object.keys(result.recorded).length > 0) {
-        toast.success("Live FX Rates Synchronized", {
-          description: `Successfully updated ${result.count} currency exchange rates.`,
+        setRates((prev) => {
+          const next = { ...prev };
+          Object.entries(result.recorded).forEach(([curr, rate]) => {
+            const key = curr.toUpperCase() as CurrencyKey;
+            if (SUPPORTED_CURRENCIES.includes(key)) {
+              next[key] = String(rate);
+            }
+          });
+          return next;
         });
-        fetchCurrentRate(selectedCurrency);
-        onSuccess?.();
+
+        toast.success("Live FX Rates Synchronized", {
+          description: `Automatically populated ${result.count} currency rate fields with live market data.`,
+        });
       } else {
         toast.info("Source Temporarily Unavailable", {
           description: "Live FX source unreachable; existing cached rates stand.",
@@ -117,31 +168,58 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
     }
   };
 
+  const handleRateChange = (currency: CurrencyKey, value: string) => {
+    setRates((prev) => ({
+      ...prev,
+      [currency]: value,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canMutate) {
-      toast.error("Permission Denied", { description: "Setting FX rates requires Finance Manager or Administrator privileges." });
+      toast.error("Permission Denied", {
+        description: "Setting FX rates requires Finance Manager or Administrator privileges.",
+      });
       return;
     }
 
-    const parsedRate = parseFloat(rateToBirr);
-    if (isNaN(parsedRate) || parsedRate <= 0) {
-      toast.error("Invalid Rate", { description: "Please enter a positive numeric exchange rate." });
+    const entriesToSave: { currency: CurrencyKey; rate: number }[] = [];
+    for (const curr of SUPPORTED_CURRENCIES) {
+      const raw = rates[curr];
+      if (raw && raw.trim() !== "") {
+        const parsed = parseFloat(raw);
+        if (isNaN(parsed) || parsed <= 0) {
+          toast.error("Invalid Rate", {
+            description: `Please enter a valid positive numeric rate for ${CURRENCY_CONFIG[curr].label}.`,
+          });
+          return;
+        }
+        entriesToSave.push({ currency: curr, rate: parsed });
+      }
+    }
+
+    if (entriesToSave.length === 0) {
+      toast.error("No Rates Specified", {
+        description: "Please enter at least one currency exchange rate to save.",
+      });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const res = await setFxRateV2(selectedCurrency, parsedRate);
-      toast.success("FX Rate Updated", {
-        description: res?.message || `1 ${selectedCurrency} rate set to ${parsedRate} ETB.`,
+      await Promise.all(
+        entriesToSave.map(({ currency, rate }) => setFxRateV2(currency, rate))
+      );
+
+      toast.success("Official FX Rates Saved", {
+        description: `Successfully configured ${entriesToSave.length} official exchange rate(s) against Birr (ETB).`,
       });
-      setRateToBirr("");
-      fetchCurrentRate(selectedCurrency);
+      await fetchAllActiveRates();
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      toast.error("Failed to Update Rate", {
+      toast.error("Failed to Save FX Rates", {
         description: formatCleanErrorMessage(err),
       });
     } finally {
@@ -151,7 +229,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[480px] bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-emerald-600" />
@@ -160,7 +238,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            View active FX conversion rates, pull real-time exchange rates, or manually record conversion multipliers against ETB (Birr).
+            Configure official conversion multipliers to Birr (ETB). Fetching live market rates automatically fills each field, which you can adjust and save system-wide.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,7 +249,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
           </div>
         )}
 
-        {/* Live FX Sync Section */}
+        {/* Live FX Sync Header */}
         {canMutate && (
           <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 space-y-2 text-xs">
             <div className="flex items-center justify-between">
@@ -181,7 +259,7 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
                   Real-Time FX Synchronization
                 </span>
                 <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Fetch live market rates from the currency service now.
+                  Fetch live market rates now to auto-fill all currency fields below.
                 </p>
               </div>
               <Button
@@ -190,12 +268,12 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
                 variant="outline"
                 disabled={isFetchingLive}
                 onClick={handleFetchRatesNow}
-                className="text-xs h-7 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950"
+                className="text-xs h-8 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950"
               >
                 {isFetchingLive ? (
                   <>
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Fetching...
+                    Fetching Rates...
                   </>
                 ) : (
                   "Fetch Rates Now"
@@ -204,27 +282,15 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             </div>
 
             {liveRatesResult && (
-              <div className="pt-1.5 border-t border-emerald-200/60 dark:border-emerald-900/30">
+              <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/30 text-[11px]">
                 {liveRatesResult.count > 0 && Object.keys(liveRatesResult.recorded).length > 0 ? (
-                  <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400">
-                      Live Rates Recorded ({liveRatesResult.count} currencies):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Object.entries(liveRatesResult.recorded).map(([curr, rate]) => (
-                        <Badge
-                          key={curr}
-                          variant="outline"
-                          className="text-[10px] font-mono border-emerald-300 text-emerald-800 bg-white dark:bg-[#15151c] dark:text-emerald-300"
-                        >
-                          1 {curr} = {Number(rate).toFixed(2)} ETB
-                        </Badge>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Auto-filled {liveRatesResult.count} currency rate fields with live market exchange.</span>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-slate-500 italic">
-                    Live source unreachable; existing cached rates stand.
+                  <p className="text-slate-500 italic">
+                    Live source unreachable; existing cached values preserved.
                   </p>
                 )}
               </div>
@@ -232,64 +298,69 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
           </div>
         )}
 
+        {/* Multi-Currency Rate Fields */}
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Target Currency</Label>
-            <select
-              value={selectedCurrency}
-              onChange={(e) => setSelectedCurrency(e.target.value as Exclude<V2SupportedCurrency, "ETB">)}
-              className="flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
-            >
-              {SUPPORTED_CURRENCIES.map((curr) => (
-                <option key={curr} value={curr}>
-                  {CURRENCY_LABELS[curr]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 dark:border-[#222228] bg-slate-50/50 dark:bg-[#171720] p-3 text-xs flex items-center justify-between">
-            <span className="text-slate-500 dark:text-zinc-400">Current Active Rate:</span>
-            <div className="flex items-center gap-1.5 font-mono font-bold text-slate-900 dark:text-white">
-              {isLoadingCurrent ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-              ) : currentActiveRate !== null ? (
-                <>
-                  1 {selectedCurrency} = {currentActiveRate.toFixed(2)} ETB
-                  <Badge variant="outline" className="text-[10px] ml-1 bg-emerald-50 text-emerald-700 border-emerald-200">
-                    Live
-                  </Badge>
-                </>
-              ) : (
-                <span className="text-slate-400 font-normal">Not configured</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-[#202026]">
+              <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Currency Exchange Multipliers (1 Foreign Unit = X Birr)
+              </span>
+              {isLoadingCurrent && (
+                <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Loading active rates...
+                </span>
               )}
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
-              New Exchange Rate (1 {selectedCurrency} = X Birr) *
-            </Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                required
-                disabled={!canMutate}
-                value={rateToBirr}
-                onChange={(e) => setRateToBirr(e.target.value)}
-                placeholder={canMutate ? "e.g. 33.50" : "Permission required to edit rate"}
-                className="pl-9 text-xs font-mono h-9"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {SUPPORTED_CURRENCIES.map((curr) => {
+                const config = CURRENCY_CONFIG[curr];
+                const active = activeRates[curr];
+                return (
+                  <div
+                    key={curr}
+                    className="p-3 rounded-lg border border-slate-200 dark:border-[#262630] bg-slate-50/50 dark:bg-[#15151c] space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor={`rate-${curr}`} className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                        {config.fieldLabel}
+                      </Label>
+                      {active !== null ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] font-mono border-emerald-300 bg-white dark:bg-[#101014] text-emerald-800 dark:text-emerald-300"
+                        >
+                          Active: {active.toFixed(2)} ETB
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">Unset</span>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        id={`rate-${curr}`}
+                        type="number"
+                        step="any"
+                        min="0"
+                        disabled={!canMutate}
+                        value={rates[curr]}
+                        onChange={(e) => handleRateChange(curr, e.target.value)}
+                        placeholder="Birr amount for 1 unit"
+                        className="pl-8 text-xs font-mono h-8 bg-white dark:bg-[#1a1a22]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Amount in Birr for 1 {config.code} ({config.label})
+                    </p>
+                  </div>
+                );
+              })}
             </div>
-            <p className="text-[11px] text-slate-400">
-              Applies to future commission conversions and foreign currency income settlements.
-            </p>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-100 dark:border-[#202026]">
             <Button
               type="button"
               variant="outline"
@@ -303,16 +374,16 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             <Button
               type="submit"
               size="sm"
-              disabled={!canMutate || isSubmitting || !rateToBirr.trim()}
+              disabled={!canMutate || isSubmitting}
               className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Recording Rate...
+                  Saving Official Rates...
                 </>
               ) : (
-                "Save FX Rate"
+                "Save Official FX Rates"
               )}
             </Button>
           </DialogFooter>

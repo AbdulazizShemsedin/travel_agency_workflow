@@ -988,7 +988,7 @@ export function ChatContainer() {
                   ? "Staff Coordination & Messages"
                   : isSupervisorOrAdmin && viewMode === "oversight"
                   ? "Executive Communication Oversight & Supervision"
-                  : "V2 Communication & Agency Chat"}
+                  : "Communication & Agency Chat"}
               </h1>
               {isSupervisorOrAdmin && viewMode === "oversight" && (
                 <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] px-2 py-0">

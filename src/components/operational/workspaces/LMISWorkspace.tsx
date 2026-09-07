@@ -538,8 +538,8 @@ export function LMISWorkspace({
           <DrawerField label="Medical Fitness" value={selectedRow?.medicalStatus || "Pending"} isReadOnly />
         </DrawerSection>
 
-        {/* Section 2: Editable LMS Clearance Fields */}
-        <DrawerSection title="LMS Clearance Processing" icon={FileCheck2}>
+        {/* Section 2: Editable LMIS Clearance Fields */}
+        <DrawerSection title="LMIS Clearance Processing" icon={FileCheck2}>
           {isPlacementDeparted ? (
             <div className="sm:col-span-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
@@ -552,7 +552,7 @@ export function LMISWorkspace({
             </div>
           ) : null}
 
-          <DrawerField label="LMS Status" isReadOnly={false}>
+          <DrawerField label="LMIS Status" isReadOnly={false}>
             <select
               value={status}
               disabled={!canEdit || mutation.isPending || isTerminal}
@@ -579,7 +579,7 @@ export function LMISWorkspace({
             <DrawerField label="Labor ID / Ministry Reference No" isReadOnly={false}>
               <Input
                 type="text"
-                placeholder="e.g. LMS-ET-2026-9912"
+                placeholder="e.g. LMIS-ET-2026-9912"
                 value={laborRefNo}
                 disabled={!canEdit || mutation.isPending}
                 onChange={(e) => setLaborRefNo(e.target.value)}

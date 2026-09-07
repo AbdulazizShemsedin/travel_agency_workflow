@@ -57,7 +57,7 @@ export function RoleWorkspaceContainer() {
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
     { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Departure" },
-    { id: "clearance", label: "Clearance Queue", icon: ShieldCheck, desc: "V2 Step Pipeline" },
+    { id: "clearance", label: "Clearance Queue", icon: ShieldCheck, desc: "Step Pipeline" },
   ];
 
   // Determine available tabs and default workspace for current user
