@@ -189,3 +189,32 @@ input::placeholder, textarea::placeholder {
 .dark .divide-slate-200 > * + * {
   border-color: #222227 !important;
 }
+
+/* Global readability bump — the system relied heavily on fixed 9-11px micro text.
+   Lift the dominant fixed-pixel sizes (and the adjacent Tailwind tiers) by ~2px so
+   tables/forms stay readable without changing spacing or layout geometry. */
+.text-\[9px\] {
+  font-size: 11px;
+}
+.text-\[10px\] {
+  font-size: 12px;
+}
+.text-\[11px\] {
+  font-size: 13px;
+}
+.text-\[12px\] {
+  font-size: 13px;
+}
+.text-\[13px\] {
+  font-size: 14px;
+}
+.text-xs {
+  font-size: 13px;
+}
+.text-sm {
+  font-size: 14.5px;
+}
+
+select option, select optgroup {
+  font-size: 0.875rem;
+}

@@ -20,7 +20,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Applicant, ApplicantState } from "@/types/applicant";
-import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { listApplicantsV2, listPlacementsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,9 +108,53 @@ export function ApplicantTable() {
     enabled: Boolean(authUser),
   });
 
+  // Join active-placement derived fields (visa/contract/sponsor) onto each applicant row.
+  // The backend stores these on the Placement (set by upload_contract / upload_visa), not on
+  // the Applicant, so list_applicants alone never returns them. Radiates the same merge the
+  // operational workspaces perform. Gracefully no-ops when the caller's role can't read
+  // placements (e.g. Registrar gets 403 on list_placements).
+  const { data: placementsData = [] } = useQuery({
+    queryKey: ["applicants-placement-join"],
+    queryFn: () => listPlacementsV2(),
+    enabled: Boolean(authUser),
+    staleTime: 30000,
+    retry: false,
+  });
+
+  const applicantRows = React.useMemo(() => {
+    if (placementsData.length === 0) return applicants;
+    const byApplicant = new Map<string, any>();
+    const byName = new Map<string, any>();
+    for (const p of placementsData) {
+      if (p.applicant) byApplicant.set(String(p.applicant).toLowerCase().trim(), p);
+      if (p.name) byName.set(String(p.name).toLowerCase().trim(), p);
+    }
+    return applicants.map((applicant) => {
+      const plc =
+        byApplicant.get(String(applicant.name || "").toLowerCase().trim()) ||
+        byApplicant.get(String((applicant as any).active_placement || "").toLowerCase().trim()) ||
+        byName.get(String((applicant as any).active_placement || "").toLowerCase().trim());
+      if (!plc) return applicant;
+      const copy = { ...applicant } as any;
+      // Only surface placement-derived fields when present (never overwrite existing).
+      const mergeKeys = [
+        ["visa_number", "visa_number"],
+        ["contract_number", "contract_number"],
+        ["employer_name", "employer_name"],
+        ["employer_national_id", "employer_national_id"],
+        ["sponsor_name", "sponsor_name"],
+        ["sponsor_civil_id", "sponsor_civil_id"],
+      ] as const;
+      for (const [src, dst] of mergeKeys) {
+        if (plc[src] && !copy[dst]) copy[dst] = plc[src];
+      }
+      return copy;
+    });
+  }, [applicants, placementsData]);
+
   // Filtered & searched data
   const filteredApplicants = React.useMemo(() => {
-    return applicants.filter((applicant) => {
+    return applicantRows.filter((applicant) => {
       const currentStatus = applicant.status || applicant.applicant_state || "Draft";
       let matchesStage = false;
       const stageNorm = selectedStage.trim().toLowerCase();

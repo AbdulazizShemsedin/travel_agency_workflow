@@ -179,6 +179,19 @@ Implemented the backend changelog into the frontend on branch `agency_finalized_
 ### Not applied (backend-owned / reference-only)
 - `Agency Tracking Settings` singleton is straightforward REST (`/api/resource/Agency Tracking Settings/...`), edited by System Manager/Admin/Finance Manager; backend-seeded and consumed by the invoice PDF — no dedicated UI screen required. Referenced in `src/Assets` (historical docs left untouched).
 
+## 6. 2026-09-08 UI Fixes & Data-Join Fixes
+
+### Visa / contract numbers missing in applicant tables — root cause + fix
+- Root cause: `upload_contract` / `upload_visa` persist extracted fields (`visa_number`, `contract_number`, `employer_name`, `employer_national_id`, `sponsor_name`, `sponsor_civil_id`) on the **Placement**, not on the Applicant. `list_applicants` returns the `active_placement` link only (verified live: APP rows carry no visa/contract keys). The `ApplicantTable` was reading those fields off the applicant row → always "—".
+- Evidence (live backend): `PLM-00014` (Fatima Al-Nasser, Processing, LMIS done) actually HAS `visa_number=1908334046`, `contract_number=2005450415`, `employer_name`, `employer_national_id`, `contract_file` — extraction worked; only the directory join was missing.
+- Fix: `ApplicantTable.tsx` now fetches `listPlacementsV2()` alongside `listApplicantsV2()` and merges the active-placement derived fields onto each applicant row (same merge the operational workspaces already used). Graceful no-op when a caller's role can't read placements (e.g. Registrar 403) — table simply falls back to "—".
+
+### Global font readability bump
+- The system relied heavily on fixed 9–11px micro-text (`text-[10px]` 308×, `text-[11px]` 331×). Added global CSS overrides in `globals.css` lifting dominant sizes ~2px while leaving spacing/layout geometry untouched: 9px→11px, 10px→12px, 11px→13px, 12px→13px, 13px→14px, `text-xs`→13px, `text-sm`→14.5px; `select option` font bumped to 0.875rem. Verified in compiled production CSS (grouped selectors `.text-\[11px\],.text-\[12px\]{font-size:13px}` etc.).
+
+### Te'shir Injaz Fee default
+- "Injaz Fee (USD)" now defaults to `10.5` (`InjazWorkspace.tsx`) — both the initial drawer state and the per-row fallback when an existing fee is absent.
+
 
 
 
