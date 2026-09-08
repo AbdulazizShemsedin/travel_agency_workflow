@@ -1154,7 +1154,7 @@ export default function ExpensesIncomePage() {
                           <div>
                             <span className="text-slate-400">Batch Total:</span>{" "}
                             <strong className="text-emerald-700 dark:text-emerald-400 font-mono">
-                              {Number(loadedBatch.total_amount).toLocaleString()} {loadedBatch.currency}
+                              {Number(loadedBatch.total_amount_original ?? loadedBatch.total_amount).toLocaleString()} {loadedBatch.currency}
                             </strong>
                           </div>
                           <div>

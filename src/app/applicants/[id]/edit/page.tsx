@@ -4,10 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
-import { getApplicantV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { ChevronRight, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { getApplicantV2, listPlacementsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { Button } from "@/components/ui/button";
+
+const IDENTITY_LOCK_STATUSES = new Set([
+  "Selected",
+  "Processing",
+  "Stamped",
+  "Ticketed",
+  "Departed",
+]);
 
 export default function EditApplicantPage() {
   const params = useParams();
@@ -20,6 +28,21 @@ export default function EditApplicantPage() {
     queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
   });
+
+  const { data: placements = [] } = useQuery({
+    queryKey: ["placements", applicantId],
+    queryFn: () => listPlacementsV2([{ applicant: applicantId }]),
+    enabled: !!applicantId,
+  });
+
+  const activePlacement = React.useMemo(() => {
+    if (!placements || placements.length === 0) return null;
+    return placements.find((p: any) => p.status !== "Cancelled") || null;
+  }, [placements]);
+
+  const isIdentityLocked = React.useMemo(() => {
+    return activePlacement ? IDENTITY_LOCK_STATUSES.has(activePlacement.status) : false;
+  }, [activePlacement]);
 
   if (isLoading) {
     return (
@@ -79,10 +102,29 @@ export default function EditApplicantPage() {
         </div>
       </div>
 
+      {/* Identity Fields Lock Warning */}
+      {isIdentityLocked && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/30 p-3.5 shadow-xs">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white font-bold text-xs">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-amber-950 dark:text-amber-200">
+              Identity Fields Locked
+            </div>
+            <div className="text-[11px] text-amber-800/80 dark:text-amber-400">
+              This applicant has an active placement at <strong>{activePlacement?.status}</strong> status.
+              Identity fields (name, passport, date of birth, gender, nationality, destination) are locked and cannot be changed.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Multi-step Registration Workflow Form pre-filled with existing data */}
       <ApplicantRegistrationForm
         existingApplicantId={applicant.name}
         initialData={applicant as any}
+        lockedIdentityFields={isIdentityLocked}
         onSuccessRedirect={(id) => router.push(`/applicants/${encodeURIComponent(id)}`)}
       />
     </div>

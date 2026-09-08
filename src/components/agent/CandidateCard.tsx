@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
+import { getCandidatePhotoUrl } from "@/lib/api/v2/portal";
 
 interface CandidateCardProps {
   candidate: PortalAvailableCandidate;
@@ -33,31 +34,12 @@ export function CandidateCard({
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
 
-  const normalizePhotoUrl = (url?: string) => {
-    if (!url) return "";
-    const trimmed = String(url).trim();
-    if (!trimmed) return "";
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
-      return trimmed;
-    }
-    if (!trimmed.startsWith("/")) {
-      return `/${trimmed}`;
-    }
-    return trimmed;
-  };
+  // The portal must load photos via the sanctioned get_candidate_photo endpoint; the raw
+  // file URL fields aren't readable by a foreign agency session.
+  const applicantName = candidate.name || "";
 
-  const passportPhotoSrc = normalizePhotoUrl(
-    candidate.photo_passport ||
-    (candidate as any).photograph ||
-    (candidate as any).photo ||
-    (candidate as any).profile_photo_url
-  );
-
-  const fullBodyPhotoSrc = normalizePhotoUrl(
-    candidate.photo_full_body ||
-    (candidate as any).photo_portrait ||
-    (candidate as any).full_body_photo
-  );
+  const passportPhotoSrc = getCandidatePhotoUrl(applicantName, "photograph");
+  const fullBodyPhotoSrc = getCandidatePhotoUrl(applicantName, "photo_full_body");
 
   const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
   const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);
@@ -190,14 +172,28 @@ export function CandidateCard({
               </div>
 
               {/* Prior Work & Salary Row */}
-              <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
-                <span className="truncate max-w-[65%]">Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{priorWorkDisplay}</strong></span>
-                {candidate.monthly_salary ? (
-                  <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono shrink-0">
-                    {candidate.monthly_salary} SAR/mo
-                  </span>
-                ) : null}
-              </div>
+              {(() => {
+                const isKuwait = (candidate.destination_country || "").toLowerCase().includes("kuwait");
+                const salaryCurrency = isKuwait ? "KD" : "SAR";
+                const salaryDisplay = (() => {
+                  const num = Number(candidate.monthly_salary);
+                  if (!isNaN(num) && num > 0) {
+                    if (isExperienced && num === 1000) return isKuwait ? "140" : "1,200";
+                    if (!isExperienced && num === 1200) return isKuwait ? "120" : "1,000";
+                    return num.toLocaleString();
+                  }
+                  return isKuwait ? (isExperienced ? "140" : "120") : (isExperienced ? "1,200" : "1,000");
+                })();
+
+                return (
+                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
+                    <span className="truncate max-w-[60%]">Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{priorWorkDisplay}</strong></span>
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono shrink-0">
+                      {salaryDisplay} {salaryCurrency}/mo
+                    </span>
+                  </div>
+                );
+              })()}
             </>
           );
         })()}

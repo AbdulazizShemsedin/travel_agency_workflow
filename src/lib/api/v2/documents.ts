@@ -5,7 +5,6 @@
  * - POST /api/method/upload_file
  * - POST /api/method/agency_tracking.passport_parser.parse_passport_file
  * - POST /api/method/agency_tracking.contract_parser.parse_contract_file
- * - POST /api/method/agency_tracking.contract_parser.parse_injaz_file
  * - POST /api/method/agency_tracking.contract_parser.parse_visa_file
  */
 
@@ -49,18 +48,6 @@ export interface V2ParsedContractData {
   duration?: string | number;
   contract_signed_date?: string;
   work_site?: string;
-  [key: string]: any;
-}
-
-export interface V2ParsedInjazData {
-  status?: string;
-  message?: string;
-  injaz_application_number?: string;
-  mofa_barcode?: string;
-  passport_number?: string;
-  full_name?: string;
-  origin_agency?: string;
-  payment_reference?: string;
   [key: string]: any;
 }
 
@@ -155,20 +142,6 @@ export async function parseContractFileV2(
     }
   );
   return { status: "success", message: "Contract document parsed successfully", ...result };
-}
-
-/**
- * Extracts fields from a Saudi Injaz paper document.
- */
-export async function parseInjazFileV2(fileUrl: string): Promise<V2ParsedInjazData> {
-  const result = await requestV2<V2ParsedInjazData>(
-    "/api/method/agency_tracking.contract_parser.parse_injaz_file",
-    {
-      method: "POST",
-      body: { file_url: fileUrl },
-    }
-  );
-  return { status: "success", message: "Injaz parsed successfully", ...result };
 }
 
 /**

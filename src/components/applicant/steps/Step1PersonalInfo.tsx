@@ -21,9 +21,10 @@ import { toast } from "sonner";
 interface Step1PersonalInfoProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<BaseApplicantFormValues, any, any>;
+  locked?: boolean;
 }
 
-export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
+export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoProps) {
   const {
     register,
     watch,
@@ -913,6 +914,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     {...register("destination_country")}
                     error={!!errors.destination_country}
                     className="font-medium"
+                    disabled={locked}
                   >
                     {DESTINATION_COUNTRY_OPTIONS.map((c) => (
                       <option key={c} value={c}>
@@ -956,6 +958,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-white dark:bg-[#121215] w-full">
                     <button
                       type="button"
+                      disabled={locked}
                       onClick={() => {
                         setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
                         if (watch("contact_person_name") === "Muayena") {
@@ -963,7 +966,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                           setValue("emergency_relationship", "", { shouldDirty: true });
                         }
                       }}
-                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${locked ? "cursor-not-allowed opacity-60" : ""} ${
                         watch("applicant_type") === "Standard" || !watch("applicant_type")
                           ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
                           : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
@@ -973,6 +976,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     </button>
                     <button
                       type="button"
+                      disabled={locked}
                       onClick={() => {
                         setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
                         const currentContact = watch("contact_person_name");
@@ -981,7 +985,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                           setValue("emergency_relationship", "Muayena / Sponsor", { shouldDirty: true });
                         }
                       }}
-                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${
+                      className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${locked ? "cursor-not-allowed opacity-60" : ""} ${
                         watch("applicant_type") === "Muayena"
                           ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
                           : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
@@ -1004,6 +1008,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="first_name"
                   placeholder="e.g., Abebe"
                   {...register("first_name")}
+                  disabled={locked}
                   className={errors.first_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.first_name && (
@@ -1019,6 +1024,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="middle_name"
                   placeholder="e.g., Bekele"
                   {...register("middle_name")}
+                  disabled={locked}
                   className={errors.middle_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.middle_name && (
@@ -1034,6 +1040,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="last_name"
                   placeholder="e.g., Kebede"
                   {...register("last_name")}
+                  disabled={locked}
                   className={errors.last_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.last_name && (
@@ -1060,6 +1067,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="passport_number"
                     placeholder="e.g., EP1234567"
                     {...register("passport_number")}
+                    disabled={locked}
                     className={errors.passport_number ? "border-rose-500 ring-1 ring-rose-500 font-mono uppercase font-bold" : "font-mono uppercase font-bold text-slate-900 dark:text-white"}
                   />
                   {errors.passport_number && (
@@ -1075,6 +1083,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                     id="date_of_birth"
                     type="date"
                     {...register("date_of_birth")}
+                    disabled={locked}
                     className={errors.date_of_birth ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.date_of_birth && (
@@ -1127,6 +1136,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   placeholder="Select gender"
                   {...register("gender")}
                   error={!!errors.gender}
+                  disabled={locked}
                 >
                   {GENDER_OPTIONS.map((g) => (
                     <option key={g} value={g}>
@@ -1209,6 +1219,7 @@ export function Step1PersonalInfo({ form }: Step1PersonalInfoProps) {
                   id="nationality"
                   placeholder="e.g., Ethiopia"
                   {...register("nationality")}
+                  disabled={locked}
                   className={errors.nationality ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
                 {errors.nationality && (

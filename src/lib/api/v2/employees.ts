@@ -268,3 +268,127 @@ export async function deleteEmployeeV2(userEmail: string): Promise<void> {
     },
   });
 }
+
+/**
+ * ---- employee_api (dedicated staff-admin RPC layer, commit 62a9a19) ----
+ * These endpoints are gated to Admin/Manager/System Manager/Administrator
+ * (`_check_staff_admin_perm`). Their `roles` output is filtered to this app's
+ * own roles and collapses any admin/System Manager role to `["Admin"]`.
+ */
+
+export interface EmployeeApiRecord {
+  name: string;
+  email: string;
+  full_name: string;
+  first_name: string;
+  last_name?: string | null;
+  enabled: boolean | number;
+  user_type: string;
+  creation: string;
+  phone?: string | null;
+  mobile_no?: string | null;
+  roles: string[];
+}
+
+/**
+ * Lists all staff/admin user accounts via employee_api.list_employees.
+ */
+export async function listEmployeesApiV2(): Promise<EmployeeApiRecord[]> {
+  const result = await requestV2<EmployeeApiRecord[] | { employees?: EmployeeApiRecord[] }>(
+    "/api/method/agency_tracking.employee_api.list_employees",
+    { method: "POST" }
+  );
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).employees)) return (result as any).employees;
+  return [];
+}
+
+/**
+ * Creates a staff/admin User via employee_api.create_employee.
+ */
+export async function createEmployeeApiV2(payload: {
+  email: string;
+  first_name: string;
+  last_name?: string;
+  phone?: string;
+  password?: string;
+  roles: string[];
+  send_welcome_email?: boolean;
+}): Promise<EmployeeApiRecord> {
+  const result = await requestV2<EmployeeApiRecord>(
+    "/api/method/agency_tracking.employee_api.create_employee",
+    {
+      method: "POST",
+      body: {
+        email: payload.email.trim().toLowerCase(),
+        first_name: payload.first_name.trim(),
+        ...(payload.last_name?.trim() ? { last_name: payload.last_name.trim() } : {}),
+        ...(payload.phone?.trim() ? { phone: payload.phone.trim() } : {}),
+        ...(payload.password?.trim() ? { password: payload.password.trim() } : {}),
+        roles: payload.roles,
+        send_welcome_email: payload.send_welcome_email ?? false,
+      },
+    }
+  );
+  return result;
+}
+
+/**
+ * Updates an employee's role list via employee_api.update_employee_roles.
+ */
+export async function updateEmployeeRolesApiV2(
+  email: string,
+  roles: string[]
+): Promise<string[]> {
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.employee_api.update_employee_roles",
+    {
+      method: "POST",
+      body: { email, roles },
+    }
+  );
+  const list = Array.isArray(result) ? result : result?.roles;
+  return Array.isArray(list) ? list.map(String) : [];
+}
+
+/**
+ * Resets an employee's password via employee_api.reset_employee_password.
+ */
+export async function resetEmployeePasswordApiV2(
+  email: string,
+  newPassword: string
+): Promise<void> {
+  await requestV2(
+    "/api/method/agency_tracking.employee_api.reset_employee_password",
+    {
+      method: "POST",
+      body: { email, new_password: newPassword },
+    }
+  );
+}
+
+/**
+ * Activates/deactivates an employee via employee_api.toggle_employee_status.
+ */
+export async function toggleEmployeeStatusApiV2(
+  email: string,
+  enabled: boolean
+): Promise<{ status: string; enabled: boolean }> {
+  return requestV2(
+    "/api/method/agency_tracking.employee_api.toggle_employee_status",
+    {
+      method: "POST",
+      body: { email, enabled },
+    }
+  );
+}
+
+/**
+ * Deletes an employee via employee_api.delete_employee.
+ */
+export async function deleteEmployeeApiV2(email: string): Promise<void> {
+  await requestV2(
+    "/api/method/agency_tracking.employee_api.delete_employee",
+    { method: "POST", body: { email } }
+  );
+}

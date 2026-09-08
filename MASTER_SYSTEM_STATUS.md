@@ -4,7 +4,7 @@
 **Backend Authority**: `https://travelagency-production-b48d.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-05T01:35:00Z  
+**Last Updated**: 2026-09-07T00:00:00Z
 
 ---
 
@@ -103,6 +103,7 @@
 | 81 | **Mobile Responsiveness, Touch Horizontal Scrolling, WhatsApp Chat Look & Crop Ratio Normalization** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 1. Eliminated mobile right-gutter whitespace with device-width Viewport, overflow-x-hidden, and min-w-0 container bounds. 2. Restored horizontal table scrolling on touch devices with touch-pan-x and minimum table widths. 3. Added explicit confirmation popups for candidate selection, photo removals, and batch/rate deletions. 4. Added country filtering for foreign contractors. 5. Overhauled ImageCropModal with canvas aspect ratio normalization (35x45mm, 3:4, 1.42) and locked corner handles. 6. Redesigned mobile chat (<md) to match WhatsApp aesthetics (emerald header, doodle wallpaper, mint outgoing bubbles, blue read receipt ticks, and capsule composer). |
 | 82 | **Registration Error Navigation, Custom Select Dropdowns, Ledger Fees & Corridor Default Roles Engine** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | 1. Registration error automatic section navigation, smooth scrolling, 4.5-second pulsing highlight, and simple plain English error formatting for non-native operators. 2. Custom styled Radix UI Select Dropdown component replacing raw HTML `<select>`. 3. Candidate detail financial ledger synthesizing initial registration fee with logs and accurate net totaling. 4. Applicant directory name column cleaning (removed dot and city name) and renamed Doc button to 'Contract document'. 5. Corridor Default Roles Engine (`defaultRoles.ts`) supporting 17 canonical roles with Saudi vs Kuwait pipeline specializations. 6. Dedicated 'Default Role Assignments' tab on `/employees` with persistence and staff resolvers. 7. 1-click 'Auto-Assign All Corridor Steps' in AssignEmployeeModal and automatic assignment on placement advance to Processing. Clean TypeScript and production build. |
 | 83 | **V2 Operational Workflow Exact Backend Conformance (`message.txt`)** | YES | YES | YES | `IMPLEMENTED` | YES | YES | YES | N/A | **COMPLETE** | Full conformance across all 13 operational domains: 1. Applicant intake & registration fee ledger integration. 2. Selection & Medical 1 gate. 3. Placement state transitions. 4. Dynamic corridor clearance concurrency (sequential gating removed). 5. Country clearance workspaces (Saudi Taeshir embedded Injaz RPCs with binary PDF blob download; Saudi Embassy Wakala unpaid warning banner & accidental submit guard; Kuwait LMIS Police Ashara fields & failure warning). 6. Contract Parser "Edit Parsed Terms" dialog (permitted fields only). 7. Ticketing & departure operations. 8. Pre-departure Medical 2 visual gate and departure blocking. 9. Commission batch lifecycle (write-off batch dialog, release unpaid items action). 10. Financial ledger & approval queue. 11. Foreign agency Wakala workspace. 12. Chat & executive oversight. 13. Canonical RBAC & employee provisioning. Verified clean TypeScript (`npx tsc --noEmit`) and production Next.js build (`npm run build`). |
+| 84 | **Foreign Agency Selection Confirmation Dialog, 7s Undo, & System-Wide Lazy Loading** | YES | YES | YES | `IMPLEMENTED` | YES | YES | YES | YES | **IMPLEMENTED** | 1. Confirmation popup (Radix Dialog, emerald-themed) before every foreign-agency candidate selection on /agent — shows candidate thumbnail, job, destination, religion, experience, and the 7s-undo notice; atomic `portal_api.select_candidate` only fires after explicit confirm. 2. Post-selection 7-second Undo bar with inline countdown-window badge — calls `placement_api.advance_placement(name, "Cancelled")` (Selected→Cancelled is the sanctioned revert edge; Departed is terminal), restores the candidate to the available pool and decrements the session selection count. 3. Lazy loading throughout: 23 route-level `loading.tsx` skeleton files (shared `ui/skeleton.tsx` primitives styled to the slate/emerald light+dark theme) plus `next/dynamic` code-splitting for the heavy `RoleWorkspaceContainer` (applicants) and full-screen `CandidateDetailModal` (agent). Verified clean TypeScript (`npx tsc --noEmit`) and production Next.js build (`npm run build`). |
 
 ---
 
@@ -137,6 +138,48 @@
 15. **Phase 15: Mobile Responsiveness, WhatsApp Chat Look, Touch Pan Tables & Photo Crop Ratios** -> [DONE]
 16. **Phase 16: Registration Error Navigation, Radix Dropdowns, Candidate Registration Fee Ledger, Directory Table Polish & Corridor Default Roles Engine** -> [DONE]
 17. **Phase 17: V2 Operational Workflow Exact Backend Conformance (`message.txt` & 13 Sections)** -> [DONE]
+18. **Phase 18: Foreign Agency Selection Confirmation, 7-Second Undo & System-Wide Lazy Loading** -> [DONE]
+19. **Phase 19: V2 Frontend Backend-Changelog Conformance (`chan.md`, commits `e5c70f6`…`ff79ac2` + invoice work)** -> [DONE]
+
+---
+
+## 5. 2026-09-07 Backend Changelog Conformance (chan.md)
+
+Implemented the backend changelog into the frontend on branch `agency_finalized_version`. All breaking changes + new endpoints/fields from backend commits `e5c70f6`…`ff79ac2` and the session's uncommitted invoice/finance work. Verified clean TypeScript (`npx tsc --noEmit`) and production Next.js build (`npx next build`).
+
+### Breaking changes — status
+| # | Change | Frontend action | Status |
+|---|---|---|---|
+| 1 | `get_current_user` roles collapse to `"Admin"` | Role arrays/`isAdminOrOps` updated to include `"Admin"` (`applicants/[id]`, LmisFastPath, ContractorRateMatrix, reports, expenses-income, commission, employees). Central `permissions.ts`/`v2Roles.ts` auto-expand admin aliases. | DONE |
+| 2 | `parse_injaz_file` removed (404) | `V2ParsedInjazData`, `parseInjazFileV2` + header removed from `documents.ts`. No code refs remain (only historical `src/Assets` docs). | DONE |
+| 3-5 | Write-off/advance now batch-currency; single write-off → `write_offs` child table; list/get fields currency-native | `finance.ts` interfaces updated (`title`, `total_amount_original`, `advance_amount_*`, `write_off_*`, `paid_amount_*`, `balance_due_*`, `write_offs`, `amount_original`, `payment_reference`); `commission/page.tsx` currency-native everywhere; write-off history child-table display added; `expenses-income` batch-total switched to `total_amount_original`+currency. | DONE |
+| 6 | `advance_placement` permission tightened | Backend is authority; honest `ApiV2Error` propagation retained (`formatCleanErrorMessage`). | DONE |
+| 7 | `settle_batch` four-eyes (ETB>100k + batch owner + not admin) | `commission/page.tsx` disable + explanatory UI + guard via `needsSecondApprover` memo. | DONE |
+| 8 | Explicit IDs (no guess-a-record) | Clearance/complaint RPCs already pass explicit IDs; `createComplaintV2` now also accepts `applicant`/`applicant_name`. | DONE |
+| 9 | Stricter clearance status-transition guards | Backend-enforced; surfaced as validation errors. `V2ClearanceStepItem` widened with new fields; `listMyClearanceStepsV2`/`listAssignedStepsV2` accept optional `placement`. | DONE |
+| 10 | Advance decoupled from balance/settlement | Removed client-side "exceeds balance" validation; labels/toasts currency-native. | DONE |
+| 11 | `register_applicant` no auto-fill | Field floor already enforced in `stage2RegistrationSchema`; no fabricated fallbacks rely on backend fill. | DONE |
+| 12 | Age validation 18–65 | `applicant.schema.ts` `date_of_birth` refine already enforces. | DONE |
+| 13 | Identity fields lock once placement in flight | `[id]/edit` computes active-placement status; form receives `lockedIdentityFields`, disables identity inputs and strips identity fields from update payload. | DONE |
+| 14 | Passport ≥6 months validity for departure | `applicant.schema.ts` `passport_expiry` refine now requires ≥6 months (via `addMonths`). | DONE |
+
+### New endpoints — wired
+- `employee_api.*` — `listEmployeesApiV2`, `createEmployeeApiV2`, `updateEmployeeRolesApiV2`, `resetEmployeePasswordApiV2`, `toggleEmployeeStatusApiV2`, `deleteEmployeeApiV2` (`employees.ts`).
+- `chat_api.list_all_threads` — `listAllThreadsForOversightV2` + ChatContainer oversight inbox (pre-existing, verified wired).
+- `portal_api.get_candidate_photo` — `getCandidatePhotoUrl(name, kind)`; used by `CandidateCard` / `CandidateDetailModal` (removed `normalizePhotoUrl` raw-field fallback).
+- `finance_api.get_owed_commissions_by_currency` — `getOwedCommissionsByCurrencyV2`.
+- `finance_api.list_transactions` — `listTransactionsV2` (all-status history view).
+
+### New fields — surfaced
+- `Contractor.license_no`, `Contractor.telephone` (added to `V2ContractorRecord`).
+- `Commission Batch Request.title`, `Commission Batch Item.payment_reference` (typed in interfaces; `title` requested in list fields).
+- `Clearance Step.title` + extended step fields on `V2ClearanceStepItem`.
+- `write_offs` child table displayed in `commission/page.tsx` write-off history.
+
+### Not applied (backend-owned / reference-only)
+- `Agency Tracking Settings` singleton is straightforward REST (`/api/resource/Agency Tracking Settings/...`), edited by System Manager/Admin/Finance Manager; backend-seeded and consumed by the invoice PDF — no dedicated UI screen required. Referenced in `src/Assets` (historical docs left untouched).
+
+
 
 
 

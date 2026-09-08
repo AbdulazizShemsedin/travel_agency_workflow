@@ -46,11 +46,13 @@ export interface V2ComplaintAgingReport {
 
 /**
  * Logs a complaint against a placed worker.
+ * Explicit placement (or applicant) is required -- no random-placement default.
  */
 export async function createComplaintV2(
   placement: string,
   description: string,
-  workerStatusAtComplaint: string
+  workerStatusAtComplaint: string,
+  extra?: { applicant?: string; applicant_name?: string }
 ): Promise<{ name?: string; message?: string }> {
   return requestV2(
     "/api/method/agency_tracking.complaint_api.create_complaint",
@@ -60,6 +62,8 @@ export async function createComplaintV2(
         placement,
         description,
         worker_status_at_complaint: workerStatusAtComplaint,
+        ...(extra?.applicant ? { applicant: extra.applicant } : {}),
+        ...(extra?.applicant_name ? { applicant_name: extra.applicant_name } : {}),
       },
     }
   );

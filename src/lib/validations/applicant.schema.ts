@@ -7,6 +7,7 @@ import {
   isFuture,
   isPast,
   startOfDay,
+  addMonths,
 } from "date-fns";
 
 export const GENDER_OPTIONS = ["Male", "Female"] as const;
@@ -326,7 +327,13 @@ export const stage2RegistrationSchema = stage1DraftSchema
         if (!val) return false;
         const parsed = parseISO(val);
         return isValid(parsed) && isFuture(startOfDay(parsed));
-      }, "Passport Expiry Date must be a future date"),
+      }, "Passport Expiry Date must be a future date")
+      .refine((val) => {
+        if (!val) return false;
+        const parsed = parseISO(val);
+        if (!isValid(parsed)) return false;
+        return startOfDay(parsed) >= addMonths(startOfDay(new Date()), 6);
+      }, "Passport must be valid for at least 6 months from today for overseas deployment"),
 
     passport_issue_date: z
       .string({ required_error: "Passport Issue Date is required for registration" })

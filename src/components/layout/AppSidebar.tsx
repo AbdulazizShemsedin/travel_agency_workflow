@@ -72,7 +72,7 @@ export function AppSidebar({
     const filtered = navItems.filter((item) => can(item.action));
     // If the user is authenticated internal staff or admin, always provide operational navigation
     if (filtered.length === 0 && (authUser?.is_internal_staff || user === "Administrator")) {
-      return navItems;
+      return navItems.filter((item) => item.action !== "manageContractors" || can("manageContractors"));
     }
     return filtered;
   }, [user, authUser, can, isForeignAgency]);

@@ -64,27 +64,52 @@ export interface V2CommissionBatchItem {
   applicant?: string;
   applicant_name?: string;
   amount: number;
+  amount_original?: number;
+  amount_birr?: number;
   currency: string;
+  payment_reference?: string;
   settled?: number | boolean;
   settlement_date?: string;
   [key: string]: any;
 }
 
+export interface V2CommissionBatchWriteOff {
+  name?: string;
+  parent?: string;
+  write_off_amount?: number;
+  write_off_amount_original?: number;
+  write_off_amount_birr?: number;
+  write_off_reason?: string;
+  write_off_transaction?: string;
+  [key: string]: any;
+}
+
 export interface V2CommissionBatch {
   name: string;
+  title?: string;
   contractor: string;
   contractor_name?: string;
   destination_country?: string;
-  total_amount: number;
-  total_amount_birr?: number;
   currency: V2SupportedCurrency;
   status: "Draft" | "Sent" | "Invoiced" | "Partially Settled" | "Settled" | "Cancelled" | string;
   items?: V2CommissionBatchItem[];
+  write_offs?: V2CommissionBatchWriteOff[];
   payment_proof?: string;
+  total_amount?: number;
+  total_amount_original?: number;
+  total_amount_birr?: number;
+  advance_amount_original?: number;
+  advance_amount_birr?: number;
   advance_amount?: number;
   advance_reference?: string;
   advance_received_on?: string;
+  write_off_total_original?: number;
+  write_off_total_birr?: number;
+  paid_amount_original?: number;
+  paid_amount_birr?: number;
+  balance_due_original?: number;
   balance_due_birr?: number;
+  owner?: string;
   creation?: string;
   [key: string]: any;
 }
@@ -238,11 +263,13 @@ export async function setFxRateV2(
 export async function getOwedCommissionsV2(
   contractor?: string,
   destinationCountry?: string,
-  order: "oldest" | "newest" = "oldest"
+  order: "oldest" | "newest" = "oldest",
+  currency?: V2SupportedCurrency
 ): Promise<V2OwedCommissionItem[]> {
   const body: Record<string, any> = { order };
   if (contractor) body.contractor = contractor;
   if (destinationCountry) body.destination_country = destinationCountry;
+  if (currency) body.currency = currency;
 
   const result = await requestV2<V2OwedCommissionItem[] | { items?: V2OwedCommissionItem[] }>(
     "/api/method/agency_tracking.finance_api.get_owed_commissions",
@@ -263,7 +290,8 @@ export async function getOwedCommissionsV2(
 export async function createCommissionBatchV2(
   contractor: string,
   destinationCountry: string,
-  transactionNames?: string[]
+  transactionNames?: string[],
+  currency?: V2SupportedCurrency
 ): Promise<V2CommissionBatch> {
   const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
     "/api/method/agency_tracking.finance_api.create_commission_batch",
@@ -275,6 +303,7 @@ export async function createCommissionBatchV2(
         ...(transactionNames && transactionNames.length > 0
           ? { transaction_names: JSON.stringify(transactionNames) }
           : {}),
+        ...(currency ? { currency } : {}),
       },
     }
   );
@@ -283,6 +312,68 @@ export async function createCommissionBatchV2(
     return result.message as V2CommissionBatch;
   }
   return result as V2CommissionBatch;
+}
+
+/**
+ * Lists a contractor's owed commissions grouped by currency (for create-batch screen).
+ */
+export async function getOwedCommissionsByCurrencyV2(
+  contractor?: string,
+  destinationCountry?: string
+): Promise<Record<string, V2OwedCommissionItem[]>> {
+  const body: Record<string, any> = {};
+  if (contractor) body.contractor = contractor;
+  if (destinationCountry) body.destination_country = destinationCountry;
+
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.finance_api.get_owed_commissions_by_currency",
+    {
+      method: "POST",
+      body,
+    }
+  );
+
+  if (result && typeof result === "object") return result;
+  return {};
+}
+
+/**
+ * Lists finance transactions across every status (Pending/Approved/Rejected/Voided) —
+ * a real transaction-history view (Finance Manager/Admin/System Manager only).
+ */
+export async function listTransactionsV2(
+  filters?: {
+    status?: string;
+    transactionType?: string;
+    placement?: string;
+    applicant?: string;
+    fromDate?: string;
+    toDate?: string;
+    orderBy?: string;
+    limitPageLength?: number;
+  }
+): Promise<V2TransactionRecord[]> {
+  const body: Record<string, any> = {};
+  if (filters?.status) body.status = filters.status;
+  if (filters?.transactionType) body.transaction_type = filters.transactionType;
+  if (filters?.placement) body.placement = filters.placement;
+  if (filters?.applicant) body.applicant = filters.applicant;
+  if (filters?.fromDate) body.from_date = filters.fromDate;
+  if (filters?.toDate) body.to_date = filters.toDate;
+  if (filters?.orderBy) body.order_by = filters.orderBy;
+  if (filters?.limitPageLength) body.limit_page_length = filters.limitPageLength;
+
+  const result = await requestV2<V2TransactionRecord[] | { transactions?: V2TransactionRecord[] }>(
+    "/api/method/agency_tracking.finance_api.list_transactions",
+    {
+      method: "POST",
+      body,
+    }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).transactions)) return (result as any).transactions;
+  return [];
 }
 
 /**
@@ -297,16 +388,28 @@ export async function listCommissionBatchesV2(
       doctype: "Commission Batch Request",
       fields: JSON.stringify([
         "name",
+        "title",
         "contractor",
         "destination_country",
+        "currency",
+        "total_amount",
+        "total_amount_original",
         "total_amount_birr",
         "status",
+        "advance_amount_original",
+        "advance_amount_birr",
         "advance_amount",
         "advance_reference",
         "advance_received_on",
+        "write_off_total_original",
+        "write_off_total_birr",
+        "paid_amount_original",
+        "paid_amount_birr",
+        "balance_due_original",
         "balance_due_birr",
         "settled_on",
         "settlement_reference",
+        "owner",
         "creation",
         "modified",
       ]),
@@ -319,7 +422,7 @@ export async function listCommissionBatchesV2(
   return result.map((b: any) => ({
     ...b,
     contractor_name: b.contractor_name || b.contractor,
-    total_amount: b.total_amount || b.total_amount_birr || 0,
+    total_amount: b.total_amount_original ?? b.total_amount ?? b.total_amount_birr ?? 0,
     currency: b.currency || "ETB",
   }));
 }
@@ -430,6 +533,8 @@ export async function settleBatchV2(
  * Writes off a discount or reduction on a Commission Batch and records an Expense transaction.
  * Authoritative Backend Endpoint: finance_api.write_off_batch
  * Roles: Finance Manager, Administrator, System Manager
+ * The amount is interpreted in the batch's own currency (batch.currency), not Birr.
+ * Callable repeatedly on the same batch (each call adds a row to the `write_offs` child table).
  */
 export async function writeOffBatchV2(
   batchName: string,
@@ -520,7 +625,9 @@ export async function manuallyMatchLineV2(
 /**
  * Records a partial / advance payment against a Commission Batch Request.
  * RBAC: Finance Manager / Admin.
- * Moves open batch (Draft/Sent) -> Partially Settled.
+ * The advance amount is interpreted in the batch's own currency (batch.currency),
+ * not Birr. It is a separate loan record (advance_amount_original / advance_reference /
+ * advance_received_on) and no longer reduces balance_due or flips settlement status.
  */
 export async function recordBatchAdvanceV2(
   batchName: string,

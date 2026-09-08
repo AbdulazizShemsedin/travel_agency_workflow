@@ -97,10 +97,13 @@ type CommissionTab =
 
 export default function AdminCommissionPage() {
   const queryClient = useQueryClient();
-  const { roles } = useAuth();
+  const { roles, user: currentUserName } = useAuth();
   const userRoles = Array.isArray(roles) ? roles.map(String) : [];
   const isFinanceManagerOrAdmin = userRoles.some((r) =>
     ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
+  );
+  const isAdminUser = userRoles.some((r) =>
+    ["Administrator", "System Manager", "Admin"].includes(r)
   );
 
   // Active Tab
@@ -124,6 +127,19 @@ export default function AdminCommissionPage() {
   const [selectedBatchName, setSelectedBatchName] = React.useState<string>("");
   const [activeBatch, setActiveBatch] = React.useState<V2CommissionBatch | null>(null);
   const [isLoadingBatchDetail, setIsLoadingBatchDetail] = React.useState<boolean>(false);
+
+  // Four-eyes settlement guard: a batch over 100,000 ETB created by the current (non-Admin)
+  // user needs an Admin to approve settlement.
+  const batchOwnerLower = (activeBatch?.owner || "").toLowerCase().trim();
+  const selfCreatedBatch =
+    !!batchOwnerLower &&
+    !!currentUserName &&
+    batchOwnerLower === currentUserName.toLowerCase().trim();
+  const needsSecondApprover =
+    !!activeBatch &&
+    (Number(activeBatch.total_amount_birr ?? 0) || 0) > 100000 &&
+    selfCreatedBatch &&
+    !isAdminUser;
 
   // Batch List Filter (Tab 2)
   const [batchStatusFilter, setBatchStatusFilter] = React.useState<string>("All");
@@ -543,6 +559,23 @@ export default function AdminCommissionPage() {
       return;
     }
 
+    // New four-eyes rule: large batches (total_amount_birr > 100,000 ETB) created by the
+    // same current user require a second approver (an Admin). Block locally so the backend
+    // PermissionError isn't hit.
+    const batchBirrTotal = Number(activeBatch.total_amount_birr ?? 0) || 0;
+    const batchOwner = activeBatch.owner || "";
+    const isSelfCreated =
+      batchOwner &&
+      currentUserName &&
+      batchOwner.toLowerCase() === currentUserName.toLowerCase();
+    if (batchBirrTotal > 100000 && isSelfCreated && !isAdminUser) {
+      toast.error("Settlement Requires a Second Approver", {
+        description:
+          "This batch exceeds 100,000 ETB and was created by you. An Admin/System Manager must approve the settlement.",
+      });
+      return;
+    }
+
     setIsSettlingWholeBatch(true);
     try {
       await settleBatchV2(activeBatch.name, settlementReference.trim());
@@ -587,7 +620,7 @@ export default function AdminCommissionPage() {
       setAdvanceAmountInput("");
       setAdvanceReferenceInput("");
       toast.success("Advance Payment Recorded", {
-        description: `Posted ${amount.toLocaleString()} Birr for batch ${activeBatch.name}. Remaining balance: ${Number(updated.balance_due_birr || 0).toLocaleString()} Birr.`,
+        description: `Posted ${amount.toLocaleString()} ${activeBatch.currency || "ETB"} for batch ${activeBatch.name}.`,
       });
       refetchBatches();
       await loadBatchDetails(activeBatch.name);
@@ -609,7 +642,7 @@ export default function AdminCommissionPage() {
     }
     const amount = Number(writeOffAmountInput);
     if (!amount || isNaN(amount) || amount <= 0) {
-      toast.error("Invalid Amount", { description: "Please enter a valid positive write-off amount in Birr." });
+      toast.error("Invalid Amount", { description: "Please enter a valid positive write-off amount in the batch currency." });
       return;
     }
     if (!writeOffReasonInput.trim()) {
@@ -624,7 +657,7 @@ export default function AdminCommissionPage() {
       setWriteOffAmountInput("");
       setWriteOffReasonInput("");
       toast.success("Batch Written Off", {
-        description: `Wrote off ${amount.toLocaleString()} Birr for batch ${batchName}. Shortfall booked to Expense Applicant Transaction.`,
+        description: `Wrote off ${amount.toLocaleString()} ${activeBatch?.currency || "ETB"} for batch ${batchName}. Shortfall booked to Expense Applicant Transaction.`,
       });
       refetchBatches();
       await loadBatchDetails(batchName);
@@ -1279,7 +1312,7 @@ export default function AdminCommissionPage() {
                       <th className="py-2.5 px-3">Batch ID</th>
                       <th className="py-2.5 px-3">Partner Agency</th>
                       <th className="py-2.5 px-3">Corridor</th>
-                      <th className="py-2.5 px-3">Total Birr</th>
+                      <th className="py-2.5 px-3">Total</th>
                       <th className="py-2.5 px-3">Advance Paid</th>
                       <th className="py-2.5 px-3">Balance Due</th>
                       <th className="py-2.5 px-3">Status</th>
@@ -1315,19 +1348,24 @@ export default function AdminCommissionPage() {
                             </td>
                             <td className="py-2.5 px-3">{batch.destination_country || "—"}</td>
                             <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
-                              {(Number(batch.total_amount_birr || batch.total_amount) || 0).toLocaleString()}{" "}
+                              {(
+                                Number(batch.total_amount_original ?? batch.total_amount) || 0
+                              ).toLocaleString()}{" "}
                               {batch.currency || "ETB"}
                             </td>
                             <td className="py-2.5 px-3 text-emerald-700 dark:text-emerald-400 font-semibold">
-                              {(Number(batch.advance_amount) || 0).toLocaleString()} Birr
+                              {(
+                                Number(batch.advance_amount_original ?? batch.advance_amount) || 0
+                              ).toLocaleString()}{" "}
+                              {batch.currency || "ETB"}
                             </td>
                             <td className="py-2.5 px-3 text-amber-700 dark:text-amber-400 font-bold">
                               {(
-                                batch.balance_due_birr !== undefined
-                                  ? Number(batch.balance_due_birr)
-                                  : Number(batch.total_amount_birr || batch.total_amount) || 0
+                                batch.balance_due_original !== undefined
+                                  ? Number(batch.balance_due_original)
+                                  : Number(batch.balance_due_birr ?? batch.total_amount) || 0
                               ).toLocaleString()}{" "}
-                              Birr
+                              {batch.currency || "ETB"}
                             </td>
                             <td className="py-2.5 px-3">
                               <Badge
@@ -1402,8 +1440,9 @@ export default function AdminCommissionPage() {
                                       setSelectedBatchName(batch.name);
                                       setActiveBatch(batch);
                                       const rem =
+                                        batch.balance_due_original ??
                                         batch.balance_due_birr ??
-                                        (batch.total_amount_birr || batch.total_amount);
+                                        (batch.total_amount_original ?? batch.total_amount);
                                       setWriteOffAmountInput(String(rem || ""));
                                       setIsWriteOffModalOpen(true);
                                     }}
@@ -1542,13 +1581,13 @@ export default function AdminCommissionPage() {
                     <div>
                       <span className="text-[10px] uppercase font-bold text-slate-400">Total Invoice</span>
                       <p className="font-bold text-slate-900 dark:text-white mt-0.5">
-                        {(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                        {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                       </p>
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Received</span>
                       <p className="font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">
-                        {(Number(activeBatch.advance_amount) || 0).toLocaleString()} Birr
+                        {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                       </p>
                       {activeBatch.advance_reference && (
                         <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.advance_reference}</p>
@@ -1567,10 +1606,10 @@ export default function AdminCommissionPage() {
                       <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Remaining Balance</span>
                       <p className="font-bold text-amber-800 dark:text-amber-300 mt-0.5">
                         {(
-                          activeBatch.balance_due_birr !== undefined
-                            ? Number(activeBatch.balance_due_birr)
-                            : Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0
-                        ).toLocaleString()} Birr
+                          activeBatch.balance_due_original !== undefined
+                            ? Number(activeBatch.balance_due_original)
+                            : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
+                        ).toLocaleString()} {activeBatch.currency || "ETB"}
                       </p>
                     </div>
                   </div>
@@ -1655,7 +1694,7 @@ export default function AdminCommissionPage() {
                                 <td className="py-2 px-3 font-mono">{it.name || "Row"}</td>
                                 <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
                                 <td className="py-2 px-3 font-semibold">{it.applicant || it.applicant_name || "Candidate"}</td>
-                                <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
+                                <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
                                 <td className="py-2 px-3">
                                   <Badge
                                     variant="outline"
@@ -1759,23 +1798,23 @@ export default function AdminCommissionPage() {
                   <div>
                     <span className="text-[10px] uppercase text-slate-400 font-semibold">Total Invoiced</span>
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                      {(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase text-emerald-600 font-semibold">Advance Received</span>
                     <p className="text-lg font-bold text-emerald-800 dark:text-emerald-400 mt-0.5">
-                      {(Number(activeBatch.advance_amount) || 0).toLocaleString()} Birr
+                      {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase text-amber-600 font-semibold">Net Balance Due</span>
                     <p className="text-lg font-bold text-amber-800 dark:text-amber-400 mt-0.5">
                       {(
-                        activeBatch.balance_due_birr !== undefined
-                          ? Number(activeBatch.balance_due_birr)
-                          : Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0
-                      ).toLocaleString()} Birr
+                        activeBatch.balance_due_original !== undefined
+                          ? Number(activeBatch.balance_due_original)
+                          : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
+                      ).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </div>
                 </div>
@@ -1802,7 +1841,7 @@ export default function AdminCommissionPage() {
                             <td className="py-2 px-3 font-mono">{idx + 1}</td>
                             <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
                             <td className="py-2 px-3 font-medium">{it.applicant || it.applicant_name || "Candidate"}</td>
-                            <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
+                            <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
                             <td className="py-2 px-3">
                               <Badge
                                 variant="outline"
@@ -1897,7 +1936,7 @@ export default function AdminCommissionPage() {
                   <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#171720] border border-slate-200 dark:border-[#24242e] space-y-1">
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Amount to Settle</span>
                     <p className="text-base font-bold text-slate-900 dark:text-white">
-                      {(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} Birr
+                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                     {activeBatch.settlement_reference && (
                       <p className="text-[11px] text-emerald-700 font-mono">
@@ -1929,7 +1968,7 @@ export default function AdminCommissionPage() {
                       <Button
                         type="button"
                         size="sm"
-                        disabled={!settlementReference.trim() || isSettlingWholeBatch}
+                        disabled={!settlementReference.trim() || isSettlingWholeBatch || needsSecondApprover}
                         onClick={() => setIsSettleBatchConfirmOpen(true)}
                         className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs"
                       >
@@ -1940,6 +1979,12 @@ export default function AdminCommissionPage() {
                         )}
                         Mark Entire Batch as Settled
                       </Button>
+                      {needsSecondApprover && (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                          This batch exceeds 100,000 ETB and was created by you. An Admin must approve the settlement.
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -2064,7 +2109,7 @@ export default function AdminCommissionPage() {
                   <CardContent className="p-3.5">
                     <span className="text-[10px] uppercase font-bold text-slate-400">Total Batch Amount</span>
                     <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                      {(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} Birr
+                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </CardContent>
                 </Card>
@@ -2073,7 +2118,7 @@ export default function AdminCommissionPage() {
                   <CardContent className="p-3.5">
                     <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Paid</span>
                     <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300 mt-1">
-                      {(Number(activeBatch.advance_amount) || 0).toLocaleString()} Birr
+                      {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       {activeBatch.advance_reference ? `Ref: ${activeBatch.advance_reference}` : "No reference"}
@@ -2086,10 +2131,10 @@ export default function AdminCommissionPage() {
                     <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Remaining Balance</span>
                     <p className="text-xl font-bold text-amber-800 dark:text-amber-300 mt-1">
                       {(
-                        activeBatch.balance_due_birr !== undefined
-                          ? Number(activeBatch.balance_due_birr)
-                          : Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0
-                      ).toLocaleString()} Birr
+                        activeBatch.balance_due_original !== undefined
+                          ? Number(activeBatch.balance_due_original)
+                          : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
+                      ).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </CardContent>
                 </Card>
@@ -2105,7 +2150,7 @@ export default function AdminCommissionPage() {
                       Record Advance Wire Payment
                     </CardTitle>
                     <CardDescription className="text-xs mt-0.5">
-                      Invokes <code>record_batch_advance</code>. Moves batch to Partially Settled and recalculates balance due.
+                      Invokes <code>record_batch_advance</code>. Records a separate advance loan in {activeBatch?.currency || "the batch currency"}; it does not reduce balance due.
                     </CardDescription>
                   </CardHeader>
 
@@ -2117,7 +2162,7 @@ export default function AdminCommissionPage() {
                     ) : (
                       <>
                         <div className="space-y-1">
-                          <Label className="text-xs font-semibold">Advance Amount (Birr) *</Label>
+                          <Label className="text-xs font-semibold">Advance Amount ({activeBatch?.currency || "ETB"}) *</Label>
                           <Input
                             type="number"
                             step="any"
@@ -2148,15 +2193,6 @@ export default function AdminCommissionPage() {
                             if (!amt || isNaN(amt) || amt <= 0) {
                               toast.error("Invalid Amount", {
                                 description: "Please enter a valid positive amount.",
-                              });
-                              return;
-                            }
-                            const maxDue =
-                              activeBatch.balance_due_birr ??
-                              (activeBatch.total_amount_birr || activeBatch.total_amount);
-                            if (amt > maxDue) {
-                              toast.error("Exceeds Balance", {
-                                description: `Amount cannot exceed remaining balance of ${Number(maxDue).toLocaleString()} Birr.`,
                               });
                               return;
                             }
@@ -2297,8 +2333,9 @@ export default function AdminCommissionPage() {
                         disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off"}
                         onClick={() => {
                           const rem =
+                            activeBatch.balance_due_original ??
                             activeBatch.balance_due_birr ??
-                            (activeBatch.total_amount_birr || activeBatch.total_amount);
+                            (activeBatch.total_amount_original ?? activeBatch.total_amount);
                           setWriteOffAmountInput(String(rem || ""));
                           setIsWriteOffModalOpen(true);
                         }}
@@ -2309,6 +2346,31 @@ export default function AdminCommissionPage() {
                       </Button>
                     </div>
                   </CardHeader>
+                  {(activeBatch.write_offs && activeBatch.write_offs.length > 0) && (
+                    <CardContent className="pt-3 space-y-2 text-xs">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                        Write-Off History
+                      </div>
+                      {activeBatch.write_offs.map((wo: any, idx: number) => (
+                        <div
+                          key={wo?.name || idx}
+                          className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                              {new Date(wo?.creation || wo?.creation_date || Date.now()).toLocaleDateString()}
+                            </span>
+                            <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
+                              -{Number(wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0).toLocaleString()} {activeBatch.currency}
+                            </span>
+                          </div>
+                          {wo?.write_off_reason && (
+                            <p className="text-[11px] text-slate-600 dark:text-zinc-300">{wo.write_off_reason}</p>
+                          )}
+                        </div>
+                      ))}
+                    </CardContent>
+                  )}
                 </Card>
               </div>
             </div>
@@ -2589,17 +2651,13 @@ export default function AdminCommissionPage() {
                 <div>
                   <span className="text-[10px] text-slate-400 font-medium">Batch Total:</span>
                   <p className="font-bold text-slate-800 dark:text-zinc-200">
-                    {(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                    {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-amber-500 font-medium">Remaining Balance:</span>
+                  <span className="text-[10px] text-amber-500 font-medium">Advance Currency:</span>
                   <p className="font-bold text-amber-700 dark:text-amber-400">
-                    {(
-                      activeBatch.balance_due_birr !== undefined
-                        ? Number(activeBatch.balance_due_birr)
-                        : Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0
-                    ).toLocaleString()} Birr
+                    {activeBatch.currency || "ETB"} (batch currency)
                   </p>
                 </div>
               </div>
@@ -2607,7 +2665,7 @@ export default function AdminCommissionPage() {
               {!advanceConfirmStep ? (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Advance Amount (Birr) *</Label>
+                    <Label className="text-xs font-semibold">Advance Amount ({activeBatch.currency || "ETB"}) *</Label>
                     <Input
                       type="number"
                       step="any"
@@ -2649,15 +2707,6 @@ export default function AdminCommissionPage() {
                           });
                           return;
                         }
-                        const maxDue =
-                          activeBatch.balance_due_birr ??
-                          (activeBatch.total_amount_birr || activeBatch.total_amount);
-                        if (amt > maxDue) {
-                          toast.error("Amount Exceeds Balance", {
-                            description: `Advance amount cannot exceed remaining balance of ${Number(maxDue).toLocaleString()} Birr.`,
-                          });
-                          return;
-                        }
                         setAdvanceConfirmStep(true);
                       }}
                       className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer"
@@ -2674,9 +2723,9 @@ export default function AdminCommissionPage() {
                       Confirm Advance Payment Posting:
                     </p>
                     <ul className="list-disc list-inside space-y-0.5 text-[11px]">
-                      <li>Amount: <strong>{Number(advanceAmountInput).toLocaleString()} Birr</strong></li>
+                      <li>Amount: <strong>{Number(advanceAmountInput).toLocaleString()} {activeBatch.currency || "ETB"}</strong> (batch currency)</li>
                       <li>Reference: <strong>{advanceReferenceInput.trim() || "None specified"}</strong></li>
-                      <li>Batch status will transition to <strong>Partially Settled</strong>.</li>
+                      <li>Recorded as a separate advance loan; it does not reduce this batch's balance due.</li>
                     </ul>
                   </div>
 
@@ -2776,7 +2825,7 @@ export default function AdminCommissionPage() {
                 <span>
                   This will mark all items in batch <strong>{activeBatch.name}</strong> as Paid and
                   finalize settlement with reference <strong>{settlementReference}</strong> for a total
-                  of <strong>{(Number(activeBatch.total_amount_birr || activeBatch.total_amount) || 0).toLocaleString()} Birr</strong>.
+                  of <strong>{(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}</strong>.
                 </span>
               ) : (
                 "Please confirm you want to proceed with full settlement."
@@ -2921,13 +2970,13 @@ export default function AdminCommissionPage() {
               Confirm Commission Batch Write-Off
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
-              Record an agreed discount on batch <strong>{activeBatch?.name || selectedBatchName}</strong> (or discharge uncollectible partner debt). Books an Expense Applicant Transaction for the shortfall and settles the batch once advance + write-off cover the total.
+              Record an agreed discount on batch <strong>{activeBatch?.name || selectedBatchName}</strong> (or discharge uncollectible partner debt). Books an Expense Applicant Transaction for the shortfall. Amount is in the batch's currency.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Write-Off Amount (Birr) *</Label>
+              <Label className="text-xs font-semibold">Write-Off Amount ({activeBatch?.currency || "ETB"}) *</Label>
               <Input
                 type="number"
                 step="any"

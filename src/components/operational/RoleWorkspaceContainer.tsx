@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeesV2 } from "@/lib/api/v2/employees";
@@ -143,8 +144,17 @@ export function RoleWorkspaceContainer() {
       allowed.unshift("directory");
     }
 
-    // Always ensure clearance queue tab is visible for clearance roles
-    if (!allowed.includes("clearance")) {
+    // Ensure clearance queue tab is visible only for clearance roles or admin
+    const hasClearanceRole =
+      isAdmin ||
+      r.includes("clearance") ||
+      r.includes("lms") ||
+      r.includes("lmis") ||
+      r.includes("taeshir") ||
+      r.includes("injaz") ||
+      r.includes("embassy");
+
+    if (hasClearanceRole && !allowed.includes("clearance")) {
       allowed.push("clearance");
     }
 
@@ -157,16 +167,22 @@ export function RoleWorkspaceContainer() {
   }, [isAdmin, roles, authUser, can]);
 
   const rolesKey = React.useMemo(() => (roles || []).join(","), [roles]);
+  const searchParams = useSearchParams();
+  const filterParam = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter");
 
-  const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
+  const [activeTab, setActiveTab] = React.useState<string>(filterParam ? "directory" : defaultTab);
   const [corridorFilter, setCorridorFilter] = React.useState<string>(defaultCorridor);
 
-  // Sync activeTab only if current tab is not in availableTabs or when persona changes
+  // Sync activeTab only if current tab is not in availableTabs or when persona changes or filterParam exists
   React.useEffect(() => {
+    if (filterParam) {
+      setActiveTab("directory");
+      return;
+    }
     if (!availableTabs.some((t) => t.id === activeTab)) {
       setActiveTab(defaultTab);
     }
-  }, [availableTabs, defaultTab, activeTab, rolesKey, authUser?.email]);
+  }, [availableTabs, defaultTab, activeTab, rolesKey, authUser?.email, filterParam]);
 
   // Fetch employees list for drawers
   const { data: employees = [] } = useQuery({

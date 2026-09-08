@@ -31,6 +31,8 @@ export interface V2ContractorRecord {
   phone?: string;
   whatsapp?: string;
   email?: string;
+  license_no?: string;
+  telephone?: string;
   active_status?: number | boolean;
   batch_mode?: "Manual Only" | "Auto-Threshold" | string;
   batch_threshold?: number;

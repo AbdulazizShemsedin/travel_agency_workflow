@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { extractRoleName } from "@/lib/auth/permissions";
 
 function getStageBadgeVariant(stage: string): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
@@ -58,12 +59,43 @@ function getStageBadgeVariant(stage: string): {
 
 export function ApplicantTable() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter") || "";
+
   const { authUser } = useAuth();
+
+  // Derive corridor restriction from user roles
+  const corridorRestriction = React.useMemo(() => {
+    if (!authUser?.roles) return null;
+    const roleNames = authUser.roles.map(extractRoleName);
+    // Admin-level roles see all corridors
+    const adminRoles = ["admin", "manager", "system manager", "administrator", "registrar", "clearance officer", "ticketer", "complaint manager", "finance manager", "communication manager", "contract parser"];
+    if (roleNames.some((r) => adminRoles.includes(r))) return null;
+    // Saudi-specific roles
+    const isSaudiRole = roleNames.some((r) => r.startsWith("saudi"));
+    // Kuwait-specific roles
+    const isKuwaitRole = roleNames.some((r) => r.startsWith("kuwait"));
+    if (isSaudiRole && !isKuwaitRole) return "saudi";
+    if (isKuwaitRole && !isSaudiRole) return "kuwait";
+    return null;
+  }, [authUser]);
+
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedStage, setSelectedStage] = React.useState<string>("All");
+  const [selectedStage, setSelectedStage] = React.useState<string>(() => {
+    if (urlFilter) return urlFilter.trim();
+    return "All";
+  });
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize] = React.useState(10);
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
+
+  // Sync stage filter if URL parameter changes
+  React.useEffect(() => {
+    if (urlFilter) {
+      setSelectedStage(urlFilter.trim());
+      setCurrentPage(1);
+    }
+  }, [urlFilter]);
 
   // Modal State for Assign Employee
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
@@ -80,8 +112,28 @@ export function ApplicantTable() {
   const filteredApplicants = React.useMemo(() => {
     return applicants.filter((applicant) => {
       const currentStatus = applicant.status || applicant.applicant_state || "Draft";
-      const matchesStage =
-        selectedStage === "All" || currentStatus === selectedStage;
+      let matchesStage = false;
+      const stageNorm = selectedStage.trim().toLowerCase();
+
+      // Corridor isolation filter
+      if (corridorRestriction) {
+        const dest = (applicant.destination_country || "").toLowerCase();
+        if (corridorRestriction === "saudi" && !dest.includes("saudi") && !dest.includes("ksa")) return false;
+        if (corridorRestriction === "kuwait" && !dest.includes("kuwait")) return false;
+      }
+
+      if (stageNorm === "all" || !stageNorm) {
+        matchesStage = true;
+      } else if (stageNorm === "in progress") {
+        matchesStage =
+          currentStatus !== "Draft" &&
+          currentStatus !== "Departed" &&
+          currentStatus !== "Cancelled";
+      } else if (stageNorm === "completed" || stageNorm === "completed / cleared") {
+        matchesStage = currentStatus === "Stamped" || currentStatus === "Ticketed";
+      } else {
+        matchesStage = currentStatus.toLowerCase() === stageNorm;
+      }
 
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -251,6 +303,8 @@ export function ApplicantTable() {
                 { value: "Stamped", label: "Stamped" },
                 { value: "Ticketed", label: "Ticketed" },
                 { value: "Departed", label: "Departed" },
+                { value: "In Progress", label: "In Progress" },
+                { value: "Completed", label: "Completed / Cleared" },
                 { value: "Cancelled", label: "Cancelled" },
               ]}
               triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
@@ -305,10 +359,22 @@ export function ApplicantTable() {
                   const stage = applicant.status || applicant.applicant_state || "Draft";
                   const badge = getStageBadgeVariant(stage);
                   const isSelected = selectedRows.has(applicant.name);
-                  const isSelectedStage = stage === "Selected";
-                  const contractNo = (applicant as any).contract_number || "2005450415";
-                  const visaNo = (applicant as any).visa_number || "1908334046";
-                  const sponsorName = (applicant as any).sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI";
+
+                  // Sponsor, contract, and visa data only exists at "Selected" stage or beyond.
+                  // Never show hardcoded fallbacks — pre-Selected applicants have no sponsor yet.
+                  const SPONSOR_ELIGIBLE_STAGES = new Set([
+                    "Selected", "Processing", "Stamped", "Ticketed", "Departed",
+                  ]);
+                  const hasPlacementData = SPONSOR_ELIGIBLE_STAGES.has(stage);
+                  const contractNo = hasPlacementData
+                    ? ((applicant as any).contract_number || "—")
+                    : "—";
+                  const visaNo = hasPlacementData
+                    ? ((applicant as any).visa_number || "—")
+                    : "—";
+                  const sponsorName = hasPlacementData
+                    ? ((applicant as any).sponsor_name || "—")
+                    : "—";
 
                   return (
                     <tr
@@ -356,24 +422,32 @@ export function ApplicantTable() {
                         {applicant.passport_number || "N/A"}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="space-y-0.5">
-                          <span className="font-mono text-xs font-semibold text-emerald-900 dark:text-emerald-400 block">
-                            CTR: {contractNo}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400 block">
-                            VISA: {visaNo}
-                          </span>
-                        </div>
+                        {hasPlacementData ? (
+                          <div className="space-y-0.5">
+                            <span className="font-mono text-xs font-semibold text-emerald-900 dark:text-emerald-400 block">
+                              CTR: {contractNo}
+                            </span>
+                            <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400 block">
+                              VISA: {visaNo}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="truncate max-w-[180px]">
-                          <span className="font-medium text-slate-900 dark:text-zinc-200 block truncate text-xs uppercase">
-                            {sponsorName}
-                          </span>
-                          <span className="text-[10px] text-slate-400 block">
-                            {applicant.destination_country || "Saudi Arabia"}
-                          </span>
-                        </div>
+                        {hasPlacementData && sponsorName !== "—" ? (
+                          <div className="truncate max-w-[180px]">
+                            <span className="font-medium text-slate-900 dark:text-zinc-200 block truncate text-xs uppercase">
+                              {sponsorName}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">
+                              {applicant.destination_country || "Saudi Arabia"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
@@ -407,7 +481,7 @@ export function ApplicantTable() {
                           </Link>
 
                           {/* 2. Assign Processing Employee - SHOWN ONLY IF ON 'Selected' STAGE */}
-                          {isSelectedStage && (
+                          {stage === "Selected" && (
                             <button
                               type="button"
                               onClick={(e) => handleSingleAssign(applicant, e)}

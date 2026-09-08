@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users,
@@ -17,11 +18,13 @@ import {
   Briefcase,
   LayoutGrid,
   Table as TableIcon,
+  Undo2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
   selectCandidateV2,
+  advancePlacementV2,
   listContractorsV2,
   V2PortalCandidate,
   ApiV2Error,
@@ -29,11 +32,36 @@ import {
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { CandidateCard } from "@/components/agent/CandidateCard";
-import { CandidateDetailModal } from "@/components/agent/CandidateDetailModal";
 import { CandidateFilters } from "@/components/agent/CandidateFilters";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+
+// Lazy-load the heavy full-screen candidate detail modal only when a candidate is viewed
+const CandidateDetailModal = dynamic(
+  () => import("@/components/agent/CandidateDetailModal").then((m) => m.CandidateDetailModal),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#121216] shadow-2xl p-8">
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500 dark:text-zinc-400">
+            <Loader2 className="h-5 w-5 animate-spin text-emerald-800 dark:text-emerald-400" />
+            Loading candidate profile...
+          </div>
+        </div>
+      </div>
+    ),
+  }
+);
 
 export default function AgentDiscoveryPage() {
   const queryClient = useQueryClient();
@@ -74,6 +102,16 @@ export default function AgentDiscoveryPage() {
     }
   }, [defaultContractor, activeContractor, fallbackContractor]);
 
+  // Clear the undo timeout if the page unmounts
+  React.useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const effectiveContractor =
     resolveContractorString(agencyContext?.contractor?.name) ||
     resolveContractorString(authUser?.contractor) ||
@@ -90,10 +128,20 @@ export default function AgentDiscoveryPage() {
   // Selection & Detail Modal State
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] =
     React.useState<PortalAvailableCandidate | null>(null);
+  const [candidatePendingConfirm, setCandidatePendingConfirm] =
+    React.useState<PortalAvailableCandidate | null>(null);
   const [selectingCandidateId, setSelectingCandidateId] = React.useState<string | null>(null);
   const [successToast, setSuccessToast] = React.useState<string | null>(null);
   const [conflictToast, setConflictToast] = React.useState<string | null>(null);
   const [selectedTodayCount, setSelectedTodayCount] = React.useState(0);
+
+  // Undo state: holds the last successfully selected placement for the 7s undo window
+  const [undoState, setUndoState] = React.useState<{
+    candidate: PortalAvailableCandidate;
+    placementName: string;
+    message: string;
+  } | null>(null);
+  const undoTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Excluded candidates in this session (e.g. selected or 409 conflict)
   const [locallyRemovedIds, setLocallyRemovedIds] = React.useState<string[]>([]);
@@ -170,6 +218,21 @@ export default function AgentDiscoveryPage() {
       );
       setTimeout(() => setSuccessToast(null), 6000);
 
+      // Set up the 7-second undo window for the foreign agent
+      const placementName = (res as any)?.placement_name || (res as any)?.name || "";
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+      setUndoState({
+        candidate,
+        placementName,
+        message: `Applicant ${candidate.full_name} (${candidate.name}) reserved. Click Undo within 7 seconds to reverse.`,
+      });
+      undoTimeoutRef.current = setTimeout(() => {
+        setUndoState(null);
+      }, 7000);
+
       // Invalidate queries to refresh background
       queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
       queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
@@ -195,7 +258,60 @@ export default function AgentDiscoveryPage() {
   });
 
   const handleSelectCandidate = (candidate: PortalAvailableCandidate) => {
-    selectMutation.mutate(candidate);
+    // Open the confirmation dialog before proceeding with the atomic selection
+    setSelectedCandidateForDetail(null);
+    setCandidatePendingConfirm(candidate);
+  };
+
+  const confirmSelection = () => {
+    if (candidatePendingConfirm) {
+      const candidate = candidatePendingConfirm;
+      setCandidatePendingConfirm(null);
+      selectMutation.mutate(candidate);
+    }
+  };
+
+  // Undo mutation: cancels the just-created Placement (Selected -> Cancelled) via the sanctioned backend RPC
+  const undoMutation = useMutation({
+    mutationFn: async (placementName: string) => {
+      if (!placementName) {
+        throw new ApiV2Error("Unable to undo: no placement identifier returned from the backend.", 400);
+      }
+      return await advancePlacementV2(placementName, "Cancelled");
+    },
+    onSuccess: (res, placementName) => {
+      if (undoTimeoutRef.current) {
+        clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
+      }
+      const candidate = undoState?.candidate;
+      setUndoState(null);
+      if (candidate) {
+        // Remove the candidate from the locally removed list so it reappears in the pool
+        setLocallyRemovedIds((prev) => prev.filter((id) => id !== candidate.name));
+        setSelectedTodayCount((prev) => Math.max(0, prev - 1));
+      }
+      setSuccessToast(
+        `↩ Undo successful. Applicant ${candidate?.full_name || ""} (${candidate?.name || placementName}) returned to the available pool.`
+      );
+      setTimeout(() => setSuccessToast(null), 6000);
+      queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+    },
+    onError: (err: ApiV2Error | any) => {
+      setConflictToast(
+        formatCleanErrorMessage(err) || "Failed to undo selection. The candidate may already have entered processing."
+      );
+      setTimeout(() => setConflictToast(null), 6000);
+    },
+  });
+
+  const handleUndo = () => {
+    if (undoState && !undoMutation.isPending) {
+      undoMutation.mutate(undoState.placementName);
+    }
   };
 
   const handleResetFilters = () => {
@@ -272,6 +388,49 @@ export default function AgentDiscoveryPage() {
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Undo Bar (appears for 7 seconds after a successful selection) */}
+        {undoState && (
+          <div className="rounded-2xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 dark:border-emerald-700 p-4 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2.5">
+              <Undo2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 animate-pulse" />
+              <span className="font-semibold">{undoState.message}</span>
+              <span className="hidden sm:inline-flex items-center rounded-full bg-emerald-200/70 dark:bg-emerald-900/60 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60">
+                7s window
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                disabled={undoMutation.isPending}
+                onClick={handleUndo}
+                className="text-xs font-bold h-8 rounded-lg bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white shadow-xs"
+              >
+                {undoMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                    Undo
+                  </>
+                )}
+              </Button>
+              <button
+                onClick={() => {
+                  if (undoTimeoutRef.current) {
+                    clearTimeout(undoTimeoutRef.current);
+                    undoTimeoutRef.current = null;
+                  }
+                  setUndoState(null);
+                }}
+                className="text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100 font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
 
@@ -522,6 +681,113 @@ export default function AgentDiscoveryPage() {
         onSelect={handleSelectCandidate}
         isSelecting={selectingCandidateId === selectedCandidateForDetail?.name}
       />
+
+      {/* Confirmation Dialog — appears before the foreign agent commits to selecting a candidate */}
+      <Dialog
+        open={!!candidatePendingConfirm}
+        onOpenChange={(open) => {
+          if (!open) setCandidatePendingConfirm(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
+              <ShieldCheck className="h-5 w-5" /> Confirm Candidate Reservation
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              You are about to reserve this applicant for your agency. This action is atomic and
+              immediately locks the candidate to your account, removing them from the public
+              pool for all other agencies.
+            </DialogDescription>
+          </DialogHeader>
+
+          {candidatePendingConfirm && (
+            <div className="space-y-3 rounded-xl border border-slate-200 dark:border-[#22222a] bg-slate-50 dark:bg-[#17171d] p-4 text-xs">
+              <div className="flex items-center gap-3">
+                {candidatePendingConfirm.photo_passport ? (
+                  <img
+                    src={candidatePendingConfirm.photo_passport}
+                    alt={candidatePendingConfirm.full_name}
+                    className="h-12 w-12 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-sm shrink-0">
+                    {candidatePendingConfirm.full_name?.slice(0, 2) || "CA"}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                    {candidatePendingConfirm.full_name}
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-400 truncate">
+                    {candidatePendingConfirm.name}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#26262f] px-3 py-2">
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Job</span>
+                  <p className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate">
+                    {candidatePendingConfirm.job_applied || (candidatePendingConfirm as any).target_job || "Domestic Worker"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#26262f] px-3 py-2">
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Destination</span>
+                  <p className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate">
+                    {candidatePendingConfirm.destination_country || "Not Specified"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#26262f] px-3 py-2">
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Religion</span>
+                  <p className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate">
+                    {candidatePendingConfirm.religion || "Not Specified"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#26262f] px-3 py-2">
+                  <span className="text-[10px] font-medium text-slate-500 dark:text-zinc-400">Experience</span>
+                  <p className="text-xs font-bold text-slate-800 dark:text-zinc-200 truncate">
+                    {candidatePendingConfirm.experience_country || "First Time"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
+                <Undo2 className="h-3 w-3" /> You will have a 7-second window to undo this reservation after confirming.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCandidatePendingConfirm(null)}
+              disabled={selectingCandidateId !== null}
+              className="border-slate-200 dark:border-[#26262f] text-slate-700 dark:text-zinc-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmSelection}
+              disabled={selectingCandidateId !== null}
+              className="bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-semibold"
+            >
+              {selectingCandidateId !== null ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reserving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Confirm Reservation
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AgentLayout>
   );
 }

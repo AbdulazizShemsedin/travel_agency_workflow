@@ -178,26 +178,61 @@ export default function CandidateCvPreviewPage() {
     window.print();
   };
 
-  const handleSavePdf = () => {
-    const rawPdfUrl = (applicant as any)?.cv_pdf_url || (applicant as any)?.cv_file_url;
-    if (rawPdfUrl && typeof rawPdfUrl === "string" && rawPdfUrl.toLowerCase().endsWith(".pdf")) {
-      const a = document.createElement("a");
-      a.href = rawPdfUrl;
-      a.download = `CV_${fullName.replace(/[^a-zA-Z0-9]/g, "_")}_${passportNumber}.pdf`;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toast.success("Official CV PDF downloaded successfully!");
-      return;
-    }
+  const [isDownloadingPdf, setIsDownloadingPdf] = React.useState(false);
+  const cvPage1Ref = React.useRef<HTMLDivElement>(null);
+  const cvPage2Ref = React.useRef<HTMLDivElement>(null);
 
-    toast.info("Preparing PDF Export...", {
-      description: "In the browser dialog, select 'Save as PDF' from the Destination dropdown.",
-    });
-    setTimeout(() => {
-      window.print();
-    }, 350);
+  const handleSavePdf = async () => {
+    try {
+      setIsDownloadingPdf(true);
+
+      // Dynamically import to avoid SSR issues
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // Capture page 1
+      if (cvPage1Ref.current) {
+        const canvas1 = await html2canvas(cvPage1Ref.current, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const img1 = canvas1.toDataURL("image/jpeg", 0.97);
+        const ratio1 = canvas1.height / canvas1.width;
+        const imgH1 = Math.min(pageWidth * ratio1, pageHeight);
+        pdf.addImage(img1, "JPEG", 0, 0, pageWidth, imgH1);
+      }
+
+      // Capture page 2
+      if (cvPage2Ref.current) {
+        pdf.addPage();
+        const canvas2 = await html2canvas(cvPage2Ref.current, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
+        const img2 = canvas2.toDataURL("image/jpeg", 0.97);
+        const ratio2 = canvas2.height / canvas2.width;
+        const imgH2 = Math.min(pageWidth * ratio2, pageHeight);
+        pdf.addImage(img2, "JPEG", 0, 0, pageWidth, imgH2);
+      }
+
+      pdf.save(`CV_${fullName.replace(/[^a-zA-Z0-9]/g, "_")}_${passportNumber}.pdf`);
+      toast.success("Official CV PDF downloaded successfully!");
+    } catch (err) {
+      console.error("Failed to generate CV PDF:", err);
+      toast.error("Failed to download PDF. Please try again.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   const handleCopyLink = () => {
@@ -286,10 +321,15 @@ export default function CandidateCvPreviewPage() {
 
           <Button
             onClick={handleSavePdf}
+            disabled={isDownloadingPdf}
             className="bg-blue-900 hover:bg-blue-950 text-white text-xs font-bold shadow-sm"
           >
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            Save as PDF
+            {isDownloadingPdf ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {isDownloadingPdf ? "Downloading PDF..." : "Save as PDF"}
           </Button>
         </div>
       </div>
@@ -329,7 +369,7 @@ export default function CandidateCvPreviewPage() {
       {/* ========================================================================= */}
       {/* PAGE 1: OFFICIAL BILATERAL RECRUITMENT CV (EXACT MATCH TO ASNEKECH SAMPLE)*/}
       {/* ========================================================================= */}
-      <div className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-8 font-sans border border-slate-300 print:border-none print:shadow-none print:p-2 print:m-0 print:max-w-none print:page-break-after-always">
+      <div ref={cvPage1Ref} className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-8 font-sans border border-slate-300 print:border-none print:shadow-none print:p-2 print:m-0 print:max-w-none print:page-break-after-always">
         
         {/* TOP HEADER SECTION */}
         <div className="flex items-center justify-between border-b-2 border-black pb-3 mb-3">
@@ -625,7 +665,7 @@ export default function CandidateCvPreviewPage() {
       {/* ========================================================================= */}
       {/* PAGE 2: OFFICIAL ETHIOPIAN PASSPORT SCAN ATTACHMENT                       */}
       {/* ========================================================================= */}
-      <div className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-10 font-sans border border-slate-300 print:border-none print:shadow-none print:p-4 print:m-0 print:max-w-none flex flex-col items-center justify-center min-h-[900px]">
+      <div ref={cvPage2Ref} className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-10 font-sans border border-slate-300 print:border-none print:shadow-none print:p-4 print:m-0 print:max-w-none flex flex-col items-center justify-center min-h-[900px]">
         
         <div className="w-full text-center pb-3 border-b border-slate-200 mb-6">
           <h3 className="text-sm font-extrabold uppercase tracking-wider text-[#002f6c]">

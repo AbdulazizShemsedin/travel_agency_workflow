@@ -135,7 +135,19 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.highest_education = "High School";
   }
 
-  // 3. Salary Amount & Monthly Salary
+  // 3. Salary Amount & Monthly Salary (Experienced = 1200 SAR, First Timer = 1000 SAR)
+  const expCountry = String(result.experience_country || "").trim().toLowerCase();
+  const isExperiencedApplicant = Boolean(
+    (expCountry &&
+      expCountry !== "none" &&
+      expCountry !== "first time" &&
+      expCountry !== "first time applicant" &&
+      expCountry !== "overseas") ||
+    result.has_experience === true ||
+    result.experience_type === "experienced" ||
+    Number(result.years_of_experience) > 0
+  );
+
   const rawSalary =
     result.salary_amount !== undefined && result.salary_amount !== null
       ? result.salary_amount
@@ -143,16 +155,24 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
       ? result.monthly_salary
       : result.salary;
 
+  const standardSalary = isExperiencedApplicant ? 1200 : 1000;
+
   if (rawSalary !== undefined && rawSalary !== null && rawSalary !== "") {
     const num = Number(rawSalary);
-    const validNum = !isNaN(num) && num > 0 ? num : 1000;
+    let validNum = !isNaN(num) && num > 0 ? num : standardSalary;
+    // Auto-correct discrepancy where experienced candidate defaulted to 1000
+    if (isExperiencedApplicant && validNum === 1000) {
+      validNum = 1200;
+    } else if (!isExperiencedApplicant && validNum === 1200) {
+      validNum = 1000;
+    }
     result.salary_amount = validNum;
     result.salary = validNum;
     result.monthly_salary = String(validNum);
   } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
-    result.salary_amount = 1000;
-    result.salary = 1000;
-    result.monthly_salary = "1000";
+    result.salary_amount = standardSalary;
+    result.salary = standardSalary;
+    result.monthly_salary = String(standardSalary);
   }
 
   // 4. Salary Currency

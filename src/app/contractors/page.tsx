@@ -22,8 +22,11 @@ import {
   Search,
   Filter,
   Coins,
+  ShieldAlert,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   listContractorsV2,
   createContractorV2,
@@ -39,6 +42,18 @@ import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRa
 
 export default function ContractorsPage() {
   const queryClient = useQueryClient();
+  const { authUser, user, can, roles } = useAuth();
+  const isAdmin = Boolean(
+    user === "Administrator" ||
+    (authUser?.email && (authUser.email.toLowerCase().startsWith("admin") || authUser.email.toLowerCase() === "administrator")) ||
+    can("manageContractors") ||
+    can("manageUsers") ||
+    (roles || []).some((r: any) => {
+      const s = String(r?.role || r?.name || r).toLowerCase().trim();
+      return s === "administrator" || s === "system manager" || s === "admin";
+    })
+  );
+
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [editingContractor, setEditingContractor] = React.useState<V2ContractorItem | null>(null);
   const [credentialsContractor, setCredentialsContractor] = React.useState<V2ContractorItem | null>(null);
@@ -281,6 +296,25 @@ export default function ContractorsPage() {
       },
     });
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center my-12 rounded-2xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 mb-4">
+          <ShieldAlert className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Admin Access Restricted</h2>
+        <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-md mt-1 mb-5">
+          Contractor management, agency onboarding, and portal credential configuration are strictly reserved for users with Administrator / Admin privileges.
+        </p>
+        <Link href="/dashboard">
+          <Button variant="outline" size="sm" className="text-xs">
+            Return to Dashboard
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">

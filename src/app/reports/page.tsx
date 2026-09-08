@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -90,7 +90,11 @@ const FUNNEL_COLORS = [
 ];
 
 export default function ReportsPage() {
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const periodParam = searchParams.get("period");
+
   const userRoles = Array.isArray(roles) ? roles.map((r) => String(r)) : [];
   const isAdminOrFinance = userRoles.some((r) =>
     ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
@@ -99,14 +103,12 @@ export default function ReportsPage() {
     ["Administrator", "System Manager", "Admin", "Manager", "Finance Manager"].includes(r)
   );
 
-  // Active Tab
+  // Role guard
+  const canViewReports = can("viewReports");
+
+  // All hooks must come before any conditional returns
   const [activeTab, setActiveTab] = React.useState<ReportTab>("operations");
-
-  // Period / Date Filters
-  const searchParams = useSearchParams();
-  const periodParam = searchParams.get("period");
   const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "custom">("yearly");
-
   const [fromDate, setFromDate] = React.useState<string>("2026-01-01");
   const [toDate, setToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
   const [isExportingXlsx, setIsExportingXlsx] = React.useState<boolean>(false);
@@ -359,6 +361,29 @@ export default function ReportsPage() {
       amount,
     }));
   }, [costBreakdown]);
+
+  // Access denied rendered after all hooks
+  if (authUser && !canViewReports) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 text-center px-4">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-950/40">
+          <Lock className="h-10 w-10 text-rose-500" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Access Restricted</h2>
+          <p className="text-sm text-slate-500 dark:text-zinc-400 max-w-sm">
+            The Reports section is only accessible to Administrators, Managers, Finance Managers, and Communication Managers.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-950 transition"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

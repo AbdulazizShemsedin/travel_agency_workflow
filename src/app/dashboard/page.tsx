@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Users,
@@ -25,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { can } = useAuth();
   const canRegister = can("registerApplicant");
   const { data: rawApplicants = [], isLoading } = useQuery({
@@ -167,68 +169,68 @@ export default function DashboardPage() {
       title: "Data Input",
       count: draftCount,
       badge: "Draft",
-      color: "border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161b] text-slate-800 dark:text-zinc-200",
+      color: "border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161b] text-slate-800 dark:text-zinc-200 hover:border-slate-400 dark:hover:border-zinc-500",
       accent: "bg-slate-500",
-      link: "/applicants?filter=Draft",
+      link: "/applicants?status=Draft",
     },
     {
       step: 2,
       title: "CV Generated",
       count: cvCount,
       badge: "CV Ready",
-      color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300",
+      color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 hover:border-purple-400 dark:hover:border-purple-700",
       accent: "bg-purple-600",
-      link: "/applicants?filter=CV Generated",
+      link: "/applicants?status=CV Generated",
     },
     {
       step: 3,
       title: "Selected",
       count: selectedCount,
       badge: "Selected",
-      color: "border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300",
+      color: "border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300 hover:border-blue-400 dark:hover:border-blue-700",
       accent: "bg-blue-600",
-      link: "/applicants?filter=Selected",
+      link: "/applicants?status=Selected",
     },
     {
       step: 4,
       title: "Processing",
       count: processingCount,
       badge: "Parallel Streams",
-      color: "border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200",
+      color: "border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 hover:border-emerald-500 dark:hover:border-emerald-600",
       accent: "bg-emerald-700",
       isParent: true,
       subBranches: [
         { name: "LMIS", count: lmisActiveCount, color: "text-emerald-700 dark:text-emerald-400 bg-emerald-100/80 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-800" },
         { name: "INJAZ", count: injazActiveCount, color: "text-blue-700 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-950/80 border-blue-300 dark:border-blue-800" },
       ],
-      link: "/applicants?filter=Processing",
+      link: "/applicants?status=Processing",
     },
     {
       step: 5,
       title: "Embassy Stamp",
       count: stampedCount,
       badge: "Visa Issued",
-      color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300",
+      color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300 hover:border-teal-400 dark:hover:border-teal-700",
       accent: "bg-teal-600",
-      link: "/applicants?filter=Stamped",
+      link: "/applicants?status=Stamped",
     },
     {
       step: 6,
       title: "Ticket Booked",
       count: ticketedCount,
       badge: "Flight Ticket",
-      color: "border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-300",
+      color: "border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-900 dark:text-indigo-300 hover:border-indigo-400 dark:hover:border-indigo-700",
       accent: "bg-indigo-600",
-      link: "/applicants?filter=Ticketed",
+      link: "/applicants?status=Ticketed",
     },
     {
       step: 7,
       title: "Departed",
       count: departedCount,
       badge: "Deployed",
-      color: "border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300",
+      color: "border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300 hover:border-emerald-500 dark:hover:border-emerald-600",
       accent: "bg-emerald-700",
-      link: "/applicants?filter=Departed",
+      link: "/applicants?status=Departed",
     },
   ];
 
@@ -237,7 +239,7 @@ export default function DashboardPage() {
       {/* Top Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:white">
             Dashboard
           </h1>
         </div>
@@ -253,14 +255,19 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* 1. Top Stat Metric Cards */}
+      {/* 1. Top Stat Metric Cards (Clickable redirection) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+        <Card
+          onClick={() => router.push("/applicants")}
+          role="button"
+          tabIndex={0}
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
               Total Applicants
             </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
               <Users className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -275,12 +282,17 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+        <Card
+          onClick={() => router.push("/applicants?status=In Progress")}
+          role="button"
+          tabIndex={0}
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 select-none group"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
               In Progress
             </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors">
               <Clock className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -295,12 +307,17 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+        <Card
+          onClick={() => router.push("/applicants?status=Completed")}
+          role="button"
+          tabIndex={0}
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
               Completed / Cleared
             </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
               <CheckCircle2 className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -315,12 +332,17 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+        <Card
+          onClick={() => router.push("/applicants?status=Departed")}
+          role="button"
+          tabIndex={0}
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-200 select-none group"
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+            <CardDescription className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
               Departed
             </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors">
               <Plane className="h-4 w-4" />
             </div>
           </CardHeader>
@@ -358,7 +380,10 @@ export default function DashboardPage() {
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
-                className={`relative rounded-xl border p-4 transition-all duration-200 hover:shadow-xs ${stage.color}`}
+                onClick={() => router.push(stage.link)}
+                role="button"
+                tabIndex={0}
+                className={`relative rounded-xl border p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer ${stage.color}`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
@@ -381,7 +406,7 @@ export default function DashboardPage() {
                     <p className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase">
                       Sub-Streams:
                     </p>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {stage.subBranches.map((sub) => (
                         <div
                           key={sub.name}
@@ -396,12 +421,9 @@ export default function DashboardPage() {
                 ) : (
                   <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-zinc-800/60">
                     <span>Candidates</span>
-                    <Link
-                      href={stage.link}
-                      className="text-emerald-800 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-0.5 text-[10px]"
-                    >
+                    <span className="text-emerald-800 dark:text-emerald-400 font-semibold flex items-center gap-0.5 text-[10px]">
                       View <ArrowRight className="h-3 w-3" />
-                    </Link>
+                    </span>
                   </div>
                 )}
               </div>

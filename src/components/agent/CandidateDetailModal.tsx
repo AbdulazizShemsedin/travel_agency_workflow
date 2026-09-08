@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { getApplicantV2 } from "@/lib/api/v2/applicants";
+import { getCandidatePhotoUrl } from "@/lib/api/v2/portal";
 
 interface CandidateDetailModalProps {
   candidate: PortalAvailableCandidate | null;
@@ -56,37 +57,10 @@ export function CandidateDetailModal({
 
   if (!isOpen || !candidate) return null;
 
-  const normalizePhotoUrl = (url?: string) => {
-    if (!url) return "";
-    const trimmed = String(url).trim();
-    if (!trimmed) return "";
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
-      return trimmed;
-    }
-    if (!trimmed.startsWith("/")) {
-      return `/${trimmed}`;
-    }
-    return trimmed;
-  };
-
-  const passportPhotoSrc = normalizePhotoUrl(
-    merged.photo_passport ||
-    merged.photograph ||
-    merged.photo ||
-    merged.profile_photo_url ||
-    candidate.photo_passport ||
-    (candidate as any).photograph ||
-    (candidate as any).photo
-  );
-
-  const fullBodyPhotoSrc = normalizePhotoUrl(
-    merged.photo_full_body ||
-    merged.photo_portrait ||
-    merged.full_body_photo ||
-    candidate.photo_full_body ||
-    (candidate as any).photo_portrait ||
-    (candidate as any).full_body_photo
-  );
+  // The portal must load photos via the sanctioned get_candidate_photo endpoint; the raw
+  // file URL fields aren't readable by a foreign agency session.
+  const passportPhotoSrc = getCandidatePhotoUrl(candidate.name, "photograph");
+  const fullBodyPhotoSrc = getCandidatePhotoUrl(candidate.name, "photo_full_body");
 
   const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
   const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);
@@ -160,6 +134,48 @@ export function CandidateDetailModal({
     }
     return "N/A";
   })();
+
+  // Determine experience and country
+  const rawCountry = (merged.experience_country || candidate.experience_country || "").trim();
+  const rawPeriod = (merged.experience_period || candidate.experience_period || "").trim();
+  const isExperienced = Boolean(
+    (rawCountry &&
+      rawCountry !== "" &&
+      rawCountry.toLowerCase() !== "none" &&
+      rawCountry.toLowerCase() !== "first time" &&
+      rawCountry.toLowerCase() !== "first time applicant" &&
+      rawCountry.toLowerCase() !== "overseas") ||
+    merged.has_experience === true ||
+    merged.experience_type === "experienced" ||
+    (candidate as any).experience_type === "experienced" ||
+    Number(merged.years_of_experience) > 0 ||
+    Number((candidate as any).years_of_experience) > 0 ||
+    Number((candidate as any).experience_years) > 0
+  );
+
+  const isKuwait = (merged.destination_country || candidate.destination_country || "").toLowerCase().includes("kuwait");
+  const salaryCurrency = isKuwait ? "KD" : "SAR";
+
+  // Experienced salary is 1200 SAR (140 KD), first timers are 1000 SAR (120 KD)
+  const salaryAmountDisplay = (() => {
+    const rawVal = merged.monthly_salary || candidate.monthly_salary;
+    const num = Number(rawVal);
+    if (!isNaN(num) && num > 0) {
+      if (isExperienced && num === 1000) {
+        return isKuwait ? "140" : "1,200";
+      }
+      if (!isExperienced && num === 1200) {
+        return isKuwait ? "120" : "1,000";
+      }
+      return num.toLocaleString();
+    }
+    return isKuwait ? (isExperienced ? "140" : "120") : (isExperienced ? "1,200" : "1,000");
+  })();
+
+  const countryDisplay = isExperienced ? rawCountry : "None / First Time Applicant";
+  const durationDisplay = isExperienced
+    ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? rawPeriod : `${merged.years_of_experience || (candidate as any).years_of_experience || (candidate as any).experience_years || 1} years`)
+    : "None";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
@@ -273,7 +289,7 @@ export function CandidateDetailModal({
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3 col-span-2 sm:col-span-1">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Monthly Salary</span>
               <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400 mt-0.5 font-mono">
-                {candidate.monthly_salary || 1200} SAR
+                {salaryAmountDisplay} {salaryCurrency}
               </p>
             </div>
           </div>
@@ -284,35 +300,16 @@ export function CandidateDetailModal({
               <Briefcase className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
               Prior Overseas Work Experience
             </h4>
-            {(() => {
-              const rawPeriod = candidate.experience_period?.trim() || "";
-              const rawCountry = candidate.experience_country?.trim() || "";
-              const isExperienced = Boolean(
-                rawCountry &&
-                rawCountry !== "" &&
-                rawCountry.toLowerCase() !== "none" &&
-                rawCountry.toLowerCase() !== "first time" &&
-                rawCountry.toLowerCase() !== "first time applicant" &&
-                rawCountry.toLowerCase() !== "overseas"
-              );
-              const countryDisplay = isExperienced ? rawCountry : "None / First Time Applicant";
-              const durationDisplay = isExperienced
-                ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? rawPeriod : `${(candidate as any).years_of_experience || 1} years`)
-                : "None";
-
-              return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                  <div>
-                    <span className="text-slate-500 dark:text-zinc-400">Country of Experience: </span>
-                    <strong className="text-slate-900 dark:text-white">{countryDisplay}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 dark:text-zinc-400">Duration: </span>
-                    <strong className="text-slate-900 dark:text-white">{durationDisplay}</strong>
-                  </div>
-                </div>
-              );
-            })()}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Country of Experience: </span>
+                <strong className="text-slate-900 dark:text-white">{countryDisplay}</strong>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-zinc-400">Duration: </span>
+                <strong className="text-slate-900 dark:text-white">{durationDisplay}</strong>
+              </div>
+            </div>
           </div>
 
           {/* Verified Skills Matrix */}

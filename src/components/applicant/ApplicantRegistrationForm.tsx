@@ -54,6 +54,7 @@ import {
 interface ApplicantRegistrationFormProps {
   initialData?: Partial<BaseApplicantFormValues>;
   existingApplicantId?: string;
+  lockedIdentityFields?: boolean;
   onSuccessRedirect?: (applicantId: string) => void;
 }
 
@@ -186,8 +187,7 @@ const FIELD_FRIENDLY_NAMES: Record<string, string> = {
   medical_status: "Medical Status",
 };
 
-function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
-  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
+function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
   if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1")) {
     return `${title} is required. Please enter or select ${title}.`;
   }
@@ -197,9 +197,39 @@ function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): strin
   return rawMessage;
 }
 
+// Core identity fields locked server-side once an active Placement is in flight (#13)
+const IDENTITY_FIELDS = [
+  "full_name",
+  "first_name",
+  "middle_name",
+  "last_name",
+  "passport_number",
+  "passport_expiry_date",
+  "passport_expiry",
+  "date_of_birth",
+  "gender",
+  "destination_country",
+  "applicant_type",
+  "entry_track",
+  "nationality",
+];
+
+function stripLockedIdentityFields<T extends Record<string, any>>(
+  payload: T,
+  locked: boolean
+): T {
+  if (!locked || !payload || typeof payload !== "object") return payload;
+  const result: Record<string, any> = { ...payload };
+  for (const field of IDENTITY_FIELDS) {
+    delete result[field];
+  }
+  return result as T;
+}
+
 export function ApplicantRegistrationForm({
   initialData,
   existingApplicantId,
+  lockedIdentityFields = false,
   onSuccessRedirect,
 }: ApplicantRegistrationFormProps) {
   const router = useRouter();
@@ -543,22 +573,27 @@ export function ApplicantRegistrationForm({
         throw new Error(friendlyMsg || "Please fill in all required fields marked in red.");
       }
 
-      const payload = normalizeApplicantFields({
-        ...formData,
-        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-        gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
-        nationality: formData.nationality || "Ethiopia",
-        entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
-        destination_country: formData.destination_country || "Saudi Arabia",
-        target_job: formData.target_job || formData.job_applied || "House worker",
-        job_applied: formData.job_applied || formData.target_job || "House worker",
-        education: formData.education || formData.highest_education || "High School",
-        highest_education: formData.highest_education || formData.education || "High School",
-        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-        salary_currency: formData.salary_currency || "SAR",
-        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-      });
+      const payload = normalizeApplicantFields(
+        stripLockedIdentityFields(
+          {
+            ...formData,
+            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+            gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
+            nationality: formData.nationality || "Ethiopia",
+            entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
+            destination_country: formData.destination_country || "Saudi Arabia",
+            target_job: formData.target_job || formData.job_applied || "House worker",
+            job_applied: formData.job_applied || formData.target_job || "House worker",
+            education: formData.education || formData.highest_education || "High School",
+            highest_education: formData.highest_education || formData.education || "High School",
+            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+            salary_currency: formData.salary_currency || "SAR",
+            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+          },
+          lockedIdentityFields
+        )
+      );
 
       let res;
       if (draftApplicantId) {
@@ -619,18 +654,23 @@ export function ApplicantRegistrationForm({
     mutationFn: async () => {
       if (!draftApplicantId) throw new Error("No applicant ID available to update.");
       const formData = getValues();
-      const payload = normalizeApplicantFields({
-        ...formData,
-        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-        target_job: formData.target_job || formData.job_applied || "House worker",
-        job_applied: formData.job_applied || formData.target_job || "House worker",
-        education: formData.education || formData.highest_education || "High School",
-        highest_education: formData.highest_education || formData.education || "High School",
-        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-        salary_currency: formData.salary_currency || "SAR",
-        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-      });
+      const payload = normalizeApplicantFields(
+        stripLockedIdentityFields(
+          {
+            ...formData,
+            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+            target_job: formData.target_job || formData.job_applied || "House worker",
+            job_applied: formData.job_applied || formData.target_job || "House worker",
+            education: formData.education || formData.highest_education || "High School",
+            highest_education: formData.highest_education || formData.education || "High School",
+            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+            salary_currency: formData.salary_currency || "SAR",
+            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+          },
+          lockedIdentityFields
+        )
+      );
       const res = await updateApplicantV2(draftApplicantId, payload);
       const isFeeAlreadyLoggedOnSave =
         feeAlreadyLoggedRef.current ||
@@ -698,22 +738,27 @@ export function ApplicantRegistrationForm({
       }
 
       let activeId = draftApplicantId;
-      const payload = normalizeApplicantFields({
-        ...formData,
-        full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-        gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
-        nationality: formData.nationality || "Ethiopia",
-        entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
-        destination_country: formData.destination_country || "Saudi Arabia",
-        target_job: formData.target_job || formData.job_applied || "House worker",
-        job_applied: formData.job_applied || formData.target_job || "House worker",
-        education: formData.education || formData.highest_education || "High School",
-        highest_education: formData.highest_education || formData.education || "High School",
-        salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-        monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-        salary_currency: formData.salary_currency || "SAR",
-        photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-      });
+      const payload = normalizeApplicantFields(
+        stripLockedIdentityFields(
+          {
+            ...formData,
+            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
+            gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
+            nationality: formData.nationality || "Ethiopia",
+            entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
+            destination_country: formData.destination_country || "Saudi Arabia",
+            target_job: formData.target_job || formData.job_applied || "House worker",
+            job_applied: formData.job_applied || formData.target_job || "House worker",
+            education: formData.education || formData.highest_education || "High School",
+            highest_education: formData.highest_education || formData.education || "High School",
+            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
+            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
+            salary_currency: formData.salary_currency || "SAR",
+            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
+          },
+          lockedIdentityFields
+        )
+      );
 
       if (!activeId) {
         const draft = await createApplicantV2(payload);
@@ -916,7 +961,7 @@ export function ApplicantRegistrationForm({
               </p>
             </div>
           </div>
-          <Step1PersonalInfo form={form} />
+          <Step1PersonalInfo form={form} locked={lockedIdentityFields} />
         </section>
 
         {/* Section 2: Education & Skills */}

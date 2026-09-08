@@ -124,7 +124,11 @@ export default function ApplicantDetailPage() {
   const queryClient = useQueryClient();
   const { roles } = useAuth();
   const isAdminOrOps = roles.some(
-    (r) => r === "Administrator" || r === "System Manager" || r === "Operations Manager"
+    (r) =>
+      r === "Administrator" ||
+      r === "System Manager" ||
+      r === "Admin" ||
+      r === "Operations Manager"
   );
 
   // Modals state

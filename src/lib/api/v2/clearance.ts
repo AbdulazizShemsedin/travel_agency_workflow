@@ -16,6 +16,7 @@ import { requestV2 } from "./client";
 
 export interface V2ClearanceStepItem {
   name: string;
+  title?: string;
   step_type: string;
   sequence_order: number;
   is_mandatory: number | boolean;
@@ -28,6 +29,12 @@ export interface V2ClearanceStepItem {
   reference_no?: string | null;
   amount?: number | null;
   payment_status?: string | null;
+  wakala_amount?: number | null;
+  wakala_status?: string | null;
+  injaz_application_id?: string | null;
+  appointment_date?: string | null;
+  injaz_outcome?: string | null;
+  rejection_remark?: string;
   step_name?: string;
   applicant?: string;
   applicant_name?: string;
@@ -40,7 +47,6 @@ export interface V2ClearanceStepItem {
   creation?: string;
   modified?: string;
   notes?: string;
-  rejection_remark?: string;
   [key: string]: any;
 }
 
@@ -49,19 +55,31 @@ export type V2ClearanceStep = V2ClearanceStepItem;
 /**
  * Fetches the current user's role-scoped clearance step queue.
  */
-export async function listMyClearanceStepsV2(): Promise<V2ClearanceStepItem[]> {
-  const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
-    "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
-    { method: "POST" }
-  );
+export async function listMyClearanceStepsV2(placement?: string): Promise<V2ClearanceStepItem[]> {
+  try {
+    const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
+      "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
+      { method: "POST", body: placement ? { placement } : undefined }
+    );
 
-  if (Array.isArray(result)) {
-    return result;
+    if (Array.isArray(result)) {
+      return result;
+    }
+    if (result && Array.isArray((result as any).steps)) {
+      return (result as any).steps;
+    }
+    return [];
+  } catch (err: any) {
+    if (
+      err?.status === 403 ||
+      err?.statusCode === 403 ||
+      String(err?.message || "").includes("PermissionError") ||
+      String(err?.message || "").includes("No permission")
+    ) {
+      return [];
+    }
+    throw err;
   }
-  if (result && Array.isArray((result as any).steps)) {
-    return (result as any).steps;
-  }
-  return [];
 }
 
 /**
@@ -224,10 +242,10 @@ export async function assignClearanceStepV2(
  * Lists clearance steps assigned to the calling officer with placement/applicant context.
  * Authoritative Backend Endpoint: clearance_api.list_assigned_steps (alias of list_my_clearance_steps)
  */
-export async function listAssignedStepsV2(): Promise<V2ClearanceStepItem[]> {
+export async function listAssignedStepsV2(placement?: string): Promise<V2ClearanceStepItem[]> {
   const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
     "/api/method/agency_tracking.clearance_api.list_assigned_steps",
-    { method: "POST" }
+    { method: "POST", body: placement ? { placement } : undefined }
   );
 
   if (Array.isArray(result)) return result;

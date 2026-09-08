@@ -113,7 +113,7 @@ export function AssignEmployeeModal({
   // 2. Fetch clearance steps
   const { data: clearanceSteps = [] } = useQuery<V2ClearanceStepItem[]>({
     queryKey: ["v2_clearance_steps_for_reassign"],
-    queryFn: listMyClearanceStepsV2,
+    queryFn: () => listMyClearanceStepsV2(),
     enabled: isOpen,
     staleTime: 10000,
   });

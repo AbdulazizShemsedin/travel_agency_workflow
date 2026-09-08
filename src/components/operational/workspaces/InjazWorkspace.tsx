@@ -108,7 +108,7 @@ export function InjazWorkspace({
   const [injazNumber, setInjazNumber] = React.useState("");
   const [paymentStatus, setPaymentStatus] = React.useState<"PAID" | "UNPAID">("UNPAID");
   const [paymentNo, setPaymentNo] = React.useState("");
-  const [injazFee, setInjazFee] = React.useState("");
+    const [injazFee, setInjazFee] = React.useState("10.5");
   const [paymentDate, setPaymentDate] = React.useState("");
   const [remark, setRemark] = React.useState("");
   const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
@@ -335,7 +335,7 @@ export function InjazWorkspace({
       setPaymentStatus(isPaid ? "PAID" : "UNPAID");
       setPaymentNo((injaz as any)?.payment_no || "");
       setPaymentDate((injaz as any)?.payment_date || "");
-      setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "");
+      setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "10.5");
       setRemark(selectedRow.remark && selectedRow.remark !== "—" ? selectedRow.remark : (injaz as any)?.notes || "");
     }
   }, [selectedRow]);

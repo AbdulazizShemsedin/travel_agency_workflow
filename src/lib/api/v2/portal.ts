@@ -158,3 +158,20 @@ export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V
   if (result && Array.isArray((result as any).requests)) return (result as any).requests;
   return [];
 }
+
+/**
+ * Returns the sanctioned portal endpoint to load a candidate photo as an <img> src.
+ * The backend streams the file locally or 302-redirects to an R2 URL; the raw file URL
+ * fields on candidate responses are NOT readable by a foreign agency session, so <img> tags
+ * must point here instead.
+ * Endpoints: portal_api.get_candidate_photo(applicant_name, kind="photograph"|"photo_full_body")
+ */
+export function getCandidatePhotoUrl(
+  applicantName: string,
+  kind: "photograph" | "photo_full_body" = "photograph"
+): string {
+  if (!applicantName) return "";
+  return `/api/method/agency_tracking.portal_api.get_candidate_photo?applicant_name=${encodeURIComponent(
+    applicantName
+  )}&kind=${kind}`;
+}

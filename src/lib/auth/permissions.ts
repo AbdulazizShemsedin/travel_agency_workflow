@@ -244,15 +244,12 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Admin",
     "Manager",
     "Finance Manager",
-    "Complaint Manager",
+    "Communication Manager",
   ],
   manageContractors: [
     "System Manager",
     "Administrator",
     "Admin",
-    "Manager",
-    "Finance Manager",
-    "Registrar",
   ],
   accessAgentPortal: [
     "Foreign Agency",
