@@ -342,9 +342,10 @@ export function InjazWorkspace({
 
   // Mutation to persist Te'shir / Injaz changes via V2
   const mutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRow) return;
-      const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+    mutationFn: async (): Promise<boolean> => {
+      if (!selectedRow) return false;
+
+      let persistedSomething = false;
 
       if (injazFee && Number(injazFee) > 0 && selectedRow.dsrName) {
         try {
@@ -355,16 +356,33 @@ export function InjazWorkspace({
             selectedRow.dsrName,
             "Taeshir"
           );
+          persistedSomething = true;
         } catch (err: any) {
           console.warn("logStageExpenseV2 error:", err);
         }
       }
 
-      if (stepName) {
+      const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+      if (!stepName) return persistedSomething;
+
+      const stepStatus = selectedRow.injaz?.status;
+      const isRowDeparted =
+        selectedRow.placementStatus === "Departed" ||
+        selectedRow.ticketStatus === "Departed" ||
+        Boolean((selectedRow as any)?.isDeparted);
+      // Terminal steps (Issued / Complete / Stamped / Rejected / Cancelled) and Departed
+      // placements are locked by the backend's 2026-08-31 terminal-state guard — no
+      // appointment, payment, status, or reassignment RPC may be issued against them.
+      const isTerminal =
+        ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
+        isRowDeparted;
+
+      if (!isTerminal) {
         // Set Taeshir appointment if details are present
         if (appointmentDate && injazNumber) {
           try {
             await setTaeshirAppointmentV2(stepName, appointmentDate, injazNumber);
+            persistedSomething = true;
           } catch (err: any) {
             console.warn("setTaeshirAppointmentV2 warning:", err);
           }
@@ -380,39 +398,40 @@ export function InjazWorkspace({
               paymentNo || undefined,
               paymentDate || undefined
             );
+            persistedSomething = true;
           } catch (err: any) {
             console.warn("recordInjazPaymentV2 warning:", err);
           }
         }
 
-        const stepStatus = selectedRow.injaz?.status;
-        const isRowDeparted =
-          selectedRow.placementStatus === "Departed" ||
-          selectedRow.ticketStatus === "Departed" ||
-          Boolean((selectedRow as any)?.isDeparted);
-        const isTerminal =
-          ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
-          isRowDeparted;
+        if (status === "Completed" && stepStatus !== "Completed" && stepStatus !== "Complete") {
+          await completeClearanceStepV2(stepName, injazNumber);
+          persistedSomething = true;
+        } else if (status === "Pending" && stepStatus === "Pending") {
+          await startClearanceStepV2(stepName);
+          persistedSomething = true;
+        }
 
-        if (!isTerminal && !isRowDeparted) {
-          if (status === "Completed" && stepStatus !== "Completed" && stepStatus !== "Complete") {
-            await completeClearanceStepV2(stepName, injazNumber);
-          } else if (status === "Pending" && stepStatus === "Pending") {
-            await startClearanceStepV2(stepName);
-          }
-
-          if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
-            try {
-              await reassignClearanceStepV2(stepName, employee);
-            } catch (err: any) {
-              console.warn("reassignClearanceStepV2 warning:", err);
-            }
+        if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
+          try {
+            await reassignClearanceStepV2(stepName, employee);
+            persistedSomething = true;
+          } catch (err: any) {
+            console.warn("reassignClearanceStepV2 warning:", err);
           }
         }
       }
+
+      return persistedSomething;
     },
-    onSuccess: () => {
-      toast.success(`Te'shir Clearance & Appointment Date for ${selectedRow?.fullName} updated successfully!`);
+    onSuccess: (persistedSomething?: boolean) => {
+      if (persistedSomething) {
+        toast.success(`Te'shir Clearance & Appointment Date for ${selectedRow?.fullName} updated successfully!`);
+      } else {
+        toast.info(
+          `No changes were saved for ${selectedRow?.fullName} — this Te'shir step is finalized (${currentInjazStatus || "terminal"}) and cannot be edited anymore.`
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -423,6 +442,16 @@ export function InjazWorkspace({
       toast.error(err?.message || "Failed to update Te'shir record.");
     },
   });
+
+  const handleSave = () => {
+    if (isInjazTerminal) {
+      toast.error(
+        `This Te'shir step is already finalized (${currentInjazStatus}) — the backend rejects changes to finalized steps. Appointment, payment, and status fields are locked.`
+      );
+      return;
+    }
+    mutation.mutate();
+  };
 
   // Columns definition matching TE'SHIR / INJAZ Sheet specifications
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
@@ -623,7 +652,7 @@ export function InjazWorkspace({
         }
         canEdit={canEdit}
         isSaving={mutation.isPending}
-        onSave={() => mutation.mutate()}
+        onSave={handleSave}
       >
         {/* Section 1: Read-Only Candidate & Contract Context */}
         <DrawerSection title="Candidate & Contract Dossier Context" icon={User}>
@@ -661,7 +690,7 @@ export function InjazWorkspace({
           {isInjazTerminal && (
             <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>This Te'shir clearance step is finalized ({currentInjazStatus}). Status and handler assignments are locked.</span>
+              <span>This Te'shir clearance step is finalized ({currentInjazStatus}). Status, appointment date, Injaz payment, and handler assignee fields are locked — the backend rejects further edits to finalized steps.</span>
             </div>
           )}
 
@@ -669,7 +698,7 @@ export function InjazWorkspace({
             <input
               type="date"
               value={appointmentDate}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setAppointmentDate(e.target.value)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
             />
@@ -692,7 +721,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="e.g. E4982104"
               value={injazNumber}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setInjazNumber(e.target.value)}
               className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -701,7 +730,7 @@ export function InjazWorkspace({
           <DrawerField label="Injaz Fee Settlement" isReadOnly={false}>
             <select
               value={paymentStatus}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setPaymentStatus(e.target.value as any)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
             >
@@ -717,7 +746,7 @@ export function InjazWorkspace({
                 step="0.01"
                 placeholder="10.5"
                 value={injazFee}
-                disabled={!canEdit || mutation.isPending}
+                disabled={!canEdit || mutation.isPending || isInjazTerminal}
                 onChange={(e) => setInjazFee(e.target.value)}
                 className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
               />
@@ -732,7 +761,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="Enter receipt number (No default)"
               value={paymentNo}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setPaymentNo(e.target.value)}
               className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -742,7 +771,7 @@ export function InjazWorkspace({
             <Input
               type="date"
               value={paymentDate}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setPaymentDate(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -753,7 +782,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="Enter processing remarks (No default)"
               value={remark}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal}
               onChange={(e) => setRemark(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />

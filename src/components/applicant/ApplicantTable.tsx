@@ -29,10 +29,31 @@ import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { extractRoleName } from "@/lib/auth/permissions";
 
+// Live backend truth: the Applicant's own `status` stays at the intake lifecycle stop
+// (Draft / Registered / CV Generated / Cancelled) even after a Placement exists — the
+// pipeline stage lives on the Placement (`Selected`/`Processing`/`Stamped`/`Ticketed`/
+// `Departed`). The Directory must therefore resolve the Current Stage from the active
+// placement when present, never from the applicant row alone.
+function resolveApplicantStage(app: any, plc: any): string {
+  const ownStatus = String(app.status || app.applicant_state || "Draft");
+  if (ownStatus === "Cancelled") return "Cancelled";
+  if (plc && plc.status) {
+    if (String(plc.status) === "Cancelled") return "Cancelled";
+    if (["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
+      return String(plc.status);
+    }
+  }
+  return ownStatus;
+}
+
 function getStageBadgeVariant(stage: string): {
   variant: "default" | "success" | "warning" | "destructive" | "info" | "neutral" | "purple";
   dotColor: string;
+  className?: string;
 } {
+  // Every pipeline stage gets a visually distinct color — adjacent stages must never
+  // share a hue (e.g. Selected and Processing were both blue). For hues without a
+  // dedicated cva variant (teal/cyan/lime), className overrides the badge colors.
   switch (stage) {
     case "Registered":
       return { variant: "success", dotColor: "bg-emerald-600" };
@@ -41,13 +62,25 @@ function getStageBadgeVariant(stage: string): {
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
     case "Processing":
-      return { variant: "info", dotColor: "bg-indigo-600" };
+      return { variant: "warning", dotColor: "bg-amber-600" };
     case "Stamped":
-      return { variant: "info", dotColor: "bg-teal-600" };
+      return {
+        variant: "neutral",
+        dotColor: "bg-teal-600",
+        className: "bg-teal-50 text-teal-700 border-teal-200",
+      };
     case "Ticketed":
-      return { variant: "purple", dotColor: "bg-indigo-600" };
+      return {
+        variant: "neutral",
+        dotColor: "bg-cyan-600",
+        className: "bg-cyan-50 text-cyan-700 border-cyan-200",
+      };
     case "Departed":
-      return { variant: "success", dotColor: "bg-emerald-600" };
+      return {
+        variant: "neutral",
+        dotColor: "bg-lime-600",
+        className: "bg-lime-50 text-lime-700 border-lime-200",
+      };
     case "Draft":
       return { variant: "neutral", dotColor: "bg-slate-500" };
     case "Cancelled":
@@ -126,14 +159,19 @@ export function ApplicantTable() {
     const byApplicant = new Map<string, any>();
     const byName = new Map<string, any>();
     for (const p of placementsData) {
+      if (String(p.status) === "Cancelled") continue;
       if (p.applicant) byApplicant.set(String(p.applicant).toLowerCase().trim(), p);
       if (p.name) byName.set(String(p.name).toLowerCase().trim(), p);
     }
     return applicants.map((applicant) => {
-      const plc =
+      let plc =
         byApplicant.get(String(applicant.name || "").toLowerCase().trim()) ||
         byApplicant.get(String((applicant as any).active_placement || "").toLowerCase().trim()) ||
         byName.get(String((applicant as any).active_placement || "").toLowerCase().trim());
+      if (plc && (applicant as any).active_placement) {
+        const preferred = byName.get(String((applicant as any).active_placement).toLowerCase().trim());
+        if (preferred) plc = preferred;
+      }
       if (!plc) return applicant;
       const copy = { ...applicant } as any;
       // Only surface placement-derived fields when present (never overwrite existing).
@@ -148,6 +186,12 @@ export function ApplicantTable() {
       for (const [src, dst] of mergeKeys) {
         if (plc[src] && !copy[dst]) copy[dst] = plc[src];
       }
+      // Resolve Current Stage from the active placement so the Directory reflects the
+      // real pipeline position (Selected/Processing/Stamped/...) instead of the static
+      // applicant intake status (CV Generated, etc.).
+      const derivedStage = resolveApplicantStage(applicant, plc);
+      copy.status = derivedStage;
+      copy.applicant_state = derivedStage;
       return copy;
     });
   }, [applicants, placementsData]);
@@ -190,7 +234,7 @@ export function ApplicantTable() {
 
       return matchesStage && matchesSearch;
     });
-  }, [applicants, selectedStage, searchQuery]);
+  }, [applicantRows, selectedStage, searchQuery]);
 
   // Paginated slice
   const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
@@ -221,7 +265,7 @@ export function ApplicantTable() {
 
   const handleBatchAssign = () => {
     const ids = Array.from(selectedRows);
-    const selectedApplicants = applicants.filter((a) => ids.includes(a.name));
+    const selectedApplicants = applicantRows.filter((a) => ids.includes(a.name));
 
     // Check if ALL selected applicants are in "Selected" stage
     const nonSelectedCandidates = selectedApplicants.filter(
@@ -262,7 +306,7 @@ export function ApplicantTable() {
   };
 
   // Selected counts breakdown
-  const selectedApplicantsList = applicants.filter((a) => selectedRows.has(a.name));
+  const selectedApplicantsList = applicantRows.filter((a) => selectedRows.has(a.name));
   const selectedStageCount = selectedApplicantsList.filter((a) => a.applicant_state === "Selected").length;
   const hasIneligibleSelected = selectedRows.size > 0 && selectedStageCount < selectedRows.size;
 
@@ -504,7 +548,7 @@ export function ApplicantTable() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant={badge.variant} dotColor={badge.dotColor}>
+                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={badge.className}>
                           {stage}
                         </Badge>
                       </td>

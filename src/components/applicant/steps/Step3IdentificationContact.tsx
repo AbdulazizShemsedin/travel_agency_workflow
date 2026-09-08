@@ -64,12 +64,12 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
         </CardContent>
       </Card>
 
-      {/* 2. Emergency Reference & Next of Kin Card */}
+      {/* 2. Emergency Reference & Family Member Card */}
       <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
         <CardHeader className="pb-4">
           <div>
             <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-              Emergency Reference & Next of Kin
+              Emergency Reference & Family Member
             </CardTitle>
           </div>
         </CardHeader>

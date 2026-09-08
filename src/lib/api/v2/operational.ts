@@ -40,6 +40,7 @@ export async function fetchOperationalWorkspaceDataV2(
 
     const placementsByApplicant = new Map<string, V2PlacementRecord>();
     for (const p of placements) {
+      if (p.status === "Cancelled") continue;
       if (p.applicant) {
         placementsByApplicant.set(p.applicant.toLowerCase().trim(), p);
       }
@@ -69,7 +70,13 @@ export async function fetchOperationalWorkspaceDataV2(
     // Process all applicants
     for (const applicant of applicants) {
       const applicantKey = applicant.name.toLowerCase().trim();
-      const plc = placementsByApplicant.get(applicantKey);
+      let plc = placementsByApplicant.get(applicantKey);
+      if (applicant.active_placement) {
+        const preferred = placementsByApplicant.get(
+          String(applicant.active_placement).toLowerCase().trim()
+        );
+        if (preferred) plc = preferred;
+      }
       const dest =
         plc?.destination_country ||
         applicant.destination_country ||
@@ -128,18 +135,46 @@ export async function fetchOperationalWorkspaceDataV2(
         applicant.applicant_state === "Departed";
 
       // ---------------------------------------------------------------------
-      // WORKSPACE PROGRESSION PREREQUISITES GATING:
-      // Backend creates all steps simultaneously in Processing; sequence order is for operator display.
-      // Roles work on their respective steps concurrently without artificial sequence blocking.
+      // OPERATIONAL SHEET STAGE-GATING:
+      // The excel-like sheets (LMIS / Te'shir / Embassy / Departure / Wakala) only
+      // list applicants that have actually entered the placement flow. A Placement is
+      // created exclusively by Foreign Agency selection or the direct Muayena intake,
+      // and the contract/visa documents are uploaded against it. Applicants still in
+      // the intake pool (no Placement, no uploaded documents) are not yet on any of
+      // these stages and must never appear in the sheets.
       // ---------------------------------------------------------------------
+      if (["lms", "injaz", "wakala", "embassy", "departure"].includes(streamType) && !plc) {
+        continue;
+      }
+
       if (streamType === "embassy") {
-        // Appears if in Processing or Stamped or has embassy step
-        if (
-          !embassyStep &&
-          !plc &&
-          applicant.applicant_state !== "Processing" &&
-          applicant.applicant_state !== "Stamped"
-        ) {
+        // Embassy sheet: placements in the clearance flow or beyond
+        const isEmbassyState =
+          plc?.status === "Processing" ||
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed";
+        if (!embassyStep && !isEmbassyState) {
+          continue;
+        }
+      } else if (streamType === "injaz") {
+        // Te'shir sheet: corridor steps spawn once the placement reaches Processing
+        const isProcessingOrBeyond =
+          plc?.status === "Processing" ||
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed";
+        if (!injazStep && !isProcessingOrBeyond) {
+          continue;
+        }
+      } else if (streamType === "lms") {
+        // LMIS sheet: same Processing-or-beyond gate as the corridor steps
+        const isProcessingOrBeyond =
+          plc?.status === "Processing" ||
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed";
+        if (!lmsStep && !isProcessingOrBeyond) {
           continue;
         }
       } else if (streamType === "departure") {
@@ -148,29 +183,9 @@ export async function fetchOperationalWorkspaceDataV2(
           isEmbassyFinished ||
           plc?.status === "Stamped" ||
           plc?.status === "Ticketed" ||
-          plc?.status === "Departed" ||
-          applicant.applicant_state === "Stamped" ||
-          applicant.applicant_state === "Ticketed" ||
-          applicant.applicant_state === "Departed";
+          plc?.status === "Departed";
 
         if (!isStampedOrBeyond) {
-          continue;
-        }
-      } else if (streamType === "injaz") {
-        if (
-          !injazStep &&
-          !plc &&
-          applicant.applicant_state !== "Processing"
-        ) {
-          continue;
-        }
-      } else if (streamType === "lms") {
-        if (
-          !lmsStep &&
-          !plc &&
-          applicant.applicant_state !== "Processing" &&
-          applicant.applicant_state !== "Registered"
-        ) {
           continue;
         }
       }

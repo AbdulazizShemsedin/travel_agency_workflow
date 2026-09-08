@@ -638,7 +638,7 @@ export default function CandidateCvPreviewPage() {
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">الوزن</td>
                   </tr>
                   <tr className="border-t border-black">
-                    <td className="py-0.5 px-2 font-bold border-r border-black">Complexion</td>
+                    <td className="py-0.5 px-2 font-bold border-r border-black">Skin Color</td>
                     <td className="py-0.5 px-2 font-bold text-center uppercase">{applicant.complexion || ""}</td>
                     <td className="py-0.5 px-2 text-right font-arabic border-l border-black" dir="rtl">البشرة</td>
                   </tr>

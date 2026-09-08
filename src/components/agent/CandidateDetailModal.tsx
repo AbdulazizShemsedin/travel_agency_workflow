@@ -294,11 +294,11 @@ export function CandidateDetailModal({
             </div>
           </div>
 
-          {/* Prior Overseas Work History */}
+          {/* Prior Work Abroad */}
           <div className="rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-white dark:bg-[#16161c] p-4 space-y-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
               <Briefcase className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-              Prior Overseas Work Experience
+              Previous Work Abroad
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
               <div>

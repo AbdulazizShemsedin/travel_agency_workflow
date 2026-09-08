@@ -45,7 +45,8 @@ export function calculateNormalizedCropBox(
   rot: number
 ): { x: number; y: number; width: number; height: number } {
   if (!targetRatio) {
-    return { x: 0.1, y: 0.12, width: 0.8, height: 0.72 };
+    // Free mode: default to the full picture so the user never has to drag it open
+    return { x: 0, y: 0, width: 1, height: 1 };
   }
   const is90or270 = rot === 90 || rot === 270;
   const effW = is90or270 ? (imgHeight || 600) : (imgWidth || 800);
@@ -55,24 +56,22 @@ export function calculateNormalizedCropBox(
   // Normalized width / normalized height K
   const K = targetRatio / canvasRatio;
 
-  let newW = 0.75;
+  // Largest rectangle with the target ratio that fits the full picture
+  let newW = 1;
   let newH = newW / K;
-
-  if (newH > 0.65) {
-    newH = 0.65;
+  if (newH > 1) {
+    newH = 1;
     newW = newH * K;
   }
-  if (newW > 0.85) {
-    newW = 0.85;
-    newH = newW / K;
-  }
 
-  newW = Math.min(0.90, Math.max(0.1, newW));
-  newH = Math.min(0.85, Math.max(0.1, newH));
+  // Keep a small breathing margin so the resize handles stay visible
+  const marginFactor = 0.98;
+  newW *= marginFactor;
+  newH *= marginFactor;
 
   return {
-    x: Math.max(0.04, (1 - newW) / 2),
-    y: Math.max(0.06, (1 - newH) / 2),
+    x: (1 - newW) / 2,
+    y: (1 - newH) / 2,
     width: newW,
     height: newH,
   };

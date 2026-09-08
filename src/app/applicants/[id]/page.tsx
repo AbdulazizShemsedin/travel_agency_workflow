@@ -973,11 +973,11 @@ export default function ApplicantDetailPage() {
                         {" "}• Ref: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.musaned_reference_no}</strong>
                       </>
                     ) : null}
-                    . Candidate is published and eligible for overseas Agent Portal discovery and selection.
+                    . Candidate is published and eligible for international Agent Portal discovery and selection.
                   </>
                 ) : (
                   <>
-                    Candidate CV record is created and published for {applicant.destination_country || "Kuwait"}. Overseas partner agencies can discover, select, and reserve this candidate via the Agent Portal.
+                    Candidate CV record is created and published for {applicant.destination_country || "Kuwait"}. International partner agencies can discover, select, and reserve this candidate via the Agent Portal.
                   </>
                 )}
               </p>
@@ -1263,7 +1263,7 @@ export default function ApplicantDetailPage() {
             <div className="space-y-1">
               <h3 className="text-base font-bold text-purple-950 dark:text-purple-200 flex items-center gap-2">
                 <Plane className="h-5 w-5 text-purple-700 dark:text-purple-400" />
-                Stage: Departed (Overseas Placement Complete 100%)
+                Stage: Departed (Placement Abroad Complete 100%)
               </h3>
               <p className="text-xs text-purple-800 dark:text-purple-300">
                 Candidate flight departure finalized. Pre-Departure Medical 2 passed.
@@ -1394,7 +1394,7 @@ export default function ApplicantDetailPage() {
                   <p className="font-semibold text-slate-900 dark:text-white">{applicant.arabic_level || "N/A"}</p>
                 </div>
                 <div>
-                  <span className="text-slate-500 dark:text-zinc-400">Overseas Experience</span>
+                  <span className="text-slate-500 dark:text-zinc-400">Work Abroad</span>
                   <p className="font-semibold text-slate-900 dark:text-white">{applicant.experience_country ? `${applicant.experience_country} (${applicant.experience_period || "1"} yrs)` : "None / First Timer"}</p>
                 </div>
               </div>
@@ -1438,11 +1438,11 @@ export default function ApplicantDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Card 4: Emergency Contacts & Next of Kin */}
+          {/* Card 4: Emergency Contacts & Family Member */}
           <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
               <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Phone className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> Emergency Reference & Next of Kin
+                <Phone className="h-4 w-4 text-emerald-800 dark:text-emerald-400" /> Emergency Reference & Family Member
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">

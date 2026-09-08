@@ -137,12 +137,26 @@ export async function requestV2<T = any>(
     }
   }
 
-  const response = await fetch(endpoint, {
-    method,
-    headers,
-    credentials: "include",
-    body: bodyData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method,
+      headers,
+      credentials: "include",
+      body: bodyData,
+    });
+  } catch (err: any) {
+    const isAbort = err?.name === "AbortError";
+    throw new ApiV2Error(
+      isAbort
+        ? "The server took too long to respond. Please check your connection and try again."
+        : "Network error: we could not reach the server. Check your internet connection and try again.",
+      isAbort ? 504 : 0,
+      "NetworkError",
+      undefined,
+      undefined
+    );
+  }
 
   // Handle binary streams (e.g. XLSX export, PDF invoice)
   const contentType = response.headers.get("content-type") || "";

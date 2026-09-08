@@ -5,6 +5,7 @@ import { UseFormReturn } from "react-hook-form";
 import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2 } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
+import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,14 +23,29 @@ interface Step1PersonalInfoProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   form: UseFormReturn<BaseApplicantFormValues, any, any>;
   locked?: boolean;
+  editingApplicantName?: string;
 }
 
-export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoProps) {
+let cachedApplicantPassports: { name: string; full_name?: string; first_name?: string; passport_number?: string }[] | null = null;
+async function getCachedApplicantPassports() {
+  if (cachedApplicantPassports) return cachedApplicantPassports;
+  try {
+    const applicants = await listApplicantsV2();
+    cachedApplicantPassports = applicants;
+  } catch {
+    cachedApplicantPassports = [];
+  }
+  return cachedApplicantPassports;
+}
+
+export function Step1PersonalInfo({ form, locked = false, editingApplicantName }: Step1PersonalInfoProps) {
   const {
     register,
     watch,
     setValue,
     getValues,
+    resetField,
+    trigger,
     formState: { errors },
   } = form;
 
@@ -37,6 +53,58 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
   const profilePhotoValue = watch("profile_photo_url") || watch("photo_passport");
   const fullBodyPhotoValue = watch("photo_full_body");
   const passportScanValue = watch("passport_scan");
+  const passportNumber = watch("passport_number");
+
+  // Live duplicate-passport + immediate validation
+  const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
+  const passportCheckTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkPassportDuplicate = React.useCallback(
+    async (rawValue: string) => {
+      const normalized = (rawValue || "").toUpperCase().trim();
+      if (!normalized) {
+        setPassportConflict(null);
+        return;
+      }
+      const applicants = await getCachedApplicantPassports();
+      const clash = applicants.find((a) => {
+        const sameNumber =
+          String(a.passport_number || "").toUpperCase().trim() === normalized;
+        if (!sameNumber) return false;
+        if (editingApplicantName) {
+          const current =
+            String(editingApplicantName).toLowerCase().trim();
+          if (String(a.name || "").toLowerCase().trim() === current) return false;
+        }
+        return true;
+      });
+      if (clash) {
+        const ownerName = clash.full_name || [clash.first_name, ""].filter(Boolean).join(" ") || "another applicant";
+        setPassportConflict(
+          `This passport number is already registered to ${ownerName}. Please check the number or speak to the registration desk.`
+        );
+      } else {
+        setPassportConflict(null);
+      }
+    },
+    [editingApplicantName]
+  );
+
+  React.useEffect(() => {
+    if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
+    passportCheckTimer.current = setTimeout(() => {
+      void trigger("passport_number");
+      void checkPassportDuplicate(passportNumber || "");
+    }, 450);
+    return () => {
+      if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
+    };
+  }, [passportNumber, trigger, checkPassportDuplicate]);
+
+  const triggerFieldSoon = (field: "first_name" | "middle_name" | "last_name" | "phone_number" | "nationality" | "date_of_birth" | "passport_expiry") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!(e.target as HTMLInputElement).value) return;
+    setTimeout(() => void trigger(field), 250);
+  };
 
   const [photoPreview, setPhotoPreview] = React.useState<string | null>(profilePhotoValue || null);
   const [fullBodyPreview, setFullBodyPreview] = React.useState<string | null>(fullBodyPhotoValue || null);
@@ -1007,7 +1075,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                 <Input
                   id="first_name"
                   placeholder="e.g., Abebe"
-                  {...register("first_name")}
+                  {...register("first_name", { onChange: triggerFieldSoon("first_name") })}
                   disabled={locked}
                   className={errors.first_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
@@ -1023,7 +1091,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                 <Input
                   id="middle_name"
                   placeholder="e.g., Bekele"
-                  {...register("middle_name")}
+                  {...register("middle_name", { onChange: triggerFieldSoon("middle_name") })}
                   disabled={locked}
                   className={errors.middle_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
@@ -1039,7 +1107,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                 <Input
                   id="last_name"
                   placeholder="e.g., Kebede"
-                  {...register("last_name")}
+                  {...register("last_name", { onChange: triggerFieldSoon("last_name") })}
                   disabled={locked}
                   className={errors.last_name ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />
@@ -1068,10 +1136,18 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                     placeholder="e.g., EP1234567"
                     {...register("passport_number")}
                     disabled={locked}
-                    className={errors.passport_number ? "border-rose-500 ring-1 ring-rose-500 font-mono uppercase font-bold" : "font-mono uppercase font-bold text-slate-900 dark:text-white"}
+                    aria-invalid={!!errors.passport_number || !!passportConflict}
+                    className={
+                      errors.passport_number || passportConflict
+                        ? "border-rose-500 ring-1 ring-rose-500 font-mono uppercase font-bold"
+                        : "font-mono uppercase font-bold text-slate-900 dark:text-white"
+                    }
                   />
                   {errors.passport_number && (
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_number.message}</p>
+                  )}
+                  {!errors.passport_number && passportConflict && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{passportConflict}</p>
                   )}
                 </div>
 
@@ -1082,7 +1158,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                   <Input
                     id="date_of_birth"
                     type="date"
-                    {...register("date_of_birth")}
+                    {...register("date_of_birth", { onChange: triggerFieldSoon("date_of_birth") })}
                     disabled={locked}
                     className={errors.date_of_birth ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
@@ -1098,7 +1174,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                   <Input
                     id="passport_expiry"
                     type="date"
-                    {...register("passport_expiry")}
+                    {...register("passport_expiry", { onChange: triggerFieldSoon("passport_expiry") })}
                     className={errors.passport_expiry ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                   />
                   {errors.passport_expiry && (
@@ -1177,7 +1253,13 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                 <Select
                   id="marital_status"
                   placeholder="Select status"
-                  {...register("marital_status")}
+                  {...register("marital_status", {
+                    onChange: (e) => {
+                      if (e.target.value === MARITAL_STATUS_OPTIONS[0]) {
+                        resetField("children", { defaultValue: 0 });
+                      }
+                    },
+                  })}
                   error={!!errors.marital_status}
                 >
                   {MARITAL_STATUS_OPTIONS.map((m) => (
@@ -1218,7 +1300,7 @@ export function Step1PersonalInfo({ form, locked = false }: Step1PersonalInfoPro
                 <Input
                   id="nationality"
                   placeholder="e.g., Ethiopia"
-                  {...register("nationality")}
+                  {...register("nationality", { onChange: triggerFieldSoon("nationality") })}
                   disabled={locked}
                   className={errors.nationality ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
                 />

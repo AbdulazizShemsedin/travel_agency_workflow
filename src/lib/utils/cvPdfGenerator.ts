@@ -312,7 +312,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
 
   const medStatus = applicant.medical_status || "-";
   page.drawText("Medical Fitness Status:", { x: 30, y: cursorY - 18, size: 8, font: fontRegular, color: textMuted });
-  page.drawText(medStatus === "FIT" ? "FIT / PASSED (Approved for Overseas Placement)" : medStatus === "UNFIT" ? "UNFIT / REJECTED" : clean(medStatus), {
+  page.drawText(medStatus === "FIT" ? "FIT / PASSED (Approved for Placement Abroad)" : medStatus === "UNFIT" ? "UNFIT / REJECTED" : clean(medStatus), {
     x: 140,
     y: cursorY - 18,
     size: 8.5,

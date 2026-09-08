@@ -4,7 +4,7 @@
 **Backend Authority**: `https://travelagency-production-b48d.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-07T00:00:00Z
+**Last Updated**: 2026-09-08T00:00:00Z
 
 ---
 
@@ -191,6 +191,57 @@ Implemented the backend changelog into the frontend on branch `agency_finalized_
 
 ### Te'shir Injaz Fee default
 - "Injaz Fee (USD)" now defaults to `10.5` (`InjazWorkspace.tsx`) — both the initial drawer state and the per-row fallback when an existing fee is absent.
+
+### Operational sheets must not list applicants who are not yet on that stage
+- Reported bug: applicants that were **not selected by a Foreign Agent** (and had no uploaded documents) appeared in the excel-like operational tables (LMIS, Te'shir, and later stages).
+- Root cause: `list_applicants` never returns an `applicant_state` key, so the v2 client normalizes `applicant_state = status` (`applicants.ts`). Only the `Registered` status leaked into the LMIS sheet via the old exemption `applicant.applicant_state !== "Registered"` in `fetchOperationalWorkspaceDataV2` — a freshly registered, unselected applicant with no Placement and no documents showed up in the LMIS excel table.
+- Fix (`src/lib/api/v2/operational.ts`): all operational sheets (lms / injaz / embassy / departure / wakala) are now stage-gated on an active **Placement**:
+  - A Placement exists only after Foreign Agency selection (`portal_api.select_candidate`) or the direct Muayena intake; contract/visa documents are uploaded against that Placement — so "no Placement" == "not on that stage yet", and those rows are excluded entirely.
+  - Cancelled placements are dropped from the placement join, and the applicant's own `active_placement` link is preferred when listing, so cancelled/obsolete placements can no longer keep a candidate in a sheet.
+  - Sheet-level gates anchored on placement status (not the applicant row): LMIS / Te'shir sheets require Processing-or-beyond (that is where corridor steps spawn); Embassy requires the embassy step or Processing-or-beyond; Departure keeps its Stamped-or-beyond rule.
+- Verified: `npx tsc --noEmit` clean, `npx next build` succeeds.
+
+### Distinct stage colors on the Directory Current Stage badges
+- Reported bug: `Selected` and `Processing` both rendered as blue (`info`) on the Directory badges, and several other stages reused hues (`Registered`/`Departed` both emerald, `CV Generated`/`Ticketed` both purple, `Stamped` blue).
+- Fix (`src/components/applicant/ApplicantTable.tsx`, `getStageBadgeVariant`): each stage now gets a unique color — Draft slate, Registered emerald, CV Generated purple, Selected blue, Processing amber, Stamped teal, Ticketed cyan, Departed lime, Cancelled rose. Teal/cyan/lime use `className` overrides (`bg-teal-50 text-teal-700 border-teal-200`, etc.) since the cva variant set has no dedicated hues; `tailwind-merge` in `cn` makes the override win over the base `neutral` variant. Verified present in compiled CSS.
+- Verified: `npx tsc --noEmit` clean, `npx next build` succeeds.
+
+### Directory Current Stage now reflects the active Placement pipeline
+- Reported bug: applicants already on `Selected` or `Processing` still showed their old intake status (`CV Generated` / `Registered`) in the Directory's "Current Stage" column — the applicant row's `status` never advances; only the Placement does.
+- Fix (`src/components/applicant/ApplicantTable.tsx`): the placement-join memo now resolves each row's stage via `resolveApplicantStage(applicant, plc)`: if the applicant isn't Cancelled and the active (non-cancelled) Placement is at `Selected`/`Processing`/`Stamped`/`Ticketed`/`Departed`, the row's `status`/`applicant_state` are set to the placement status, then `copy` feeds the whole table — so the stage badge, stage filter, sponsor/contract/visa eligibility, the "Assign" button, and the batch-assign stage check all use the true pipeline stage. Cancelled placements are dropped from the join and `active_placement` is preferred.
+- Verified: `npx tsc --noEmit` clean, `npx next build` succeeds.
+
+## 7. 2026-09-08 Injaz / Te'shir Workspace Alignment with Backend Terminal-State Guard
+- Reported bug: in the Te'shir / Injaz workspace, setting the **Injaz payment status to PAID** appeared to succeed but never persisted. Backend proxy log showed two `417 ValidationError`s against `CLR-00029` (Taeshir, status `Complete`):
+  - `agency_tracking.clearance_api.set_taeshir_appointment` → `417` — "CLR-00029 is already Complete (terminal) -- this can no longer be edited through this action."
+  - `agency_tracking.clearance_api.record_injaz_payment` → `417` — same terminal-step rejection.
+- Root cause (`src/components/operational/workspaces/InjazWorkspace.tsx`): the drawer's Save always issued `setTaeshirAppointmentV2` / `recordInjazPaymentV2` whenever the payment status was `PAID` (or a fee + receipt were present), with **no terminal-state check**. The backend `417` was caught and only `console.warn`-ed, so `mutation.onSuccess` still fired and toasted "updated successfully!" while nothing was persisted — a misleading success on a bank-side that stays `UNPAID`.
+- Live verification of the authoritative list view: `list_my_clearance_steps` returns only `status=Complete` (terminal), `payment_status=Not Applicable` (the step's own base fee), `reference_no`, `appointment_date`, `injaz_application_id`, `injaz_outcome`, `date_completed` — it does **not** return the `injaz_*` sub-flow payment fields, so the drawer/column truthfully cannot mark the row PAID for finalized steps.
+- Fix (frontend-only, aligned with the backend's 2026-08-31 terminal-state guard):
+  - All mutable drawer fields (appointment date, Injaz application number, Injaz payment status, fee, receipt №, payment date, remark) are now `disabled` when `isInjazTerminal` (Issued / Complete / Completed / Stamped / Rejected / Cancelled step, or Departed placement) — matching the already-locked status and assignee selects. The finalized banner text now states these fields are locked.
+  - The drawer Save action is guarded by `handleSave`: on a terminal step it refuses with a clear error toast instead of firing mutations that the backend will reject.
+  - The mutation itself no longer calls `setTaeshirAppointmentV2` / `recordInjazPaymentV2` (nor start/complete/reassign) on terminal steps or Departed placements, and `onSuccess` only claims "updated successfully!" when at least one RPC actually persisted (`persistedSomething`); otherwise it reports honestly that the finalized step could not be edited.
+- Out-of-scope (backend-owned): `agency_tracking.clearance_api.render_injaz_pdf` returns `500` — `AttributeError: 'File' object has no attribute 'content_type'` inside `attach_datauri(applicant.photograph)` (`pdf_utils.py`). The frontend already falls back to the client-side Injaz PDF generator (`downloadInjazDocumentPDF`), so document generation still works; the PDF-500 itself must be fixed in the backend.
+- Verified: `npx tsc --noEmit` clean, `npx next build` succeeds.
+
+## 8. 2026-09-08 Post-QA Polish Pass — Readability, Plain English, Live Field Validation & Honest Errors
+- Goal: close the QA feedback list (small fonts, crop window not filling the photo, wrong Institution placeholder, complex English terms like Complexion / Next of Kin / Overseas, missing live inline validation, vague Register/Draft failure messages, and a legacy "Housemaid" job option) with frontend-only changes verified by `npx tsc --noEmit` and `npx next build`.
+- **Typography (`src/app/globals.css`)**: bumped the fixed micro-text tiers (`text-[9px]`→12px up through `text-[13px]`→15px) and the Tailwind tiers (`text-xs`→14px, `text-sm`→15px, `text-base`→16px, `text-lg`→18px, `text-xl`→21px, `text-2xl`→24px, `text-3xl`→29px, `text-4xl`→35px), covering the dashboard `text-2xl font-bold` headings. Heading weights softened (`font-black`→750, `font-extrabold`→700, `font-bold`→650) so dense UI reads friendlier. Un-layered rules intentionally beat Tailwind's layered utilities (existing pattern in the file).
+- **Crop preview (`src/components/ui/ImageCropModal.tsx`)**: `calculateNormalizedCropBox` now defaults the crop window to the full picture — free mode returns `{0,0,1,1}`; ratio modes return the largest target-ratio rectangle that fills the image at ~98% scale so handles stay usable. No downstream re-clamping occurs.
+- **Institution placeholder (`Step2EducationExperience.tsx`)**: now example institution names ("Addis Ababa University, Entoto Polytechnic College") instead of school-level types. Also relabeled the March-select label "Complexion / Skin"→"Skin Color" and placeholder "Select Complexion"→"Select skin color" (values unchanged: FAIR/MEDIUM/DARK).
+- **Removed obsolete "Housemaid"**: dropped from `JOB_APPLIED_OPTIONS` (`applicant.schema.ts`) and from the agent job filter (`CandidateFilters.tsx`, which also gained a matching "House worker" option). Display-only fallbacks elsewhere were kept since historical records may still carry the value.
+- **Plain English for non-native operators**: "Next of Kin"→"Family Member" (Step3 card + applicant details card + step description), "Overseas"—›"Work Abroad"/"international" across the applicant form steps, review step, applicant detail/CV pages, agent candidate modal, Muayena modal, CV PDF generator and schema error copy. Backend field names and raw-value logic compares (e.g. `rawCountry !== "overseas"`) are untouched.
+- **Marital status → children**: in `Step1PersonalInfo`, selecting "Single" now resets the Children field to 0 via `resetField("children", { defaultValue: 0 })` — no manual override needed.
+- **Live inline validation** (the form previously had `useForm({ mode: "onBlur" })` but NO resolver, so schema errors only appeared when the handler ran `safeParse` + `setError` at Register/Draft click):
+  - Attached `zodResolver(stage1DraftSchema)` to the form, so all Stage-1 fields (names, gender, religion, marital status, children, nationality, phone, city, country) validate per-field on blur with inline red text. Stage 2–4 strict requirements still gate at Register click via `stage2RegistrationSchema.safeParse` (by design).
+  - Added immediate (debounced ~250ms) `trigger(field)` validations on change for first/middle/last name, date of birth, passport expiry and nationality.
+  - Added a live duplicate-passport check in Step1: on each value change a 450ms debounce calls `listApplicantsV2` (cached per page load, errors swallowed) and shows "This passport number is already registered to <name>…" in red under the field, excluding the current record when editing (`editingApplicantName` passed from `existingApplicantId`). The Input also gets `aria-invalid` + red ring while conflicted.
+- **Honest, helpful Register/Draft errors**:
+  - `client.ts`: `fetch` rejections are now wrapped as `ApiV2Error` ("Network error: we could not reach the server…") with `excType: "NetworkError"` / status 0 instead of leaking raw `TypeError: Failed to fetch`; AbortError is reported as a timeout.
+  - Proxy route (`src/app/api/method/[...slug]/route.ts`): `fetchWithRetry` now aborts after 45s (fast-fail instead of hanging), `parseJsonOrFriendlyMessage` replaces the obscure "Non-JSON response from backend" with a human message (plus a short response snippet when available), and the 502 catch blocks pass through the specifically useful timeout wording ("The server took too long to respond…").
+  - `ApplicantRegistrationForm.tsx`: new `describeApiError()` maps network (status 0 / NetworkError), 502/504 timeouts, and 5xx statuses to clear operator copy with the backend message when it is meaningful; the Draft / Save Changes / Register toasts now use it instead of bare `err.message`.
+- **Slow loading**: the 45s proxy timeout + fast-fail is the main mitigation; broader page-by-page load profiling was NOT undertaken (kept scope limited to the reported failure symptom). Remaining candidate bottleneck (sequential CSRF-token round-trip before every POST) is left as-is to avoid destabilizing the auth path.
+- Verified: `npx tsc --noEmit` clean, `npx next build` succeeds (build re-run after all edits).
 
 
 

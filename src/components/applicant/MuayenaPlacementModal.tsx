@@ -98,7 +98,7 @@ export function MuayenaPlacementModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            Directly bind candidate with contract in hand to an overseas contractor. Enters directly at Selected stage without CV generation or marketplace listing.
+            Directly bind candidate with contract in hand to an international contractor. Enters directly at Selected stage without CV generation or marketplace listing.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,10 +119,10 @@ export function MuayenaPlacementModal({
                 required
                 className="flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
               >
-                <option value="">Select an overseas partner...</option>
+                <option value="">Select an international partner...</option>
                 {contractors.map((c) => (
                   <option key={c.name} value={c.name}>
-                    {c.company_name || c.name} ({c.destination_country || c.country || "Overseas"})
+                    {c.company_name || c.name} ({c.destination_country || c.country || "International"})
                   </option>
                 ))}
               </select>

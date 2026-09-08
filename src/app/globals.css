@@ -191,28 +191,58 @@ input::placeholder, textarea::placeholder {
 }
 
 /* Global readability bump — the system relied heavily on fixed 9-11px micro text.
-   Lift the dominant fixed-pixel sizes (and the adjacent Tailwind tiers) by ~2px so
-   tables/forms stay readable without changing spacing or layout geometry. */
+   Lift the dominant fixed-pixel sizes (and the adjacent Tailwind tiers) so tables
+   and forms stay readable without changing spacing or layout geometry. */
 .text-\[9px\] {
-  font-size: 11px;
-}
-.text-\[10px\] {
   font-size: 12px;
 }
+.text-\[10px\] {
+  font-size: 13px;
+}
 .text-\[11px\] {
-  font-size: 13px;
-}
-.text-\[12px\] {
-  font-size: 13px;
-}
-.text-\[13px\] {
   font-size: 14px;
 }
+.text-\[12px\] {
+  font-size: 14px;
+}
+.text-\[13px\] {
+  font-size: 15px;
+}
 .text-xs {
-  font-size: 13px;
+  font-size: 14px;
 }
 .text-sm {
-  font-size: 14.5px;
+  font-size: 15px;
+}
+.text-base {
+  font-size: 16px;
+}
+.text-lg {
+  font-size: 18px;
+}
+.text-xl {
+  font-size: 21px;
+}
+.text-2xl {
+  font-size: 24px;
+}
+.text-3xl {
+  font-size: 29px;
+}
+.text-4xl {
+  font-size: 35px;
+}
+
+/* Page headings should read clearly but not shout — take the heaviest
+   weights down a notch so dense UI reads as friendly rather than bold. */
+.font-black {
+  font-weight: 750;
+}
+.font-extrabold {
+  font-weight: 700;
+}
+.font-bold {
+  font-weight: 650;
 }
 
 select option, select optgroup {

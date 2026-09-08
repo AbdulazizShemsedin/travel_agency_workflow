@@ -43,7 +43,7 @@ export function CandidateFilters({
 
   const JOBS = [
     { value: "All Jobs", label: "💼 Job Position (All)", icon: <Briefcase className="h-3.5 w-3.5 text-slate-400" /> },
-    { value: "Housemaid", label: "Housemaid" },
+    { value: "House worker", label: "House worker" },
     { value: "Nanny / Childcare", label: "Nanny / Childcare" },
     { value: "Cook / Arabic Cuisine", label: "Cook / Arabic Cuisine" },
     { value: "Private Driver", label: "Private Driver" },

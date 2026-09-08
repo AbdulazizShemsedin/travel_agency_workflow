@@ -26,6 +26,7 @@ import {
   stage1DraftSchema,
   stage2RegistrationSchema,
 } from "@/lib/validations/applicant.schema";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createApplicantV2,
   updateApplicantV2,
@@ -197,6 +198,25 @@ function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): strin
   return rawMessage;
 }
 
+function describeApiError(err?: ApiV2Error | null): string {
+  if (!err) return "Please review the form and try again.";
+  const msg = (err.message || "").trim();
+  if (err.statusCode === 0 || err.excType === "NetworkError") {
+    return "Network error: we could not reach the server. Check your internet connection and try again.";
+  }
+  if (err.statusCode === 502 || err.statusCode === 504) {
+    if (/took too long|did not respond/i.test(msg)) {
+      return msg;
+    }
+    return "The server did not respond. It may be starting up or your internet may be offline. Please try again in a moment.";
+  }
+  if (err.statusCode && err.statusCode >= 500) {
+    const fallback = `The server hit an error (HTTP ${err.statusCode}). Please try again in a moment.`;
+    return msg && !/(failed to respond|unexpected response)/i.test(msg) ? msg : fallback;
+  }
+  return msg || "Please review the form and try again.";
+}
+
 // Core identity fields locked server-side once an active Placement is in flight (#13)
 const IDENTITY_FIELDS = [
   "full_name",
@@ -257,6 +277,8 @@ export function ApplicantRegistrationForm({
   // React Hook Form
   const form = useForm<BaseApplicantFormValues>({
     mode: "onBlur",
+    // @ts-expect-error zodResolver generic widening across runtime-normalized optional fields
+    resolver: zodResolver(stage1DraftSchema),
     defaultValues: {
       applicant_type: (initialData?.applicant_type as any) || "Standard",
       first_name: initialData?.first_name || "",
@@ -643,7 +665,7 @@ export function ApplicantRegistrationForm({
     onError: (error: unknown) => {
       const err = error as ApiV2Error;
       toast.error("Cannot Save Draft", {
-        description: err.message || "Please fill in all Stage 1 required fields.",
+        description: describeApiError(err),
         duration: 5000,
       });
     },
@@ -708,7 +730,7 @@ export function ApplicantRegistrationForm({
     onError: (error: unknown) => {
       const err = error as ApiV2Error;
       toast.error("Failed to save changes", {
-        description: err.message || "Please check the entered values.",
+        description: describeApiError(err),
       });
     },
   });
@@ -813,7 +835,7 @@ export function ApplicantRegistrationForm({
       const err = error as ApiV2Error;
       setIsConfirmRegisterOpen(false);
       toast.error("Registration Requirement Not Met", {
-        description: err.message || "Please check the highlighted required fields.",
+        description: describeApiError(err),
         duration: 6000,
       });
     },
@@ -961,7 +983,7 @@ export function ApplicantRegistrationForm({
               </p>
             </div>
           </div>
-          <Step1PersonalInfo form={form} locked={lockedIdentityFields} />
+          <Step1PersonalInfo form={form} locked={lockedIdentityFields} editingApplicantName={existingApplicantId} />
         </section>
 
         {/* Section 2: Education & Skills */}
@@ -975,7 +997,7 @@ export function ApplicantRegistrationForm({
                 Education, Experience & Skills Matrix
               </h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Academic qualifications, overseas experience, language proficiencies, and domestic skills.
+                Academic qualifications, work experience abroad, language proficiencies, and domestic skills.
               </p>
             </div>
           </div>
@@ -993,7 +1015,7 @@ export function ApplicantRegistrationForm({
                 National Identification & Emergency Contacts
               </h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Fayda / National ID, Ministry Labour ID, target profession, and emergency next of kin.
+                Fayda / National ID, Ministry Labour ID, target profession, and emergency family member.
               </p>
             </div>
           </div>

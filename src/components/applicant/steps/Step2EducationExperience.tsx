@@ -476,7 +476,7 @@ export function Step2EducationExperience({
         <CardHeader className="pb-4">
           <div>
             <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">
-              Languages & Overseas Work Experience
+              Languages & Work Experience Abroad
             </CardTitle>
           </div>
         </CardHeader>
@@ -534,7 +534,7 @@ export function Step2EducationExperience({
                 Has Experience ?
               </Label>
               <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                Enable if candidate has previous overseas, Gulf, or domestic work experience.
+                Enable if the candidate has previously worked abroad, in the Gulf, or in their home country.
               </p>
             </div>
             <Switch
@@ -554,7 +554,7 @@ export function Step2EducationExperience({
             />
           </div>
 
-          {/* Overseas Experience Country & Period & Video (Only when toggled ON) */}
+          {/* Work Abroad Country & Period & Video (Only when toggled ON) */}
           {hasExperience && (
             <div className="space-y-4 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -665,7 +665,7 @@ export function Step2EducationExperience({
 
             <div className="space-y-1.5">
               <Label htmlFor="complexion" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                Complexion / Skin <span className="text-slate-400 font-normal">(Optional)</span>
+                Skin Color <span className="text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Select
                 id="complexion"
@@ -675,7 +675,7 @@ export function Step2EducationExperience({
               >
                 {COMPLEXION_OPTIONS.map((c) => (
                   <option key={c} value={c}>
-                    {c === "" ? "Select Complexion" : c === "FAIR" ? "Fair (Default)" : c === "MEDIUM" ? "Medium" : c === "DARK" ? "Dark" : c}
+                    {c === "" ? "Select skin color" : c === "FAIR" ? "Fair (Default)" : c === "MEDIUM" ? "Medium" : c === "DARK" ? "Dark" : c}
                   </option>
                 ))}
               </Select>
@@ -742,7 +742,7 @@ export function Step2EducationExperience({
             </Label>
             <Input
               id="institution"
-              placeholder="e.g., Primary School, High School, Vocational Center"
+              placeholder="e.g., Addis Ababa University, Entoto Polytechnic College"
               {...register("institution")}
             />
           </div>

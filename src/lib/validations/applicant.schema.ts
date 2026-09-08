@@ -46,7 +46,6 @@ export const COMPLEXION_OPTIONS = ["FAIR", "MEDIUM", "DARK"] as const;
 
 export const JOB_APPLIED_OPTIONS = [
   "House worker",
-  "Housemaid",
   "Domestic Worker",
   "Driver",
   "Heavy Equipment Driver",
@@ -301,7 +300,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
         const parsed = parseISO(val);
         const age = differenceInYears(new Date(), parsed);
         return isValid(parsed) && age >= 18;
-      }, "Applicant must be at least 18 years old for overseas deployment")
+      }, "Applicant must be at least 18 years old for work abroad")
       .refine((val) => {
         if (!val) return false;
         const parsed = parseISO(val);
@@ -333,7 +332,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
         const parsed = parseISO(val);
         if (!isValid(parsed)) return false;
         return startOfDay(parsed) >= addMonths(startOfDay(new Date()), 6);
-      }, "Passport must be valid for at least 6 months from today for overseas deployment"),
+      }, "Passport must be valid for at least 6 months from today for work abroad"),
 
     passport_issue_date: z
       .string({ required_error: "Passport Issue Date is required for registration" })

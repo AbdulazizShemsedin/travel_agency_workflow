@@ -49,20 +49,43 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   };
 }
 
-async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2): Promise<Response> {
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2, timeoutMs = 45000): Promise<Response> {
   let lastError: any;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, init);
+      const res = await fetch(url, { ...init, signal: controller.signal });
       return res;
     } catch (err: any) {
       lastError = err;
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
       }
+    } finally {
+      clearTimeout(timer);
     }
   }
+  if (lastError?.name === "AbortError") {
+    lastError = new Error("The server took too long to respond. Please try again in a moment.");
+  }
   throw lastError;
+}
+
+async function parseJsonOrFriendlyMessage(res: Response) {
+  const isUpstreamError = !res.ok && res.status >= 500;
+  const fallbackMessage = isUpstreamError
+    ? "The server did not respond as expected. Please try again in a moment."
+    : "The server returned an unexpected response. Please try again.";
+  try {
+    return await res.json();
+  } catch {
+    let snippet = "";
+    try {
+      snippet = (await res.text()).slice(0, 200);
+    } catch {}
+    return { message: snippet ? `${fallbackMessage} (${snippet})` : fallbackMessage };
+  }
 }
 
 function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | Response) {
@@ -184,7 +207,7 @@ export async function POST(
         body: formData,
       });
 
-      const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+      const data = await parseJsonOrFriendlyMessage(res);
       const response = NextResponse.json(data, { status: res.status });
       forwardSetCookieHeaders(res, response);
       return response;
@@ -635,7 +658,7 @@ export async function POST(
       return binaryResponse;
     }
 
-    const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+    const data = await parseJsonOrFriendlyMessage(res);
 
     // Post-query enrichment for contractor user details and portal candidate skills
     if (res.ok && data) {
@@ -763,10 +786,16 @@ export async function POST(
     return response;
   } catch (err: any) {
     console.error("[PROXY CATCH POST]", methodPath, err);
+    const detail =
+      typeof err?.message === "string" && err.message.length > 0
+        ? err.message
+        : "Unable to connect to the server. Please check your network connection and try again.";
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",
-        message: "Unable to connect to the server. Please check your network connection and try again.",
+        message: detail.includes("took too long")
+          ? detail
+          : "Unable to connect to the server. Please check your network connection and try again.",
       },
       { status: 502 }
     );
@@ -810,7 +839,7 @@ export async function GET(
       return binaryResponse;
     }
 
-    const data = await res.json().catch(() => ({ message: "Non-JSON response from backend" }));
+    const data = await parseJsonOrFriendlyMessage(res);
     if (!res.ok) {
       console.error("[PROXY ERROR GET]", methodPath, res.status, data);
     }
@@ -819,10 +848,16 @@ export async function GET(
     return response;
   } catch (err: any) {
     console.error("[PROXY CATCH GET]", methodPath, err);
+    const detail =
+      typeof err?.message === "string" && err.message.length > 0
+        ? err.message
+        : "Unable to connect to the server. Please check your network connection and try again.";
     return NextResponse.json(
       {
         exc_type: "BackendConnectionError",
-        message: "Unable to connect to the server. Please check your network connection and try again.",
+        message: detail.includes("took too long")
+          ? detail
+          : "Unable to connect to the server. Please check your network connection and try again.",
       },
       { status: 502 }
     );

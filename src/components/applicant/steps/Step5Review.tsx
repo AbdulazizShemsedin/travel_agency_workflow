@@ -334,7 +334,7 @@ export function Step5Review({
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">Overseas Experience:</span>
+              <span className="text-slate-500">Work Abroad:</span>
               <span className="font-medium text-slate-900">
                 {values.experience_country ? `${values.experience_country} (${values.experience_period || "1"} yrs)` : "None / First Timer"}
               </span>
