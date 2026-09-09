@@ -278,6 +278,7 @@ export default function AdminCommissionPage() {
         selectedCountry || undefined,
         "oldest"
       ),
+    enabled: !!selectedContractor,
     staleTime: 20000,
   });
 

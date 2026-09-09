@@ -392,20 +392,10 @@ export async function listCommissionBatchesV2(
         "contractor",
         "destination_country",
         "currency",
-        "total_amount",
-        "total_amount_original",
-        "total_amount_birr",
         "status",
-        "advance_amount_original",
-        "advance_amount_birr",
         "advance_amount",
         "advance_reference",
         "advance_received_on",
-        "write_off_total_original",
-        "write_off_total_birr",
-        "paid_amount_original",
-        "paid_amount_birr",
-        "balance_due_original",
         "balance_due_birr",
         "settled_on",
         "settlement_reference",
@@ -419,12 +409,22 @@ export async function listCommissionBatchesV2(
     },
   });
   if (!Array.isArray(result)) return [];
-  return result.map((b: any) => ({
-    ...b,
-    contractor_name: b.contractor_name || b.contractor,
-    total_amount: b.total_amount_original ?? b.total_amount ?? b.total_amount_birr ?? 0,
-    currency: b.currency || "ETB",
-  }));
+  return result.map((b: any) => {
+    // Virtual fields (total_amount_original, total_amount_birr, advance_amount_birr, etc.)
+    // are not permitted in frappe.client.get_list. The full doc (with virtuals) is fetched
+    // separately via getCommissionBatchV2 when a batch is selected.
+    // For the list view, approximate total from real DB columns:
+    //   balance_due_birr + advance_amount = total_amount_birr (from docs: balance_due_birr = total − advance)
+    const advanceAmt = Number(b.advance_amount ?? 0) || 0;
+    const balanceDue = Number(b.balance_due_birr ?? 0) || 0;
+    const derivedTotal = advanceAmt + balanceDue;
+    return {
+      ...b,
+      contractor_name: b.contractor_name || b.contractor,
+      total_amount: derivedTotal,
+      currency: b.currency || "ETB",
+    };
+  });
 }
 
 /**

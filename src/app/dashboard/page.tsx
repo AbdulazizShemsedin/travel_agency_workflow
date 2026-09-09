@@ -383,46 +383,48 @@ export default function DashboardPage() {
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`relative rounded-xl border p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer ${stage.color}`}
+                className={`relative rounded-xl border p-5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer ${stage.color}`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold ${stage.accent}`}>
-                      {stage.step}
-                    </span>
-                    {stage.badge}
+                <div className="flex items-start justify-between">
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold ${stage.accent}`}>
+                    {stage.step}
                   </span>
-                  <span className="font-mono text-xl font-black text-slate-900 dark:text-white">
+                  <span className="font-mono text-2xl font-black text-slate-900 dark:text-white leading-none">
                     {stage.count}
                   </span>
                 </div>
 
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white mb-2">
-                  {stage.title}
+                <h4 className="mt-3 text-lg font-bold leading-snug text-slate-900 dark:text-white">
+                  {stage.badge}
                 </h4>
+                <p className="mt-1 text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
+                  {stage.title}
+                </p>
 
                 {stage.isParent && stage.subBranches ? (
-                  <div className="mt-2 space-y-1.5 border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2">
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase">
-                      Sub-Streams:
+                  <div className="mt-4 space-y-2 border-t border-emerald-200/60 dark:border-emerald-800/60 pt-3">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
+                      Sub-Streams
                     </p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-2">
                       {stage.subBranches.map((sub) => (
                         <div
                           key={sub.name}
-                          className={`flex flex-col items-center justify-center p-1.5 rounded-lg border text-center ${sub.color}`}
+                          className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center ${sub.color}`}
                         >
-                          <span className="text-[9px] font-black">{sub.name}</span>
-                          <span className="font-mono font-bold text-xs">{sub.count}</span>
+                          <span className="text-xs font-black leading-tight">{sub.name}</span>
+                          <span className="font-mono font-bold text-sm mt-0.5">{sub.count}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-zinc-400 pt-2 border-t border-slate-200/50 dark:border-zinc-800/60">
-                    <span>Candidates</span>
-                    <span className="text-emerald-800 dark:text-emerald-400 font-semibold flex items-center gap-0.5 text-[10px]">
-                      View <ArrowRight className="h-3 w-3" />
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-800/60 pt-3">
+                    <span className="text-xs font-medium text-slate-500 dark:text-zinc-400">
+                      Candidates
+                    </span>
+                    <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
+                      View <ArrowRight className="h-3.5 w-3.5" />
                     </span>
                   </div>
                 )}
