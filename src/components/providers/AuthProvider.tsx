@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (authUser.roles?.includes("Foreign Agency") && !authUser.is_internal_staff) {
           router.push("/agent");
         } else {
-          router.push("/applicants");
+          router.push("/dashboard");
         }
       }
     }
@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (userContext.roles?.includes("Foreign Agency") && !userContext.is_internal_staff) {
           router.push("/agent");
         } else {
-          router.push("/applicants");
+          router.push("/dashboard");
         }
       }
       return userContext;
