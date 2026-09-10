@@ -32,6 +32,7 @@ import {
   advancePlacementV2,
 } from "@/lib/api/v2/placements";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 
 interface DepartureWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -53,30 +54,9 @@ export function DepartureWorkspace({
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
 
-  const isAdmin = React.useMemo<boolean>(() => {
-    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return norm === "system manager" || norm === "administrator" || norm === "manager" || norm === "agency admin";
-    });
-  }, [authUser, roles]);
-
-  const canEdit = React.useMemo<boolean>(() => {
-    if (isAdmin) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return (
-        norm === "ticketing officer" ||
-        norm === "ticketer" ||
-        norm === "departure officer" ||
-        norm === "logistics officer" ||
-        norm === "medical officer"
-      );
-    });
-  }, [isAdmin, roles]);
+  const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
+  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
+  const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Ticketer"] as any) || (authUserV2?.roles || []).some((r) => ["ticketing officer", "departure officer", "logistics officer", "medical officer"].includes(String(r).trim().toLowerCase()));
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 

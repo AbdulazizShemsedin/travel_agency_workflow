@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import {
   startClearanceStepV2,
   completeClearanceStepV2,
@@ -61,24 +62,18 @@ export function LMISWorkspace({
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
 
-  const isAdmin = React.useMemo<boolean>(() => {
-    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return norm === "system manager" || norm === "administrator" || norm === "manager" || norm === "agency admin";
-    });
-  }, [authUser, roles]);
+  // Use the authoritative hasAnyV2Role utility which handles Admin / System Manager
+  // bypass automatically, with exact-case matching against Frappe role names.
+  const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
 
-  const canEdit = React.useMemo<boolean>(() => {
-    if (isAdmin) return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
+  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) ||
+    (authUserV2?.roles || []).some((r) => {
       const norm = String(r).trim().toLowerCase();
-      return norm === "saudi lmis" || norm === "kuwait lmis" || norm === "clearance officer";
-    });
-  }, [isAdmin, roles]);
+      return norm === "admin" || norm === "administrator" || norm === "system manager" || norm === "manager" || norm === "agency admin";
+    }) ||
+    (authUser?.email || "").toLowerCase() === "administrator";
+
+  const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS", "Clearance Officer"]);
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
