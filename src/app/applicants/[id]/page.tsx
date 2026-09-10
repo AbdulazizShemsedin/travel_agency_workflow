@@ -281,6 +281,12 @@ export default function ApplicantDetailPage() {
   });
 
   const activePlacement = placements[0] || null;
+  const hasUploadedContract = Boolean(
+    activePlacement?.contract_file ||
+    activePlacement?.contract_number ||
+    (applicant as any)?.contract_file ||
+    (applicant as any)?.contract_number
+  );
 
   React.useEffect(() => {
     if (activePlacement?.medical_selected_status === "FIT" || activePlacement?.medical_selected_status === "UNFIT") {
@@ -519,6 +525,15 @@ export default function ApplicantDetailPage() {
   const advanceToProcessingMutation = useMutation({
     mutationFn: async () => {
       if (!activePlacement) throw new Error("No active placement found");
+      const hasContract = Boolean(
+        activePlacement.contract_file ||
+        activePlacement.contract_number ||
+        (applicant as any)?.contract_file ||
+        (applicant as any)?.contract_number
+      );
+      if (!hasContract) {
+        throw new Error("Signed employment contract must be uploaded on the system before advancing to Processing stage.");
+      }
       const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
       const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
       if (!isFit) {
@@ -1019,13 +1034,37 @@ export default function ApplicantDetailPage() {
                 Stage: Selected (Placement Created — Corridor Clearance Setup)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
-                Placement is active for {applicant.destination_country || "Saudi Arabia"} corridor. Allocate clearance officers to corridor steps and confirm medical fitness to advance to Processing.
+                Placement is active for {applicant.destination_country || "Saudi Arabia"} corridor. Upload the signed employment contract and confirm medical fitness to advance to Processing.
               </p>
+              {!hasUploadedContract && (
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-md border border-amber-200 dark:border-amber-800/60 w-fit mt-1">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Contract upload required before advancing to the next stage</span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-                  <FileText className="mr-1.5 h-3.5 w-3.5" /> View / Update Contract
+                <Button
+                  variant={hasUploadedContract ? "outline" : "default"}
+                  size="sm"
+                  className={
+                    hasUploadedContract
+                      ? "text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/60 dark:bg-emerald-950/30"
+                      : "text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
+                  }
+                >
+                  {hasUploadedContract ? (
+                    <>
+                      <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Contract Attached
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="mr-1.5 h-3.5 w-3.5" />
+                      Upload Contract (Required)
+                    </>
+                  )}
                 </Button>
               </Link>
               <Button
@@ -1045,6 +1084,16 @@ export default function ApplicantDetailPage() {
               <Button
                 size="sm"
                 onClick={() => {
+                  if (!hasUploadedContract) {
+                    toast.error("Signed Contract Required", {
+                      description: "Signed contract must be uploaded on the system before this selected candidate can proceed to Processing.",
+                      action: {
+                        label: "Upload Contract",
+                        onClick: () => router.push(`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`),
+                      },
+                    });
+                    return;
+                  }
                   const isFit = activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
                   const medDate = activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date;
                   if (!isFit || !medDate) {
@@ -1056,11 +1105,18 @@ export default function ApplicantDetailPage() {
                   }
                   advanceToProcessingMutation.mutate();
                 }}
-                disabled={advanceToProcessingMutation.isPending}
+                disabled={advanceToProcessingMutation.isPending || !hasUploadedContract}
                 className={
-                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") && (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
+                  hasUploadedContract &&
+                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") &&
+                  (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
                     ? "bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
-                    : "bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 text-xs font-semibold"
+                    : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed text-xs font-semibold"
+                }
+                title={
+                  !hasUploadedContract
+                    ? "Upload signed contract first to enable advancing to Processing"
+                    : undefined
                 }
               >
                 <Clock className="mr-1.5 h-3.5 w-3.5" /> Advance to Processing

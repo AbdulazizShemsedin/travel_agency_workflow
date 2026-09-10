@@ -30,6 +30,7 @@ import {
   HelpCircle,
   FileBadge2,
   Pencil,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,19 @@ export default function PlacementDocumentCenterPage() {
   const handleApproveContractAndAdvance = async () => {
     if (!activePlacement) {
       toast.error("No active placement record found.");
+      return;
+    }
+
+    const hasContract = Boolean(
+      activePlacement.contract_file ||
+      activePlacement.contract_number ||
+      (applicant as any)?.contract_file ||
+      (applicant as any)?.contract_number
+    );
+    if (!hasContract) {
+      toast.error("Signed Contract Required", {
+        description: "Please upload and attach the signed contract document before advancing to Processing stage.",
+      });
       return;
     }
 
@@ -720,20 +734,37 @@ export default function PlacementDocumentCenterPage() {
                   <div className="pt-3 border-t border-slate-100 dark:border-[#222228] space-y-2">
                     {activePlacement.status === "Selected" ? (
                       <>
-                        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-3 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
-                          <div className="font-bold flex items-center gap-1.5">
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                            Contract Uploaded — Ready for Stage Approval
+                        {Boolean(activePlacement.contract_file || activePlacement.contract_number) ? (
+                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-3 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
+                            <div className="font-bold flex items-center gap-1.5">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                              Contract Attached — Ready for Stage Approval
+                            </div>
+                            <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
+                              Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS &amp; Te&apos;shir)</strong>.
+                            </p>
                           </div>
-                          <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
-                            Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS &amp; Te&apos;shir)</strong>.
-                          </p>
-                        </div>
+                        ) : (
+                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 p-3 text-xs text-amber-900 dark:text-amber-300 space-y-1">
+                            <div className="font-bold flex items-center gap-1.5">
+                              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                              Signed Contract Document Required
+                            </div>
+                            <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80">
+                              Please choose and attach the signed contract document above before this candidate can be advanced to <strong>Processing</strong>.
+                            </p>
+                          </div>
+                        )}
                         <Button
                           type="button"
-                          disabled={isApprovingContract || !activePlacement.contract_file}
+                          disabled={isApprovingContract || !Boolean(activePlacement.contract_file || activePlacement.contract_number)}
                           onClick={handleApproveContractAndAdvance}
-                          className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2"
+                          className={cn(
+                            "w-full font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2",
+                            Boolean(activePlacement.contract_file || activePlacement.contract_number)
+                              ? "bg-emerald-800 hover:bg-emerald-900 text-white"
+                              : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                          )}
                         >
                           {isApprovingContract ? (
                             <>
