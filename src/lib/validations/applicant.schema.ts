@@ -124,7 +124,7 @@ export const baseApplicantSchema = z.object({
   job_applied: z.string().trim().default("House worker"),
   highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
   labour_id: z.string().optional().or(z.literal("")),
-  national_id: z.string().trim().min(1, "National ID / Fayda ID is required"),
+  national_id: z.string().optional().or(z.literal("")),
   contact_person_name: z.string().optional().or(z.literal("")),
   contact_person_phone: z.string().optional().or(z.literal("")),
   emergency_contact_name: z.string().optional().or(z.literal("")),
