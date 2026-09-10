@@ -41,13 +41,17 @@ export function Step3IdentificationContact({ form }: Step3IdentificationContactP
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="national_id" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                National ID / Fayda ID (Optional)
+                National ID / Fayda ID <span className="text-rose-500">*</span>
               </Label>
               <Input
                 id="national_id"
                 placeholder="e.g., FAN-123456789"
                 {...register("national_id")}
+                className={errors.national_id ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
               />
+              {errors.national_id && (
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.national_id.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">

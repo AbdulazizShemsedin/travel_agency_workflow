@@ -148,10 +148,17 @@ export function OperationalDrawer({
             <h4 className="font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider text-[11px]">
               {title}
             </h4>
-            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
-              <Lock className="h-3 w-3 text-slate-400" />
-              Fields marked grey are read-only
-            </span>
+            {canEdit ? (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60">
+                <CheckCircle2 className="h-3 w-3" />
+                Edit Access
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60">
+                <Lock className="h-3 w-3" />
+                View Only
+              </span>
+            )}
           </div>
 
           {/* --------------------------------------------------------- */}

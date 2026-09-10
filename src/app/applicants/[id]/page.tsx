@@ -747,7 +747,7 @@ export default function ApplicantDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
               {applicant.full_name || [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ") || applicant.name}
             </h1>
-            <Badge variant="default" className="text-xs">
+            <Badge variant="default" className="text-xs bg-blue-900 font-bold text-white">
               {STAGE_DISPLAY_LABELS[currentStage] || currentStage}
             </Badge>
             {applicant.applicant_state === "Cancelled" && (
@@ -1456,7 +1456,7 @@ export default function ApplicantDetailPage() {
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Relationship</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_relation || applicant.emergency_relationship || applicant.next_of_kin_relationship || "Relative"}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_relation || applicant.emergency_relationship || applicant.next_of_kin_relationship || "—"}</p>
               </div>
             </CardContent>
           </Card>

@@ -32,7 +32,7 @@ export function CandidateFilters({
   totalAvailable,
 }: CandidateFiltersProps) {
   const DESTINATIONS = [
-    { value: "All Countries", label: "🌐 Destination (All)", icon: <Globe2 className="h-3.5 w-3.5 text-slate-400" /> },
+    { value: "All Countries", label: "Destination (All)", icon: <Globe2 className="h-3.5 w-3.5 text-slate-400" /> },
     { value: "Saudi Arabia", label: "🇸🇦 Saudi Arabia" },
     { value: "Kuwait", label: "🇰🇼 Kuwait" },
     { value: "UAE", label: "🇦🇪 UAE" },
@@ -42,7 +42,7 @@ export function CandidateFilters({
   ];
 
   const JOBS = [
-    { value: "All Jobs", label: "💼 Job Position (All)", icon: <Briefcase className="h-3.5 w-3.5 text-slate-400" /> },
+    { value: "All Jobs", label: "Job Position (All)", icon: <Briefcase className="h-3.5 w-3.5 text-slate-400" /> },
     { value: "House worker", label: "House worker" },
     { value: "Nanny / Childcare", label: "Nanny / Childcare" },
     { value: "Cook / Arabic Cuisine", label: "Cook / Arabic Cuisine" },

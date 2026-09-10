@@ -278,7 +278,7 @@ export default function CandidateCvPreviewPage() {
               <FileCheck2 className="h-6 w-6 text-blue-900 dark:text-blue-400" />
               Official Bilateral CV Dossier
             </h1>
-            <Badge variant="default" className="text-xs bg-blue-900 font-bold">
+            <Badge variant="default" className="text-xs bg-blue-900 font-bold text-white">
               {applicant.applicant_state}
             </Badge>
           </div>

@@ -304,12 +304,46 @@ export function V2ClearanceQueueWorkspace() {
     },
   });
 
+  // Save reference/amount details without advancing the state machine.
+  // If the step is already In Progress, also advances to Complete.
+  const saveDetailsMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRow) return;
+      const stepStatus = (selectedRow.status || "").toLowerCase();
+      // For In Progress non-embassy steps: complete the step with the ref/amount
+      if (stepStatus === "in progress" && !isEmbassyStep) {
+        await completeClearanceStepV2(
+          selectedRow.name,
+          referenceNo.trim() || undefined,
+          amount ? Number(amount) : undefined
+        );
+      } else if (stepStatus === "in progress" && isEmbassyStep) {
+        // Embassy in-progress: save ref via stamp call
+        await stampEmbassyStepV2(selectedRow.name, referenceNo.trim() || undefined);
+      } else if (stepStatus === "submitted" && isEmbassyStep) {
+        await stampEmbassyStepV2(selectedRow.name, referenceNo.trim() || undefined);
+      } else {
+        // For Pending steps: just start the step (advance to In Progress) if ref/amount entered
+        await startClearanceStepV2(selectedRow.name);
+      }
+    },
+    onSuccess: () => {
+      toast.success(`Clearance step for ${selectedRow?.full_name} saved successfully.`);
+      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+      setIsDrawerOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to save clearance step details.");
+    },
+  });
+
   const isSaving =
     startMutation.isPending ||
     completeMutation.isPending ||
     submitEmbassyMutation.isPending ||
     stampEmbassyMutation.isPending ||
-    rejectEmbassyMutation.isPending;
+    rejectEmbassyMutation.isPending ||
+    saveDetailsMutation.isPending;
 
   const handleRowClick = (row: V2ClearanceQueueRow) => {
     setSelectedRow(row);
@@ -1202,6 +1236,18 @@ export function V2ClearanceQueueWorkspace() {
         applicantId={selectedRow?.name || ""}
         passportNumber={selectedRow?.passport_number || undefined}
         statusBadge={selectedRow ? renderStatusBadge(selectedRow.status) : undefined}
+        canEdit={canOperateSelectedStep && !isTerminalStatus}
+        isSaving={isSaving}
+        onSave={canOperateSelectedStep && !isTerminalStatus ? () => saveDetailsMutation.mutate() : undefined}
+        saveButtonText={
+          selectedRow?.status === "In Progress" && !isEmbassyStep
+            ? "Save & Mark Complete"
+            : selectedRow?.status === "In Progress" && isEmbassyStep
+            ? "Record Visa Stamp"
+            : selectedRow?.status === "Submitted" && isEmbassyStep
+            ? "Record Visa Stamp"
+            : "Save & Start Step"
+        }
       >
         {selectedRow && (
           <div className="space-y-6">
@@ -1322,33 +1368,83 @@ export function V2ClearanceQueueWorkspace() {
               </div>
             </DrawerSection>
 
-            {/* Section 4: Authoritative Operational Actions */}
-            <DrawerSection title="Clearance Action Controls" icon={FileCheck2}>
+            {/* Section 4: Editable Step Details (Reference No, Amount, Rejection Remark) */}
+            <DrawerSection title="Step Details & Reference" icon={FileCheck2}>
               {/* Role Permission Check Warning */}
               {!canOperateSelectedStep && (
-                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <div className="col-span-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
                   <Lock className="h-4 w-4 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-semibold">Action Restricted: </span>
+                    <span className="font-semibold">View-Only: </span>
                     Operating this step requires the{" "}
                     <strong>{CLEARANCE_ROLE_BY_STEP_TYPE[selectedRow.step_type] || "Clearance Officer"}</strong>{" "}
-                    or <strong>Manager / Admin</strong> role. Your assigned roles are view-only for this step type.
+                    or <strong>Manager / Admin</strong> role.
                   </div>
                 </div>
               )}
 
               {/* Terminal State Banner */}
               {isTerminalStatus && (
-                <div className="p-3 rounded-lg bg-slate-100 dark:bg-[#181820] border border-slate-200 dark:border-[#272730] text-xs text-slate-700 dark:text-zinc-300 space-y-1.5">
+                <div className="col-span-2 p-3 rounded-lg bg-slate-100 dark:bg-[#181820] border border-slate-200 dark:border-[#272730] text-xs text-slate-700 dark:text-zinc-300 space-y-1.5">
                   <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    Terminal State Reached ({selectedRow.status})
+                    Step Finalized ({selectedRow.status})
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-zinc-400">
                     This clearance step is finalized and cannot be modified further.
                   </p>
+                </div>
+              )}
+
+              {/* Always-visible editable Reference No + Amount + Rejection Remark fields */}
+              <DrawerField label="Reference / Permit / Visa No" isReadOnly={false}>
+                <Input
+                  type="text"
+                  placeholder="e.g. REF-2026-91823"
+                  value={referenceNo}
+                  onChange={(e) => setReferenceNo(e.target.value)}
+                  disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                  className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </DrawerField>
+
+              <DrawerField label="Clearance Fee / Amount (Optional)" isReadOnly={false}>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                    className="h-9 text-xs pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  />
+                  <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">ETB</span>
+                </div>
+              </DrawerField>
+
+              {isEmbassyStep && (
+                <div className="sm:col-span-2">
+                  <DrawerField label="Rejection Remark (if rejected)" isReadOnly={false}>
+                    <Textarea
+                      rows={2}
+                      value={rejectionRemark}
+                      onChange={(e) => setRejectionRemark(e.target.value)}
+                      placeholder="Specify embassy refusal ground or missing document..."
+                      disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                      className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                    />
+                  </DrawerField>
+                </div>
+              )}
+            </DrawerSection>
+
+            {/* Section 5: Authoritative Operational Actions */}
+            <DrawerSection title="Clearance Action Controls" icon={ShieldCheck}>
+              {/* Terminal State Info */}
+              {isTerminalStatus && (
+                <div className="col-span-2 p-3 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#272730] text-xs text-slate-600 dark:text-zinc-400">
                   {selectedRow.reference_no && (
-                    <div className="font-mono text-xs text-slate-800 dark:text-zinc-200">
+                    <div className="font-mono text-xs text-slate-800 dark:text-zinc-200 mb-1">
                       Reference No: <strong>{selectedRow.reference_no}</strong>
                     </div>
                   )}
@@ -1357,6 +1453,7 @@ export function V2ClearanceQueueWorkspace() {
                       Rejection Remark: {selectedRow.rejection_remark}
                     </div>
                   )}
+                  <p className="mt-1 text-[11px] text-slate-400">All workflow actions are locked for this finalized step.</p>
                 </div>
               )}
 

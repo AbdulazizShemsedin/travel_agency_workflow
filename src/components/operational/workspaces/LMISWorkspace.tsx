@@ -528,6 +528,25 @@ export function LMISWorkspace({
         isSaving={mutation.isPending}
         onSave={() => mutation.mutate()}
       >
+        {/* View-Only Banner: shown when user lacks LMIS edit permissions */}
+        {!canEdit && (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-start gap-3">
+            <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                View Only — No Edit Access
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-400 leading-relaxed">
+                Your account does not have an LMIS edit role. To modify this clearance record, your administrator must assign you one of the following roles:{" "}
+                <strong>Saudi LMIS</strong>, <strong>Kuwait LMIS</strong>, <strong>Clearance Officer</strong>, <strong>Manager</strong>, or <strong>Agency Admin</strong>.
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-500 font-medium mt-1">
+                Currently signed in as: <span className="font-mono">{authUser?.email || authUser?.full_name || "Unknown"}</span>
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Section 1: Read-Only Candidate Context */}
         <DrawerSection title="Candidate & Contract Context" icon={User}>
           <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
