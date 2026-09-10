@@ -639,32 +639,7 @@ export function PushNotificationToggle() {
               </span>
             )}
 
-            {/* Admin Diagnostics quick buttons */}
-            {!isForeignAgency && isSystemManagerOrAdmin && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsStorageModalOpen(true);
-                    handleTestStorage();
-                  }}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer"
-                  title="Test R2 object storage readiness"
-                >
-                  <Database className="h-3 w-3 text-emerald-500" />
-                  <span>R2</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsRegenVapidModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-                  title="Regenerate VAPID push keys"
-                >
-                  <KeyRound className="h-3 w-3 text-amber-500" />
-                  <span>VAPID</span>
-                </button>
-              </div>
-            )}
+
           </div>
         </PopoverContent>
       </Popover>

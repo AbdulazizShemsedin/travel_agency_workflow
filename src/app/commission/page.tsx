@@ -792,9 +792,7 @@ export default function AdminCommissionPage() {
               Commission Batches & Foreign Agency Settlement
             </h1>
           </div>
-          <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Authoritative commission lifecycle: Owed accumulation • Batch generation (CBR-#####) • On-demand PDF invoices • Full & partial settlements • Contractor threshold rules.
-          </p>
+
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -1139,9 +1137,7 @@ export default function AdminCommissionPage() {
                     <Layers className="h-4 w-4 text-emerald-600" />
                     Unbatched Approved Commissions
                   </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Commissions accrued when applicants reach Departed (or triggered early). Select items to group into a Commission Batch Request (CBR-#####).
-                  </CardDescription>
+
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1928,9 +1924,7 @@ export default function AdminCommissionPage() {
                       {activeBatch.status}
                     </Badge>
                   </div>
-                  <CardDescription className="text-xs mt-0.5">
-                    Marks all items Paid, stamps settlement reference, and completes batch {activeBatch.name}.
-                  </CardDescription>
+
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4 text-xs">
@@ -2001,9 +1995,7 @@ export default function AdminCommissionPage() {
                     </CardTitle>
                     <span className="text-[10px] text-slate-400">CSV / PDF</span>
                   </div>
-                  <CardDescription className="text-xs mt-0.5">
-                    Upload agency paid applicant lists to match against batch {activeBatch.name}.
-                  </CardDescription>
+
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4 text-xs">
@@ -2150,9 +2142,7 @@ export default function AdminCommissionPage() {
                       <CreditCard className="h-4 w-4 text-amber-600" />
                       Record Advance Wire Payment
                     </CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      Invokes <code>record_batch_advance</code>. Records a separate advance loan in {activeBatch?.currency || "the batch currency"}; it does not reduce balance due.
-                    </CardDescription>
+
                   </CardHeader>
 
                   <CardContent className="p-4 space-y-3 text-xs">
@@ -2223,9 +2213,7 @@ export default function AdminCommissionPage() {
                         </span>
                       )}
                     </div>
-                    <CardDescription className="text-xs mt-0.5">
-                      Invokes <code>settle_batch_items</code> to mark specific line items Paid.
-                    </CardDescription>
+
                   </CardHeader>
 
                   <CardContent className="p-4 space-y-3 text-xs">
@@ -2323,9 +2311,7 @@ export default function AdminCommissionPage() {
                           <AlertTriangle className="h-4 w-4 text-rose-600" />
                           Write Off Batch Balance (Bad Debt Discharge)
                         </CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
-                          Invokes authoritative <code>write_off_batch</code> to discharge uncollectible partner debt with required justification reason.
-                        </CardDescription>
+
                       </div>
                       <Button
                         type="button"
@@ -2392,9 +2378,7 @@ export default function AdminCommissionPage() {
                     <Settings className="h-4 w-4 text-emerald-600" />
                     Partner Agency Batch & Commission Settings
                   </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Configure batch creation mode, unbatched auto-generation thresholds, and default corridor commission rates.
-                  </CardDescription>
+
                 </div>
 
                 <Button
@@ -2471,9 +2455,7 @@ export default function AdminCommissionPage() {
                         {contractorRates.length} configured
                       </Badge>
                     </h4>
-                    <p className="text-[11px] text-slate-500">
-                      Authoritative matrix: Destination Country × Entry Track (Standard, Muayena) × Gender (Female, Male) × Rate × Currency.
-                    </p>
+
                   </div>
 
                   <Button
