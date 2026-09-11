@@ -389,3 +389,30 @@ export async function updateKuwaitPoliceAsharaV2(
   });
 }
 
+/**
+ * Fetches the full Clearance Step document from the backend via frappe.client.get.
+ * Provides all sub-flow fields (injaz, wakala, police_ashara, payment details, notes).
+ */
+export async function getClearanceStepDocV2(
+  clearanceStepName: string
+): Promise<V2ClearanceStepItem | null> {
+  try {
+    const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
+      "/api/method/frappe.client.get",
+      {
+        method: "POST",
+        body: {
+          doctype: "Clearance Step",
+          name: clearanceStepName,
+        },
+      }
+    );
+    if (!res) return null;
+    return (res as any).message || res;
+  } catch (err) {
+    console.warn("getClearanceStepDocV2 error:", err);
+    return null;
+  }
+}
+
+

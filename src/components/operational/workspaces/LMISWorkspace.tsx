@@ -37,8 +37,9 @@ import {
   completeClearanceStepV2,
   reassignClearanceStepV2,
   updateKuwaitPoliceAsharaV2,
+  getClearanceStepDocV2,
 } from "@/lib/api/v2/clearance";
-import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
+import { updateApplicantForLmisV2, getApplicantV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 
@@ -115,42 +116,95 @@ export function LMISWorkspace({
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
-    if (selectedRow) {
-      const lms = (selectedRow.lms as any) || {};
-      const st = lms?.status;
-      if (st === "Issued" || st === "Approved" || st === "Completed" || st === "Complete") {
-        setStatus("Issued");
-      } else if (st === "Rejected") {
-        setStatus("Rejected");
-      } else {
-        setStatus("Pending");
-      }
+    if (!selectedRow) return;
 
-      setIssuedOn(lms?.date_completed || lms?.issued_on || "");
-      const app = (selectedRow.applicant as any) || {};
-      const cleanLaborId = selectedRow.laborId && !selectedRow.laborId.toUpperCase().startsWith("APP-")
-        ? selectedRow.laborId
-        : (app.labor_id && !app.labor_id.toUpperCase().startsWith("APP-") ? app.labor_id : "");
-      setLaborRefNo(cleanLaborId || "");
-      setEmployee(lms?.assigned_officer || lms?.employee || lms?.completed_by || "");
+    let isMounted = true;
 
-      setNationalId(app.national_id || lms?.national_id || "");
-      setEmergencyContactName(app.emergency_contact_name || app.contact_person || "");
-      setEmergencyContactPhone(app.emergency_contact_phone || app.contact_phone || selectedRow.phone || "");
-      
-      const rawCoc = app.coc_status || lms?.coc_status || "";
-      const cleanCoc = rawCoc === "Passed" ? "Issued" : (["Pending", "Issued", "Not Started"].includes(rawCoc) ? rawCoc : "Not Started");
-      setCocStatus(cleanCoc);
-      setExamDate(app.exam_date || lms?.exam_date || "");
-      setInsurancePayment(app.insurance_payment ? String(app.insurance_payment) : "");
-      setLmisPayment(app.lmis_payment ? String(app.lmis_payment) : "");
-
-      setPoliceAsharaRefNo(lms?.police_ashara_reference_no || lms?.reference_no || lms?.police_clearance_no || app.police_clearance_no || "");
-      setPoliceAsharaStatus(lms?.police_ashara_status || (lms?.police_clearance_status as any) || "Pending");
-      setPoliceAsharaDate(lms?.police_ashara_appointment_date || "");
-      setPoliceAsharaAmount(lms?.police_ashara_amount ? String(lms.police_ashara_amount) : "");
-      setPoliceAsharaRemark(lms?.police_ashara_remark || "");
+    // 1. Synchronously initialize from table row
+    const lms = (selectedRow.lms as any) || {};
+    const st = lms?.status;
+    if (st === "Issued" || st === "Approved" || st === "Completed" || st === "Complete") {
+      setStatus("Issued");
+    } else if (st === "Rejected") {
+      setStatus("Rejected");
+    } else {
+      setStatus("Pending");
     }
+
+    setIssuedOn(lms?.date_completed || lms?.issued_on || "");
+    const app = (selectedRow.applicant as any) || {};
+    const cleanLaborId = selectedRow.laborId && !selectedRow.laborId.toUpperCase().startsWith("APP-")
+      ? selectedRow.laborId
+      : (app.labor_id && !app.labor_id.toUpperCase().startsWith("APP-") ? app.labor_id : "");
+    setLaborRefNo(cleanLaborId || "");
+    setEmployee(lms?.assigned_officer || lms?.employee || lms?.completed_by || "");
+
+    setNationalId(app.national_id || lms?.national_id || "");
+    setEmergencyContactName(app.emergency_contact_name || app.contact_person || "");
+    setEmergencyContactPhone(app.emergency_contact_phone || app.contact_phone || selectedRow.phone || "");
+    
+    const rawCoc = app.coc_status || lms?.coc_status || "";
+    const cleanCoc = rawCoc === "Passed" ? "Issued" : (["Pending", "Issued", "Not Started"].includes(rawCoc) ? rawCoc : "Not Started");
+    setCocStatus(cleanCoc);
+    setExamDate(app.exam_date || lms?.exam_date || "");
+    setInsurancePayment(app.insurance_payment ? String(app.insurance_payment) : "");
+    setLmisPayment(app.lmis_payment ? String(app.lmis_payment) : "");
+
+    setPoliceAsharaRefNo(lms?.police_ashara_reference_no || lms?.reference_no || lms?.police_clearance_no || app.police_clearance_no || "");
+    setPoliceAsharaStatus(lms?.police_ashara_status || (lms?.police_clearance_status as any) || "Pending");
+    setPoliceAsharaDate(lms?.police_ashara_appointment_date || "");
+    setPoliceAsharaAmount(lms?.police_ashara_amount ? String(lms.police_ashara_amount) : "");
+    setPoliceAsharaRemark(lms?.police_ashara_remark || "");
+
+    // 2. Fetch authoritative fresh records in background to ensure all persisted fields (COC, National ID, Emergency Contacts, etc.) are 100% current
+    const stepName = selectedRow.clearanceStepName || selectedRow.lms?.name;
+    Promise.all([
+      getApplicantV2(selectedRow.applicantId).catch(() => null),
+      stepName ? getClearanceStepDocV2(stepName).catch(() => null) : null,
+    ]).then(([freshApp, freshStep]) => {
+      if (!isMounted) return;
+      if (freshApp) {
+        if (freshApp.labor_id && !freshApp.labor_id.toUpperCase().startsWith("APP-")) {
+          setLaborRefNo(freshApp.labor_id);
+        }
+        if (freshApp.national_id) setNationalId(freshApp.national_id);
+        if (freshApp.emergency_contact_name) setEmergencyContactName(freshApp.emergency_contact_name);
+        if (freshApp.emergency_contact_phone) setEmergencyContactPhone(freshApp.emergency_contact_phone);
+        if (freshApp.coc_status) {
+          const cCoc = freshApp.coc_status === "Passed" ? "Issued" : freshApp.coc_status;
+          setCocStatus(cCoc);
+        }
+        if (freshApp.exam_date) setExamDate(freshApp.exam_date);
+        if (freshApp.insurance_payment !== undefined && freshApp.insurance_payment !== null) {
+          setInsurancePayment(String(freshApp.insurance_payment));
+        }
+        if (freshApp.lmis_payment !== undefined && freshApp.lmis_payment !== null) {
+          setLmisPayment(String(freshApp.lmis_payment));
+        }
+      }
+      if (freshStep) {
+        if (freshStep.status === "Issued" || freshStep.status === "Approved" || freshStep.status === "Completed" || freshStep.status === "Complete") {
+          setStatus("Issued");
+        } else if (freshStep.status === "Rejected") {
+          setStatus("Rejected");
+        }
+        if (freshStep.date_completed) setIssuedOn(freshStep.date_completed);
+        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
+          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
+        }
+        if (freshStep.police_ashara_reference_no || freshStep.reference_no) {
+          setPoliceAsharaRefNo(freshStep.police_ashara_reference_no || freshStep.reference_no);
+        }
+        if (freshStep.police_ashara_status) setPoliceAsharaStatus(freshStep.police_ashara_status);
+        if (freshStep.police_ashara_appointment_date) setPoliceAsharaDate(freshStep.police_ashara_appointment_date);
+        if (freshStep.police_ashara_amount) setPoliceAsharaAmount(String(freshStep.police_ashara_amount));
+        if (freshStep.police_ashara_remark) setPoliceAsharaRemark(freshStep.police_ashara_remark);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRow]);
 
   // Mutation to persist LMIS changes via authoritative V2 endpoints
@@ -252,9 +306,11 @@ export function LMISWorkspace({
     },
     onSuccess: () => {
       toast.success(`LMIS Clearance for ${selectedRow?.fullName} updated successfully!`);
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
       onRefresh();
       setSelectedRow(null);
     },

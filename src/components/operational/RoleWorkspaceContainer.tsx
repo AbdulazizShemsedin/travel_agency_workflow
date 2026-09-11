@@ -203,7 +203,7 @@ export function RoleWorkspaceContainer() {
     queryKey: ["operational_workspace_v2", streamType, corridorFilter],
     queryFn: () => fetchOperationalWorkspaceDataV2(streamType, corridorFilter),
     enabled: isOperationalTab,
-    staleTime: 10000,
+    staleTime: 0,
   });
 
   // Workspace Titles & Descriptions for header

@@ -1,16 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { AppLayoutClient } from "@/components/layout/AppLayoutClient";
-
-const hankenGrotesk = Hanken_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-hanken-grotesk",
-  weight: ["300", "400", "500", "600", "700", "800"],
-  display: "swap",
-});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -30,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${hankenGrotesk.variable} w-full max-w-full overflow-x-clip`} suppressHydrationWarning>
+    <html lang="en" className="w-full max-w-full overflow-x-clip" suppressHydrationWarning>
       <body className="min-h-screen w-full max-w-full overflow-x-clip bg-slate-50 dark:bg-[#090d16] font-sans text-slate-900 dark:text-slate-100 antialiased">
         <QueryProvider>
           <AuthProvider>

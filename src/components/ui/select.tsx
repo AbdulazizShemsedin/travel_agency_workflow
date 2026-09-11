@@ -26,7 +26,7 @@ const SelectTrigger = React.forwardRef<
       "border-slate-200 dark:border-[#272730] hover:border-slate-300 dark:hover:border-[#383844] hover:bg-slate-50 dark:hover:bg-[#18181f]",
       "focus:outline-none focus:ring-2 focus:ring-emerald-700/20 dark:focus:ring-emerald-500/20 focus:border-emerald-700 dark:focus:border-emerald-500",
       "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 dark:disabled:bg-[#101014]",
-      "[&>span]:line-clamp-1 text-left",
+      "[&>span]:truncate [&>span]:block whitespace-nowrap text-left",
       error && "border-rose-500 focus:ring-rose-500/20 focus:border-rose-500",
       className
     )}

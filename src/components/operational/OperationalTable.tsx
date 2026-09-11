@@ -400,7 +400,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
 
           {/* TanStack Status Filter Dropdown */}
           {availableStatuses.length > 0 && (
-            <div className="w-40 sm:w-44">
+            <div className="min-w-[150px] sm:min-w-[175px]">
               <SimpleSelect
                 value={selectedStatusFilter}
                 onValueChange={setSelectedStatusFilter}
@@ -408,14 +408,14 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   { value: "ALL", label: `All Statuses (${data.length})` },
                   ...availableStatuses.map((st) => ({ value: st, label: `Status: ${st}` })),
                 ]}
-                triggerClassName="h-8 px-2.5 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] font-semibold"
+                triggerClassName="h-8 px-2.5 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] font-semibold whitespace-nowrap"
                 aria-label="Filter by Status"
               />
             </div>
           )}
 
           {/* Remaining Date Urgency Filter */}
-          <div className="w-44 sm:w-48">
+          <div className="min-w-[150px] sm:min-w-[175px]">
             <SimpleSelect
               value={selectedUrgencyFilter}
               onValueChange={setSelectedUrgencyFilter}
@@ -426,7 +426,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                 { value: "VALID", label: "✓ Valid (> 15d)" },
               ]}
               triggerClassName={cn(
-                "h-8 px-2.5 text-xs font-semibold",
+                "h-8 px-2.5 text-xs font-semibold whitespace-nowrap",
                 selectedUrgencyFilter !== "ALL"
                   ? "border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/30"
                   : "border-slate-200 dark:border-[#2c2c36] bg-white dark:bg-[#1a1a20]"

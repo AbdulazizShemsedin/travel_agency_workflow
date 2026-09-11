@@ -24,11 +24,32 @@ export interface ParsedPassportMRZ {
  * Parses standard ICAO Doc 9303 Machine Readable Zone (MRZ) 2-line format (TD3)
  */
 export function parseMRZText(rawText: string): ParsedPassportMRZ | null {
-  if (!rawText) return null;
+  if (!rawText || !rawText.trim()) return null;
+
+  // Split on newlines
+  let rawLines = rawText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // If pasted as a single line, attempt to split if space-separated or exactly 88+ chars
+  if (rawLines.length === 1) {
+    const single = rawLines[0];
+    if (single.includes(" ")) {
+      const spaceParts = single.split(/\s+/).filter((p) => p.length >= 25);
+      if (spaceParts.length >= 2) {
+        rawLines = spaceParts;
+      }
+    } else {
+      const cleaned = single.replace(/[^A-Z0-9<]/gi, "").toUpperCase();
+      if (cleaned.length >= 80) {
+        rawLines = [cleaned.slice(0, 44), cleaned.slice(44, 88)];
+      }
+    }
+  }
 
   // Clean lines: keep alphanumeric and '<'
-  const lines = rawText
-    .split(/\r?\n/)
+  const lines = rawLines
     .map((l) => l.replace(/[^A-Z0-9<]/gi, "").toUpperCase())
     .filter((l) => l.length >= 25);
 
@@ -48,7 +69,7 @@ export function parseMRZText(rawText: string): ParsedPassportMRZ | null {
 
   // If not found by prefix, find the two longest lines containing '<'
   if (!line1 || !line2) {
-    const candidateLines = lines.filter((l) => l.includes("<") && l.length >= 30);
+    const candidateLines = lines.filter((l) => l.includes("<") && l.length >= 25);
     if (candidateLines.length >= 2) {
       line1 = candidateLines[0];
       line2 = candidateLines[1];
@@ -83,6 +104,8 @@ export function parseMRZText(rawText: string): ParsedPassportMRZ | null {
       nameString = nameString.substring(1);
     }
 
+    nameString = nameString.replace(/^<+/, "");
+
     const nameParts = nameString.split("<<");
     lastName = nameParts[0]?.replace(/<+/g, " ").trim() || "";
     
@@ -90,6 +113,19 @@ export function parseMRZText(rawText: string): ParsedPassportMRZ | null {
       const givenParts = nameParts[1].split("<").filter(Boolean);
       firstName = givenParts[0] || "";
       middleName = givenParts[1] || "";
+    } else if (nameString.includes("<")) {
+      const tokens = nameString.split("<").filter(Boolean);
+      if (tokens.length >= 3) {
+        lastName = tokens[0];
+        firstName = tokens[1];
+        middleName = tokens[2];
+      } else if (tokens.length === 2) {
+        lastName = tokens[0];
+        firstName = tokens[1];
+      } else if (tokens.length === 1) {
+        firstName = tokens[0];
+        lastName = tokens[0];
+      }
     }
   }
 

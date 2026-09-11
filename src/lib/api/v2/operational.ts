@@ -111,16 +111,39 @@ export async function fetchOperationalWorkspaceDataV2(
       );
 
       // Check step completion statuses
-      const isLmsFinished =
-        lmsStep?.status === "Completed" ||
-        lmsStep?.status === "Approved" ||
-        lmsStep?.status === "Issued";
+      const isSaudi = dest.toLowerCase().includes("saudi");
 
-      const isInjFinished =
+      // 1. LMIS Completion: LMIS step must be Issued/Completed, and COC fields finished (for Saudi)
+      const isLmsIssued =
+        lmsStep?.status === "Issued" ||
+        lmsStep?.status === "Completed" ||
+        lmsStep?.status === "Complete" ||
+        lmsStep?.status === "Approved";
+
+      const hasCocFinished =
+        !isSaudi ||
+        applicant.coc_status === "Issued" ||
+        applicant.coc_status === "Passed" ||
+        (lmsStep as any)?.coc_status === "Issued" ||
+        (lmsStep as any)?.coc_status === "Passed" ||
+        Boolean(applicant.exam_date || (lmsStep as any)?.exam_date);
+
+      const isLmsFullyCompleted = Boolean(lmsStep && isLmsIssued && hasCocFinished);
+
+      // 2. Te'shir Completion: Step must be completed/issued and Injaz must be paid
+      const isTeshirStepFinished =
         injazStep?.status === "Completed" ||
-        injazStep?.status === "Approved" ||
+        injazStep?.status === "Complete" ||
         injazStep?.status === "Issued" ||
-        (injazStep?.payment_status || "").toLowerCase().includes("paid");
+        injazStep?.status === "Approved";
+
+      const isInjazPaid =
+        (injazStep?.payment_status || "").toLowerCase().includes("paid") ||
+        (injazStep as any)?.injaz_payment_status === "Paid" ||
+        injazStep?.status === "Completed" ||
+        injazStep?.status === "Issued";
+
+      const isTeshirFullyCompleted = Boolean(injazStep && isTeshirStepFinished && (!isSaudi || isInjazPaid));
 
       const isEmbassyFinished =
         embassyStep?.status === "Stamped" ||
@@ -147,14 +170,35 @@ export async function fetchOperationalWorkspaceDataV2(
         continue;
       }
 
-      if (streamType === "embassy") {
-        // Embassy sheet: placements in the clearance flow or beyond
+      if (streamType === "embassy" || streamType === "wakala") {
+        // Strict Clearance Order: LMIS (COC finished & LMIS issued) AND Te'shir (plus Injaz paid)
+        // must BOTH be completed before an applicant can appear on Embassy & Stamping (or Wakala)
+        if (!isLmsFullyCompleted || !isTeshirFullyCompleted) {
+          continue;
+        }
+
         const isEmbassyState =
           plc?.status === "Processing" ||
           plc?.status === "Stamped" ||
           plc?.status === "Ticketed" ||
           plc?.status === "Departed";
         if (!embassyStep && !isEmbassyState) {
+          continue;
+        }
+      } else if (streamType === "departure") {
+        // Strict Clearance Order: LMIS and Te'shir must be completed first, AND Embassy/Stamping completed
+        // before an applicant can appear on Flight Ticketing & Airport Departure
+        if (!isLmsFullyCompleted || !isTeshirFullyCompleted) {
+          continue;
+        }
+
+        const isStampedOrBeyond =
+          isEmbassyFinished ||
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed";
+
+        if (!isStampedOrBeyond) {
           continue;
         }
       } else if (streamType === "injaz") {
@@ -175,17 +219,6 @@ export async function fetchOperationalWorkspaceDataV2(
           plc?.status === "Ticketed" ||
           plc?.status === "Departed";
         if (!lmsStep && !isProcessingOrBeyond) {
-          continue;
-        }
-      } else if (streamType === "departure") {
-        // Departure workspace shows Stamped, Ticketed, or Departed placements
-        const isStampedOrBeyond =
-          isEmbassyFinished ||
-          plc?.status === "Stamped" ||
-          plc?.status === "Ticketed" ||
-          plc?.status === "Departed";
-
-        if (!isStampedOrBeyond) {
           continue;
         }
       }

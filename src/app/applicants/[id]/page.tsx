@@ -42,6 +42,8 @@ import {
   XCircle,
   Trash2,
   AlertTriangle,
+  ShieldAlert,
+  Unlock,
 } from "lucide-react";
 import {
   getApplicantV2,
@@ -91,6 +93,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/providers/AuthProvider";
 
@@ -134,6 +137,8 @@ export default function ApplicantDetailPage() {
   // Modals state
   const [isAssignModalOpen, setIsAssignModalOpen] = React.useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
+  const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
+  const [restartTargetStatus, setRestartTargetStatus] = React.useState<"Draft" | "Registered">("Draft");
   const [isMusanedModalOpen, setIsMusanedModalOpen] = React.useState(false);
   const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
   const [isTicketingModalOpen, setIsTicketingModalOpen] = React.useState(false);
@@ -143,6 +148,21 @@ export default function ApplicantDetailPage() {
   const [med1Date, setMed1Date] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [med1Expiry, setMed1Expiry] = React.useState("");
   const [cancelRemarks, setCancelRemarks] = React.useState("");
+
+  // Country Ban (Ashara Teyezuwal) state
+  const [isCountryBanModalOpen, setIsCountryBanModalOpen] = React.useState(false);
+  const [banCountry, setBanCountry] = React.useState("Kuwait");
+  const [banReason, setBanReason] = React.useState("");
+  const [isLiftBanModalOpen, setIsLiftBanModalOpen] = React.useState(false);
+  const [banToLift, setBanToLift] = React.useState<any>(null);
+  const [liftBanReason, setLiftBanReason] = React.useState("");
+
+  const canSetBan = roles.some((r) =>
+    ["Registrar", "Complaint Manager", "Manager", "Admin", "System Manager", "Administrator"].includes(r)
+  );
+  const canLiftBan = roles.some((r) =>
+    ["Manager", "Admin", "System Manager", "Administrator", "General Manager", "Operations Manager"].includes(r)
+  );
 
   // Multiple Fee & Expense logging state for candidate profile
   const [isLogFeeModalOpen, setIsLogFeeModalOpen] = React.useState(false);
@@ -388,7 +408,7 @@ export default function ApplicantDetailPage() {
     [placementOfficers, employees, corridorCountry]
   );
 
-  const { data: countryBans = [] } = useQuery({
+  const { data: countryBans = [], refetch: refetchCountryBans } = useQuery({
     queryKey: ["country-bans", applicantId],
     queryFn: () => listCountryBansV2(applicantId),
     enabled: !!applicantId,
@@ -469,11 +489,12 @@ export default function ApplicantDetailPage() {
   });
 
   const restartMutation = useMutation({
-    mutationFn: () => restartApplicantV2(applicantId, "Draft"),
+    mutationFn: (targetStatus?: "Draft" | "Registered") => restartApplicantV2(applicantId, targetStatus || restartTargetStatus || "Draft"),
     onSuccess: (data) => {
+      setIsRestartModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(data.message || "Applicant restarted to Draft.");
+      toast.success(data.message || `Applicant restarted to ${restartTargetStatus}.`);
     },
     onError: (err: Error) => toast.error("Restart failed", { description: err.message }),
   });
@@ -519,6 +540,43 @@ export default function ApplicantDetailPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to record Medical result", { description: err.message });
+    },
+  });
+
+  const setCountryBanMutation = useMutation({
+    mutationFn: async () => {
+      if (!banReason.trim()) throw new Error("A written reason is required when setting a Country Ban.");
+      return await setCountryBanV2(applicantId, banCountry, banReason.trim());
+    },
+    onSuccess: () => {
+      toast.success(`Country ban (Ashara Teyezuwal) set for ${banCountry}.`);
+      setIsCountryBanModalOpen(false);
+      setBanReason("");
+      refetchCountryBans();
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to set country ban.");
+    },
+  });
+
+  const removeCountryBanMutation = useMutation({
+    mutationFn: async () => {
+      if (!banToLift?.name) return;
+      return await removeCountryBanV2(banToLift.name);
+    },
+    onSuccess: () => {
+      toast.success("Country ban lifted successfully by Manager Override.");
+      setIsLiftBanModalOpen(false);
+      setBanToLift(null);
+      setLiftBanReason("");
+      refetchCountryBans();
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to lift country ban.");
     },
   });
 
@@ -781,7 +839,7 @@ export default function ApplicantDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => restartMutation.mutate()}
+              onClick={() => setIsRestartModalOpen(true)}
               disabled={restartMutation.isPending}
               className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300"
             >
@@ -850,8 +908,61 @@ export default function ApplicantDetailPage() {
               Edit Profile
             </Button>
           </Link>
+
+          {canSetBan && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCountryBanModalOpen(true)}
+              className="text-xs border-rose-300 dark:border-rose-900 text-rose-800 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+              title="Set permanent country ban (Ashara Teyezuwal)"
+            >
+              <ShieldAlert className="mr-1.5 h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              Country Ban (Ashara)
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Active Country Ban (Ashara Teyezuwal) Alert Banner */}
+      {countryBans.length > 0 && (
+        <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50/90 dark:bg-rose-950/40 p-4 shadow-sm animate-in fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-rose-900 dark:text-rose-200 flex items-center gap-2">
+                  Permanent Country Ban Active (Ashara Teyezuwal)
+                  <Badge variant="destructive" className="text-[10px] uppercase font-bold">
+                    Blacklisted
+                  </Badge>
+                </h4>
+                <div className="mt-1 space-y-1">
+                  {countryBans.map((ban) => (
+                    <p key={ban.name} className="text-xs text-rose-800 dark:text-rose-300">
+                      • <strong>{ban.country}</strong> — Reason: <em>{ban.reason || "No reason recorded"}</em> (Set by {ban.set_by || "Staff"} on {ban.set_on || "Record"})
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {canLiftBan && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBanToLift(countryBans[0]);
+                  setIsLiftBanModalOpen(true);
+                }}
+                className="text-xs border-rose-300 text-rose-800 hover:bg-rose-100 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/60 shrink-0"
+              >
+                <Unlock className="mr-1.5 h-3.5 w-3.5" />
+                Manager Override (Lift Ban)
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Canonical 9-Stage Stepper Ribbon */}
       <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 shadow-xs overflow-x-auto">
@@ -1980,6 +2091,214 @@ export default function ApplicantDetailPage() {
               ) : (
                 `Submit ${profileFees.filter((f) => parseFloat(f.amount) > 0).length || profileFees.length} Fee Entry to Finance`
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set Country Ban (Ashara Teyezuwal) Dialog */}
+      <Dialog open={isCountryBanModalOpen} onOpenChange={setIsCountryBanModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-700 dark:text-rose-400">
+              <ShieldAlert className="h-5 w-5 text-rose-600" />
+              Set Country Ban (Ashara Teyezuwal)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Establish a permanent per-applicant country blacklist. This candidate will be restricted from placement in the specified corridor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <Label className="text-xs font-semibold">Target Destination Country *</Label>
+              <select
+                value={banCountry}
+                onChange={(e) => setBanCountry(e.target.value)}
+                className="h-9 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-3 text-xs font-semibold"
+              >
+                <option value="Kuwait">Kuwait</option>
+                <option value="Saudi Arabia">Saudi Arabia</option>
+                <option value="United Arab Emirates">United Arab Emirates</option>
+                <option value="Qatar">Qatar</option>
+                <option value="Jordan">Jordan</option>
+                <option value="Oman">Oman</option>
+              </select>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">Written Reason / Justification *</Label>
+              <Textarea
+                rows={3}
+                placeholder="e.g. Police CID finger-print match / previous deportation / medical disqualification"
+                value={banReason}
+                onChange={(e) => setBanReason(e.target.value)}
+                className="mt-1 text-xs"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                A written reason is required and will be permanently recorded in the Process Event audit trail.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsCountryBanModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setCountryBanMutation.mutate()}
+              disabled={setCountryBanMutation.isPending || !banReason.trim()}
+              className="bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs"
+            >
+              {setCountryBanMutation.isPending ? "Setting Ban..." : "Confirm Country Ban"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lift Country Ban (Manager Override) Dialog */}
+      <Dialog open={isLiftBanModalOpen} onOpenChange={setIsLiftBanModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <Unlock className="h-5 w-5 text-emerald-600" />
+              Manager Override — Lift Country Ban
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Only authorized management accounts can remove a permanent blacklist entry.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            {banToLift && (
+              <div className="p-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 space-y-1">
+                <p className="font-semibold text-slate-800 dark:text-zinc-200">
+                  Target Ban: {banToLift.country} ({banToLift.name})
+                </p>
+                <p className="text-slate-600 dark:text-zinc-400 text-[11px]">
+                  Original Reason: {banToLift.reason || "—"}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <Label className="text-xs font-semibold">Manager Written Override Reason *</Label>
+              <Textarea
+                rows={3}
+                placeholder="e.g. Cleared by embassy appeal / diplomatic clearance certificate provided"
+                value={liftBanReason}
+                onChange={(e) => setLiftBanReason(e.target.value)}
+                className="mt-1 text-xs"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                This override will be logged in the immutable Process Event history.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsLiftBanModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => removeCountryBanMutation.mutate()}
+              disabled={removeCountryBanMutation.isPending || !liftBanReason.trim()}
+              className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs"
+            >
+              {removeCountryBanMutation.isPending ? "Lifting Ban..." : "Lift Ban with Override"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Applicant Dialog */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-700 dark:text-rose-400">
+              <Ban className="h-5 w-5 text-rose-600" />
+              Cancel Applicant Process
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Cancelling this applicant will freeze any active placement and linked clearance steps to Cancelled.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <Label className="text-xs font-semibold">Cancellation Reason / Remarks *</Label>
+              <Textarea
+                rows={3}
+                placeholder="e.g. Candidate withdrew consent / Medical disqualification / Family emergency"
+                value={cancelRemarks}
+                onChange={(e) => setCancelRemarks(e.target.value)}
+                className="mt-1 text-xs"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                A written justification is mandatory and permanently logged in the audit trail.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsCancelModalOpen(false)}>
+              Keep Active
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending || !cancelRemarks.trim()}
+              className="bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs"
+            >
+              {cancelMutation.isPending ? "Cancelling..." : "Confirm Cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restart Applicant Dialog */}
+      <Dialog open={isRestartModalOpen} onOpenChange={setIsRestartModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-emerald-800 dark:text-emerald-400">
+              <RotateCcw className="h-5 w-5 text-emerald-700" />
+              Restart Applicant Case
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Restarting returns this cancelled candidate to the pipeline, automatically incrementing the cycle count.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <Label className="text-xs font-semibold">Target Restart Status *</Label>
+              <select
+                value={restartTargetStatus}
+                onChange={(e) => setRestartTargetStatus(e.target.value as "Draft" | "Registered")}
+                className="h-9 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-3 text-xs font-semibold"
+              >
+                <option value="Draft">Draft (Full re-editing allowed)</option>
+                <option value="Registered">Registered (Directly validated for selection)</option>
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Selecting Registered will automatically validate that all track-specific field-floor requirements are satisfied.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsRestartModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => restartMutation.mutate(restartTargetStatus)}
+              disabled={restartMutation.isPending}
+              className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs"
+            >
+              {restartMutation.isPending ? "Restarting..." : `Restart to ${restartTargetStatus}`}
             </Button>
           </DialogFooter>
         </DialogContent>

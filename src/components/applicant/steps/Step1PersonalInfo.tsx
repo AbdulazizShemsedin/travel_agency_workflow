@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2 } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
@@ -174,7 +174,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     }
   }, [passportScanValue, passportScanPreview]);
 
-  const handleApplyOcrData = (d: any) => {
+  const handleApplyOcrData = (d: any, source: "upload" | "mrz" = "upload") => {
     if (!d) return;
     if (d.first_name) {
       setValue("first_name", d.first_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
@@ -222,15 +222,20 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       place_of_issue: placeOfIssue || d.place_of_issue,
     });
     setIsOcrReviewOpen(false);
-    toast.success("Applicant personal info auto-populated from passport scan!");
+    if (source === "mrz") {
+      toast.success("Passport MRZ successfully decoded and applicant fields populated!");
+    } else {
+      toast.success("Applicant personal info auto-populated from passport scan!");
+    }
   };
 
-  // Main Passport MRZ Auto-Scan Handler (Dispatches to Backend Python OCR and/or Client OCR)
+  // Main Passport MRZ Auto-Scan Handler (Async Non-Blocking Queue with Timeout Guard & Client Fallback)
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
     const localUrl = URL.createObjectURL(file);
     setPassportScanPreview(localUrl);
     setIsScanningOCR(true);
+    const toastId = toast.loading("Processing passport document (non-blocking OCR)...");
 
     try {
       // 1. Upload passport scan file
@@ -245,23 +250,26 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
         }
       } catch (e) {
-        console.warn("File upload error:", e);
+        console.warn("File upload notice:", e);
       }
 
-      // 2. Dispatch file_url to backend Python OCR engine
+      // 2. Dispatch file_url to backend Python OCR engine with a 12s non-blocking timeout guard
+      // This prevents browser 502 timeouts if a large/non-passport file (e.g. wallpaper) is uploaded
       let extractedData: any = null;
       if (uploadedUrl) {
         try {
-          const ocrRes = await parsePassportFileV2(uploadedUrl);
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000));
+          const ocrPromise = parsePassportFileV2(uploadedUrl).catch(() => null);
+          const ocrRes = await Promise.race([ocrPromise, timeoutPromise]);
           if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth || ocrRes.passport_expiry || ocrRes.passport_expiry_date)) {
             extractedData = ocrRes;
           }
         } catch (backendErr) {
-          console.warn("Backend OCR parse error:", backendErr);
+          console.warn("Backend OCR async timeout/error, switching to client optical OCR:", backendErr);
         }
       }
 
-      // 3. If backend didn't return complete data (e.g. missing DOB or Expiry), run optical OCR to enrich missing fields
+      // 3. If backend didn't return complete data (or timed out on non-passport/wallpaper), run optical OCR
       const hasDob = Boolean(extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date);
       const hasExpiry = Boolean(extractedData?.passport_expiry || extractedData?.passport_expiry_date || extractedData?.expiry_date);
       const hasPassportNumber = Boolean(extractedData?.passport_number);
@@ -290,62 +298,72 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             };
           }
         } catch (clientErr) {
-          console.warn("Client OCR fallback warning:", clientErr);
+          console.warn("Client optical OCR fallback warning:", clientErr);
         }
       }
 
-      if (extractedData) {
+      // 4. Send background job completion notification
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification("Passport OCR Complete", {
+            body: extractedData?.first_name ? `Extracted passport for ${extractedData.first_name}` : "Passport document processing finished.",
+            icon: "/favicon.ico",
+          });
+        } catch {}
+      }
+
+      if (extractedData && (extractedData.passport_number || extractedData.first_name || extractedData.date_of_birth)) {
         // Show review dialog so user can confirm before applying
         setPendingOcrData(extractedData);
         setIsOcrReviewOpen(true);
-        toast.success("Passport extracted successfully! Review and apply data.");
+        toast.success("Passport extracted successfully! Review and apply data.", { id: toastId });
       } else {
-        toast.info("Passport scan attached. You can fill or edit registration fields.");
+        toast.info("Passport scan attached. You can review or enter registration fields.", { id: toastId });
       }
     } catch (err: any) {
-      console.warn("Passport scan processing warning:", err);
-      toast.error("Passport processing warning: " + (err?.message || "Please check details."));
+      console.warn("Passport scan processing notice:", err);
+      toast.error("Passport scan notice: " + (err?.message || "Please verify fields manually."), { id: toastId });
     } finally {
       setIsScanningOCR(false);
     }
   };
 
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          setMrzInputText(text.trim());
+          toast.success("MRZ text pasted from clipboard!");
+        } else {
+          toast.info("Clipboard is empty or contains no text.");
+        }
+      } else {
+        toast.info("Direct clipboard access is unavailable. Please paste manually into the text box (Ctrl+V).");
+      }
+    } catch {
+      toast.info("Clipboard read was blocked by your browser. Please paste directly using Ctrl+V.");
+    }
+  };
+
   const handleParseMrzText = async () => {
-    if (!mrzInputText.trim()) return;
+    if (!mrzInputText.trim()) {
+      toast.error("Please paste or type the 2 MRZ lines before decoding.");
+      return;
+    }
     setIsScanningOCR(true);
     try {
       const parsed = parseMRZText(mrzInputText.trim());
-      if (parsed) {
-        if (parsed.first_name) setValue("first_name", parsed.first_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.middle_name) setValue("middle_name", parsed.middle_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.last_name) setValue("last_name", parsed.last_name, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.passport_number) setValue("passport_number", parsed.passport_number.toUpperCase(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        const dob = parsed.date_of_birth || parsed.dob;
-        if (dob) {
-          setValue("date_of_birth", dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          setValue("dob" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          setValue("birth_date" as any, dob, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        }
-        if (parsed.gender) setValue("gender", parsed.gender as any, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        if (parsed.nationality) setValue("nationality", parsed.nationality, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        const expiry = parsed.passport_expiry || parsed.passport_expiry_date;
-        if (expiry) {
-          setValue("passport_expiry", expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          setValue("passport_expiry_date" as any, expiry, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          if (parsed.passport_issue_date) {
-            setValue("passport_issue_date", parsed.passport_issue_date, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-          }
-        }
-        if (parsed.place_of_issue) {
-          setValue("place_of_issue", parsed.place_of_issue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
-        }
-
-        setOcrSuccessData(parsed);
+      if (parsed && (parsed.passport_number || parsed.first_name || parsed.last_name)) {
+        handleApplyOcrData(parsed, "mrz");
         setIsMrzDialogOpen(false);
-        toast.success("MRZ text parsed and filled successfully!");
+        setMrzInputText("");
+      } else {
+        toast.error("Could not decode MRZ. Please make sure to provide the 2 standard 44-character passport lines.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Manual MRZ decode warning:", err);
+      toast.error("Failed to parse MRZ: " + (err?.message || "Invalid MRZ format"));
     } finally {
       setIsScanningOCR(false);
     }
@@ -457,9 +475,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
             <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full md:w-auto">
               <Button
+                id="btn-open-mrz-dialog"
                 type="button"
                 variant="outline"
                 onClick={() => setIsMrzDialogOpen(true)}
+                disabled={locked}
                 className="text-xs font-semibold border-emerald-300 text-emerald-900 dark:text-emerald-300 hover:bg-emerald-100/50"
               >
                 <FileText className="mr-1.5 h-3.5 w-3.5" />
@@ -620,6 +640,110 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             >
               <CheckCircle2 className="h-4 w-4 mr-1.5" />
               Apply Extracted Data to Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual MRZ Text Paste Dialog */}
+      <Dialog open={isMrzDialogOpen} onOpenChange={setIsMrzDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <FileText className="h-5 w-5 text-emerald-600" />
+              Paste Passport MRZ Code
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Paste the 2 Machine-Readable Zone (MRZ) lines located at the bottom of the candidate's passport bio-data page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="mrz-raw-input" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                MRZ Code Lines (TD3 Format)
+              </Label>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePasteClipboard}
+                  className="h-7 px-2 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5 mr-1" />
+                  Paste from Clipboard
+                </Button>
+                {mrzInputText && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMrzInputText("")}
+                    className="h-7 px-2 text-[11px] text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <Textarea
+              id="mrz-raw-input"
+              rows={4}
+              value={mrzInputText}
+              onChange={(e) => setMrzInputText(e.target.value)}
+              placeholder={`P<ETHMOHAMMED<<FATUMA<<<<<<<<<<<<<<<<<<<<<<<\nEP12345674ETH9501018F2812316<<<<<<<<<<<<<<04`}
+              className="font-mono text-xs uppercase tracking-wider bg-slate-50 dark:bg-[#16161b] border-slate-300 dark:border-zinc-800 focus-visible:ring-emerald-600 leading-relaxed"
+            />
+
+            <div className="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 p-2.5 text-[11px] text-amber-900 dark:text-amber-300 space-y-1">
+              <div className="font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Format Guidelines:</span>
+              </div>
+              <p className="text-amber-800/90 dark:text-amber-300/80 pl-5 leading-relaxed">
+                • Standard passports have <strong>2 lines of 44 characters</strong> with chevrons (<code className="font-mono font-bold">&lt;</code>).
+                <br />
+                • Line 1 starts with <code className="font-mono font-bold">P&lt;</code> followed by Country and Name.
+                <br />
+                • Line 2 contains Passport Number, DOB, Gender, and Expiry Date.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsMrzDialogOpen(false);
+                setMrzInputText("");
+              }}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              id="btn-decode-mrz-submit"
+              type="button"
+              size="sm"
+              disabled={!mrzInputText.trim() || isScanningOCR}
+              onClick={handleParseMrzText}
+              className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-xs"
+            >
+              {isScanningOCR ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  Decoding...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                  Decode & Auto-Fill Form
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

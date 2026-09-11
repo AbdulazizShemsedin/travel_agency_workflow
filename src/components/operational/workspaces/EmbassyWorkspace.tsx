@@ -33,7 +33,9 @@ import {
   stampEmbassyStepV2,
   rejectEmbassyStepV2,
   reassignClearanceStepV2,
+  getClearanceStepDocV2,
 } from "@/lib/api/v2/clearance";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
@@ -82,30 +84,71 @@ export function EmbassyWorkspace({
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
-    if (selectedRow) {
-      setConfirmUnpaidWakala(false);
-      const embassy = selectedRow.embassy;
-      const st = embassy?.status;
-      if (st === "Approved" || st === "Stamped" || selectedRow.embassyStatus === "Approved") {
-        setStatus("Approved");
-      } else if (st === "Submitted") {
-        setStatus("Submitted");
-      } else if (st === "Rejected") {
-        setStatus("Rejected");
-      } else {
-        setStatus("Pending");
-      }
+    if (!selectedRow) return;
 
-      setSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
-      const isPaid = (embassy?.payment_status || "").toLowerCase().includes("paid");
-      setFeeStatus(isPaid ? "Paid" : "Unpaid");
-      setEmbassyFee((embassy as any)?.fee ? String((embassy as any).fee) : (embassy as any)?.amount ? String((embassy as any).amount) : "");
-      setReceiptNo(embassy?.reference_no || embassy?.receipt_no || "");
-      setEmployee(embassy?.assigned_officer || embassy?.employee || "");
-      setStampNumber(selectedRow.visaNumber || (selectedRow.applicant as any)?.visa_number || "");
-      setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.stamp_date || "");
-      setRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || "");
+    let isMounted = true;
+
+    // 1. Initialize synchronously from table row
+    setConfirmUnpaidWakala(false);
+    const embassy = selectedRow.embassy;
+    const st = embassy?.status;
+    if (st === "Approved" || st === "Stamped" || selectedRow.embassyStatus === "Approved") {
+      setStatus("Approved");
+    } else if (st === "Submitted") {
+      setStatus("Submitted");
+    } else if (st === "Rejected") {
+      setStatus("Rejected");
+    } else {
+      setStatus("Pending");
     }
+
+    setSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
+    const isPaid = (embassy?.payment_status || "").toLowerCase().includes("paid");
+    setFeeStatus(isPaid ? "Paid" : "Unpaid");
+    setEmbassyFee((embassy as any)?.fee ? String((embassy as any).fee) : (embassy as any)?.amount ? String((embassy as any).amount) : "");
+    setReceiptNo(embassy?.reference_no || embassy?.receipt_no || "");
+    setEmployee(embassy?.assigned_officer || embassy?.employee || "");
+    setStampNumber(selectedRow.visaNumber || (selectedRow.applicant as any)?.visa_number || "");
+    setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.stamp_date || "");
+    setRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || "");
+
+    // 2. Fetch fresh clearance step doc and fresh applicant in background
+    const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
+    Promise.all([
+      stepName ? getClearanceStepDocV2(stepName).catch(() => null) : null,
+      getApplicantV2(selectedRow.applicantId).catch(() => null),
+    ]).then(([freshStep, freshApp]) => {
+      if (!isMounted) return;
+      if (freshStep) {
+        if (freshStep.status === "Approved" || freshStep.status === "Stamped") {
+          setStatus("Approved");
+        } else if (freshStep.status === "Submitted") {
+          setStatus("Submitted");
+        } else if (freshStep.status === "Rejected") {
+          setStatus("Rejected");
+        }
+        if (freshStep.date_started) setSubmissionDate(freshStep.date_started);
+        const fPaid = (freshStep.payment_status || "").toLowerCase().includes("paid");
+        setFeeStatus(fPaid ? "Paid" : "Unpaid");
+        if (freshStep.amount || (freshStep as any).fee) {
+          setEmbassyFee(String(freshStep.amount || (freshStep as any).fee));
+        }
+        if (freshStep.reference_no) setReceiptNo(freshStep.reference_no);
+        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
+          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
+        }
+        if (freshStep.rejection_remark || freshStep.notes) {
+          setRejectionRemark(freshStep.rejection_remark || freshStep.notes || "");
+        }
+      }
+      if (freshApp) {
+        if (freshApp.visa_number) setStampNumber(freshApp.visa_number);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRow]);
 
   // Mutation to persist Embassy Clearance via V2 endpoints
@@ -119,7 +162,7 @@ export function EmbassyWorkspace({
           await logStageExpenseV2(
             Number(embassyFee),
             "USD",
-            "Embassy Visa Processing Fee",
+            "Embassy Visa Stamping Fee",
             selectedRow.dsrName,
             "Embassy"
           );
@@ -128,25 +171,24 @@ export function EmbassyWorkspace({
         }
       }
 
-      const stepStatus = selectedRow.embassy?.status;
-      const isRowDeparted =
-        selectedRow.placementStatus === "Departed" ||
-        selectedRow.ticketStatus === "Departed" ||
-        Boolean((selectedRow as any)?.isDeparted);
-      const isTerminal =
-        ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
-        isRowDeparted;
+      if (stepName && !isEmbassyTerminal) {
+        const stepStatus = selectedRow.embassy?.status;
+        const isSaudi = selectedRow.destinationCountry?.toLowerCase().includes("saudi");
+        const isTaeshirDone =
+          selectedRow.injaz?.status === "Completed" ||
+          selectedRow.injaz?.status === "Complete" ||
+          selectedRow.injaz?.status === "Issued" ||
+          selectedRow.injaz?.status === "Approved";
 
-      if (stepName && !isTerminal && !isRowDeparted) {
-        if (status === "Submitted" && stepStatus !== "Submitted") {
-          const isSaudi = (selectedRow.destinationCountry || "").toLowerCase().includes("saudi");
-          const isWakalaPaid = selectedRow.wakalaStatus === "Paid";
-          if (isSaudi && !isWakalaPaid && !confirmUnpaidWakala) {
-            throw new Error("Wakala Unpaid — Embassy submission should not proceed. Please check the override box to confirm proceeding.");
+        if (status === "Approved" && stepStatus !== "Approved" && stepStatus !== "Stamped") {
+          if (isSaudi && !isTaeshirDone) {
+            throw new Error(
+              "Cannot stamp Embassy step: Taeshir clearance must be completed first on the Saudi Arabia corridor."
+            );
           }
+          await stampEmbassyStepV2(stepName, stampNumber || selectedRow.visaNumber || undefined);
+        } else if (status === "Submitted" && stepStatus !== "Submitted") {
           await submitEmbassyStepV2(stepName);
-        } else if (status === "Approved" && stepStatus !== "Stamped" && stepStatus !== "Approved") {
-          await stampEmbassyStepV2(stepName, stampNumber || receiptNo);
         } else if (status === "Rejected" && stepStatus !== "Rejected") {
           if (!rejectionRemark.trim()) {
             throw new Error("Rejection remark is required when rejecting Embassy step.");
@@ -166,10 +208,19 @@ export function EmbassyWorkspace({
       }
     },
     onSuccess: () => {
-      toast.success(`Embassy Clearance for ${selectedRow?.fullName} updated successfully!`);
+      const isStampedNow = status === "Approved";
+      if (isStampedNow) {
+        toast.success(
+          `Embassy visa stamped for ${selectedRow?.fullName}! Placement auto-advanced to Stamped stage.`
+        );
+      } else {
+        toast.success(`Embassy Clearance for ${selectedRow?.fullName} updated successfully!`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
       onRefresh();
       setSelectedRow(null);
     },
@@ -403,6 +454,24 @@ export function EmbassyWorkspace({
               <span>This Embassy clearance step is finalized ({currentEmbassyStatus}). Status and handler assignments are locked.</span>
             </div>
           )}
+
+          {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") &&
+            !(
+              selectedRow?.injaz?.status === "Completed" ||
+              selectedRow?.injaz?.status === "Complete" ||
+              selectedRow?.injaz?.status === "Issued" ||
+              selectedRow?.injaz?.status === "Approved"
+            ) && (
+              <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <span className="font-bold">Taeshir Pending — Stamping Gated on Saudi Corridor</span>
+                  <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    Taeshir clearance step is currently {selectedRow?.injaz?.status || "Pending"}. On the Saudi Arabia corridor, Embassy visa stamping requires Taeshir to be completed first.
+                  </p>
+                </div>
+              </div>
+            )}
 
           {status === "Submitted" && selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
             <div className="sm:col-span-2 p-3 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 text-xs">

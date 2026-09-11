@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { triggerWakalaReminderV2 } from "@/lib/api/v2/notifications";
-import { reassignClearanceStepV2 } from "@/lib/api/v2/clearance";
+import { reassignClearanceStepV2, getClearanceStepDocV2 } from "@/lib/api/v2/clearance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 
@@ -60,15 +60,44 @@ export function WakalaWorkspace({
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
-    if (selectedRow) {
-      const wakala = selectedRow.wakala || selectedRow.embassy;
-      const isAuth =
-        (selectedRow.wakalaStatus || "").toLowerCase().includes("authorized") ||
-        (selectedRow.wakalaStatus || "").toLowerCase().includes("completed");
-      setStatus(isAuth ? "Completed" : "Pending");
-      setWakalaRefNo((wakala as any)?.reference_no || selectedRow.visaNumber || "");
-      setEmployee((wakala as any)?.assigned_officer || (wakala as any)?.employee || "");
+    if (!selectedRow) return;
+
+    let isMounted = true;
+
+    // 1. Initialize synchronously from table row
+    const wakala = selectedRow.wakala || selectedRow.embassy;
+    const isAuth =
+      (selectedRow.wakalaStatus || "").toLowerCase().includes("authorized") ||
+      (selectedRow.wakalaStatus || "").toLowerCase().includes("completed") ||
+      (selectedRow.wakalaStatus || "").toLowerCase().includes("paid");
+    setStatus(isAuth ? "Completed" : "Pending");
+    setWakalaRefNo((wakala as any)?.reference_no || selectedRow.visaNumber || "");
+    setEmployee((wakala as any)?.assigned_officer || (wakala as any)?.employee || "");
+
+    // 2. Fetch fresh clearance step doc in background
+    const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
+    if (stepName) {
+      getClearanceStepDocV2(stepName).then((freshStep) => {
+        if (!isMounted || !freshStep) return;
+        if (freshStep.wakala_status) {
+          const freshAuth =
+            freshStep.wakala_status.toLowerCase().includes("authorized") ||
+            freshStep.wakala_status.toLowerCase().includes("completed") ||
+            freshStep.wakala_status.toLowerCase().includes("paid");
+          setStatus(freshAuth ? "Completed" : "Pending");
+        }
+        if (freshStep.reference_no) setWakalaRefNo(freshStep.reference_no);
+        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
+          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
+        }
+      }).catch((err) => {
+        console.warn("Could not load fresh Wakala clearance step:", err);
+      });
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRow]);
 
   // Mutation
@@ -83,7 +112,11 @@ export function WakalaWorkspace({
     },
     onSuccess: () => {
       toast.success(`Wakala details for ${selectedRow?.fullName} updated successfully!`);
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
       onRefresh();
       setSelectedRow(null);
     },

@@ -30,7 +30,9 @@ import {
   recordRescheduleV2,
   recordPredepartureMedicalResultV2,
   advancePlacementV2,
+  getPlacementV2,
 } from "@/lib/api/v2/placements";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 
@@ -86,32 +88,91 @@ export function DepartureWorkspace({
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
-    if (selectedRow) {
-      const tkt = selectedRow.ticket;
-      const dep = selectedRow.departure;
+    if (!selectedRow) return;
 
-      setTicketStatus(selectedRow.ticketStatus === "Booked" ? "Booked" : "Pending");
-      setTicketNumber(selectedRow.ticketNumber && selectedRow.ticketNumber !== "—" ? selectedRow.ticketNumber : tkt?.ticket_number || "");
-      setAirline((tkt as any)?.airline || "Ethiopian Airlines");
-      setFlightDate(tkt?.flight_date || "");
-      setFlightTime((tkt as any)?.flight_time || (dep as any)?.flight_time || "");
-      setTicketCost((tkt as any)?.ticket_cost || "");
-      setTicketCurrency((tkt as any)?.currency || "USD");
-      setTicketDetails((tkt as any)?.ticket_details || "");
-      setEmployee((tkt as any)?.employee || (dep as any)?.employee || "");
+    let isMounted = true;
 
-      const med2Val = (dep as any)?.medical_2_result || (dep as any)?.medical_2_status;
-      setMedical2Result(med2Val === "FIT" || med2Val === "Pass" ? "Pass" : med2Val === "UNFIT" || med2Val === "Fail" ? "Fail" : "");
-      setMedical2Date((dep as any)?.medical_2_date || (dep as any)?.medical_2_examination_date || "");
-      setMedical2Remark((dep as any)?.medical_2_remark || "");
+    // 1. Initialize synchronously from table row
+    const tkt = selectedRow.ticket;
+    const dep = selectedRow.departure;
 
-      const isDep = Boolean(dep?.departed_on);
-      setDepartureStatus(isDep ? "Departed" : "Pending");
-      setDepartureTime(dep?.departed_on || "");
-      setRescheduleDate((dep as any)?.reschedule_date || "");
-      setRescheduleCause((dep as any)?.reschedule_cause || "Airport");
-      setRescheduleCost((dep as any)?.reschedule_cost || "");
+    setTicketStatus(selectedRow.ticketStatus === "Booked" ? "Booked" : "Pending");
+    setTicketNumber(selectedRow.ticketNumber && selectedRow.ticketNumber !== "—" ? selectedRow.ticketNumber : tkt?.ticket_number || "");
+    setAirline((tkt as any)?.airline || "Ethiopian Airlines");
+    setFlightDate(tkt?.flight_date || "");
+    setFlightTime((tkt as any)?.flight_time || (dep as any)?.flight_time || "");
+    setTicketCost((tkt as any)?.ticket_cost || "");
+    setTicketCurrency((tkt as any)?.currency || "USD");
+    setTicketDetails((tkt as any)?.ticket_details || "");
+    setEmployee((tkt as any)?.employee || (dep as any)?.employee || "");
+
+    const med2Val = (dep as any)?.medical_2_result || (dep as any)?.medical_2_status;
+    setMedical2Result(med2Val === "FIT" || med2Val === "Pass" ? "Pass" : med2Val === "UNFIT" || med2Val === "Fail" ? "Fail" : "");
+    setMedical2Date((dep as any)?.medical_2_date || (dep as any)?.medical_2_examination_date || "");
+    setMedical2Remark((dep as any)?.medical_2_remark || "");
+
+    const isDep = Boolean(dep?.departed_on);
+    setDepartureStatus(isDep ? "Departed" : "Pending");
+    setDepartureTime(dep?.departed_on || "");
+    setRescheduleDate((dep as any)?.reschedule_date || "");
+    setRescheduleCause((dep as any)?.reschedule_cause === "Internal" ? "Internal" : "Airport");
+    setRescheduleCost((dep as any)?.reschedule_cost || "");
+
+    // 2. Fetch authoritative Placement record in background to ensure latest ticket/flight/departure fields
+    const placementName = selectedRow.placementId || selectedRow.dsrName;
+    if (placementName) {
+      getPlacementV2(placementName).then((freshPlc) => {
+        if (!isMounted || !freshPlc) return;
+        if (freshPlc.ticket_number) setTicketNumber(freshPlc.ticket_number);
+        if (freshPlc.status === "Ticketed" || freshPlc.status === "Departed" || freshPlc.ticket_number) {
+          setTicketStatus("Booked");
+        }
+        if (freshPlc.airline) setAirline(freshPlc.airline);
+        if (freshPlc.flight_date) {
+          const parts = freshPlc.flight_date.split(" ");
+          setFlightDate(parts[0]);
+          if (parts[1]) setFlightTime(parts[1]);
+        }
+        if (freshPlc.flight_time) setFlightTime(freshPlc.flight_time);
+        if (freshPlc.ticket_cost !== undefined && freshPlc.ticket_cost !== null) {
+          setTicketCost(freshPlc.ticket_cost);
+        }
+        if ((freshPlc as any).ticket_currency || freshPlc.currency) {
+          setTicketCurrency((freshPlc as any).ticket_currency || freshPlc.currency);
+        }
+        if (freshPlc.ticket_details) setTicketDetails(freshPlc.ticket_details);
+        if (freshPlc.ticket_booked_by || (freshPlc as any).employee) {
+          setEmployee(freshPlc.ticket_booked_by || (freshPlc as any).employee);
+        }
+
+        const freshMed2 = freshPlc.medical_2_result || freshPlc.medical_2_status;
+        if (freshMed2) {
+          setMedical2Result(freshMed2 === "FIT" || freshMed2 === "Pass" ? "Pass" : freshMed2 === "UNFIT" || freshMed2 === "Fail" ? "Fail" : "");
+        }
+        if (freshPlc.medical_2_date || freshPlc.medical_2_examination_date) {
+          setMedical2Date(freshPlc.medical_2_date || freshPlc.medical_2_examination_date || "");
+        }
+        if (freshPlc.medical_2_remark) setMedical2Remark(freshPlc.medical_2_remark);
+
+        if (freshPlc.status === "Departed" || freshPlc.departed_on) {
+          setDepartureStatus("Departed");
+          if (freshPlc.departed_on) setDepartureTime(freshPlc.departed_on);
+        }
+        if (freshPlc.reschedule_date) setRescheduleDate(freshPlc.reschedule_date);
+        if (freshPlc.reschedule_cause) {
+          setRescheduleCause(freshPlc.reschedule_cause === "Internal" ? "Internal" : "Airport");
+        }
+        if (freshPlc.reschedule_cost !== undefined && freshPlc.reschedule_cost !== null) {
+          setRescheduleCost(freshPlc.reschedule_cost);
+        }
+      }).catch((err) => {
+        console.warn("Could not load fresh Placement record:", err);
+      });
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRow]);
 
   // Mutation to persist Ticket & Departure via V2
@@ -145,7 +206,7 @@ export function DepartureWorkspace({
         }
       }
 
-      // 2. Record Pre-Departure Medical 2 Check
+      // 2. Record Pre-departure Medical 2 Check
       if (medical2Result) {
         await recordPredepartureMedicalResultV2(
           placementName,
@@ -175,9 +236,11 @@ export function DepartureWorkspace({
     },
     onSuccess: () => {
       toast.success(`Flight & Departure details for ${selectedRow?.fullName} updated successfully!`);
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["placements"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       onRefresh();
       setSelectedRow(null);
     },

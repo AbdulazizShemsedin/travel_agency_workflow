@@ -49,6 +49,7 @@ import {
   recordInjazPaymentV2,
   forfeitInjazAndRestartV2,
   renderInjazPdfV2,
+  getClearanceStepDocV2,
 } from "@/lib/api/v2/clearance";
 import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
@@ -300,30 +301,77 @@ export function InjazWorkspace({
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
-    if (selectedRow) {
-      const injaz = selectedRow.injaz;
-      const st = injaz?.status;
-      setStatus(st === "Approved" || st === "Completed" || st === "Complete" || st === "Issued" ? "Completed" : "Pending");
-      setEmployee(injaz?.assigned_officer || injaz?.employee || "");
-      setAppointmentDate(
-        selectedRow.appointmentDate && selectedRow.appointmentDate !== "—"
-          ? selectedRow.appointmentDate
-          : (injaz as any)?.appointment_date || ""
-      );
-      setInjazNumber(
-        injaz?.reference_no ||
-        (injaz as any)?.injaz_number ||
-        ""
-      );
-      const isPaid =
-        selectedRow.injazPayment === "PAID" ||
-        (injaz?.payment_status || "").toLowerCase().includes("paid");
-      setPaymentStatus(isPaid ? "PAID" : "UNPAID");
-      setPaymentNo((injaz as any)?.payment_no || "");
-      setPaymentDate((injaz as any)?.payment_date || "");
-      setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "10.5");
-      setRemark(selectedRow.remark && selectedRow.remark !== "—" ? selectedRow.remark : (injaz as any)?.notes || "");
-    }
+    if (!selectedRow) return;
+
+    let isMounted = true;
+
+    // 1. Initialize synchronously from table row
+    const injaz = selectedRow.injaz;
+    const st = injaz?.status;
+    setStatus(st === "Approved" || st === "Completed" || st === "Complete" || st === "Issued" ? "Completed" : "Pending");
+    setEmployee(injaz?.assigned_officer || injaz?.employee || "");
+    setAppointmentDate(
+      selectedRow.appointmentDate && selectedRow.appointmentDate !== "—"
+        ? selectedRow.appointmentDate
+        : (injaz as any)?.appointment_date || ""
+    );
+    setInjazNumber(
+      injaz?.reference_no ||
+      (injaz as any)?.injaz_number ||
+      ""
+    );
+    const isPaid =
+      selectedRow.injazPayment === "PAID" ||
+      (injaz?.payment_status || "").toLowerCase().includes("paid");
+    setPaymentStatus(isPaid ? "PAID" : "UNPAID");
+    setPaymentNo((injaz as any)?.payment_no || "");
+    setPaymentDate((injaz as any)?.payment_date || "");
+    setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "10.5");
+    setRemark(selectedRow.remark && selectedRow.remark !== "—" ? selectedRow.remark : (injaz as any)?.notes || "");
+
+    // 2. Fetch fresh clearance step doc and fresh applicant in background
+    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+    Promise.all([
+      stepName ? getClearanceStepDocV2(stepName).catch(() => null) : null,
+      getApplicantV2(selectedRow.applicantId).catch(() => null),
+    ]).then(([freshStep, _freshApp]) => {
+      if (!isMounted) return;
+      if (freshStep) {
+        if (freshStep.status) {
+          const freshSt = freshStep.status;
+          setStatus(freshSt === "Approved" || freshSt === "Completed" || freshSt === "Complete" || freshSt === "Issued" ? "Completed" : "Pending");
+        }
+        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
+          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
+        }
+        if (freshStep.appointment_date || freshStep.date_started) {
+          setAppointmentDate(freshStep.appointment_date || freshStep.date_started || "");
+        }
+        if (freshStep.reference_no || freshStep.injaz_applicant_number || (freshStep as any).injaz_application_id) {
+          setInjazNumber(freshStep.reference_no || freshStep.injaz_applicant_number || (freshStep as any).injaz_application_id || "");
+        }
+        const freshPaid =
+          (freshStep.payment_status || (freshStep as any).injaz_payment_status || "").toLowerCase().includes("paid") ||
+          freshStep.status === "Completed" || freshStep.status === "Issued";
+        setPaymentStatus(freshPaid ? "PAID" : "UNPAID");
+        if ((freshStep as any).payment_no || (freshStep as any).injaz_receipt_number) {
+          setPaymentNo((freshStep as any).payment_no || (freshStep as any).injaz_receipt_number || "");
+        }
+        if ((freshStep as any).payment_date || (freshStep as any).injaz_paid_date) {
+          setPaymentDate((freshStep as any).payment_date || (freshStep as any).injaz_paid_date || "");
+        }
+        if ((freshStep as any).fee || freshStep.amount || (freshStep as any).injaz_amount) {
+          setInjazFee(String((freshStep as any).fee || freshStep.amount || (freshStep as any).injaz_amount));
+        }
+        if (freshStep.notes || freshStep.rejection_remark) {
+          setRemark(freshStep.notes || freshStep.rejection_remark || "");
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRow]);
 
   // Mutation to persist Te'shir / Injaz changes via V2
@@ -418,9 +466,11 @@ export function InjazWorkspace({
           `No changes were saved for ${selectedRow?.fullName} — this Te'shir step is finalized (${currentInjazStatus || "terminal"}) and cannot be edited anymore.`
         );
       }
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
       onRefresh();
       setSelectedRow(null);
     },
