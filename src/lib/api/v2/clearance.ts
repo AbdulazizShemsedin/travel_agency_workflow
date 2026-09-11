@@ -139,15 +139,46 @@ export async function reassignClearanceStepV2(
 
 /**
  * Submits an Embassy step's documents (Monday schedule).
+ * Backend Note (2026-09-11): Blocks on unpaid Wakala on the Saudi corridor.
+ * Managers/Admins can supply overrideReason if authorized.
  */
 export async function submitEmbassyStepV2(
-  clearanceStepName: string
+  clearanceStepName: string,
+  overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.submit_embassy_step",
     {
       method: "POST",
-      body: { clearance_step_name: clearanceStepName },
+      body: {
+        clearance_step_name: clearanceStepName,
+        ...(overrideReason ? { override_reason: overrideReason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Records the Wakala fee payment on a Saudi-corridor Embassy step only (step_type == "Embassy").
+ * Authoritative Backend Endpoint: clearance_api.record_wakala_payment (New 2026-09-11)
+ * Permitted roles: Manager/Admin/System Manager, assigned officer, or Saudi Embassy role holder.
+ */
+export async function recordWakalaPaymentV2(
+  clearanceStepName: string,
+  wakalaStatus: "Pending" | "Paid" = "Paid",
+  wakalaAmount?: number,
+  paidDate?: string
+): Promise<{ message?: V2ClearanceStepItem; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.record_wakala_payment",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        wakala_status: wakalaStatus,
+        ...(typeof wakalaAmount === "number" ? { wakala_amount: wakalaAmount } : {}),
+        ...(paidDate ? { paid_date: paidDate } : {}),
+      },
     }
   );
 }

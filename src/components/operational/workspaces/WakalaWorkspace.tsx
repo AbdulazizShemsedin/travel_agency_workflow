@@ -11,6 +11,8 @@ import {
   PhoneCall,
   Send,
   Loader2,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -22,7 +24,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { triggerWakalaReminderV2 } from "@/lib/api/v2/notifications";
-import { reassignClearanceStepV2, getClearanceStepDocV2 } from "@/lib/api/v2/clearance";
+import {
+  reassignClearanceStepV2,
+  getClearanceStepDocV2,
+  recordWakalaPaymentV2,
+} from "@/lib/api/v2/clearance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 
@@ -47,16 +53,21 @@ export function WakalaWorkspace({
   const { authUser, roles } = useAuth();
 
   const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
-  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
-  const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Clearance Officer"]);
+  const isAdmin = hasAnyV2Role(authUserV2, ["Admin", "Manager"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
+  const isEmbassyOfficer = hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer"] as any) || (authUserV2?.roles || []).some((r) => String(r).toLowerCase().includes("embassy") || String(r).toLowerCase().includes("clearance"));
+  const [employee, setEmployee] = React.useState("");
+  const isAssignedOfficer = (authUser?.email || "").toLowerCase() === (employee || "").toLowerCase() || (authUser?.full_name || "").toLowerCase() === (employee || "").toLowerCase();
+  const canEdit = isAdmin || isEmbassyOfficer || isAssignedOfficer;
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
   // Form State for Drawer
   const [status, setStatus] = React.useState<"Pending" | "Completed">("Pending");
+  const [wakalaAmount, setWakalaAmount] = React.useState<string>("");
+  const [wakalaPaidDate, setWakalaPaidDate] = React.useState<string>("");
   const [wakalaRefNo, setWakalaRefNo] = React.useState("");
-  const [employee, setEmployee] = React.useState("");
   const [isSendingReminder, setIsSendingReminder] = React.useState(false);
+  const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -67,10 +78,12 @@ export function WakalaWorkspace({
     // 1. Initialize synchronously from table row
     const wakala = selectedRow.wakala || selectedRow.embassy;
     const isAuth =
+      (selectedRow.wakalaStatus || "").toLowerCase() === "paid" ||
       (selectedRow.wakalaStatus || "").toLowerCase().includes("authorized") ||
-      (selectedRow.wakalaStatus || "").toLowerCase().includes("completed") ||
-      (selectedRow.wakalaStatus || "").toLowerCase().includes("paid");
+      (selectedRow.wakalaStatus || "").toLowerCase().includes("completed");
     setStatus(isAuth ? "Completed" : "Pending");
+    setWakalaAmount(selectedRow.wakalaAmount !== undefined ? String(selectedRow.wakalaAmount) : "");
+    setWakalaPaidDate(selectedRow.wakalaPaidDate || "");
     setWakalaRefNo((wakala as any)?.reference_no || selectedRow.visaNumber || "");
     setEmployee((wakala as any)?.assigned_officer || (wakala as any)?.employee || "");
 
@@ -81,10 +94,16 @@ export function WakalaWorkspace({
         if (!isMounted || !freshStep) return;
         if (freshStep.wakala_status) {
           const freshAuth =
+            freshStep.wakala_status.toLowerCase() === "paid" ||
             freshStep.wakala_status.toLowerCase().includes("authorized") ||
-            freshStep.wakala_status.toLowerCase().includes("completed") ||
-            freshStep.wakala_status.toLowerCase().includes("paid");
+            freshStep.wakala_status.toLowerCase().includes("completed");
           setStatus(freshAuth ? "Completed" : "Pending");
+        }
+        if (freshStep.wakala_amount !== undefined && freshStep.wakala_amount !== null) {
+          setWakalaAmount(String(freshStep.wakala_amount));
+        }
+        if (freshStep.wakala_paid_date || freshStep.paid_date) {
+          setWakalaPaidDate(freshStep.wakala_paid_date || freshStep.paid_date);
         }
         if (freshStep.reference_no) setWakalaRefNo(freshStep.reference_no);
         if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
@@ -106,7 +125,18 @@ export function WakalaWorkspace({
       if (!selectedRow) return;
       const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
 
-      if (stepName && isAdmin && employee) {
+      if (stepName && canEdit) {
+        const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
+        const targetWakalaStatus = status === "Completed" ? "Paid" : "Pending";
+        await recordWakalaPaymentV2(
+          stepName,
+          targetWakalaStatus,
+          amt,
+          targetWakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined
+        );
+      }
+
+      if (stepName && isAdmin && employee && employee !== (selectedRow.embassy?.assigned_officer || selectedRow.embassy?.employee)) {
         await reassignClearanceStepV2(stepName, employee);
       }
     },
@@ -370,32 +400,144 @@ export function WakalaWorkspace({
 
         {/* Section 2: Editable Wakala Clearance Fields */}
         <DrawerSection title="Wakala Verification Actions" icon={FileText}>
-          <DrawerField label="Wakala Status" isReadOnly={false}>
-            <select
-              value={status}
-              disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
-            >
-              <option value="Pending">Pending (Awaiting Musaned Verification)</option>
-              <option value="Completed">Completed (Wakala Authorized)</option>
-            </select>
-          </DrawerField>
+          {/* 1-Click Quick Action Banner */}
+          {status !== "Completed" ? (
+            <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                <div>
+                  <span className="font-bold">Wakala Payment Required</span>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Wakala fee is currently Pending. Embassy documents cannot be submitted until marked as Paid.
+                  </p>
+                </div>
+              </div>
+              {canEdit && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={async () => {
+                    const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
+                    if (!stepName) return;
+                    try {
+                      setIsRecordingWakala(true);
+                      const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
+                      await recordWakalaPaymentV2(
+                        stepName,
+                        "Paid",
+                        amt,
+                        wakalaPaidDate || new Date().toISOString().split("T")[0]
+                      );
+                      setStatus("Completed");
+                      toast.success("Wakala fee recorded as Paid!");
+                      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+                      onRefresh();
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to record Wakala payment.");
+                    } finally {
+                      setIsRecordingWakala(false);
+                    }
+                  }}
+                  disabled={isRecordingWakala}
+                  className="shrink-0 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm"
+                >
+                  {isRecordingWakala ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3 w-3" />}
+                  Mark Wakala Paid
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                <div>
+                  <span className="font-bold">Wakala Fee Verified (Paid)</span>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                    Paid on {wakalaPaidDate || "Record"} {wakalaAmount ? `• Amount: ${wakalaAmount} SAR` : ""}. Eligible for embassy submission.
+                  </p>
+                </div>
+              </div>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
+                    if (!stepName) return;
+                    try {
+                      setIsRecordingWakala(true);
+                      await recordWakalaPaymentV2(stepName, "Pending");
+                      setStatus("Pending");
+                      toast.info("Wakala fee reverted to Pending.");
+                      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+                      onRefresh();
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed to revert Wakala status.");
+                    } finally {
+                      setIsRecordingWakala(false);
+                    }
+                  }}
+                  disabled={isRecordingWakala}
+                  className="shrink-0 text-xs border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
+                >
+                  Revert to Pending
+                </Button>
+              )}
+            </div>
+          )}
 
-          <DrawerField label="Wakala Authorization / Reference №" isReadOnly={false}>
-            <input
-              type="text"
-              placeholder="e.g. WAK-2026-99201"
-              value={wakalaRefNo}
-              disabled={!canEdit || mutation.isPending}
-              onChange={(e) => setWakalaRefNo(e.target.value)}
-              className="h-9 w-full px-3 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
-            />
-          </DrawerField>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <DrawerField label="Wakala Fee Status" isReadOnly={false}>
+              <select
+                value={status}
+                disabled={!canEdit || mutation.isPending || isRecordingWakala}
+                onChange={(e) => setStatus(e.target.value as any)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
+              >
+                <option value="Pending">Pending (Unpaid)</option>
+                <option value="Completed">Paid (Authorized)</option>
+              </select>
+            </DrawerField>
+
+            <DrawerField label="Wakala Fee Amount (SAR)" isReadOnly={false}>
+              <input
+                type="number"
+                placeholder="e.g. 2000"
+                value={wakalaAmount}
+                disabled={!canEdit || mutation.isPending || isRecordingWakala}
+                onChange={(e) => setWakalaAmount(e.target.value)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white disabled:opacity-60"
+              />
+            </DrawerField>
+
+            <DrawerField label="Payment Date" isReadOnly={false}>
+              <input
+                type="date"
+                value={wakalaPaidDate}
+                disabled={!canEdit || mutation.isPending || isRecordingWakala || status !== "Completed"}
+                onChange={(e) => setWakalaPaidDate(e.target.value)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white disabled:opacity-50"
+              />
+            </DrawerField>
+
+            <DrawerField label="Musaned Reference №" isReadOnly={false}>
+              <input
+                type="text"
+                placeholder="e.g. WAK-2026-99201"
+                value={wakalaRefNo}
+                disabled={!canEdit || mutation.isPending}
+                onChange={(e) => setWakalaRefNo(e.target.value)}
+                className="h-9 w-full px-3 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
+              />
+            </DrawerField>
+          </div>
 
           {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
           {isAdmin && (
-            <div className="sm:col-span-2">
+            <div className="pt-2">
               <DrawerField label="Assigned Wakala Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}

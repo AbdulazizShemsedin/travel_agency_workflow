@@ -25,6 +25,7 @@ import {
   UserCog,
   BellRing,
   Upload,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
@@ -48,6 +49,8 @@ import {
   submitEmbassyStepV2,
   stampEmbassyStepV2,
   rejectEmbassyStepV2,
+  recordWakalaPaymentV2,
+  getClearanceStepDocV2,
   V2ClearanceStepItem,
 } from "@/lib/api/v2/clearance";
 import { getCorridorStepsV2, V2CorridorStepDefinition } from "@/lib/api/v2/corridor";
@@ -82,8 +85,12 @@ export function V2ClearanceQueueWorkspace() {
   const [amount, setAmount] = React.useState<string>("");
   const [rejectionRemark, setRejectionRemark] = React.useState<string>("");
 
-  // Wakala reminder state
+  // Wakala fee & submission override states
   const [isWakalaReminding, setIsWakalaReminding] = React.useState(false);
+  const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
+  const [embassyOverrideReason, setEmbassyOverrideReason] = React.useState("");
+  const [confirmUnpaidWakalaOverride, setConfirmUnpaidWakalaOverride] = React.useState(false);
+  const [wakalaAmountInput, setWakalaAmountInput] = React.useState("");
 
   // Determine if user has administrative or manager role
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
@@ -105,14 +112,12 @@ export function V2ClearanceQueueWorkspace() {
   const { data: saudiCorridorSteps = [] } = useQuery<V2CorridorStepDefinition[]>({
     queryKey: ["corridor_steps", "Saudi Arabia"],
     queryFn: () => getCorridorStepsV2("Saudi Arabia"),
-    enabled: Boolean(authUser),
     staleTime: 60000,
   });
 
   const { data: kuwaitCorridorSteps = [] } = useQuery<V2CorridorStepDefinition[]>({
     queryKey: ["corridor_steps", "Kuwait"],
     queryFn: () => getCorridorStepsV2("Kuwait"),
-    enabled: Boolean(authUser),
     staleTime: 60000,
   });
 
@@ -129,9 +134,9 @@ export function V2ClearanceQueueWorkspace() {
     staleTime: 10000,
   });
 
-  // 3. Fetch Placements context to enrich applicant details
+  // 3. Fetch Placements for enrichment
   const { data: rawPlacements = [] } = useQuery<V2PlacementRecord[]>({
-    queryKey: ["v2_placements_for_clearance"],
+    queryKey: ["placements_for_queue_enrichment"],
     queryFn: () => listPlacementsV2(),
     enabled: Boolean(authUser),
     staleTime: 20000,
@@ -185,6 +190,12 @@ export function V2ClearanceQueueWorkspace() {
         passport_number: step.passport_number || plc?.passport_number || "—",
         phone: step.phone || plc?.phone,
         gender: step.gender || plc?.gender,
+
+        // Clearance sub-flow & Wakala context
+        wakala_status: step.wakala_status,
+        wakala_amount: step.wakala_amount,
+        wakala_paid_date: step.wakala_paid_date,
+        assigned_officer: step.assigned_officer,
       };
     });
   }, [rawClearanceSteps, placementMap]);
@@ -234,11 +245,24 @@ export function V2ClearanceQueueWorkspace() {
     if (isManagerOrAdmin) return true;
 
     const requiredRole = CLEARANCE_ROLE_BY_STEP_TYPE[selectedRow.step_type];
+    const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).trim().toLowerCase()) : [];
+    if (userRoles.includes("clearance officer")) return true;
+    if (selectedRow.step_type === "Embassy" && userRoles.some((r) => r.includes("embassy"))) return true;
     if (!requiredRole) return false;
 
-    const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).trim().toLowerCase()) : [];
-    return userRoles.includes(requiredRole.toLowerCase()) || userRoles.includes("clearance officer");
+    return userRoles.includes(requiredRole.toLowerCase());
   }, [selectedRow, isManagerOrAdmin, roles]);
+
+  // Check if current user has permission to record/update Wakala payment
+  const canUpdateWakala = React.useMemo<boolean>(() => {
+    if (!selectedRow) return false;
+    if (isManagerOrAdmin) return true;
+    const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).trim().toLowerCase()) : [];
+    if (userRoles.some((r) => r.includes("embassy") || r.includes("clearance"))) return true;
+    const userIdentifier = (authUser?.email || "").toLowerCase();
+    const assigned = (selectedRow.assigned_officer || "").toLowerCase();
+    return Boolean(userIdentifier && assigned && userIdentifier === assigned);
+  }, [selectedRow, isManagerOrAdmin, roles, authUser]);
 
   // Action Mutations
   const startMutation = useMutation({
@@ -267,10 +291,16 @@ export function V2ClearanceQueueWorkspace() {
   });
 
   const submitEmbassyMutation = useMutation({
-    mutationFn: (stepName: string) => submitEmbassyStepV2(stepName),
+    mutationFn: (param: string | { stepName: string; overrideReason?: string }) => {
+      const stepName = typeof param === "string" ? param : param.stepName;
+      const overrideReason = typeof param === "object" ? param.overrideReason : undefined;
+      return submitEmbassyStepV2(stepName, overrideReason);
+    },
     onSuccess: () => {
       toast.success("Embassy dossier submitted successfully");
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+      setEmbassyOverrideReason("");
+      setConfirmUnpaidWakalaOverride(false);
       setIsDrawerOpen(false);
     },
     onError: (err: any) => {
@@ -350,8 +380,30 @@ export function V2ClearanceQueueWorkspace() {
     setReferenceNo(row.reference_no || "");
     setAmount(row.amount ? String(row.amount) : "");
     setRejectionRemark(row.rejection_remark || "");
+    setWakalaAmountInput(row.wakala_amount ? String(row.wakala_amount) : "");
+    setEmbassyOverrideReason("");
+    setConfirmUnpaidWakalaOverride(false);
     setIsDrawerOpen(true);
   };
+
+  // Sync fresh step document in background when row opens
+  React.useEffect(() => {
+    if (!selectedRow?.name) return;
+    let isMounted = true;
+    getClearanceStepDocV2(selectedRow.name)
+      .then((freshStep) => {
+        if (!isMounted || !freshStep) return;
+        if (freshStep.wakala_amount !== undefined && freshStep.wakala_amount !== null) {
+          setWakalaAmountInput(String(freshStep.wakala_amount));
+        }
+        setSelectedRow((prev) => (prev && prev.name === freshStep.name ? { ...prev, ...freshStep } : prev));
+      })
+      .catch((e) => console.warn("Could not load fresh clearance step:", e));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedRow?.name]);
 
   const isEmbassyStep = React.useMemo<boolean>(() => {
     if (!selectedRow) return false;
@@ -1546,30 +1598,128 @@ export function V2ClearanceQueueWorkspace() {
               )}
 
               {/* Action: In Progress & IS Embassy -> Submit to Embassy */}
-              {!isTerminalStatus && selectedRow.status === "In Progress" && isEmbassyStep && (
-                <div className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-white">
-                    <Send className="h-4 w-4 text-purple-600" />
-                    Submit Dossier to Embassy
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Submitting the candidate passport and dossier to the diplomatic mission moves status to <strong>Submitted</strong>.
-                  </p>
-                  <Button
-                    type="button"
-                    disabled={!canOperateSelectedStep || isSaving}
-                    onClick={() => submitEmbassyMutation.mutate(selectedRow.name)}
-                    className="w-full bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 dark:hover:bg-purple-500 text-white text-xs font-semibold h-9"
-                  >
-                    {submitEmbassyMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    ) : (
-                      <Send className="h-4 w-4 mr-1.5" />
+              {!isTerminalStatus && selectedRow.status === "In Progress" && isEmbassyStep && (() => {
+                const isSaudi = (selectedRow.destination_country || "").toLowerCase().includes("saudi") || selectedRow.step_type === "Embassy";
+                const isWakalaPaid = (selectedRow.wakala_status || "").toLowerCase() === "paid";
+
+                return (
+                  <div className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-white">
+                        <Send className="h-4 w-4 text-purple-600" />
+                        Submit Dossier to Embassy
+                      </div>
+                      {isSaudi && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] font-bold",
+                            isWakalaPaid
+                              ? "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              : "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"
+                          )}
+                        >
+                          Wakala: {isWakalaPaid ? "Paid" : "Pending"}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
+                      Submitting the candidate passport and dossier to the diplomatic mission moves status to <strong>Submitted</strong>.
+                    </p>
+
+                    {/* Unpaid Wakala Gate Warning on Saudi Corridor */}
+                    {isSaudi && !isWakalaPaid && (
+                      <div className="p-2.5 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Wakala Payment Required (Submission Gate)</span>
+                            <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                              Wakala fee must be marked as Paid before embassy documents can be submitted.
+                            </p>
+                          </div>
+                        </div>
+
+                        {canUpdateWakala && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                setIsRecordingWakala(true);
+                                const amt = wakalaAmountInput ? Number(wakalaAmountInput) : undefined;
+                                await recordWakalaPaymentV2(selectedRow.name, "Paid", amt);
+                                toast.success("Wakala payment recorded as Paid! Embassy documents can now be submitted.");
+                                queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+                                queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                                setSelectedRow((prev) => (prev ? { ...prev, wakala_status: "Paid" } : null));
+                              } catch (e: any) {
+                                toast.error(e?.message || "Failed to record Wakala payment.");
+                              } finally {
+                                setIsRecordingWakala(false);
+                              }
+                            }}
+                            disabled={isRecordingWakala}
+                            className="w-full bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold h-8 shadow-xs"
+                          >
+                            {isRecordingWakala ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />}
+                            Record Wakala Payment (Mark Paid)
+                          </Button>
+                        )}
+
+                        {/* Manager / Admin Override Option */}
+                        {isManagerOrAdmin && (
+                          <div className="pt-1.5 border-t border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-950 dark:text-amber-200 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={confirmUnpaidWakalaOverride}
+                                onChange={(e) => setConfirmUnpaidWakalaOverride(e.target.checked)}
+                                className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                              />
+                              <span>Manager Override: Submit despite unpaid Wakala</span>
+                            </label>
+                            {confirmUnpaidWakalaOverride && (
+                              <Input
+                                type="text"
+                                placeholder="Manager written override reason *"
+                                value={embassyOverrideReason}
+                                onChange={(e) => setEmbassyOverrideReason(e.target.value)}
+                                className="h-7 text-xs bg-white dark:bg-[#1a1a20] border-amber-300"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
-                    Submit Embassy Step
-                  </Button>
-                </div>
-              )}
+
+                    <Button
+                      type="button"
+                      disabled={
+                        !canOperateSelectedStep ||
+                        isSaving ||
+                        (isSaudi && !isWakalaPaid && (!isManagerOrAdmin || !confirmUnpaidWakalaOverride))
+                      }
+                      onClick={() =>
+                        submitEmbassyMutation.mutate({
+                          stepName: selectedRow.name,
+                          overrideReason: isSaudi && !isWakalaPaid && isManagerOrAdmin && confirmUnpaidWakalaOverride
+                            ? embassyOverrideReason.trim() || "Manager authorized override"
+                            : undefined,
+                        })
+                      }
+                      className="w-full bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 dark:hover:bg-purple-500 text-white text-xs font-semibold h-9"
+                    >
+                      {submitEmbassyMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-1.5" />
+                      )}
+                      Submit Embassy Step
+                    </Button>
+                  </div>
+                );
+              })()}
 
               {/* Action: Submitted (Embassy) -> Stamp OR Reject */}
               {!isTerminalStatus && selectedRow.status === "Submitted" && isEmbassyStep && (
@@ -1653,52 +1803,132 @@ export function V2ClearanceQueueWorkspace() {
                   </div>
                 </div>
               )}
-              {/* Wakala Payment Reminder Manual Trigger (Saudi Embassy) */}
-              {isEmbassyStep && !isTerminalStatus && (
-                <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800/40 bg-amber-50/30 dark:bg-amber-950/10 space-y-2 mt-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-300">
-                    <div className="flex items-center gap-1.5">
-                      <BellRing className="h-4 w-4 text-amber-600" />
-                      Wakala Payment Reminder
+              {/* Wakala Payment Details & Actions (Saudi Embassy) */}
+              {isEmbassyStep && !isTerminalStatus && (() => {
+                const isPaid = (selectedRow.wakala_status || "").toLowerCase() === "paid";
+                return (
+                  <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800/40 bg-amber-50/30 dark:bg-amber-950/10 space-y-3 mt-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-300">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-amber-600" />
+                        Wakala Authorization & Fee Payment
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold",
+                          isPaid
+                            ? "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                            : "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"
+                        )}
+                      >
+                        {isPaid ? "Paid" : "Pending"}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-800 bg-amber-50">
-                      Monday Gate
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Wakala must be paid by the contractor before Monday embassy submission. Manually dispatch a push/WhatsApp alert:
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        setIsWakalaReminding(true);
-                        const res = await triggerWakalaReminderV2(selectedRow.name);
-                        toast.success("Wakala Reminder Sent", {
-                          description: res?.message || `Wakala payment reminder dispatched for ${selectedRow.name}`,
-                        });
-                      } catch (err: any) {
-                        toast.error("Reminder Failed", {
-                          description: err?.message || "Could not dispatch Wakala reminder",
-                        });
-                      } finally {
-                        setIsWakalaReminding(false);
-                      }
-                    }}
-                    disabled={isWakalaReminding}
-                    className="w-full text-xs font-semibold h-8 border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
-                  >
-                    {isWakalaReminding ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <BellRing className="h-3.5 w-3.5 mr-1.5" />
+
+                    <div className="text-[11px] text-slate-600 dark:text-zinc-300">
+                      {isPaid ? (
+                        <p className="text-emerald-700 dark:text-emerald-300">
+                          Wakala fee payment verified. {selectedRow.wakala_amount ? `• Amount: ${selectedRow.wakala_amount} SAR` : ""} {selectedRow.wakala_paid_date ? `• Paid on ${selectedRow.wakala_paid_date}` : ""}
+                        </p>
+                      ) : (
+                        <p className="text-slate-500 dark:text-zinc-400">
+                          Wakala must be paid by the contractor before Monday embassy submission.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Wakala Fee (SAR)</label>
+                        <Input
+                          type="number"
+                          placeholder="e.g. 2000"
+                          value={wakalaAmountInput}
+                          disabled={!canUpdateWakala || isRecordingWakala}
+                          onChange={(e) => setWakalaAmountInput(e.target.value)}
+                          className="h-7 text-xs mt-0.5"
+                        />
+                      </div>
+
+                      <div className="flex items-end">
+                        {canUpdateWakala && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                setIsRecordingWakala(true);
+                                const nextStatus = isPaid ? "Pending" : "Paid";
+                                const amt = wakalaAmountInput ? Number(wakalaAmountInput) : undefined;
+                                await recordWakalaPaymentV2(selectedRow.name, nextStatus, amt);
+                                toast.success(
+                                  nextStatus === "Paid"
+                                    ? "Wakala payment recorded as Paid!"
+                                    : "Wakala status reverted to Pending."
+                                );
+                                queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+                                setSelectedRow((prev) => (prev ? { ...prev, wakala_status: nextStatus } : null));
+                              } catch (e: any) {
+                                toast.error(e?.message || "Failed to update Wakala payment.");
+                              } finally {
+                                setIsRecordingWakala(false);
+                              }
+                            }}
+                            disabled={isRecordingWakala}
+                            className={cn(
+                              "w-full text-xs font-semibold h-7",
+                              isPaid
+                                ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200"
+                                : "bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
+                            )}
+                          >
+                            {isRecordingWakala ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : isPaid ? (
+                              "Revert to Pending"
+                            ) : (
+                              "Mark Wakala Paid"
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {!isPaid && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            setIsWakalaReminding(true);
+                            const res = await triggerWakalaReminderV2(selectedRow.name);
+                            toast.success("Wakala Reminder Sent", {
+                              description: res?.message || `Wakala payment reminder dispatched for ${selectedRow.name}`,
+                            });
+                          } catch (err: any) {
+                            toast.error("Reminder Failed", {
+                              description: err?.message || "Could not dispatch Wakala reminder",
+                            });
+                          } finally {
+                            setIsWakalaReminding(false);
+                          }
+                        }}
+                        disabled={isWakalaReminding}
+                        className="w-full text-xs font-semibold h-7 border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+                      >
+                        {isWakalaReminding ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                        ) : (
+                          <BellRing className="h-3 w-3 mr-1.5" />
+                        )}
+                        Send Musaned / Push Reminder
+                      </Button>
                     )}
-                    Send Wakala Reminder
-                  </Button>
-                </div>
-              )}
+                  </div>
+                );
+              })()}
 
             </DrawerSection>
           </div>

@@ -1859,11 +1859,14 @@ export default function AdminCommissionPage() {
                   </div>
                 </div>
 
-                <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-[11px] text-emerald-900 dark:text-emerald-300 flex items-center gap-2">
-                  <Info className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>
-                    Clicking &quot;Download Invoice PDF&quot; generates an official billing invoice PDF with verified agency details and applicant placement breakdown.
-                  </span>
+                <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-[11px] text-emerald-900 dark:text-emerald-300 space-y-1">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Info className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>Official Commission Billing Invoice PDF</span>
+                  </div>
+                  <p className="text-[10px] text-emerald-800 dark:text-emerald-400 pl-6">
+                    Clicking &quot;Download Invoice PDF&quot; generates the official PDF invoice. Note: The bottom-line TOTAL on the printed invoice dynamically combines this batch balance with any requested advance and prior unpaid batch arrears for this foreign contractor.
+                  </p>
                 </div>
               </CardContent>
             </Card>

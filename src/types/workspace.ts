@@ -19,7 +19,7 @@ export interface V2ClearanceQueueRow {
   name: string; // CLR-00001
   step_type: string; // "LMIS Clearance" | "Taeshir" | "Embassy" | "Kuwait LMIS" | "Telesign" | "Kuwait Embassy"
   sequence_order: number;
-  is_mandatory: number; // 1 or 0
+  is_mandatory: number | boolean; // 1 or 0 or boolean
   status: string; // "Pending" | "In Progress" | "Issued" | "Complete" | "Submitted" | "Stamped" | "Rejected" | "Cancelled"
   date_started?: string | null;
   date_completed?: string | null;
@@ -43,6 +43,12 @@ export interface V2ClearanceQueueRow {
   passport_number?: string;
   phone?: string;
   gender?: string;
+
+  // Clearance sub-flow & wakala properties
+  wakala_status?: string | null;
+  wakala_amount?: number | null;
+  wakala_paid_date?: string | null;
+  assigned_officer?: string | null;
   [key: string]: any;
 }
 

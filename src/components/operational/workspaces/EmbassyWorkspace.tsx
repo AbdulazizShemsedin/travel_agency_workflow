@@ -27,6 +27,7 @@ import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   startClearanceStepV2,
   submitEmbassyStepV2,
@@ -34,6 +35,7 @@ import {
   rejectEmbassyStepV2,
   reassignClearanceStepV2,
   getClearanceStepDocV2,
+  recordWakalaPaymentV2,
 } from "@/lib/api/v2/clearance";
 import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { logStageExpenseV2 } from "@/lib/api/v2/finance";
@@ -78,6 +80,20 @@ export function EmbassyWorkspace({
   const [stampDate, setStampDate] = React.useState("");
   const [rejectionRemark, setRejectionRemark] = React.useState("");
   const [confirmUnpaidWakala, setConfirmUnpaidWakala] = React.useState(false);
+  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Paid">("Pending");
+  const [wakalaAmount, setWakalaAmount] = React.useState("");
+  const [wakalaPaidDate, setWakalaPaidDate] = React.useState(() => new Date().toISOString().split("T")[0]);
+  const [wakalaOverrideReason, setWakalaOverrideReason] = React.useState("");
+  const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
+
+  const isEmbassyOfficer =
+    hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer"] as any) ||
+    roles.some((r) => ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer", "Embassy"].includes(r));
+  const isAssignedOfficer = Boolean(
+    authUser?.email &&
+      (selectedRow?.embassy?.assigned_officer === authUser.email || (selectedRow as any)?.assigned_officer === authUser.email)
+  );
+  const canUpdateWakala = isAdmin || isEmbassyOfficer || isAssignedOfficer;
 
   const currentEmbassyStatus = selectedRow?.embassy?.status;
   const isEmbassyTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentEmbassyStatus || "");
@@ -112,6 +128,12 @@ export function EmbassyWorkspace({
     setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.stamp_date || "");
     setRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || "");
 
+    const isWakalaPaid = (selectedRow.wakalaStatus || "").toLowerCase() === "paid";
+    setWakalaStatus(isWakalaPaid ? "Paid" : "Pending");
+    setWakalaAmount(selectedRow.wakalaAmount ? String(selectedRow.wakalaAmount) : "");
+    setWakalaPaidDate(selectedRow.wakalaPaidDate || new Date().toISOString().split("T")[0]);
+    setWakalaOverrideReason("");
+
     // 2. Fetch fresh clearance step doc and fresh applicant in background
     const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
     Promise.all([
@@ -139,6 +161,15 @@ export function EmbassyWorkspace({
         }
         if (freshStep.rejection_remark || freshStep.notes) {
           setRejectionRemark(freshStep.rejection_remark || freshStep.notes || "");
+        }
+        if (freshStep.wakala_status) {
+          setWakalaStatus(freshStep.wakala_status === "Paid" ? "Paid" : "Pending");
+        }
+        if (freshStep.wakala_amount) {
+          setWakalaAmount(String(freshStep.wakala_amount));
+        }
+        if ((freshStep as any).paid_date || (freshStep as any).wakala_paid_date) {
+          setWakalaPaidDate((freshStep as any).paid_date || (freshStep as any).wakala_paid_date);
         }
       }
       if (freshApp) {
@@ -188,7 +219,20 @@ export function EmbassyWorkspace({
           }
           await stampEmbassyStepV2(stepName, stampNumber || selectedRow.visaNumber || undefined);
         } else if (status === "Submitted" && stepStatus !== "Submitted") {
-          await submitEmbassyStepV2(stepName);
+          if (isSaudi && wakalaStatus !== "Paid") {
+            if (isAdmin && confirmUnpaidWakala) {
+              await submitEmbassyStepV2(
+                stepName,
+                wakalaOverrideReason.trim() || "Manager manual override for unpaid Wakala"
+              );
+            } else {
+              throw new Error(
+                "Wakala must be Paid before Embassy documents can be Submitted. Please record Wakala payment or provide an authorized manager override."
+              );
+            }
+          } else {
+            await submitEmbassyStepV2(stepName);
+          }
         } else if (status === "Rejected" && stepStatus !== "Rejected") {
           if (!rejectionRemark.trim()) {
             throw new Error("Rejection remark is required when rejecting Embassy step.");
@@ -196,6 +240,24 @@ export function EmbassyWorkspace({
           await rejectEmbassyStepV2(stepName, rejectionRemark.trim());
         } else if (status === "Pending" && stepStatus === "Pending") {
           await startClearanceStepV2(stepName);
+        }
+
+        // Also persist Wakala payment updates if modified by authorized embassy officer/admin
+        if (isSaudi && canUpdateWakala) {
+          const origWakalaStatus = (selectedRow.wakalaStatus || "").toLowerCase() === "paid" ? "Paid" : "Pending";
+          if (wakalaStatus !== origWakalaStatus || wakalaAmount) {
+            try {
+              const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
+              await recordWakalaPaymentV2(
+                stepName,
+                wakalaStatus,
+                amt,
+                wakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined
+              );
+            } catch (wErr: any) {
+              console.warn("recordWakalaPaymentV2 notice during save:", wErr);
+            }
+          }
         }
 
         if (isAdmin && employee && employee !== (selectedRow.embassy?.assigned_officer || selectedRow.embassy?.employee)) {
@@ -473,21 +535,170 @@ export function EmbassyWorkspace({
               </div>
             )}
 
-          {status === "Submitted" && selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
-            <div className="sm:col-span-2 p-3 rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/30 text-xs">
-              <label className="flex items-start gap-2 cursor-pointer font-semibold text-rose-800 dark:text-rose-300">
-                <input
-                  type="checkbox"
-                  checked={confirmUnpaidWakala}
-                  onChange={(e) => setConfirmUnpaidWakala(e.target.checked)}
-                  className="mt-0.5 rounded border-rose-400 text-rose-600 focus:ring-rose-500"
-                />
-                <span>
-                  Wakala is Unpaid. Check here to confirm manual override and proceed with Embassy submission.
-                </span>
-              </label>
+        {/* Saudi Corridor: Wakala Payment & Authorization Management (2026-09-11) */}
+        {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && (
+          <DrawerSection title="Wakala Payment & Authorization (Saudi Arabia)" icon={CreditCard}>
+            <div className="sm:col-span-2 space-y-3">
+              {wakalaStatus !== "Paid" ? (
+                <div className="rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50/90 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Wakala Payment Required for Embassy Submission</span>
+                      <p className="mt-0.5 text-[11px] text-rose-700 dark:text-rose-400">
+                        Wakala is currently <strong>{wakalaStatus}</strong>. Submission to the Saudi Embassy is gated until the Wakala fee is marked as Paid.
+                      </p>
+                    </div>
+                  </div>
+                  {canUpdateWakala && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
+                        if (!stepName) return;
+                        try {
+                          setIsRecordingWakala(true);
+                          const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
+                          await recordWakalaPaymentV2(
+                            stepName,
+                            "Paid",
+                            amt,
+                            wakalaPaidDate || new Date().toISOString().split("T")[0]
+                          );
+                          setWakalaStatus("Paid");
+                          setConfirmUnpaidWakala(false);
+                          toast.success("Wakala fee recorded as Paid! Embassy documents can now be submitted.");
+                          queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                          queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+                          onRefresh();
+                        } catch (e: any) {
+                          toast.error(e?.message || "Failed to record Wakala payment.");
+                        } finally {
+                          setIsRecordingWakala(false);
+                        }
+                      }}
+                      disabled={isRecordingWakala}
+                      className="shrink-0 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm"
+                    >
+                      {isRecordingWakala ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3 w-3" />}
+                      Mark Wakala Paid
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <div>
+                      <span className="font-bold">Wakala Payment Verified (Paid)</span>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                        Paid on {wakalaPaidDate || "Record"} {wakalaAmount ? `• Amount: ${wakalaAmount} SAR` : ""}. Embassy documents are eligible for submission.
+                      </p>
+                    </div>
+                  </div>
+                  {canUpdateWakala && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
+                        if (!stepName) return;
+                        try {
+                          setIsRecordingWakala(true);
+                          await recordWakalaPaymentV2(stepName, "Pending");
+                          setWakalaStatus("Pending");
+                          toast.info("Wakala fee reverted to Pending.");
+                          queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                          queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
+                          onRefresh();
+                        } catch (e: any) {
+                          toast.error(e?.message || "Failed to revert Wakala status.");
+                        } finally {
+                          setIsRecordingWakala(false);
+                        }
+                      }}
+                      disabled={isRecordingWakala}
+                      className="shrink-0 text-xs border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
+                    >
+                      Revert to Pending
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                  <Label className="text-[11px] font-semibold">Wakala Fee Status</Label>
+                  <select
+                    value={wakalaStatus}
+                    disabled={!canUpdateWakala || isRecordingWakala}
+                    onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "Paid")}
+                    className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
+                  >
+                    <option value="Pending">Pending (Unpaid)</option>
+                    <option value="Paid">Paid (Authorized)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-semibold">Wakala Fee Amount (SAR)</Label>
+                  <Input
+                    type="number"
+                    placeholder="e.g. 2000"
+                    value={wakalaAmount}
+                    disabled={!canUpdateWakala || isRecordingWakala}
+                    onChange={(e) => setWakalaAmount(e.target.value)}
+                    className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-semibold">Payment Date</Label>
+                  <Input
+                    type="date"
+                    value={wakalaPaidDate}
+                    disabled={!canUpdateWakala || isRecordingWakala || wakalaStatus !== "Paid"}
+                    onChange={(e) => setWakalaPaidDate(e.target.value)}
+                    className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              {/* Manager Written Override Input if Submitting Unpaid Wakala */}
+              {status === "Submitted" && wakalaStatus !== "Paid" && isAdmin && (
+                <div className="mt-2 p-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 text-xs space-y-2">
+                  <label className="flex items-start gap-2 cursor-pointer font-semibold text-amber-900 dark:text-amber-200">
+                    <input
+                      type="checkbox"
+                      checked={confirmUnpaidWakala}
+                      onChange={(e) => setConfirmUnpaidWakala(e.target.checked)}
+                      className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                      Manager Override: Proceed with Embassy Submission despite Unpaid Wakala.
+                    </span>
+                  </label>
+                  {confirmUnpaidWakala && (
+                    <div>
+                      <Label className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
+                        Manager Written Override Reason *
+                      </Label>
+                      <Input
+                        type="text"
+                        placeholder="e.g. Approved by Operations Manager / Foreign agency verified offline"
+                        value={wakalaOverrideReason}
+                        onChange={(e) => setWakalaOverrideReason(e.target.value)}
+                        className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-amber-300 dark:border-amber-800"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
+          </DrawerSection>
+        )}
 
           <DrawerField label="Embassy Clearance Status" isReadOnly={false}>
             <select
