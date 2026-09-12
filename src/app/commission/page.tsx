@@ -81,6 +81,7 @@ import {
   V2ContractorCommissionRate,
 } from "@/lib/api/v2/contractors";
 import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
+import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 import { FxRateModal } from "@/components/finance/FxRateModal";
@@ -700,7 +701,7 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION 8: Export Commissions XLSX
+  // ACTION 8: Export Commissions Spreadsheet (.xlsx or .csv fallback)
   const handleExportCommissionsXlsx = async () => {
     setIsExportingXlsx(true);
     try {
@@ -708,16 +709,10 @@ export default function AdminCommissionPage() {
         selectedContractor || undefined,
         selectedCountry || undefined
       );
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Commissions_${selectedContractor || "All"}_${selectedCountry}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const fallback = `Commissions_${selectedContractor || "All"}_${selectedCountry || "All"}`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
       toast.success("Spreadsheet Downloaded", {
-        description: "Exported commissions data successfully.",
+        description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
       });
     } catch (err: any) {
       toast.error("Export Failed", {
@@ -850,9 +845,10 @@ export default function AdminCommissionPage() {
             disabled={isExportingXlsx}
             onClick={handleExportCommissionsXlsx}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+            title="Export commissions spreadsheet (Excel / CSV)"
           >
             <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
-            {isExportingXlsx ? "Exporting..." : "Export .xlsx"}
+            {isExportingXlsx ? "Exporting..." : "Export Excel / CSV"}
           </Button>
         </div>
       </div>

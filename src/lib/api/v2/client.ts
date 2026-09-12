@@ -181,7 +181,29 @@ export async function requestV2<T = any>(
       } catch {}
       throw new ApiV2Error(errorMsg, response.status);
     }
-    return (await response.blob()) as unknown as T;
+    const blob = await response.blob();
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+      if (match && match[1]) {
+        try {
+          const parsed = decodeURIComponent(match[1].trim());
+          Object.defineProperty(blob, "filename", {
+            value: parsed,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        } catch {
+          Object.defineProperty(blob, "filename", {
+            value: match[1].trim(),
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+        }
+      }
+    }
+    return blob as unknown as T;
   }
 
 

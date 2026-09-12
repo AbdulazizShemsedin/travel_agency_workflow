@@ -24,6 +24,9 @@ import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
+import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
+import { toast } from "sonner";
 
 export default function AgentCommissionPage() {
   const { authUser, agencyContext } = useAuth();
@@ -65,8 +68,26 @@ export default function AgentCommissionPage() {
     refetchList();
   };
 
-  const excelExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
+  const [isExportingSpreadsheet, setIsExportingSpreadsheet] = React.useState(false);
+
+  const handleExportExcel = async () => {
+    setIsExportingSpreadsheet(true);
+    try {
+      const blob = await exportCommissionsXlsxV2(effectiveContractor || undefined);
+      const fallback = `Statements_${effectiveContractor || "Agency"}`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
+      toast.success("Spreadsheet Downloaded", {
+        description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
+      });
+    } catch (err: any) {
+      toast.error("Export Failed", {
+        description: err?.message || "Failed to download accounting statement.",
+      });
+    } finally {
+      setIsExportingSpreadsheet(false);
+    }
+  };
+
   const pdfExportUrl =
     "/api/method/agency_tracking.report_api.export_commissions_xlsx";
 
@@ -175,15 +196,16 @@ export default function AgentCommissionPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <a
-              href={excelExportUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs px-4 py-2.5 shadow-xs transition"
+            <Button
+              type="button"
+              disabled={isExportingSpreadsheet}
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs px-4 py-2.5 shadow-xs transition h-auto cursor-pointer"
+              title="Export statement spreadsheet (Excel / CSV)"
             >
               <FileSpreadsheet className="h-4 w-4" />
-              Export Excel (.xlsx)
-            </a>
+              {isExportingSpreadsheet ? "Exporting..." : "Export Excel / CSV"}
+            </Button>
             <a
               href={pdfExportUrl}
               target="_blank"

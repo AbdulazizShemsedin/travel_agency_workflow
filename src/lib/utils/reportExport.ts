@@ -184,3 +184,90 @@ export function exportToPrintPDF<T extends Record<string, any>>(
   printWindow.document.write(htmlContent);
   printWindow.document.close();
 }
+
+export interface BackendSpreadsheetDownloadResult {
+  filename: string;
+  format: "xlsx" | "csv";
+}
+
+/**
+ * Downloads a spreadsheet binary/stream returned by Frappe backend (e.g. export_commissions_xlsx).
+ * Handles the backend's dual .xlsx / .csv fallback format:
+ * 1. Checks if the blob is binary XLSX (magic bytes PK\x03\x04 or openxml mime).
+ * 2. Checks if the blob is CSV text. If CSV, ensures a UTF-8 BOM (\uFEFF) is present
+ *    so Microsoft Excel opens it seamlessly without character corruption or format warnings.
+ * 3. Extracts or aligns the file extension to match the true format (.xlsx vs .csv),
+ *    preventing Microsoft Excel's "file format and extension don't match / corrupted" error.
+ */
+export async function downloadBackendSpreadsheet(
+  blob: Blob,
+  fallbackBaseName = "commissions_report"
+): Promise<BackendSpreadsheetDownloadResult> {
+  // 1. Detect format by checking ZIP / OpenXML magic bytes
+  let isXlsx = false;
+  try {
+    const slice = await blob.slice(0, 4).arrayBuffer();
+    const bytes = new Uint8Array(slice);
+    isXlsx =
+      bytes.length >= 4 &&
+      bytes[0] === 0x50 &&
+      bytes[1] === 0x4b &&
+      bytes[2] === 0x03 &&
+      bytes[3] === 0x04;
+  } catch {
+    isXlsx = false;
+  }
+
+  // Also check MIME type if magic bytes check was indeterminate
+  if (!isXlsx && (blob.type.includes("openxmlformats") || blob.type.includes("spreadsheetml"))) {
+    isXlsx = true;
+  }
+
+  const format: "xlsx" | "csv" = isXlsx ? "xlsx" : "csv";
+  const expectedExt = `.${format}`;
+
+  // 2. Resolve target filename
+  const serverFilename = (blob as any)?.filename as string | undefined;
+  let filename: string;
+  if (serverFilename) {
+    const base = serverFilename.replace(/\.(xlsx|csv|txt)$/i, "");
+    filename = `${base}${expectedExt}`;
+  } else {
+    const base = fallbackBaseName.replace(/\.(xlsx|csv|txt)$/i, "");
+    filename = `${base}${expectedExt}`;
+  }
+
+  // 3. For CSV, ensure UTF-8 BOM (\uFEFF) is present for flawless Microsoft Excel rendering
+  let finalBlob = blob;
+  if (!isXlsx) {
+    try {
+      const firstBytes = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
+      const hasBom =
+        firstBytes.length >= 3 &&
+        firstBytes[0] === 0xef &&
+        firstBytes[1] === 0xbb &&
+        firstBytes[2] === 0xbf;
+
+      if (!hasBom) {
+        finalBlob = new Blob(["\uFEFF", blob], { type: "text/csv;charset=utf-8;" });
+      }
+    } catch {
+      finalBlob = new Blob(["\uFEFF", blob], { type: "text/csv;charset=utf-8;" });
+    }
+  }
+
+  // 4. Trigger browser download
+  if (typeof window !== "undefined") {
+    const url = window.URL.createObjectURL(finalBlob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  return { filename, format };
+}
+

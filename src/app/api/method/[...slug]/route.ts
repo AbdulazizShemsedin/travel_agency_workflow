@@ -653,6 +653,7 @@ export async function POST(
       headers.set("Content-Type", resContentType);
       const contentDisposition = res.headers.get("content-disposition");
       if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
+      headers.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
       const binaryResponse = new Response(buffer, { status: res.status, headers });
       forwardSetCookieHeaders(res, binaryResponse);
       return binaryResponse;
@@ -834,6 +835,7 @@ export async function GET(
       headers.set("Content-Type", resContentType);
       const contentDisposition = res.headers.get("content-disposition");
       if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
+      headers.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
       const binaryResponse = new Response(buffer, { status: res.status, headers });
       forwardSetCookieHeaders(res, binaryResponse);
       return binaryResponse;

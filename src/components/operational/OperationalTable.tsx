@@ -277,24 +277,56 @@ export function OperationalTable<T extends Record<string, any> = any>({
     const rows = table.getFilteredRowModel().rows;
     if (rows.length === 0) return;
 
-    const visibleHeaders = visibleColumns.map((c) => `"${c.columnDef.header || c.id}"`).join(",");
+    // Filter out action columns and columns without valid data
+    const exportableCols = visibleColumns.filter((c) => {
+      const id = (c.id || "").toLowerCase();
+      return id !== "actions" && id !== "action" && id !== "select" && id !== "expander";
+    });
+
+    if (exportableCols.length === 0) return;
+
+    const visibleHeaders = exportableCols.map((c) => {
+      const headerText = typeof c.columnDef.header === "string"
+        ? c.columnDef.header
+        : (c.id || "Column");
+      return `"${headerText.replace(/"/g, '""')}"`;
+    }).join(",");
+
     const csvRows = rows.map((row) => {
-      return visibleColumns
+      return exportableCols
         .map((col) => {
-          const val = (row.original as any)[col.id] ?? "";
+          let val: any;
+          try {
+            val = row.getValue(col.id);
+          } catch {
+            val = undefined;
+          }
+
+          if (val === undefined || val === null) {
+            const accessorKey = (col.columnDef as any)?.accessorKey;
+            val = accessorKey ? (row.original as any)[accessorKey] : (row.original as any)[col.id];
+          }
+
+          if (val === undefined || val === null) val = "";
+          if (typeof val === "object" && !(val instanceof Date)) {
+            val = JSON.stringify(val);
+          }
           return `"${String(val).replace(/"/g, '""')}"`;
         })
         .join(",");
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + [visibleHeaders, ...csvRows].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    // UTF-8 BOM (\uFEFF) and CRLF line breaks for proper Microsoft Excel compatibility
+    const csvContent = "\uFEFF" + [visibleHeaders, ...csvRows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${title.toLowerCase().replace(/\s+/g, "_")}_export.csv`);
+    link.href = url;
+    link.download = `${title.toLowerCase().replace(/\s+/g, "_")}_export.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Quick action: Sort by most urgent remaining days (ascending order)

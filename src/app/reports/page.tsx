@@ -69,6 +69,7 @@ import {
   V2EmployeeFinancialItem,
   V2PendingApprovalItem,
 } from "@/lib/api/v2/reports";
+import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import {
   listUnresolvedComplaintsV2,
   listNewComplaintsV2,
@@ -312,21 +313,15 @@ export default function ReportsPage() {
     staleTime: 20000,
   });
 
-  // Handle Binary XLSX Export
+  // Handle Backend Spreadsheet Export (.xlsx or .csv fallback)
   const handleExportXlsx = async () => {
     setIsExportingXlsx(true);
     try {
       const blob = await exportCommissionsXlsxV2(undefined, undefined, fromDate, toDate);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Commissions_Export_${fromDate}_to_${toDate}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success("Commissions Export Downloaded", {
-        description: `Exported binary spreadsheet from ${fromDate} to ${toDate}.`,
+      const fallback = `Commissions_Export_${fromDate}_to_${toDate}`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
+      toast.success("Spreadsheet Downloaded", {
+        description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
       });
     } catch (err: any) {
       toast.error("Export Failed", {
@@ -454,9 +449,10 @@ export default function ReportsPage() {
               disabled={isExportingXlsx}
               onClick={handleExportXlsx}
               className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+              title="Export commissions spreadsheet (Excel / CSV)"
             >
               <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
-              {isExportingXlsx ? "Exporting..." : "Export .xlsx"}
+              {isExportingXlsx ? "Exporting..." : "Export Excel / CSV"}
             </Button>
           )}
         </div>
