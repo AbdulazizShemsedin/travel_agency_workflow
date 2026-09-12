@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { loginUser, logoutUser, getLoggedUser, fetchCurrentUserContext, AuthUser } from "@/lib/api/auth";
-import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction } from "@/lib/auth/permissions";
+import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction, ROUTE_PERMISSION_MAP } from "@/lib/auth/permissions";
 import { isDemoMode } from "@/lib/config/env";
 import { DEMO_USERS, DemoUserProfile } from "@/lib/demo/users";
 import { AgencyContextResponse } from "@/types/applicant";
+import { toast } from "sonner";
 
 interface AuthContextType {
   user: string | null;
@@ -132,6 +133,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push("/dashboard");
         }
       }
+    }
+  }, [isLoading, authUser, pathname, router]);
+
+  // RBAC Route Guard: block access to pages the user's role doesn't permit
+  React.useEffect(() => {
+    if (isLoading || !authUser || !pathname) return;
+    // Skip login, agent portal, and settings routes (always accessible)
+    if (pathname === "/login" || pathname.startsWith("/login") || pathname.startsWith("/agent") || pathname === "/settings") return;
+
+    // Find the matching route permission
+    // Check exact match first, then prefix match for dynamic routes like /applicants/[id]
+    let requiredAction: PermissionAction | undefined = ROUTE_PERMISSION_MAP[pathname];
+    if (!requiredAction) {
+      // Find the longest matching route prefix
+      const matchedRoute = Object.keys(ROUTE_PERMISSION_MAP)
+        .filter((route) => pathname.startsWith(route))
+        .sort((a, b) => b.length - a.length)[0];
+      if (matchedRoute) {
+        requiredAction = ROUTE_PERMISSION_MAP[matchedRoute];
+      }
+    }
+
+    // If a required action was found and the user doesn't have permission, redirect
+    if (requiredAction && !can(authUser, requiredAction)) {
+      toast.error("Access Denied", {
+        description: "You do not have permission to access this section. Contact your administrator if you believe this is an error.",
+        duration: 5000,
+      });
+      router.replace("/dashboard");
     }
   }, [isLoading, authUser, pathname, router]);
 

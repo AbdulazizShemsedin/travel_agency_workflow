@@ -58,6 +58,7 @@ import {
   resolveDefaultEmployeeForRole,
 } from "@/lib/api/v2";
 import { cn } from "@/lib/utils";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 // Canonical Roles Definition mapped directly to active database roles
 export interface CanonicalRoleDefinition {
@@ -352,7 +353,7 @@ export default function EmployeesPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to create employee", {
-        description: err.message || "Please verify the information and try again.",
+        description: formatCleanErrorMessage(err) || err.message || "Please verify the information and try again.",
       });
     },
   });
@@ -370,7 +371,7 @@ export default function EmployeesPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to update security roles", {
-        description: err.message || "Please try again.",
+        description: formatCleanErrorMessage(err) || err.message || "Please try again.",
       });
     },
   });
@@ -388,7 +389,7 @@ export default function EmployeesPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to reset password", {
-        description: err.message || "Please try again.",
+        description: formatCleanErrorMessage(err) || err.message || "Please try again.",
       });
     },
   });
@@ -408,7 +409,7 @@ export default function EmployeesPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to update status", {
-        description: err.message || "Please try again.",
+        description: formatCleanErrorMessage(err) || err.message || "Please try again.",
       });
     },
   });

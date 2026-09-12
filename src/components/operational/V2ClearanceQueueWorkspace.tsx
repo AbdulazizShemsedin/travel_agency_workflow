@@ -27,6 +27,7 @@ import {
   Upload,
   AlertTriangle,
   ShieldAlert,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
@@ -42,6 +43,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   listMyClearanceStepsV2,
@@ -50,6 +59,8 @@ import {
   submitEmbassyStepV2,
   stampEmbassyStepV2,
   rejectEmbassyStepV2,
+  reassignClearanceStepV2,
+  reopenClearanceStepV2,
   recordWakalaPaymentV2,
   getClearanceStepDocV2,
   V2ClearanceStepItem,
@@ -92,6 +103,11 @@ export function V2ClearanceQueueWorkspace() {
   const [embassyOverrideReason, setEmbassyOverrideReason] = React.useState("");
   const [confirmUnpaidWakalaOverride, setConfirmUnpaidWakalaOverride] = React.useState(false);
   const [wakalaAmountInput, setWakalaAmountInput] = React.useState("");
+
+  // Reopen Step modal states
+  const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
+  const [reopenReason, setReopenReason] = React.useState("");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending" | "Submitted">("In Progress");
 
   // Determine if user has administrative or manager role
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
@@ -335,14 +351,59 @@ export function V2ClearanceQueueWorkspace() {
     },
   });
 
+  const isRowDeparted = React.useMemo(() => {
+    if (!selectedRow) return false;
+    const plc = selectedRow.placement ? placementMap.get(selectedRow.placement) : undefined;
+    return plc?.status === "Departed" || (plc as any)?.ticket_status === "Departed";
+  }, [selectedRow, placementMap]);
+
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRow) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(selectedRow.name, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: () => {
+      toast.success("Clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      setIsDrawerOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to reopen clearance step.");
+    },
+  });
+
   // Save reference/amount details without advancing the state machine.
   // If the step is already In Progress, also advances to Complete.
+  // For terminal steps, saves data corrections without altering terminal outcome.
   const saveDetailsMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRow) return;
+      if (isRowDeparted) {
+        throw new Error("Placement is Departed/Cancelled; clearance steps cannot be edited.");
+      }
       const stepStatus = (selectedRow.status || "").toLowerCase();
-      // For In Progress non-embassy steps: complete the step with the ref/amount
-      if (stepStatus === "in progress" && !isEmbassyStep) {
+      if (isTerminalStatus) {
+        if (isEmbassyStep) {
+          if (stepStatus === "stamped" || stepStatus === "approved") {
+            await stampEmbassyStepV2(selectedRow.name, referenceNo.trim() || undefined);
+          } else if (stepStatus === "rejected") {
+            await rejectEmbassyStepV2(selectedRow.name, rejectionRemark.trim() || referenceNo.trim() || "Rejected");
+          }
+        } else {
+          await completeClearanceStepV2(
+            selectedRow.name,
+            referenceNo.trim() || undefined,
+            amount ? Number(amount) : undefined
+          );
+        }
+      } else if (stepStatus === "in progress" && !isEmbassyStep) {
+        // For In Progress non-embassy steps: complete the step with the ref/amount
         await completeClearanceStepV2(
           selectedRow.name,
           referenceNo.trim() || undefined,
@@ -359,7 +420,11 @@ export function V2ClearanceQueueWorkspace() {
       }
     },
     onSuccess: () => {
-      toast.success(`Clearance step for ${selectedRow?.full_name} saved successfully.`);
+      toast.success(
+        isTerminalStatus
+          ? `Clearance step corrections for ${selectedRow?.full_name} saved successfully.`
+          : `Clearance step for ${selectedRow?.full_name} saved successfully.`
+      );
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
       setIsDrawerOpen(false);
     },
@@ -1289,17 +1354,37 @@ export function V2ClearanceQueueWorkspace() {
         applicantId={selectedRow?.name || ""}
         passportNumber={selectedRow?.passport_number || undefined}
         statusBadge={selectedRow ? renderStatusBadge(selectedRow.status) : undefined}
-        canEdit={canOperateSelectedStep && !isTerminalStatus}
+        canEdit={canOperateSelectedStep && !isRowDeparted}
         isSaving={isSaving}
-        onSave={canOperateSelectedStep && !isTerminalStatus ? () => saveDetailsMutation.mutate() : undefined}
+        onSave={canOperateSelectedStep && !isRowDeparted ? () => saveDetailsMutation.mutate() : undefined}
         saveButtonText={
-          selectedRow?.status === "In Progress" && !isEmbassyStep
+          isTerminalStatus
+            ? "Save Corrections"
+            : selectedRow?.status === "In Progress" && !isEmbassyStep
             ? "Save & Mark Complete"
             : selectedRow?.status === "In Progress" && isEmbassyStep
             ? "Record Visa Stamp"
             : selectedRow?.status === "Submitted" && isEmbassyStep
             ? "Record Visa Stamp"
             : "Save & Start Step"
+        }
+        leftAction={
+          isTerminalStatus && !isRowDeparted && isManagerOrAdmin ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setReopenReason("");
+                setReopenTargetStatus("In Progress");
+                setIsReopenModalOpen(true);
+              }}
+              className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Reopen Step
+            </Button>
+          ) : undefined
         }
       >
         {selectedRow && (
@@ -1438,16 +1523,16 @@ export function V2ClearanceQueueWorkspace() {
 
               {/* Terminal State Banner */}
               {isTerminalStatus && (
-                <div className="col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
-                    <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
+                <div className="col-span-2 rounded-xl border-2 border-blue-400/40 dark:border-blue-600/40 bg-blue-50/60 dark:bg-blue-950/40 p-3.5 shadow-xs text-blue-950 dark:text-blue-100 flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 mt-0.5">
+                    <ShieldAlert className="h-4.5 w-4.5 text-blue-700 dark:text-blue-300" />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                      Clearance Step Finalized & Locked
+                    <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                      Step Finalized — Data Corrections Allowed
                     </p>
-                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                      This clearance step is finalized (<span className="font-bold underline">{selectedRow.status}</span>). All workflow actions, reference numbers, and handler assignments are permanently locked and cannot be modified.
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-300 leading-relaxed">
+                      This clearance step is finalized (<span className="font-bold underline">{selectedRow.status}</span>). Reference numbers, amounts, and rejection remarks can be corrected and saved. To reverse the completed outcome itself, click <strong className="underline">Reopen Step</strong> above.
                     </p>
                   </div>
                 </div>
@@ -1460,7 +1545,7 @@ export function V2ClearanceQueueWorkspace() {
                   placeholder="e.g. REF-2026-91823"
                   value={referenceNo}
                   onChange={(e) => setReferenceNo(e.target.value)}
-                  disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                  disabled={!canOperateSelectedStep || isSaving || isRowDeparted}
                   className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                 />
               </DrawerField>
@@ -1472,7 +1557,7 @@ export function V2ClearanceQueueWorkspace() {
                     placeholder="0.00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                    disabled={!canOperateSelectedStep || isSaving || isRowDeparted}
                     className="h-9 text-xs pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                   />
                   <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">ETB</span>
@@ -1487,7 +1572,7 @@ export function V2ClearanceQueueWorkspace() {
                       value={rejectionRemark}
                       onChange={(e) => setRejectionRemark(e.target.value)}
                       placeholder="Specify embassy refusal ground or missing document..."
-                      disabled={!canOperateSelectedStep || isSaving || isTerminalStatus}
+                      disabled={!canOperateSelectedStep || isSaving || isRowDeparted}
                       className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                     />
                   </DrawerField>
@@ -1969,6 +2054,73 @@ export function V2ClearanceQueueWorkspace() {
           }}
         />
       )}
+
+      {/* Dialog: Reopen Clearance Step */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#15151b] border-slate-200 dark:border-[#2a2a35]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <RotateCcw className="h-4.5 w-4.5 text-amber-600" />
+              Reopen Clearance Step
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Reversing this step will reset its terminal outcome and notify the assigned handler. A written audit reason is mandatory.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Target Status
+              </label>
+              <select
+                value={reopenTargetStatus}
+                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="In Progress">In Progress (Default)</option>
+                <option value="Pending">Pending</option>
+                {isEmbassyStep && <option value="Submitted">Submitted (At Embassy)</option>}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Reason for Reopening <span className="text-rose-500">*</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this clearance step needs to be reopened (e.g. outcome entered in error, ministry verification reset)..."
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={reopenMutation.isPending}
+              onClick={() => setIsReopenModalOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenMutation.isPending || !reopenReason.trim()}
+              onClick={() => reopenMutation.mutate()}
+              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

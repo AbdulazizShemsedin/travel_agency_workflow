@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { logStageExpenseV2, logStageIncomeV2, V2SupportedCurrency } from "@/lib/api/v2";
 import { toast } from "sonner";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 export interface StageFeeEntry {
   id: string;
@@ -115,7 +116,7 @@ export function StageFeeSection({
       });
     } catch (err: any) {
       toast.error("Failed to submit stage fee", {
-        description: err.message || "An error occurred while logging fee",
+        description: formatCleanErrorMessage(err),
       });
     } finally {
       setSubmittingId(null);
@@ -145,7 +146,9 @@ export function StageFeeSection({
       }
       toast.success(`Submitted ${successCount} fee entries to Finance!`);
     } catch (err: any) {
-      toast.error("Error submitting fee batch", { description: err?.message });
+      toast.error("Failed to submit fee batch", {
+        description: formatCleanErrorMessage(err),
+      });
     } finally {
       setIsSubmittingAll(false);
     }

@@ -182,42 +182,46 @@ export async function createEmployeeV2(payload: CreateEmployeePayload): Promise<
 }
 
 /**
+ * Fast, role-gated employee roster for internal staff.
+ * Authoritative Backend Endpoint: employee_api.list_employee_roster (New 2026-09-11)
+ * Accessible to any member of INTERNAL_STAFF_ROLES for staff assignment pickers,
+ * chat participant dropdowns, and clearance officer assignments.
+ */
+export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
+  try {
+    const res = await requestV2<{ message?: any[] } | any[]>(
+      "/api/method/agency_tracking.employee_api.list_employee_roster",
+      { method: "POST" }
+    );
+    const list = Array.isArray(res) ? res : Array.isArray((res as any)?.message) ? (res as any).message : [];
+    return list.map((u: any) => ({
+      name: u.name || u.email,
+      email: u.email || u.name,
+      full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
+      first_name: u.first_name || "",
+      last_name: u.last_name || null,
+      phone: u.phone || null,
+      mobile_no: u.mobile_no || null,
+      enabled: typeof u.enabled === "number" ? u.enabled : u.enabled ? 1 : 0,
+      user_type: "System User",
+      creation: u.creation || "",
+      roles: Array.isArray(u.roles) ? u.roles.map((r: any) => typeof r === "string" ? r : r?.role).filter(Boolean) : [],
+    }));
+  } catch (err) {
+    console.warn("listEmployeeRosterV2 notice, trying fallback:", err);
+    return listEmployeesV2();
+  }
+}
+
+/**
  * Updates assigned security roles for an existing employee.
+ * Uses agency_tracking.employee_api.update_employee_roles which enforces backend admin-lockout guards.
  */
 export async function updateEmployeeRolesV2(
   userEmail: string,
   newRoles: string[]
 ): Promise<string[]> {
-  const res = await requestV2<any>("/api/method/frappe.client.get", {
-    method: "POST",
-    body: { doctype: "User", name: userEmail },
-  });
-
-  const userDoc = res?.message || res;
-  if (!userDoc) {
-    throw new Error(`Failed to load employee record for ${userEmail}`);
-  }
-
-  // Ensure Desk User is retained
-  const roleSet = new Set(newRoles);
-  roleSet.add("Desk User");
-
-  userDoc.roles = Array.from(roleSet).map((role) => ({
-    doctype: "Has Role",
-    role,
-  }));
-
-  const saveRes = await requestV2<any>("/api/method/frappe.client.save", {
-    method: "POST",
-    body: { doc: userDoc },
-  });
-
-  const savedDoc = saveRes?.message || saveRes;
-  const updatedRoles: string[] = Array.isArray(savedDoc?.roles)
-    ? savedDoc.roles.map((r: any) => (typeof r === "string" ? r : r?.role)).filter(Boolean)
-    : Array.from(roleSet);
-
-  return updatedRoles;
+  return updateEmployeeRolesApiV2(userEmail, newRoles);
 }
 
 /**
@@ -240,20 +244,13 @@ export async function resetEmployeePasswordV2(
 
 /**
  * Activates or deactivates an employee account.
+ * Uses agency_tracking.employee_api.toggle_employee_status which enforces backend admin-lockout guards.
  */
 export async function toggleEmployeeStatusV2(
   userEmail: string,
   enabled: boolean
 ): Promise<void> {
-  await requestV2("/api/method/frappe.client.set_value", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      name: userEmail,
-      fieldname: "enabled",
-      value: enabled ? 1 : 0,
-    },
-  });
+  await toggleEmployeeStatusApiV2(userEmail, enabled);
 }
 
 /**

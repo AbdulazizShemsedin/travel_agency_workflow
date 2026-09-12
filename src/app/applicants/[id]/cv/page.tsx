@@ -29,6 +29,7 @@ import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 export default function CandidateCvPreviewPage() {
   const params = useParams();
@@ -59,8 +60,8 @@ export default function CandidateCvPreviewPage() {
         rawMsg.includes("non-JSON") ||
         rawMsg.includes("HTTP 500");
       const description = isRenderCrash
-        ? "The server encountered an error while rendering the CV PDF. This may be due to missing print template configuration or a temporary rendering engine issue. Please check that the Print Format is enabled on the backend and try again."
-        : rawMsg;
+        ? "We couldn't generate the official CV document right now. Please verify applicant information and photo, then try again in a moment."
+        : formatCleanErrorMessage(err);
       toast.error("CV Generation Failed", { description });
     },
   });

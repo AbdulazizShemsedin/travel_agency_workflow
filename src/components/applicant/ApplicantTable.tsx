@@ -95,7 +95,7 @@ export function ApplicantTable() {
   const searchParams = useSearchParams();
   const urlFilter = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter") || "";
 
-  const { authUser } = useAuth();
+  const { authUser, can } = useAuth();
 
   // Derive corridor restriction from user roles
   const corridorRestriction = React.useMemo(() => {
@@ -377,18 +377,20 @@ export function ApplicantTable() {
               Clear Selection
             </Button>
             {/* Prominent Assign Employee Button */}
-            <Button
-              size="sm"
-              onClick={handleBatchAssign}
-              className={`text-xs font-bold shadow-xs cursor-pointer ${
-                hasIneligibleSelected
-                  ? "bg-amber-500 hover:bg-amber-400 text-amber-950"
-                  : "bg-emerald-400 hover:bg-emerald-300 text-emerald-950"
-              }`}
-            >
-              <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-              Edit Staff ({selectedRows.size})
-            </Button>
+            {can("manageUsers") && (
+              <Button
+                size="sm"
+                onClick={handleBatchAssign}
+                className={`text-xs font-bold shadow-xs cursor-pointer ${
+                  hasIneligibleSelected
+                    ? "bg-amber-500 hover:bg-amber-400 text-amber-950"
+                    : "bg-emerald-400 hover:bg-emerald-300 text-emerald-950"
+                }`}
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+                Edit Staff ({selectedRows.size})
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -605,8 +607,8 @@ export function ApplicantTable() {
                             <span>View</span>
                           </Link>
 
-                          {/* 2. Assign Processing Employee - SHOWN ONLY IF ON 'Selected' STAGE */}
-                          {stage === "Selected" && (
+                          {/* 2. Assign Processing Employee - SHOWN ONLY IF ON 'Selected' STAGE & has manageUsers */}
+                          {stage === "Selected" && can("manageUsers") && (
                             <button
                               type="button"
                               onClick={(e) => handleSingleAssign(applicant, e)}

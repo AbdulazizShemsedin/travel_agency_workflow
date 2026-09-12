@@ -84,7 +84,7 @@ export function WakalaWorkspace({
     setStatus(isAuth ? "Completed" : "Pending");
     setWakalaAmount(selectedRow.wakalaAmount !== undefined ? String(selectedRow.wakalaAmount) : "");
     setWakalaPaidDate(selectedRow.wakalaPaidDate || "");
-    setWakalaRefNo((wakala as any)?.reference_no || selectedRow.visaNumber || "");
+    setWakalaRefNo((wakala as any)?.wakala_reference_no || (wakala as any)?.reference_no || selectedRow.visaNumber || "");
     setEmployee((wakala as any)?.assigned_officer || (wakala as any)?.employee || "");
 
     // 2. Fetch fresh clearance step doc in background
@@ -103,11 +103,13 @@ export function WakalaWorkspace({
           setWakalaAmount(String(freshStep.wakala_amount));
         }
         if (freshStep.wakala_paid_date || freshStep.paid_date) {
-          setWakalaPaidDate(freshStep.wakala_paid_date || freshStep.paid_date);
+          setWakalaPaidDate(freshStep.wakala_paid_date || freshStep.paid_date || "");
         }
-        if (freshStep.reference_no) setWakalaRefNo(freshStep.reference_no);
+        if (freshStep.wakala_reference_no || freshStep.reference_no) {
+          setWakalaRefNo(freshStep.wakala_reference_no || freshStep.reference_no || "");
+        }
         if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
-          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
+          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by || "");
         }
       }).catch((err) => {
         console.warn("Could not load fresh Wakala clearance step:", err);
@@ -119,10 +121,18 @@ export function WakalaWorkspace({
     };
   }, [selectedRow]);
 
+  const isPlacementDeparted =
+    selectedRow?.placementStatus === "Departed" ||
+    selectedRow?.ticketStatus === "Departed" ||
+    Boolean((selectedRow as any)?.isDeparted);
+
   // Mutation
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedRow) return;
+      if (isPlacementDeparted) {
+        throw new Error("Placement is Departed/Cancelled; its clearance steps can no longer be edited.");
+      }
       const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
 
       if (stepName && canEdit) {
@@ -132,7 +142,8 @@ export function WakalaWorkspace({
           stepName,
           targetWakalaStatus,
           amt,
-          targetWakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined
+          targetWakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined,
+          wakalaRefNo || undefined
         );
       }
 
@@ -364,7 +375,7 @@ export function WakalaWorkspace({
             {status}
           </Badge>
         }
-        canEdit={canEdit}
+        canEdit={canEdit && !isPlacementDeparted}
         isSaving={mutation.isPending}
         onSave={() => mutation.mutate()}
         leftAction={
@@ -412,7 +423,7 @@ export function WakalaWorkspace({
                   </p>
                 </div>
               </div>
-              {canEdit && (
+              {canEdit && !isPlacementDeparted && (
                 <Button
                   type="button"
                   size="sm"
@@ -426,7 +437,8 @@ export function WakalaWorkspace({
                         stepName,
                         "Paid",
                         amt,
-                        wakalaPaidDate || new Date().toISOString().split("T")[0]
+                        wakalaPaidDate || new Date().toISOString().split("T")[0],
+                        wakalaRefNo || undefined
                       );
                       setStatus("Completed");
                       toast.success("Wakala fee recorded as Paid!");
@@ -458,7 +470,7 @@ export function WakalaWorkspace({
                   </p>
                 </div>
               </div>
-              {canEdit && (
+              {canEdit && !isPlacementDeparted && (
                 <Button
                   type="button"
                   variant="outline"
@@ -468,7 +480,13 @@ export function WakalaWorkspace({
                     if (!stepName) return;
                     try {
                       setIsRecordingWakala(true);
-                      await recordWakalaPaymentV2(stepName, "Pending");
+                      await recordWakalaPaymentV2(
+                        stepName,
+                        "Pending",
+                        undefined,
+                        undefined,
+                        wakalaRefNo || undefined
+                      );
                       setStatus("Pending");
                       toast.info("Wakala fee reverted to Pending.");
                       queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });

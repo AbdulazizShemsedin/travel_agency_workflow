@@ -17,6 +17,7 @@ import {
   Award,
   CreditCard,
   Phone,
+  RotateCcw,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -45,7 +46,8 @@ import {
   completeClearanceStepV2,
   rejectClearanceStepV2,
   reassignClearanceStepV2,
-  updateKuwaitPoliceAsharaV2,
+  recordPoliceAsharaV2,
+  reopenClearanceStepV2,
   getClearanceStepDocV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, getApplicantV2 } from "@/lib/api/v2/applicants";
@@ -110,10 +112,15 @@ export function LMISWorkspace({
 
   // Kuwait LMIS / Police Ashara fields
   const [policeAsharaRefNo, setPoliceAsharaRefNo] = React.useState("");
-  const [policeAsharaStatus, setPoliceAsharaStatus] = React.useState<"Pending" | "Completed" | "Passed" | "Failed" | "Rejected">("Pending");
-  const [policeAsharaDate, setPoliceAsharaDate] = React.useState("");
-  const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState("");
-  const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState("");
+  const [policeAsharaStatus, setPoliceAsharaStatus] = React.useState<"Pending" | "Scheduled" | "Completed" | "Passed" | "Failed" | "Rejected" | string>("Pending");
+  const [policeAsharaDate, setPoliceAsharaDate] = React.useState<string>("");
+  const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState<string>("");
+  const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState<string>("");
+
+  // Reopen Step Modal state
+  const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
+  const [reopenReason, setReopenReason] = React.useState("");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending">("In Progress");
   const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
 
   const currentLmisStatus = selectedRow?.lms?.status;
@@ -121,9 +128,9 @@ export function LMISWorkspace({
     selectedRow?.placementStatus === "Departed" ||
     selectedRow?.ticketStatus === "Departed" ||
     Boolean((selectedRow as any)?.isDeparted);
-  const isTerminal =
-    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentLmisStatus || "") ||
-    isPlacementDeparted;
+  const isStepTerminal =
+    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentLmisStatus || "");
+  const isTerminal = isStepTerminal || isPlacementDeparted;
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -212,9 +219,9 @@ export function LMISWorkspace({
           setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
         }
         if (freshStep.police_ashara_reference_no || freshStep.reference_no) {
-          setPoliceAsharaRefNo(freshStep.police_ashara_reference_no || freshStep.reference_no);
+          setPoliceAsharaRefNo(freshStep.police_ashara_reference_no || freshStep.reference_no || "");
         }
-        if (freshStep.police_ashara_status) setPoliceAsharaStatus(freshStep.police_ashara_status);
+        if (freshStep.police_ashara_status) setPoliceAsharaStatus(freshStep.police_ashara_status as any);
         if (freshStep.police_ashara_appointment_date) setPoliceAsharaDate(freshStep.police_ashara_appointment_date);
         if (freshStep.police_ashara_amount) setPoliceAsharaAmount(String(freshStep.police_ashara_amount));
         if (freshStep.police_ashara_remark) setPoliceAsharaRemark(freshStep.police_ashara_remark);
@@ -290,44 +297,63 @@ export function LMISWorkspace({
         }
       }
 
-      // 2. Kuwait Police Ashara persistence if Kuwait corridor
+      // 2. Kuwait Police Ashara persistence via authoritative recordPoliceAsharaV2
       if (isKuwait && stepName) {
+        if (policeAsharaStatus === "Failed" && !policeAsharaRemark.trim()) {
+          throw new Error("A remark is required when Police Ashara status is Failed.");
+        }
         try {
-          await updateKuwaitPoliceAsharaV2(stepName, {
+          await recordPoliceAsharaV2(stepName, {
             police_ashara_appointment_date: policeAsharaDate || undefined,
             police_ashara_status: policeAsharaStatus,
+            police_ashara_payment_status: "Pending",
             police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
             police_ashara_remark: policeAsharaRemark.trim() || undefined,
-            reference_no: policeAsharaRefNo.trim() || undefined,
           });
         } catch (asharaErr: any) {
-          console.warn("updateKuwaitPoliceAsharaV2 error:", asharaErr);
+          console.warn("recordPoliceAsharaV2 error:", asharaErr);
         }
       }
 
-      // 3. Authoritative Clearance Step State Machine (only for active/non-terminal steps and non-departed placements)
-      if (stepName && !isStepTerminal && !isRowDeparted) {
-        if (status === "Rejected") {
-          await rejectClearanceStepV2(stepName, rejectionRemark.trim() || "LMIS requirements rejected", "LMIS");
-        } else if (status === "Issued" && stepStatus !== "Issued") {
-          if (stepStatus === "Pending") {
+      // 3. Authoritative Clearance Step State Machine & Data Corrections
+      if (stepName && !isRowDeparted) {
+        if (isStepTerminal) {
+          // Data correction on already-terminal step:
+          // completeClearanceStepV2 supports reference_no, amount, date_completed update on terminal steps
+          await completeClearanceStepV2(stepName, safeLaborId, undefined, issuedOn || undefined);
+
+          // Reassign officer if modified by Admin (allowed on terminal steps per 2026-09-11 update)
+          if (isAdmin && employee && employee !== (selectedRow.lms?.assigned_officer || selectedRow.lms?.employee)) {
             try {
-              await startClearanceStepV2(stepName);
-            } catch (startErr) {
-              console.warn("Auto-start before complete:", startErr);
+              await reassignClearanceStepV2(stepName, employee);
+            } catch (err: any) {
+              console.warn("reassignClearanceStepV2 warning:", err);
             }
           }
-          await completeClearanceStepV2(stepName, safeLaborId);
-        } else if (status === "In Progress" && stepStatus === "Pending") {
-          await startClearanceStepV2(stepName);
-        }
+        } else {
+          // Normal active progression
+          if (status === "Rejected") {
+            await rejectClearanceStepV2(stepName, rejectionRemark.trim() || "LMIS requirements rejected", "LMIS");
+          } else if (status === "Issued" && stepStatus !== "Issued") {
+            if (stepStatus === "Pending") {
+              try {
+                await startClearanceStepV2(stepName);
+              } catch (startErr) {
+                console.warn("Auto-start before complete:", startErr);
+              }
+            }
+            await completeClearanceStepV2(stepName, safeLaborId, undefined, issuedOn || undefined);
+          } else if (status === "In Progress" && stepStatus === "Pending") {
+            await startClearanceStepV2(stepName);
+          }
 
-        // Reassign officer if modified by Admin (only allowed on non-terminal steps)
-        if (isAdmin && employee && employee !== (selectedRow.lms?.assigned_officer || selectedRow.lms?.employee)) {
-          try {
-            await reassignClearanceStepV2(stepName, employee);
-          } catch (err: any) {
-            console.warn("reassignClearanceStepV2 warning:", err);
+          // Reassign officer if modified by Admin
+          if (isAdmin && employee && employee !== (selectedRow.lms?.assigned_officer || selectedRow.lms?.employee)) {
+            try {
+              await reassignClearanceStepV2(stepName, employee);
+            } catch (err: any) {
+              console.warn("reassignClearanceStepV2 warning:", err);
+            }
           }
         }
       }
@@ -346,6 +372,36 @@ export function LMISWorkspace({
     },
     onError: (err: any) => {
       toast.error(err?.message || "Failed to update LMIS Clearance record.");
+    },
+  });
+
+  // Reopen Step Mutation (Manager/Admin only)
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRow) return;
+      const stepName = selectedRow.clearanceStepName || selectedRow.lms?.name;
+      if (!stepName) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: async () => {
+      toast.success("LMIS clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+        queryClient.invalidateQueries({ queryKey: ["placements"] }),
+      ]);
+      onRefresh();
+      setSelectedRow(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to reopen clearance step.");
     },
   });
 
@@ -607,9 +663,23 @@ export function LMISWorkspace({
             {status}
           </Badge>
         }
-        canEdit={canEdit && !isTerminal}
-        isSaving={mutation.isPending}
+        canEdit={canEdit && !isPlacementDeparted}
+        isSaving={mutation.isPending || reopenMutation.isPending}
         onSave={() => setIsConfirmOpen(true)}
+        leftAction={
+          isStepTerminal && !isPlacementDeparted && isAdmin ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsReopenModalOpen(true)}
+              className="h-9 px-3 text-xs font-semibold border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-950/60 flex items-center gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reopen Step
+            </Button>
+          ) : undefined
+        }
       >
         {/* View-Only Banner: shown when user lacks LMIS edit permissions */}
         {!canEdit && (
@@ -656,17 +726,17 @@ export function LMISWorkspace({
                 </p>
               </div>
             </div>
-          ) : isTerminal ? (
+          ) : isStepTerminal ? (
             <div className="sm:col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
                 <AlertTriangle className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                  Clearance Step Finalized & Locked
+                  Clearance Step Finalized ({currentLmisStatus})
                 </p>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This LMIS clearance step is finalized (<span className="font-bold underline">{currentLmisStatus}</span>). Status, reference numbers, and handler assignments are permanently locked and cannot be modified.
+                  This LMIS clearance step is finalized (<span className="font-bold underline">{currentLmisStatus}</span>). Reference numbers, issue dates, and payments remain correctable below. To reverse the outcome itself (e.g. back to In Progress), use <strong>Reopen Step</strong>.
                 </p>
               </div>
             </div>
@@ -818,7 +888,7 @@ export function LMISWorkspace({
               <DrawerField label="Assigned LMIS Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending || isTerminal}
+                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
                   onChange={(e) => setEmployee(e.target.value)}
                   className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
@@ -960,7 +1030,7 @@ export function LMISWorkspace({
                   {status === "Issued" ? "Confirm LMIS Step Finalization" : "Confirm Save Changes"}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Review your changes before submitting to the live database.
+                  Review your changes before saving.
                 </DialogDescription>
               </div>
             </div>
@@ -978,11 +1048,11 @@ export function LMISWorkspace({
                   <p>
                     {status === "Issued" ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Issued (Approved)</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        Setting this clearance step to <strong className="underline">Issued (Approved)</strong> will finalize it. Once saved, the outcome status is finalized. Any outcome reversals will require managerial approval.
                       </>
                     ) : (
                       <>
-                        Once submitted, clearance step updates are recorded on the live server. Please verify all information is accurate before confirming.
+                        Once confirmed, clearance step updates are recorded in the applicant record. Please verify all information is accurate before saving.
                       </>
                     )}
                   </p>
@@ -1066,6 +1136,72 @@ export function LMISWorkspace({
               className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
             >
               {mutation.isPending ? "Submitting..." : "Yes, Confirm & Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Reopen Clearance Step */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#15151b] border-slate-200 dark:border-[#2a2a35]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <RotateCcw className="h-4.5 w-4.5 text-amber-600" />
+              Reopen LMIS Clearance Step
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Reversing this step will reset its outcome status and notify the assigned handler. A written audit reason is mandatory.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Target Status
+              </label>
+              <select
+                value={reopenTargetStatus}
+                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="In Progress">In Progress (Default)</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Reason for Reopening <span className="text-rose-500">*</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this LMIS step needs to be reopened (e.g. marked Issued by mistake, ministry document review required)..."
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={reopenMutation.isPending}
+              onClick={() => setIsReopenModalOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenMutation.isPending || !reopenReason.trim()}
+              onClick={() => reopenMutation.mutate()}
+              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
             </Button>
           </DialogFooter>
         </DialogContent>

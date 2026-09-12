@@ -509,35 +509,37 @@ export default function ReportsPage() {
           ) : null}
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("financial")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "financial"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <DollarSign className="h-3.5 w-3.5" />
-          Financial Ledgers & Costs
-          {!isAdminOrFinance && <Lock className="h-3 w-3 text-amber-500" />}
-        </button>
+        {isAdminOrFinance && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("financial")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "financial"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <DollarSign className="h-3.5 w-3.5" />
+            Financial Ledgers & Costs
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("approvals")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "approvals"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <Inbox className="h-3.5 w-3.5" />
-          Pending Approvals Queue
-          {!isAdminOrFinance && <Lock className="h-3 w-3 text-amber-500" />}
-        </button>
+        {isAdminOrFinance && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("approvals")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "approvals"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <Inbox className="h-3.5 w-3.5" />
+            Pending Approvals Queue
+          </button>
+        )}
       </div>
 
       {/* ------------------------------------------------------------- */}

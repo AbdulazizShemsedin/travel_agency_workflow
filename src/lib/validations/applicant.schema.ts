@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { businessZodErrorMap } from "./zod-error-map";
 import {
   differenceInCalendarDays,
   differenceInYears,
@@ -9,6 +10,9 @@ import {
   startOfDay,
   addMonths,
 } from "date-fns";
+
+// Enforce non-technical, human-friendly error messages globally across all Zod validations
+z.setErrorMap(businessZodErrorMap);
 
 export const GENDER_OPTIONS = ["Male", "Female"] as const;
 
@@ -77,14 +81,14 @@ export const DESTINATION_COUNTRY_OPTIONS = [
   "Other",
 ] as const;
 
-// Safe helper for optional numeric fields
+// Safe helper for optional numeric fields with human-friendly error mapping
 const optionalNumber = (schema: z.ZodNumber) =>
   z.preprocess((val) => {
-    if (val === "" || val === null || val === undefined || Number.isNaN(val)) {
+    if (val === "" || val === null || val === undefined) {
       return undefined;
     }
     const num = Number(val);
-    return Number.isNaN(num) ? undefined : num;
+    return Number.isNaN(num) ? NaN : num;
   }, schema.optional());
 
 // Safe helper for boolean fields (converts Frappe "1", "0", "", 1, 0, "true", "false" to boolean)
@@ -106,8 +110,19 @@ export const baseApplicantSchema = z.object({
   religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
   marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   children: z.preprocess(
-    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
-    z.number().int("Children must be a whole number").min(0).max(25).default(0)
+    (val) => {
+      if (val === "" || val === null || val === undefined) return 0;
+      const num = Number(val);
+      return Number.isNaN(num) ? NaN : num;
+    },
+    z.number({
+      invalid_type_error: "Please enter a valid number of children (e.g. 0, 1, 2)",
+      required_error: "Number of children is required",
+    })
+      .int("Number of children must be a whole number")
+      .min(0, "Number of children cannot be negative")
+      .max(25, "Number of children cannot exceed 25")
+      .default(0)
   ),
   nationality: z.string().trim().default("Ethiopia"),
   destination_country: z.string().trim().default("Saudi Arabia"),
@@ -139,7 +154,9 @@ export const baseApplicantSchema = z.object({
   // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
   target_job: z.string().trim().optional().or(z.literal("")),
   education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
-  salary_amount: optionalNumber(z.number().min(0)),
+  salary_amount: optionalNumber(
+    z.number({ invalid_type_error: "Please enter a valid salary amount" }).min(0, "Salary amount cannot be negative")
+  ),
   salary_currency: z.enum(["SAR", "KWD", "USD", "ETB", "AED", "QAR"]).default("SAR"),
   photograph: z.string().optional().or(z.literal("")),
   passport_expiry_date: z.string().optional().or(z.literal("")),
@@ -158,9 +175,13 @@ export const baseApplicantSchema = z.object({
 
   // Fees & Registration (Applicant Fee)
   fee_required: optionalBoolean,
-  registration_fee_amount: optionalNumber(z.number().min(0)),
+  registration_fee_amount: optionalNumber(
+    z.number({ invalid_type_error: "Please enter a valid registration fee amount" }).min(0, "Registration fee cannot be negative")
+  ),
   fee_type: z.enum(["Registration Fee", "Processing Fee", "Visa Fee", "Other"]).default("Registration Fee"),
-  fee_amount: optionalNumber(z.number().min(0)),
+  fee_amount: optionalNumber(
+    z.number({ invalid_type_error: "Please enter a valid fee amount" }).min(0, "Fee amount cannot be negative")
+  ),
   fee_direction: z.enum(["Income", "Expense"]).default("Income"),
   fee_payment_date: z.string().optional().or(z.literal("")),
   fee_expiry_date: z.string().optional().or(z.literal("")),
@@ -254,8 +275,18 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
   }),
 
   children: z.preprocess(
-    (val) => (val === "" || val === null || val === undefined ? 0 : Number(val)),
-    z.number().int("Children count must be a number").min(0).max(25)
+    (val) => {
+      if (val === "" || val === null || val === undefined) return 0;
+      const num = Number(val);
+      return Number.isNaN(num) ? NaN : num;
+    },
+    z.number({
+      invalid_type_error: "Please enter a valid number of children (e.g. 0, 1, 2)",
+      required_error: "Number of children is required",
+    })
+      .int("Number of children must be a whole number")
+      .min(0, "Number of children cannot be negative")
+      .max(25, "Number of children cannot exceed 25")
   ),
 
   nationality: z

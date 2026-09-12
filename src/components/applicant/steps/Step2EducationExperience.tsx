@@ -63,7 +63,7 @@ export function Step2EducationExperience({
         toast.success("Candidate video uploaded successfully!");
       }
     } catch (err: any) {
-      toast.error("Video upload failed", { description: err.message || "Failed to upload video file" });
+      toast.error("Video upload failed", { description: "We couldn't upload the video. Please check the file size or format and try again." });
     } finally {
       setIsUploadingVideo(false);
     }

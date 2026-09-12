@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   listContractorsV2,
@@ -167,7 +168,9 @@ export default function ContractorsPage() {
       setTimeout(() => setSuccessMessage(null), 4000);
     },
     onError: (err: any) => {
-      toast.error("Failed to add contractor: " + (err?.message || "Unknown error"));
+      toast.error("Failed to add contractor agency", {
+        description: formatCleanErrorMessage(err),
+      });
     },
   });
 
@@ -206,7 +209,9 @@ export default function ContractorsPage() {
       toast.success("Contractor agency details updated successfully!");
     },
     onError: (err: any) => {
-      toast.error("Failed to update contractor: " + (err?.message || "Unknown error"));
+      toast.error("Failed to update contractor agency", {
+        description: formatCleanErrorMessage(err),
+      });
     },
   });
 
@@ -218,7 +223,9 @@ export default function ContractorsPage() {
       toast.success("Agent portal password updated successfully!");
     },
     onError: (err: any) => {
-      toast.error("Failed to update agent password: " + (err?.message || "Unknown error"));
+      toast.error("Failed to update agent password", {
+        description: formatCleanErrorMessage(err),
+      });
     },
   });
 

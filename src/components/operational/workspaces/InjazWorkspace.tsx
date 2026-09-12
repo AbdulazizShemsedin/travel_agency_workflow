@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -32,6 +33,7 @@ import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -46,6 +48,7 @@ import {
   startClearanceStepV2,
   completeClearanceStepV2,
   reassignClearanceStepV2,
+  reopenClearanceStepV2,
   setTaeshirAppointmentV2,
   rescheduleTaeshirAppointmentV2,
   recordInjazPaymentV2,
@@ -63,6 +66,7 @@ import {
   InjazCandidateData,
 } from "@/lib/pdf/injazDocumentGenerator";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 interface InjazWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -110,8 +114,41 @@ export function InjazWorkspace({
     selectedRow?.ticketStatus === "Departed" ||
     Boolean((selectedRow as any)?.isDeparted);
   const isInjazTerminal =
-    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "") ||
-    isPlacementDeparted;
+    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "");
+
+  // Reopen Step Modal State & Mutation
+  const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
+  const [reopenReason, setReopenReason] = React.useState("");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending">("In Progress");
+
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRow) return;
+      const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
+      if (!stepName) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: async () => {
+      toast.success("Te'shir / Injaz clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+        queryClient.invalidateQueries({ queryKey: ["placements"] }),
+      ]);
+      onRefresh();
+      setSelectedRow(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to reopen clearance step.");
+    },
+  });
 
   // Forfeit and Restart Dialog State
   const [isForfeitModalOpen, setIsForfeitModalOpen] = React.useState(false);
@@ -381,55 +418,61 @@ export function InjazWorkspace({
         selectedRow.placementStatus === "Departed" ||
         selectedRow.ticketStatus === "Departed" ||
         Boolean((selectedRow as any)?.isDeparted);
-      // Terminal steps (Issued / Complete / Stamped / Rejected / Cancelled) and Departed
-      // placements are locked by the backend's 2026-08-31 terminal-state guard — no
-      // appointment, payment, status, or reassignment RPC may be issued against them.
-      const isTerminal =
-        ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(stepStatus || "") ||
-        isRowDeparted;
 
-      if (!isTerminal) {
-        // Set Taeshir appointment if details are present
-        if (appointmentDate && injazNumber) {
-          try {
-            await setTaeshirAppointmentV2(stepName, appointmentDate, injazNumber);
-            persistedSomething = true;
-          } catch (err: any) {
-            console.warn("setTaeshirAppointmentV2 warning:", err);
-          }
-        }
+      if (isRowDeparted) {
+        throw new Error("Placement is Departed/Cancelled; clearance steps cannot be edited.");
+      }
 
-        // Record Injaz payment if fee entered
-        if (paymentStatus === "PAID" || (injazFee && Number(injazFee) > 0 && paymentNo)) {
-          try {
-            await recordInjazPaymentV2(
-              stepName,
-              Number(injazFee) || 10.5,
-              "USD",
-              paymentNo || undefined,
-              paymentDate || undefined
-            );
-            persistedSomething = true;
-          } catch (err: any) {
-            console.warn("recordInjazPaymentV2 warning:", err);
-          }
-        }
-
-        if (status === "Completed" && stepStatus !== "Completed" && stepStatus !== "Complete") {
-          await completeClearanceStepV2(stepName, injazNumber);
+      // Set Taeshir appointment if details are present (supported for terminal steps)
+      if (appointmentDate && injazNumber) {
+        try {
+          await setTaeshirAppointmentV2(stepName, appointmentDate, injazNumber);
           persistedSomething = true;
-        } else if (status === "Pending" && stepStatus === "Pending") {
-          await startClearanceStepV2(stepName);
-          persistedSomething = true;
+        } catch (err: any) {
+          console.warn("setTaeshirAppointmentV2 warning:", err);
         }
+      }
 
-        if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
-          try {
-            await reassignClearanceStepV2(stepName, employee);
-            persistedSomething = true;
-          } catch (err: any) {
-            console.warn("reassignClearanceStepV2 warning:", err);
-          }
+      // Record Injaz payment (supports Paid and Unpaid correction)
+      const wasPaid =
+        selectedRow.injazPayment === "PAID" ||
+        (selectedRow.injaz?.payment_status || "").toLowerCase().includes("paid");
+      if (
+        paymentStatus === "PAID" ||
+        (paymentStatus === "UNPAID" && wasPaid) ||
+        (injazFee && Number(injazFee) > 0 && paymentNo)
+      ) {
+        try {
+          await recordInjazPaymentV2(
+            stepName,
+            Number(injazFee) || 10.5,
+            "USD",
+            paymentNo || undefined,
+            paymentDate || undefined,
+            paymentStatus === "PAID" ? "Paid" : "Unpaid"
+          );
+          persistedSomething = true;
+        } catch (err: any) {
+          console.warn("recordInjazPaymentV2 warning:", err);
+        }
+      }
+
+      // Complete clearance step or update terminal data
+      if (status === "Completed") {
+        await completeClearanceStepV2(stepName, injazNumber || undefined, Number(injazFee) || undefined);
+        persistedSomething = true;
+      } else if (status === "Pending" && stepStatus === "Pending") {
+        await startClearanceStepV2(stepName);
+        persistedSomething = true;
+      }
+
+      // Reassign officer if changed (now permitted on terminal steps)
+      if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
+        try {
+          await reassignClearanceStepV2(stepName, employee);
+          persistedSomething = true;
+        } catch (err: any) {
+          console.warn("reassignClearanceStepV2 warning:", err);
         }
       }
 
@@ -440,7 +483,7 @@ export function InjazWorkspace({
         toast.success(`Te'shir Clearance & Appointment Date for ${selectedRow?.fullName} updated successfully!`);
       } else {
         toast.info(
-          `No changes were saved for ${selectedRow?.fullName} — this Te'shir step is finalized (${currentInjazStatus || "terminal"}) and cannot be edited anymore.`
+          `No changes were saved for ${selectedRow?.fullName}.`
         );
       }
       queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
@@ -457,9 +500,9 @@ export function InjazWorkspace({
   });
 
   const handleSave = () => {
-    if (isInjazTerminal) {
+    if (isPlacementDeparted) {
       toast.error(
-        `This Te'shir step is already finalized (${currentInjazStatus}). Appointment, payment, and status fields are permanently locked.`
+        `This placement is Departed/Cancelled. Clearance steps can no longer be edited.`
       );
       return;
     }
@@ -612,7 +655,7 @@ export function InjazWorkspace({
                 await downloadInjazDocumentPDF(injazData);
                 toast.success("Injaz document downloaded!");
               } catch (err: any) {
-                toast.error("Failed to generate Injaz document: " + err.message);
+                toast.error("Failed to generate Injaz document", { description: formatCleanErrorMessage(err) });
               }
             }}
             className="h-6 px-2 text-[11px] font-semibold border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
@@ -663,9 +706,27 @@ export function InjazWorkspace({
             {status}
           </Badge>
         }
-        canEdit={canEdit && !isInjazTerminal}
+        canEdit={canEdit && !isPlacementDeparted}
         isSaving={mutation.isPending}
         onSave={handleSave}
+        leftAction={
+          isInjazTerminal && !isPlacementDeparted && isAdmin ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setReopenReason("");
+                setReopenTargetStatus("In Progress");
+                setIsReopenModalOpen(true);
+              }}
+              className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Reopen Step
+            </Button>
+          ) : undefined
+        }
       >
         {/* Section 1: Read-Only Candidate & Contract Context */}
         <DrawerSection title="Candidate & Contract Dossier Context" icon={User}>
@@ -701,16 +762,16 @@ export function InjazWorkspace({
         {/* Section 2: Editable Te'shir & Appointment Processing Fields */}
         <DrawerSection title="Te'shir Appointment & Clearance Actions" icon={CalendarDays}>
           {isInjazTerminal && (
-            <div className="sm:col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
-                <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
+            <div className="sm:col-span-2 rounded-xl border-2 border-blue-400/40 dark:border-blue-600/40 bg-blue-50/60 dark:bg-blue-950/40 p-3.5 shadow-xs text-blue-950 dark:text-blue-100 flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 mt-0.5">
+                <ShieldAlert className="h-4.5 w-4.5 text-blue-700 dark:text-blue-300" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                  Clearance Step Finalized & Locked
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                  Step Finalized — Data Corrections Allowed
                 </p>
-                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This Te'shir clearance step is finalized (<span className="font-bold underline">{currentInjazStatus}</span>). Status, appointment date, Injaz payment, and handler assignee fields are permanently locked against further modifications.
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 leading-relaxed">
+                  This Te&apos;shir clearance step is finalized (<span className="font-bold underline">{currentInjazStatus}</span>). You can correct appointment date, E-number, payment status, fee, receipt, and assigned officer. To reverse the completed status itself, click <strong className="underline">Reopen Step</strong> above.
                 </p>
               </div>
             </div>
@@ -720,7 +781,7 @@ export function InjazWorkspace({
             <input
               type="date"
               value={appointmentDate}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setAppointmentDate(e.target.value)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
             />
@@ -729,7 +790,7 @@ export function InjazWorkspace({
           <DrawerField label="Te'shir Clearance Status" isReadOnly={false}>
             <select
               value={status}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isInjazTerminal || isPlacementDeparted}
               onChange={(e) => setStatus(e.target.value as any)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
@@ -743,7 +804,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="e.g. E4982104"
               value={injazNumber}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setInjazNumber(e.target.value)}
               className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -752,7 +813,7 @@ export function InjazWorkspace({
           <DrawerField label="Injaz Fee Settlement" isReadOnly={false}>
             <select
               value={paymentStatus}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setPaymentStatus(e.target.value as any)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
             >
@@ -768,7 +829,7 @@ export function InjazWorkspace({
                 step="0.01"
                 placeholder="10.5"
                 value={injazFee}
-                disabled={!canEdit || mutation.isPending || isInjazTerminal}
+                disabled={!canEdit || mutation.isPending || isPlacementDeparted}
                 onChange={(e) => setInjazFee(e.target.value)}
                 className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
               />
@@ -783,7 +844,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="Enter receipt number (No default)"
               value={paymentNo}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setPaymentNo(e.target.value)}
               className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -793,7 +854,7 @@ export function InjazWorkspace({
             <Input
               type="date"
               value={paymentDate}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setPaymentDate(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -804,7 +865,7 @@ export function InjazWorkspace({
               type="text"
               placeholder="Enter processing remarks (No default)"
               value={remark}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setRemark(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -816,7 +877,7 @@ export function InjazWorkspace({
               <DrawerField label="Assigned Te'shir Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending || isInjazTerminal}
+                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
                   onChange={(e) => setEmployee(e.target.value)}
                   className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
@@ -897,7 +958,7 @@ export function InjazWorkspace({
                       toast.info("Candidate loaded into browser extension memory.");
                     }
                   } catch (err: any) {
-                    toast.error("Failed to bridge candidate to extension: " + err.message);
+                    toast.error("Failed to bridge candidate", { description: formatCleanErrorMessage(err) });
                   }
                 }}
                 className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
@@ -991,32 +1052,52 @@ export function InjazWorkspace({
               </div>
               <div>
                 <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                  {status === "Completed" ? "Confirm Te'shir Step Completion" : "Confirm Save Changes"}
+                  {isInjazTerminal
+                    ? "Confirm Te'shir Data Correction"
+                    : status === "Completed"
+                    ? "Confirm Te'shir Step Completion"
+                    : "Confirm Save Changes"}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Review your changes before submitting to the live database.
+                  Review your changes before saving.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            {/* Eye-catching yellow warning box */}
-            <div className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 text-amber-950 dark:text-amber-200">
+            {/* Warning or info box */}
+            <div
+              className={cn(
+                "rounded-xl border-2 p-3.5",
+                isInjazTerminal
+                  ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-200"
+                  : "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200"
+              )}
+            >
               <div className="flex items-start gap-2.5">
-                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <ShieldAlert
+                  className={cn(
+                    "h-4 w-4 shrink-0 mt-0.5",
+                    isInjazTerminal ? "text-blue-600 dark:text-blue-400" : "text-amber-600"
+                  )}
+                />
                 <div className="text-xs leading-relaxed">
-                  <p className="font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100 mb-0.5">
-                    Permanent Action Warning
+                  <p className="font-bold uppercase tracking-wide mb-0.5">
+                    {isInjazTerminal ? "Clearance Step Data Correction" : "Permanent Action Warning"}
                   </p>
                   <p>
-                    {status === "Completed" ? (
+                    {isInjazTerminal ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Completed</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        This step is already finalized. Data modifications to appointment date, Injaz application ID, payment status, fee, and handler will be recorded without altering the step&apos;s completion status.
+                      </>
+                    ) : status === "Completed" ? (
+                      <>
+                        Setting this clearance step to <strong className="underline">Completed</strong> will permanently finalize it. Once saved, the status itself cannot regress except via Reopen Step.
                       </>
                     ) : (
                       <>
-                        Once submitted, Te&apos;shir updates are recorded on the live server. Please verify all information is accurate before confirming.
+                        Once confirmed, Te&apos;shir updates are recorded in the applicant record. Please verify all information is accurate before confirming.
                       </>
                     )}
                   </p>
@@ -1092,7 +1173,73 @@ export function InjazWorkspace({
               }}
               className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
             >
-              {mutation.isPending ? "Submitting..." : "Yes, Confirm & Save"}
+              {mutation.isPending ? "Submitting..." : isInjazTerminal ? "Yes, Save Corrections" : "Yes, Confirm & Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Reopen Clearance Step */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#15151b] border-slate-200 dark:border-[#2a2a35]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <RotateCcw className="h-4.5 w-4.5 text-amber-600" />
+              Reopen Te&apos;shir / Injaz Clearance Step
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Reversing this step will reset its outcome status and notify the assigned handler. A written audit reason is mandatory.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Target Status
+              </label>
+              <select
+                value={reopenTargetStatus}
+                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="In Progress">In Progress (Default)</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Reason for Reopening <span className="text-rose-500">*</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this Te'shir / Injaz step needs to be reopened (e.g. biometrics rescheduled, wrong outcome recorded)..."
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={reopenMutation.isPending}
+              onClick={() => setIsReopenModalOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenMutation.isPending || !reopenReason.trim()}
+              onClick={() => reopenMutation.mutate()}
+              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
             </Button>
           </DialogFooter>
         </DialogContent>

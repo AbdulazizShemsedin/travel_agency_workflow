@@ -56,15 +56,6 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   const passportScanValue = watch("passport_scan");
   const passportNumber = watch("passport_number");
 
-  const maritalStatus = watch("marital_status");
-  const isSingle = String(maritalStatus || "").toLowerCase() === "single";
-
-  React.useEffect(() => {
-    if (isSingle) {
-      setValue("children", 0, { shouldDirty: true, shouldValidate: true });
-    }
-  }, [isSingle, setValue]);
-
   const currentDestCountry = watch("destination_country") || "";
   const isKnownPredefinedCountry = DESTINATION_COUNTRY_OPTIONS.filter((c) => c !== "Other").includes(
     currentDestCountry as any
@@ -343,7 +334,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       }
     } catch (err: any) {
       console.warn("Passport scan processing notice:", err);
-      toast.error("Passport scan notice: " + (err?.message || "Please verify fields manually."), { id: toastId });
+      toast.error("Could not automatically read passport scan. Please verify fields manually.", { id: toastId });
     } finally {
       setIsScanningOCR(false);
     }
@@ -380,11 +371,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         setIsMrzDialogOpen(false);
         setMrzInputText("");
       } else {
-        toast.error("Could not decode MRZ. Please make sure to provide the 2 standard 44-character passport lines.");
+        toast.error("Could not read passport code lines. Please ensure both passport lines are entered accurately.");
       }
     } catch (err: any) {
       console.warn("Manual MRZ decode warning:", err);
-      toast.error("Failed to parse MRZ: " + (err?.message || "Invalid MRZ format"));
+      toast.error("Could not decode passport information. Please verify the characters and try again.");
     } finally {
       setIsScanningOCR(false);
     }
@@ -405,11 +396,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           setValue("photograph" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
           toast.success("Portrait photo uploaded successfully!");
         } else {
-          toast.error("Failed to obtain server file URL for photo. Please retry.");
+          toast.error("We couldn't save the portrait photo. Please try uploading again.");
         }
       } catch (err: any) {
         console.warn("Photo upload error:", err);
-        toast.error("Photo upload failed: " + (err?.message || "Please try again."));
+        toast.error("Photo upload failed. Please try again or select a different image.");
       } finally {
         setIsUploadingPassport(false);
       }
@@ -438,11 +429,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           }
           toast.success("Full body photo uploaded successfully!");
         } else {
-          toast.error("Failed to obtain server file URL for full-body photo. Please retry.");
+          toast.error("We couldn't save the full-body photo. Please try uploading again.");
         }
       } catch (err: any) {
         console.warn("Full body photo upload error:", err);
-        toast.error("Full-body photo upload failed: " + (err?.message || "Please try again."));
+        toast.error("Full-body photo upload failed. Please try again or select a different image.");
       } finally {
         setIsUploadingFullBody(false);
       }
@@ -1463,25 +1454,23 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             </div>
 
             {/* Children & Nationality */}
-            <div className={cn("grid grid-cols-1 gap-4", isSingle ? "sm:grid-cols-1" : "sm:grid-cols-2")}>
-              {!isSingle && (
-                <div className="space-y-1.5 animate-in fade-in duration-200">
-                  <Label htmlFor="children" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Number of Children <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    id="children"
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    {...register("children", { valueAsNumber: true })}
-                    className={errors.children ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
-                  />
-                  {errors.children && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.children.message}</p>
-                  )}
-                </div>
-              )}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="children" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                  Number of Children <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  id="children"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  {...register("children", { valueAsNumber: true })}
+                  className={errors.children ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
+                />
+                {errors.children && (
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.children.message}</p>
+                )}
+              </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="nationality" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">

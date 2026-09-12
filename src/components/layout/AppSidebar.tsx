@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { PermissionAction, isPureForeignAgency } from "@/lib/auth/permissions";
+import { PermissionAction, isPureForeignAgency, normalizeRoleDisplay } from "@/lib/auth/permissions";
 
 interface NavItemConfig {
   label: string;
@@ -69,17 +69,11 @@ export function AppSidebar({
       return [];
     }
     if (!user) return navItems; // Unauthenticated preview
-    const filtered = navItems.filter((item) => can(item.action));
-    // If the user is authenticated internal staff or admin, always provide operational navigation
-    if (filtered.length === 0 && (authUser?.is_internal_staff || user === "Administrator")) {
-      return navItems.filter((item) => item.action !== "manageContractors" || can("manageContractors"));
-    }
-    return filtered;
+    return navItems.filter((item) => can(item.action));
   }, [user, authUser, can, isForeignAgency]);
 
   const canRegister =
-    !isForeignAgency &&
-    (Boolean(user) ? can("registerApplicant") || Boolean(authUser?.is_internal_staff) || user === "Administrator" : false);
+    !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
   const canAccessAgentPortal = can("accessAgentPortal") || isForeignAgency;
   const showLabels = isMobileOpen || !isCollapsed;
 
@@ -242,11 +236,22 @@ export function AppSidebar({
                     {authUser?.full_name || user}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-0.5">
-                    {roles.slice(0, 2).map((r) => (
-                      <span key={r} className="truncate text-[9px] font-medium text-emerald-800 dark:text-emerald-400">
-                        {r}
-                      </span>
-                    ))}
+                    {(() => {
+                      // Deduplicate roles after normalization (e.g. System Manager + Admin both map to "Admin")
+                      const seen = new Set<string>();
+                      return roles.slice(0, 3).reduce<React.ReactElement[]>((acc, r) => {
+                        const display = normalizeRoleDisplay(r);
+                        if (!seen.has(display)) {
+                          seen.add(display);
+                          acc.push(
+                            <span key={r} className="truncate text-[9px] font-medium text-emerald-800 dark:text-emerald-400">
+                              {display}
+                            </span>
+                          );
+                        }
+                        return acc;
+                      }, []).slice(0, 2);
+                    })()}
                   </div>
                 </div>
               )}

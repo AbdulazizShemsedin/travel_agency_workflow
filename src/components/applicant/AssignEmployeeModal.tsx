@@ -21,7 +21,7 @@ import {
   getPlacementOfficersV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
-  listEmployeesV2,
+  listEmployeeRosterV2,
   V2PlacementRecord,
   V2ClearanceStepItem,
   V2EmployeeRecord,
@@ -137,10 +137,10 @@ export function AssignEmployeeModal({
     staleTime: 15000,
   });
 
-  // 4. Fetch all internal employees
+  // 4. Fetch all internal employees via list_employee_roster
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery<V2EmployeeRecord[]>({
     queryKey: ["v2_employees_for_assign"],
-    queryFn: () => listEmployeesV2(),
+    queryFn: () => listEmployeeRosterV2(),
     enabled: isOpen,
     staleTime: 30000,
   });

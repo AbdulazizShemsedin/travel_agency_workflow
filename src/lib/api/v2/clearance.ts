@@ -31,6 +31,14 @@ export interface V2ClearanceStepItem {
   payment_status?: string | null;
   wakala_amount?: number | null;
   wakala_status?: string | null;
+  wakala_reference_no?: string | null;
+  police_ashara_reference_no?: string | null;
+  police_ashara_status?: string | null;
+  police_ashara_payment_status?: string | null;
+  police_ashara_amount?: number | null;
+  police_ashara_appointment_date?: string | null;
+  police_ashara_remark?: string | null;
+  payments?: any[];
   injaz_application_id?: string | null;
   appointment_date?: string | null;
   injaz_outcome?: string | null;
@@ -99,12 +107,14 @@ export async function startClearanceStepV2(
 
 /**
  * Marks a non-Embassy Clearance Step Complete (Issued for LMIS; Complete for others).
+ * Also supports data corrections (reference_no, amount, date_completed) on already-completed steps.
  */
 export async function completeClearanceStepV2(
   clearanceStepName: string,
   referenceNo?: string,
-  amount?: number
-): Promise<{ message?: string; [key: string]: any }> {
+  amount?: number,
+  dateCompleted?: string
+): Promise<{ message?: string | V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.complete_clearance_step",
     {
@@ -113,6 +123,30 @@ export async function completeClearanceStepV2(
         clearance_step_name: clearanceStepName,
         ...(referenceNo ? { reference_no: referenceNo } : {}),
         ...(amount !== undefined ? { amount } : {}),
+        ...(dateCompleted ? { date_completed: dateCompleted } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Reverses a clearance step's terminal outcome (Issued/Complete/Stamped/Rejected).
+ * Authoritative Backend Endpoint: clearance_api.reopen_clearance_step (New 2026-09-12)
+ * Permitted roles: Manager / Admin / System Manager only.
+ */
+export async function reopenClearanceStepV2(
+  clearanceStepName: string,
+  reason: string,
+  targetStatus: "Pending" | "In Progress" | "Submitted" = "In Progress"
+): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.reopen_clearance_step",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        reason: reason.trim(),
+        target_status: targetStatus,
       },
     }
   );
@@ -160,14 +194,16 @@ export async function submitEmbassyStepV2(
 
 /**
  * Records the Wakala fee payment on a Saudi-corridor Embassy step only (step_type == "Embassy").
- * Authoritative Backend Endpoint: clearance_api.record_wakala_payment (New 2026-09-11)
+ * Authoritative Backend Endpoint: clearance_api.record_wakala_payment (Updated 2026-09-11)
  * Permitted roles: Manager/Admin/System Manager, assigned officer, or Saudi Embassy role holder.
+ * Note: reference_no param writes to dedicated wakala_reference_no field on backend.
  */
 export async function recordWakalaPaymentV2(
   clearanceStepName: string,
   wakalaStatus: "Pending" | "Paid" = "Paid",
   wakalaAmount?: number,
-  paidDate?: string
+  paidDate?: string,
+  referenceNo?: string
 ): Promise<{ message?: V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.record_wakala_payment",
@@ -178,6 +214,7 @@ export async function recordWakalaPaymentV2(
         wakala_status: wakalaStatus,
         ...(typeof wakalaAmount === "number" ? { wakala_amount: wakalaAmount } : {}),
         ...(paidDate ? { paid_date: paidDate } : {}),
+        ...(referenceNo ? { reference_no: referenceNo } : {}),
       },
     }
   );
@@ -375,14 +412,16 @@ export async function rescheduleTaeshirAppointmentV2(
 
 /**
  * Records an Injaz visa fee payment.
- * Authoritative Backend Endpoint: clearance_api.record_injaz_payment
+ * Authoritative Backend Endpoint: clearance_api.record_injaz_payment (Updated 2026-09-12)
+ * payment_status defaults to "Paid", or "Unpaid" to fix a mistaken confirmation without forfeit.
  */
 export async function recordInjazPaymentV2(
   clearanceStepName: string,
   amount: number,
   currency: string = "USD",
   receiptNumber?: string,
-  paidDate?: string
+  paidDate?: string,
+  paymentStatus: "Paid" | "Unpaid" = "Paid"
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.record_injaz_payment",
@@ -392,6 +431,7 @@ export async function recordInjazPaymentV2(
         clearance_step_name: clearanceStepName,
         amount,
         currency,
+        payment_status: paymentStatus,
         ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
         ...(paidDate ? { paid_date: paidDate } : {}),
       },
@@ -400,16 +440,16 @@ export async function recordInjazPaymentV2(
 }
 
 /**
- * Forfeits a missed Injaz slot and restarts with a fresh application attempt.
- * Authoritative Backend Endpoint: clearance_api.forfeit_injaz_and_restart
+ * Forfeits the current Injaz attempt and opens a brand new attempt with a new application ID.
+ * Backend Endpoint: agency_tracking.clearance_api.forfeit_injaz_and_restart
  */
 export async function forfeitInjazAndRestartV2(
   clearanceStepName: string,
   reason: string,
   newAppointmentDate: string,
   newInjazApplicationId: string
-): Promise<{ message?: string; [key: string]: any }> {
-  return requestV2(
+): Promise<V2ClearanceStepItem> {
+  const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
     "/api/method/agency_tracking.clearance_api.forfeit_injaz_and_restart",
     {
       method: "POST",
@@ -421,10 +461,78 @@ export async function forfeitInjazAndRestartV2(
       },
     }
   );
+  return (res as any)?.message ?? (res as any);
+}
+
+/**
+ * Records Kuwait LMIS Police Ashara sub-check appointment, payment, status, and remarks.
+ * Authoritative Backend Endpoint: clearance_api.record_police_ashara (New 2026-09-12)
+ * Must be step_type == "Kuwait LMIS".
+ */
+export async function recordPoliceAsharaV2(
+  clearanceStepName: string,
+  params: {
+    police_ashara_status?: "Pending" | "Scheduled" | "Completed" | "Failed" | string;
+    police_ashara_payment_status?: "Not Applicable" | "Pending" | "Paid" | string;
+    police_ashara_amount?: number;
+    police_ashara_appointment_date?: string;
+    police_ashara_remark?: string;
+  }
+): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.record_police_ashara",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        ...(params.police_ashara_status ? { police_ashara_status: params.police_ashara_status } : {}),
+        ...(params.police_ashara_payment_status ? { police_ashara_payment_status: params.police_ashara_payment_status } : {}),
+        ...(typeof params.police_ashara_amount === "number" ? { police_ashara_amount: params.police_ashara_amount } : {}),
+        ...(params.police_ashara_appointment_date ? { police_ashara_appointment_date: params.police_ashara_appointment_date } : {}),
+        ...(params.police_ashara_remark ? { police_ashara_remark: params.police_ashara_remark } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Records a generic line-item payment on any Clearance Step (e.g. Insurance premium).
+ * Authoritative Backend Endpoint: clearance_api.record_other_payment (New 2026-09-12)
+ * Supports adding a new row or correcting an existing one with payment_row_name.
+ */
+export async function recordOtherPaymentV2(
+  clearanceStepName: string,
+  params: {
+    payment_type?: string;
+    amount?: number;
+    currency?: string;
+    status?: "Pending" | "Paid";
+    remark?: string;
+    receipt_url?: string;
+    payment_row_name?: string;
+  }
+): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.record_other_payment",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        ...(params.payment_type ? { payment_type: params.payment_type } : {}),
+        ...(typeof params.amount === "number" ? { amount: params.amount } : {}),
+        ...(params.currency ? { currency: params.currency } : {}),
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.remark ? { remark: params.remark } : {}),
+        ...(params.receipt_url ? { receipt_url: params.receipt_url } : {}),
+        ...(params.payment_row_name ? { payment_row_name: params.payment_row_name } : {}),
+      },
+    }
+  );
 }
 
 /**
  * Updates Kuwait Police Ashara fields on a Kuwait LMIS Clearance Step.
+ * @deprecated Use recordPoliceAsharaV2 for validated backend RPC
  */
 export async function updateKuwaitPoliceAsharaV2(
   clearanceStepName: string,
@@ -436,15 +544,9 @@ export async function updateKuwaitPoliceAsharaV2(
     reference_no?: string;
     [key: string]: any;
   }
-): Promise<{ message?: string; [key: string]: any }> {
-  return requestV2("/api/method/frappe.client.set_value", {
-    method: "POST",
-    body: {
-      doctype: "Clearance Step",
-      name: clearanceStepName,
-      fieldname: fields,
-    },
-  });
+): Promise<any> {
+  // Delegate to authoritative recordPoliceAsharaV2 if possible
+  return recordPoliceAsharaV2(clearanceStepName, fields);
 }
 
 /**

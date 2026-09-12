@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
+  RotateCcw,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -28,7 +29,9 @@ import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +46,7 @@ import {
   stampEmbassyStepV2,
   rejectEmbassyStepV2,
   reassignClearanceStepV2,
+  reopenClearanceStepV2,
   getClearanceStepDocV2,
   recordWakalaPaymentV2,
 } from "@/lib/api/v2/clearance";
@@ -51,6 +55,7 @@ import { logStageExpenseV2 } from "@/lib/api/v2/finance";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 interface EmbassyWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -106,7 +111,55 @@ export function EmbassyWorkspace({
   const canUpdateWakala = isAdmin || isEmbassyOfficer || isAssignedOfficer;
 
   const currentEmbassyStatus = selectedRow?.embassy?.status;
-  const isEmbassyTerminal = ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentEmbassyStatus || "");
+  const isPlacementDeparted =
+    selectedRow?.placementStatus === "Departed" ||
+    selectedRow?.ticketStatus === "Departed" ||
+    Boolean((selectedRow as any)?.isDeparted);
+  const isEmbassyTerminal = [
+    "Issued",
+    "Complete",
+    "Completed",
+    "Stamped",
+    "Approved",
+    "Rejected",
+    "Cancelled",
+  ].includes(currentEmbassyStatus || "");
+
+  // Reopen Step Modal State & Mutation
+  const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
+  const [reopenReason, setReopenReason] = React.useState("");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending" | "Submitted">("In Progress");
+
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRow) return;
+      const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
+      if (!stepName) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: async () => {
+      toast.success("Embassy clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+        queryClient.invalidateQueries({ queryKey: ["placements"] }),
+      ]);
+      onRefresh();
+      setSelectedRow(null);
+    },
+    onError: (err: any) => {
+      toast.error("Failed to reopen clearance step", {
+        description: formatCleanErrorMessage(err),
+      });
+    },
+  });
 
   // Sync drawer form state when row changes
   React.useEffect(() => {
@@ -212,7 +265,11 @@ export function EmbassyWorkspace({
         }
       }
 
-      if (stepName && !isEmbassyTerminal) {
+      if (isPlacementDeparted) {
+        throw new Error("Placement is Departed/Cancelled; its clearance steps can no longer be edited.");
+      }
+
+      if (stepName) {
         const stepStatus = selectedRow.embassy?.status;
         const isSaudi = selectedRow.destinationCountry?.toLowerCase().includes("saudi");
         const isTaeshirDone =
@@ -221,14 +278,14 @@ export function EmbassyWorkspace({
           selectedRow.injaz?.status === "Issued" ||
           selectedRow.injaz?.status === "Approved";
 
-        if (status === "Approved" && stepStatus !== "Approved" && stepStatus !== "Stamped") {
-          if (isSaudi && !isTaeshirDone) {
+        if (status === "Approved") {
+          if (!isEmbassyTerminal && isSaudi && !isTaeshirDone) {
             throw new Error(
               "Cannot stamp Embassy step: Taeshir clearance must be completed first on the Saudi Arabia corridor."
             );
           }
           await stampEmbassyStepV2(stepName, stampNumber || selectedRow.visaNumber || undefined);
-        } else if (status === "Submitted" && stepStatus !== "Submitted") {
+        } else if (status === "Submitted" && stepStatus !== "Submitted" && !isEmbassyTerminal) {
           if (isSaudi && wakalaStatus !== "Paid") {
             if (isAdmin && confirmUnpaidWakala) {
               await submitEmbassyStepV2(
@@ -243,12 +300,12 @@ export function EmbassyWorkspace({
           } else {
             await submitEmbassyStepV2(stepName);
           }
-        } else if (status === "Rejected" && stepStatus !== "Rejected") {
+        } else if (status === "Rejected") {
           if (!rejectionRemark.trim()) {
             throw new Error("Rejection remark is required when rejecting Embassy step.");
           }
           await rejectEmbassyStepV2(stepName, rejectionRemark.trim());
-        } else if (status === "Pending" && stepStatus === "Pending") {
+        } else if (status === "Pending" && stepStatus === "Pending" && !isEmbassyTerminal) {
           await startClearanceStepV2(stepName);
         }
 
@@ -297,7 +354,9 @@ export function EmbassyWorkspace({
       setSelectedRow(null);
     },
     onError: (err: any) => {
-      toast.error(err?.message || "Failed to update Embassy record.");
+      toast.error("Failed to update Embassy record", {
+        description: formatCleanErrorMessage(err),
+      });
     },
   });
 
@@ -487,17 +546,35 @@ export function EmbassyWorkspace({
             {status === "Approved" ? "Stamped" : status}
           </Badge>
         }
-        canEdit={canEdit && !isEmbassyTerminal}
+        canEdit={canEdit && !isPlacementDeparted}
         isSaving={mutation.isPending}
         onSave={() => {
-          if (isEmbassyTerminal) {
+          if (isPlacementDeparted) {
             toast.error(
-              `This Embassy step is already finalized (${currentEmbassyStatus}) — status and handler assignments are locked.`
+              `This placement is Departed/Cancelled — clearance steps can no longer be edited.`
             );
             return;
           }
           setIsConfirmOpen(true);
         }}
+        leftAction={
+          isEmbassyTerminal && !isPlacementDeparted && isAdmin ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setReopenReason("");
+                setReopenTargetStatus("In Progress");
+                setIsReopenModalOpen(true);
+              }}
+              className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            >
+              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+              Reopen Step
+            </Button>
+          ) : undefined
+        }
       >
         <DrawerSection title="Candidate & Visa Dossier" icon={Building2}>
           <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
@@ -529,16 +606,16 @@ export function EmbassyWorkspace({
 
         <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
           {isEmbassyTerminal && (
-            <div className="sm:col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
-                <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
+            <div className="sm:col-span-2 rounded-xl border-2 border-blue-400/40 dark:border-blue-600/40 bg-blue-50/60 dark:bg-blue-950/40 p-3.5 shadow-xs text-blue-950 dark:text-blue-100 flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 mt-0.5">
+                <ShieldAlert className="h-4.5 w-4.5 text-blue-700 dark:text-blue-300" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                  Clearance Step Finalized & Locked
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
+                  Step Finalized — Data Corrections Allowed
                 </p>
-                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). Status, visa stamp details, and handler assignments are permanently locked and cannot be modified.
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 leading-relaxed">
+                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). You can correct visa stamp number, stamped date, rejection remarks, or handler assignment. To reverse the outcome itself, click <strong className="underline">Reopen Step</strong> above.
                 </p>
               </div>
             </div>
@@ -730,7 +807,7 @@ export function EmbassyWorkspace({
           <DrawerField label="Embassy Clearance Status" isReadOnly={false}>
             <select
               value={status}
-              disabled={!canEdit || mutation.isPending || isEmbassyTerminal}
+              disabled={!canEdit || mutation.isPending || isEmbassyTerminal || isPlacementDeparted}
               onChange={(e) => setStatus(e.target.value as any)}
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
@@ -745,7 +822,7 @@ export function EmbassyWorkspace({
             <Input
               type="date"
               value={submissionDate}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setSubmissionDate(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -759,7 +836,7 @@ export function EmbassyWorkspace({
                   type="text"
                   placeholder="e.g. Passport damage / photo mismatch"
                   value={rejectionRemark}
-                  disabled={!canEdit || mutation.isPending}
+                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
                   onChange={(e) => setRejectionRemark(e.target.value)}
                   className="h-9 text-xs border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30"
                 />
@@ -773,7 +850,7 @@ export function EmbassyWorkspace({
               <DrawerField label="Assigned Embassy Officer (Admin Only)" isReadOnly={false}>
                 <select
                   value={employee}
-                  disabled={!canEdit || mutation.isPending || isEmbassyTerminal}
+                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
                   onChange={(e) => setEmployee(e.target.value)}
                   className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
                 >
@@ -795,7 +872,7 @@ export function EmbassyWorkspace({
               type="text"
               placeholder="e.g. 1908334046"
               value={stampNumber}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setStampNumber(e.target.value)}
               className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -805,7 +882,7 @@ export function EmbassyWorkspace({
             <Input
               type="date"
               value={stampDate}
-              disabled={!canEdit || mutation.isPending}
+              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
               onChange={(e) => setStampDate(e.target.value)}
               className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
             />
@@ -831,7 +908,9 @@ export function EmbassyWorkspace({
                     toast.info("Candidate ready in browser extension storage.");
                   }
                 } catch (err: any) {
-                  toast.error("Failed to bridge candidate: " + err.message);
+                  toast.error("Failed to send candidate to browser extension", {
+                    description: formatCleanErrorMessage(err),
+                  });
                 }
               }}
               className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
@@ -863,36 +942,56 @@ export function EmbassyWorkspace({
               </div>
               <div>
                 <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                  {status === "Approved" ? "Confirm Embassy Visa Stamping" : "Confirm Save Changes"}
+                  {isEmbassyTerminal
+                    ? "Confirm Embassy Data Correction"
+                    : status === "Approved"
+                    ? "Confirm Embassy Visa Stamping"
+                    : "Confirm Save Changes"}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Review your changes before submitting to the live database.
+                  Review your changes before saving.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            {/* Eye-catching yellow warning box */}
-            <div className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 text-amber-950 dark:text-amber-200">
+            {/* Warning or info box */}
+            <div
+              className={cn(
+                "rounded-xl border-2 p-3.5",
+                isEmbassyTerminal
+                  ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-200"
+                  : "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200"
+              )}
+            >
               <div className="flex items-start gap-2.5">
-                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <ShieldAlert
+                  className={cn(
+                    "h-4 w-4 shrink-0 mt-0.5",
+                    isEmbassyTerminal ? "text-blue-600 dark:text-blue-400" : "text-amber-600"
+                  )}
+                />
                 <div className="text-xs leading-relaxed">
-                  <p className="font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100 mb-0.5">
-                    Permanent Action Warning
+                  <p className="font-bold uppercase tracking-wide mb-0.5">
+                    {isEmbassyTerminal ? "Clearance Step Data Correction" : "Permanent Action Warning"}
                   </p>
                   <p>
-                    {status === "Approved" ? (
+                    {isEmbassyTerminal ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        This step is already finalized. Data modifications to visa stamp number, stamped date, rejection remarks, and handler assignment will be updated without reversing completion status.
+                      </>
+                    ) : status === "Approved" ? (
+                      <>
+                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, status reversals require the Reopen Step action.
                       </>
                     ) : status === "Rejected" ? (
                       <>
-                        Rejecting this embassy clearance step will mark it as terminal. Once saved, this action cannot be undone on the live database without administrator intervention.
+                        Rejecting this embassy clearance step will mark it as terminal. Once saved, reversing requires the Reopen Step action.
                       </>
                     ) : (
                       <>
-                        Once submitted, embassy clearance updates are recorded on the live server. Please verify all information is accurate before confirming.
+                        Once saved, embassy clearance updates are permanently recorded. Please verify all information is accurate before confirming.
                       </>
                     )}
                   </p>
@@ -972,7 +1071,74 @@ export function EmbassyWorkspace({
               }}
               className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
             >
-              {mutation.isPending ? "Submitting..." : "Yes, Confirm & Save"}
+              {mutation.isPending ? "Submitting..." : isEmbassyTerminal ? "Yes, Save Corrections" : "Yes, Confirm & Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Reopen Clearance Step */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#15151b] border-slate-200 dark:border-[#2a2a35]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <RotateCcw className="h-4.5 w-4.5 text-amber-600" />
+              Reopen Embassy Clearance Step
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Reversing this step will reset its terminal outcome and notify the assigned handler. A written audit reason is mandatory.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Target Status
+              </label>
+              <select
+                value={reopenTargetStatus}
+                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
+                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="In Progress">In Progress (Default)</option>
+                <option value="Pending">Pending</option>
+                <option value="Submitted">Submitted (At Embassy)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                Reason for Reopening <span className="text-rose-500">*</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this Embassy clearance step needs to be reopened (e.g. stamped visa revoked by embassy, correction needed before departure)..."
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={reopenMutation.isPending}
+              onClick={() => setIsReopenModalOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenMutation.isPending || !reopenReason.trim()}
+              onClick={() => reopenMutation.mutate()}
+              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
             </Button>
           </DialogFooter>
         </DialogContent>

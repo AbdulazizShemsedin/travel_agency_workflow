@@ -96,6 +96,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 const CANONICAL_STAGES = [
   "Draft",
@@ -125,7 +126,7 @@ export default function ApplicantDetailPage() {
   const rawId = params?.id;
   const applicantId = typeof rawId === "string" ? decodeURIComponent(rawId) : Array.isArray(rawId) ? decodeURIComponent(rawId[0]) : "";
   const queryClient = useQueryClient();
-  const { roles } = useAuth();
+  const { roles, can } = useAuth();
   const isAdminOrOps = roles.some(
     (r) =>
       r === "Administrator" ||
@@ -433,8 +434,8 @@ export default function ApplicantDetailPage() {
         rawMsg.includes("non-JSON") ||
         rawMsg.includes("HTTP 500");
       const description = isRenderCrash
-        ? "The server encountered an error while rendering the CV PDF. This may be due to missing print template configuration or a temporary rendering engine issue. Please check that the Print Format is enabled on the backend and try again."
-        : rawMsg;
+        ? "We couldn't generate the official CV document right now. Please verify applicant information and photo, then try again in a moment."
+        : formatCleanErrorMessage(err);
       toast.error("CV Generation Failed", { description });
     },
   });
@@ -1280,12 +1281,14 @@ export default function ApplicantDetailPage() {
               >
                 <DollarSign className="mr-1.5 h-3.5 w-3.5" /> Accrue Early Commission
               </Button>
-              <Button
-                onClick={() => setIsAssignModalOpen(true)}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
-              >
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
-              </Button>
+              {can("manageUsers") && (
+                <Button
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
+                >
+                  <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -1309,14 +1312,16 @@ export default function ApplicantDetailPage() {
                   )}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAssignModalOpen(true)}
-                className="text-xs border-slate-300 dark:border-[#26262d] shrink-0"
-              >
-                <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
-              </Button>
+              {can("manageUsers") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="text-xs border-slate-300 dark:border-[#26262d] shrink-0"
+                >
+                  <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
+                </Button>
+              )}
             </div>
 
             {/* Dynamic Clearance Steps Grid: Processing Stage contains LMIS and Te'shir clearance steps (Embassy is handled in Embassy stage) */}
@@ -1815,10 +1820,10 @@ export default function ApplicantDetailPage() {
                     >
                       <div className="space-y-0.5 max-w-[70%]">
                         <p className="font-semibold text-slate-800 dark:text-zinc-200 truncate">
-                          {fee.description || fee.source_doctype || "Clearance Fee"}
+                          {fee.description || "Clearance Fee"}
                         </p>
                         <p className="text-[10px] text-slate-400">
-                          {fee.date || "Today"} • {fee.source_doctype || "Clearance"}
+                          {fee.date || "Today"} • {fee.source_doctype?.replace(/DocType/gi, "Record") || "Clearance"}
                         </p>
                       </div>
                       <span

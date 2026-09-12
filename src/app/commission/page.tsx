@@ -1606,6 +1606,15 @@ export default function AdminCommissionPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* PDF Total Divergence Notice */}
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200/80 dark:border-[#262632] text-[11px] text-slate-600 dark:text-slate-400">
+                    <Info className="h-4 w-4 shrink-0 text-blue-500 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Invoice PDF Total Note:</span>{" "}
+                      The printed invoice TOTAL reflects <strong>Batch Total + Requested Advance + Previous Unpaid Arrears</strong> across open batches for this contractor. The balance due shown here is strictly for this batch record.
+                    </div>
+                  </div>
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-4">
@@ -1855,13 +1864,13 @@ export default function AdminCommissionPage() {
                   </div>
                 </div>
 
-                <div className="p-3 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 text-[11px] text-emerald-900 dark:text-emerald-300 space-y-1">
+                <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/30 text-[11px] text-blue-900 dark:text-blue-300 space-y-1">
                   <div className="flex items-center gap-2 font-semibold">
-                    <Info className="h-4 w-4 shrink-0 text-emerald-600" />
-                    <span>Official Commission Billing Invoice PDF</span>
+                    <Info className="h-4 w-4 shrink-0 text-blue-600" />
+                    <span>Official Commission Billing Invoice PDF Notice</span>
                   </div>
-                  <p className="text-[10px] text-emerald-800 dark:text-emerald-400 pl-6">
-                    Clicking &quot;Download Invoice PDF&quot; generates the official PDF invoice. Note: The bottom-line TOTAL on the printed invoice dynamically combines this batch balance with any requested advance and prior unpaid batch arrears for this foreign contractor.
+                  <p className="text-[10px] text-blue-800 dark:text-blue-400 pl-6 leading-relaxed">
+                    Clicking &quot;Download Invoice PDF&quot; generates the authoritative invoice. <strong>Important:</strong> The bottom-line TOTAL on the printed invoice PDF dynamically reflects <em>Batch Total + Requested Advance + Previous Unpaid Arrears</em> across open batches (Sent/Partially Settled) for this contractor. The stored balance due shown in the table above is strictly for this batch record alone.
                   </p>
                 </div>
               </CardContent>

@@ -425,17 +425,17 @@ export function PushNotificationToggle() {
           description: res.message || `Bucket '${res.bucket}' verified read/write.`,
         });
       } else {
-        sonnerToast.error("Storage Issue", {
-          description: res.message || "Storage connection returned failure status.",
+        sonnerToast.error("Storage Status", {
+          description: res.message || "Storage connection could not be established.",
         });
       }
     } catch (err: any) {
       setStorageStatus({
         status: "error",
-        message: err?.message || "Failed to reach storage connection endpoint.",
+        message: "Unable to connect to document storage. Please try again.",
       });
-      sonnerToast.error("Storage Test Failed", {
-        description: err?.message || "Communication failure with storage engine.",
+      sonnerToast.error("Storage Check Failed", {
+        description: "Unable to reach document storage service. Please check your connection or try again.",
       });
     } finally {
       setIsTestingStorage(false);
@@ -764,12 +764,12 @@ export function PushNotificationToggle() {
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-amber-500" />
-              Regenerate VAPID Push Keys
+              Regenerate Notification Security Keys
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-2">
-              Regenerating the notification keypair creates a fresh secure cryptographic keypair.
+              Regenerating notification security keys creates a fresh connection key.
               <span className="block mt-2 font-semibold text-rose-600 dark:text-rose-400">
-                Warning: This invalidates all active browser push subscriptions across all users. Every team member will need to re-enable push notifications on their devices.
+                Warning: This resets push notifications for all team members. Everyone will need to re-enable notifications on their devices.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -808,10 +808,10 @@ export function PushNotificationToggle() {
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Database className="h-4 w-4 text-emerald-500" />
-              R2 Object Storage Health
+              Document Storage Status
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Live read/write verification probe with Cloudflare R2 bucket.
+              Verifies file storage connection and upload readiness.
             </DialogDescription>
           </DialogHeader>
 
@@ -819,7 +819,7 @@ export function PushNotificationToggle() {
             {isTestingStorage ? (
               <div className="flex items-center justify-center py-6 gap-2 text-slate-500">
                 <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
-                <span>Testing R2 storage connectivity & permissions...</span>
+                <span>Checking document storage connection...</span>
               </div>
             ) : storageStatus ? (
               <>
@@ -837,7 +837,7 @@ export function PushNotificationToggle() {
                 </div>
                 {storageStatus.bucket && (
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500 dark:text-zinc-400">R2 Bucket:</span>
+                    <span className="text-slate-500 dark:text-zinc-400">Storage Container:</span>
                     <span className="font-mono font-semibold text-slate-900 dark:text-zinc-200">
                       {storageStatus.bucket}
                     </span>
@@ -845,7 +845,7 @@ export function PushNotificationToggle() {
                 )}
                 {storageStatus.public_url_base && (
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-slate-500 dark:text-zinc-400">Public CDN Base:</span>
+                    <span className="text-slate-500 dark:text-zinc-400">Public Document Address:</span>
                     <span className="font-mono text-[10px] text-slate-600 dark:text-zinc-300 truncate">
                       {storageStatus.public_url_base}
                     </span>

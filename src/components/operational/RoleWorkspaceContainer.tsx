@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
-import { listEmployeesV2 } from "@/lib/api/v2/employees";
+import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { LMISWorkspace } from "./workspaces/LMISWorkspace";
 import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
@@ -196,7 +196,7 @@ export function RoleWorkspaceContainer() {
   // Fetch employees list for drawers
   const { data: employees = [] } = useQuery({
     queryKey: ["employees_v2"],
-    queryFn: listEmployeesV2,
+    queryFn: listEmployeeRosterV2,
   });
 
   // Fetch live workspace data for active operational stream

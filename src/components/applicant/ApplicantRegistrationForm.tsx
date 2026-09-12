@@ -37,6 +37,7 @@ import {
   normalizeApplicantFields,
   ApiV2Error,
 } from "@/lib/api/v2";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
 import { Step2EducationExperience } from "./steps/Step2EducationExperience";
 import { Step3IdentificationContact } from "./steps/Step3IdentificationContact";
@@ -188,33 +189,32 @@ const FIELD_FRIENDLY_NAMES: Record<string, string> = {
   medical_status: "Medical Status",
 };
 
-function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
-  if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1")) {
+function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
+  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
+  if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1") || rawMessage.toLowerCase().includes("cannot be left blank")) {
     return `${title} is required. Please enter or select ${title}.`;
   }
-  if (rawMessage.toLowerCase().includes("invalid enum") || rawMessage.toLowerCase().includes("expected")) {
+  if (/expected number|received nan/i.test(rawMessage)) {
+    if (fieldName === "children") {
+      return "Please enter a valid number of children (e.g. 0, 1, 2).";
+    }
+    if (fieldName.includes("salary")) {
+      return "Please enter a valid monthly salary amount.";
+    }
+    if (fieldName.includes("fee") || fieldName.includes("amount")) {
+      return `Please enter a valid payment amount for ${title}.`;
+    }
+    return `Please enter a valid number or amount for ${title}.`;
+  }
+  if (rawMessage.toLowerCase().includes("invalid enum") || rawMessage.toLowerCase().includes("expected option")) {
     return `Please select a valid option for ${title}.`;
   }
-  return rawMessage;
+  return formatCleanErrorMessage(rawMessage);
 }
 
 function describeApiError(err?: ApiV2Error | null): string {
   if (!err) return "Please review the form and try again.";
-  const msg = (err.message || "").trim();
-  if (err.statusCode === 0 || err.excType === "NetworkError") {
-    return "Network error: we could not reach the server. Check your internet connection and try again.";
-  }
-  if (err.statusCode === 502 || err.statusCode === 504) {
-    if (/took too long|did not respond/i.test(msg)) {
-      return msg;
-    }
-    return "The server did not respond. It may be starting up or your internet may be offline. Please try again in a moment.";
-  }
-  if (err.statusCode && err.statusCode >= 500) {
-    const fallback = `The server hit an error (HTTP ${err.statusCode}). Please try again in a moment.`;
-    return msg && !/(failed to respond|unexpected response)/i.test(msg) ? msg : fallback;
-  }
-  return msg || "Please review the form and try again.";
+  return formatCleanErrorMessage(err);
 }
 
 // Core identity fields locked server-side once an active Placement is in flight (#13)
@@ -580,9 +580,10 @@ export function ApplicantRegistrationForm({
       if (!validation.success) {
         validation.error.errors.forEach((err) => {
           if (err.path[0]) {
+            const fieldName = err.path[0] as string;
             setError(err.path[0] as keyof BaseApplicantFormValues, {
               type: "manual",
-              message: err.message,
+              message: formatSimpleErrorMessage(fieldName, err.message),
             });
           }
         });
@@ -745,9 +746,10 @@ export function ApplicantRegistrationForm({
       if (!validation.success) {
         validation.error.errors.forEach((err) => {
           if (err.path[0]) {
+            const fieldName = err.path[0] as string;
             setError(err.path[0] as keyof BaseApplicantFormValues, {
               type: "manual",
-              message: err.message,
+              message: formatSimpleErrorMessage(fieldName, err.message),
             });
           }
         });
@@ -756,7 +758,8 @@ export function ApplicantRegistrationForm({
         const firstField = firstError?.path[0] as string;
         scrollToFieldWithError(firstField);
 
-        throw new Error(firstError?.message || "Please complete all registration requirements.");
+        const friendlyFirst = formatSimpleErrorMessage(firstField, firstError?.message);
+        throw new Error(friendlyFirst || "Please complete all registration requirements.");
       }
 
       let activeId = draftApplicantId;
@@ -849,9 +852,10 @@ export function ApplicantRegistrationForm({
     if (!validation.success) {
       validation.error.errors.forEach((err) => {
         if (err.path[0]) {
+          const fieldName = err.path[0] as string;
           setError(err.path[0] as keyof BaseApplicantFormValues, {
             type: "manual",
-            message: err.message,
+            message: formatSimpleErrorMessage(fieldName, err.message),
           });
         }
       });

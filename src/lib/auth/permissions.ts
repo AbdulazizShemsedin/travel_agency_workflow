@@ -157,7 +157,6 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "System Manager",
     "Administrator",
     "Admin",
-    "Manager",
   ],
   viewDashboard: [
     "System Manager",
@@ -244,12 +243,13 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Admin",
     "Manager",
     "Finance Manager",
-    "Communication Manager",
   ],
   manageContractors: [
     "System Manager",
     "Administrator",
     "Admin",
+    "Registrar",
+    "Finance Manager",
   ],
   accessAgentPortal: [
     "Foreign Agency",
@@ -367,4 +367,41 @@ export function can(user: AuthUser | null | undefined, action: PermissionAction)
 }
 
 export const hasPermission = can;
+
+/**
+ * Maps frontend routes to required PermissionActions for route-level guarding.
+ * Routes not listed here are accessible to all authenticated users.
+ */
+export const ROUTE_PERMISSION_MAP: Record<string, PermissionAction> = {
+  "/dashboard": "viewDashboard",
+  "/applicants": "viewApplicants",
+  "/applicants/new": "registerApplicant",
+  "/chat": "manageCommunication",
+  "/employees": "manageUsers",
+  "/contractors": "manageContractors",
+  "/commission": "manageCommission",
+  "/complaints": "manageComplaints",
+  "/reports": "viewReports",
+  "/expenses-income": "viewFinance",
+};
+
+/**
+ * Role display names normalized for UI — backend role names like
+ * "System Manager", "Administrator" are mapped to a cleaner label.
+ */
+const ROLE_DISPLAY_OVERRIDES: Record<string, string> = {
+  "system manager": "Admin",
+  "administrator": "Admin",
+  "manager": "Admin",
+};
+
+/**
+ * Normalizes a backend role string to its user-facing display label.
+ * "System Manager", "Administrator", "Manager" all map to "Admin".
+ * Other roles pass through unchanged.
+ */
+export function normalizeRoleDisplay(role: string): string {
+  const key = role.trim().toLowerCase();
+  return ROLE_DISPLAY_OVERRIDES[key] || role;
+}
 

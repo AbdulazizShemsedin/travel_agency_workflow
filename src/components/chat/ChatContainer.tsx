@@ -58,7 +58,7 @@ import {
   V2ChatMessage,
 } from "@/lib/api/v2/communication";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
-import { listEmployeesV2 } from "@/lib/api/v2/employees";
+import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
@@ -186,7 +186,7 @@ export function ChatContainer() {
   // Queries for internal staff and authorized contacts
   const { data: internalEmployees = [] } = useQuery({
     queryKey: ["v2_employees_chat_dropdown"],
-    queryFn: listEmployeesV2,
+    queryFn: listEmployeeRosterV2,
     staleTime: 60000,
   });
 
