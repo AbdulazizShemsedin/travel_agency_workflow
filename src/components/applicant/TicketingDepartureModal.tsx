@@ -160,6 +160,12 @@ export function TicketingDepartureModal({
 
   // 4. Finalize Departure
   const handleConfirmDeparture = async () => {
+    if (placement.status !== "Ticketed") {
+      toast.error("Placement Not Ready for Departure", {
+        description: `Current placement stage is "${placement.status}". All clearance steps (LMIS, Te'shir, Embassy) must be completed and flight ticket recorded before advancing to Departed.`,
+      });
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await advancePlacementV2(placement.name, "Departed");
@@ -441,6 +447,23 @@ export function TicketingDepartureModal({
         {/* Tab 4: Final Departure Clearance */}
         {activeTab === "departure" && (
           <div className="space-y-4 py-2">
+            {placement.status !== "Ticketed" && (
+              <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  Prerequisites Required: Stage is Currently "{placement.status}"
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                  A placement cannot move to <strong>Departed</strong> directly from <strong>{placement.status}</strong>. Please complete the prerequisite steps:
+                </p>
+                <ol className="list-decimal pl-4 space-y-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                  <li>Complete and finalize all 3 clearance steps (LMIS, Te'shir, and Embassy Visa Stamping).</li>
+                  <li>Record flight ticket details in the <strong>Flight Ticketing</strong> tab to transition this placement to <strong>Ticketed</strong>.</li>
+                  <li>Verify that pre-departure Medical 2 is passed (FIT).</li>
+                </ol>
+              </div>
+            )}
+
             <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 space-y-2 text-xs">
               <div className="flex items-center gap-2 font-bold text-purple-950 dark:text-purple-300">
                 <Plane className="h-4 w-4 text-purple-700" />
@@ -460,6 +483,7 @@ export function TicketingDepartureModal({
               placementId={placement?.name}
               stageName="Departure"
               defaultDirection="Expense"
+              disabled={placement.status !== "Ticketed" && placement.status !== "Departed"}
             />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
@@ -470,8 +494,8 @@ export function TicketingDepartureModal({
                 type="button"
                 size="sm"
                 onClick={handleConfirmDeparture}
-                disabled={isSubmitting}
-                className="bg-purple-900 hover:bg-purple-950 text-white font-semibold text-xs h-9"
+                disabled={isSubmitting || placement.status !== "Ticketed"}
+                className="bg-purple-900 hover:bg-purple-950 text-white font-semibold text-xs h-9 disabled:opacity-50"
               >
                 {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plane className="h-3.5 w-3.5 mr-1.5" />}
                 Confirm Final Departure

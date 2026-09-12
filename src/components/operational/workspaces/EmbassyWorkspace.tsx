@@ -487,7 +487,7 @@ export function EmbassyWorkspace({
             {status === "Approved" ? "Stamped" : status}
           </Badge>
         }
-        canEdit={canEdit}
+        canEdit={canEdit && !isEmbassyTerminal}
         isSaving={mutation.isPending}
         onSave={() => {
           if (isEmbassyTerminal) {
@@ -538,7 +538,7 @@ export function EmbassyWorkspace({
                   Clearance Step Finalized & Locked
                 </p>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). Status, visa stamp details, and handler assignments are locked by the backend state machine and cannot be modified.
+                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). Status, visa stamp details, and handler assignments are permanently locked and cannot be modified.
                 </p>
               </div>
             </div>
@@ -847,6 +847,7 @@ export function EmbassyWorkspace({
           placementId={selectedRow?.dsrName}
           stageName="Embassy Clearance"
           defaultDirection="Expense"
+          disabled={isEmbassyTerminal || !canEdit}
         />
       </OperationalDrawer>
 
@@ -883,7 +884,7 @@ export function EmbassyWorkspace({
                   <p>
                     {status === "Approved" ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, the <strong>backend state machine strictly locks this step</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
                       </>
                     ) : status === "Rejected" ? (
                       <>

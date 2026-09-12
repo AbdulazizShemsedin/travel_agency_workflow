@@ -102,10 +102,6 @@ export function InjazWorkspace({
   const [remark, setRemark] = React.useState("");
   const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
 
-  // Reschedule Dialog State
-  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = React.useState(false);
-  const [rescheduleDate, setRescheduleDate] = React.useState("");
-  const [rescheduleCause, setRescheduleCause] = React.useState("");
   const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
 
   const currentInjazStatus = selectedRow?.injaz?.status;
@@ -116,7 +112,6 @@ export function InjazWorkspace({
   const isInjazTerminal =
     ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "") ||
     isPlacementDeparted;
-  const [isRescheduling, setIsRescheduling] = React.useState(false);
 
   // Forfeit and Restart Dialog State
   const [isForfeitModalOpen, setIsForfeitModalOpen] = React.useState(false);
@@ -257,27 +252,6 @@ export function InjazWorkspace({
     }
   };
 
-  const handleRescheduleAppointment = async () => {
-    if (!selectedRow) return;
-    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-    if (!stepName || !rescheduleDate) {
-      toast.error("New appointment date is required.");
-      return;
-    }
-    setIsRescheduling(true);
-    try {
-      await rescheduleTaeshirAppointmentV2(stepName, rescheduleDate, rescheduleCause || "Applicant requested reschedule");
-      toast.success("Taeshir appointment rescheduled successfully!");
-      setAppointmentDate(rescheduleDate);
-      setIsRescheduleModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-      onRefresh();
-    } catch (err: any) {
-      toast.error("Failed to reschedule appointment", { description: err?.message });
-    } finally {
-      setIsRescheduling(false);
-    }
-  };
 
   const handleForfeitAndRestartInjaz = async () => {
     if (!selectedRow) return;
@@ -485,7 +459,7 @@ export function InjazWorkspace({
   const handleSave = () => {
     if (isInjazTerminal) {
       toast.error(
-        `This Te'shir step is already finalized (${currentInjazStatus}) — the backend rejects changes to finalized steps. Appointment, payment, and status fields are locked.`
+        `This Te'shir step is already finalized (${currentInjazStatus}). Appointment, payment, and status fields are permanently locked.`
       );
       return;
     }
@@ -689,7 +663,7 @@ export function InjazWorkspace({
             {status}
           </Badge>
         }
-        canEdit={canEdit}
+        canEdit={canEdit && !isInjazTerminal}
         isSaving={mutation.isPending}
         onSave={handleSave}
       >
@@ -736,7 +710,7 @@ export function InjazWorkspace({
                   Clearance Step Finalized & Locked
                 </p>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This Te'shir clearance step is finalized (<span className="font-bold underline">{currentInjazStatus}</span>). Status, appointment date, Injaz payment, and handler assignee fields are locked — the backend rejects further edits to finalized steps.
+                  This Te'shir clearance step is finalized (<span className="font-bold underline">{currentInjazStatus}</span>). Status, appointment date, Injaz payment, and handler assignee fields are permanently locked against further modifications.
                 </p>
               </div>
             </div>
@@ -899,20 +873,6 @@ export function InjazWorkspace({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setRescheduleDate(appointmentDate);
-                  setRescheduleCause("");
-                  setIsRescheduleModalOpen(true);
-                }}
-                className="text-xs border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-              >
-                <Calendar className="mr-1.5 h-3.5 w-3.5" />
-                Free Reschedule
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
                   setForfeitReason("");
                   setForfeitNewDate("");
                   setForfeitNewInjazId("");
@@ -954,59 +914,9 @@ export function InjazWorkspace({
           placementId={selectedRow?.dsrName}
           stageName="Te'shir / Injaz Clearance"
           defaultDirection="Expense"
+          disabled={isInjazTerminal || !canEdit}
         />
       </OperationalDrawer>
-
-      {/* Free Reschedule Modal */}
-      <Dialog open={isRescheduleModalOpen} onOpenChange={setIsRescheduleModalOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-amber-500" />
-              Reschedule Taeshir Appointment
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Reschedule the visa center slot without forfeiting paid Injaz consular fees.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs">
-            <div className="space-y-1">
-              <Label className="font-semibold text-xs">New Appointment Date *</Label>
-              <Input
-                type="date"
-                value={rescheduleDate}
-                onChange={(e) => setRescheduleDate(e.target.value)}
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="font-semibold text-xs">Cause / Justification</Label>
-              <Input
-                type="text"
-                placeholder="e.g. Candidate illness / center slot change"
-                value={rescheduleCause}
-                onChange={(e) => setRescheduleCause(e.target.value)}
-                className="h-9 text-xs"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsRescheduleModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={isRescheduling || !rescheduleDate}
-              onClick={handleRescheduleAppointment}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
-            >
-              {isRescheduling ? "Rescheduling..." : "Confirm Reschedule"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Forfeit and Restart Injaz Modal */}
       <Dialog open={isForfeitModalOpen} onOpenChange={setIsForfeitModalOpen}>
@@ -1102,7 +1012,7 @@ export function InjazWorkspace({
                   <p>
                     {status === "Completed" ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Completed</strong> will permanently finalize it. Once saved, the <strong>backend state machine strictly locks this step</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        Setting this clearance step to <strong className="underline">Completed</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
                       </>
                     ) : (
                       <>

@@ -43,6 +43,7 @@ import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import {
   startClearanceStepV2,
   completeClearanceStepV2,
+  rejectClearanceStepV2,
   reassignClearanceStepV2,
   updateKuwaitPoliceAsharaV2,
   getClearanceStepDocV2,
@@ -92,7 +93,8 @@ export function LMISWorkspace({
   );
 
   // Form State for Drawer
-  const [status, setStatus] = React.useState<"Pending" | "Issued" | "Rejected">("Pending");
+  const [status, setStatus] = React.useState<"Pending" | "In Progress" | "Issued" | "Rejected">("Pending");
+  const [rejectionRemark, setRejectionRemark] = React.useState("");
   const [issuedOn, setIssuedOn] = React.useState("");
   const [laborRefNo, setLaborRefNo] = React.useState("");
   const [employee, setEmployee] = React.useState("");
@@ -136,9 +138,12 @@ export function LMISWorkspace({
       setStatus("Issued");
     } else if (st === "Rejected") {
       setStatus("Rejected");
+    } else if (st === "In Progress") {
+      setStatus("In Progress");
     } else {
       setStatus("Pending");
     }
+    setRejectionRemark(lms?.rejection_remark || "");
 
     setIssuedOn(lms?.date_completed || lms?.issued_on || "");
     const app = (selectedRow.applicant as any) || {};
@@ -196,7 +201,12 @@ export function LMISWorkspace({
           setStatus("Issued");
         } else if (freshStep.status === "Rejected") {
           setStatus("Rejected");
+        } else if (freshStep.status === "In Progress") {
+          setStatus("In Progress");
+        } else {
+          setStatus("Pending");
         }
+        if (freshStep.rejection_remark) setRejectionRemark(freshStep.rejection_remark);
         if (freshStep.date_completed) setIssuedOn(freshStep.date_completed);
         if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
           setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
@@ -297,9 +307,18 @@ export function LMISWorkspace({
 
       // 3. Authoritative Clearance Step State Machine (only for active/non-terminal steps and non-departed placements)
       if (stepName && !isStepTerminal && !isRowDeparted) {
-        if (status === "Issued" && stepStatus !== "Issued") {
+        if (status === "Rejected") {
+          await rejectClearanceStepV2(stepName, rejectionRemark.trim() || "LMIS requirements rejected", "LMIS");
+        } else if (status === "Issued" && stepStatus !== "Issued") {
+          if (stepStatus === "Pending") {
+            try {
+              await startClearanceStepV2(stepName);
+            } catch (startErr) {
+              console.warn("Auto-start before complete:", startErr);
+            }
+          }
           await completeClearanceStepV2(stepName, safeLaborId);
-        } else if (status === "Pending" && stepStatus === "Pending") {
+        } else if (status === "In Progress" && stepStatus === "Pending") {
           await startClearanceStepV2(stepName);
         }
 
@@ -313,13 +332,15 @@ export function LMISWorkspace({
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`LMIS Clearance for ${selectedRow?.fullName} updated successfully!`);
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
-      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["placements"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+        queryClient.invalidateQueries({ queryKey: ["placements"] }),
+      ]);
       onRefresh();
       setSelectedRow(null);
     },
@@ -578,13 +599,15 @@ export function LMISWorkspace({
                 ? "bg-emerald-600 text-white font-bold text-[10px]"
                 : status === "Rejected"
                 ? "bg-rose-600 text-white font-bold text-[10px]"
+                : status === "In Progress"
+                ? "bg-blue-600 text-white font-bold text-[10px]"
                 : "bg-amber-500 text-white font-bold text-[10px]"
             }
           >
             {status}
           </Badge>
         }
-        canEdit={canEdit}
+        canEdit={canEdit && !isTerminal}
         isSaving={mutation.isPending}
         onSave={() => setIsConfirmOpen(true)}
       >
@@ -629,21 +652,21 @@ export function LMISWorkspace({
                   Placement Already Departed
                 </p>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This candidate has already Departed. The clearance lifecycle is finalized and locked by the backend. No further changes can be submitted.
+                  This candidate has already Departed. The clearance lifecycle is finalized and locked. No further changes can be submitted.
                 </p>
               </div>
             </div>
           ) : isTerminal ? (
             <div className="sm:col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
-                <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
+                <AlertTriangle className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
                   Clearance Step Finalized & Locked
                 </p>
                 <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                  This LMIS clearance step is finalized (<span className="font-bold underline">{currentLmisStatus}</span>). Status, reference numbers, and handler assignments are locked by the backend state machine and cannot be modified.
+                  This LMIS clearance step is finalized (<span className="font-bold underline">{currentLmisStatus}</span>). Status, reference numbers, and handler assignments are permanently locked and cannot be modified.
                 </p>
               </div>
             </div>
@@ -657,10 +680,26 @@ export function LMISWorkspace({
               className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
             >
               <option value="Pending">Pending</option>
+              <option value="In Progress">In Progress (Under Review)</option>
               <option value="Issued">Issued (Approved)</option>
               <option value="Rejected">Rejected</option>
             </select>
           </DrawerField>
+
+          {status === "Rejected" && (
+            <div className="sm:col-span-2">
+              <DrawerField label="Rejection Remark / Reason *" isReadOnly={false}>
+                <Input
+                  type="text"
+                  placeholder="Provide the reason for rejecting this LMIS clearance..."
+                  value={rejectionRemark}
+                  disabled={!canEdit || mutation.isPending || isTerminal}
+                  onChange={(e) => setRejectionRemark(e.target.value)}
+                  className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-rose-300 dark:border-rose-900/60 focus:border-rose-500"
+                />
+              </DrawerField>
+            </div>
+          )}
 
           <DrawerField label="Ministry Issued Date" isReadOnly={false}>
             <Input
@@ -902,6 +941,7 @@ export function LMISWorkspace({
           placementId={selectedRow?.dsrName}
           stageName="LMIS Clearance"
           defaultDirection="Expense"
+          disabled={isTerminal || !canEdit}
         />
       </OperationalDrawer>
 
@@ -938,7 +978,7 @@ export function LMISWorkspace({
                   <p>
                     {status === "Issued" ? (
                       <>
-                        Setting this clearance step to <strong className="underline">Issued (Approved)</strong> will permanently finalize it. Once saved, the <strong>backend state machine strictly locks this step</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                        Setting this clearance step to <strong className="underline">Issued (Approved)</strong> will permanently finalize it. Once saved, <strong>this step is permanently locked</strong> and any further changes or status reversals are <strong>not allowed</strong>.
                       </>
                     ) : (
                       <>

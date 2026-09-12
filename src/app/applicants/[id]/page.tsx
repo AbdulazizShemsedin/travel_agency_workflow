@@ -1662,15 +1662,15 @@ export default function ApplicantDetailPage() {
             <CardContent className="pt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Contact Person</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_name || applicant.emergency_contact_name || applicant.next_of_kin_name || "N/A"}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_name || applicant.emergency_contact_name || applicant.contact_person || applicant.next_of_kin_name || "N/A"}</p>
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Phone Number</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_phone || applicant.emergency_contact_phone || applicant.next_of_kin_contact || "N/A"}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_phone || applicant.emergency_contact_phone || applicant.emergency_phone || applicant.contact_phone || applicant.next_of_kin_contact || "N/A"}</p>
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Relationship</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.contact_person_relation || applicant.emergency_relationship || applicant.next_of_kin_relationship || "—"}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.emergency_relationship || applicant.contact_person_relation || applicant.relationship || applicant.emergency_contact_address || applicant.next_of_kin_relationship || "—"}</p>
               </div>
             </CardContent>
           </Card>

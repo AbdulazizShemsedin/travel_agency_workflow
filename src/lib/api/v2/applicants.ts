@@ -229,6 +229,41 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.labour_id = laborIdVal;
   }
 
+  // 10. Emergency Contact Person, Phone & Relationship Aliasing
+  const contactName =
+    result.contact_person_name ||
+    result.emergency_contact_name ||
+    result.contact_person ||
+    result.next_of_kin_name;
+  if (contactName) {
+    result.contact_person_name = contactName;
+    result.emergency_contact_name = contactName;
+    result.contact_person = contactName;
+  }
+
+  const contactPhone =
+    result.contact_person_phone ||
+    result.emergency_contact_phone ||
+    result.emergency_phone ||
+    result.contact_phone ||
+    result.next_of_kin_contact;
+  if (contactPhone) {
+    result.contact_person_phone = contactPhone;
+    result.emergency_contact_phone = contactPhone;
+  }
+
+  const relationship =
+    result.emergency_relationship ||
+    result.contact_person_relation ||
+    result.relationship ||
+    result.emergency_contact_address ||
+    result.next_of_kin_relationship;
+  if (relationship) {
+    result.emergency_relationship = relationship;
+    result.contact_person_relation = relationship;
+    result.relationship = relationship;
+  }
+
   return result as T;
 }
 

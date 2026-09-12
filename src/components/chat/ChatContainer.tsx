@@ -475,10 +475,44 @@ export function ChatContainer() {
           participantsList: participants,
         };
       } else {
-        // Internal Thread: Staff A <-> Staff B (or multi-colleague)
-        const displays = participants.map((p) => resolveUserDisplay(p));
-        const p1 = displays[0] || resolveUserDisplay(thread.owner || "Staff A");
-        const p2 = displays[1] || (displays.length > 1 ? displays[1] : { name: "Internal Colleague", role: "Staff" });
+        // Internal Thread: Display actual names and roles for internal colleagues
+        const uniqueParticipants = Array.from(
+          new Set([
+            thread.owner,
+            ...participants,
+          ].filter(Boolean) as string[])
+        );
+
+        const displays = uniqueParticipants.map((p) => resolveUserDisplay(p));
+
+        let p1 = displays[0];
+        if (!p1 || p1.name === "Staff A") {
+          const currentStaffName = authUser?.full_name || user || "Operations Officer";
+          p1 = {
+            name: currentStaffName,
+            email: currentEmail,
+            role: isAdmin ? "Administrator" : "Operations Officer",
+            isStaff: true,
+          };
+        }
+
+        let p2 = displays[1];
+        if (!p2) {
+          const otherEmp = internalEmployees.find(
+            (e) => (e.email || e.name || "").toLowerCase() !== (p1.email || "").toLowerCase()
+          );
+          if (otherEmp) {
+            p2 = {
+              name: otherEmp.full_name || otherEmp.name,
+              email: otherEmp.email || otherEmp.name,
+              role: (otherEmp as any).role || "Operations Officer",
+              isStaff: true,
+            };
+          } else {
+            p2 = { name: "Operations Colleague", email: "", role: "Staff", isStaff: true };
+          }
+        }
+
         const extras = displays.length > 2 ? ` (+${displays.length - 2} more)` : "";
 
         return {
@@ -488,13 +522,13 @@ export function ChatContainer() {
           p2Name: p2.name,
           p2Role: p2.role,
           badgeLabel: "Staff ↔ Staff",
-          partyLine: `${p1.name} ⟷ ${p2.name}${extras}`,
+          partyLine: `${p1.name} (${p1.role}) ⟷ ${p2.name} (${p2.role})${extras}`,
           shortParties: `${p1.name} ⟷ ${p2.name}${extras}`,
           participantsList: participants,
         };
       }
     },
-    [availableContractors, resolveUserDisplay]
+    [availableContractors, resolveUserDisplay, authUser, user, currentEmail, isAdmin, internalEmployees]
   );
 
   // Filter threads

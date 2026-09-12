@@ -553,30 +553,29 @@ export default function DashboardPage() {
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`relative rounded-xl border p-4 sm:p-5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer ${stage.color}`}
+                className={`relative rounded-xl border p-4 sm:p-5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer flex flex-col justify-between min-h-[185px] h-[185px] ${stage.color}`}
               >
-                <div className="flex items-start justify-between">
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-semibold ${stage.accent}`}>
-                    {stage.step}
-                  </span>
-                  <span className="font-mono text-xl font-bold text-slate-800 dark:text-zinc-200 leading-none">
-                    {stage.count}
-                  </span>
+                <div>
+                  <div className="flex items-start justify-between">
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-semibold ${stage.accent}`}>
+                      {stage.step}
+                    </span>
+                    <span className="font-mono text-xl font-bold text-slate-800 dark:text-zinc-200 leading-none">
+                      {stage.count}
+                    </span>
+                  </div>
+
+                  <h4 className="mt-2 text-sm font-semibold leading-snug text-slate-800 dark:text-zinc-200">
+                    {stage.badge}
+                  </h4>
+                  <p className="mt-0.5 text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
+                    {stage.title}
+                  </p>
                 </div>
 
-                <h4 className="mt-2.5 text-sm font-semibold leading-snug text-slate-800 dark:text-zinc-200">
-                  {stage.badge}
-                </h4>
-                <p className="mt-0.5 text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
-                  {stage.title}
-                </p>
-
                 {stage.isParent && stage.subBranches ? (
-                  <div className="mt-3 space-y-2 border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2.5">
-                    <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
-                      Sub-Streams
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="mt-auto border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {stage.subBranches.map((sub: any) => (
                         <div
                           key={sub.name}
@@ -586,16 +585,16 @@ export default function DashboardPage() {
                               router.push(sub.link);
                             }
                           }}
-                          className={`flex flex-col items-center justify-center p-1.5 rounded-lg border text-center transition-all hover:scale-105 cursor-pointer ${sub.color}`}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-md border text-center transition-all hover:scale-[1.02] cursor-pointer ${sub.color}`}
                         >
-                          <span className="text-xs font-semibold leading-tight">{sub.name}</span>
-                          <span className="font-mono font-medium text-xs mt-0.5">{sub.count}</span>
+                          <span className="text-[11px] font-semibold leading-tight">{sub.name}</span>
+                          <span className="font-mono font-bold text-xs">{sub.count}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-800/60 pt-2.5">
+                  <div className="mt-auto flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-800/60 pt-2">
                     <span className="text-xs font-normal text-slate-500 dark:text-zinc-400">
                       Candidates
                     </span>

@@ -24,6 +24,7 @@ interface StageFeeSectionProps {
   defaultDirection?: "Expense" | "Income";
   className?: string;
   onFeesChange?: (fees: StageFeeEntry[]) => void;
+  disabled?: boolean;
 }
 
 export function StageFeeSection({
@@ -32,6 +33,7 @@ export function StageFeeSection({
   defaultDirection = "Expense",
   className = "",
   onFeesChange,
+  disabled = false,
 }: StageFeeSectionProps) {
   const [feeRequired, setFeeRequired] = React.useState(false);
   const [fees, setFees] = React.useState<StageFeeEntry[]>([
@@ -155,18 +157,31 @@ export function StageFeeSection({
     <div className={`space-y-3 rounded-xl border border-slate-200 dark:border-[#272730] bg-slate-50/70 dark:bg-[#141419] p-3.5 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 cursor-pointer">
-            <DollarSign className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-            Stage Fee & Expense Tracking ({stageName})
-          </Label>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 cursor-pointer">
+              <DollarSign className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+              Stage Fee & Expense Tracking ({stageName})
+            </Label>
+            {disabled && (
+              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 px-1.5 py-0.2 rounded">
+                Locked
+              </span>
+            )}
+          </div>
           <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-            Log single or multiple expenses or collections incurred during this stage.
+            {disabled
+              ? "This clearance step is finalized. Fee and expense submissions are locked."
+              : "Log single or multiple expenses or collections incurred during this stage."}
           </p>
         </div>
-        <Switch checked={feeRequired} onCheckedChange={setFeeRequired} />
+        <Switch
+          checked={!disabled && feeRequired}
+          disabled={disabled}
+          onCheckedChange={(val) => !disabled && setFeeRequired(val)}
+        />
       </div>
 
-      {feeRequired && (
+      {!disabled && feeRequired && (
         <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-[#24242e] animate-in fade-in slide-in-from-top-2 duration-200">
           {fees.map((entry, idx) => (
             <div

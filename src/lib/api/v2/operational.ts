@@ -107,7 +107,11 @@ export async function fetchOperationalWorkspaceDataV2(
         (s) => s.step_type === "Taeshir" || s.step_type === "Telesign"
       );
       const embassyStep = siblingSteps.find(
-        (s) => s.step_type === "Embassy" || s.step_type === "Kuwait Embassy"
+        (s) =>
+          s.step_type === "Embassy" ||
+          s.step_type === "Saudi Embassy" ||
+          s.step_type === "Kuwait Embassy" ||
+          (s.step_type || "").toLowerCase().includes("embassy")
       );
 
       // Check step completion statuses
@@ -171,12 +175,6 @@ export async function fetchOperationalWorkspaceDataV2(
       }
 
       if (streamType === "embassy" || streamType === "wakala") {
-        // Strict Clearance Order: LMIS (COC finished & LMIS issued) AND Te'shir (plus Injaz paid)
-        // must BOTH be completed before an applicant can appear on Embassy & Stamping (or Wakala)
-        if (!isLmsFullyCompleted || !isTeshirFullyCompleted) {
-          continue;
-        }
-
         const isEmbassyState =
           plc?.status === "Processing" ||
           plc?.status === "Stamped" ||
@@ -186,12 +184,6 @@ export async function fetchOperationalWorkspaceDataV2(
           continue;
         }
       } else if (streamType === "departure") {
-        // Strict Clearance Order: LMIS and Te'shir must be completed first, AND Embassy/Stamping completed
-        // before an applicant can appear on Flight Ticketing & Airport Departure
-        if (!isLmsFullyCompleted || !isTeshirFullyCompleted) {
-          continue;
-        }
-
         const isStampedOrBeyond =
           isEmbassyFinished ||
           plc?.status === "Stamped" ||

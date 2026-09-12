@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import { ImageCropModal } from "@/components/ui/ImageCropModal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -54,6 +55,26 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   const fullBodyPhotoValue = watch("photo_full_body");
   const passportScanValue = watch("passport_scan");
   const passportNumber = watch("passport_number");
+
+  const maritalStatus = watch("marital_status");
+  const isSingle = String(maritalStatus || "").toLowerCase() === "single";
+
+  React.useEffect(() => {
+    if (isSingle) {
+      setValue("children", 0, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [isSingle, setValue]);
+
+  const currentDestCountry = watch("destination_country") || "";
+  const isKnownPredefinedCountry = DESTINATION_COUNTRY_OPTIONS.filter((c) => c !== "Other").includes(
+    currentDestCountry as any
+  );
+  const [isOtherCountry, setIsOtherCountry] = React.useState<boolean>(
+    Boolean(currentDestCountry && !isKnownPredefinedCountry)
+  );
+  const [customOtherCountry, setCustomOtherCountry] = React.useState<string>(
+    !isKnownPredefinedCountry && currentDestCountry !== "Other" ? currentDestCountry : ""
+  );
 
   // Live duplicate-passport + immediate validation
   const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
@@ -1103,7 +1124,23 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                   </div>
                   <Select
                     id="destination_country"
-                    {...register("destination_country")}
+                    value={isOtherCountry ? "Other" : (currentDestCountry || "Saudi Arabia")}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "Other") {
+                        setIsOtherCountry(true);
+                        setValue("destination_country", customOtherCountry || "Other", {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      } else {
+                        setIsOtherCountry(false);
+                        setValue("destination_country", val, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }
+                    }}
                     error={!!errors.destination_country}
                     className="font-medium"
                     disabled={locked}
@@ -1126,6 +1163,31 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                       </option>
                     ))}
                   </Select>
+
+                  {/* Conditional text input when "Other" country is selected */}
+                  {isOtherCountry && (
+                    <div className="space-y-1 pt-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <Label htmlFor="custom_destination_country" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                        Specify Other Country Name <span className="text-rose-500">*</span>
+                      </Label>
+                      <Input
+                        id="custom_destination_country"
+                        placeholder="e.g., Bahrain, Malaysia, Lebanon"
+                        value={customOtherCountry}
+                        disabled={locked}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomOtherCountry(val);
+                          setValue("destination_country", val || "Other", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        className="h-9 text-xs font-medium bg-white dark:bg-[#1a1a20]"
+                      />
+                    </div>
+                  )}
+
                   {errors.destination_country && (
                     <p className="text-xs text-rose-600 dark:text-rose-400">{errors.destination_country.message}</p>
                   )}
@@ -1133,7 +1195,9 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                   <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-0.5">
                     {watch("destination_country")?.toLowerCase() === "kuwait"
                       ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
-                      : "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."}
+                      : watch("destination_country")?.toLowerCase() === "saudi arabia"
+                      ? "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."
+                      : "🌐 International Corridor: Standard visa and contract processing pipeline."}
                   </p>
                 </div>
 
@@ -1379,7 +1443,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                   placeholder="Select status"
                   {...register("marital_status", {
                     onChange: (e) => {
-                      if (e.target.value === MARITAL_STATUS_OPTIONS[0]) {
+                      if (String(e.target.value || "").toLowerCase() === "single") {
                         resetField("children", { defaultValue: 0 });
                       }
                     },
@@ -1399,23 +1463,25 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             </div>
 
             {/* Children & Nationality */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="children" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Number of Children <span className="text-rose-500">*</span>
-                </Label>
-                <Input
-                  id="children"
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  {...register("children", { valueAsNumber: true })}
-                  className={errors.children ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
-                />
-                {errors.children && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.children.message}</p>
-                )}
-              </div>
+            <div className={cn("grid grid-cols-1 gap-4", isSingle ? "sm:grid-cols-1" : "sm:grid-cols-2")}>
+              {!isSingle && (
+                <div className="space-y-1.5 animate-in fade-in duration-200">
+                  <Label htmlFor="children" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                    Number of Children <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="children"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    {...register("children", { valueAsNumber: true })}
+                    className={errors.children ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
+                  />
+                  {errors.children && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.children.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="nationality" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">

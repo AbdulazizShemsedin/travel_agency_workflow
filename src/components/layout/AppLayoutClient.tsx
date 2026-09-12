@@ -26,6 +26,40 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
     }
   }, []);
 
+  // Ensure navigation and clicks are never stuck by orphan modal states or pointer locks
+  React.useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+      if (document.body.hasAttribute("data-scroll-locked")) {
+        document.body.removeAttribute("data-scroll-locked");
+      }
+    }
+  }, [pathname]);
+
+  // Global watcher ensuring body pointer-events never permanently freeze the screen
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleCaptureClick = () => {
+      if (document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+    };
+    const interval = setInterval(() => {
+      const hasOpenDialog = document.querySelector('[role="dialog"], [data-state="open"]');
+      if (!hasOpenDialog && document.body.style.pointerEvents === "none") {
+        document.body.style.pointerEvents = "";
+      }
+    }, 400);
+
+    window.addEventListener("click", handleCaptureClick, { capture: true });
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("click", handleCaptureClick, { capture: true });
+    };
+  }, []);
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev;

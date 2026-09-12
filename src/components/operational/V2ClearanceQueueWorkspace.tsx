@@ -1447,7 +1447,7 @@ export function V2ClearanceQueueWorkspace() {
                       Clearance Step Finalized & Locked
                     </p>
                     <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
-                      This clearance step is finalized (<span className="font-bold underline">{selectedRow.status}</span>). All workflow actions, reference numbers, and handler assignments are locked by the backend state machine and cannot be modified.
+                      This clearance step is finalized (<span className="font-bold underline">{selectedRow.status}</span>). All workflow actions, reference numbers, and handler assignments are permanently locked and cannot be modified.
                     </p>
                   </div>
                 </div>
