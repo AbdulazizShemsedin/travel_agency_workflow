@@ -169,12 +169,21 @@ export function RoleWorkspaceContainer() {
   const rolesKey = React.useMemo(() => (roles || []).join(","), [roles]);
   const searchParams = useSearchParams();
   const filterParam = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter");
+  const tabParam = searchParams?.get("tab");
 
-  const [activeTab, setActiveTab] = React.useState<string>(filterParam ? "directory" : defaultTab);
+  const [activeTab, setActiveTab] = React.useState<string>(() => {
+    if (tabParam && availableTabs.some((t) => t.id === tabParam)) return tabParam;
+    if (filterParam) return "directory";
+    return defaultTab;
+  });
   const [corridorFilter, setCorridorFilter] = React.useState<string>(defaultCorridor);
 
-  // Sync activeTab only if current tab is not in availableTabs or when persona changes or filterParam exists
+  // Sync activeTab when tabParam, filterParam, availableTabs, or persona changes
   React.useEffect(() => {
+    if (tabParam && availableTabs.some((t) => t.id === tabParam)) {
+      setActiveTab(tabParam);
+      return;
+    }
     if (filterParam) {
       setActiveTab("directory");
       return;
@@ -182,7 +191,7 @@ export function RoleWorkspaceContainer() {
     if (!availableTabs.some((t) => t.id === activeTab)) {
       setActiveTab(defaultTab);
     }
-  }, [availableTabs, defaultTab, activeTab, rolesKey, authUser?.email, filterParam]);
+  }, [availableTabs, defaultTab, activeTab, rolesKey, authUser?.email, filterParam, tabParam]);
 
   // Fetch employees list for drawers
   const { data: employees = [] } = useQuery({

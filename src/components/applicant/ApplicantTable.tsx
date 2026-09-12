@@ -219,6 +219,16 @@ export function ApplicantTable() {
           currentStatus !== "Cancelled";
       } else if (stageNorm === "completed" || stageNorm === "completed / cleared") {
         matchesStage = currentStatus === "Stamped" || currentStatus === "Ticketed";
+      } else if (stageNorm === "cv ready" || stageNorm === "cv generated") {
+        matchesStage = currentStatus === "CV Generated" || currentStatus === "Registered";
+      } else if (stageNorm === "parallel streams" || stageNorm === "processing") {
+        matchesStage = currentStatus === "Processing";
+      } else if (stageNorm === "visa issued" || stageNorm === "stamped") {
+        matchesStage = currentStatus === "Stamped";
+      } else if (stageNorm === "flight ticket" || stageNorm === "ticketed") {
+        matchesStage = currentStatus === "Ticketed";
+      } else if (stageNorm === "deployed" || stageNorm === "departed") {
+        matchesStage = currentStatus === "Departed";
       } else {
         matchesStage = currentStatus.toLowerCase() === stageNorm;
       }
@@ -234,7 +244,34 @@ export function ApplicantTable() {
 
       return matchesStage && matchesSearch;
     });
-  }, [applicantRows, selectedStage, searchQuery]);
+  }, [applicantRows, selectedStage, searchQuery, corridorRestriction]);
+
+  // Dynamic live stage count summary for filter dropdown
+  const stageCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {
+      All: applicantRows.length,
+      Draft: 0,
+      Registered: 0,
+      "CV Generated": 0,
+      Selected: 0,
+      Processing: 0,
+      Stamped: 0,
+      Ticketed: 0,
+      Departed: 0,
+      InProgress: 0,
+      Completed: 0,
+      Cancelled: 0,
+    };
+
+    for (const a of applicantRows) {
+      const s = String(a.status || a.applicant_state || "Draft");
+      if (counts[s] !== undefined) counts[s]++;
+      if (s !== "Draft" && s !== "Departed" && s !== "Cancelled") counts.InProgress++;
+      if (s === "Stamped" || s === "Ticketed") counts.Completed++;
+    }
+
+    return counts;
+  }, [applicantRows]);
 
   // Paginated slice
   const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
@@ -382,18 +419,18 @@ export function ApplicantTable() {
                 setCurrentPage(1);
               }}
               options={[
-                { value: "All", label: `All Stages (${applicants.length})` },
-                { value: "Draft", label: "Draft" },
-                { value: "Registered", label: "Registered" },
-                { value: "CV Generated", label: "CV Generated" },
-                { value: "Selected", label: "Selected" },
-                { value: "Processing", label: "Processing" },
-                { value: "Stamped", label: "Stamped" },
-                { value: "Ticketed", label: "Ticketed" },
-                { value: "Departed", label: "Departed" },
-                { value: "In Progress", label: "In Progress" },
-                { value: "Completed", label: "Completed / Cleared" },
-                { value: "Cancelled", label: "Cancelled" },
+                { value: "All", label: `All Stages (${stageCounts.All})` },
+                { value: "Draft", label: `Draft (${stageCounts.Draft})` },
+                { value: "Registered", label: `Registered (${stageCounts.Registered})` },
+                { value: "CV Generated", label: `CV Generated (${stageCounts["CV Generated"]})` },
+                { value: "Selected", label: `Selected (${stageCounts.Selected})` },
+                { value: "Processing", label: `Processing (${stageCounts.Processing})` },
+                { value: "Stamped", label: `Stamped (${stageCounts.Stamped})` },
+                { value: "Ticketed", label: `Ticketed (${stageCounts.Ticketed})` },
+                { value: "Departed", label: `Departed (${stageCounts.Departed})` },
+                { value: "In Progress", label: `In Progress (${stageCounts.InProgress})` },
+                { value: "Completed", label: `Completed / Cleared (${stageCounts.Completed})` },
+                { value: "Cancelled", label: `Cancelled (${stageCounts.Cancelled})` },
               ]}
               triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
               aria-label="Filter by Stage"
