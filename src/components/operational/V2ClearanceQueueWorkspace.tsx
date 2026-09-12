@@ -26,6 +26,7 @@ import {
   BellRing,
   Upload,
   AlertTriangle,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
@@ -1437,14 +1438,18 @@ export function V2ClearanceQueueWorkspace() {
 
               {/* Terminal State Banner */}
               {isTerminalStatus && (
-                <div className="col-span-2 p-3 rounded-lg bg-slate-100 dark:bg-[#181820] border border-slate-200 dark:border-[#272730] text-xs text-slate-700 dark:text-zinc-300 space-y-1.5">
-                  <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    Step Finalized ({selectedRow.status})
+                <div className="col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
+                    <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    This clearance step is finalized and cannot be modified further.
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Clearance Step Finalized & Locked
+                    </p>
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                      This clearance step is finalized (<span className="font-bold underline">{selectedRow.status}</span>). All workflow actions, reference numbers, and handler assignments are locked by the backend state machine and cannot be modified.
+                    </p>
+                  </div>
                 </div>
               )}
 

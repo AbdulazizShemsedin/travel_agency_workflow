@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -28,6 +29,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   startClearanceStepV2,
   submitEmbassyStepV2,
@@ -85,6 +94,7 @@ export function EmbassyWorkspace({
   const [wakalaPaidDate, setWakalaPaidDate] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [wakalaOverrideReason, setWakalaOverrideReason] = React.useState("");
   const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
 
   const isEmbassyOfficer =
     hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer"] as any) ||
@@ -479,7 +489,15 @@ export function EmbassyWorkspace({
         }
         canEdit={canEdit}
         isSaving={mutation.isPending}
-        onSave={() => mutation.mutate()}
+        onSave={() => {
+          if (isEmbassyTerminal) {
+            toast.error(
+              `This Embassy step is already finalized (${currentEmbassyStatus}) — status and handler assignments are locked.`
+            );
+            return;
+          }
+          setIsConfirmOpen(true);
+        }}
       >
         <DrawerSection title="Candidate & Visa Dossier" icon={Building2}>
           <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
@@ -511,9 +529,18 @@ export function EmbassyWorkspace({
 
         <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
           {isEmbassyTerminal && (
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 p-2.5 text-xs text-slate-600 dark:text-zinc-300 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span>This Embassy clearance step is finalized ({currentEmbassyStatus}). Status and handler assignments are locked.</span>
+            <div className="sm:col-span-2 rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 shadow-xs text-amber-950 dark:text-amber-100 flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 mt-0.5">
+                <ShieldAlert className="h-4.5 w-4.5 text-amber-700 dark:text-amber-300" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                  Clearance Step Finalized & Locked
+                </p>
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-relaxed">
+                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). Status, visa stamp details, and handler assignments are locked by the backend state machine and cannot be modified.
+                </p>
+              </div>
             </div>
           )}
 
@@ -822,6 +849,133 @@ export function EmbassyWorkspace({
           defaultDirection="Expense"
         />
       </OperationalDrawer>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Finalize / Save Confirmation Dialog                           */}
+      {/* ------------------------------------------------------------- */}
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <DialogContent className="sm:max-w-md border-amber-200 dark:border-amber-800 bg-white dark:bg-[#121216]">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                  {status === "Approved" ? "Confirm Embassy Visa Stamping" : "Confirm Save Changes"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Review your changes before submitting to the live database.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {/* Eye-catching yellow warning box */}
+            <div className="rounded-xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 p-3.5 text-amber-950 dark:text-amber-200">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs leading-relaxed">
+                  <p className="font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100 mb-0.5">
+                    Permanent Action Warning
+                  </p>
+                  <p>
+                    {status === "Approved" ? (
+                      <>
+                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, the <strong>backend state machine strictly locks this step</strong> and any further changes or status reversals are <strong>not allowed</strong>.
+                      </>
+                    ) : status === "Rejected" ? (
+                      <>
+                        Rejecting this embassy clearance step will mark it as terminal. Once saved, this action cannot be undone on the live database without administrator intervention.
+                      </>
+                    ) : (
+                      <>
+                        Once submitted, embassy clearance updates are recorded on the live server. Please verify all information is accurate before confirming.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Candidate & Field Summary */}
+            <div className="rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50/60 dark:bg-[#16161c] p-3.5 space-y-2 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
+                <span className="text-slate-500 dark:text-zinc-400">Candidate:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedRow?.fullName}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
+                <span className="text-slate-500 dark:text-zinc-400">Embassy Status to Apply:</span>
+                <Badge
+                  className={
+                    status === "Approved"
+                      ? "bg-emerald-600 text-white font-bold text-[10px]"
+                      : status === "Rejected"
+                      ? "bg-rose-600 text-white font-bold text-[10px]"
+                      : status === "Submitted"
+                      ? "bg-blue-600 text-white font-bold text-[10px]"
+                      : "bg-amber-500 text-white font-bold text-[10px]"
+                  }
+                >
+                  {status === "Approved" ? "Stamped" : status}
+                </Badge>
+              </div>
+              {stampNumber && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
+                  <span className="text-slate-500 dark:text-zinc-400">Visa / Stamp №:</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">{stampNumber}</span>
+                </div>
+              )}
+              {submissionDate && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
+                  <span className="text-slate-500 dark:text-zinc-400">Submission Date:</span>
+                  <span className="text-slate-800 dark:text-zinc-200">{submissionDate}</span>
+                </div>
+              )}
+              {receiptNo && (
+                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
+                  <span className="text-slate-500 dark:text-zinc-400">Receipt / Ref №:</span>
+                  <span className="font-mono text-slate-800 dark:text-zinc-200">{receiptNo}</span>
+                </div>
+              )}
+              {embassyFee && (
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-slate-500 dark:text-zinc-400">Embassy Fee:</span>
+                  <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                    ${embassyFee} USD
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={() => setIsConfirmOpen(false)}
+              className="text-xs font-semibold"
+            >
+              Cancel / Review
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={mutation.isPending}
+              onClick={() => {
+                setIsConfirmOpen(false);
+                mutation.mutate();
+              }}
+              className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+            >
+              {mutation.isPending ? "Submitting..." : "Yes, Confirm & Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
