@@ -89,9 +89,31 @@ export default function EditApplicantPage() {
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Edit Applicant: {applicant.full_name}
             </h2>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Applicant ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.name}</strong> • Status: {applicant.applicant_state}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-zinc-400 mt-1">
+              {applicant.passport_number && (
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="text-slate-400 dark:text-zinc-500">Passport:</span>
+                  <strong className="font-mono font-bold text-slate-800 dark:text-zinc-200">{applicant.passport_number}</strong>
+                </span>
+              )}
+              {applicant.destination_country && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 font-medium">
+                    <span className="text-slate-400 dark:text-zinc-500">Destination:</span>
+                    <strong className="text-slate-800 dark:text-zinc-200">{applicant.destination_country}</strong>
+                  </span>
+                </>
+              )}
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <span className="text-slate-400 dark:text-zinc-500">Stage:</span>
+                <strong className="text-slate-800 dark:text-zinc-200">{applicant.applicant_state}</strong>
+              </span>
+              <span className="font-mono text-[11px] text-slate-400 dark:text-zinc-600">
+                ({applicant.name})
+              </span>
+            </div>
           </div>
           <Link
             href={`/applicants/${encodeURIComponent(applicantId)}`}

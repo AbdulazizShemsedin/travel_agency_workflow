@@ -143,8 +143,8 @@ export function LmisFastPathModal({
                   update_applicant_for_lmis
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
-                {applicantName || "Candidate"} • {applicantId}
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Candidate: <strong className="font-semibold text-slate-800 dark:text-zinc-200">{applicantName || "Candidate"}</strong> • <span className="font-mono text-[11px] text-slate-400">Ref: {applicantId}</span>
               </p>
             </div>
           </div>

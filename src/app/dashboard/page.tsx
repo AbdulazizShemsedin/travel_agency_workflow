@@ -182,6 +182,10 @@ export default function DashboardPage() {
       id: string;
       name: string;
       applicantName: string;
+      passportNumber?: string;
+      destination?: string;
+      phone?: string;
+      expiryDate?: string;
       type: "Passport" | "Medical" | "Visa";
       message: string;
       severity: "URGENT" | "WARNING";
@@ -201,6 +205,10 @@ export default function DashboardPage() {
               id: `${a.name}-passport`,
               name: a.full_name || a.name,
               applicantName: a.name,
+              passportNumber: a.passport_number,
+              destination: a.destination_country,
+              phone: a.phone_number || a.phone,
+              expiryDate: a.passport_expiry,
               type: "Passport",
               message: pDays <= 0 ? "Passport Expired" : `Passport expires in ${pDays} days`,
               severity: pDays <= 7 ? "URGENT" : "WARNING",
@@ -215,6 +223,10 @@ export default function DashboardPage() {
               id: `${a.name}-med`,
               name: a.full_name || a.name,
               applicantName: a.name,
+              passportNumber: a.passport_number,
+              destination: a.destination_country,
+              phone: a.phone_number || a.phone,
+              expiryDate: a.medical_expiry_date,
               type: "Medical",
               message: mDays <= 0 ? "Medical Check Expired" : `Medical check expires in ${mDays} days`,
               severity: mDays <= 14 ? "URGENT" : "WARNING",
@@ -233,6 +245,7 @@ export default function DashboardPage() {
       id: string;
       title: string;
       candidate: string;
+      details?: string;
       applicantId: string;
       type: string;
       badge: string;
@@ -242,10 +255,19 @@ export default function DashboardPage() {
     applicantRows
       .filter((a) => (a.status || a.applicant_state) === "Selected")
       .forEach((a) => {
+        const details = [
+          a.passport_number ? `Passport: ${a.passport_number}` : null,
+          a.destination_country ? `Corridor: ${a.destination_country}` : null,
+          "Ready for staff assignment",
+        ]
+          .filter(Boolean)
+          .join(" • ");
+
         tasks.push({
           id: `task-assign-${a.name}`,
           title: "Assign Clearance Officers",
-          candidate: `${a.full_name || a.name} (Ready for staff assignment)`,
+          candidate: a.full_name || a.name,
+          details,
           applicantId: a.name,
           type: "Assignment",
           badge: "ASSIGN OFFICERS",
@@ -256,10 +278,19 @@ export default function DashboardPage() {
     applicantRows
       .filter((a) => (a.status || a.applicant_state) === "Registered")
       .forEach((a) => {
+        const details = [
+          a.passport_number ? `Passport: ${a.passport_number}` : null,
+          a.destination_country ? `Corridor: ${a.destination_country}` : null,
+          "Profile verified • Ready for CV",
+        ]
+          .filter(Boolean)
+          .join(" • ");
+
         tasks.push({
           id: `task-cv-${a.name}`,
           title: "Generate Bilateral CV",
-          candidate: `${a.full_name || a.name} (Registered & verified)`,
+          candidate: a.full_name || a.name,
+          details,
           applicantId: a.name,
           type: "CV",
           badge: "GENERATE CV",
@@ -270,10 +301,18 @@ export default function DashboardPage() {
     applicantRows
       .filter((a) => (a.status || a.applicant_state) === "Draft")
       .forEach((a) => {
+        const details = [
+          a.phone_number || a.phone ? `Phone: ${a.phone_number || a.phone}` : null,
+          "KYC intake incomplete",
+        ]
+          .filter(Boolean)
+          .join(" • ");
+
         tasks.push({
           id: `task-draft-${a.name}`,
           title: "Complete KYC & Register",
-          candidate: `${a.full_name || a.name} (Draft incomplete)`,
+          candidate: a.full_name || a.name,
+          details,
           applicantId: a.name,
           type: "Registration",
           badge: "COMPLETE DRAFT",
@@ -606,9 +645,43 @@ export default function DashboardPage() {
                           {alert.message}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Candidate: <strong className="text-slate-800 dark:text-zinc-200">{alert.name}</strong> • ID: <span className="font-mono">{alert.applicantName}</span>
-                      </p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-zinc-400">
+                        <span>
+                          Candidate: <strong className="text-slate-800 dark:text-zinc-200">{alert.name}</strong>
+                        </span>
+                        {alert.passportNumber ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Passport: <strong className="font-mono text-slate-700 dark:text-zinc-300">{alert.passportNumber}</strong>
+                            </span>
+                          </>
+                        ) : null}
+                        {alert.destination ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Corridor: <strong className="text-emerald-700 dark:text-emerald-400">{alert.destination}</strong>
+                            </span>
+                          </>
+                        ) : null}
+                        {alert.phone ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Phone: <span className="text-slate-700 dark:text-zinc-300">{alert.phone}</span>
+                            </span>
+                          </>
+                        ) : null}
+                        {alert.expiryDate ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Expiry: <span className="font-mono text-rose-600 dark:text-rose-400 font-semibold">{alert.expiryDate}</span>
+                            </span>
+                          </>
+                        ) : null}
+                      </div>
                     </div>
                     <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
                       <Button
@@ -660,7 +733,10 @@ export default function DashboardPage() {
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        {task.candidate}
+                        Candidate: <strong className="text-slate-800 dark:text-zinc-200">{task.candidate}</strong>
+                        {task.details && (
+                          <span> • {task.details}</span>
+                        )}
                       </p>
                     </div>
                     <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
@@ -713,8 +789,22 @@ export default function DashboardPage() {
                       <h5 className="font-bold text-slate-900 dark:text-white">
                         {applicant.full_name || `${applicant.first_name} ${applicant.last_name}`}
                       </h5>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        ID: <span className="font-mono">{applicant.name}</span> • Passport: <span className="font-mono">{applicant.passport_number || "Pending"}</span>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 flex flex-wrap items-center gap-x-2">
+                        <span>
+                          Passport: <strong className="font-mono font-medium text-slate-700 dark:text-zinc-300">{applicant.passport_number || "Pending"}</strong>
+                        </span>
+                        <span>•</span>
+                        <span>
+                          Destination: <strong className="text-emerald-700 dark:text-emerald-400">{applicant.destination_country || "Unassigned"}</strong>
+                        </span>
+                        {applicant.target_job || applicant.job_applied ? (
+                          <>
+                            <span>•</span>
+                            <span>
+                              Job: <span className="text-slate-700 dark:text-zinc-300">{applicant.target_job || applicant.job_applied}</span>
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                   </div>

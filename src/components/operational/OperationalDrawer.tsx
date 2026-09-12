@@ -115,14 +115,16 @@ export function OperationalDrawer({
                   {statusBadge}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-zinc-400">
-                  <span className="font-mono text-emerald-800 dark:text-emerald-400 font-semibold">
-                    {applicantId}
-                  </span>
-                  {passportNumber && (
+                  {passportNumber ? (
+                    <span className="font-medium text-slate-700 dark:text-zinc-300">
+                      Passport: <strong className="font-mono font-bold text-slate-900 dark:text-white">{passportNumber}</strong>
+                    </span>
+                  ) : null}
+                  {applicantId && (
                     <>
-                      <span>•</span>
-                      <span className="font-mono text-slate-600 dark:text-zinc-300">
-                        Passport: {passportNumber}
+                      {passportNumber && <span>•</span>}
+                      <span className="font-mono text-[11px] text-slate-400 dark:text-zinc-500">
+                        Ref: {applicantId}
                       </span>
                     </>
                   )}

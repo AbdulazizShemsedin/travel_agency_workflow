@@ -400,7 +400,7 @@ export default function AgentComplaintsPage() {
                     </p>
 
                     <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400 dark:text-zinc-500 pt-1">
-                      <span>Candidate: <strong className="text-slate-700 dark:text-zinc-300">{c.full_name || c.applicant}</strong> ({c.applicant})</span>
+                      <span>Candidate: <strong className="text-slate-700 dark:text-zinc-300">{c.full_name || c.applicant}</strong></span>
                       {c.passport_number && <span>Passport: <strong className="text-slate-700 dark:text-zinc-300">{c.passport_number}</strong></span>}
                       <span>Logged: {c.creation?.split(" ")[0]}</span>
                       {c.outcome && <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Outcome: {c.outcome}</span>}

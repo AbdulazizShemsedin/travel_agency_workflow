@@ -106,7 +106,7 @@ export function MuayenaPlacementModal({
           <div className="p-3 rounded-lg border border-slate-200 dark:border-[#222228] bg-slate-50/50 dark:bg-[#171720] text-xs space-y-1">
             <span className="text-slate-500">Candidate:</span>
             <div className="font-bold text-slate-900 dark:text-white">
-              {applicantName} ({applicantId})
+              {applicantName}
             </div>
           </div>
 

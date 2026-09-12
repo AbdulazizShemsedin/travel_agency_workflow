@@ -827,10 +827,49 @@ export default function ApplicantDetailPage() {
               <Badge variant="destructive">Cancelled</Badge>
             )}
           </div>
-          <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Applicant ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.name}</strong> • Registered on{" "}
-            {applicant.registration_date || applicant.creation?.split(" ")[0] || "Draft"}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-zinc-400 mt-1">
+            {applicant.passport_number && (
+              <span className="flex items-center gap-1 font-medium">
+                <span className="text-slate-400 dark:text-zinc-500">Passport:</span>
+                <strong className="font-mono font-bold text-slate-800 dark:text-zinc-200">{applicant.passport_number}</strong>
+              </span>
+            )}
+            {applicant.destination_country && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="text-slate-400 dark:text-zinc-500">Destination:</span>
+                  <strong className="text-slate-800 dark:text-zinc-200">{applicant.destination_country}</strong>
+                </span>
+              </>
+            )}
+            {(applicant.phone_number || applicant.phone) && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="text-slate-400 dark:text-zinc-500">Phone:</span>
+                  <strong className="text-slate-800 dark:text-zinc-200">{applicant.phone_number || applicant.phone}</strong>
+                </span>
+              </>
+            )}
+            {(applicant.target_job || applicant.job_applied) && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="text-slate-400 dark:text-zinc-500">Role:</span>
+                  <strong className="text-slate-800 dark:text-zinc-200">{applicant.target_job || applicant.job_applied}</strong>
+                </span>
+              </>
+            )}
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <span className="text-slate-400 dark:text-zinc-500">Registered:</span>
+              <span className="text-slate-700 dark:text-zinc-300">{applicant.registration_date || applicant.creation?.split(" ")[0] || "Draft"}</span>
+            </span>
+            <span className="font-mono text-[11px] text-slate-400 dark:text-zinc-600">
+              ({applicant.name})
+            </span>
+          </div>
         </div>
 
         {/* Top Header Buttons */}
@@ -1297,8 +1336,12 @@ export default function ApplicantDetailPage() {
                       <p className="text-slate-500 dark:text-zinc-400">
                         Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(step)}</strong>
                       </p>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        Step ID: {step.name} (Seq {step.sequence_order})
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-[10px] font-medium text-slate-600 dark:text-zinc-300">
+                          Step #{step.sequence_order || 1}
+                        </span>
+                        {step.date_started && <span>• Started: {step.date_started}</span>}
+                        {step.date_completed && <span>• Completed: {step.date_completed}</span>}
                       </div>
                     </div>
                   );
@@ -1379,8 +1422,12 @@ export default function ApplicantDetailPage() {
                 <p className="text-slate-500 dark:text-zinc-400">
                   Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(embassyClearanceStep)}</strong>
                 </p>
-                <div className="text-[10px] text-slate-400 font-mono">
-                  Step ID: {embassyClearanceStep.name} (Seq {embassyClearanceStep.sequence_order})
+                <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-[10px] font-medium text-slate-600 dark:text-zinc-300">
+                    Step #{embassyClearanceStep.sequence_order || 1}
+                  </span>
+                  {embassyClearanceStep.date_started && <span>• Started: {embassyClearanceStep.date_started}</span>}
+                  {embassyClearanceStep.date_completed && <span>• Completed: {embassyClearanceStep.date_completed}</span>}
                 </div>
               </div>
             )}
