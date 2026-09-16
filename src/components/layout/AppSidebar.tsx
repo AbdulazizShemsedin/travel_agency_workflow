@@ -34,13 +34,13 @@ interface NavItemConfig {
 const navItems: NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard" },
   { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants" },
-  { label: "Messages / Chat", href: "/chat", icon: MessageSquare, action: "manageCommunication" },
+  { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication" },
   { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers" },
-  { label: "Contractors", href: "/contractors", icon: Building2, action: "manageContractors" },
+  { label: "Foreign Agencies", href: "/contractors", icon: Building2, action: "manageContractors" },
   { label: "Commissions", href: "/commission", icon: DollarSign, action: "manageCommission" },
-  { label: "Complaints Desk", href: "/complaints", icon: AlertCircle, action: "manageComplaints" },
+  { label: "Complaints", href: "/complaints", icon: AlertCircle, action: "manageComplaints" },
   { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports" },
-  { label: "Expenses/Income", href: "/expenses-income", icon: Receipt, action: "viewFinance" },
+  { label: "Finance", href: "/expenses-income", icon: Receipt, action: "viewFinance" },
 ];
 
 interface AppSidebarProps {
@@ -114,7 +114,7 @@ export function AppSidebar({
                   Travel Agency
                 </h1>
                 <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
-                  Management Portal
+                  Travel Agency
                 </p>
               </div>
             )}

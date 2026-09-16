@@ -49,7 +49,8 @@ import {
   V2CommissionBatch,
   V2SupportedCurrency,
 } from "@/lib/api/v2/finance";
-import { getFinancialOverviewV2, getPendingApprovalQueueV2, V2PendingApprovalItem } from "@/lib/api/v2/reports";
+import { getFinancialOverviewV2, getPendingApprovalQueueV2, exportTransactionsXlsxV2, V2PendingApprovalItem } from "@/lib/api/v2/reports";
+import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
 import { listEmployeesV2, V2EmployeeRecord } from "@/lib/api/v2/employees";
 import { listPlacementsV2, V2PlacementRecord } from "@/lib/api/v2/placements";
@@ -83,9 +84,11 @@ export default function ExpensesIncomePage() {
     amount: "",
     description: "",
     placement: "",
+    applicant: "",
     currency: "ETB" as V2SupportedCurrency,
     stageLoggedAt: "",
   });
+  const [isExporting, setIsExporting] = React.useState<boolean>(false);
 
   // Rejection & Void Dialog States
   const [rejectingTx, setRejectingTx] = React.useState<V2PendingApprovalItem | null>(null);
@@ -231,6 +234,28 @@ export default function ExpensesIncomePage() {
   const totalExpense = summary?.totals_birr?.expense ?? 0;
   const netBalance = totalIncome - totalExpense;
 
+  // Handle Export Transactions to Excel (.xlsx)
+  const handleExportTransactions = async () => {
+    setIsExporting(true);
+    try {
+      const statusFilter = activeTab === "approval_queue" ? "Pending" : undefined;
+      const blob = await exportTransactionsXlsxV2({
+        status: statusFilter,
+      });
+      const fallback = `Transactions_${activeTab}_${new Date().toISOString().split("T")[0]}`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
+      toast.success("Excel Spreadsheet Downloaded", {
+        description: `Exported ${res.filename} (${res.format.toUpperCase()}) with formatted columns and agency banner.`,
+      });
+    } catch (err: any) {
+      toast.error("Export Failed", {
+        description: err?.message || "Failed to export transactions spreadsheet.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Mutation: Log Stage Income or Expense
   const recordTxnMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -241,7 +266,8 @@ export default function ExpensesIncomePage() {
           data.currency,
           data.description,
           data.placement || undefined,
-          data.stageLoggedAt || undefined
+          data.stageLoggedAt || undefined,
+          data.applicant || undefined
         );
       } else {
         return await logStageIncomeV2(
@@ -249,7 +275,8 @@ export default function ExpensesIncomePage() {
           data.currency,
           data.description,
           data.placement || undefined,
-          data.stageLoggedAt || undefined
+          data.stageLoggedAt || undefined,
+          data.applicant || undefined
         );
       }
     },
@@ -265,6 +292,7 @@ export default function ExpensesIncomePage() {
         amount: "",
         description: "",
         placement: "",
+        applicant: "",
         currency: "ETB",
         stageLoggedAt: "",
       });
@@ -536,17 +564,17 @@ export default function ExpensesIncomePage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Expenses & Income Management
+              Finance
             </h1>
             <Badge
               variant="outline"
               className="text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
             >
-              V2 FINANCE WORKFLOW
+              Finance
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Log disbursements, audit ledger entries, execute Finance Manager approvals, and reconcile bank statements.
+            Add expenses and income, approve payments, and check bank records.
           </p>
         </div>
 
@@ -569,12 +597,29 @@ export default function ExpensesIncomePage() {
             type="button"
             variant="outline"
             size="sm"
+            onClick={handleExportTransactions}
+            disabled={isExporting}
+            className="text-xs h-8 border-slate-300 dark:border-[#2a2a35]"
+            title="Export transactions matching current view to Excel (.xlsx)"
+          >
+            {isExporting ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin text-emerald-600" />
+            ) : (
+              <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+            )}
+            Export to Excel
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => setIsFxModalOpen(true)}
             className="text-xs h-8 border-slate-300 dark:border-[#2a2a35]"
-            title="View active foreign exchange conversion rates or set manual rates"
+            title="View active exchange rates"
           >
             <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
-            Manage FX Rates
+            Exchange Rates
           </Button>
 
           <Button
@@ -582,7 +627,7 @@ export default function ExpensesIncomePage() {
             onClick={() => setIsAddModalOpen(true)}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs h-8 shadow-xs"
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Record Transaction
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Payment
           </Button>
         </div>
       </div>
@@ -602,7 +647,7 @@ export default function ExpensesIncomePage() {
           )}
         >
           <DollarSign className="h-3.5 w-3.5" />
-          Financial Ledger & Summary
+          Ledger & Summary
         </button>
 
         <button
@@ -616,7 +661,7 @@ export default function ExpensesIncomePage() {
           )}
         >
           <Inbox className="h-3.5 w-3.5" />
-          Pending Approvals Queue
+          Pending Approvals
           {pendingQueue.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
               {pendingQueue.length}
@@ -635,7 +680,7 @@ export default function ExpensesIncomePage() {
           )}
         >
           <FileSpreadsheet className="h-3.5 w-3.5" />
-          Bank Statement Reconciliation
+          Bank Statement Matching
         </button>
       </div>
 
@@ -1505,18 +1550,35 @@ export default function ExpensesIncomePage() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="placement" className="text-xs font-semibold">
-                  Linked Placement ID (Optional)
-                </Label>
-                <Input
-                  id="placement"
-                  placeholder="e.g. PLM-00013"
-                  value={formData.placement}
-                  onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
-                  className="h-8 text-xs font-mono"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="placement" className="text-xs font-semibold">
+                    Linked Placement (Optional)
+                  </Label>
+                  <Input
+                    id="placement"
+                    placeholder="e.g. PLM-00013"
+                    value={formData.placement}
+                    onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="applicant" className="text-xs font-semibold">
+                    Linked Applicant (Optional)
+                  </Label>
+                  <Input
+                    id="applicant"
+                    placeholder="e.g. APP-00042"
+                    value={formData.applicant}
+                    onChange={(e) => setFormData({ ...formData, applicant: e.target.value })}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
               </div>
+              <p className="text-[11px] text-slate-400">
+                Leave placement and applicant blank for general office expenses, loan/advance receipts, or one-off entries.
+              </p>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
                 <Button

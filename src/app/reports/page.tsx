@@ -59,6 +59,7 @@ import {
   getEmployeeFinancialReportV2,
   getPendingApprovalQueueV2,
   exportCommissionsXlsxV2,
+  exportTransactionsXlsxV2,
   V2OperationsSummary,
   V2DailyWorkReport,
   V2StaffPerformanceItem,
@@ -332,6 +333,29 @@ export default function ReportsPage() {
     }
   };
 
+  const [isExportingTransactionsXlsx, setIsExportingTransactionsXlsx] = React.useState<boolean>(false);
+  const handleExportTransactionsXlsx = async (statusFilter?: string) => {
+    setIsExportingTransactionsXlsx(true);
+    try {
+      const blob = await exportTransactionsXlsxV2({
+        from_date: fromDate,
+        to_date: toDate,
+        status: statusFilter,
+      });
+      const fallback = `Transactions_Export_${statusFilter || "All"}_${fromDate}_to_${toDate}`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
+      toast.success("Transactions Spreadsheet Downloaded", {
+        description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
+      });
+    } catch (err: any) {
+      toast.error("Export Failed", {
+        description: err?.message || "Failed to export transactions spreadsheet. Please try again.",
+      });
+    } finally {
+      setIsExportingTransactionsXlsx(false);
+    }
+  };
+
   // Funnel Data Transformation
   const funnelChartData = React.useMemo(() => {
     if (!opsSummary?.applicant_funnel) return [];
@@ -443,17 +467,32 @@ export default function ReportsPage() {
           </div>
 
           {isManagerOrAdmin && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={isExportingXlsx}
-              onClick={handleExportXlsx}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
-              title="Export commissions spreadsheet (Excel / CSV)"
-            >
-              <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
-              {isExportingXlsx ? "Exporting..." : "Export Excel / CSV"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={isExportingXlsx}
+                onClick={handleExportXlsx}
+                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+                title="Export commissions spreadsheet (Excel / CSV)"
+              >
+                <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+                {isExportingXlsx ? "Exporting..." : "Export Commissions (.xlsx)"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isExportingTransactionsXlsx}
+                onClick={() => handleExportTransactionsXlsx(activeTab === "approvals" ? "Pending" : undefined)}
+                className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
+                title="Export all transactions (Expense/Income/Commission) with rich formatting to Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                {isExportingTransactionsXlsx ? "Exporting..." : "Export Transactions (.xlsx)"}
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -1025,9 +1064,23 @@ export default function ReportsPage() {
                     <Inbox className="h-4 w-4 text-emerald-600" />
                     Pending Financial Approvals Queue (Oldest First)
                   </span>
-                  <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 text-[10px]">
-                    {pendingApprovals.length} Pending Actions
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isExportingTransactionsXlsx}
+                      onClick={() => handleExportTransactionsXlsx("Pending")}
+                      className="text-xs h-7 border-slate-300 dark:border-[#2a2a35]"
+                      title="Export pending queue to Excel (.xlsx)"
+                    >
+                      <FileSpreadsheet className="mr-1.5 h-3 w-3 text-emerald-600" />
+                      Export Queue (.xlsx)
+                    </Button>
+                    <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 text-[10px]">
+                      {pendingApprovals.length} Pending Actions
+                    </Badge>
+                  </div>
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Applicant transaction expenses and receipts awaiting Finance Manager audit and formal approval.

@@ -26,6 +26,7 @@ import {
   FileText,
 } from "lucide-react";
 import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -236,6 +237,38 @@ export default function CandidateCvPreviewPage() {
     }
   };
 
+  const [isDownloadingServerPdf, setIsDownloadingServerPdf] = React.useState(false);
+  const handleDownloadServerPdf = async () => {
+    if (!applicant?.name) return;
+    setIsDownloadingServerPdf(true);
+    try {
+      const blob = await renderCvPdfV2(applicant.name);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CV_${fullName.replace(/[^a-zA-Z0-9]/g, "_")}_${passportNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Official CV PDF downloaded successfully!");
+    } catch (err: any) {
+      console.error("Failed to render CV PDF:", err);
+      const rawMsg = err?.message || "";
+      const is417 =
+        err?.status === 417 ||
+        err?.statusCode === 417 ||
+        rawMsg.includes("417") ||
+        rawMsg.includes("Could not generate the CV PDF");
+      const description = is417
+        ? "Could not generate the CV PDF. Try again shortly or contact support."
+        : formatCleanErrorMessage(err);
+      toast.error("CV PDF Generation Failed", { description });
+    } finally {
+      setIsDownloadingServerPdf(false);
+    }
+  };
+
   const handleCopyLink = () => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
@@ -321,6 +354,20 @@ export default function CandidateCvPreviewPage() {
           </Button>
 
           <Button
+            onClick={handleDownloadServerPdf}
+            disabled={isDownloadingServerPdf}
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-800 text-white text-xs font-bold shadow-xs"
+            title="Download authoritative compiled PDF from server"
+          >
+            {isDownloadingServerPdf ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            {isDownloadingServerPdf ? "Rendering PDF..." : "Download Official PDF"}
+          </Button>
+
+          <Button
             onClick={handleSavePdf}
             disabled={isDownloadingPdf}
             className="bg-blue-900 hover:bg-blue-950 text-white text-xs font-bold shadow-sm"
@@ -330,7 +377,7 @@ export default function CandidateCvPreviewPage() {
             ) : (
               <Download className="mr-1.5 h-3.5 w-3.5" />
             )}
-            {isDownloadingPdf ? "Downloading PDF..." : "Save as PDF"}
+            {isDownloadingPdf ? "Downloading..." : "Client Export"}
           </Button>
         </div>
       </div>

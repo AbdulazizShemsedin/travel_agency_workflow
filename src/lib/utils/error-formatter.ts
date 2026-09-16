@@ -408,26 +408,26 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   // 6. Specific High-Impact Business Rule Mappings
   // Medical Gates
   if (/medical_2_status must be FIT/i.test(text) || /Medical 2 FIT required/i.test(text)) {
-    return "Departure cannot be confirmed until the final medical result is marked Fit.";
+    return "Departure cannot be confirmed until the final medical check is FIT.";
   }
   if (/medical_selected_status must be 'FIT'/i.test(text) || /Medical 1 FIT required/i.test(text)) {
-    return "Candidate's Medical 1 examination must be recorded as FIT before advancing.";
+    return "Medical 1 check must be FIT before you can continue.";
   }
 
   // Wakala Payment Guard on Embassy Submission
   if (/Wakala must be Paid before Embassy documents can be Submitted/i.test(text)) {
-    return "Wakala fee must be recorded as Paid before submitting documents to the Embassy (or require a Manager override).";
+    return "Wakala must be Paid before sending documents to the Embassy (or get Manager approval).";
   }
   if (/wakala_amount|wakala_payment_status/i.test(text)) {
-    return "Wakala payment details are required before proceeding.";
+    return "Wakala payment is required before you can continue.";
   }
 
   // Admin Account Lockout Protection
   if (/Refusing to remove your own Admin\/Manager\/System Manager access/i.test(text)) {
-    return "You cannot remove your own administrative access.";
+    return text.replace(/^Error:\s*/i, "").trim();
   }
   if (/is the last remaining staff-admin account/i.test(text)) {
-    return "This account is the last remaining administrator and cannot be disabled or stripped of administrative permissions.";
+    return text.replace(/^Error:\s*/i, "").trim();
   }
 
   // Clearance Step State Machine Rules
@@ -436,11 +436,11 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return `A clearance step in '${match ? match[1] : "this"}' status cannot be completed.`;
   }
   if (/already Departed\/Cancelled; its clearance steps can no longer be edited/i.test(text)) {
-    return "This placement is already finalized (Departed or Cancelled) and its clearance steps can no longer be modified.";
+    return "This placement is already Departed or Cancelled and cannot be changed.";
   }
   if (/cannot reach Ticketed until '([^']+)' is completed/i.test(text)) {
     const match = text.match(/cannot reach Ticketed until '([^']+)' is completed/i);
-    return `Ticket details cannot be recorded until '${match ? match[1] : "all required steps"}' is completed.`;
+    return `Ticket details cannot be saved until '${match ? match[1] : "all required steps"}' is completed.`;
   }
 
   // Ticket & Departure validation
@@ -450,33 +450,33 @@ export function formatCleanErrorMessage(rawError: unknown): string {
 
   // Police Ashara Kuwait LMIS Sub-Check
   if (/police_ashara_remark is required/i.test(text)) {
-    return "Please enter a remark explaining why the Police Ashara check failed.";
+    return "Please enter a reason why Police Ashara failed.";
   }
 
   // Commission & Advance Financial Rules
   if (/advance_amount must be greater than 0/i.test(text)) {
-    return "Please enter an advance amount greater than zero.";
+    return "Please enter an advance payment greater than zero.";
   }
   if (/advance_amount cannot exceed batch total/i.test(text)) {
-    return "The advance payment cannot be greater than the total amount requested.";
+    return "The advance payment cannot be greater than the batch total.";
   }
 
   // Partner Agency / Contractor requirement
   if (/A contractor must be specified|contractor must be specified|A Partner Agency must be specified|Partner Agency must be specified/i.test(text)) {
-    return "Please select a Partner Agency to proceed.";
+    return "Please select a partner agency.";
   }
 
   // Mandatory Reason for Reopening or Rejection
   if (/rejection_remark is required/i.test(text) || /reason is required/i.test(text)) {
-    return "Please provide a written reason before confirming this action.";
+    return "Please enter a reason before you continue.";
   }
 
   // Language Levels
   if (/Value 'Fair' not in allowed values/i.test(text) || (/english_level/i.test(text) && /not in allowed values/i.test(text))) {
-    return "English proficiency level must be one of: None, Basic, Good, or Fluent.";
+    return "English level must be: None, Basic, Good, or Fluent.";
   }
   if (/arabic_level/i.test(text) && /not in allowed values/i.test(text)) {
-    return "Arabic proficiency level must be one of: None, Basic, Good, or Fluent.";
+    return "Arabic level must be: None, Basic, Good, or Fluent.";
   }
 
   // General "not in allowed values"
@@ -486,9 +486,9 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     const allowed = notAllowedMatch[2];
     if (allowed) {
       const cleanAllowed = allowed.split(",").map((s) => s.trim().replace(/['"]/g, "")).join(", ");
-      return `'${val}' is not a valid selection. Allowed options are: ${cleanAllowed}.`;
+      return `'${val}' is not valid. Options are: ${cleanAllowed}.`;
     }
-    return `'${val}' is not a valid option. Please select an option from the list.`;
+    return `'${val}' is not a valid choice. Please select from the list.`;
   }
 
   // 7. Permission & Authorization Errors
@@ -497,7 +497,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
       text
     )
   ) {
-    return "You do not have permission to perform this action. Please contact your agency administrator if you require access.";
+    return "You do not have permission to do this. Please contact your administrator.";
   }
 
   // 8. Session Expiration & Authentication
@@ -507,109 +507,136 @@ export function formatCleanErrorMessage(rawError: unknown): string {
 
   // 9. Network & Server Errors
   if (
-    /Failed to fetch|NetworkError|BackendConnectionError|ECONNREFUSED|ETIMEDOUT|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|Unable to connect to backend/i.test(
+    /Failed to fetch|NetworkError|BackendConnectionError|ECONNREFUSED|ETIMEDOUT|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|Unable to connect to backend|Application failed to respond/i.test(
       text
     )
   ) {
-    return "Unable to connect to the server. Please check your internet connection and try again in a few moments.";
+    return "Cannot connect to server. Please check your internet connection and try again.";
   }
   if (/Unexpected token < in JSON|Server returned non-JSON response|Internal Server Error|500 Internal/i.test(text)) {
-    return "The server encountered a temporary issue. Please refresh the page and try again.";
+    return "Server error. Please refresh the page and try again.";
   }
 
   // 10. HTTP Status Code Fallbacks
   if (/HTTP 400|status code 400/i.test(text)) {
-    return "Some information is missing or incorrect. Please review the highlighted fields and try again.";
+    return "Some information is missing or incorrect. Please check the fields and try again.";
   }
   if (/HTTP 404|status code 404/i.test(text)) {
-    return "The requested record could not be found. It may have been removed or is no longer available.";
+    return "This record could not be found.";
   }
   if (/HTTP 409|status code 409/i.test(text)) {
-    return "This record has already been updated or selected by another user. Please refresh and try again.";
+    return "This record was updated by someone else. Please refresh and try again.";
   }
   if (/HTTP 417|status code 417/i.test(text)) {
-    return "The information provided does not meet the requirements. Please review the fields and try again.";
+    return "Please check the entered information and try again.";
   }
   if (/HTTP 422|status code 422/i.test(text)) {
-    return "The provided information could not be processed. Please check your entries and try again.";
+    return "Please check the entered information and try again.";
   }
   if (/HTTP 429|status code 429/i.test(text)) {
-    return "Too many requests. Please wait a moment before trying again.";
+    return "Too many requests. Please wait a moment and try again.";
   }
   if (/HTTP 5\d\d|status code 5\d\d/i.test(text)) {
-    return "Something went wrong on the server while completing this action. Please try again in a moment.";
+    return "We could not complete this action. Please try again.";
   }
 
-  // 11. Duplicate Entry
-  if (/Duplicate entry/i.test(text) || /already exists/i.test(text)) {
+  // 11. Duplicate Entry & Applicant Unique ID Collisions
+  if (
+    /Duplicate entry/i.test(text) ||
+    /already exists/i.test(text) ||
+    /already has (National ID|Passport Number|Labor ID|Labour ID)/i.test(text) ||
+    /DuplicateEntryError/i.test(text)
+  ) {
+    // Exact Frappe Applicant.validate_uniqueness() exception:
+    // e.g. "Another Applicant (APP-00027) already has National ID 'FAN-999888111'."
+    const specificApplicantMatch = text.match(
+      /Another Applicant \(([^)]+)\) already has (National ID|Passport Number|Labor ID|Labour ID) '([^']+)'/i
+    );
+    if (specificApplicantMatch) {
+      const [_, appName, fieldType, fieldValue] = specificApplicantMatch;
+      const friendlyField =
+        /national/i.test(fieldType)
+          ? "National ID"
+          : /passport/i.test(fieldType)
+          ? "Passport Number"
+          : "Labour ID";
+      return `This ${friendlyField} ('${fieldValue}') is already used by applicant ${appName}. Please check the number.`;
+    }
+
     if (/passport/i.test(text)) {
-      return "An applicant with this passport number is already registered in the system.";
+      return "An applicant with this passport number is already registered.";
+    }
+    if (/national_id|national id|fayda|fan/i.test(text)) {
+      return "An applicant with this National ID is already registered.";
+    }
+    if (/labour_id|labor_id|labor id|labour id/i.test(text)) {
+      return "An applicant with this Labour ID is already registered.";
     }
     const match = text.match(/Duplicate entry '([^']+)'/i);
     if (match && match[1]) {
-      return `A record with identifier '${match[1]}' already exists in the system.`;
+      return `A record with '${match[1]}' already exists.`;
     }
-    return "A record with this information already exists in the system.";
+    return "A record with this information already exists.";
   }
 
   // 12. Link / Record Not Found
   if (/DoesNotExistError|does not exist|not found/i.test(text)) {
-    if (/applicant/i.test(text)) return "The requested applicant could not be found.";
-    if (/placement/i.test(text)) return "The requested placement could not be found.";
-    if (/clearance/i.test(text)) return "The requested clearance task could not be found.";
-    if (/contractor|foreign agency|partner/i.test(text)) return "The requested partner agency could not be found.";
-    if (/ticket|departure/i.test(text)) return "The requested ticket or flight record could not be found.";
-    if (/complaint/i.test(text)) return "The requested complaint could not be found.";
-    return "The requested record could not be found.";
+    if (/applicant/i.test(text)) return "This applicant could not be found.";
+    if (/placement/i.test(text)) return "This placement could not be found.";
+    if (/clearance/i.test(text)) return "This clearance step could not be found.";
+    if (/contractor|foreign agency|partner/i.test(text)) return "This foreign agency could not be found.";
+    if (/ticket|departure/i.test(text)) return "This flight ticket could not be found.";
+    if (/complaint/i.test(text)) return "This complaint could not be found.";
+    return "This record could not be found.";
   }
 
   // 13. Required / Mandatory Fields
-  if (/Mandatory fields required:\s*(.*)/i.test(text)) {
-    const match = text.match(/Mandatory fields required:\s*(.*)/i);
+  if (/(?:requires|Mandatory fields required:?)\s*:?\s*(.*)/i.test(text)) {
+    const match = text.match(/(?:requires|Mandatory fields required:?)\s*:?\s*(.*)/i);
     if (match && match[1]) {
       let fields = match[1];
       for (const [snake, clean] of Object.entries(FIELD_NAME_MAP)) {
         fields = fields.replace(new RegExp(`\\b${snake}\\b`, "gi"), clean);
       }
       fields = fields.replace(/\b([a-z]{2,})_([a-z]{2,})\b/g, "$1 $2");
-      return `Please fill in all required fields: ${fields.trim()}.`;
+      return `Please fill in the required fields: ${fields.trim()}.`;
     }
-    return "Please fill in all required fields before proceeding.";
+    return "Please fill in all required fields.";
   }
 
   if (/Field '([^']+)' cannot be null|is a mandatory field/i.test(text)) {
     const match = text.match(/Field '([^']+)' cannot be null|([a-zA-Z0-9_]+) is a mandatory field/i);
     const rawFld = match ? (match[1] || match[2]) : "";
     const cleanFld = (rawFld && FIELD_NAME_MAP[rawFld.toLowerCase()]) || rawFld.replace(/_/g, " ");
-    return cleanFld ? `Please provide the required ${cleanFld}.` : "Please fill in all required fields.";
+    return cleanFld ? `Please enter the ${cleanFld}.` : "Please fill in all required fields.";
   }
 
   // 14. Stage Transition Rules
   if (/status must be '([^']+)' to proceed/i.test(text)) {
     const match = text.match(/status must be '([^']+)' to proceed/i);
-    return `Candidate must be in '${match ? match[1] : "the required"}' stage to proceed.`;
+    return `Applicant must be in '${match ? match[1] : "the required"}' stage to continue.`;
   }
   if (/cannot transition from '([^']+)' to '([^']+)'/i.test(text)) {
     const match = text.match(/cannot transition from '([^']+)' to '([^']+)'/i);
-    return `Candidate cannot transition directly from ${match ? match[1] : "current stage"} to ${match ? match[2] : "next stage"}.`;
+    return `Applicant cannot move from ${match ? match[1] : "current stage"} to ${match ? match[2] : "next stage"}.`;
   }
 
   // 15. Text Length Exceeded
   if (/Value exceeds max_length of (\d+)/i.test(text)) {
-    return "The entered text is too long. Please shorten your input.";
+    return "Text is too long. Please shorten your input.";
   }
 
   // 16. Replace Backend Internal Names with Human Business Terms
   text = text.replace(/DocType '([^']+)'/gi, "$1 record");
   text = text.replace(/DocType ([a-zA-Z0-9_]+)/gi, "$1 record");
-  text = text.replace(/agency_tracking\.[a-zA-Z0-9_.]+/gi, "the system service");
-  text = text.replace(/applicant_processing\.[a-zA-Z0-9_.]+/gi, "the system service");
-  text = text.replace(/frappe\.client\.[a-zA-Z0-9_.]+/gi, "the system service");
-  text = text.replace(/\/api\/method\/[a-zA-Z0-9_.]+/gi, "the requested service");
+  text = text.replace(/agency_tracking\.[a-zA-Z0-9_.]+/gi, "the system");
+  text = text.replace(/applicant_processing\.[a-zA-Z0-9_.]+/gi, "the system");
+  text = text.replace(/frappe\.client\.[a-zA-Z0-9_.]+/gi, "the system");
+  text = text.replace(/\/api\/method\/[a-zA-Z0-9_.]+/gi, "the action");
   text = text.replace(/Commission Batch Request/gi, "Commission Batch");
-  text = text.replace(/Applicant Transaction/gi, "Transaction");
-  text = text.replace(/Clearance Step/gi, "Clearance Task");
-  text = text.replace(/\bContractor\b/gi, "Partner Agency");
+  text = text.replace(/Applicant Transaction/gi, "Payment");
+  text = text.replace(/Clearance Step/gi, "Clearance Step");
+  text = text.replace(/\bContractor\b/gi, "Foreign Agency");
 
   // 17. Replace Snake Case Fields with Clean Business Labels
   for (const [snake, clean] of Object.entries(FIELD_NAME_MAP)) {
@@ -624,12 +651,12 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   text = text.replace(/cannot be null/gi, "is required");
   text = text.replace(/is a mandatory field/gi, "is required");
   text = text.replace(/missing required argument/gi, "missing required information");
-  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+ mutation\.?/gi, "The system could not save your changes. Please verify all details and try again.");
-  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+ request\.?/gi, "The request could not be processed. Please check your inputs and try again.");
-  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+\.?/gi, "The action could not be completed. Please try again.");
-  text = text.replace(/Backend state rejected mutation\.?/gi, "The action could not be processed with the current record status.");
-  text = text.replace(/Reassignment rejected by backend/gi, "Reassignment could not be completed.");
-  text = text.replace(/per the backend contract/gi, "per system guidelines");
+  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+ mutation\.?/gi, "Could not save your changes. Please check details and try again.");
+  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+ request\.?/gi, "Could not complete this action. Please check your entries and try again.");
+  text = text.replace(/Backend rejected [a-zA-Z0-9_ ]+\.?/gi, "Could not complete this action. Please try again.");
+  text = text.replace(/Backend state rejected mutation\.?/gi, "This action cannot be done in the current stage.");
+  text = text.replace(/Reassignment rejected by backend/gi, "Could not reassign staff.");
+  text = text.replace(/per the backend contract/gi, "per system rules");
   text = text.replace(/\bFrappe\b/gi, "System");
 
   // Clean raw JavaScript primitives if visible
@@ -656,7 +683,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     text.includes("get_attr") ||
     /module\s*'|attribute\s*'/i.test(text)
   ) {
-    return "The system encountered an unexpected issue while processing your request. Please review your input or try again.";
+    return "We could not complete this action. Please try again.";
   }
 
   // Capitalize first character

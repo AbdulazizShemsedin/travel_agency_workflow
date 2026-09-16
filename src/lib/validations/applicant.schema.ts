@@ -366,13 +366,9 @@ export const stage2RegistrationSchema = stage1DraftSchema
       }, "Passport must be valid for at least 6 months from today for work abroad"),
 
     passport_issue_date: z
-      .string({ required_error: "Passport Issue Date is required for registration" })
-      .min(1, "Passport Issue Date is required")
-      .refine((val) => {
-        if (!val) return false;
-        const parsed = parseISO(val);
-        return isValid(parsed) && isPast(startOfDay(parsed));
-      }, "Passport Issue Date must be in the past"),
+      .string()
+      .optional()
+      .or(z.literal("")),
 
     place_of_issue: z.string().trim().optional().or(z.literal("")),
 
@@ -402,11 +398,10 @@ export const stage2RegistrationSchema = stage1DraftSchema
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
     medical_expiry_date: z
-      .string()
-      .optional()
-      .or(z.literal(""))
+      .string({ required_error: "Medical Expiry Date is required for registration" })
+      .min(1, "Medical Expiry Date is required for registration")
       .refine((val) => {
-        if (!val) return true;
+        if (!val) return false;
         return isValid(parseISO(val));
       }, "Please enter a valid Medical Expiration Date"),
   })

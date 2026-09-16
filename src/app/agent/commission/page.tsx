@@ -20,6 +20,8 @@ import {
   getOwedCommissionsV2,
   V2OwedCommissionItem,
 } from "@/lib/api/v2";
+import { listApplicantsV2 } from "@/lib/api/v2/applicants";
+import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +53,82 @@ export default function AgentCommissionPage() {
     queryKey: ["unpaid-commission-candidates", effectiveContractor],
     queryFn: () => getOwedCommissionsV2(effectiveContractor || undefined),
   });
+
+  // Fetch Applicants & Placements to resolve real full names and passports
+  const { data: applicants = [] } = useQuery({
+    queryKey: ["applicants_for_agent_commission"],
+    queryFn: () => listApplicantsV2(),
+    staleTime: 60000,
+  });
+
+  const { data: placements = [] } = useQuery({
+    queryKey: ["placements_for_agent_commission"],
+    queryFn: () => listPlacementsV2(),
+    staleTime: 60000,
+  });
+
+  const applicantMap = React.useMemo(() => {
+    const map = new Map<string, { full_name: string; passport_number?: string }>();
+    for (const a of applicants) {
+      const name = a.full_name || [a.first_name, a.last_name].filter(Boolean).join(" ") || a.name;
+      const val = { full_name: name, passport_number: a.passport_number || undefined };
+      map.set(String(a.name).toLowerCase().trim(), val);
+      if (a.passport_number) {
+        map.set(String(a.passport_number).toLowerCase().trim(), val);
+      }
+    }
+    return map;
+  }, [applicants]);
+
+  const placementMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of placements) {
+      if (p.name && p.applicant) {
+        map.set(String(p.name).toLowerCase().trim(), String(p.applicant).toLowerCase().trim());
+      }
+    }
+    return map;
+  }, [placements]);
+
+  const resolveCandidate = React.useCallback(
+    (cand: any) => {
+      let name =
+        cand.full_name && cand.full_name !== "Applicant" && cand.full_name !== "Candidate"
+          ? cand.full_name
+          : cand.applicant_name && cand.applicant_name !== "Applicant" && cand.applicant_name !== "Candidate"
+          ? cand.applicant_name
+          : "";
+      let passport = cand.passport_number || "";
+
+      const keysToTry = [cand.applicant, cand.placement, cand.transaction, cand.transaction_name, cand.name].filter(Boolean);
+      for (const k of keysToTry) {
+        const lower = String(k).toLowerCase().trim();
+        if (applicantMap.has(lower)) {
+          const found = applicantMap.get(lower)!;
+          if (!name) name = found.full_name;
+          if (!passport && found.passport_number) passport = found.passport_number;
+          break;
+        }
+        if (placementMap.has(lower)) {
+          const appId = placementMap.get(lower)!;
+          if (applicantMap.has(appId)) {
+            const found = applicantMap.get(appId)!;
+            if (!name) name = found.full_name;
+            if (!passport && found.passport_number) passport = found.passport_number;
+            break;
+          }
+        }
+      }
+
+      if (!name) {
+        const fallback = cand.applicant || cand.name;
+        name = fallback && !/^([A-Z]{3,4}-\d+|Applicant|Candidate)$/i.test(fallback) ? fallback : cand.name;
+      }
+
+      return { name, passport };
+    },
+    [applicantMap, placementMap]
+  );
 
   const totalOutstanding = candidateList.reduce(
     (acc, curr) => acc + (Number(curr.commission_amount || curr.amount) || 0),
@@ -259,33 +337,36 @@ export default function AgentCommissionPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-                  {candidateList.map((cand, idx) => (
-                    <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                      {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                      <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
-                        {cand.full_name || cand.applicant_name || cand.name}
-                      </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {cand.passport_number || "—"}
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {cand.departure_date || cand.accrual_date || "—"}
-                      </td>
-                      <td className="px-5 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        <p className="font-semibold text-slate-800 dark:text-zinc-200">
-                          {cand.destination_country || "—"}
-                        </p>
-                        {cand.sponsor_name && (
-                          <p className="text-[10px] text-slate-400">
-                            {cand.sponsor_name}
+                  {candidateList.map((cand, idx) => {
+                    const { name: candidateName, passport: candidatePassport } = resolveCandidate(cand);
+                    return (
+                      <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                        {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
+                          {candidateName}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          {candidatePassport || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          {cand.departure_date || cand.accrual_date || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          <p className="font-semibold text-slate-800 dark:text-zinc-200">
+                            {cand.destination_country || "—"}
                           </p>
-                        )}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                        {(Number(cand.amount || cand.commission_amount || cand.rate) || 0).toLocaleString()} {cand.currency || "SAR"}
-                      </td>
-                    </tr>
-                  ))}
+                          {cand.sponsor_name && (
+                            <p className="text-[10px] text-slate-400">
+                              {cand.sponsor_name}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          {(Number(cand.amount || cand.commission_amount || cand.rate) || 0).toLocaleString()} {cand.currency || "SAR"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

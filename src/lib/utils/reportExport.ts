@@ -145,7 +145,7 @@ export function exportToPrintPDF<T extends Record<string, any>>(
         <div class="header">
           <div>
             <h1 class="title">${reportTitle}</h1>
-            <p class="subtitle">Travel Agency Workflow • Official Operational Management Report</p>
+            <p class="subtitle">Operational Report</p>
             ${filtersSummary ? `<p style="font-size: 10px; color: #047857; margin: 4px 0 0 0; font-weight: 600;">Active Filter: ${filtersSummary}</p>` : ""}
           </div>
           <div class="meta">

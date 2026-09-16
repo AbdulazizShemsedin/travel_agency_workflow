@@ -70,8 +70,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
-            refetchOnWindowFocus: false,
+            staleTime: 1000 * 15, // 15 seconds
+            refetchOnWindowFocus: true,
             retry: (failureCount, error: any) => {
               if (error?.statusCode === 401 || error?.statusCode === 403 || error?.statusCode === 404) {
                 return false;

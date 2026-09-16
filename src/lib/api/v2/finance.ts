@@ -122,7 +122,8 @@ export async function logStageExpenseV2(
   currency: V2SupportedCurrency,
   description: string,
   placement?: string,
-  stageLoggedAt?: string
+  stageLoggedAt?: string,
+  applicant?: string
 ): Promise<{ name?: string; message?: string }> {
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_expense",
@@ -134,6 +135,7 @@ export async function logStageExpenseV2(
         description,
         ...(placement ? { placement } : {}),
         ...(stageLoggedAt ? { stage_logged_at: stageLoggedAt } : {}),
+        ...(applicant ? { applicant } : {}),
       },
     }
   );
@@ -147,7 +149,8 @@ export async function logStageIncomeV2(
   currency: V2SupportedCurrency,
   description: string,
   placement?: string,
-  stageLoggedAt?: string
+  stageLoggedAt?: string,
+  applicant?: string
 ): Promise<{ name?: string; message?: string }> {
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_income",
@@ -159,6 +162,7 @@ export async function logStageIncomeV2(
         description,
         ...(placement ? { placement } : {}),
         ...(stageLoggedAt ? { stage_logged_at: stageLoggedAt } : {}),
+        ...(applicant ? { applicant } : {}),
       },
     }
   );
@@ -291,7 +295,9 @@ export async function createCommissionBatchV2(
   contractor: string,
   destinationCountry: string,
   transactionNames?: string[],
-  currency?: V2SupportedCurrency
+  currency?: V2SupportedCurrency,
+  requestedAdvanceAmount?: number,
+  includeUnpaidFromPrevious?: boolean
 ): Promise<V2CommissionBatch> {
   const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
     "/api/method/agency_tracking.finance_api.create_commission_batch",
@@ -304,6 +310,8 @@ export async function createCommissionBatchV2(
           ? { transaction_names: JSON.stringify(transactionNames) }
           : {}),
         ...(currency ? { currency } : {}),
+        ...(typeof requestedAdvanceAmount === "number" ? { requested_advance_amount: requestedAdvanceAmount } : {}),
+        ...(typeof includeUnpaidFromPrevious === "boolean" ? { include_unpaid_from_previous: includeUnpaidFromPrevious } : {}),
       },
     }
   );
@@ -433,6 +441,40 @@ export async function listCommissionBatchesV2(
 export async function getCommissionBatchV2(
   batchName: string
 ): Promise<V2CommissionBatch | null> {
+  try {
+    const res = await requestV2<any>(
+      "/api/method/agency_tracking.finance_api.get_commission_batch",
+      {
+        method: "POST",
+        body: { batch_name: batchName },
+      }
+    );
+    const batch = res && "name" in res ? res : res?.message;
+    if (batch) {
+      if (Array.isArray(batch.items_detail) && batch.items_detail.length > 0) {
+        const detailByItem = new Map<string, any>(
+          batch.items_detail.map((d: any) => [String(d.item || d.transaction), d])
+        );
+        batch.items = (batch.items || []).map((it: any) => {
+          const key = String(it.name || it.transaction || "");
+          const d = detailByItem.get(key) || detailByItem.get(String(it.transaction || "")) || {};
+          return {
+            ...it,
+            applicant: d.applicant || it.applicant,
+            applicant_name: d.full_name || it.applicant_name,
+            full_name: d.full_name || it.full_name,
+            placement: d.placement || it.placement,
+            amount_original: d.amount_original ?? it.amount_original,
+            amount_birr: d.amount_birr ?? it.amount_birr,
+          };
+        });
+      }
+      return batch as V2CommissionBatch;
+    }
+  } catch (err) {
+    console.warn("[finance_api.get_commission_batch] failed, falling back to frappe.client.get:", err);
+  }
+
   const result = await requestV2<any>("/api/method/frappe.client.get", {
     method: "POST",
     body: {
@@ -623,35 +665,25 @@ export async function manuallyMatchLineV2(
 }
 
 /**
- * Records a partial / advance payment against a Commission Batch Request.
- * RBAC: Finance Manager / Admin.
- * The advance amount is interpreted in the batch's own currency (batch.currency),
- * not Birr. It is a separate loan record (advance_amount_original / advance_reference /
- * advance_received_on) and no longer reduces balance_due or flips settlement status.
+ * Updates or clears the requested advance amount on a Commission Batch Request.
+ * Authoritative Backend Endpoint: finance_api.update_batch_advance (New 2026-09-12)
+ * RBAC: Finance Manager / Admin / System Manager.
+ * requested_advance_amount is in the batch's own currency. Pass 0 to clear.
  */
-export async function recordBatchAdvanceV2(
+export async function updateBatchAdvanceV2(
   batchName: string,
-  advanceAmount: number,
-  advanceReference?: string
-): Promise<V2CommissionBatch> {
-  const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
-    "/api/method/agency_tracking.finance_api.record_batch_advance",
+  requestedAdvanceAmount: number
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.update_batch_advance",
     {
       method: "POST",
       body: {
         batch_name: batchName,
-        advance_amount: advanceAmount,
-        ...(advanceReference && advanceReference.trim()
-          ? { advance_reference: advanceReference.trim() }
-          : {}),
+        requested_advance_amount: requestedAdvanceAmount,
       },
     }
   );
-
-  if (result && "message" in result && result.message) {
-    return result.message as V2CommissionBatch;
-  }
-  return result as V2CommissionBatch;
 }
 
 export interface V2FetchFxRatesNowResponse {

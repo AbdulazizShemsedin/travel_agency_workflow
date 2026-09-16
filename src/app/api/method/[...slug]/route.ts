@@ -32,14 +32,25 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   if (authHeader) {
     headers["Authorization"] = authHeader;
   } else if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
-    const hasValidUserSession = Boolean(
-      cookie &&
-      cookie.includes("sid=") &&
-      !cookie.includes("sid=Guest") &&
-      !cookie.includes("sid=;")
-    );
-    if (!hasValidUserSession) {
-      headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
+    // Do not add API key Authorization for auth or guest bootstrap endpoints; rely on session cookies.
+    const isAuthEndpoint =
+      methodPath === "login" ||
+      methodPath === "logout" ||
+      methodPath.endsWith("/login") ||
+      methodPath.endsWith("/logout") ||
+      methodPath.includes("get_current_user") ||
+      methodPath.includes("get_csrf_token") ||
+      methodPath.includes("get_logged_user");
+    if (!isAuthEndpoint) {
+      const hasValidUserSession = Boolean(
+        cookie &&
+        cookie.includes("sid=") &&
+        !cookie.includes("sid=Guest") &&
+        !cookie.includes("sid=;")
+      );
+      if (!hasValidUserSession) {
+        headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
+      }
     }
   }
 
@@ -89,15 +100,23 @@ async function parseJsonOrFriendlyMessage(res: Response) {
 }
 
 function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | Response) {
+  const sanitizeCookie = (cookie: string) => {
+    // Remove explicit domain, secure, and samesite attributes to allow cookie on proxy domain (localhost)
+    return cookie
+      .replace(/;\s*Domain=[^;]+/gi, "")
+      .replace(/;\s*Secure/gi, "")
+      .replace(/;\s*SameSite=[^;]+/gi, "");
+  };
+
   if (typeof (sourceRes.headers as any).getSetCookie === "function") {
     const cookies: string[] = (sourceRes.headers as any).getSetCookie();
     for (const cookie of cookies) {
-      targetRes.headers.append("set-cookie", cookie);
+      targetRes.headers.append("set-cookie", sanitizeCookie(cookie));
     }
   } else {
     const setCookie = sourceRes.headers.get("set-cookie");
     if (setCookie) {
-      targetRes.headers.set("set-cookie", setCookie);
+      targetRes.headers.set("set-cookie", sanitizeCookie(setCookie));
     }
   }
 }
@@ -780,7 +799,15 @@ export async function POST(
     }
 
     if (!res.ok) {
-      console.error("[PROXY ERROR POST]", methodPath, res.status, data);
+      const isExpectedAuthChallenge = res.status === 401 && (
+        methodPath.includes("login") ||
+        methodPath.includes("logout") ||
+        methodPath.includes("get_current_user") ||
+        methodPath.includes("get_logged_user")
+      );
+      if (!isExpectedAuthChallenge) {
+        console.error("[PROXY ERROR POST]", methodPath, res.status, data);
+      }
     }
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);
@@ -843,7 +870,15 @@ export async function GET(
 
     const data = await parseJsonOrFriendlyMessage(res);
     if (!res.ok) {
-      console.error("[PROXY ERROR GET]", methodPath, res.status, data);
+      const isExpectedAuthChallenge = res.status === 401 && (
+        methodPath.includes("login") ||
+        methodPath.includes("logout") ||
+        methodPath.includes("get_current_user") ||
+        methodPath.includes("get_logged_user")
+      );
+      if (!isExpectedAuthChallenge) {
+        console.error("[PROXY ERROR GET]", methodPath, res.status, data);
+      }
     }
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);

@@ -5,7 +5,7 @@ import { UseFormReturn } from "react-hook-form";
 import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
-import { listApplicantsV2 } from "@/lib/api/v2/applicants";
+import { listApplicantsV2, checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,18 +27,6 @@ interface Step1PersonalInfoProps {
   editingApplicantName?: string;
 }
 
-let cachedApplicantPassports: { name: string; full_name?: string; first_name?: string; passport_number?: string }[] | null = null;
-async function getCachedApplicantPassports() {
-  if (cachedApplicantPassports) return cachedApplicantPassports;
-  try {
-    const applicants = await listApplicantsV2();
-    cachedApplicantPassports = applicants;
-  } catch {
-    cachedApplicantPassports = [];
-  }
-  return cachedApplicantPassports;
-}
-
 export function Step1PersonalInfo({ form, locked = false, editingApplicantName }: Step1PersonalInfoProps) {
   const {
     register,
@@ -47,6 +35,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     getValues,
     resetField,
     trigger,
+    setError,
+    clearErrors,
     formState: { errors },
   } = form;
 
@@ -76,30 +66,30 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       const normalized = (rawValue || "").toUpperCase().trim();
       if (!normalized) {
         setPassportConflict(null);
+        if (errors.passport_number?.type === "manual") {
+          clearErrors("passport_number");
+        }
         return;
       }
-      const applicants = await getCachedApplicantPassports();
-      const clash = applicants.find((a) => {
-        const sameNumber =
-          String(a.passport_number || "").toUpperCase().trim() === normalized;
-        if (!sameNumber) return false;
-        if (editingApplicantName) {
-          const current =
-            String(editingApplicantName).toLowerCase().trim();
-          if (String(a.name || "").toLowerCase().trim() === current) return false;
-        }
-        return true;
-      });
-      if (clash) {
-        const ownerName = clash.full_name || [clash.first_name, ""].filter(Boolean).join(" ") || "another applicant";
-        setPassportConflict(
-          `This passport number is already registered to ${ownerName}. Please check the number or speak to the registration desk.`
-        );
+      const res = await checkApplicantUniquenessV2(
+        "passport_number",
+        normalized,
+        editingApplicantName
+      );
+      if (res.isConflict && res.message) {
+        setPassportConflict(res.message);
+        setError("passport_number", {
+          type: "manual",
+          message: res.message,
+        });
       } else {
         setPassportConflict(null);
+        if (errors.passport_number?.type === "manual") {
+          clearErrors("passport_number");
+        }
       }
     },
-    [editingApplicantName]
+    [editingApplicantName, setError, clearErrors, errors.passport_number]
   );
 
   React.useEffect(() => {
@@ -107,7 +97,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     passportCheckTimer.current = setTimeout(() => {
       void trigger("passport_number");
       void checkPassportDuplicate(passportNumber || "");
-    }, 450);
+    }, 400);
     return () => {
       if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
     };
@@ -1314,6 +1304,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     id="passport_number"
                     placeholder="e.g., EP1234567"
                     {...register("passport_number")}
+                    onBlur={(e) => {
+                      register("passport_number").onBlur(e);
+                      void trigger("passport_number");
+                      void checkPassportDuplicate(e.target.value);
+                    }}
                     disabled={locked}
                     aria-invalid={!!errors.passport_number || !!passportConflict}
                     className={
@@ -1322,11 +1317,10 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                         : "font-mono uppercase font-bold text-slate-900 dark:text-white"
                     }
                   />
-                  {errors.passport_number && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_number.message}</p>
-                  )}
-                  {!errors.passport_number && passportConflict && (
-                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{passportConflict}</p>
+                  {(errors.passport_number?.message || passportConflict) && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                      {errors.passport_number?.message || passportConflict}
+                    </p>
                   )}
                 </div>
 

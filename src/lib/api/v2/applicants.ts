@@ -557,3 +557,75 @@ export async function logApplicantFeeV2(
     throw err;
   }
 }
+
+export interface UniquenessCheckResult {
+  isConflict: boolean;
+  conflictingApplicant?: {
+    name: string;
+    full_name?: string;
+    first_name?: string;
+    last_name?: string;
+    passport_number?: string;
+    national_id?: string;
+    labor_id?: string;
+  };
+  message?: string;
+}
+
+/**
+ * Checks in real-time whether a unique identifier (National ID / Fayda, Passport, or Labour ID)
+ * is already registered to another applicant on the backend.
+ */
+export async function checkApplicantUniquenessV2(
+  field: "passport_number" | "national_id" | "labour_id" | "labor_id",
+  value: string,
+  excludeApplicantName?: string
+): Promise<UniquenessCheckResult> {
+  const cleanVal = (value || "").trim();
+  if (!cleanVal) {
+    return { isConflict: false };
+  }
+
+  const filterKey = field === "labour_id" ? "labor_id" : field;
+  try {
+    const matches = await listApplicantsV2(
+      { [filterKey]: cleanVal },
+      10
+    );
+
+    const clash = matches.find((a) => {
+      const fieldVal = String((a as any)[filterKey] || (a as any)[field] || "").trim();
+      if (!fieldVal || fieldVal.toLowerCase() !== cleanVal.toLowerCase()) return false;
+      if (
+        excludeApplicantName &&
+        a.name?.toLowerCase().trim() === excludeApplicantName.toLowerCase().trim()
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (clash) {
+      const ownerName =
+        clash.full_name ||
+        [clash.first_name, clash.last_name].filter(Boolean).join(" ") ||
+        clash.name;
+      const label =
+        field === "passport_number"
+          ? "Passport number"
+          : field === "national_id"
+          ? "National ID (Fayda / FAN)"
+          : "Ministry Labour ID";
+
+      return {
+        isConflict: true,
+        conflictingApplicant: clash,
+        message: `This ${label} is already registered to ${ownerName} (${clash.name}). Please verify the number or check existing applicant records.`,
+      };
+    }
+  } catch (err) {
+    console.warn("[V2 Applicant API] checkApplicantUniquenessV2 error:", err);
+  }
+
+  return { isConflict: false };
+}

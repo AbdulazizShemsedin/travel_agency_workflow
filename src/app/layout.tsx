@@ -11,9 +11,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Travel Agency Management Portal",
+  title: "Travel Agency Portal",
   description:
-    "Enterprise applicant registration, document verification, processing pipeline and deployment management workflow.",
+    "Register applicants, verify documents, and manage the process.",
 };
 
 export default function RootLayout({

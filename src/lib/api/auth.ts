@@ -1,4 +1,5 @@
 import { getCurrentUserV2, loginV2, logoutV2 } from "./v2/auth";
+import { ApiV2Error } from "@/lib/api/v2/client";
 import { getCachedOrFetchCsrfToken, clearCsrfToken } from "./v2/client";
 
 export interface AuthUser {
@@ -110,7 +111,12 @@ export async function fetchCurrentUserContext(): Promise<AuthUser | null> {
       enabled: true,
     };
   } catch (err) {
-    console.warn("[Auth] fetchCurrentUserContext error:", err);
+    // Suppress noisy warnings for expected unauthenticated (401) responses.
+    // Only log unexpected errors.
+    if (!(err instanceof ApiV2Error && err.statusCode === 401)) {
+      console.warn("[Auth] fetchCurrentUserContext error:", err);
+    }
     return null;
   }
+
 }

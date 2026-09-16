@@ -112,9 +112,9 @@ const CANONICAL_STAGES = [
 const STAGE_DISPLAY_LABELS: Record<string, string> = {
   Draft: "Draft",
   Registered: "Registered",
-  "CV Generated": "CV Generated",
+  "CV Generated": "Waiting to be Selected",
   Selected: "Selected",
-  Processing: "Processing(LMIS and Te'shir)",
+  Processing: "Processing (LMIS & Te'shir)",
   Stamped: "Embassy",
   Ticketed: "Ticketed",
   Departed: "Departed",
@@ -288,12 +288,16 @@ export default function ApplicantDetailPage() {
     queryKey: ["applicant", applicantId],
     queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const { data: placements = [] } = useQuery({
     queryKey: ["applicant-placements", applicantId],
     queryFn: () => listPlacementsV2({ applicant: applicantId }),
     enabled: !!applicantId,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const { data: clearanceSteps = [] } = useQuery({
@@ -379,6 +383,22 @@ export default function ApplicantDetailPage() {
       return norm.includes("embassy") || norm.includes("stamping");
     });
   }, [applicantClearanceSteps]);
+
+  // Authoritative Wakala payment status from backend Embassy clearance step
+  const wakalaStatus = React.useMemo(() => {
+    return (
+      embassyClearanceStep?.wakala_status ||
+      (embassyClearanceStep as any)?.wakala_payment_status ||
+      (activePlacement as any)?.wakala_status ||
+      (activePlacement as any)?.wakala_payment_status ||
+      "Pending"
+    );
+  }, [embassyClearanceStep, activePlacement]);
+
+  const isWakalaPaid = React.useMemo(() => {
+    const s = String(wakalaStatus).trim().toLowerCase();
+    return s === "paid" || s.includes("authorized") || s.includes("completed");
+  }, [wakalaStatus]);
 
   // Resolve officer name from placement officers or configured default specialists
   const getStepOfficerName = React.useCallback(
@@ -815,7 +835,7 @@ export default function ApplicantDetailPage() {
             href="/applicants"
             className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Applicants Directory
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Applicant List
           </Link>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
@@ -920,12 +940,34 @@ export default function ApplicantDetailPage() {
             Send to Extension
           </Button>
 
-          <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-            <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
-              <FileText className="mr-1.5 h-3.5 w-3.5" />
-              Contract Document (PDF)
-            </Button>
-          </Link>
+          {/* View CV Button: Visible for any applicant with CV generated */}
+          {Boolean(
+            applicant.cv_attachment ||
+            applicant.cv_file ||
+            (applicant.status && !["Draft", "Registered"].includes(applicant.status)) ||
+            (applicant.applicant_state && !["Draft", "Registered"].includes(applicant.applicant_state))
+          ) && (
+            <Link href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs border-blue-300 text-blue-900 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-300"
+                title="View official bilateral CV document"
+              >
+                <Eye className="mr-1.5 h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
+                View CV
+              </Button>
+            </Link>
+          )}
+
+          {(isMuayenaApplicant || Boolean(activePlacement || applicant.active_placement)) && (
+            <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+              <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
+                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                Contract Document (PDF)
+              </Button>
+            </Link>
+          )}
 
           {/* Muayena Track Direct Placement Creator (Muayena applicants only) */}
           {!activePlacement && isMuayenaApplicant && (
@@ -998,6 +1040,43 @@ export default function ApplicantDetailPage() {
               >
                 <Unlock className="mr-1.5 h-3.5 w-3.5" />
                 Manager Override (Lift Ban)
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Eye-catching Waiting to be Selected Banner */}
+      {currentStage === "CV Generated" && (
+        <div className="rounded-xl border-2 border-purple-400 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-100 dark:from-purple-950/60 dark:via-indigo-950/40 dark:to-purple-900/40 p-4 shadow-sm animate-in fade-in slide-in-from-top-1 duration-300">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-xs ring-4 ring-purple-200 dark:ring-purple-900/60">
+                <Building2 className="h-5 w-5 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-bold text-purple-950 dark:text-purple-100">
+                    Waiting to be Selected by Foreign Partner Agency
+                  </h4>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-purple-200/90 px-2 py-0.5 text-[11px] font-semibold text-purple-900 dark:bg-purple-900/70 dark:text-purple-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-purple-600 animate-ping" />
+                    Listed on Foreign Agency Portal
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-purple-800 dark:text-purple-300">
+                  This applicant&apos;s CV is active and visible on the foreign partner agency platform. Once an agency selects this applicant or an employment contract is uploaded, they will move to <strong>Selected</strong> stage.
+                </p>
+              </div>
+            </div>
+            {(isAdminOrOps || can("manageContractors")) && (
+              <Button
+                size="sm"
+                onClick={() => setIsMusanedModalOpen(true)}
+                className="shrink-0 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold shadow-xs"
+              >
+                <Building2 className="mr-1.5 h-3.5 w-3.5" />
+                Select Agency
               </Button>
             )}
           </div>
@@ -1120,13 +1199,13 @@ export default function ApplicantDetailPage() {
           </div>
         )}
 
-        {/* Stage 3: CV Generated */}
+        {/* Stage 3: CV Generated / Waiting to be Selected */}
         {currentStage === "CV Generated" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
-                Stage: CV Generated (Available in Agent Portal)
+                <CheckCircle2 className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                Stage: Waiting to be Selected (Listed on Foreign Agency Portal)
               </h3>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
                 {isSaudiApplicant ? (
@@ -1139,11 +1218,11 @@ export default function ApplicantDetailPage() {
                         {" "}• Ref: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.musaned_reference_no}</strong>
                       </>
                     ) : null}
-                    . Candidate is published and eligible for international Agent Portal discovery and selection.
+                    . Applicant is listed and waiting to be selected by a foreign partner agency.
                   </>
                 ) : (
                   <>
-                    Candidate CV record is created and published for {applicant.destination_country || "Kuwait"}. International partner agencies can discover, select, and reserve this candidate via the Agent Portal.
+                    Applicant CV is created and published for {applicant.destination_country || "Kuwait"}. Partner agencies can view and select this applicant on their portal.
                   </>
                 )}
               </p>
@@ -1163,13 +1242,13 @@ export default function ApplicantDetailPage() {
               {activePlacement && (
                 <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
                   <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold">
-                    <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload & Parse Musaned Contract
+                    <UploadCloud className="mr-1.5 h-3.5 w-3.5" /> Upload Contract
                   </Button>
                 </Link>
               )}
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}>
                 <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-                  <Eye className="mr-1.5 h-3.5 w-3.5" /> View Official CV
+                  <Eye className="mr-1.5 h-3.5 w-3.5" /> View CV
                 </Button>
               </Link>
             </div>
@@ -1384,22 +1463,22 @@ export default function ApplicantDetailPage() {
               </Button>
             </div>
 
-            {isAdminOrOps && isSaudiApplicant && (activePlacement as any)?.wakala_payment_status !== "Paid" && (activePlacement as any)?.wakala_payment_status !== "Authorized" && (
+            {isAdminOrOps && isSaudiApplicant && !isWakalaPaid && embassyClearanceStep?.status !== "Stamped" && (
               <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/30 p-4 space-y-2 text-xs">
                 <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-bold">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <span>Administrative Notice: Musaned Wakala Authorization Requirement</span>
+                  <span>Notice: Wakala Payment Required</span>
                 </div>
                 <p className="text-amber-800 dark:text-amber-300">
-                  Wakala authorization status is currently <strong>{(activePlacement as any)?.wakala_payment_status || "Pending"}</strong>. For Saudi Arabia corridor placements, verified Wakala authorization from the Foreign Agency via the Musaned portal is required before Embassy visa stamping can proceed.
+                  Wakala is currently <strong>Pending</strong>. For Saudi Arabia, the foreign partner agency must pay the Wakala fee before Embassy visa stamping can proceed.
                 </p>
                 <p className="text-amber-700 dark:text-amber-400 text-[11px]">
-                  As an Administrator / Operations Manager, you can review authorization, confirm foreign agency payment, or manage operational step clearances in the Wakala Workspace.
+                  Managers can review payment status or record Wakala in the Clearance List.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
-                  <Link href="/operational-workspace?tab=wakala">
+                  <Link href="/applicants?tab=clearance">
                     <Button size="sm" variant="outline" className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">
-                      Open Wakala Workspace
+                      Open Clearance List
                     </Button>
                   </Link>
                   <Button
@@ -1408,9 +1487,23 @@ export default function ApplicantDetailPage() {
                     onClick={() => setIsMusanedModalOpen(true)}
                     className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
                   >
-                    Verify Musaned Contract
+                    Check Musaned Contract
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {isSaudiApplicant && isWakalaPaid && (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30 p-3.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-200 font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>Wakala Paid:</strong> Wakala payment is confirmed. Documents are ready for Embassy visa stamping.
+                  </span>
+                </div>
+                <Badge variant="success" className="shrink-0 bg-emerald-700 text-white">
+                  Wakala Paid
+                </Badge>
               </div>
             )}
 
@@ -1427,6 +1520,14 @@ export default function ApplicantDetailPage() {
                 <p className="text-slate-500 dark:text-zinc-400">
                   Officer: <strong className="text-slate-800 dark:text-zinc-200 font-semibold">{getStepOfficerName(embassyClearanceStep)}</strong>
                 </p>
+                {isSaudiApplicant && (
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-zinc-800 text-[11px]">
+                    <span className="text-slate-500 dark:text-zinc-400">Wakala Fee:</span>
+                    <Badge variant={isWakalaPaid ? "success" : "warning"} className="text-[10px] py-0 px-1.5">
+                      {isWakalaPaid ? "Paid" : "Pending"}
+                    </Badge>
+                  </div>
+                )}
                 <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-[10px] font-medium text-slate-600 dark:text-zinc-300">
                     Step #{embassyClearanceStep.sequence_order || 1}

@@ -57,7 +57,13 @@ export function DepartureWorkspace({
   const { authUser, roles } = useAuth();
 
   const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
-  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
+  const isStrictAdmin = Boolean(
+    (authUser?.email || "").toLowerCase() === "administrator" ||
+    (authUser?.email || "").toLowerCase() === "admin" ||
+    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
+    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+  );
+  const isAdmin = isStrictAdmin || (authUserV2?.roles || []).some((r: any) => ["manager", "agency admin"].includes(String(r).trim().toLowerCase()));
   const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Ticketer"] as any) || (authUserV2?.roles || []).some((r) => ["ticketing officer", "departure officer", "logistics officer", "medical officer"].includes(String(r).trim().toLowerCase()));
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
@@ -782,8 +788,8 @@ export function DepartureWorkspace({
             </>
           )}
 
-          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
-          {isAdmin && (
+          {/* Assigned Officer Field: Visible ONLY to Admins */}
+          {isStrictAdmin && (
             <div className="sm:col-span-2">
               <DrawerField label="Assigned Ticketing Officer (Admin Only)" isReadOnly={false}>
                 <select

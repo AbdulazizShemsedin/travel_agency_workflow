@@ -265,12 +265,12 @@ export default function DashboardPage() {
 
         tasks.push({
           id: `task-assign-${a.name}`,
-          title: "Assign Clearance Officers",
+          title: "Assign Staff",
           candidate: a.full_name || a.name,
           details,
           applicantId: a.name,
           type: "Assignment",
-          badge: "ASSIGN OFFICERS",
+          badge: "ASSIGN STAFF",
         });
       });
 
@@ -288,7 +288,7 @@ export default function DashboardPage() {
 
         tasks.push({
           id: `task-cv-${a.name}`,
-          title: "Generate Bilateral CV",
+          title: "Generate CV",
           candidate: a.full_name || a.name,
           details,
           applicantId: a.name,
@@ -303,19 +303,19 @@ export default function DashboardPage() {
       .forEach((a) => {
         const details = [
           a.phone_number || a.phone ? `Phone: ${a.phone_number || a.phone}` : null,
-          "KYC intake incomplete",
+          "Intake incomplete",
         ]
           .filter(Boolean)
           .join(" • ");
 
         tasks.push({
           id: `task-draft-${a.name}`,
-          title: "Complete KYC & Register",
+          title: "Complete Registration",
           candidate: a.full_name || a.name,
           details,
           applicantId: a.name,
           type: "Registration",
-          badge: "COMPLETE DRAFT",
+          badge: "FINISH DRAFT",
         });
       });
 
@@ -326,7 +326,7 @@ export default function DashboardPage() {
   const pipelineStages = [
     {
       step: 1,
-      title: "Data Input",
+      title: "Draft",
       count: draftCount,
       badge: "Draft",
       color: "border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161b] text-slate-800 dark:text-zinc-200 hover:border-slate-400 dark:hover:border-zinc-500",
@@ -335,12 +335,12 @@ export default function DashboardPage() {
     },
     {
       step: 2,
-      title: "CV Generated",
+      title: "Waiting to be Selected",
       count: cvCount,
-      badge: "CV Ready",
+      badge: "Waiting to be Selected",
       color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 hover:border-purple-400 dark:hover:border-purple-700",
       accent: "bg-purple-600",
-      link: "/applicants?status=CV Generated",
+      link: "/applicants?status=Waiting to be Selected",
     },
     {
       step: 3,

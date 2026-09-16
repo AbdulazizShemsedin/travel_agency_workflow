@@ -565,15 +565,21 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   const align = (header.column.columnDef.meta as any)?.align || "left";
                   const width = (header.column.columnDef.meta as any)?.width;
                   const isFirstCol = colIdx === 0;
+                  const isSecondCol = colIdx === 1;
 
                   return (
                     <th
                       key={header.id}
                       scope="col"
-                      style={{ width }}
+                      style={{
+                        width,
+                        ...(isFirstCol ? { left: 0 } : {}),
+                        ...(isSecondCol ? { left: "50px" } : {}),
+                      }}
                       className={cn(
                         "py-2.5 px-3 select-none",
-                        isFirstCol && "sticky left-0 z-20 bg-slate-100 dark:bg-[#181820] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
+                        isFirstCol && "sticky left-0 z-20 bg-slate-100 dark:bg-[#181820]",
+                        isSecondCol && "sticky z-20 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -618,7 +624,18 @@ export function OperationalTable<T extends Record<string, any> = any>({
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {visibleColumns.map((col, idx) => (
-                    <td key={idx} className={cn("py-3 px-3", idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]")}>
+                    <td
+                      key={idx}
+                      style={{
+                        ...(idx === 0 ? { left: 0 } : {}),
+                        ...(idx === 1 ? { left: "50px" } : {}),
+                      }}
+                      className={cn(
+                        "py-3 px-3",
+                        idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]",
+                        idx === 1 && "sticky z-10 bg-white dark:bg-[#121215] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]"
+                      )}
+                    >
                       <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
                     </td>
                   ))}
@@ -651,7 +668,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                     key={row.id}
                     onClick={() => onRowClick(row.original)}
                     className={cn(
-                      "cursor-pointer transition-colors duration-100 hover:bg-emerald-50/60 dark:hover:bg-[#1a2e26]/30",
+                      "group cursor-pointer transition-colors duration-100 hover:bg-emerald-50/60 dark:hover:bg-[#1a2e26]/30",
                       isSelected
                         ? "bg-emerald-50/90 dark:bg-[#183428]/50 ring-1 ring-inset ring-emerald-500 font-medium"
                         : "even:bg-slate-50/30 dark:even:bg-[#141419]/40"
@@ -660,14 +677,21 @@ export function OperationalTable<T extends Record<string, any> = any>({
                     {row.getVisibleCells().map((cell, colIdx) => {
                       const align = (cell.column.columnDef.meta as any)?.align || "left";
                       const isFirstCol = colIdx === 0;
+                      const isSecondCol = colIdx === 1;
 
                       return (
                         <td
                           key={cell.id}
+                          style={{
+                            ...(isFirstCol ? { left: 0 } : {}),
+                            ...(isSecondCol ? { left: "50px" } : {}),
+                          }}
                           className={cn(
                             "py-2 px-3 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs",
-                            isFirstCol && "sticky left-0 z-10 bg-white dark:bg-[#121215] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]",
+                            isFirstCol && "sticky left-0 z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26]",
+                            isSecondCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
                             isSelected && isFirstCol && "bg-emerald-50 dark:bg-[#183428]",
+                            isSelected && isSecondCol && "bg-emerald-50 dark:bg-[#183428]",
                             align === "center" && "text-center",
                             align === "right" && "text-right"
                           )}

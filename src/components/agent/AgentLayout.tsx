@@ -96,12 +96,12 @@ export function AgentLayout({
   };
 
   const navItems = [
-    { label: "Candidate Marketplace", href: "/agent", icon: Users },
-    { label: "My Reserved Candidates", href: "/agent/reserved", icon: CheckCircle2 },
-    { label: "Wakala Requests", href: "/agent/wakala", icon: ShieldCheck },
-    { label: "Commission & Statements", href: "/agent/commission", icon: Receipt },
-    { label: "Complaints & Guarantee", href: "/agent/complaints", icon: AlertCircle },
-    { label: "Messages & Staff Chat", href: "/agent/chat", icon: MessageSquare },
+    { label: "Available Applicants", href: "/agent", icon: Users },
+    { label: "Selected Applicants", href: "/agent/reserved", icon: CheckCircle2 },
+    { label: "Wakala", href: "/agent/wakala", icon: ShieldCheck },
+    { label: "Commissions", href: "/agent/commission", icon: Receipt },
+    { label: "Complaints", href: "/agent/complaints", icon: AlertCircle },
+    { label: "Messages", href: "/agent/chat", icon: MessageSquare },
   ];
 
   return (
@@ -111,11 +111,11 @@ export function AgentLayout({
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-semibold tracking-wide">
-            Agency Portal • Partner Access
+            Foreign Agency Portal
           </span>
           <span className="hidden sm:inline text-emerald-300/80">|</span>
           <span className="hidden sm:inline text-[11px] text-emerald-300/80">
-            Dedicated candidate selection, Wakala processing & staff coordination
+            Select applicants, track Wakala, and message staff
           </span>
         </div>
 

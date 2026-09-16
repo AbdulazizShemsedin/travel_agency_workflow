@@ -121,7 +121,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadUserContext();
   }, [loadUserContext]);
 
-  // Route protection: redirect unauthenticated users to /login
+  const login = async (email: string, pass: string) => {
+    setIsLoading(true);
+    try {
+      await loginUser(email, pass);
+      // Retry fetching user context up to 3 times
+      let userContext: AuthUser | null = null;
+      for (let i = 0; i < 3; i++) {
+        userContext = await fetchCurrentUserContext();
+        if (userContext) break;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!userContext) {
+        // Fallback minimal info assuming login succeeded
+        userContext = {
+          email,
+          full_name: email,
+          roles: [],
+          is_internal_staff: true,
+          contractor: null,
+          enabled: true,
+        } as AuthUser;
+      }
+      setUser(userContext.email);
+      setAuthUser(userContext);
+      if (userContext.contractor) {
+        setAgencyContext({
+          user: userContext.email,
+          full_name: userContext.full_name || userContext.email,
+          roles: userContext.roles,
+          is_internal_staff: userContext.is_internal_staff ?? false,
+          contractor: userContext.contractor,
+        });
+      } else {
+        setAgencyContext(null);
+      }
+      // Redirect based on role
+      if (userContext.roles?.includes("Foreign Agency") && !userContext.is_internal_staff) {
+        router.push("/agent");
+      } else {
+        router.push("/dashboard");
+      }
+      return userContext;
+    } finally {
+      setIsLoading(false);
+    }
+  };
   React.useEffect(() => {
     if (!isLoading) {
       if (!authUser && pathname !== "/login" && !pathname.startsWith("/login")) {
@@ -165,23 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, authUser, pathname, router]);
 
-  const login = async (email: string, pass: string) => {
-    setIsLoading(true);
-    try {
-      await loginUser(email, pass);
-      const userContext = await loadUserContext();
-      if (userContext) {
-        if (userContext.roles?.includes("Foreign Agency") && !userContext.is_internal_staff) {
-          router.push("/agent");
-        } else {
-          router.push("/dashboard");
-        }
-      }
-      return userContext;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+
 
   const logout = async () => {
     setIsLoading(true);

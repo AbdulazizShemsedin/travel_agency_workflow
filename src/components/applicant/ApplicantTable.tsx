@@ -58,7 +58,12 @@ function getStageBadgeVariant(stage: string): {
     case "Registered":
       return { variant: "success", dotColor: "bg-emerald-600" };
     case "CV Generated":
-      return { variant: "purple", dotColor: "bg-purple-600" };
+    case "Waiting to be Selected":
+      return {
+        variant: "purple",
+        dotColor: "bg-purple-600",
+        className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+      };
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
     case "Processing":
@@ -186,6 +191,19 @@ export function ApplicantTable() {
       for (const [src, dst] of mergeKeys) {
         if (plc[src] && !copy[dst]) copy[dst] = plc[src];
       }
+      // Ensure sponsor_name and employer_name mirror each other so Kafeel displays reliably from contract or visa
+      if (!copy.sponsor_name && (copy.employer_name || plc.employer_name)) {
+        copy.sponsor_name = copy.employer_name || plc.employer_name;
+      }
+      if (!copy.employer_name && (copy.sponsor_name || plc.sponsor_name)) {
+        copy.employer_name = copy.sponsor_name || plc.sponsor_name;
+      }
+      if (!copy.contract_number && (plc.contract_number || plc.contract_no)) {
+        copy.contract_number = plc.contract_number || plc.contract_no;
+      }
+      if (!copy.visa_number && (plc.visa_number || plc.visa_no)) {
+        copy.visa_number = plc.visa_number || plc.visa_no;
+      }
       // Resolve Current Stage from the active placement so the Directory reflects the
       // real pipeline position (Selected/Processing/Stamped/...) instead of the static
       // applicant intake status (CV Generated, etc.).
@@ -219,8 +237,15 @@ export function ApplicantTable() {
           currentStatus !== "Cancelled";
       } else if (stageNorm === "completed" || stageNorm === "completed / cleared") {
         matchesStage = currentStatus === "Stamped" || currentStatus === "Ticketed";
-      } else if (stageNorm === "cv ready" || stageNorm === "cv generated") {
-        matchesStage = currentStatus === "CV Generated" || currentStatus === "Registered";
+      } else if (
+        stageNorm === "cv ready" ||
+        stageNorm === "cv generated" ||
+        stageNorm === "waiting to be selected"
+      ) {
+        matchesStage =
+          currentStatus === "CV Generated" ||
+          currentStatus === "Registered" ||
+          currentStatus === "Waiting to be Selected";
       } else if (stageNorm === "parallel streams" || stageNorm === "processing") {
         matchesStage = currentStatus === "Processing";
       } else if (stageNorm === "visa issued" || stageNorm === "stamped") {
@@ -376,7 +401,7 @@ export function ApplicantTable() {
             >
               Clear Selection
             </Button>
-            {/* Prominent Assign Employee Button */}
+            {/* Prominent Assign Staff Button */}
             {can("manageUsers") && (
               <Button
                 size="sm"
@@ -388,7 +413,7 @@ export function ApplicantTable() {
                 }`}
               >
                 <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                Edit Staff ({selectedRows.size})
+                Assign Staff ({selectedRows.size})
               </Button>
             )}
           </div>
@@ -413,7 +438,7 @@ export function ApplicantTable() {
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Stage Filter */}
-          <div className="w-44 sm:w-52">
+          <div className="w-48 sm:w-56">
             <SimpleSelect
               value={selectedStage}
               onValueChange={(val) => {
@@ -424,7 +449,7 @@ export function ApplicantTable() {
                 { value: "All", label: `All Stages (${stageCounts.All})` },
                 { value: "Draft", label: `Draft (${stageCounts.Draft})` },
                 { value: "Registered", label: `Registered (${stageCounts.Registered})` },
-                { value: "CV Generated", label: `CV Generated (${stageCounts["CV Generated"]})` },
+                { value: "Waiting to be Selected", label: `Waiting to be Selected (${stageCounts["CV Generated"]})` },
                 { value: "Selected", label: `Selected (${stageCounts.Selected})` },
                 { value: "Processing", label: `Processing (${stageCounts.Processing})` },
                 { value: "Stamped", label: `Stamped (${stageCounts.Stamped})` },
@@ -484,24 +509,27 @@ export function ApplicantTable() {
               ) : (
                 paginatedApplicants.map((applicant) => {
                   const stage = applicant.status || applicant.applicant_state || "Draft";
+                  const displayStage = stage === "CV Generated" ? "Waiting to be Selected" : stage;
                   const badge = getStageBadgeVariant(stage);
                   const isSelected = selectedRows.has(applicant.name);
 
-                  // Sponsor, contract, and visa data only exists at "Selected" stage or beyond.
-                  // Never show hardcoded fallbacks — pre-Selected applicants have no sponsor yet.
-                  const SPONSOR_ELIGIBLE_STAGES = new Set([
-                    "Selected", "Processing", "Stamped", "Ticketed", "Departed",
-                  ]);
-                  const hasPlacementData = SPONSOR_ELIGIBLE_STAGES.has(stage);
-                  const contractNo = hasPlacementData
-                    ? ((applicant as any).contract_number || "—")
-                    : "—";
-                  const visaNo = hasPlacementData
-                    ? ((applicant as any).visa_number || "—")
-                    : "—";
-                  const sponsorName = hasPlacementData
-                    ? ((applicant as any).sponsor_name || "—")
-                    : "—";
+                  // Extract contract, visa, and sponsor (Kafeel) from applicant or merged placement record
+                  const contractNo =
+                    (applicant as any).contract_number ||
+                    (applicant as any).contract_no ||
+                    (applicant as any).contractor_doc?.contract_number ||
+                    null;
+                  const visaNo =
+                    (applicant as any).visa_number ||
+                    (applicant as any).visa_no ||
+                    (applicant as any).contractor_doc?.visa_number ||
+                    null;
+                  const sponsorName =
+                    (applicant as any).sponsor_name ||
+                    (applicant as any).employer_name ||
+                    (applicant as any).contractor_doc?.sponsor_name ||
+                    (applicant as any).contractor_doc?.employer_name ||
+                    null;
 
                   return (
                     <tr
@@ -546,16 +574,16 @@ export function ApplicantTable() {
                         </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400">
-                        {applicant.passport_number || "N/A"}
+                        {applicant.passport_number || "—"}
                       </td>
                       <td className="px-4 py-3">
-                        {hasPlacementData ? (
+                        {contractNo || visaNo ? (
                           <div className="space-y-0.5">
                             <span className="font-mono text-xs font-semibold text-emerald-900 dark:text-emerald-400 block">
-                              CTR: {contractNo}
+                              CTR: {contractNo || "—"}
                             </span>
                             <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400 block">
-                              VISA: {visaNo}
+                              VISA: {visaNo || "—"}
                             </span>
                           </div>
                         ) : (
@@ -563,9 +591,9 @@ export function ApplicantTable() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {hasPlacementData && sponsorName !== "—" ? (
+                        {sponsorName ? (
                           <div className="truncate max-w-[180px]">
-                            <span className="font-medium text-slate-900 dark:text-zinc-200 block truncate text-xs uppercase">
+                            <span className="font-medium text-slate-900 dark:text-zinc-200 block truncate text-xs uppercase" title={sponsorName}>
                               {sponsorName}
                             </span>
                             <span className="text-[10px] text-slate-400 block">
@@ -588,7 +616,7 @@ export function ApplicantTable() {
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={badge.variant} dotColor={badge.dotColor} className={badge.className}>
-                          {stage}
+                          {displayStage}
                         </Badge>
                       </td>
                       <td
@@ -601,7 +629,7 @@ export function ApplicantTable() {
                           <Link
                             href={`/applicants/${encodeURIComponent(applicant.name)}`}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-slate-200 dark:hover:bg-[#252530] border border-slate-200 dark:border-[#2a2a35] transition"
-                            title="View Candidate Dossier"
+                            title="View Applicant Details"
                           >
                             <Eye className="h-3 w-3 text-slate-500" />
                             <span>View</span>
@@ -613,7 +641,7 @@ export function ApplicantTable() {
                               type="button"
                               onClick={(e) => handleSingleAssign(applicant, e)}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
-                              title="Assign Processing Staff"
+                              title="Assign Staff"
                             >
                               <UserCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                               <span>Assign</span>
@@ -625,22 +653,25 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"
-                              title="Standardized PDF CV"
+                              title="View CV"
                             >
                               <FileText className="h-3 w-3 text-purple-600" />
-                              <span>CV</span>
+                              <span>View CV</span>
                             </Link>
                           )}
 
-                          {/* 4. Contractor Document Action */}
-                          <Link
-                            href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
-                            title="View Official Contract Document"
-                          >
-                            <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                            <span>Contract document</span>
-                          </Link>
+                          {/* 4. Contractor Document Action (Muayena or candidates selected by contractor) */}
+                          {((applicant.entry_track === "Muayena" || applicant.applicant_type === "Muayena") ||
+                            Boolean(applicant.active_placement || applicant.placement_name)) && (
+                            <Link
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
+                              title="View Contract Document"
+                            >
+                              <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                              <span>Contract</span>
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>

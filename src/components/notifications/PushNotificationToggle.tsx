@@ -59,6 +59,34 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+const notifiedAlertIds = new Set<string>();
+
+function getPersistedNotifiedIds(userKey: string): Set<string> {
+  if (typeof window === "undefined") return notifiedAlertIds;
+  try {
+    const raw = localStorage.getItem(`watchdogs_notified_${userKey}`) || localStorage.getItem("watchdogs_notified_all") || "[]";
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      arr.forEach((id: string) => notifiedAlertIds.add(id));
+    }
+  } catch {
+    // fallback
+  }
+  return notifiedAlertIds;
+}
+
+function persistNotifiedId(userKey: string, id: string) {
+  notifiedAlertIds.add(id);
+  if (typeof window === "undefined") return;
+  try {
+    const arr = Array.from(notifiedAlertIds).slice(-300);
+    localStorage.setItem(`watchdogs_notified_${userKey}`, JSON.stringify(arr));
+    localStorage.setItem("watchdogs_notified_all", JSON.stringify(arr));
+  } catch {
+    // ignore
+  }
+}
+
 export function PushNotificationToggle() {
   const queryClient = useQueryClient();
   const { user, roles, authUser, agencyContext } = useAuth();
@@ -158,14 +186,15 @@ export function PushNotificationToggle() {
     checkSubscriptionStatus();
   }, [serverPushStatus]);
 
-  // 2. Prompt user immediately upon login if push notifications are not enabled
+  // 2. Prompt user immediately upon login if push notifications are not enabled (max once across sessions)
   React.useEffect(() => {
     if (user && isSupported && !isPushEnabled) {
-      const sessionKey = `push_prompt_shown_${user}`;
-      const alreadyPrompted = sessionStorage.getItem(sessionKey);
+      const storageKey = `push_prompt_shown_${user.toLowerCase()}`;
+      const alreadyPrompted = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey);
 
       if (!alreadyPrompted) {
-        sessionStorage.setItem(sessionKey, "true");
+        localStorage.setItem(storageKey, "true");
+        sessionStorage.setItem(storageKey, "true");
         const timer = setTimeout(() => {
           sonnerToast.warning("Push Notifications Disabled", {
             description: "Real-time desktop push alerts are currently disabled. Enable them to receive instant updates.",
@@ -185,29 +214,28 @@ export function PushNotificationToggle() {
     }
   }, [user, isSupported, isPushEnabled]);
 
-  // Real-time Watchdog Alert Dispatcher: Pushes native device notifications & alerts for all watchdogs
+  // Real-time Watchdog Alert Dispatcher: Pushes native device notifications & alerts ONLY for genuinely new, unseen watchdogs
   React.useEffect(() => {
     if (!notifications || notifications.length === 0) return;
     if (typeof window === "undefined") return;
 
-    const seenKey = `watchdogs_notified_${user || "anon"}`;
-    let seenNotifs: string[] = [];
-    try {
-      seenNotifs = JSON.parse(sessionStorage.getItem(seenKey) || "[]");
-    } catch {
-      seenNotifs = [];
-    }
+    const userKey = (user || "anon").toLowerCase();
+    const seenSet = getPersistedNotifiedIds(userKey);
 
     const unnotifiedWatchdogs = notifications.filter(
       (n) =>
         (n.id.includes("watchdog") || n.id.includes("expiry") || n.id.includes("reminder") || n.severity === "urgent") &&
-        !seenNotifs.includes(n.id)
+        !seenSet.has(n.id)
     );
 
     if (unnotifiedWatchdogs.length === 0) return;
 
-    unnotifiedWatchdogs.forEach((n) => {
-      seenNotifs.push(n.id);
+    // Limit individual toast notifications to max 2 at a time so user is never spammed with repetitive popups
+    const toastsToShow = unnotifiedWatchdogs.slice(0, 2);
+    const remainingCount = unnotifiedWatchdogs.length - toastsToShow.length;
+
+    toastsToShow.forEach((n) => {
+      persistNotifiedId(userKey, n.id);
 
       // 1. Browser Native Push Notification (if permission granted)
       if ("Notification" in window && Notification.permission === "granted") {
@@ -218,7 +246,6 @@ export function PushNotificationToggle() {
             tag: n.id,
           });
         } catch {
-          // If constructor restricted, try service worker
           navigator.serviceWorker?.ready.then((reg) => {
             reg.showNotification(n.title, {
               body: n.description,
@@ -241,7 +268,7 @@ export function PushNotificationToggle() {
                 },
               }
             : undefined,
-          duration: 9000,
+          duration: 8000,
         });
       } else if (n.severity === "warning") {
         sonnerToast.warning(n.title, {
@@ -254,15 +281,21 @@ export function PushNotificationToggle() {
                 },
               }
             : undefined,
-          duration: 7000,
+          duration: 6000,
         });
       }
     });
 
-    try {
-      sessionStorage.setItem(seenKey, JSON.stringify(seenNotifs));
-    } catch {
-      // ignore
+    if (remainingCount > 0) {
+      // Mark all remaining unnotified items as seen so they do not pop up again in future polling intervals
+      unnotifiedWatchdogs.slice(2).forEach((n) => {
+        persistNotifiedId(userKey, n.id);
+      });
+
+      sonnerToast.warning(`${remainingCount} operational alert${remainingCount === 1 ? "" : "s"}`, {
+        description: `You have ${remainingCount} additional pending watchdog notifications. Click the bell icon to review them.`,
+        duration: 5000,
+      });
     }
   }, [notifications, user]);
 
@@ -651,11 +684,11 @@ export function PushNotificationToggle() {
             <div>
               <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
                 {modalAction === "enable"
-                  ? "Enable Desktop Push Notifications"
-                  : "Disable Push Notifications"}
+                  ? "Turn On Notifications"
+                  : "Turn Off Notifications"}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                Chrome & Device System Alerts
+                Browser and computer alerts
               </DialogDescription>
             </div>
           </DialogHeader>
@@ -663,30 +696,30 @@ export function PushNotificationToggle() {
           {modalAction === "enable" ? (
             <div className="space-y-3 text-xs text-slate-600 dark:text-zinc-300 leading-relaxed py-2">
               <p>
-                Allowing push notifications enables Chrome to send real-time alerts directly to your PC or mobile device.
+                Get real-time alerts on your computer or phone when applicants or flights are updated.
               </p>
               <div className="rounded-xl border border-slate-200 dark:border-[#222227] bg-slate-50/80 dark:bg-[#16161b] p-3.5 space-y-1.5 text-xs">
                 <div className="text-slate-800 dark:text-zinc-200 font-medium">
-                  • Alerts for Embassy visas, complaints, and departure flight updates
+                  • Alerts for visas, complaints, and departure flight updates
                 </div>
                 <div className="text-slate-800 dark:text-zinc-200 font-medium">
-                  • Active in background even when the website or tab is closed
+                  • Works in the background even if this website is closed
                 </div>
                 <div className="text-slate-800 dark:text-zinc-200 font-medium">
-                  • Can be turned off or configured at any time
+                  • You can turn this off at any time
                 </div>
               </div>
               <p className="text-[11px] text-slate-400">
-                Click <strong>Allow & Enable</strong>, then select <strong>Allow</strong> in your browser prompt.
+                Click <strong>Turn On</strong>, then click <strong>Allow</strong> in your browser popup.
               </p>
             </div>
           ) : (
             <div className="space-y-3 text-xs text-slate-600 dark:text-zinc-300 leading-relaxed py-2">
               <p>
-                Are you sure you want to disable desktop push notifications on this device?
+                Turn off notifications on this computer?
               </p>
               <p className="text-slate-500 dark:text-zinc-400">
-                You will no longer receive immediate OS notifications when candidate statuses update or urgent complaints are logged. You can re-enable this at any time.
+                You will not receive instant alerts on this device. You can turn notifications back on at any time.
               </p>
             </div>
           )}
@@ -725,15 +758,14 @@ export function PushNotificationToggle() {
                   size="sm"
                   onClick={handleEnablePush}
                   disabled={isLoading}
-                  className="rounded-xl bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold text-xs cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      Connecting...
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Turning On...
                     </>
                   ) : (
-                    "Allow & Enable Push"
+                    "Turn On"
                   )}
                 </Button>
               ) : (
@@ -742,15 +774,14 @@ export function PushNotificationToggle() {
                   size="sm"
                   onClick={handleDisablePush}
                   disabled={isLoading}
-                  className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-xs"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      Disabling...
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Turning Off...
                     </>
                   ) : (
-                    "Disable Notifications"
+                    "Turn Off"
                   )}
                 </Button>
               )}

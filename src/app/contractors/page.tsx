@@ -328,17 +328,17 @@ export default function ContractorsPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Foreign Contractors & Agencies
+            Foreign Agencies
           </h2>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Manage partner foreign agencies, configure communication managers, and manage portal login credentials.
+            Manage partner foreign agencies, set managers, and manage login accounts.
           </p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
           className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-sm"
         >
-          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Contractor Agency
+          <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Agency
         </Button>
       </div>
 
@@ -355,7 +355,7 @@ export default function ContractorsPage() {
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <Input
             type="search"
-            placeholder="Search contractor, contact, email, phone..."
+            placeholder="Search agency, contact, email, phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 h-9 text-xs bg-white dark:bg-[#141418] border-slate-200 dark:border-[#26262d]"
@@ -371,7 +371,7 @@ export default function ContractorsPage() {
             value={selectedCountry}
             onChange={(e) => setSelectedCountry(e.target.value)}
             className="h-9 px-3 rounded-lg border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold text-slate-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-            aria-label="Filter Contractors by Country"
+            aria-label="Filter Agencies by Country"
           >
             {availableCountries.map((country) => {
               const count =
@@ -404,18 +404,18 @@ export default function ContractorsPage() {
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
-            <span className="ml-2 text-xs text-slate-500">Loading contractors...</span>
+            <span className="ml-2 text-xs text-slate-500">Loading agencies...</span>
           </div>
         ) : (
           <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
             <table className="w-full min-w-[750px] text-left text-xs">
               <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
                 <tr>
-                  <th className="px-4 py-3.5">Contractor ID</th>
-                  <th className="px-4 py-3.5">Name / Agency</th>
+                  <th className="px-4 py-3.5">Agency ID</th>
+                  <th className="px-4 py-3.5">Agency Name</th>
                   <th className="px-4 py-3.5">Country</th>
-                  <th className="px-4 py-3.5">Portal User Account</th>
-                  <th className="px-4 py-3.5">Contact & Phone</th>
+                  <th className="px-4 py-3.5">User Account</th>
+                  <th className="px-4 py-3.5">Phone & Contact</th>
                   <th className="px-4 py-3.5 text-center">Status</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>

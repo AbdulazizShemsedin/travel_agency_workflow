@@ -499,7 +499,7 @@ export default function AgentDiscoveryPage() {
             <div className="flex items-center justify-between gap-2 px-1">
               <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-400 font-medium">
                 <span>
-                  Showing <strong className="text-slate-900 dark:text-white">{visibleCandidates.length}</strong> available candidates
+                  <span>Showing <strong className="text-slate-900 dark:text-white">{visibleCandidates.length}</strong> candidates</span>
                 </span>
               </div>
               <div className="flex items-center rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] p-0.5 shadow-2xs">
@@ -692,12 +692,10 @@ export default function AgentDiscoveryPage() {
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-              <ShieldCheck className="h-5 w-5" /> Confirm Candidate Reservation
+              <ShieldCheck className="h-5 w-5" /> Select This Applicant?
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              You are about to reserve this applicant for your agency. This action is atomic and
-              immediately locks the candidate to your account, removing them from the public
-              pool for all other agencies.
+              Selecting this applicant reserves them for your agency. They will not be available to other agencies.
             </DialogDescription>
           </DialogHeader>
 
@@ -752,7 +750,7 @@ export default function AgentDiscoveryPage() {
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
-                <Undo2 className="h-3 w-3" /> You will have a 7-second window to undo this reservation after confirming.
+                <Undo2 className="h-3 w-3" /> You will have 7 seconds to undo after selecting.
               </p>
             </div>
           )}
@@ -776,12 +774,12 @@ export default function AgentDiscoveryPage() {
               {selectingCandidateId !== null ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Reserving...
+                  Selecting...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Confirm Reservation
+                  Select Applicant
                 </>
               )}
             </Button>

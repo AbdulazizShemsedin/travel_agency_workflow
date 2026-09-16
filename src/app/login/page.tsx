@@ -129,7 +129,7 @@ export default function LoginPage() {
     } catch (err: any) {
       recordFailure();
       if (failedAttempts + 1 < 5) {
-        setError(formatCleanErrorMessage(err) || "Failed to sign in. Please verify your credentials.");
+        setError(formatCleanErrorMessage(err) || "Could not sign in. Please check your email and password.");
       }
       setIsSubmitting(false);
     }
@@ -160,10 +160,10 @@ export default function LoginPage() {
             <Plane className="h-7 w-7 transform -rotate-45" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Travel Agency Portal
+            Travel Agency
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Sign in to your agency workflow account
+            Sign in to your account
           </p>
         </div>
 
@@ -183,7 +183,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                Email Address / Username
+                Email or Username
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
@@ -237,15 +237,15 @@ export default function LoginPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Authenticating...
+                  Signing in...
                 </>
               ) : lockoutSeconds > 0 ? (
                 <>
-                  Locked out ({lockoutSeconds}s)
+                  Please wait ({lockoutSeconds}s)
                 </>
               ) : (
                 <>
-                  Sign In to Agency Portal
+                  Sign In
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}

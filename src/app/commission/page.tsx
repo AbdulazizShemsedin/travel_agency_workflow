@@ -63,13 +63,16 @@ import {
   uploadBatchPaymentProofV2,
   settleBatchItemsV2,
   settleBatchV2,
-  recordBatchAdvanceV2,
+  updateBatchAdvanceV2,
   writeOffBatchV2,
   releaseUnpaidItemsV2,
   triggerEarlyCommissionAccrualV2,
+  logStageIncomeV2,
+  logStageExpenseV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
   V2CommissionBatchItem,
+  V2SupportedCurrency,
 } from "@/lib/api/v2/finance";
 import {
   listContractorsV2,
@@ -83,6 +86,9 @@ import {
 import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
 import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
+import { listApplicantsV2 } from "@/lib/api/v2/applicants";
+import { listPlacementsV2 } from "@/lib/api/v2/placements";
+import { requestV2 } from "@/lib/api/v2/client";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 import { FxRateModal } from "@/components/finance/FxRateModal";
 import { Coins, TrendingUp } from "lucide-react";
@@ -161,9 +167,22 @@ export default function AdminCommissionPage() {
   // Advance Payment Modal States
   const [isAdvanceModalOpen, setIsAdvanceModalOpen] = React.useState<boolean>(false);
   const [advanceAmountInput, setAdvanceAmountInput] = React.useState<string>("");
-  const [advanceReferenceInput, setAdvanceReferenceInput] = React.useState<string>("");
   const [isSubmittingAdvance, setIsSubmittingAdvance] = React.useState<boolean>(false);
   const [advanceConfirmStep, setAdvanceConfirmStep] = React.useState<boolean>(false);
+
+  // Batch Creation Custom States (Advance & Include Unpaid from Previous)
+  const [createBatchAdvance, setCreateBatchAdvance] = React.useState<string>("");
+  const [includeUnpaidPrevious, setIncludeUnpaidPrevious] = React.useState<boolean>(false);
+
+  // Quick Log Income/Expense Modal States
+  const [isQuickLogModalOpen, setIsQuickLogModalOpen] = React.useState<boolean>(false);
+  const [quickLogType, setQuickLogType] = React.useState<"Income" | "Expense">("Income");
+  const [quickLogAmount, setQuickLogAmount] = React.useState<string>("");
+  const [quickLogCurrency, setQuickLogCurrency] = React.useState<V2SupportedCurrency>("ETB");
+  const [quickLogDescription, setQuickLogDescription] = React.useState<string>("");
+  const [quickLogPlacement, setQuickLogPlacement] = React.useState<string>("");
+  const [quickLogApplicant, setQuickLogApplicant] = React.useState<string>("");
+  const [isLoggingQuickTx, setIsLoggingQuickTx] = React.useState<boolean>(false);
 
   // Write-Off Batch Modal States
   const [isWriteOffModalOpen, setIsWriteOffModalOpen] = React.useState<boolean>(false);
@@ -283,18 +302,177 @@ export default function AdminCommissionPage() {
     staleTime: 20000,
   });
 
+  // Fetch Applicants list to resolve full names of departed candidates across all commission tables
+  const { data: applicants = [] } = useQuery({
+    queryKey: ["applicants"],
+    queryFn: () => listApplicantsV2(),
+    staleTime: 60000,
+  });
+
+  // Fetch Placements list to resolve placement -> applicant linkages
+  const { data: placements = [] } = useQuery({
+    queryKey: ["v2_placements_for_commission"],
+    queryFn: () => listPlacementsV2(),
+    staleTime: 60000,
+  });
+
+  const applicantMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of applicants) {
+      const name = a.full_name || [a.first_name, a.last_name].filter(Boolean).join(" ") || a.name;
+      map.set(String(a.name).toLowerCase().trim(), name);
+      if (a.passport_number) {
+        map.set(String(a.passport_number).toLowerCase().trim(), name);
+      }
+    }
+    return map;
+  }, [applicants]);
+
+  const placementMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of placements) {
+      if (p.name && p.applicant) {
+        map.set(String(p.name).toLowerCase().trim(), String(p.applicant).toLowerCase().trim());
+      }
+    }
+    return map;
+  }, [placements]);
+
+  // Fetch all transactions to link batch requests & transactions to placements & applicants
+  const { data: allTransactions = [] } = useQuery({
+    queryKey: ["v2_all_applicant_transactions_for_commission"],
+    queryFn: async () => {
+      try {
+        const res = await requestV2<any[]>("/api/method/frappe.client.get_list", {
+          method: "POST",
+          body: {
+            doctype: "Applicant Transaction",
+            fields: JSON.stringify([
+              "name",
+              "placement",
+              "applicant",
+              "commission_batch_request",
+              "transaction_type",
+              "amount_original",
+              "currency_original",
+              "status",
+            ]),
+            limit_page_length: 500,
+          },
+        });
+        return Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 30000,
+  });
+
+  const txMap = React.useMemo(() => {
+    const map = new Map<string, { placement?: string; applicant?: string; candidateName?: string }>();
+    for (const t of allTransactions) {
+      const txId = String(t.name).toLowerCase().trim();
+      const plcId = t.placement ? String(t.placement).toLowerCase().trim() : undefined;
+      const appId = t.applicant
+        ? String(t.applicant).toLowerCase().trim()
+        : (plcId ? placementMap.get(plcId) : undefined);
+      const candidateName = appId ? applicantMap.get(appId) : undefined;
+      map.set(txId, { placement: plcId, applicant: appId, candidateName });
+    }
+    return map;
+  }, [allTransactions, placementMap, applicantMap]);
+
+  const batchApplicantsMap = React.useMemo(() => {
+    const map = new Map<string, Array<{ txId: string; appId?: string; name: string }>>();
+    for (const t of allTransactions) {
+      if (!t.commission_batch_request) continue;
+      const bId = String(t.commission_batch_request).trim();
+      const plcId = t.placement ? String(t.placement).toLowerCase().trim() : undefined;
+      const appId = t.applicant
+        ? String(t.applicant).toLowerCase().trim()
+        : (plcId ? placementMap.get(plcId) : undefined);
+      const candidateName = appId ? applicantMap.get(appId) : undefined;
+      const name = candidateName || appId || t.name;
+      const list = map.get(bId) || [];
+      if (!list.some((item) => item.txId === t.name)) {
+        list.push({ txId: t.name, appId: appId ? appId.toUpperCase() : undefined, name });
+      }
+      map.set(bId, list);
+    }
+    return map;
+  }, [allTransactions, placementMap, applicantMap]);
+
+  const getCandidateName = React.useCallback(
+    (itemOrKey: any): string => {
+      if (!itemOrKey) return "—";
+      if (typeof itemOrKey === "object") {
+        if (itemOrKey.full_name && itemOrKey.full_name !== "Applicant" && itemOrKey.full_name !== "Candidate") {
+          return itemOrKey.full_name;
+        }
+        if (itemOrKey.applicant_name && itemOrKey.applicant_name !== "Applicant" && itemOrKey.applicant_name !== "Candidate") {
+          return itemOrKey.applicant_name;
+        }
+        const rawKey =
+          itemOrKey.applicant ||
+          itemOrKey.placement ||
+          itemOrKey.transaction ||
+          itemOrKey.transaction_name ||
+          itemOrKey.name;
+        return getCandidateName(rawKey);
+      }
+
+      const str = String(itemOrKey).trim();
+      const lower = str.toLowerCase();
+
+      // 1. Direct applicant name / passport match
+      if (applicantMap.has(lower)) {
+        return applicantMap.get(lower)!;
+      }
+
+      // 2. Transaction match
+      if (txMap.has(lower)) {
+        const resolved = txMap.get(lower);
+        if (resolved?.candidateName) return resolved.candidateName;
+        if (resolved?.applicant && applicantMap.has(resolved.applicant)) {
+          return applicantMap.get(resolved.applicant)!;
+        }
+        if (resolved?.placement && placementMap.has(resolved.placement)) {
+          const aId = placementMap.get(resolved.placement)!;
+          if (applicantMap.has(aId)) return applicantMap.get(aId)!;
+        }
+      }
+
+      // 3. Placement match
+      if (placementMap.has(lower)) {
+        const aId = placementMap.get(lower)!;
+        if (applicantMap.has(aId)) return applicantMap.get(aId)!;
+      }
+
+      // 4. If it's already a full person name (not an ID and not "Applicant" / "Candidate")
+      if (!/^([A-Z]{3,4}-\d+|Applicant|Candidate)$/i.test(str) && str.length > 2) {
+        return str;
+      }
+
+      return str;
+    },
+    [applicantMap, txMap, placementMap]
+  );
+
   // Filter owed commissions by search query
   const filteredOwed = React.useMemo(() => {
     if (!searchQuery.trim()) return owedCommissions;
     const q = searchQuery.toLowerCase();
-    return owedCommissions.filter(
-      (item) =>
+    return owedCommissions.filter((item) => {
+      const candName = getCandidateName(item).toLowerCase();
+      return (
+        candName.includes(q) ||
         (item.applicant && item.applicant.toLowerCase().includes(q)) ||
-        (item.full_name && item.full_name.toLowerCase().includes(q)) ||
+        (item.placement && item.placement.toLowerCase().includes(q)) ||
         (item.transaction_name && item.transaction_name.toLowerCase().includes(q)) ||
         (item.name && item.name.toLowerCase().includes(q))
-    );
-  }, [owedCommissions, searchQuery]);
+      );
+    });
+  }, [owedCommissions, searchQuery, getCandidateName]);
 
   // Toggle selection for batching
   const toggleSelectTx = (txName: string) => {
@@ -402,15 +580,21 @@ export default function AdminCommissionPage() {
 
     setIsCreatingBatch(true);
     try {
+      const advNum = createBatchAdvance.trim() ? Number(createBatchAdvance) : undefined;
       const batch = await createCommissionBatchV2(
         selectedContractor,
         selectedCountry,
-        selectedTxNames.length > 0 ? selectedTxNames : undefined
+        selectedTxNames.length > 0 ? selectedTxNames : undefined,
+        undefined,
+        advNum,
+        includeUnpaidPrevious
       );
 
       setSelectedBatchName(batch.name);
       setActiveBatch(batch);
       setSelectedTxNames([]);
+      setCreateBatchAdvance("");
+      setIncludeUnpaidPrevious(false);
       toast.success("Commission Batch Created", {
         description: `Successfully created batch ${batch.name}.`,
       });
@@ -597,41 +781,92 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION 7: Record Advance Payment
+  // ACTION 7: Update Batch Advance Amount
   const handleRecordAdvance = async () => {
     if (!activeBatch?.name) return;
     const amount = Number(advanceAmountInput);
-    if (!amount || isNaN(amount) || amount <= 0) {
+    if (isNaN(amount) || amount < 0) {
       toast.error("Invalid Amount", {
-        description: "Please enter a valid positive advance amount.",
+        description: "Please enter a valid non-negative advance amount (0 to clear).",
       });
       return;
     }
 
     setIsSubmittingAdvance(true);
     try {
-      const updated = await recordBatchAdvanceV2(
-        activeBatch.name,
-        amount,
-        advanceReferenceInput.trim() || undefined
-      );
+      await updateBatchAdvanceV2(activeBatch.name, amount);
 
-      setActiveBatch(updated);
       setIsAdvanceModalOpen(false);
       setAdvanceConfirmStep(false);
       setAdvanceAmountInput("");
-      setAdvanceReferenceInput("");
-      toast.success("Advance Payment Recorded", {
-        description: `Posted ${amount.toLocaleString()} ${activeBatch.currency || "ETB"} for batch ${activeBatch.name}.`,
+      toast.success("Batch Advance Updated", {
+        description: amount === 0
+          ? `Cleared advance on batch ${activeBatch.name}.`
+          : `Set requested advance to ${amount.toLocaleString()} ${activeBatch.currency || "ETB"} for batch ${activeBatch.name}.`,
       });
       refetchBatches();
       await loadBatchDetails(activeBatch.name);
     } catch (err: any) {
-      toast.error("Advance Posting Failed", {
+      toast.error("Advance Update Failed", {
         description: formatCleanErrorMessage(err),
       });
     } finally {
       setIsSubmittingAdvance(false);
+    }
+  };
+
+  // ACTION: Quick Log One-Off Income / Expense
+  const handleQuickLogTransaction = async () => {
+    const amt = Number(quickLogAmount);
+    if (!amt || isNaN(amt) || amt <= 0) {
+      toast.error("Invalid Amount", {
+        description: "Please enter a valid amount greater than zero.",
+      });
+      return;
+    }
+    if (!quickLogDescription.trim()) {
+      toast.error("Description Required", {
+        description: "Please enter a description for this entry.",
+      });
+      return;
+    }
+
+    setIsLoggingQuickTx(true);
+    try {
+      if (quickLogType === "Expense") {
+        await logStageExpenseV2(
+          amt,
+          quickLogCurrency,
+          quickLogDescription.trim(),
+          quickLogPlacement.trim() || undefined,
+          undefined,
+          quickLogApplicant.trim() || undefined
+        );
+      } else {
+        await logStageIncomeV2(
+          amt,
+          quickLogCurrency,
+          quickLogDescription.trim(),
+          quickLogPlacement.trim() || undefined,
+          undefined,
+          quickLogApplicant.trim() || undefined
+        );
+      }
+
+      toast.success(`${quickLogType} Logged Successfully`, {
+        description: `Logged ${amt.toLocaleString()} ${quickLogCurrency} for finance review.`,
+      });
+      setIsQuickLogModalOpen(false);
+      setQuickLogAmount("");
+      setQuickLogDescription("");
+      setQuickLogPlacement("");
+      setQuickLogApplicant("");
+    } catch (err: any) {
+      toast.error(`Failed to Log ${quickLogType}`, {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsLoggingQuickTx(false);
     }
   };
 
@@ -836,6 +1071,20 @@ export default function AdminCommissionPage() {
             >
               <TrendingUp className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
               FX Rates
+            </Button>
+          )}
+
+          {isFinanceManagerOrAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setIsQuickLogModalOpen(true)}
+              className="text-xs h-8 border-slate-300 dark:border-[#2a2a34]"
+              title="Log one-off agency income or expense entry"
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+              Log Income / Expense
             </Button>
           )}
 
@@ -1133,7 +1382,9 @@ export default function AdminCommissionPage() {
                     <Layers className="h-4 w-4 text-emerald-600" />
                     Unbatched Approved Commissions
                   </CardTitle>
-
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    Departed candidates awaiting grouping into an invoice batch. Once batched, they move to the Batch Requests tab.
+                  </CardDescription>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1145,7 +1396,7 @@ export default function AdminCommissionPage() {
                     className="text-xs h-8"
                   >
                     <Clock className="mr-1.5 h-3.5 w-3.5 text-amber-600" />
-                    Trigger Early Accrual
+                    Add Early Commission
                   </Button>
 
                   <Button
@@ -1162,7 +1413,7 @@ export default function AdminCommissionPage() {
                     )}
                     {selectedTxNames.length > 0
                       ? `Create Batch (${selectedTxNames.length} items)`
-                      : "Batch All Owed"}
+                      : "Batch All"}
                   </Button>
                 </div>
               </div>
@@ -1224,8 +1475,8 @@ export default function AdminCommissionPage() {
                             <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
                               {txId}
                             </td>
-                            <td className="py-2.5 px-3 font-semibold">
-                              {item.full_name || item.applicant || "Candidate"}
+                            <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
+                              {getCandidateName(item)}
                             </td>
                             <td className="py-2.5 px-3">{item.contractor_name || item.contractor}</td>
                             <td className="py-2.5 px-3">{item.destination_country || selectedCountry}</td>
@@ -1254,7 +1505,7 @@ export default function AdminCommissionPage() {
                     ) : (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-slate-400">
-                          No unbatched owed commissions for this Contractor in {selectedCountry}.
+                          No unbatched commissions for this agency in {selectedCountry}.
                         </td>
                       </tr>
                     )}
@@ -1304,6 +1555,7 @@ export default function AdminCommissionPage() {
                     <tr>
                       <th className="py-2.5 px-3">Batch ID</th>
                       <th className="py-2.5 px-3">Partner Agency</th>
+                      <th className="py-2.5 px-3">Candidates in Batch</th>
                       <th className="py-2.5 px-3">Corridor</th>
                       <th className="py-2.5 px-3">Total</th>
                       <th className="py-2.5 px-3">Advance Paid</th>
@@ -1317,9 +1569,9 @@ export default function AdminCommissionPage() {
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                     {isBatchesLoading ? (
                       <tr>
-                        <td colSpan={10} className="py-8 text-center text-slate-400">
+                        <td colSpan={11} className="py-8 text-center text-slate-400">
                           <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
-                          Loading Commission Batch Requests...
+                          Loading commission batches...
                         </td>
                       </tr>
                     ) : filteredBatches.length > 0 ? (
@@ -1338,6 +1590,41 @@ export default function AdminCommissionPage() {
                             </td>
                             <td className="py-2.5 px-3 font-medium">
                               {batch.contractor_name || batch.contractor}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {(() => {
+                                const candidates = batchApplicantsMap.get(batch.name) || [];
+                                if (candidates.length === 0) {
+                                  return (
+                                    <span className="text-[11px] text-slate-400 italic">
+                                      0 Candidates (No active lines)
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <div className="flex flex-col gap-1 max-w-[260px]">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[10px] font-bold px-1.5 py-0",
+                                          candidates.length > 1
+                                            ? "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                                            : "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                                        )}
+                                      >
+                                        {candidates.length} {candidates.length === 1 ? "Candidate" : "Candidates"}
+                                      </Badge>
+                                    </div>
+                                    <span
+                                      className="font-semibold text-slate-800 dark:text-zinc-200 truncate text-xs"
+                                      title={candidates.map((c) => `${c.name}${c.appId ? ` (${c.appId})` : ""}`).join(", ")}
+                                    >
+                                      {candidates.map((c) => c.name).join(", ")}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="py-2.5 px-3">{batch.destination_country || "—"}</td>
                             <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
@@ -1453,8 +1740,8 @@ export default function AdminCommissionPage() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-400">
-                          Zero commission batch requests found for current filters.
+                        <td colSpan={11} className="py-12 text-center text-slate-400">
+                          No commission batches found for current filters.
                         </td>
                       </tr>
                     )}
@@ -1555,15 +1842,14 @@ export default function AdminCommissionPage() {
                           type="button"
                           size="sm"
                           onClick={() => {
-                            setAdvanceAmountInput("");
-                            setAdvanceReferenceInput("");
+                            setAdvanceAmountInput(activeBatch.requested_advance_amount ? String(activeBatch.requested_advance_amount) : "");
                             setAdvanceConfirmStep(false);
                             setIsAdvanceModalOpen(true);
                           }}
                           className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
                         >
                           <CreditCard className="h-3.5 w-3.5 mr-1.5" />
-                          Record Advance
+                          Update Advance
                         </Button>
                       )}
                     </div>
@@ -1695,7 +1981,9 @@ export default function AdminCommissionPage() {
                                 </td>
                                 <td className="py-2 px-3 font-mono">{it.name || "Row"}</td>
                                 <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
-                                <td className="py-2 px-3 font-semibold">{it.applicant || it.applicant_name || "Candidate"}</td>
+                                <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                                  {getCandidateName(it)}
+                                </td>
                                 <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
                                 <td className="py-2 px-3">
                                   <Badge
@@ -1804,13 +2092,13 @@ export default function AdminCommissionPage() {
                     </p>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase text-emerald-600 font-semibold">Advance Received</span>
+                    <span className="text-[10px] uppercase text-emerald-600 font-semibold">Advance Requested</span>
                     <p className="text-lg font-bold text-emerald-800 dark:text-emerald-400 mt-0.5">
                       {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase text-amber-600 font-semibold">Net Balance Due</span>
+                    <span className="text-[10px] uppercase text-amber-600 font-semibold">Stored Balance Due</span>
                     <p className="text-lg font-bold text-amber-800 dark:text-amber-400 mt-0.5">
                       {(
                         activeBatch.balance_due_original !== undefined
@@ -1819,6 +2107,21 @@ export default function AdminCommissionPage() {
                       ).toLocaleString()} {activeBatch.currency || "ETB"}
                     </p>
                   </div>
+                </div>
+
+                {/* Explanatory Notice for Printed Invoice TOTAL */}
+                <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Layers className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>Official PDF Invoice Printed Total:</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-blue-900 dark:text-blue-300">
+                    The printed invoice bottom-line <strong>TOTAL</strong> is dynamically computed at PDF render time as:{" "}
+                    <code className="bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded font-mono font-bold">
+                      Batch Total + Requested Advance + Previous Unpaid Arrears
+                    </code>
+                    . System stored balance due (<span className="font-mono font-semibold">balance_due_original</span>) deliberately tracks only this batch's own line items.
+                  </p>
                 </div>
 
                 {/* Candidate Lines */}
@@ -1842,7 +2145,7 @@ export default function AdminCommissionPage() {
                           <tr key={it.name || idx}>
                             <td className="py-2 px-3 font-mono">{idx + 1}</td>
                             <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
-                            <td className="py-2 px-3 font-medium">{it.applicant || it.applicant_name || "Candidate"}</td>
+                            <td className="py-2 px-3 font-medium">{getCandidateName(it)}</td>
                             <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
                             <td className="py-2 px-3">
                               <Badge
@@ -2143,43 +2446,34 @@ export default function AdminCommissionPage() {
 
               {/* Action Panels */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Advance Recording Card */}
+                {/* Advance Updating Card */}
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
                     <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
                       <CreditCard className="h-4 w-4 text-amber-600" />
-                      Record Advance Wire Payment
+                      Update Requested Advance
                     </CardTitle>
-
+                    <CardDescription className="text-xs text-slate-500">
+                      Set requested contractor advance. Pass 0 to clear. Prints as an addition on the batch invoice PDF total.
+                    </CardDescription>
                   </CardHeader>
 
                   <CardContent className="p-4 space-y-3 text-xs">
                     {activeBatch.status === "Settled" ? (
                       <div className="p-3 rounded-lg bg-slate-50 text-slate-500 text-xs">
-                        This batch is fully Settled. No advance payment needed.
+                        This batch is fully Settled.
                       </div>
                     ) : (
                       <>
                         <div className="space-y-1">
-                          <Label className="text-xs font-semibold">Advance Amount ({activeBatch?.currency || "ETB"}) *</Label>
+                          <Label className="text-xs font-semibold">Requested Advance ({activeBatch?.currency || "ETB"}) *</Label>
                           <Input
                             type="number"
                             step="any"
-                            min="1"
-                            placeholder="e.g. 50000"
+                            min="0"
+                            placeholder="e.g. 50000 (0 to clear)"
                             value={advanceAmountInput}
                             onChange={(e) => setAdvanceAmountInput(e.target.value)}
-                            className="text-xs h-8"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold">Advance Wire Reference (Optional)</Label>
-                          <Input
-                            type="text"
-                            placeholder="e.g. CBE-TX-984210"
-                            value={advanceReferenceInput}
-                            onChange={(e) => setAdvanceReferenceInput(e.target.value)}
                             className="text-xs h-8"
                           />
                         </div>
@@ -2187,20 +2481,27 @@ export default function AdminCommissionPage() {
                         <Button
                           type="button"
                           size="sm"
+                          disabled={isSubmittingAdvance}
                           onClick={() => {
                             const amt = Number(advanceAmountInput);
-                            if (!amt || isNaN(amt) || amt <= 0) {
+                            if (isNaN(amt) || amt < 0) {
                               toast.error("Invalid Amount", {
-                                description: "Please enter a valid positive amount.",
+                                description: "Please enter a valid non-negative amount (0 to clear).",
                               });
                               return;
                             }
-                            setAdvanceConfirmStep(true);
-                            setIsAdvanceModalOpen(true);
+                            handleRecordAdvance();
                           }}
                           className="w-full h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs mt-2"
                         >
-                          Review & Post Advance Payment
+                          {isSubmittingAdvance ? (
+                            <>
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              Updating Advance...
+                            </>
+                          ) : (
+                            "Save Requested Advance"
+                          )}
                         </Button>
                       </>
                     )}
@@ -2255,7 +2556,7 @@ export default function AdminCommissionPage() {
                                 )}
                                 <div>
                                   <p className="font-semibold text-slate-900 dark:text-white">
-                                    {it.applicant || it.applicant_name || "Candidate"}
+                                    {getCandidateName(it)}
                                   </p>
                                   <p className="text-[10px] font-mono text-slate-400">
                                     {it.transaction || it.name}
@@ -2622,17 +2923,17 @@ export default function AdminCommissionPage() {
       </Dialog>
 
       {/* ------------------------------------------------------------------- */}
-      {/* MODAL 2: RECORD BATCH ADVANCE PAYMENT                               */}
+      {/* MODAL 2: UPDATE BATCH ADVANCE AMOUNT                                */}
       {/* ------------------------------------------------------------------- */}
       <Dialog open={isAdvanceModalOpen} onOpenChange={setIsAdvanceModalOpen}>
         <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-amber-500" />
-              Record Commission Batch Advance Payment
+              Update Batch Requested Advance
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Apply a partial advance wire or cash payment against batch {activeBatch?.name}.
+              Set or clear the requested advance amount for batch {activeBatch?.name}. Pass 0 to clear.
             </DialogDescription>
           </DialogHeader>
 
@@ -2646,7 +2947,7 @@ export default function AdminCommissionPage() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] text-amber-500 font-medium">Advance Currency:</span>
+                  <span className="text-[10px] text-amber-500 font-medium">Currency:</span>
                   <p className="font-bold text-amber-700 dark:text-amber-400">
                     {activeBatch.currency || "ETB"} (batch currency)
                   </p>
@@ -2656,27 +2957,19 @@ export default function AdminCommissionPage() {
               {!advanceConfirmStep ? (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Advance Amount ({activeBatch.currency || "ETB"}) *</Label>
+                    <Label className="text-xs font-semibold">Requested Advance Amount ({activeBatch.currency || "ETB"}) *</Label>
                     <Input
                       type="number"
                       step="any"
-                      min="1"
-                      placeholder="e.g. 50000"
+                      min="0"
+                      placeholder="e.g. 5000 (0 to clear)"
                       value={advanceAmountInput}
                       onChange={(e) => setAdvanceAmountInput(e.target.value)}
                       className="text-xs h-9"
                     />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Advance Wire Reference (Optional)</Label>
-                    <Input
-                      type="text"
-                      placeholder="e.g. CBE-TX-984210"
-                      value={advanceReferenceInput}
-                      onChange={(e) => setAdvanceReferenceInput(e.target.value)}
-                      className="text-xs h-9"
-                    />
+                    <p className="text-[10px] text-slate-500">
+                      Enter the advance amount to appear on the printed invoice, or enter 0 to clear.
+                    </p>
                   </div>
 
                   <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
@@ -2692,9 +2985,9 @@ export default function AdminCommissionPage() {
                       size="sm"
                       onClick={() => {
                         const amt = Number(advanceAmountInput);
-                        if (!amt || isNaN(amt) || amt <= 0) {
+                        if (isNaN(amt) || amt < 0) {
                           toast.error("Invalid Amount", {
-                            description: "Please enter a positive advance amount.",
+                            description: "Please enter a valid non-negative advance amount (0 to clear).",
                           });
                           return;
                         }
@@ -2711,12 +3004,12 @@ export default function AdminCommissionPage() {
                   <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs space-y-1.5">
                     <p className="font-bold flex items-center gap-1.5">
                       <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-                      Confirm Advance Payment Posting:
+                      Confirm Advance Update:
                     </p>
                     <ul className="list-disc list-inside space-y-0.5 text-[11px]">
-                      <li>Amount: <strong>{Number(advanceAmountInput).toLocaleString()} {activeBatch.currency || "ETB"}</strong> (batch currency)</li>
-                      <li>Reference: <strong>{advanceReferenceInput.trim() || "None specified"}</strong></li>
-                      <li>Recorded as a separate advance loan; it does not reduce this batch's balance due.</li>
+                      <li>Requested Advance: <strong>{Number(advanceAmountInput).toLocaleString()} {activeBatch.currency || "ETB"}</strong></li>
+                      <li>{Number(advanceAmountInput) === 0 ? "Any previously recorded advance will be cleared." : "This will be included as an advance line on the printed invoice."}</li>
+                      <li>Does not modify the batch's stored balance due.</li>
                     </ul>
                   </div>
 
@@ -2739,10 +3032,10 @@ export default function AdminCommissionPage() {
                       {isSubmittingAdvance ? (
                         <>
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          Posting to Ledger...
+                          Updating Advance...
                         </>
                       ) : (
-                        "Post Advance Payment"
+                        "Save Advance Amount"
                       )}
                     </Button>
                   </DialogFooter>
@@ -2891,6 +3184,43 @@ export default function AdminCommissionPage() {
                 </span>
               </div>
             </div>
+
+            {/* Advance Amount & Include Unpaid from Previous Batches */}
+            <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-[#2a2a35]">
+              <div>
+                <Label className="text-[11px] font-semibold">Requested Advance Amount (Optional)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={`e.g. 1000 (${filteredOwed[0]?.currency || "SAR"})`}
+                  value={createBatchAdvance}
+                  onChange={(e) => setCreateBatchAdvance(e.target.value)}
+                  className="h-8 text-xs mt-1"
+                />
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Added as an advance loan line item into this batch's printed invoice total.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-2 cursor-pointer p-2 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#26262f]">
+                <input
+                  type="checkbox"
+                  checked={includeUnpaidPrevious}
+                  onChange={(e) => setIncludeUnpaidPrevious(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div className="text-[11px]">
+                  <span className="font-semibold text-slate-800 dark:text-zinc-200">
+                    Include unpaid items from previous open batches
+                  </span>
+                  <p className="text-slate-500 dark:text-zinc-400 text-[10px] leading-tight mt-0.5">
+                    Pulls still-unpaid items from this contractor's open batches (Sent / Partially Settled) in the same currency into this new batch as trackable line items. (Older batches with zero remaining unpaid balance will flip to Settled).
+                  </p>
+                </div>
+              </label>
+            </div>
+
             <p className="text-[11px] text-slate-500">
               A Commission Batch Request (CBR-#####) will be created with status <strong>Draft</strong>.
             </p>
@@ -3011,6 +3341,143 @@ export default function AdminCommissionPage() {
             >
               {isSubmittingWriteOff && <Loader2 className="h-3 w-3 animate-spin" />}
               Confirm Write-Off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Log One-Off Income / Expense Modal */}
+      <Dialog open={isQuickLogModalOpen} onOpenChange={setIsQuickLogModalOpen}>
+        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Plus className="h-5 w-5 text-emerald-600" />
+              Log One-Off Financial Transaction
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Record a general agency income or expense entry (e.g. advance, fee, or one-off operational disbursement).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 text-xs py-1">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setQuickLogType("Income")}
+                className={cn(
+                  "py-2 rounded-lg font-bold border text-center transition-all",
+                  quickLogType === "Income"
+                    ? "bg-emerald-50 border-emerald-500 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-600 shadow-xs"
+                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-400"
+                )}
+              >
+                + Log Income
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuickLogType("Expense")}
+                className={cn(
+                  "py-2 rounded-lg font-bold border text-center transition-all",
+                  quickLogType === "Expense"
+                    ? "bg-rose-50 border-rose-500 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-600 shadow-xs"
+                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-400"
+                )}
+              >
+                - Log Expense
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] font-semibold">Amount *</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  placeholder="e.g. 5000"
+                  value={quickLogAmount}
+                  onChange={(e) => setQuickLogAmount(e.target.value)}
+                  className="h-8 text-xs mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold">Currency *</Label>
+                <select
+                  value={quickLogCurrency}
+                  onChange={(e) => setQuickLogCurrency(e.target.value as V2SupportedCurrency)}
+                  className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs mt-1 font-semibold text-slate-900 dark:text-white"
+                >
+                  <option value="ETB" className="dark:bg-[#121217]">ETB (Birr)</option>
+                  <option value="SAR" className="dark:bg-[#121217]">SAR (Saudi Riyal)</option>
+                  <option value="USD" className="dark:bg-[#121217]">USD (US Dollar)</option>
+                  <option value="KWD" className="dark:bg-[#121217]">KWD (Kuwaiti Dinar)</option>
+                  <option value="AED" className="dark:bg-[#121217]">AED (UAE Dirham)</option>
+                  <option value="QAR" className="dark:bg-[#121217]">QAR (Qatari Riyal)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-[11px] font-semibold">Description / Purpose *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Agency advance disbursement or contractor initial deposit"
+                value={quickLogDescription}
+                onChange={(e) => setQuickLogDescription(e.target.value)}
+                className="h-8 text-xs mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-500">Placement ID (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. PLM-0001"
+                  value={quickLogPlacement}
+                  onChange={(e) => setQuickLogPlacement(e.target.value)}
+                  className="h-8 text-xs mt-1 font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-500">Applicant ID (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. APP-0001"
+                  value={quickLogApplicant}
+                  onChange={(e) => setQuickLogApplicant(e.target.value)}
+                  className="h-8 text-xs mt-1 font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsQuickLogModalOpen(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isLoggingQuickTx}
+              onClick={handleQuickLogTransaction}
+              className="text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-bold"
+            >
+              {isLoggingQuickTx ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Recording...
+                </>
+              ) : (
+                `Submit ${quickLogType}`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -174,7 +174,23 @@ export async function fetchOperationalWorkspaceDataV2(
         continue;
       }
 
-      if (streamType === "embassy" || streamType === "wakala") {
+      if (streamType === "embassy") {
+        const isAlreadyStampedOrBeyond =
+          plc?.status === "Stamped" ||
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed" ||
+          applicant.applicant_state === "Stamped" ||
+          applicant.applicant_state === "Ticketed" ||
+          applicant.applicant_state === "Departed";
+
+        // Candidate must have finished Te'shir before entering the Embassy stage
+        if (!isAlreadyStampedOrBeyond && !isTeshirFullyCompleted) {
+          continue;
+        }
+        if (!embassyStep && !isAlreadyStampedOrBeyond) {
+          continue;
+        }
+      } else if (streamType === "wakala") {
         const isEmbassyState =
           plc?.status === "Processing" ||
           plc?.status === "Stamped" ||
@@ -184,27 +200,37 @@ export async function fetchOperationalWorkspaceDataV2(
           continue;
         }
       } else if (streamType === "departure") {
-        const isStampedOrBeyond =
+        const isAlreadyTicketedOrBeyond =
+          plc?.status === "Ticketed" ||
+          plc?.status === "Departed" ||
+          applicant.applicant_state === "Ticketed" ||
+          applicant.applicant_state === "Departed";
+
+        // Must be stamped by Embassy (and completed Te'shir) before entering Ticket/Departure stage
+        const isReadyForDeparture =
+          (isEmbassyFinished && isTeshirFullyCompleted) ||
+          plc?.status === "Stamped";
+
+        if (!isAlreadyTicketedOrBeyond && !isReadyForDeparture) {
+          continue;
+        }
+      } else if (streamType === "injaz") {
+        // Te'shir sheet: candidate must have completed LMIS (or already advanced beyond)
+        const isAlreadyPastLms =
+          isTeshirFullyCompleted ||
           isEmbassyFinished ||
           plc?.status === "Stamped" ||
           plc?.status === "Ticketed" ||
           plc?.status === "Departed";
 
-        if (!isStampedOrBeyond) {
+        if (!isAlreadyPastLms && !isLmsFullyCompleted) {
           continue;
         }
-      } else if (streamType === "injaz") {
-        // Te'shir sheet: corridor steps spawn once the placement reaches Processing
-        const isProcessingOrBeyond =
-          plc?.status === "Processing" ||
-          plc?.status === "Stamped" ||
-          plc?.status === "Ticketed" ||
-          plc?.status === "Departed";
-        if (!injazStep && !isProcessingOrBeyond) {
+        if (!injazStep && !isAlreadyPastLms) {
           continue;
         }
       } else if (streamType === "lms") {
-        // LMIS sheet: same Processing-or-beyond gate as the corridor steps
+        // LMIS sheet: placement must be in Processing or beyond
         const isProcessingOrBeyond =
           plc?.status === "Processing" ||
           plc?.status === "Stamped" ||
@@ -228,8 +254,14 @@ export async function fetchOperationalWorkspaceDataV2(
       }
 
       const medicalDate =
-        applicant.medical_issue_date || applicant.medical_date || undefined;
-      const medicalExpiryDate = applicant.medical_expiry_date;
+        applicant.medical_issue_date ||
+        applicant.medical_date ||
+        (plc as any)?.medical_selected_examination_date ||
+        undefined;
+      const medicalExpiryDate =
+        applicant.medical_expiry_date ||
+        (plc as any)?.medical_selected_expiry_date ||
+        undefined;
       let medicalRemaining = "—";
       let medicalRemainingDays: number | undefined = undefined;
 
@@ -280,6 +312,15 @@ export async function fetchOperationalWorkspaceDataV2(
           ? embassyStep || lmsStep
           : undefined;
 
+      const rawApplicantMed = (applicant.medical_status || "").toUpperCase().trim();
+      const rawPlcMed = ((plc as any)?.medical_selected_status || "").toUpperCase().trim();
+      const resolvedMedical =
+        rawApplicantMed === "FIT" || rawPlcMed === "FIT"
+          ? "FIT"
+          : rawApplicantMed === "UNFIT" || rawPlcMed === "UNFIT"
+          ? "UNFIT"
+          : applicant.medical_status || (plc as any)?.medical_selected_status || "Pending";
+
       const row: WorkspaceApplicantRow = {
         applicantId: applicant.name,
         applicant: applicant as any,
@@ -292,7 +333,7 @@ export async function fetchOperationalWorkspaceDataV2(
           applicant.name,
         passportNumber: applicant.passport_number || "—",
         phone: applicant.phone || applicant.phone_number || undefined,
-        medicalStatus: applicant.medical_status || "Pending",
+        medicalStatus: resolvedMedical,
         medicalDate,
         medicalExpiryDate,
         jobApplied: applicant.target_job || applicant.job_applied || "Housemaid",

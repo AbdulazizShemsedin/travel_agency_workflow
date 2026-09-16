@@ -53,12 +53,12 @@ export function RoleWorkspaceContainer() {
   const canRegister = can("registerApplicant");
 
   const allTabsConfig = [
-    { id: "directory", label: "Directory", icon: Users, desc: "All Candidates" },
+    { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
     { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Departure" },
-    { id: "clearance", label: "Clearance Queue", icon: ShieldCheck, desc: "Step Pipeline" },
+    { id: "clearance", label: "Clearance List", icon: ShieldCheck, desc: "Step Pipeline" },
   ];
 
   // Determine available tabs and default workspace for current user
@@ -219,37 +219,37 @@ export function RoleWorkspaceContainer() {
   const getHeaderInfo = () => {
     if (activeTab === "lms") {
       return {
-        title: "LMIS Clearance Workspace",
-        subtitle: "Ministry of Labor quota clearance, COC credentials, and document compliance.",
+        title: "LMIS Clearance",
+        subtitle: "Ministry of Labor clearance and COC documents.",
       };
     }
     if (activeTab === "injaz") {
       return {
-        title: "Te'shir / Injaz MOFA Processing",
-        subtitle: "Saudi Ministry of Foreign Affairs electronic visa application, fee settlement, and biometric appointment scheduling.",
+        title: "Te'shir & Injaz",
+        subtitle: "Saudi MOFA visa application, payments, and finger-print appointments.",
       };
     }
     if (activeTab === "embassy") {
       return {
-        title: "Embassy Clearance & Visa Stamping",
-        subtitle: "Physical passport submission to diplomatic missions and visa sticker stamping verification.",
+        title: "Embassy & Stamping",
+        subtitle: "Send passports to the embassy and record visa stamping.",
       };
     }
     if (activeTab === "departure") {
       return {
-        title: "Flight Ticketing & Airport Departure",
-        subtitle: "Airline booking, PNR registration, pre-departure medical fitness, and Bole Airport dispatch.",
+        title: "Tickets & Departure",
+        subtitle: "Flight bookings, pre-departure medical checks, and airport departures.",
       };
     }
     if (activeTab === "clearance") {
       return {
-        title: "Operational Clearance Queue",
-        subtitle: "Dynamic corridor stages and role-scoped clearance step execution.",
+        title: "Clearance List",
+        subtitle: "Track clearance steps for all applicants.",
       };
     }
     return {
-      title: "Applicant Processing",
-      subtitle: "Comprehensive candidate lifecycle management and operational workspaces.",
+      title: "Applicants",
+      subtitle: "Manage all applicants here.",
     };
   };
 

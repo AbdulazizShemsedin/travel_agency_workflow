@@ -53,7 +53,13 @@ export function WakalaWorkspace({
   const { authUser, roles } = useAuth();
 
   const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
-  const isAdmin = hasAnyV2Role(authUserV2, ["Admin", "Manager"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
+  const isStrictAdmin = Boolean(
+    (authUser?.email || "").toLowerCase() === "administrator" ||
+    (authUser?.email || "").toLowerCase() === "admin" ||
+    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
+    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+  );
+  const isAdmin = isStrictAdmin || (authUserV2?.roles || []).some((r: any) => ["manager", "agency admin"].includes(String(r).trim().toLowerCase()));
   const isEmbassyOfficer = hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer"] as any) || (authUserV2?.roles || []).some((r) => String(r).toLowerCase().includes("embassy") || String(r).toLowerCase().includes("clearance"));
   const [employee, setEmployee] = React.useState("");
   const isAssignedOfficer = (authUser?.email || "").toLowerCase() === (employee || "").toLowerCase() || (authUser?.full_name || "").toLowerCase() === (employee || "").toLowerCase();
@@ -553,8 +559,8 @@ export function WakalaWorkspace({
             </DrawerField>
           </div>
 
-          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
-          {isAdmin && (
+          {/* Assigned Officer Field: Visible ONLY to Admins */}
+          {isStrictAdmin && (
             <div className="pt-2">
               <DrawerField label="Assigned Wakala Officer (Admin Only)" isReadOnly={false}>
                 <select

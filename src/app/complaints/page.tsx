@@ -231,7 +231,7 @@ export default function AdminComplaintsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Agency Complaints & Dispute Desk
+            Complaints
           </h2>
         </div>
 
@@ -253,7 +253,7 @@ export default function AdminComplaintsPage() {
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs rounded-xl"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Log New Ticket
+            Add Complaint
           </Button>
         </div>
       </div>
@@ -289,7 +289,7 @@ export default function AdminComplaintsPage() {
                   : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
               }`}
             >
-              New / Triage {activeTab === "new" ? `(${complaints.length})` : ""}
+              New {activeTab === "new" ? `(${complaints.length})` : ""}
             </button>
             <button
               onClick={() => setActiveTab("unresolved")}
@@ -299,7 +299,7 @@ export default function AdminComplaintsPage() {
                   : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
               }`}
             >
-              Unresolved Backlog {activeTab === "unresolved" ? `(${complaints.length})` : ""}
+              Open {activeTab === "unresolved" ? `(${complaints.length})` : ""}
             </button>
             <button
               onClick={() => setActiveTab("all")}
@@ -309,7 +309,7 @@ export default function AdminComplaintsPage() {
                   : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
               }`}
             >
-              All Complaints
+              All
             </button>
             <button
               onClick={() => setActiveTab("resolved")}
@@ -319,7 +319,7 @@ export default function AdminComplaintsPage() {
                   : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
               }`}
             >
-              Resolved & Dismissed
+              Resolved
             </button>
           </div>
 

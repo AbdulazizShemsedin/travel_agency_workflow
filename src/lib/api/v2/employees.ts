@@ -47,88 +47,38 @@ export interface ResetEmployeePasswordPayload {
 }
 
 /**
- * Lists all active and inactive system staff accounts, enriching each with assigned security roles.
+ * Fast, role-gated employee roster for internal staff.
+ * Authoritative Backend Endpoint: employee_api.list_employee_roster (New 2026-09-11)
+ * Accessible to any member of INTERNAL_STAFF_ROLES for staff assignment pickers,
+ * chat participant dropdowns, staff directories, and clearance officer assignments.
+ */
+export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
+  const res = await requestV2<{ message?: any[] } | any[]>(
+    "/api/method/agency_tracking.employee_api.list_employee_roster",
+    { method: "POST" }
+  );
+  const list = Array.isArray(res) ? res : Array.isArray((res as any)?.message) ? (res as any).message : [];
+  return list.map((u: any) => ({
+    name: u.name || u.email,
+    email: u.email || u.name,
+    full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
+    first_name: u.first_name || "",
+    last_name: u.last_name || null,
+    phone: u.phone || null,
+    mobile_no: u.mobile_no || null,
+    enabled: typeof u.enabled === "number" ? u.enabled : u.enabled ? 1 : 0,
+    user_type: "System User",
+    creation: u.creation || "",
+    roles: Array.isArray(u.roles) ? u.roles.map((r: any) => typeof r === "string" ? r : r?.role).filter(Boolean) : [],
+  }));
+}
+
+/**
+ * Lists all active and inactive system staff accounts with assigned security roles.
+ * Backed by authoritative role-gated agency_tracking.employee_api.list_employee_roster.
  */
 export async function listEmployeesV2(): Promise<V2EmployeeRecord[]> {
-  const users = await requestV2<any[]>("/api/method/frappe.client.get_list", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      fields: [
-        "name",
-        "email",
-        "full_name",
-        "first_name",
-        "last_name",
-        "enabled",
-        "user_type",
-        "creation",
-        "phone",
-        "mobile_no",
-      ],
-      filters: [
-        ["User", "user_type", "=", "System User"],
-        ["User", "name", "!=", "Guest"],
-      ],
-      order_by: "creation desc",
-      limit_page_length: 100,
-    },
-  });
-
-  if (!Array.isArray(users)) {
-    return [];
-  }
-
-  // Enrich users with their assigned security roles in parallel
-  const enrichedUsers: V2EmployeeRecord[] = await Promise.all(
-    users.map(async (u) => {
-      try {
-        const docRes = await requestV2<any>("/api/method/frappe.client.get", {
-          method: "POST",
-          body: {
-            doctype: "User",
-            name: u.name,
-          },
-        });
-        const doc = docRes?.message || docRes;
-        const roles: string[] = Array.isArray(doc?.roles)
-          ? doc.roles
-              .map((r: any) => (typeof r === "string" ? r : r?.role))
-              .filter(Boolean)
-          : [];
-
-        return {
-          name: u.name || u.email,
-          email: u.email || u.name,
-          full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
-          first_name: u.first_name || "",
-          last_name: u.last_name || null,
-          phone: u.phone || u.mobile_no || null,
-          mobile_no: u.mobile_no || u.phone || null,
-          enabled: typeof u.enabled === "number" ? u.enabled : 1,
-          user_type: u.user_type || "System User",
-          creation: u.creation || new Date().toISOString(),
-          roles,
-        };
-      } catch {
-        return {
-          name: u.name || u.email,
-          email: u.email || u.name,
-          full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
-          first_name: u.first_name || "",
-          last_name: u.last_name || null,
-          phone: u.phone || u.mobile_no || null,
-          mobile_no: u.mobile_no || u.phone || null,
-          enabled: typeof u.enabled === "number" ? u.enabled : 1,
-          user_type: u.user_type || "System User",
-          creation: u.creation || new Date().toISOString(),
-          roles: [],
-        };
-      }
-    })
-  );
-
-  return enrichedUsers;
+  return listEmployeeRosterV2();
 }
 
 /**
@@ -181,37 +131,6 @@ export async function createEmployeeV2(payload: CreateEmployeePayload): Promise<
   };
 }
 
-/**
- * Fast, role-gated employee roster for internal staff.
- * Authoritative Backend Endpoint: employee_api.list_employee_roster (New 2026-09-11)
- * Accessible to any member of INTERNAL_STAFF_ROLES for staff assignment pickers,
- * chat participant dropdowns, and clearance officer assignments.
- */
-export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
-  try {
-    const res = await requestV2<{ message?: any[] } | any[]>(
-      "/api/method/agency_tracking.employee_api.list_employee_roster",
-      { method: "POST" }
-    );
-    const list = Array.isArray(res) ? res : Array.isArray((res as any)?.message) ? (res as any).message : [];
-    return list.map((u: any) => ({
-      name: u.name || u.email,
-      email: u.email || u.name,
-      full_name: u.full_name || `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.name,
-      first_name: u.first_name || "",
-      last_name: u.last_name || null,
-      phone: u.phone || null,
-      mobile_no: u.mobile_no || null,
-      enabled: typeof u.enabled === "number" ? u.enabled : u.enabled ? 1 : 0,
-      user_type: "System User",
-      creation: u.creation || "",
-      roles: Array.isArray(u.roles) ? u.roles.map((r: any) => typeof r === "string" ? r : r?.role).filter(Boolean) : [],
-    }));
-  } catch (err) {
-    console.warn("listEmployeeRosterV2 notice, trying fallback:", err);
-    return listEmployeesV2();
-  }
-}
 
 /**
  * Updates assigned security roles for an existing employee.

@@ -78,7 +78,13 @@ export function EmbassyWorkspace({
   const { authUser, roles } = useAuth();
 
   const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
-  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) || (authUserV2?.roles || []).some((r) => ["admin", "administrator", "system manager", "manager", "agency admin"].includes(String(r).trim().toLowerCase())) || (authUser?.email || "").toLowerCase() === "administrator";
+  const isStrictAdmin = Boolean(
+    (authUser?.email || "").toLowerCase() === "administrator" ||
+    (authUser?.email || "").toLowerCase() === "admin" ||
+    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
+    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+  );
+  const isAdmin = isStrictAdmin || (authUserV2?.roles || []).some((r: any) => ["manager", "agency admin"].includes(String(r).trim().toLowerCase()));
   const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer"]);
 
   const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
@@ -97,6 +103,7 @@ export function EmbassyWorkspace({
   const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Paid">("Pending");
   const [wakalaAmount, setWakalaAmount] = React.useState("");
   const [wakalaPaidDate, setWakalaPaidDate] = React.useState(() => new Date().toISOString().split("T")[0]);
+  const [wakalaRefNo, setWakalaRefNo] = React.useState("");
   const [wakalaOverrideReason, setWakalaOverrideReason] = React.useState("");
   const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
@@ -195,6 +202,7 @@ export function EmbassyWorkspace({
     setWakalaStatus(isWakalaPaid ? "Paid" : "Pending");
     setWakalaAmount(selectedRow.wakalaAmount ? String(selectedRow.wakalaAmount) : "");
     setWakalaPaidDate(selectedRow.wakalaPaidDate || new Date().toISOString().split("T")[0]);
+    setWakalaRefNo((selectedRow as any)?.wakalaReferenceNo || (selectedRow.embassy as any)?.wakala_reference_no || "");
     setWakalaOverrideReason("");
 
     // 2. Fetch fresh clearance step doc and fresh applicant in background
@@ -233,6 +241,9 @@ export function EmbassyWorkspace({
         }
         if ((freshStep as any).paid_date || (freshStep as any).wakala_paid_date) {
           setWakalaPaidDate((freshStep as any).paid_date || (freshStep as any).wakala_paid_date);
+        }
+        if ((freshStep as any).wakala_reference_no) {
+          setWakalaRefNo((freshStep as any).wakala_reference_no);
         }
       }
       if (freshApp) {
@@ -312,14 +323,15 @@ export function EmbassyWorkspace({
         // Also persist Wakala payment updates if modified by authorized embassy officer/admin
         if (isSaudi && canUpdateWakala) {
           const origWakalaStatus = (selectedRow.wakalaStatus || "").toLowerCase() === "paid" ? "Paid" : "Pending";
-          if (wakalaStatus !== origWakalaStatus || wakalaAmount) {
+          if (wakalaStatus !== origWakalaStatus || wakalaAmount || wakalaRefNo) {
             try {
               const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
               await recordWakalaPaymentV2(
                 stepName,
                 wakalaStatus,
                 amt,
-                wakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined
+                wakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined,
+                wakalaRefNo.trim() || undefined
               );
             } catch (wErr: any) {
               console.warn("recordWakalaPaymentV2 notice during save:", wErr);
@@ -732,7 +744,7 @@ export function EmbassyWorkspace({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                 <div>
                   <Label className="text-[11px] font-semibold">Wakala Fee Status</Label>
                   <select
@@ -766,6 +778,18 @@ export function EmbassyWorkspace({
                     disabled={!canUpdateWakala || isRecordingWakala || wakalaStatus !== "Paid"}
                     onChange={(e) => setWakalaPaidDate(e.target.value)}
                     className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] disabled:opacity-50"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-semibold">Wakala Reference №</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. WAK-99281"
+                    value={wakalaRefNo}
+                    disabled={!canUpdateWakala || isRecordingWakala}
+                    onChange={(e) => setWakalaRefNo(e.target.value)}
+                    className="h-9 mt-1 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                   />
                 </div>
               </div>
@@ -844,8 +868,8 @@ export function EmbassyWorkspace({
             </div>
           )}
 
-          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
-          {isAdmin && (
+          {/* Assigned Officer Field: Visible ONLY to Admins */}
+          {isStrictAdmin && (
             <div className="sm:col-span-2">
               <DrawerField label="Assigned Embassy Officer (Admin Only)" isReadOnly={false}>
                 <select

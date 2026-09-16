@@ -371,3 +371,40 @@ export async function exportCommissionsXlsxV2(
     }
   );
 }
+
+export interface V2ExportTransactionsParams {
+  status?: string;
+  transaction_type?: string;
+  placement?: string;
+  applicant?: string;
+  from_date?: string;
+  to_date?: string;
+}
+
+/**
+ * Exports all finance transactions (Expense/Income/Commission) matching filters as a formatted binary .xlsx spreadsheet.
+ * Authoritative Backend Endpoint: report_api.export_transactions_xlsx (New 2026-09-12)
+ * Auth: Finance Manager / Admin / System Manager
+ */
+export async function exportTransactionsXlsxV2(
+  params?: V2ExportTransactionsParams
+): Promise<Blob> {
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.report_api.export_transactions_xlsx",
+    {
+      method: "POST",
+      body: {
+        ...(params?.status ? { status: params.status } : {}),
+        ...(params?.transaction_type ? { transaction_type: params.transaction_type } : {}),
+        ...(params?.placement ? { placement: params.placement } : {}),
+        ...(params?.applicant ? { applicant: params.applicant } : {}),
+        ...(params?.from_date ? { from_date: params.from_date } : {}),
+        ...(params?.to_date ? { to_date: params.to_date } : {}),
+      },
+      headers: {
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/json, */*",
+      },
+    }
+  );
+}
+

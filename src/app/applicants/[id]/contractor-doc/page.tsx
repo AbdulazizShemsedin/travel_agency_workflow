@@ -185,8 +185,8 @@ export default function PlacementDocumentCenterPage() {
     }
   };
 
-  // Approve Contract & Advance Placement from Selected -> Processing
-  const handleApproveContractAndAdvance = async () => {
+  // Approve Extracted Contract Data (Verifies & saves extracted contract fields without advancing placement stage)
+  const handleApproveContractData = async () => {
     if (!activePlacement) {
       toast.error("No active placement record found.");
       return;
@@ -195,30 +195,23 @@ export default function PlacementDocumentCenterPage() {
     const hasContract = Boolean(
       activePlacement.contract_file ||
       activePlacement.contract_number ||
+      contractParseResult?.contract_number ||
       (applicant as any)?.contract_file ||
       (applicant as any)?.contract_number
     );
     if (!hasContract) {
       toast.error("Signed Contract Required", {
-        description: "Please upload and attach the signed contract document before advancing to Processing stage.",
+        description: "Please upload and attach the signed contract document before approving contract data.",
       });
       return;
     }
 
     setIsApprovingContract(true);
     try {
-      // 1. Enforce Medical (Selected stage) is recorded as FIT with an exam date per state machine rule
+      // 1. Optionally sync medical status if recorded
       const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
       const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
-      if (!isFit || !medDate) {
-        toast.error("Medical FIT Clearance Required", {
-          description: "Candidate's Medical examination must be recorded as FIT with an examination date before approving the contract and advancing to Processing.",
-        });
-        setIsApprovingContract(false);
-        return;
-      }
-
-      if (activePlacement.medical_selected_status !== "FIT") {
+      if (isFit && medDate && activePlacement.medical_selected_status !== "FIT") {
         await recordSelectedMedicalResultV2(
           activePlacement.name,
           "FIT",
@@ -227,20 +220,32 @@ export default function PlacementDocumentCenterPage() {
         );
       }
 
-      // 2. Advance Placement to Processing stage
-      await advancePlacementV2(activePlacement.name, "Processing");
+      // 2. Save and approve the extracted contract fields on the placement
+      const payloadToUpdate: Record<string, any> = {};
+      if (contractParseResult?.contract_number) payloadToUpdate.contract_number = contractParseResult.contract_number;
+      if (contractParseResult?.visa_number) payloadToUpdate.visa_number = contractParseResult.visa_number;
+      if (contractParseResult?.sponsor_name) payloadToUpdate.employer_name = contractParseResult.sponsor_name;
+      if (contractParseResult?.sponsor_id) payloadToUpdate.employer_national_id = contractParseResult.sponsor_id;
+      if (contractParseResult?.contractor_name) payloadToUpdate.saudi_agency_name = contractParseResult.contractor_name;
+      if (contractParseResult?.contract_date) payloadToUpdate.contract_signed_date = contractParseResult.contract_date;
 
-      toast.success("Contract Approved & Placement Advanced!", {
-        description: `Placement ${activePlacement.name} has moved to Processing stage. Clearance corridor steps are now ready.`,
+      if (Object.keys(payloadToUpdate).length > 0) {
+        await updatePlacementParsedFieldsV2(activePlacement.name, payloadToUpdate);
+      }
+
+      toast.success("Contract Data Approved Successfully!", {
+        description: `Extracted contract details for placement ${activePlacement.name} have been verified and saved.`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["v2_applicant_doc_center", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicant_v2", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
+      queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["clearance_queue_workspace"] });
     } catch (err: any) {
-      toast.error("Failed to Advance Placement", {
-        description: err?.message || "Failed to advance placement to Processing.",
+      toast.error("Failed to Approve Contract Data", {
+        description: err?.message || "Failed to save and approve extracted contract details.",
       });
     } finally {
       setIsApprovingContract(false);
@@ -738,10 +743,10 @@ export default function PlacementDocumentCenterPage() {
                           <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-3 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
                             <div className="font-bold flex items-center gap-1.5">
                               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                              Contract Attached — Ready for Stage Approval
+                              Contract Attached — Ready for Verification
                             </div>
                             <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
-                              Approving terms verifies the Selected Medical 1 FIT gate and transitions this placement to <strong>Processing (LMIS &amp; Te&apos;shir)</strong>.
+                              Approving terms verifies the signed contract and records the extracted details onto the placement record.
                             </p>
                           </div>
                         ) : (
@@ -751,14 +756,14 @@ export default function PlacementDocumentCenterPage() {
                               Signed Contract Document Required
                             </div>
                             <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80">
-                              Please choose and attach the signed contract document above before this candidate can be advanced to <strong>Processing</strong>.
+                              Please choose and attach the signed contract document above before approving extracted data.
                             </p>
                           </div>
                         )}
                         <Button
                           type="button"
                           disabled={isApprovingContract || !Boolean(activePlacement.contract_file || activePlacement.contract_number)}
-                          onClick={handleApproveContractAndAdvance}
+                          onClick={handleApproveContractData}
                           className={cn(
                             "w-full font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2",
                             Boolean(activePlacement.contract_file || activePlacement.contract_number)
@@ -769,12 +774,12 @@ export default function PlacementDocumentCenterPage() {
                           {isApprovingContract ? (
                             <>
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              Approving Contract & Advancing Placement...
+                              Approving Extracted Contract Data...
                             </>
                           ) : (
                             <>
                               <CheckCircle2 className="h-4 w-4" />
-                              Approve Contract & Advance to Next Stage (Processing)
+                              Approve Extracted Contract Data
                             </>
                           )}
                         </Button>

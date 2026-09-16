@@ -26,6 +26,7 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
   const {
     register,
     watch,
+    trigger,
     formState: { errors },
   } = form;
 
@@ -123,8 +124,8 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
                 Medical Assessment & Expiration
               </CardTitle>
             </div>
-            <span className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
-              Optional
+            <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+              Required for Registration
             </span>
           </div>
         </CardHeader>
@@ -188,7 +189,7 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="medical_expiry_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Medical Expiry Date <span className="text-slate-400 font-normal">(Optional)</span>
+                  Medical Expiry Date <span className="text-rose-500 font-bold">*</span>
                 </Label>
                 {medicalExpiryDate && (
                   <span
@@ -202,11 +203,13 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
               <Input
                 id="medical_expiry_date"
                 type="date"
-                {...register("medical_expiry_date")}
-                className={errors.medical_expiry_date ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+                {...register("medical_expiry_date", {
+                  onBlur: () => void trigger("medical_expiry_date"),
+                })}
+                className={errors.medical_expiry_date ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
               />
               {errors.medical_expiry_date && (
-                <p className="text-xs text-rose-600">{errors.medical_expiry_date.message}</p>
+                <p className="text-xs font-medium text-rose-600 dark:text-rose-400">{errors.medical_expiry_date.message}</p>
               )}
             </div>
           </div>

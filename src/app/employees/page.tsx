@@ -497,7 +497,7 @@ export default function EmployeesPage() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
             >
               <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-              Add New Employee
+              Add Employee
             </Button>
           )}
         </div>
@@ -530,7 +530,7 @@ export default function EmployeesPage() {
                 </Badge>
               </div>
               <p className="text-xs font-mono text-slate-500 dark:text-zinc-400 mt-0.5">
-                Staff Email: <strong>{authUser?.email || "Unknown"}</strong>
+                Email: <strong>{authUser?.email || "Unknown"}</strong>
               </p>
             </div>
           </div>
@@ -538,7 +538,7 @@ export default function EmployeesPage() {
           <div className="flex flex-col items-start sm:items-end gap-1.5 max-w-xl">
             <div className="flex items-center justify-between w-full sm:justify-end gap-2">
               <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                Active Session Security Roles:
+                Your Roles:
               </span>
               {Array.isArray(roles) && roles.length > 4 && (
                 <button
@@ -563,13 +563,12 @@ export default function EmployeesPage() {
                   </Badge>
                 ))
               ) : (
-                <span className="text-xs text-slate-400">Standard Staff Access</span>
+                <span className="text-xs text-slate-400">Standard Access</span>
               )}
               {Array.isArray(roles) && roles.length > 4 && !showAllSessionRoles && (
                 <Badge
                   variant="outline"
-                  onClick={() => setShowAllSessionRoles(true)}
-                  className="text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                  className="text-[10px] font-semibold bg-slate-100 dark:bg-[#181822] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#282835]"
                 >
                   +{roles.length - 4} more
                 </Badge>
@@ -580,7 +579,7 @@ export default function EmployeesPage() {
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Top Navigation Tabs: Directory, Stage Defaults, Role Guide     */}
+      {/* Top Navigation Tabs: Staff List, Default Assignments, Role Guide */}
       {/* ------------------------------------------------------------- */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#24242e] pb-2 overflow-x-auto">
         <button
@@ -594,7 +593,7 @@ export default function EmployeesPage() {
           )}
         >
           <Users className="h-4 w-4" />
-          <span>Staff Directory</span>
+          <span>Staff List</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             {employees.length}
           </Badge>
@@ -611,7 +610,7 @@ export default function EmployeesPage() {
           )}
         >
           <SlidersHorizontal className="h-4 w-4" />
-          <span>Default Role Assignments</span>
+          <span>Default Assignments</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             Saudi & Kuwait
           </Badge>
@@ -628,7 +627,7 @@ export default function EmployeesPage() {
           )}
         >
           <Shield className="h-4 w-4" />
-          <span>Role Guide & Permissions</span>
+          <span>Roles & Permissions</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             17 Roles
           </Badge>

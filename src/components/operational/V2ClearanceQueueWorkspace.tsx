@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   RotateCcw,
+  CreditCard,
 } from "lucide-react";
 import Link from "next/link";
 import { AssignEmployeeModal } from "@/components/applicant/AssignEmployeeModal";
@@ -62,6 +63,7 @@ import {
   reassignClearanceStepV2,
   reopenClearanceStepV2,
   recordWakalaPaymentV2,
+  recordOtherPaymentV2,
   getClearanceStepDocV2,
   V2ClearanceStepItem,
 } from "@/lib/api/v2/clearance";
@@ -103,6 +105,17 @@ export function V2ClearanceQueueWorkspace() {
   const [embassyOverrideReason, setEmbassyOverrideReason] = React.useState("");
   const [confirmUnpaidWakalaOverride, setConfirmUnpaidWakalaOverride] = React.useState(false);
   const [wakalaAmountInput, setWakalaAmountInput] = React.useState("");
+  const [wakalaRefNo, setWakalaRefNo] = React.useState<string>("");
+  const [dateCompleted, setDateCompleted] = React.useState<string>("");
+
+  // Other payments state
+  const [stepPayments, setStepPayments] = React.useState<any[]>([]);
+  const [otherPaymentType, setOtherPaymentType] = React.useState<string>("");
+  const [otherPaymentAmount, setOtherPaymentAmount] = React.useState<string>("");
+  const [otherPaymentCurrency, setOtherPaymentCurrency] = React.useState<string>("ETB");
+  const [otherPaymentStatus, setOtherPaymentStatus] = React.useState<"Pending" | "Paid">("Pending");
+  const [otherPaymentRemark, setOtherPaymentRemark] = React.useState<string>("");
+  const [isRecordingOtherPayment, setIsRecordingOtherPayment] = React.useState<boolean>(false);
 
   // Reopen Step modal states
   const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
@@ -295,8 +308,17 @@ export function V2ClearanceQueueWorkspace() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: ({ stepName, refNo, amt }: { stepName: string; refNo?: string; amt?: number }) =>
-      completeClearanceStepV2(stepName, refNo, amt),
+    mutationFn: ({
+      stepName,
+      refNo,
+      amt,
+      dateDone,
+    }: {
+      stepName: string;
+      refNo?: string;
+      amt?: number;
+      dateDone?: string;
+    }) => completeClearanceStepV2(stepName, refNo, amt, dateDone),
     onSuccess: () => {
       toast.success("Clearance step completed successfully");
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
@@ -399,15 +421,17 @@ export function V2ClearanceQueueWorkspace() {
           await completeClearanceStepV2(
             selectedRow.name,
             referenceNo.trim() || undefined,
-            amount ? Number(amount) : undefined
+            amount ? Number(amount) : undefined,
+            dateCompleted.trim() || undefined
           );
         }
       } else if (stepStatus === "in progress" && !isEmbassyStep) {
-        // For In Progress non-embassy steps: complete the step with the ref/amount
+        // For In Progress non-embassy steps: complete the step with the ref/amount/dateCompleted
         await completeClearanceStepV2(
           selectedRow.name,
           referenceNo.trim() || undefined,
-          amount ? Number(amount) : undefined
+          amount ? Number(amount) : undefined,
+          dateCompleted.trim() || undefined
         );
       } else if (stepStatus === "in progress" && isEmbassyStep) {
         // Embassy in-progress: save ref via stamp call
@@ -445,10 +469,13 @@ export function V2ClearanceQueueWorkspace() {
     setSelectedRow(row);
     setReferenceNo(row.reference_no || "");
     setAmount(row.amount ? String(row.amount) : "");
+    setDateCompleted((row as any).date_completed || "");
+    setWakalaRefNo((row as any).wakala_reference_no || "");
     setRejectionRemark(row.rejection_remark || "");
     setWakalaAmountInput(row.wakala_amount ? String(row.wakala_amount) : "");
     setEmbassyOverrideReason("");
     setConfirmUnpaidWakalaOverride(false);
+    setStepPayments((row as any).payments || []);
     setIsDrawerOpen(true);
   };
 
@@ -462,6 +489,15 @@ export function V2ClearanceQueueWorkspace() {
         if (freshStep.wakala_amount !== undefined && freshStep.wakala_amount !== null) {
           setWakalaAmountInput(String(freshStep.wakala_amount));
         }
+        if (freshStep.wakala_reference_no) {
+          setWakalaRefNo(freshStep.wakala_reference_no);
+        }
+        if (freshStep.date_completed) {
+          setDateCompleted(freshStep.date_completed);
+        }
+        if (Array.isArray(freshStep.payments)) {
+          setStepPayments(freshStep.payments);
+        }
         setSelectedRow((prev) => (prev && prev.name === freshStep.name ? { ...prev, ...freshStep } : prev));
       })
       .catch((e) => console.warn("Could not load fresh clearance step:", e));
@@ -470,6 +506,36 @@ export function V2ClearanceQueueWorkspace() {
       isMounted = false;
     };
   }, [selectedRow?.name]);
+
+  const handleRecordOtherPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRow || !otherPaymentType.trim()) {
+      toast.error("Payment Type is required (e.g. Insurance)");
+      return;
+    }
+    setIsRecordingOtherPayment(true);
+    try {
+      const res = await recordOtherPaymentV2(selectedRow.name, {
+        payment_type: otherPaymentType.trim(),
+        amount: otherPaymentAmount ? Number(otherPaymentAmount) : undefined,
+        currency: otherPaymentCurrency,
+        status: otherPaymentStatus,
+        remark: otherPaymentRemark.trim() || undefined,
+      });
+      toast.success("Payment line-item recorded successfully!");
+      if (res?.message?.payments) {
+        setStepPayments(res.message.payments);
+      }
+      setOtherPaymentType("");
+      setOtherPaymentAmount("");
+      setOtherPaymentRemark("");
+      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to record payment");
+    } finally {
+      setIsRecordingOtherPayment(false);
+    }
+  };
 
   const isEmbassyStep = React.useMemo<boolean>(() => {
     if (!selectedRow) return false;
@@ -1564,6 +1630,32 @@ export function V2ClearanceQueueWorkspace() {
                 </div>
               </DrawerField>
 
+              <DrawerField label="Completion / Issue Date" isReadOnly={false}>
+                <Input
+                  type="date"
+                  placeholder="YYYY-MM-DD"
+                  value={dateCompleted}
+                  onChange={(e) => setDateCompleted(e.target.value)}
+                  disabled={!canOperateSelectedStep || isSaving || isRowDeparted}
+                  className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  title="Pass date to backdate or correct the recorded completion date"
+                />
+              </DrawerField>
+
+              {isEmbassyStep && (
+                <DrawerField label="Wakala Reference №" isReadOnly={false}>
+                  <Input
+                    type="text"
+                    placeholder="e.g. WAK-99281"
+                    value={wakalaRefNo}
+                    onChange={(e) => setWakalaRefNo(e.target.value)}
+                    disabled={!canUpdateWakala || isSaving || isRowDeparted}
+                    className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                    title="Dedicated Wakala reference number stored on wakala_reference_no"
+                  />
+                </DrawerField>
+              )}
+
               {isEmbassyStep && (
                 <div className="sm:col-span-2">
                   <DrawerField label="Rejection Remark (if rejected)" isReadOnly={false}>
@@ -1578,6 +1670,114 @@ export function V2ClearanceQueueWorkspace() {
                   </DrawerField>
                 </div>
               )}
+            </DrawerSection>
+
+            {/* Section 4b: Other Line-Item Payments (Insurance, Misc Fees) */}
+            <DrawerSection title="Other Clearance Payments & Insurance" icon={CreditCard}>
+              <div className="col-span-2 space-y-3">
+                {stepPayments && stepPayments.length > 0 ? (
+                  <div className="rounded-lg border border-slate-200 dark:border-[#2a2a35] overflow-hidden text-xs">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 dark:bg-[#181820] text-slate-500 text-[10px] uppercase font-bold">
+                        <tr>
+                          <th className="p-2">Type</th>
+                          <th className="p-2">Amount</th>
+                          <th className="p-2">Status</th>
+                          <th className="p-2">Remark</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-[#202028]">
+                        {stepPayments.map((p, idx) => (
+                          <tr key={p.name || idx}>
+                            <td className="p-2 font-semibold">{p.payment_type || "Fee"}</td>
+                            <td className="p-2 font-mono">{p.amount ? `${p.amount} ${p.currency || "ETB"}` : "—"}</td>
+                            <td className="p-2">
+                              <Badge variant="outline" className={p.status === "Paid" ? "border-emerald-400 text-emerald-800 bg-emerald-50" : "border-amber-400 text-amber-800 bg-amber-50"}>
+                                {p.status || "Pending"}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-slate-400">{p.remark || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No other payment line items recorded for this clearance step.</p>
+                )}
+
+                {canOperateSelectedStep && !isRowDeparted && (
+                  <form onSubmit={handleRecordOtherPayment} className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-2.5">
+                    <span className="text-xs font-bold block text-slate-800 dark:text-zinc-200">
+                      Record Other Clearance Fee / Insurance Line Item
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Payment Type *</label>
+                        <Input
+                          placeholder="e.g. Insurance Premium"
+                          value={otherPaymentType}
+                          onChange={(e) => setOtherPaymentType(e.target.value)}
+                          className="h-7 text-xs"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Amount</label>
+                        <Input
+                          type="number"
+                          placeholder="0.00"
+                          value={otherPaymentAmount}
+                          onChange={(e) => setOtherPaymentAmount(e.target.value)}
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Currency</label>
+                        <select
+                          value={otherPaymentCurrency}
+                          onChange={(e) => setOtherPaymentCurrency(e.target.value)}
+                          className="h-7 w-full px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded"
+                        >
+                          <option value="ETB">ETB</option>
+                          <option value="SAR">SAR</option>
+                          <option value="USD">USD</option>
+                          <option value="KWD">KWD</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500">Payment Status</label>
+                        <select
+                          value={otherPaymentStatus}
+                          onChange={(e) => setOtherPaymentStatus(e.target.value as "Pending" | "Paid")}
+                          className="h-7 w-full px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Paid">Paid</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500">Remark</label>
+                      <Input
+                        placeholder="Optional receipt number or notes"
+                        value={otherPaymentRemark}
+                        onChange={(e) => setOtherPaymentRemark(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isRecordingOtherPayment || !otherPaymentType.trim()}
+                      className="text-xs h-7 bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-700"
+                    >
+                      {isRecordingOtherPayment ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      Add Payment Line Item
+                    </Button>
+                  </form>
+                )}
+              </div>
             </DrawerSection>
 
             {/* Section 5: Authoritative Operational Actions */}
@@ -1663,6 +1863,20 @@ export function V2ClearanceQueueWorkspace() {
                         className="h-8 text-xs mt-1"
                       />
                     </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                        Completion Date (Optional)
+                      </label>
+                      <Input
+                        type="date"
+                        value={dateCompleted}
+                        onChange={(e) => setDateCompleted(e.target.value)}
+                        disabled={!canOperateSelectedStep || isSaving}
+                        className="h-8 text-xs mt-1"
+                        title="Leave blank for today's date, or select to backdate"
+                      />
+                    </div>
                   </div>
 
                   <Button
@@ -1673,6 +1887,7 @@ export function V2ClearanceQueueWorkspace() {
                         stepName: selectedRow.name,
                         refNo: referenceNo.trim() || undefined,
                         amt: amount ? Number(amount) : undefined,
+                        dateDone: dateCompleted.trim() || undefined,
                       })
                     }
                     className="w-full bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold h-9"

@@ -78,12 +78,18 @@ export function LMISWorkspace({
   // bypass automatically, with exact-case matching against Frappe role names.
   const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
 
-  const isAdmin = hasAnyV2Role(authUserV2, ["Admin"] as any) ||
-    (authUserV2?.roles || []).some((r) => {
+  const isStrictAdmin = Boolean(
+    (authUser?.email || "").toLowerCase() === "administrator" ||
+    (authUser?.email || "").toLowerCase() === "admin" ||
+    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
+    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+  );
+
+  const isAdmin = isStrictAdmin ||
+    (authUserV2?.roles || []).some((r: any) => {
       const norm = String(r).trim().toLowerCase();
-      return norm === "admin" || norm === "administrator" || norm === "system manager" || norm === "manager" || norm === "agency admin";
-    }) ||
-    (authUser?.email || "").toLowerCase() === "administrator";
+      return norm === "manager" || norm === "agency admin";
+    });
 
   const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS", "Clearance Officer"]);
 
@@ -113,6 +119,7 @@ export function LMISWorkspace({
   // Kuwait LMIS / Police Ashara fields
   const [policeAsharaRefNo, setPoliceAsharaRefNo] = React.useState("");
   const [policeAsharaStatus, setPoliceAsharaStatus] = React.useState<"Pending" | "Scheduled" | "Completed" | "Passed" | "Failed" | "Rejected" | string>("Pending");
+  const [policeAsharaPaymentStatus, setPoliceAsharaPaymentStatus] = React.useState<"Not Applicable" | "Pending" | "Paid" | string>("Pending");
   const [policeAsharaDate, setPoliceAsharaDate] = React.useState<string>("");
   const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState<string>("");
   const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState<string>("");
@@ -173,6 +180,7 @@ export function LMISWorkspace({
 
     setPoliceAsharaRefNo(lms?.police_ashara_reference_no || lms?.reference_no || lms?.police_clearance_no || app.police_clearance_no || "");
     setPoliceAsharaStatus(lms?.police_ashara_status || (lms?.police_clearance_status as any) || "Pending");
+    setPoliceAsharaPaymentStatus(lms?.police_ashara_payment_status || "Pending");
     setPoliceAsharaDate(lms?.police_ashara_appointment_date || "");
     setPoliceAsharaAmount(lms?.police_ashara_amount ? String(lms.police_ashara_amount) : "");
     setPoliceAsharaRemark(lms?.police_ashara_remark || "");
@@ -222,6 +230,7 @@ export function LMISWorkspace({
           setPoliceAsharaRefNo(freshStep.police_ashara_reference_no || freshStep.reference_no || "");
         }
         if (freshStep.police_ashara_status) setPoliceAsharaStatus(freshStep.police_ashara_status as any);
+        if (freshStep.police_ashara_payment_status) setPoliceAsharaPaymentStatus(freshStep.police_ashara_payment_status);
         if (freshStep.police_ashara_appointment_date) setPoliceAsharaDate(freshStep.police_ashara_appointment_date);
         if (freshStep.police_ashara_amount) setPoliceAsharaAmount(String(freshStep.police_ashara_amount));
         if (freshStep.police_ashara_remark) setPoliceAsharaRemark(freshStep.police_ashara_remark);
@@ -306,12 +315,13 @@ export function LMISWorkspace({
           await recordPoliceAsharaV2(stepName, {
             police_ashara_appointment_date: policeAsharaDate || undefined,
             police_ashara_status: policeAsharaStatus,
-            police_ashara_payment_status: "Pending",
+            police_ashara_payment_status: policeAsharaPaymentStatus,
             police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
             police_ashara_remark: policeAsharaRemark.trim() || undefined,
           });
         } catch (asharaErr: any) {
           console.warn("recordPoliceAsharaV2 error:", asharaErr);
+          throw asharaErr;
         }
       }
 
@@ -487,18 +497,30 @@ export function LMISWorkspace({
       width: "90px",
       align: "center",
       cell: (row) => {
+        const raw = (row.medicalStatus || "").toUpperCase().trim();
         const isFit =
-          (row.medicalStatus || "").toUpperCase().includes("FIT") ||
-          row.medicalStatus === "Passed";
+          raw === "FIT" ||
+          raw === "PASSED" ||
+          (raw.includes("FIT") && !raw.includes("UNFIT"));
+        const isUnfit = raw === "UNFIT" || raw === "FAILED";
+
+        if (isFit) {
+          return (
+            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-bold text-[10px]">
+              FIT
+            </Badge>
+          );
+        }
+        if (isUnfit) {
+          return (
+            <Badge className="bg-rose-600 hover:bg-rose-600 text-white font-bold text-[10px]">
+              UNFIT
+            </Badge>
+          );
+        }
         return (
-          <Badge
-            className={
-              isFit
-                ? "bg-emerald-600 text-white font-bold text-[10px]"
-                : "bg-rose-600 text-white font-bold text-[10px]"
-            }
-          >
-            {isFit ? "FIT" : "UNFIT"}
+          <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold text-[10px] border border-amber-300 dark:border-amber-700">
+            Pending
           </Badge>
         );
       },
@@ -781,19 +803,6 @@ export function LMISWorkspace({
             />
           </DrawerField>
 
-          <div className="sm:col-span-2">
-            <DrawerField label="Labor ID / Ministry Reference No" isReadOnly={false}>
-              <Input
-                type="text"
-                placeholder="e.g. LMIS-ET-2026-9912"
-                value={laborRefNo}
-                disabled={!canEdit || mutation.isPending}
-                onChange={(e) => setLaborRefNo(e.target.value)}
-                className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-              />
-            </DrawerField>
-          </div>
-
           {/* Kuwait Corridor Sub-Flow: Police Ashara */}
           {isKuwait && (
             <>
@@ -833,10 +842,22 @@ export function LMISWorkspace({
                   className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-medium"
                 >
                   <option value="Pending">Pending</option>
+                  <option value="Scheduled">Scheduled</option>
                   <option value="Completed">Completed</option>
-                  <option value="Passed">Passed (Cleared)</option>
                   <option value="Failed">Failed (Disqualified)</option>
-                  <option value="Rejected">Rejected</option>
+                </select>
+              </DrawerField>
+
+              <DrawerField label="Ashara Payment Status" isReadOnly={false}>
+                <select
+                  value={policeAsharaPaymentStatus}
+                  disabled={!canEdit || mutation.isPending}
+                  onChange={(e) => setPoliceAsharaPaymentStatus(e.target.value)}
+                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-medium"
+                >
+                  <option value="Not Applicable">Not Applicable</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Paid">Paid</option>
                 </select>
               </DrawerField>
 
@@ -882,8 +903,8 @@ export function LMISWorkspace({
             </>
           )}
 
-          {/* Assigned Officer Field: Visible ONLY to Admins/Managers */}
-          {isAdmin && (
+          {/* Assigned Officer Field: Visible ONLY to Admins */}
+          {isStrictAdmin && (
             <div className="sm:col-span-2">
               <DrawerField label="Assigned LMIS Officer (Admin Only)" isReadOnly={false}>
                 <select

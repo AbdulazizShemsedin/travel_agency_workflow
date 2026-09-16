@@ -320,7 +320,7 @@ export async function getForeignAgencyNotificationsV2(contractorName?: string): 
     for (const req of wakalaRequests) {
       const candidateName = req.full_name || req.applicant_name || "Candidate";
       notifications.push({
-        id: `agency-wakala-${req.clearance_step_name || req.name || Math.random().toString()}`,
+        id: `agency-wakala-${req.clearance_step_name || req.name || req.placement_name || req.passport_number || req.applicant_name || "pending"}`,
         title: `Wakala Authorization Required: ${candidateName}`,
         description: `Placement ${req.placement_name || "Pending"} requires Wakala authorization (Passport: ${req.passport_number || "N/A"}) ahead of Monday Embassy cutoff.`,
         category: "workflow",

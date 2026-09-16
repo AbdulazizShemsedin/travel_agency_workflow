@@ -38,6 +38,7 @@ import {
   ApiV2Error,
 } from "@/lib/api/v2";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
 import { Step2EducationExperience } from "./steps/Step2EducationExperience";
 import { Step3IdentificationContact } from "./steps/Step3IdentificationContact";
@@ -183,10 +184,14 @@ const FIELD_FRIENDLY_NAMES: Record<string, string> = {
   arabic_level: "Arabic Level",
   monthly_salary: "Monthly Salary",
   national_id: "National ID (Fayda)",
+  labor_id: "Ministry Labour ID",
+  labour_id: "Ministry Labour ID",
   contact_person_name: "Emergency Contact Name",
   contact_person_phone: "Emergency Contact Phone",
   emergency_relationship: "Emergency Relationship",
   medical_status: "Medical Status",
+  medical_issue_date: "Medical Exam Date",
+  medical_expiry_date: "Medical Expiry Date",
 };
 
 function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
@@ -276,7 +281,7 @@ export function ApplicantRegistrationForm({
 
   // React Hook Form
   const form = useForm<BaseApplicantFormValues>({
-    mode: "onBlur",
+    mode: "onTouched",
     // @ts-expect-error zodResolver generic widening across runtime-normalized optional fields
     resolver: zodResolver(stage1DraftSchema),
     defaultValues: {
@@ -473,7 +478,21 @@ export function ApplicantRegistrationForm({
         name,
         `field-${name}`,
         `input-${name}`,
-      ];
+        name === "photo_passport" ? "passport-photo-upload" : "",
+        name === "photo_full_body" ? "fullbody-photo-upload" : "",
+        name === "passport_scan" ? "passport-auto-scan-input" : "",
+        name === "target_job" ? "job_applied" : "",
+        name === "job_applied" ? "target_job" : "",
+        name === "education" ? "highest_education" : "",
+        name === "highest_education" ? "education" : "",
+        name === "passport_expiry_date" ? "passport_expiry" : "",
+        name === "passport_expiry" ? "passport_expiry_date" : "",
+        name === "phone" ? "phone_number" : "",
+        name === "phone_number" ? "phone" : "",
+        name === "salary_amount" ? "monthly_salary" : "",
+        name === "monthly_salary" ? "salary_amount" : "",
+        name === "medical_expiry_date" ? "medical_expiry_date" : "",
+      ].filter(Boolean);
       for (const id of candidates) {
         const found = document.getElementById(id);
         if (found) return found;
@@ -837,9 +856,82 @@ export function ApplicantRegistrationForm({
     onError: (error: unknown) => {
       const err = error as ApiV2Error;
       setIsConfirmRegisterOpen(false);
-      toast.error("Registration Requirement Not Met", {
-        description: describeApiError(err),
-        duration: 6000,
+      const rawMsg = err?.message || String(error || "");
+
+      // 1. Check for missing required fields from backend
+      // Backend pattern: "<track> track, Registered status requires: <fields>" OR "Mandatory fields required: <fields>"
+      const requiresMatch = rawMsg.match(/(?:requires|mandatory fields required:?)\s*:?\s*([^.\n]+)/i);
+      const parsedFields: (keyof BaseApplicantFormValues)[] = [];
+      if (requiresMatch && requiresMatch[1]) {
+        const fieldListStr = requiresMatch[1];
+        const rawTokens = fieldListStr.split(/[,•;]|\band\b/i).map((s) => s.trim()).filter(Boolean);
+
+        for (const token of rawTokens) {
+          const lower = token.toLowerCase();
+          if (lower.includes("photo") || lower.includes("photograph")) parsedFields.push("photo_passport");
+          else if (lower.includes("passport scan") || lower.includes("passport_scan")) parsedFields.push("passport_scan");
+          else if (lower.includes("passport number") || lower.includes("passport_number")) parsedFields.push("passport_number");
+          else if (lower.includes("passport expiry") || lower.includes("passport_expiry")) parsedFields.push("passport_expiry");
+          else if (lower.includes("date of birth") || lower.includes("birth") || lower.includes("dob")) parsedFields.push("date_of_birth");
+          else if (lower.includes("job") || lower.includes("position")) parsedFields.push("job_applied");
+          else if (lower.includes("education")) parsedFields.push("highest_education");
+          else if (lower.includes("salary")) parsedFields.push("monthly_salary");
+          else if (lower.includes("medical expiry") || lower.includes("medical_expiry")) parsedFields.push("medical_expiry_date");
+          else if (lower.includes("medical") && (lower.includes("unfit") || lower.includes("status"))) parsedFields.push("medical_status");
+          else if (lower.includes("first name") || lower.includes("first_name")) parsedFields.push("first_name");
+          else if (lower.includes("middle name") || lower.includes("middle_name") || lower.includes("father")) parsedFields.push("middle_name");
+          else if (lower.includes("last name") || lower.includes("last_name") || lower.includes("grandfather")) parsedFields.push("last_name");
+          else if (lower.includes("national id") || lower.includes("fayda") || lower.includes("fan")) parsedFields.push("national_id");
+          else if (lower.includes("labor id") || lower.includes("labour id")) parsedFields.push("labor_id");
+          else if (lower.includes("phone")) parsedFields.push("phone_number");
+          else if (lower.includes("place of birth") || lower.includes("birth place")) parsedFields.push("place_of_birth");
+        }
+      }
+
+      // 2. Check for Duplicate Entry collisions from backend
+      if (/Duplicate entry|already exists|already has (National ID|Passport Number|Labor ID)/i.test(rawMsg)) {
+        if (/national_id|national id|fayda|fan/i.test(rawMsg)) {
+          parsedFields.push("national_id");
+          setError("national_id", {
+            type: "manual",
+            message: "This National ID (Fayda / FAN) is already registered in the system.",
+          });
+        } else if (/passport/i.test(rawMsg)) {
+          parsedFields.push("passport_number");
+          setError("passport_number", {
+            type: "manual",
+            message: "This Passport Number is already registered in the system.",
+          });
+        } else if (/labor_id|labour_id|labor id|labour id/i.test(rawMsg)) {
+          parsedFields.push("labor_id");
+          setError("labor_id", {
+            type: "manual",
+            message: "This Ministry Labour ID is already registered in the system.",
+          });
+        }
+      }
+
+      // 3. Highlight conflicting/missing fields and scroll directly to the input
+      if (parsedFields.length > 0) {
+        parsedFields.forEach((fld) => {
+          const friendly = FIELD_FRIENDLY_NAMES[fld] || (fld as string).replace(/_/g, " ");
+          setError(fld, {
+            type: "manual",
+            message: `${friendly} is required to complete registration.`,
+          });
+        });
+        scrollToFieldWithError(parsedFields[0]);
+      }
+
+      // 4. Format user-friendly toast description
+      let friendlyDescription = describeApiError(err);
+      if (/Application failed to respond|Bad Gateway|Gateway Timeout/i.test(rawMsg)) {
+        friendlyDescription = "The registration server is taking longer than usual to respond. Your applicant draft has been saved. Please try registering again in a few moments.";
+      }
+
+      toast.error("Registration Requirements Not Met", {
+        description: friendlyDescription,
+        duration: 7000,
       });
     },
   });
@@ -881,6 +973,61 @@ export function ApplicantRegistrationForm({
           "The applicant cannot be registered while medical status is Unfit. You can save as Draft until cleared.",
       });
       return;
+    }
+
+    // Live Uniqueness Verification Pre-Check before confirming registration
+    const passportVal = (formData.passport_number || "").trim();
+    if (passportVal) {
+      const passportCheck = await checkApplicantUniquenessV2(
+        "passport_number",
+        passportVal,
+        existingApplicantId
+      );
+      if (passportCheck.isConflict && passportCheck.message) {
+        setError("passport_number", { type: "manual", message: passportCheck.message });
+        scrollToFieldWithError("passport_number");
+        toast.error("Duplicate Passport Number", {
+          description: passportCheck.message,
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    const nationalVal = (formData.national_id || "").trim();
+    if (nationalVal) {
+      const nationalCheck = await checkApplicantUniquenessV2(
+        "national_id",
+        nationalVal,
+        existingApplicantId
+      );
+      if (nationalCheck.isConflict && nationalCheck.message) {
+        setError("national_id", { type: "manual", message: nationalCheck.message });
+        scrollToFieldWithError("national_id");
+        toast.error("Duplicate National ID (Fayda)", {
+          description: nationalCheck.message,
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    const labourVal = (formData.labour_id || (formData as any).labor_id || "").trim();
+    if (labourVal) {
+      const labourCheck = await checkApplicantUniquenessV2(
+        "labour_id",
+        labourVal,
+        existingApplicantId
+      );
+      if (labourCheck.isConflict && labourCheck.message) {
+        setError("labour_id", { type: "manual", message: labourCheck.message });
+        scrollToFieldWithError("labour_id");
+        toast.error("Duplicate Ministry Labour ID", {
+          description: labourCheck.message,
+          duration: 6000,
+        });
+        return;
+      }
     }
 
     setIsConfirmRegisterOpen(true);
@@ -1023,7 +1170,7 @@ export function ApplicantRegistrationForm({
               </p>
             </div>
           </div>
-          <Step3IdentificationContact form={form} />
+          <Step3IdentificationContact form={form} editingApplicantName={existingApplicantId} />
         </section>
 
         {/* Section 4: Medical & COC */}
