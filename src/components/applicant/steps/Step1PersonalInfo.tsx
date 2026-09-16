@@ -237,7 +237,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     const localUrl = URL.createObjectURL(file);
     setPassportScanPreview(localUrl);
     setIsScanningOCR(true);
-    const toastId = toast.loading("Processing passport document (non-blocking OCR)...");
+    const toastId = toast.loading("Extracting passport details in background... You can continue filling out the form.");
 
     try {
       // 1. Upload passport scan file
@@ -1682,13 +1682,14 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           ? 1.42
           : null
       }
-      onConfirm={async (resultFile) => {
+      onConfirm={(resultFile) => {
+        setCropModalState((prev) => ({ ...prev, open: false }));
         if (cropModalState.type === "passport") {
-          await handlePassportAutoScan(resultFile);
+          handlePassportAutoScan(resultFile);
         } else if (cropModalState.type === "portrait") {
-          await handlePhotoUpload(resultFile);
+          handlePhotoUpload(resultFile);
         } else if (cropModalState.type === "fullbody") {
-          await handleFullBodyUpload(resultFile);
+          handleFullBodyUpload(resultFile);
         }
       }}
     />

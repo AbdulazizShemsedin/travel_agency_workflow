@@ -414,14 +414,14 @@ export function ImageCropModal({
       const cleanName = origName.replace(/\.[^/.]+$/, "") + "_cropped.jpg";
       const finalFile = new File([blob], cleanName, { type: "image/jpeg" });
 
-      await onConfirm(finalFile, true);
       onOpenChange(false);
+      onConfirm(finalFile, true);
     } catch (err) {
       console.warn("Crop generation failed, falling back to original file:", err);
-      if (imageFile) {
-        await onConfirm(imageFile, false);
-      }
       onOpenChange(false);
+      if (imageFile) {
+        onConfirm(imageFile, false);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -431,8 +431,8 @@ export function ImageCropModal({
     if (imageFile) {
       setIsProcessing(true);
       try {
-        await onConfirm(imageFile, false);
         onOpenChange(false);
+        onConfirm(imageFile, false);
       } finally {
         setIsProcessing(false);
       }
