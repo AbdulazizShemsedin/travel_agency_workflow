@@ -34,6 +34,7 @@ import {
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import { StageFeeSection } from "@/components/operational/StageFeeSection";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface TicketingDepartureModalProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ export function TicketingDepartureModal({
   // Medical 2 State
   const [medical2Status, setMedical2Status] = React.useState<"FIT" | "UNFIT">("FIT");
   const [medical2ExamDate, setMedical2ExamDate] = React.useState(new Date().toISOString().split("T")[0]);
+  const [isUnfitConfirmOpen, setIsUnfitConfirmOpen] = React.useState(false);
 
   if (!placement) return null;
 
@@ -135,8 +137,7 @@ export function TicketingDepartureModal({
   };
 
   // 3. Record Pre-Departure Medical 2
-  const handleRecordMedical2 = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeRecordMedical2 = async () => {
     setIsSubmitting(true);
     try {
       const res = await recordPredepartureMedicalResultV2(placement.name, medical2Status, medical2ExamDate);
@@ -156,6 +157,15 @@ export function TicketingDepartureModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRecordMedical2 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (medical2Status === "UNFIT") {
+      setIsUnfitConfirmOpen(true);
+      return;
+    }
+    await executeRecordMedical2();
   };
 
   // 4. Finalize Departure
@@ -184,7 +194,8 @@ export function TicketingDepartureModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[560px] bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
         <DialogHeader>
           <div className="flex items-center justify-between">
@@ -505,5 +516,31 @@ export function TicketingDepartureModal({
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Confirmation Modal for Pre-Departure Medical 2 UNFIT */}
+    <ConfirmationModal
+      isOpen={isUnfitConfirmOpen}
+      onClose={() => setIsUnfitConfirmOpen(false)}
+      onConfirm={async () => {
+        try {
+          await executeRecordMedical2();
+          setIsUnfitConfirmOpen(false);
+        } catch {
+          // Handled in executeRecordMedical2
+        }
+      }}
+      title="Disqualify Candidate (Medical 2 UNFIT)?"
+      description={
+        <span>
+          Warning: Setting Pre-Departure Medical 2 to UNFIT will immediately disqualify{" "}
+          <strong>{applicantName}</strong> from traveling and automatically cancel both the candidate and placement record. This action cannot be undone. Are you sure you want to proceed?
+        </span>
+      }
+      confirmLabel="Confirm UNFIT Disqualification"
+      cancelLabel="Go Back"
+      variant="danger"
+      isLoading={isSubmitting}
+    />
+    </>
   );
 }

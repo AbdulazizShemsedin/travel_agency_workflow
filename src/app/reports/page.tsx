@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -30,6 +31,8 @@ import {
   Activity,
   ArrowUpRight,
   Inbox,
+  Receipt,
+  Loader2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -76,9 +79,13 @@ import {
   listNewComplaintsV2,
   V2ComplaintRecord,
 } from "@/lib/api/v2/complaints";
+import {
+  listTransactionsV2,
+  V2TransactionRecord,
+} from "@/lib/api/v2/finance";
 import { cn } from "@/lib/utils";
 
-type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "approvals";
+type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions" | "approvals";
 
 const FUNNEL_COLORS = [
   "#94a3b8", // Draft
@@ -114,6 +121,11 @@ export default function ReportsPage() {
   const [fromDate, setFromDate] = React.useState<string>("2026-01-01");
   const [toDate, setToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
   const [isExportingXlsx, setIsExportingXlsx] = React.useState<boolean>(false);
+
+  // Transactions ledger filters
+  const [txnSearchQuery, setTxnSearchQuery] = React.useState<string>("");
+  const [txnStatusFilter, setTxnStatusFilter] = React.useState<string>("All");
+  const [txnTypeFilter, setTxnTypeFilter] = React.useState<string>("All");
 
   // Quick Preset Helper (Daily, Weekly, Monthly, Yearly)
   const setPreset = React.useCallback((preset: "daily" | "weekly" | "monthly" | "yearly" | "all") => {
@@ -313,6 +325,73 @@ export default function ReportsPage() {
     enabled: activeTab === "approvals" && isAdminOrFinance,
     staleTime: 20000,
   });
+
+  // 10. All Transactions Ledger (Admin / Finance Manager)
+  const {
+    data: allTransactions = [],
+    isLoading: isTransactionsLoading,
+    refetch: refetchTransactions,
+  } = useQuery<V2TransactionRecord[]>({
+    queryKey: ["report_all_transactions", dateParams, txnStatusFilter, txnTypeFilter],
+    queryFn: () =>
+      listTransactionsV2({
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+        status: txnStatusFilter !== "All" ? txnStatusFilter : undefined,
+        transactionType: txnTypeFilter !== "All" ? txnTypeFilter : undefined,
+        limitPageLength: 200,
+      }),
+    enabled: activeTab === "transactions" && isAdminOrFinance,
+    staleTime: 30000,
+  });
+
+  const filteredTransactions = React.useMemo(() => {
+    if (!txnSearchQuery.trim()) return allTransactions;
+    const q = txnSearchQuery.toLowerCase();
+    return allTransactions.filter((t: any) => {
+      return (
+        t.name?.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q) ||
+        t.applicant?.toLowerCase().includes(q) ||
+        t.placement?.toLowerCase().includes(q) ||
+        t.logged_by?.toLowerCase().includes(q) ||
+        t.stage_logged_at?.toLowerCase().includes(q) ||
+        t.currency?.toLowerCase().includes(q) ||
+        t.currency_original?.toLowerCase().includes(q) ||
+        t.status?.toLowerCase().includes(q)
+      );
+    });
+  }, [allTransactions, txnSearchQuery]);
+
+  const transactionMetrics = React.useMemo(() => {
+    let totalExpenseBirr = 0;
+    let totalIncomeBirr = 0;
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
+
+    allTransactions.forEach((t: any) => {
+      const birr = Number(t.amount_birr || t.amount || 0);
+      if (t.transaction_type === "Expense" && t.status === "Approved") {
+        totalExpenseBirr += birr;
+      } else if (t.transaction_type === "Income" && t.status === "Approved") {
+        totalIncomeBirr += birr;
+      }
+
+      if (t.status === "Pending") pendingCount++;
+      else if (t.status === "Approved") approvedCount++;
+      else if (t.status === "Rejected" || t.status === "Voided") rejectedCount++;
+    });
+
+    return {
+      totalCount: allTransactions.length,
+      totalExpenseBirr,
+      totalIncomeBirr,
+      pendingCount,
+      approvedCount,
+      rejectedCount,
+    };
+  }, [allTransactions]);
 
   // Handle Backend Spreadsheet Export (.xlsx or .csv fallback)
   const handleExportXlsx = async () => {
@@ -561,6 +640,27 @@ export default function ReportsPage() {
           >
             <DollarSign className="h-3.5 w-3.5" />
             Financial Ledgers & Costs
+          </button>
+        )}
+
+        {isAdminOrFinance && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("transactions")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "transactions"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            All Transactions Ledger
+            {allTransactions.length > 0 && activeTab === "transactions" ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-700 text-white text-[10px] font-bold">
+                {allTransactions.length}
+              </span>
+            ) : null}
           </button>
         )}
 
@@ -1028,6 +1128,343 @@ export default function ReportsPage() {
                           <tr>
                             <td colSpan={4} className="py-6 text-center text-slate-400">
                               No employee financial records found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB: ALL TRANSACTIONS LEDGER                                  */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "transactions" && (
+        <>
+          {!isAdminOrFinance ? (
+            <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
+              <div className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-amber-600" />
+                <h3 className="text-sm font-bold">Transaction History is Role-Restricted</h3>
+              </div>
+              <p className="leading-relaxed">
+                Access to the complete system transaction ledger is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Quick Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="p-4 space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Total Transactions
+                    </span>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                        {transactionMetrics.totalCount}
+                      </span>
+                      <Badge variant="outline" className="text-[10px]">
+                        In Date Window
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="p-4 space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Approved Expenses
+                    </span>
+                    <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                      ETB {transactionMetrics.totalExpenseBirr.toLocaleString()}
+                    </span>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="p-4 space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Approved Income
+                    </span>
+                    <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
+                      ETB {transactionMetrics.totalIncomeBirr.toLocaleString()}
+                    </span>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="p-4 space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Pending Approvals
+                    </span>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-2xl font-bold text-amber-800 dark:text-amber-400">
+                        {transactionMetrics.pendingCount}
+                      </span>
+                      {transactionMetrics.pendingCount > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveTab("approvals")}
+                          className="h-6 text-[11px] px-2 text-amber-800 hover:text-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                        >
+                          Review Queue →
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Transactions Master Table */}
+              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-sm font-bold flex items-center gap-2">
+                        <Receipt className="h-4 w-4 text-emerald-600" />
+                        Complete Financial Transactions Ledger
+                      </CardTitle>
+                      <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                        Authoritative ledger of all operational expenses, stage fees, and incomes across every status.
+                      </CardDescription>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchTransactions()}
+                        disabled={isTransactionsLoading}
+                        className="h-8 text-xs border-slate-200 dark:border-[#2a2a35] font-semibold"
+                      >
+                        <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isTransactionsLoading && "animate-spin text-emerald-600")} />
+                        Refresh
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isExportingTransactionsXlsx}
+                        onClick={() => handleExportTransactionsXlsx(txnStatusFilter !== "All" ? txnStatusFilter : undefined)}
+                        className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+                      >
+                        <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+                        {isExportingTransactionsXlsx ? "Exporting..." : "Export Ledger (.xlsx)"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Filter Toolbar */}
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-3">
+                    {/* Search Input */}
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        value={txnSearchQuery}
+                        onChange={(e) => setTxnSearchQuery(e.target.value)}
+                        placeholder="Search ID, description, candidate, user..."
+                        className="h-8 pl-8 text-xs bg-slate-50 dark:bg-[#181820] border-slate-200 dark:border-[#282834]"
+                      />
+                    </div>
+
+                    {/* Status Filter Tabs */}
+                    <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto p-0.5 rounded-lg bg-slate-100 dark:bg-[#1a1a24]">
+                      {(["All", "Pending", "Approved", "Rejected", "Voided"] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setTxnStatusFilter(st)}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap",
+                            txnStatusFilter === st
+                              ? "bg-white dark:bg-[#252535] text-slate-900 dark:text-white shadow-2xs"
+                              : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white"
+                          )}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Type Filter Tabs */}
+                    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-[#1a1a24] ml-auto">
+                      {(["All", "Expense", "Income"] as const).map((tp) => (
+                        <button
+                          key={tp}
+                          type="button"
+                          onClick={() => setTxnTypeFilter(tp)}
+                          className={cn(
+                            "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all whitespace-nowrap",
+                            txnTypeFilter === tp
+                              ? "bg-white dark:bg-[#252535] text-slate-900 dark:text-white shadow-2xs"
+                              : "text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white"
+                          )}
+                        >
+                          {tp}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#20202a]">
+                        <tr>
+                          <th className="py-2.5 px-3 font-semibold">Transaction</th>
+                          <th className="py-2.5 px-3 font-semibold">Type</th>
+                          <th className="py-2.5 px-3 font-semibold">Description & Stage</th>
+                          <th className="py-2.5 px-3 font-semibold">Candidate / Placement</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Amount (Original)</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Amount (ETB)</th>
+                          <th className="py-2.5 px-3 font-semibold text-center">Status</th>
+                          <th className="py-2.5 px-3 font-semibold">Logged By</th>
+                          <th className="py-2.5 px-3 font-semibold">Approval / Audit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
+                        {isTransactionsLoading ? (
+                          <tr>
+                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                              <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-600 mb-2" />
+                              Loading financial transactions...
+                            </td>
+                          </tr>
+                        ) : filteredTransactions.length > 0 ? (
+                          filteredTransactions.map((t: any) => {
+                            const isExpense = t.transaction_type === "Expense";
+                            const origCurr = t.currency_original || t.currency || "ETB";
+                            const origAmt = Number(t.amount_original || t.amount || 0);
+                            const birrAmt = Number(t.amount_birr || t.amount || 0);
+
+                            return (
+                              <tr key={t.name} className="hover:bg-slate-50/80 dark:hover:bg-[#181822] transition-colors">
+                                <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
+                                  <div>{t.name}</div>
+                                  <div className="text-[10px] font-normal text-slate-400 font-sans">
+                                    {t.creation ? t.creation.split(" ")[0] : "—"}
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] font-bold px-2 py-0.5",
+                                      isExpense
+                                        ? "border-rose-300 text-rose-700 bg-rose-50/60 dark:bg-rose-950/30 dark:border-rose-800"
+                                        : "border-emerald-300 text-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 dark:border-emerald-800"
+                                    )}
+                                  >
+                                    {t.transaction_type || "Expense"}
+                                  </Badge>
+                                </td>
+
+                                <td className="py-2.5 px-3 max-w-xs">
+                                  <div className="font-medium text-slate-800 dark:text-zinc-200 line-clamp-1">
+                                    {t.description || "No description"}
+                                  </div>
+                                  {t.stage_logged_at && (
+                                    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                                      <Layers className="h-2.5 w-2.5 text-slate-400" />
+                                      {t.stage_logged_at}
+                                    </div>
+                                  )}
+                                </td>
+
+                                <td className="py-2.5 px-3 whitespace-nowrap font-mono text-[11px]">
+                                  {t.applicant ? (
+                                    <Link
+                                      href={`/applicants/${encodeURIComponent(t.applicant)}`}
+                                      className="text-emerald-800 dark:text-emerald-400 hover:underline block font-semibold"
+                                    >
+                                      {t.applicant}
+                                    </Link>
+                                  ) : null}
+                                  {t.placement && (
+                                    <span className="text-[10px] text-slate-400 block font-normal">
+                                      {t.placement}
+                                    </span>
+                                  )}
+                                  {!t.applicant && !t.placement && (
+                                    <span className="text-slate-400 font-sans text-[11px]">General Ledger</span>
+                                  )}
+                                </td>
+
+                                <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap text-slate-800 dark:text-zinc-200">
+                                  {origCurr} {origAmt.toLocaleString()}
+                                </td>
+
+                                <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
+                                  <span className={cn(isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
+                                    {isExpense ? "-" : "+"} ETB {birrAmt.toLocaleString()}
+                                  </span>
+                                </td>
+
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] font-semibold px-2 py-0.5",
+                                      t.status === "Approved"
+                                        ? "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-800"
+                                        : t.status === "Pending"
+                                        ? "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800"
+                                        : t.status === "Rejected"
+                                        ? "border-red-300 text-red-700 bg-red-50 dark:bg-red-950/40 dark:border-red-800"
+                                        : "border-slate-300 text-slate-600 bg-slate-50 dark:bg-[#1a1a24]"
+                                    )}
+                                  >
+                                    {t.status === "Approved" && <CheckCircle2 className="h-2.5 w-2.5 mr-1 text-emerald-600" />}
+                                    {t.status === "Pending" && <Clock className="h-2.5 w-2.5 mr-1 text-amber-600" />}
+                                    {t.status || "Pending"}
+                                  </Badge>
+                                </td>
+
+                                <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap text-[11px]">
+                                  {t.logged_by || "System"}
+                                </td>
+
+                                <td className="py-2.5 px-3 text-slate-500 text-[11px] max-w-xs">
+                                  {t.status === "Approved" ? (
+                                    <div className="text-emerald-800 dark:text-emerald-400">
+                                      <span className="font-semibold">Approved</span>
+                                      {t.approved_by ? ` by ${t.approved_by}` : ""}
+                                      {t.approved_on ? ` (${t.approved_on.split(" ")[0]})` : ""}
+                                    </div>
+                                  ) : t.status === "Rejected" ? (
+                                    <div className="text-red-600 dark:text-red-400">
+                                      <span className="font-semibold">Rejected</span>: {t.rejection_reason || "No reason given"}
+                                    </div>
+                                  ) : t.status === "Voided" ? (
+                                    <div className="text-slate-400 italic">Voided transaction</div>
+                                  ) : (
+                                    <div className="text-amber-800 dark:text-amber-400 italic">Awaiting review</div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                              <Receipt className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-2" />
+                              <p className="font-semibold text-slate-600 dark:text-zinc-400">No transactions found</p>
+                              <p className="text-[11px] text-slate-400 mt-1">
+                                {txnSearchQuery || txnStatusFilter !== "All" || txnTypeFilter !== "All"
+                                  ? "No records match the active search or status filters."
+                                  : "Zero transactions recorded within the selected date range."}
+                              </p>
                             </td>
                           </tr>
                         )}

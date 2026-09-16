@@ -29,8 +29,9 @@ interface CandidateDetailModalProps {
   candidate: PortalAvailableCandidate | null;
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (candidate: PortalAvailableCandidate) => void;
+  onSelect?: (candidate: PortalAvailableCandidate) => void;
   isSelecting?: boolean;
+  isAlreadyReserved?: boolean;
 }
 
 export function CandidateDetailModal({
@@ -39,6 +40,7 @@ export function CandidateDetailModal({
   onClose,
   onSelect,
   isSelecting = false,
+  isAlreadyReserved = false,
 }: CandidateDetailModalProps) {
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
@@ -381,24 +383,33 @@ export function CandidateDetailModal({
             Close
           </Button>
 
-          <Button
-            type="button"
-            disabled={isSelecting}
-            onClick={() => onSelect(candidate)}
-            className="bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-semibold text-xs px-5 h-10 rounded-xl shadow-xs"
-          >
-            {isSelecting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Reserving Candidate...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Select & Reserve Candidate
-              </>
-            )}
-          </Button>
+          {isAlreadyReserved ? (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-emerald-800 text-white font-semibold text-xs px-3 py-1.5 rounded-xl shadow-xs">
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                Allocated to Your Agency
+              </Badge>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              disabled={isSelecting}
+              onClick={() => onSelect && candidate && onSelect(candidate)}
+              className="bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-semibold text-xs px-5 h-10 rounded-xl shadow-xs"
+            >
+              {isSelecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reserving Candidate...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Select & Reserve Candidate
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

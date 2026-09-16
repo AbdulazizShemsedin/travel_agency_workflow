@@ -245,76 +245,6 @@ export async function POST(
       "Content-Type": "application/json",
     };
 
-    // Dedicated Oversight Endpoint: List all system threads with participants for Admin only
-    if (methodPath === "agency_tracking.chat_api.list_all_threads") {
-      // Strictly enforce authorization: Only Admin, Administrator, or System Manager
-      const isAuthorized = await checkIsAdminOnly(config, forwardHeaders);
-      if (!isAuthorized) {
-        return NextResponse.json(
-          { message: "Forbidden: Thread oversight is strictly restricted to Administrator and Admin roles only." },
-          { status: 403 }
-        );
-      }
-
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-      const elevatedHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      };
-
-      try {
-        const listRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get_list`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: JSON.stringify({
-            doctype: "Chat Thread",
-            fields: [
-              "name",
-              "owner",
-              "thread_type",
-              "contractor",
-              "context_type",
-              "context_reference",
-              "last_message_at",
-              "modified",
-              "creation",
-            ],
-            limit_page_length: 150,
-          }),
-        });
-
-        const listData = await listRes.json().catch(() => ({ message: [] }));
-        const rawThreads: any[] = Array.isArray(listData.message) ? listData.message : [];
-
-        const enriched = await Promise.all(
-          rawThreads.map(async (t) => {
-            try {
-              const docRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                method: "POST",
-                headers: elevatedHeaders,
-                body: JSON.stringify({
-                  doctype: "Chat Thread",
-                  name: t.name,
-                }),
-              });
-              const docData = await docRes.json().catch(() => ({}));
-              const participants = (docData.message?.participants || []).map((p: any) => p.user);
-              return {
-                ...t,
-                participants: participants.length > 0 ? participants : [t.owner].filter(Boolean),
-              };
-            } catch {
-              return { ...t, participants: [t.owner].filter(Boolean) };
-            }
-          })
-        );
-
-        return NextResponse.json({ message: enriched }, { status: 200 });
-      } catch (err: any) {
-        console.error("[PROXY ERROR list_all_threads]", err);
-        return NextResponse.json({ message: [] }, { status: 200 });
-      }
-    }
 
     // Dedicated Whitelisted Endpoint: Update Contractor Agency and linked Foreign Agency User
     if (methodPath === "agency_tracking.contractor_api.update_contractor") {
@@ -573,7 +503,56 @@ export async function POST(
         });
 
         if (retryRes.ok) {
-          const retryData = await retryRes.json().catch(() => ({ message: [] }));
+          let retryData: any = await retryRes.json().catch(() => ({ message: [] }));
+          const rawPlacements: any[] = Array.isArray(retryData.message)
+            ? retryData.message
+            : Array.isArray(retryData)
+            ? retryData
+            : [];
+
+          if (rawPlacements.length > 0) {
+            const applicantNames = Array.from(new Set(rawPlacements.map((p) => p.applicant).filter(Boolean)));
+            const applicantMap = new Map<string, any>();
+
+            await Promise.all(
+              applicantNames.map(async (appName) => {
+                try {
+                  const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+                    method: "POST",
+                    headers: elevatedHeaders,
+                    body: JSON.stringify({ doctype: "Applicant", name: appName }),
+                  });
+                  const aData = await aRes.json().catch(() => ({}));
+                  if (aData.message) {
+                    applicantMap.set(appName, aData.message);
+                  }
+                } catch {}
+              })
+            );
+
+            const enriched = rawPlacements.map((p) => {
+              const a = applicantMap.get(p.applicant) || {};
+              const computedFullName = a.full_name || [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ");
+              return {
+                ...p,
+                full_name: computedFullName || a.applicant_name || p.full_name || p.applicant,
+                applicant_name: a.applicant_name || computedFullName || p.applicant,
+                passport_number: a.passport_number || p.passport_number || "",
+                photo_passport: a.photo_passport || a.photograph || p.photo_passport || "",
+                photo_full_body: a.photo_full_body || p.photo_full_body || "",
+                job_applied: a.target_job || a.job_applied || p.target_job || "",
+                destination_country: a.destination_country || p.destination_country || "",
+                nationality: a.nationality || "Ethiopian",
+                gender: a.gender || p.gender || "",
+                religion: a.religion || "",
+                age: a.age || "",
+              };
+            });
+
+            if (Array.isArray(retryData.message)) retryData.message = enriched;
+            else if (Array.isArray(retryData)) (retryData as any) = enriched;
+          }
+
           const response = NextResponse.json(retryData, { status: 200 });
           forwardSetCookieHeaders(res, response);
           return response;
@@ -793,6 +772,55 @@ export async function POST(
           );
           if (Array.isArray(data.message?.candidates)) data.message.candidates = enriched;
           else if (Array.isArray(data.message)) data.message = enriched;
+          else if (Array.isArray(data)) (data as any) = enriched;
+        }
+      } else if (methodPath === "agency_tracking.placement_api.list_placements") {
+        const rawPlacements: any[] = Array.isArray(data.message)
+          ? data.message
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        if (rawPlacements.length > 0) {
+          const applicantNames = Array.from(new Set(rawPlacements.map((p) => p.applicant).filter(Boolean)));
+          const applicantMap = new Map<string, any>();
+
+          await Promise.all(
+            applicantNames.map(async (appName) => {
+              try {
+                const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+                  method: "POST",
+                  headers: elevatedHeaders,
+                  body: JSON.stringify({ doctype: "Applicant", name: appName }),
+                });
+                const aData = await aRes.json().catch(() => ({}));
+                if (aData.message) {
+                  applicantMap.set(appName, aData.message);
+                }
+              } catch {}
+            })
+          );
+
+          const enriched = rawPlacements.map((p) => {
+            const a = applicantMap.get(p.applicant) || {};
+            const computedFullName = a.full_name || [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ");
+            return {
+              ...p,
+              full_name: computedFullName || a.applicant_name || p.full_name || p.applicant,
+              applicant_name: a.applicant_name || computedFullName || p.applicant,
+              passport_number: a.passport_number || p.passport_number || "",
+              photo_passport: a.photo_passport || a.photograph || p.photo_passport || "",
+              photo_full_body: a.photo_full_body || p.photo_full_body || "",
+              job_applied: a.target_job || a.job_applied || p.target_job || "",
+              destination_country: a.destination_country || p.destination_country || "",
+              nationality: a.nationality || "Ethiopian",
+              gender: a.gender || p.gender || "",
+              religion: a.religion || "",
+              age: a.age || "",
+            };
+          });
+
+          if (Array.isArray(data.message)) data.message = enriched;
           else if (Array.isArray(data)) (data as any) = enriched;
         }
       }

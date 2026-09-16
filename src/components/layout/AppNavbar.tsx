@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
 import { DemoRoleSwitcher } from "@/components/demo/DemoRoleSwitcher";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface AppNavbarProps {
   isSidebarCollapsed?: boolean;
@@ -25,6 +26,9 @@ export function AppNavbar({
   onMobileMenuToggle,
 }: AppNavbarProps) {
   const [isDarkMode, setIsDarkMode] = React.useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     const saved = localStorage.getItem("theme");
@@ -121,7 +125,7 @@ export function AppNavbar({
 
         {/* User Account Popover or Login Button */}
         {user && (
-          <Popover>
+          <Popover open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -139,7 +143,11 @@ export function AppNavbar({
                 <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{user}</p>
               </div>
               <button
-                onClick={() => logout()}
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  setIsLogoutConfirmOpen(true);
+                }}
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition font-medium cursor-pointer"
               >
                 <LogOut className="h-3.5 w-3.5" />
@@ -148,6 +156,28 @@ export function AppNavbar({
             </PopoverContent>
           </Popover>
         )}
+
+        {/* Logout Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={isLogoutConfirmOpen}
+          onClose={() => setIsLogoutConfirmOpen(false)}
+          onConfirm={async () => {
+            try {
+              setIsLoggingOut(true);
+              await logout();
+            } finally {
+              setIsLoggingOut(false);
+              setIsLogoutConfirmOpen(false);
+            }
+          }}
+          title="Log Out of System?"
+          description="Are you sure you want to log out? Any unsaved changes on open screens will be lost."
+          confirmLabel="Log Out"
+          cancelLabel="Stay Signed In"
+          variant="danger"
+          icon={LogOut}
+          isLoading={isLoggingOut}
+        />
       </div>
     </header>
   );

@@ -59,6 +59,7 @@ import {
 } from "@/lib/api/v2";
 import { cn } from "@/lib/utils";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 // Canonical Roles Definition mapped directly to active database roles
 export interface CanonicalRoleDefinition {
@@ -258,6 +259,7 @@ export default function EmployeesPage() {
   const [selectedForRoles, setSelectedForRoles] = React.useState<V2EmployeeRecord | null>(null);
   const [editingRoles, setEditingRoles] = React.useState<string[]>([]);
   const [selectedForPassword, setSelectedForPassword] = React.useState<V2EmployeeRecord | null>(null);
+  const [employeeToDeactivate, setEmployeeToDeactivate] = React.useState<V2EmployeeRecord | null>(null);
   const [newPassword, setNewPassword] = React.useState<string>("");
   const [showNewPassword, setShowNewPassword] = React.useState<boolean>(false);
 
@@ -905,12 +907,16 @@ export default function EmployeesPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                toggleStatusMutation.mutate({
-                                  email: emp.email,
-                                  enabled: emp.enabled !== 1,
-                                })
-                              }
+                              onClick={() => {
+                                if (emp.enabled === 1) {
+                                  setEmployeeToDeactivate(emp);
+                                } else {
+                                  toggleStatusMutation.mutate({
+                                    email: emp.email,
+                                    enabled: true,
+                                  });
+                                }
+                              }}
                               disabled={toggleStatusMutation.isPending}
                               className={cn(
                                 "h-7 px-2 text-[11px]",
@@ -1680,6 +1686,41 @@ export default function EmployeesPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Confirmation Modal for Staff Deactivation */}
+      <ConfirmationModal
+        isOpen={!!employeeToDeactivate}
+        onClose={() => setEmployeeToDeactivate(null)}
+        onConfirm={async () => {
+          if (!employeeToDeactivate) return;
+          try {
+            await toggleStatusMutation.mutateAsync({
+              email: employeeToDeactivate.email,
+              enabled: false,
+            });
+            setEmployeeToDeactivate(null);
+          } catch {
+            // Handled by mutation onError toast
+          }
+        }}
+        title="Deactivate Staff Account?"
+        description={
+          employeeToDeactivate ? (
+            <span>
+              Are you sure you want to deactivate{" "}
+              <strong>{employeeToDeactivate.full_name || employeeToDeactivate.email}</strong>?
+              This staff member will immediately lose access to the system until reactivated.
+            </span>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="Deactivate Account"
+        cancelLabel="Keep Active"
+        variant="danger"
+        icon={UserX}
+        isLoading={toggleStatusMutation.isPending}
+      />
 
       {/* ------------------------------------------------------------- */}
       {/* Role Architecture Reference Guide                             */}

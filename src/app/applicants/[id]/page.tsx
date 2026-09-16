@@ -92,6 +92,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -145,6 +146,7 @@ export default function ApplicantDetailPage() {
   const [isTicketingModalOpen, setIsTicketingModalOpen] = React.useState(false);
   const [ticketingInitialTab, setTicketingInitialTab] = React.useState<"ticket" | "reschedule" | "medical2" | "departure">("ticket");
   const [isMedical1ModalOpen, setIsMedical1ModalOpen] = React.useState(false);
+  const [isUnfitConfirmOpen, setIsUnfitConfirmOpen] = React.useState(false);
   const [med1Status, setMed1Status] = React.useState<"FIT" | "UNFIT">("FIT");
   const [med1Date, setMed1Date] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [med1Expiry, setMed1Expiry] = React.useState("");
@@ -2098,15 +2100,53 @@ export default function ApplicantDetailPage() {
               Cancel
             </Button>
             <Button
-              onClick={() => recordMedical1Mutation.mutate()}
+              onClick={() => {
+                if (med1Status === "UNFIT") {
+                  setIsUnfitConfirmOpen(true);
+                } else {
+                  recordMedical1Mutation.mutate();
+                }
+              }}
               disabled={recordMedical1Mutation.isPending || !med1Date}
-              className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
+              className={
+                med1Status === "UNFIT"
+                  ? "bg-rose-700 hover:bg-rose-800 text-white font-semibold"
+                  : "bg-emerald-900 hover:bg-emerald-950 text-white font-semibold"
+              }
             >
-              {recordMedical1Mutation.isPending ? "Recording..." : "Save Medical Result"}
+              {recordMedical1Mutation.isPending
+                ? "Recording..."
+                : med1Status === "UNFIT"
+                ? "Save UNFIT Result"
+                : "Save Medical Result"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Modal for Medical 1 UNFIT Result */}
+      <ConfirmationModal
+        isOpen={isUnfitConfirmOpen}
+        onClose={() => setIsUnfitConfirmOpen(false)}
+        onConfirm={async () => {
+          try {
+            await recordMedical1Mutation.mutateAsync();
+            setIsUnfitConfirmOpen(false);
+          } catch {
+            // Handled by mutation onError toast
+          }
+        }}
+        title="Mark Applicant as Medical UNFIT?"
+        description={
+          <span>
+            Warning: Marking <strong>{applicant?.full_name || applicantId}</strong> as Medical UNFIT will automatically cancel the applicant record and cancel any active job placement. This action cannot be undone. Are you sure you want to proceed?
+          </span>
+        }
+        confirmLabel="Confirm UNFIT & Cancel"
+        cancelLabel="Go Back"
+        variant="danger"
+        isLoading={recordMedical1Mutation.isPending}
+      />
 
       {/* Log Multiple Candidate Fees / Expenses Dialog */}
       <Dialog open={isLogFeeModalOpen} onOpenChange={setIsLogFeeModalOpen}>

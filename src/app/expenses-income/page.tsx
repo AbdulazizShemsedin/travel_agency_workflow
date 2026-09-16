@@ -1673,6 +1673,79 @@ export default function ExpensesIncomePage() {
         </div>
       )}
 
+      {/* ------------------------------------------------------------- */}
+      {/* Modal 3: Void Transaction Dialog (Soft Delete)                */}
+      {/* ------------------------------------------------------------- */}
+      {voidingTxName && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-xl border border-rose-200 dark:border-rose-950/60 bg-white dark:bg-[#16161b] p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-[#222227]">
+              <div className="flex items-center gap-2">
+                <AlertOctagon className="h-5 w-5 text-rose-600" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Void Transaction ({voidingTxName})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoidingTxName(null);
+                  setVoidReason("");
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVoid} className="space-y-3.5">
+              <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 text-xs text-rose-800 dark:text-rose-300">
+                <span className="font-semibold block mb-1">Soft Delete Audit Warning</span>
+                Voiding marks this transaction as Voided in the permanent audit trail and excludes it from ledger balances. This action cannot be undone.
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="void_reason" className="text-xs font-semibold">
+                  Void Audit Reason <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  id="void_reason"
+                  placeholder="e.g. Duplicate entry / bank refund / erroneous charge"
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  required
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setVoidingTxName(null);
+                    setVoidReason("");
+                  }}
+                  className="text-xs h-8"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!voidReason.trim() || isVoiding}
+                  className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                >
+                  {isVoiding ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Confirm Void Transaction
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* FX Rate Management Modal */}
       <FxRateModal
         isOpen={isFxModalOpen}

@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { listContractorsV2, V2ContractorRecord } from "@/lib/api/v2/contractors";
 import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface AgentLayoutProps {
   children: React.ReactNode;
@@ -47,6 +48,8 @@ export function AgentLayout({
   const [isDarkMode, setIsDarkMode] = React.useState(false);
   const [isAgencyDropdownOpen, setIsAgencyDropdownOpen] = React.useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [contractorsList, setContractorsList] = React.useState<V2ContractorRecord[]>([]);
 
   const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
@@ -250,7 +253,7 @@ export function AgentLayout({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => logout()}
+              onClick={() => setIsLogoutConfirmOpen(true)}
               className="hidden sm:inline-flex h-9 text-xs rounded-xl border-slate-200 dark:border-[#26262f] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
             >
               <LogOut className="h-3.5 w-3.5 mr-1" />
@@ -336,7 +339,7 @@ export function AgentLayout({
                   size="sm"
                   onClick={() => {
                     setIsMobileNavOpen(false);
-                    logout();
+                    setIsLogoutConfirmOpen(true);
                   }}
                   className="w-full justify-center h-10 text-xs text-rose-600 border-rose-200 dark:border-rose-950 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                 >
@@ -367,6 +370,28 @@ export function AgentLayout({
           </div>
         </div>
       </footer>
+
+      {/* Sign Out Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isLogoutConfirmOpen}
+        onClose={() => setIsLogoutConfirmOpen(false)}
+        onConfirm={async () => {
+          try {
+            setIsLoggingOut(true);
+            await logout();
+          } finally {
+            setIsLoggingOut(false);
+            setIsLogoutConfirmOpen(false);
+          }
+        }}
+        title="Sign Out of Partner Portal?"
+        description="Are you sure you want to sign out of the Foreign Agency Portal?"
+        confirmLabel="Sign Out"
+        cancelLabel="Stay Signed In"
+        variant="danger"
+        icon={LogOut}
+        isLoading={isLoggingOut}
+      />
     </div>
   );
 }

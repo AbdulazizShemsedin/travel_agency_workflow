@@ -1093,9 +1093,20 @@ export function EmbassyWorkspace({
                 setIsConfirmOpen(false);
                 mutation.mutate();
               }}
-              className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
+              className={cn(
+                "text-xs font-semibold text-white",
+                status === "Rejected"
+                  ? "bg-rose-600 hover:bg-rose-700"
+                  : "bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+              )}
             >
-              {mutation.isPending ? "Submitting..." : isEmbassyTerminal ? "Yes, Save Corrections" : "Yes, Confirm & Save"}
+              {mutation.isPending
+                ? "Submitting..."
+                : status === "Rejected"
+                ? "Yes, Confirm Rejection"
+                : isEmbassyTerminal
+                ? "Yes, Save Corrections"
+                : "Yes, Confirm & Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

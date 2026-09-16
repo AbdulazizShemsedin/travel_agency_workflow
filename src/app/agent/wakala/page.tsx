@@ -32,7 +32,6 @@ import {
   V2WakalaRequestItem,
 } from "@/lib/api/v2/portal";
 import {
-  triggerWakalaReminderV2,
   getPushSubscriptionStatusV2,
   subscribeToPushV2,
   getVapidPublicKeyV2,
@@ -90,7 +89,6 @@ export default function AgentWakalaRequestsPage() {
   const isForeignAgency = userRoles.some((r) => r.toLowerCase().includes("foreign agency") || r.toLowerCase().includes("agent"));
 
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [remindingStepName, setRemindingStepName] = React.useState<string | null>(null);
   const [isSubscribingPush, setIsSubscribingPush] = React.useState<boolean>(false);
 
   // 1. Fetch Real Unpaid Wakala Requests from V2 Portal API
@@ -134,28 +132,6 @@ export default function AgentWakalaRequestsPage() {
     });
   }, [wakalaRequests, searchTerm]);
 
-  // Mutation: Trigger Wakala Reminder
-  const reminderMutation = useMutation({
-    mutationFn: (clearanceStepName: string) => triggerWakalaReminderV2(clearanceStepName),
-    onSuccess: (data, stepName) => {
-      toast.success("Wakala Reminder Dispatched", {
-        description: data?.message || `Wakala payment reminder sent for step ${stepName}.`,
-      });
-      setRemindingStepName(null);
-      queryClient.invalidateQueries({ queryKey: ["agency-wakala-requests"] });
-    },
-    onError: (err: any) => {
-      toast.error("Reminder Failed", {
-        description: err?.message || "Failed to send Wakala reminder. Please try again.",
-      });
-      setRemindingStepName(null);
-    },
-  });
-
-  const handleTriggerReminder = (stepName: string) => {
-    setRemindingStepName(stepName);
-    reminderMutation.mutate(stepName);
-  };
 
   // Real Browser Web Push Registration via V2 Backend API
   const handleEnablePush = async () => {
@@ -468,22 +444,34 @@ export default function AgentWakalaRequestsPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleTriggerReminder(req.clearance_step_name)}
-                              disabled={remindingStepName === req.clearance_step_name}
-                              className="h-7 text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
-                              title="Send manual Wakala reminder to agency user"
+                            <a
+                              href="https://musaned.com.sa"
+                              target="_blank"
+                              rel="noopener noreferrer"
                             >
-                              {remindingStepName === req.clearance_step_name ? (
-                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              ) : (
-                                <BellRing className="h-3 w-3 mr-1" />
-                              )}
-                              Send Reminder
-                            </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold"
+                                title="Open Musaned portal to authorize Wakala"
+                              >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Musaned
+                              </Button>
+                            </a>
+                            <Link href="/agent/chat">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-slate-200 dark:border-[#2a2a35] hover:bg-slate-100 dark:hover:bg-[#1f1f28] text-slate-700 dark:text-zinc-300 font-semibold"
+                                title="Chat with Agency Headquarters regarding this Wakala"
+                              >
+                                <MessageCircle className="h-3 w-3 mr-1 text-emerald-600" />
+                                Contact HQ
+                              </Button>
+                            </Link>
                           </div>
                         </td>
                       </tr>

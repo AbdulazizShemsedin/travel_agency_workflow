@@ -52,6 +52,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   listMyClearanceStepsV2,
@@ -98,6 +99,7 @@ export function V2ClearanceQueueWorkspace() {
   const [referenceNo, setReferenceNo] = React.useState<string>("");
   const [amount, setAmount] = React.useState<string>("");
   const [rejectionRemark, setRejectionRemark] = React.useState<string>("");
+  const [isRejectConfirmOpen, setIsRejectConfirmOpen] = React.useState<boolean>(false);
 
   // Wakala fee & submission override states
   const [isWakalaReminding, setIsWakalaReminding] = React.useState(false);
@@ -2090,12 +2092,7 @@ export function V2ClearanceQueueWorkspace() {
                       type="button"
                       variant="destructive"
                       disabled={!canOperateSelectedStep || !rejectionRemark.trim() || isSaving}
-                      onClick={() =>
-                        rejectEmbassyMutation.mutate({
-                          stepName: selectedRow.name,
-                          remark: rejectionRemark.trim(),
-                        })
-                      }
+                      onClick={() => setIsRejectConfirmOpen(true)}
                       className="w-full text-xs font-semibold h-9"
                     >
                       {rejectEmbassyMutation.isPending ? (
@@ -2336,6 +2333,40 @@ export function V2ClearanceQueueWorkspace() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Modal for Embassy Visa Rejection */}
+      <ConfirmationModal
+        isOpen={isRejectConfirmOpen}
+        onClose={() => setIsRejectConfirmOpen(false)}
+        onConfirm={async () => {
+          if (!selectedRow) return;
+          try {
+            await rejectEmbassyMutation.mutateAsync({
+              stepName: selectedRow.name,
+              remark: rejectionRemark.trim(),
+            });
+            setIsRejectConfirmOpen(false);
+          } catch {
+            // Error toast handled by mutation onError
+          }
+        }}
+        title="Confirm Embassy Visa Rejection?"
+        description={
+          selectedRow ? (
+            <span>
+              Are you sure you want to record an Embassy rejection for{" "}
+              <strong>{selectedRow.full_name || selectedRow.name}</strong>? This will halt consular visa processing and mark the Embassy clearance stage as Rejected with your specified remark.
+            </span>
+          ) : (
+            "Are you sure you want to record an Embassy rejection for this applicant?"
+          )
+        }
+        confirmLabel="Confirm Rejection"
+        cancelLabel="Go Back"
+        variant="danger"
+        icon={XCircle}
+        isLoading={rejectEmbassyMutation.isPending}
+      />
     </div>
   );
 }
