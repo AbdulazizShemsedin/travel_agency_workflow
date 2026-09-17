@@ -246,7 +246,7 @@ function formatZodIssue(issue: any): string {
  * Extracts and unpacks raw error message from any error object, Zod error, or Frappe response.
  */
 function extractRawErrorMessage(error: unknown): string {
-  if (!error) return "An unexpected issue occurred. Please try again.";
+  if (!error) return "Could not complete this action. Please check your entries and try again.";
 
   // 1. ZodError object or array of issues
   if (typeof error === "object" && error !== null) {
@@ -311,7 +311,7 @@ function extractRawErrorMessage(error: unknown): string {
         // continue
       }
     }
-    return error.message || "An unexpected issue occurred. Please try again.";
+    return error.message || "Could not complete this action. Please check your entries and try again.";
   }
 
   // 4. Generic object structure
@@ -357,7 +357,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     ) {
       text = lastLine;
     } else {
-      return "The system encountered an unexpected issue while completing this action. Please try again.";
+      return "Could not complete this action right now. Please check your entries and try again.";
     }
   }
 
@@ -514,7 +514,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return "Cannot connect to server. Please check your internet connection and try again.";
   }
   if (/Unexpected token < in JSON|Server returned non-JSON response|Internal Server Error|500 Internal/i.test(text)) {
-    return "Server error. Please refresh the page and try again.";
+    return "The server is temporarily busy or updating. Please try again in a few moments.";
   }
 
   // 10. HTTP Status Code Fallbacks
@@ -537,7 +537,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return "Too many requests. Please wait a moment and try again.";
   }
   if (/HTTP 5\d\d|status code 5\d\d/i.test(text)) {
-    return "We could not complete this action. Please try again.";
+    return "The server could not complete this request right now. Please try again in a moment.";
   }
 
   // 11. Duplicate Entry & Applicant Unique ID Collisions
@@ -683,7 +683,7 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     text.includes("get_attr") ||
     /module\s*'|attribute\s*'/i.test(text)
   ) {
-    return "We could not complete this action. Please try again.";
+    return "Could not complete this action. Please review your entries and try again.";
   }
 
   // Capitalize first character

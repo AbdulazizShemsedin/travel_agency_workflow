@@ -86,8 +86,8 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2, ti
 async function parseJsonOrFriendlyMessage(res: Response) {
   const isUpstreamError = !res.ok && res.status >= 500;
   const fallbackMessage = isUpstreamError
-    ? "The server did not respond as expected. Please try again in a moment."
-    : "The server returned an unexpected response. Please try again.";
+    ? "The server is temporarily busy. Please try again in a few moments."
+    : "Could not complete this request right now. Please try again in a moment.";
   try {
     return await res.json();
   } catch {
@@ -833,8 +833,15 @@ export async function POST(
         methodPath.includes("get_current_user") ||
         methodPath.includes("get_logged_user")
       );
-      if (!isExpectedAuthChallenge) {
+      const isPermissionError = res.status === 403 && (
+        data?.exc_type === "PermissionError" ||
+        String(data?.exception || "").includes("PermissionError") ||
+        String(data?._error_message || "").includes("No permission")
+      );
+      if (!isExpectedAuthChallenge && !isPermissionError) {
         console.error("[PROXY ERROR POST]", methodPath, res.status, data);
+      } else if (isPermissionError) {
+        console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
     const response = NextResponse.json(data, { status: res.status });
@@ -904,8 +911,15 @@ export async function GET(
         methodPath.includes("get_current_user") ||
         methodPath.includes("get_logged_user")
       );
-      if (!isExpectedAuthChallenge) {
+      const isPermissionError = res.status === 403 && (
+        data?.exc_type === "PermissionError" ||
+        String(data?.exception || "").includes("PermissionError") ||
+        String(data?._error_message || "").includes("No permission")
+      );
+      if (!isExpectedAuthChallenge && !isPermissionError) {
         console.error("[PROXY ERROR GET]", methodPath, res.status, data);
+      } else if (isPermissionError) {
+        console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
     const response = NextResponse.json(data, { status: res.status });

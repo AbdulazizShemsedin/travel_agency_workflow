@@ -63,6 +63,7 @@ import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { listPortalCandidatesV2 } from "@/lib/api/v2/portal";
+import { requestV2 } from "@/lib/api/v2/client";
 import { cn } from "@/lib/utils";
 
 function WhatsAppDoubleCheck({ className }: { className?: string }) {

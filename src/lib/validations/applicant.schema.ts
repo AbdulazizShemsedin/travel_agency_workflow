@@ -230,7 +230,7 @@ export const baseApplicantSchema = z.object({
   education_remarks: z.string().optional().or(z.literal("")),
 });
 
-// Stage 1 Schema: Mandatory for Draft Floor
+// Stage 1 Schema: Minimal Requirements to Save an In-Progress Draft
 export const stage1DraftSchema = baseApplicantSchema.extend({
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS, {
     errorMap: () => ({ message: "Please select an Applicant Type" }),
@@ -242,82 +242,97 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
     .default("Saudi Arabia"),
 
   first_name: z
-    .string({ required_error: "First Name is required" })
+    .string({ required_error: "First Name is required to save a draft" })
     .trim()
     .min(2, "First Name must be at least 2 characters")
     .max(50, "First Name must not exceed 50 characters")
     .regex(NAME_REGEX, "First Name can only contain letters, hyphens, and spaces"),
 
-  middle_name: z
-    .string({ required_error: "Father Name (Middle Name) is required" })
-    .trim()
-    .min(2, "Father Name must be at least 2 characters")
-    .max(50, "Father Name must not exceed 50 characters")
-    .regex(NAME_REGEX, "Father Name can only contain letters, hyphens, and spaces"),
+  middle_name: z.string().trim().max(50, "Father Name must not exceed 50 characters").optional().or(z.literal("")),
 
-  last_name: z
-    .string({ required_error: "Last Name is required" })
-    .trim()
-    .min(2, "Last Name must be at least 2 characters")
-    .max(50, "Last Name must not exceed 50 characters")
-    .regex(NAME_REGEX, "Last Name can only contain letters, hyphens, and spaces"),
+  last_name: z.string().trim().max(50, "Last Name must not exceed 50 characters").optional().or(z.literal("")),
 
-  gender: z.enum(GENDER_OPTIONS, {
-    errorMap: () => ({ message: "Please select a Gender (Male or Female)" }),
-  }),
+  gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default("Female"),
 
-  religion: z.enum(RELIGION_OPTIONS, {
-    errorMap: () => ({ message: "Please select a Religion" }),
-  }),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
 
-  marital_status: z.enum(MARITAL_STATUS_OPTIONS, {
-    errorMap: () => ({ message: "Please select a Marital Status" }),
-  }),
+  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
 
   children: z.preprocess(
     (val) => {
       if (val === "" || val === null || val === undefined) return 0;
       const num = Number(val);
-      return Number.isNaN(num) ? NaN : num;
+      return Number.isNaN(num) ? 0 : num;
     },
     z.number({
       invalid_type_error: "Please enter a valid number of children (e.g. 0, 1, 2)",
-      required_error: "Number of children is required",
     })
       .int("Number of children must be a whole number")
       .min(0, "Number of children cannot be negative")
       .max(25, "Number of children cannot exceed 25")
+      .default(0)
   ),
 
   nationality: z
-    .string({ required_error: "Nationality is required" })
+    .string()
     .trim()
-    .min(2, "Nationality is required (e.g. Ethiopia)")
-    .max(60),
+    .default("Ethiopia"),
 
-  phone_number: z
-    .string({ required_error: "Primary Phone Number is required" })
-    .trim()
-    .min(9, "Phone Number must be at least 9 digits")
-    .max(18, "Phone Number cannot exceed 18 digits")
-    .regex(PHONE_REGEX, "Please enter a valid Phone Number (e.g. +251911223344)"),
+  phone_number: z.string().trim().optional().or(z.literal("")),
 
-  city: z
-    .string({ required_error: "City is required" })
-    .trim()
-    .min(2, "City is required (e.g. Addis Ababa)")
-    .max(60),
+  city: z.string().trim().optional().or(z.literal("")),
 
-  country: z
-    .string({ required_error: "Country is required" })
-    .trim()
-    .min(2, "Country is required (e.g. Ethiopia)")
-    .max(60),
+  country: z.string().trim().default("Ethiopia"),
 });
 
 // Stage 2 Schema: Strictly Validates All Requirements for Registration
 export const stage2RegistrationSchema = stage1DraftSchema
   .extend({
+    middle_name: z
+      .string({ required_error: "Father Name (Middle Name) is required for registration" })
+      .trim()
+      .min(2, "Father Name must be at least 2 characters")
+      .max(50, "Father Name must not exceed 50 characters")
+      .regex(NAME_REGEX, "Father Name can only contain letters, hyphens, and spaces"),
+
+    last_name: z
+      .string({ required_error: "Last Name is required for registration" })
+      .trim()
+      .min(2, "Last Name must be at least 2 characters")
+      .max(50, "Last Name must not exceed 50 characters")
+      .regex(NAME_REGEX, "Last Name can only contain letters, hyphens, and spaces"),
+
+    gender: z.enum(GENDER_OPTIONS, {
+      errorMap: () => ({ message: "Please select a Gender (Male or Female)" }),
+    }),
+
+    religion: z.enum(RELIGION_OPTIONS, {
+      errorMap: () => ({ message: "Please select a Religion" }),
+    }),
+
+    marital_status: z.enum(MARITAL_STATUS_OPTIONS, {
+      errorMap: () => ({ message: "Please select a Marital Status" }),
+    }),
+
+    phone_number: z
+      .string({ required_error: "Primary Phone Number is required for registration" })
+      .trim()
+      .min(9, "Phone Number must be at least 9 digits")
+      .max(18, "Phone Number cannot exceed 18 digits")
+      .regex(PHONE_REGEX, "Please enter a valid Phone Number (e.g. +251911223344)"),
+
+    city: z
+      .string({ required_error: "City is required for registration" })
+      .trim()
+      .min(2, "City is required (e.g. Addis Ababa)")
+      .max(60),
+
+    country: z
+      .string({ required_error: "Country is required for registration" })
+      .trim()
+      .min(2, "Country is required (e.g. Ethiopia)")
+      .max(60),
+
     date_of_birth: z
       .string({ required_error: "Date of Birth is required for registration" })
       .min(1, "Date of Birth is required")
@@ -326,6 +341,12 @@ export const stage2RegistrationSchema = stage1DraftSchema
         const parsed = parseISO(val);
         return isValid(parsed) && isPast(startOfDay(parsed));
       }, "Date of Birth cannot be today or in the future")
+      .refine((val) => {
+        if (!val) return false;
+        const parsed = parseISO(val);
+        const age = differenceInYears(new Date(), parsed);
+        return isValid(parsed) && age >= 18;
+      }, "Applicant must be at least 18 years old for work abroad")
       .refine((val) => {
         if (!val) return false;
         const parsed = parseISO(val);

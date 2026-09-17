@@ -243,14 +243,11 @@ export async function requestV2<T = any>(
   }
 
   // Parse Frappe standard errors and validation failures
-  if (!response.ok || jsonResponse.exc || jsonResponse.exception || jsonResponse.exc_type) {
-    let errorMsg = "An unexpected server error occurred.";
+  if (!response.ok || jsonResponse?.exc || jsonResponse?.exception || jsonResponse?.exc_type) {
+    let errorMsg = "";
 
-    if (typeof jsonResponse.message === "string") {
-      errorMsg = jsonResponse.message;
-    } else if (jsonResponse.message && typeof jsonResponse.message.error === "string") {
-      errorMsg = jsonResponse.message.error;
-    } else if (typeof jsonResponse._server_messages === "string") {
+    // 1. Try _server_messages first (often carries exact Frappe ValidationError text)
+    if (typeof jsonResponse?._server_messages === "string") {
       try {
         const parsedMsgs = JSON.parse(jsonResponse._server_messages);
         if (Array.isArray(parsedMsgs)) {
@@ -264,24 +261,82 @@ export async function requestV2<T = any>(
                   return m;
                 }
               }
-              return m.message || JSON.stringify(m);
+              return m.message || (typeof m === "object" ? JSON.stringify(m) : String(m));
             })
+            .filter(Boolean)
             .join(" • ");
         }
       } catch {
         errorMsg = jsonResponse._server_messages;
       }
-    } else if (response.status === 403) {
-      errorMsg = "Permission denied: Your assigned role does not have authorization for this operation.";
-    } else if (response.status === 417) {
-      errorMsg = "Validation error: Operation violated backend business rules.";
+    }
+
+    // 2. Try message field
+    if (!errorMsg && typeof jsonResponse?.message === "string") {
+      errorMsg = jsonResponse.message;
+    } else if (!errorMsg && jsonResponse?.message && typeof jsonResponse.message === "object") {
+      errorMsg = jsonResponse.message.error || jsonResponse.message.message || jsonResponse.message.detail || "";
+    }
+
+    // 3. Try exception field (strip Python/Frappe exception classes)
+    if (!errorMsg && typeof jsonResponse?.exception === "string") {
+      const rawExc = jsonResponse.exception.trim();
+      const cleaned = rawExc
+        .replace(/^(?:frappe\.)?(?:exceptions\.)?(?:pymysql\.err\.)?[a-zA-Z0-9_]+Error:\s*/i, "")
+        .replace(/^[a-zA-Z0-9_]+Error:\s*/i, "")
+        .trim();
+      if (cleaned) {
+        errorMsg = cleaned;
+      }
+    }
+
+    // 4. Try error / errors fields
+    if (!errorMsg && typeof jsonResponse?.error === "string") {
+      errorMsg = jsonResponse.error;
+    } else if (!errorMsg && Array.isArray(jsonResponse?.errors) && jsonResponse.errors.length > 0) {
+      errorMsg = jsonResponse.errors
+        .map((e: any) => (typeof e === "string" ? e : e?.message || JSON.stringify(e)))
+        .join(" • ");
+    }
+
+    // 5. Try exc traceback (take the last meaningful line)
+    if (!errorMsg && typeof jsonResponse?.exc === "string") {
+      const lines = jsonResponse.exc.split("\n").map((l: string) => l.trim()).filter(Boolean);
+      const last = lines[lines.length - 1] || "";
+      if (last && !last.startsWith("Traceback") && !last.startsWith("File ")) {
+        const cleanedLast = last.replace(/^(?:frappe\.)?(?:exceptions\.)?[a-zA-Z0-9_]+Error:\s*/i, "").trim();
+        if (cleanedLast) errorMsg = cleanedLast;
+      }
+    }
+
+    // 6. Actionable status-code fallbacks (avoid technical terms or generic "Unexpected server error")
+    if (!errorMsg) {
+      if (response.status === 400) {
+        errorMsg = "Some of the entered details need correction. Please check the form and try again.";
+      } else if (response.status === 401) {
+        errorMsg = "Your session has expired. Please sign in again.";
+      } else if (response.status === 403) {
+        errorMsg = "Permission denied: Your assigned role does not have authorization for this operation.";
+      } else if (response.status === 404) {
+        errorMsg = "The requested record was not found.";
+      } else if (response.status === 409) {
+        errorMsg = "A record with these details already exists or was modified by another user.";
+      } else if (response.status === 417) {
+        errorMsg = "The entered information does not meet system rules. Please review the details.";
+      } else if (response.status === 429) {
+        errorMsg = "Too many requests. Please wait a moment and try again.";
+      } else if (response.status >= 500) {
+        errorMsg = "The server could not complete this request right now. Please try again in a few moments.";
+      } else {
+        errorMsg = "Could not complete this action. Please review your entries and try again.";
+      }
     }
 
     throw new ApiV2Error(
       errorMsg,
       response.status,
-      jsonResponse.exc_type,
-      jsonResponse._server_messages,
+      jsonResponse?.exc_type,
+      jsonResponse?._server_messages,
       jsonResponse
     );
   }

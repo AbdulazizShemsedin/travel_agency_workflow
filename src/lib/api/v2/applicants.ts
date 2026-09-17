@@ -572,6 +572,10 @@ export interface UniquenessCheckResult {
   message?: string;
 }
 
+// In-memory cache for live uniqueness checks (prevents redundant API calls)
+const uniquenessCheckCache = new Map<string, { result: UniquenessCheckResult; timestamp: number }>();
+const UNIQUENESS_CACHE_TTL_MS = 60000; // 60 seconds
+
 /**
  * Checks in real-time whether a unique identifier (National ID / Fayda, Passport, or Labour ID)
  * is already registered to another applicant on the backend.
@@ -582,11 +586,19 @@ export async function checkApplicantUniquenessV2(
   excludeApplicantName?: string
 ): Promise<UniquenessCheckResult> {
   const cleanVal = (value || "").trim();
-  if (!cleanVal) {
+  // Don't query backend for empty or partial short inputs (less than 4 characters)
+  if (!cleanVal || cleanVal.length < 4) {
     return { isConflict: false };
   }
 
   const filterKey = field === "labour_id" ? "labor_id" : field;
+  const cacheKey = `${filterKey}:${cleanVal.toLowerCase()}:${(excludeApplicantName || "").toLowerCase()}`;
+
+  const cached = uniquenessCheckCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < UNIQUENESS_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
   try {
     const matches = await listApplicantsV2(
       { [filterKey]: cleanVal },
@@ -614,18 +626,23 @@ export async function checkApplicantUniquenessV2(
         field === "passport_number"
           ? "Passport number"
           : field === "national_id"
-          ? "National ID (Fayda / FAN)"
+          ? "National ID (Fayda)"
           : "Ministry Labour ID";
 
-      return {
+      const conflictResult: UniquenessCheckResult = {
         isConflict: true,
         conflictingApplicant: clash,
-        message: `This ${label} is already registered to ${ownerName} (${clash.name}). Please verify the number or check existing applicant records.`,
+        message: `This ${label} is already used by ${ownerName} (${clash.name}). Please check the number or view their record.`,
       };
+      uniquenessCheckCache.set(cacheKey, { result: conflictResult, timestamp: Date.now() });
+      return conflictResult;
     }
   } catch (err) {
     console.warn("[V2 Applicant API] checkApplicantUniquenessV2 error:", err);
   }
 
-  return { isConflict: false };
+  const freeResult: UniquenessCheckResult = { isConflict: false };
+  uniquenessCheckCache.set(cacheKey, { result: freeResult, timestamp: Date.now() });
+  return freeResult;
 }
+

@@ -39,19 +39,24 @@ export function Step3IdentificationContact({
 
   const nationalTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const labourTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCheckedNationalIdRef = React.useRef<string>("");
+  const lastCheckedLabourIdRef = React.useRef<string>("");
 
   // Live Uniqueness Check: National ID / Fayda (FAN no)
   const verifyNationalIdUniqueness = React.useCallback(
     async (rawValue: string) => {
       const clean = (rawValue || "").trim();
-      if (!clean) {
+      if (!clean || clean.length < 4) {
         setNationalIdConflict(null);
         setIsCheckingNationalId(false);
-        if (errors.national_id?.type === "manual") {
-          clearErrors("national_id");
-        }
+        clearErrors("national_id");
+        lastCheckedNationalIdRef.current = clean;
         return;
       }
+      if (clean === lastCheckedNationalIdRef.current) {
+        return;
+      }
+      lastCheckedNationalIdRef.current = clean;
 
       setIsCheckingNationalId(true);
       try {
@@ -69,9 +74,7 @@ export function Step3IdentificationContact({
           });
         } else {
           setNationalIdConflict(null);
-          if (errors.national_id?.type === "manual") {
-            clearErrors("national_id");
-          }
+          clearErrors("national_id");
         }
       } catch {
         // Silently preserve offline resilience
@@ -79,21 +82,24 @@ export function Step3IdentificationContact({
         setIsCheckingNationalId(false);
       }
     },
-    [editingApplicantName, setError, clearErrors, errors.national_id]
+    [editingApplicantName, setError, clearErrors]
   );
 
   // Live Uniqueness Check: Ministry Labour ID
   const verifyLabourIdUniqueness = React.useCallback(
     async (rawValue: string) => {
       const clean = (rawValue || "").trim();
-      if (!clean) {
+      if (!clean || clean.length < 4) {
         setLabourIdConflict(null);
         setIsCheckingLabourId(false);
-        if (errors.labour_id?.type === "manual") {
-          clearErrors("labour_id");
-        }
+        clearErrors("labour_id");
+        lastCheckedLabourIdRef.current = clean;
         return;
       }
+      if (clean === lastCheckedLabourIdRef.current) {
+        return;
+      }
+      lastCheckedLabourIdRef.current = clean;
 
       setIsCheckingLabourId(true);
       try {
@@ -111,9 +117,7 @@ export function Step3IdentificationContact({
           });
         } else {
           setLabourIdConflict(null);
-          if (errors.labour_id?.type === "manual") {
-            clearErrors("labour_id");
-          }
+          clearErrors("labour_id");
         }
       } catch {
         // Silently preserve offline resilience
@@ -121,15 +125,21 @@ export function Step3IdentificationContact({
         setIsCheckingLabourId(false);
       }
     },
-    [editingApplicantName, setError, clearErrors, errors.labour_id]
+    [editingApplicantName, setError, clearErrors]
   );
 
   // Debounced live watcher for National ID
   React.useEffect(() => {
+    const trimmed = (nationalIdValue || "").trim();
+    if (!trimmed || trimmed.length < 4) {
+      if (nationalTimerRef.current) clearTimeout(nationalTimerRef.current);
+      setNationalIdConflict(null);
+      return;
+    }
     if (nationalTimerRef.current) clearTimeout(nationalTimerRef.current);
     nationalTimerRef.current = setTimeout(() => {
-      void verifyNationalIdUniqueness(nationalIdValue || "");
-    }, 350);
+      void verifyNationalIdUniqueness(trimmed);
+    }, 700);
 
     return () => {
       if (nationalTimerRef.current) clearTimeout(nationalTimerRef.current);
@@ -138,10 +148,16 @@ export function Step3IdentificationContact({
 
   // Debounced live watcher for Labour ID
   React.useEffect(() => {
+    const trimmed = (labourIdValue || "").trim();
+    if (!trimmed || trimmed.length < 4) {
+      if (labourTimerRef.current) clearTimeout(labourTimerRef.current);
+      setLabourIdConflict(null);
+      return;
+    }
     if (labourTimerRef.current) clearTimeout(labourTimerRef.current);
     labourTimerRef.current = setTimeout(() => {
-      void verifyLabourIdUniqueness(labourIdValue || "");
-    }, 350);
+      void verifyLabourIdUniqueness(trimmed);
+    }, 700);
 
     return () => {
       if (labourTimerRef.current) clearTimeout(labourTimerRef.current);

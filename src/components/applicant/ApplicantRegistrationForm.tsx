@@ -608,11 +608,14 @@ export function ApplicantRegistrationForm({
         });
 
         const firstError = validation.error.errors[0];
-        const errorField = firstError?.path[0] as string;
+        const errorField = (firstError?.path[0] as string) || "first_name";
         scrollToFieldWithError(errorField);
 
-        const friendlyMsg = formatSimpleErrorMessage(errorField, firstError?.message);
-        throw new Error(friendlyMsg || "Please fill in all required fields marked in red.");
+        const friendlyMsg =
+          errorField === "first_name"
+            ? "Please enter the candidate's First Name before saving a draft."
+            : formatSimpleErrorMessage(errorField, firstError?.message);
+        throw new Error(friendlyMsg || "Please enter the candidate's First Name before saving a draft.");
       }
 
       const payload = normalizeApplicantFields(
@@ -684,9 +687,9 @@ export function ApplicantRegistrationForm({
     },
     onError: (error: unknown) => {
       const err = error as ApiV2Error;
-      toast.error("Cannot Save Draft", {
+      toast.error("Could Not Save Draft", {
         description: describeApiError(err),
-        duration: 5000,
+        duration: 6000,
       });
     },
   });
@@ -1130,7 +1133,7 @@ export function ApplicantRegistrationForm({
                 Personal & Passport Information
               </h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Passport OCR extraction, bio data, and official residential address.
+                Passport scan, personal details, and home address.
               </p>
             </div>
           </div>

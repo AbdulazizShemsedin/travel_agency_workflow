@@ -107,12 +107,15 @@ export async function getComplianceNotificationsV2(authUser?: AuthUser | null): 
 
   try {
     const canManageComplaints = authUser ? hasPermission(authUser, "manageComplaints") : false;
+    const canAccessClearance = authUser
+      ? hasPermission(authUser, "manageClearances") || hasPermission(authUser, "manageTicketing")
+      : false;
 
     const [applicants, placements, complaints, clearanceSteps] = await Promise.all([
       listApplicantsV2().catch(() => []),
       listPlacementsV2().catch(() => []),
       canManageComplaints ? listUnresolvedComplaintsV2().catch(() => []) : Promise.resolve([]),
-      listMyClearanceStepsV2().catch(() => []),
+      canAccessClearance ? listMyClearanceStepsV2().catch(() => []) : Promise.resolve([]),
     ]);
 
     const now = new Date();

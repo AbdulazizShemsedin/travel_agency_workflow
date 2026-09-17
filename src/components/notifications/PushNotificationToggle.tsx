@@ -123,11 +123,13 @@ export function PushNotificationToggle() {
 
   // Fetch in-app notifications (isolated for foreign agencies vs internal staff)
   const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
-  const { data: notifications = [] } = useQuery<V2AppNotification[]>({
-    queryKey: ["notifications", isForeignAgency ? "agency" : "internal", user, authUser?.roles, effectiveContractor],
+  const { data: notifications = [], refetch: refetchNotifications } = useQuery<V2AppNotification[]>({
+    queryKey: ["notifications", isForeignAgency ? "agency" : "internal", user, effectiveContractor],
     queryFn: () => (isForeignAgency ? getForeignAgencyNotificationsV2(effectiveContractor) : getComplianceNotificationsV2(authUser)),
     enabled: Boolean(user),
-    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache - prevents constant refetches
+    refetchOnWindowFocus: false,
+    refetchInterval: false, // Do NOT poll 4 heavy list endpoints every 30 seconds
   });
 
   // Fetch authoritative backend subscription status
@@ -425,22 +427,22 @@ export function PushNotificationToggle() {
     }
   };
 
-  // 6. Admin: Regenerate VAPID Keys
+  // 6. Admin: Reset Notification Security Keys
   const handleRegenerateVapid = async () => {
     setIsRegeneratingVapid(true);
     try {
       await regenerateVapidKeysV2();
-      sonnerToast.success("VAPID Keys Regenerated", {
-        description: "Fresh keypair created on server. Existing client subscriptions invalidated.",
+      sonnerToast.success("Notification Keys Reset", {
+        description: "Fresh security key created on server. Existing connections reset.",
       });
       setIsPushEnabled(false);
       localStorage.removeItem("push_notifications_enabled");
       setIsRegenVapidModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      showFeedback("VAPID keypair regenerated. Please re-subscribe.", "success");
+      showFeedback("Notification keys reset. Please turn alerts back on.", "success");
     } catch (err: any) {
-      sonnerToast.error("Regeneration Failed", {
-        description: err?.message || "Failed to regenerate notification keypair.",
+      sonnerToast.error("Reset Failed", {
+        description: err?.message || "Failed to reset notification keys.",
       });
     } finally {
       setIsRegeneratingVapid(false);

@@ -50,6 +50,8 @@ export default function DashboardPage() {
   const { can } = useAuth();
   const canRegister = can("registerApplicant");
 
+  const canAccessClearances = can("manageClearances") || can("manageTicketing");
+
   const { data: rawApplicants = [], isLoading: isApplicantsLoading } = useQuery({
     queryKey: ["applicants_v2_dashboard"],
     queryFn: () => listApplicantsV2(),
@@ -65,6 +67,7 @@ export default function DashboardPage() {
   const { data: clearanceStepsData = [] } = useQuery({
     queryKey: ["dashboard-clearance-steps"],
     queryFn: () => listMyClearanceStepsV2(),
+    enabled: Boolean(canAccessClearances),
     staleTime: 30000,
     retry: false,
   });
@@ -395,9 +398,9 @@ export default function DashboardPage() {
     },
     {
       step: 7,
-      title: "Departed",
+      title: "Travel Completed",
       count: departedCount,
-      badge: "Deployed",
+      badge: "Departed",
       color: "border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300 hover:border-emerald-500 dark:hover:border-emerald-600",
       accent: "bg-emerald-700",
       link: "/applicants?status=Departed",

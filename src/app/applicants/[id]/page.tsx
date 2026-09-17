@@ -302,9 +302,12 @@ export default function ApplicantDetailPage() {
     staleTime: 0,
   });
 
+  const canAccessClearance = can("manageClearances") || can("manageTicketing");
+
   const { data: clearanceSteps = [] } = useQuery({
     queryKey: ["my-clearance-steps"],
     queryFn: () => listMyClearanceStepsV2(),
+    enabled: Boolean(canAccessClearance),
   });
 
   const activePlacement = placements[0] || null;
@@ -674,10 +677,10 @@ export default function ApplicantDetailPage() {
       return triggerEarlyCommissionAccrualV2(activePlacement.name);
     },
     onSuccess: (res) => {
-      toast.success("Early Commission Accrued", { description: res.message || "Commission record created." });
+      toast.success("Early Commission Recorded", { description: res.message || "Commission record created." });
     },
     onError: (err: any) => {
-      toast.error("Failed to accrue commission", { description: err.message });
+      toast.error("Failed to record early commission", { description: err.message });
     },
   });
 
@@ -1360,7 +1363,7 @@ export default function ApplicantDetailPage() {
                 disabled={triggerEarlyCommissionMutation.isPending}
                 className="text-xs border-slate-300 dark:border-[#26262d]"
               >
-                <DollarSign className="mr-1.5 h-3.5 w-3.5" /> Accrue Early Commission
+                <DollarSign className="mr-1.5 h-3.5 w-3.5" /> Record Commission Early
               </Button>
               {can("manageUsers") && (
                 <Button

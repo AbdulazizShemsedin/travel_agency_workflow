@@ -60,17 +60,22 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   // Live duplicate-passport + immediate validation
   const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
   const passportCheckTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCheckedPassportRef = React.useRef<string>("");
 
   const checkPassportDuplicate = React.useCallback(
     async (rawValue: string) => {
       const normalized = (rawValue || "").toUpperCase().trim();
-      if (!normalized) {
+      if (!normalized || normalized.length < 4) {
         setPassportConflict(null);
-        if (errors.passport_number?.type === "manual") {
-          clearErrors("passport_number");
-        }
+        clearErrors("passport_number");
+        lastCheckedPassportRef.current = normalized;
         return;
       }
+      if (normalized === lastCheckedPassportRef.current) {
+        return;
+      }
+      lastCheckedPassportRef.current = normalized;
+
       const res = await checkApplicantUniquenessV2(
         "passport_number",
         normalized,
@@ -84,24 +89,27 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         });
       } else {
         setPassportConflict(null);
-        if (errors.passport_number?.type === "manual") {
-          clearErrors("passport_number");
-        }
+        clearErrors("passport_number");
       }
     },
-    [editingApplicantName, setError, clearErrors, errors.passport_number]
+    [editingApplicantName, setError, clearErrors]
   );
 
   React.useEffect(() => {
+    const trimmed = (passportNumber || "").toUpperCase().trim();
+    if (!trimmed || trimmed.length < 4) {
+      if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
+      setPassportConflict(null);
+      return;
+    }
     if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
     passportCheckTimer.current = setTimeout(() => {
-      void trigger("passport_number");
-      void checkPassportDuplicate(passportNumber || "");
-    }, 400);
+      void checkPassportDuplicate(trimmed);
+    }, 700);
     return () => {
       if (passportCheckTimer.current) clearTimeout(passportCheckTimer.current);
     };
-  }, [passportNumber, trigger, checkPassportDuplicate]);
+  }, [passportNumber, checkPassportDuplicate]);
 
   const triggerFieldSoon = (field: "first_name" | "middle_name" | "last_name" | "phone_number" | "nationality" | "date_of_birth" | "passport_expiry") => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!(e.target as HTMLInputElement).value) return;
@@ -225,19 +233,19 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     });
     setIsOcrReviewOpen(false);
     if (source === "mrz") {
-      toast.success("Passport MRZ successfully decoded and applicant fields populated!");
+      toast.success("Passport details read successfully and filled into the form!");
     } else {
-      toast.success("Applicant personal info auto-populated from passport scan!");
+      toast.success("Applicant details filled automatically from passport photo!");
     }
   };
 
-  // Main Passport MRZ Auto-Scan Handler (Async Non-Blocking Queue with Timeout Guard & Client Fallback)
+  // Main Passport Auto-Scan Handler (Async Non-Blocking Queue with Timeout Guard & Client Fallback)
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
     const localUrl = URL.createObjectURL(file);
     setPassportScanPreview(localUrl);
     setIsScanningOCR(true);
-    const toastId = toast.loading("Extracting passport details in background... You can continue filling out the form.");
+    const toastId = toast.loading("Reading passport details in the background... You can continue filling out the form.");
 
     try {
       // 1. Upload passport scan file
@@ -307,8 +315,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       // 4. Send background job completion notification
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
         try {
-          new Notification("Passport OCR Complete", {
-            body: extractedData?.first_name ? `Extracted passport for ${extractedData.first_name}` : "Passport document processing finished.",
+          new Notification("Passport Scan Complete", {
+            body: extractedData?.first_name ? `Passport details read for ${extractedData.first_name}` : "Passport document scanning finished.",
             icon: "/favicon.ico",
           });
         } catch {}
@@ -318,13 +326,13 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         // Show review dialog so user can confirm before applying
         setPendingOcrData(extractedData);
         setIsOcrReviewOpen(true);
-        toast.success("Passport extracted successfully! Review and apply data.", { id: toastId });
+        toast.success("Passport details read successfully! Please review and confirm.", { id: toastId });
       } else {
         toast.info("Passport scan attached. You can review or enter registration fields.", { id: toastId });
       }
     } catch (err: any) {
       console.warn("Passport scan processing notice:", err);
-      toast.error("Could not automatically read passport scan. Please verify fields manually.", { id: toastId });
+      toast.error("Could not read the passport photo clearly. Please enter the details manually.", { id: toastId });
     } finally {
       setIsScanningOCR(false);
     }
@@ -336,7 +344,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         const text = await navigator.clipboard.readText();
         if (text && text.trim()) {
           setMrzInputText(text.trim());
-          toast.success("MRZ text pasted from clipboard!");
+          toast.success("Passport code pasted from clipboard!");
         } else {
           toast.info("Clipboard is empty or contains no text.");
         }
@@ -350,7 +358,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
   const handleParseMrzText = async () => {
     if (!mrzInputText.trim()) {
-      toast.error("Please paste or type the 2 MRZ lines before decoding.");
+      toast.error("Please paste or type the 2 lines of passport code before continuing.");
       return;
     }
     setIsScanningOCR(true);
@@ -364,8 +372,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         toast.error("Could not read passport code lines. Please ensure both passport lines are entered accurately.");
       }
     } catch (err: any) {
-      console.warn("Manual MRZ decode warning:", err);
-      toast.error("Could not decode passport information. Please verify the characters and try again.");
+      console.warn("Manual passport code decode warning:", err);
+      toast.error("Could not read passport code. Please check the characters and try again.");
     } finally {
       setIsScanningOCR(false);
     }
@@ -451,14 +459,14 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Passport Quick-Scan & Auto-Fill (OCR)
+                    Passport Quick-Scan & Auto-Fill
                   </h3>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                    <Sparkles className="h-3 w-3" /> Auto-Population Enabled
+                    <Sparkles className="h-3 w-3" /> Auto-Fill Enabled
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
-                  Upload candidate passport image or paste the 2 MRZ code lines. The system will automatically decode MRZ and populate First Name, Last Name, Passport #, Date of Birth, Gender, and Expiry Date.
+                  Upload candidate passport photo or paste the 2 lines of code from the bottom. The system will automatically read them and fill in Name, Passport Number, Date of Birth, Gender, and Expiry Date.
                 </p>
                 <div className="flex items-start sm:items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1.5 mt-1 max-w-2xl">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
@@ -485,7 +493,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                 className="text-xs font-semibold border-emerald-300 text-emerald-900 dark:text-emerald-300 hover:bg-emerald-100/50"
               >
                 <FileText className="mr-1.5 h-3.5 w-3.5" />
-                Paste MRZ Text
+                Paste Passport Code
               </Button>
 
               <label
@@ -495,7 +503,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                 {isScanningOCR ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Decoding MRZ...</span>
+                    <span>Reading Passport...</span>
                   </>
                 ) : (
                   <>
@@ -575,7 +583,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         </CardContent>
       </Card>
 
-      {/* Interactive MRZ OCR Review Dialog */}
+      {/* Interactive Passport Review Dialog */}
       <Dialog open={isOcrReviewOpen} onOpenChange={setIsOcrReviewOpen}>
         <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
@@ -647,23 +655,23 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         </DialogContent>
       </Dialog>
 
-      {/* Manual MRZ Text Paste Dialog */}
+      {/* Manual Passport Code Paste Dialog */}
       <Dialog open={isMrzDialogOpen} onOpenChange={setIsMrzDialogOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
               <FileText className="h-5 w-5 text-emerald-600" />
-              Paste Passport MRZ Code
+              Paste Passport Code
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Paste the 2 Machine-Readable Zone (MRZ) lines located at the bottom of the candidate's passport bio-data page.
+              Paste the 2 lines of code printed at the very bottom of the candidate's passport photo page.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="flex items-center justify-between">
               <Label htmlFor="mrz-raw-input" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                MRZ Code Lines (TD3 Format)
+                Passport Code Lines (Bottom of Photo Page)
               </Label>
               <div className="flex items-center gap-1.5">
                 <Button
@@ -738,12 +746,12 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
               {isScanningOCR ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  Decoding...
+                  Reading...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                  Decode & Auto-Fill Form
+                  Read & Fill Form
                 </>
               )}
             </Button>
@@ -1662,7 +1670,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       }
       description={
         cropModalState.type === "passport"
-          ? "Preview, rotate, or crop the passport / MRZ zone. Note: Ensure the image is sharp, clear, and well-aligned for accurate data extraction."
+          ? "Preview, rotate, or crop the passport photo page. Make sure the photo is clear, upright, and easy to read."
           : cropModalState.type === "portrait"
           ? "Preview, rotate, or crop candidate face portrait (standard passport photo 35x45mm)."
           : "Preview, rotate, or crop candidate standing full-body portrait (3:4 vertical)."

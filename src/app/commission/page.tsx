@@ -18,7 +18,6 @@ import {
   Filter,
   RefreshCw,
   X,
-  FileUp,
   CheckSquare,
   Square,
   ExternalLink,
@@ -26,14 +25,11 @@ import {
   AlertCircle,
   Loader2,
   Building2,
-  Sparkles,
   Calendar,
   ArrowRight,
-  Plus,
   Trash2,
   HelpCircle,
   Info,
-  Clock,
   ChevronRight,
   Check,
   FolderOpen,
@@ -60,15 +56,11 @@ import {
   listCommissionBatchesV2,
   getCommissionBatchV2,
   getBatchInvoicePdfV2,
-  uploadBatchPaymentProofV2,
   settleBatchItemsV2,
   settleBatchV2,
   updateBatchAdvanceV2,
   writeOffBatchV2,
   releaseUnpaidItemsV2,
-  triggerEarlyCommissionAccrualV2,
-  logStageIncomeV2,
-  logStageExpenseV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
   V2CommissionBatchItem,
@@ -95,11 +87,7 @@ import { Coins, TrendingUp } from "lucide-react";
 
 type CommissionTab =
   | "owed"
-  | "batches"
-  | "details"
-  | "invoice"
-  | "settlement"
-  | "partial"
+  | "batch_management"
   | "config";
 
 export default function AdminCommissionPage() {
@@ -151,11 +139,6 @@ export default function AdminCommissionPage() {
   // Batch List Filter (Tab 2)
   const [batchStatusFilter, setBatchStatusFilter] = React.useState<string>("All");
 
-  // Early Accrual Modal
-  const [isEarlyAccrualModalOpen, setIsEarlyAccrualModalOpen] = React.useState<boolean>(false);
-  const [earlyPlacementName, setEarlyPlacementName] = React.useState<string>("");
-  const [isTriggeringEarlyAccrual, setIsTriggeringEarlyAccrual] = React.useState<boolean>(false);
-
   // Partial Settlement: Multi-select batch item names
   const [selectedItemRowNames, setSelectedItemRowNames] = React.useState<string[]>([]);
   const [isSettlingItems, setIsSettlingItems] = React.useState<boolean>(false);
@@ -174,16 +157,6 @@ export default function AdminCommissionPage() {
   const [createBatchAdvance, setCreateBatchAdvance] = React.useState<string>("");
   const [includeUnpaidPrevious, setIncludeUnpaidPrevious] = React.useState<boolean>(false);
 
-  // Quick Log Income/Expense Modal States
-  const [isQuickLogModalOpen, setIsQuickLogModalOpen] = React.useState<boolean>(false);
-  const [quickLogType, setQuickLogType] = React.useState<"Income" | "Expense">("Income");
-  const [quickLogAmount, setQuickLogAmount] = React.useState<string>("");
-  const [quickLogCurrency, setQuickLogCurrency] = React.useState<V2SupportedCurrency>("ETB");
-  const [quickLogDescription, setQuickLogDescription] = React.useState<string>("");
-  const [quickLogPlacement, setQuickLogPlacement] = React.useState<string>("");
-  const [quickLogApplicant, setQuickLogApplicant] = React.useState<string>("");
-  const [isLoggingQuickTx, setIsLoggingQuickTx] = React.useState<boolean>(false);
-
   // Write-Off Batch Modal States
   const [isWriteOffModalOpen, setIsWriteOffModalOpen] = React.useState<boolean>(false);
   const [writeOffAmountInput, setWriteOffAmountInput] = React.useState<string>("");
@@ -193,13 +166,9 @@ export default function AdminCommissionPage() {
   // Releasing Unpaid Items State
   const [isReleasingItems, setIsReleasingItems] = React.useState<boolean>(false);
 
-  // Payment Proof File Upload & Fuzzy Match
-  const [paymentProofFile, setPaymentProofFile] = React.useState<File | null>(null);
-  const [isUploadingProof, setIsUploadingProof] = React.useState<boolean>(false);
-  const [proofMatchResult, setProofMatchResult] = React.useState<{
-    matched_items: string[];
-    unmatched_names: string[];
-  } | null>(null);
+  // Unsettled-only filter for batch management sidebar (default to false to show all batches)
+  const [showUnsettledOnly, setShowUnsettledOnly] = React.useState<boolean>(false);
+  const [batchWorkspaceView, setBatchWorkspaceView] = React.useState<"all" | "items" | "invoice" | "settlement" | "partial">("all");
 
   // Binary PDF and XLSX export loading states
   const [isDownloadingPdf, setIsDownloadingPdf] = React.useState<boolean>(false);
@@ -511,7 +480,7 @@ export default function AdminCommissionPage() {
     staleTime: 30000,
   });
 
-  // Filter batches by selected contractor, country, and status
+  // Filter batches by selected contractor, country, status, and unsettled filter
   const filteredBatches = React.useMemo(() => {
     return commissionBatches.filter((b) => {
       const matchContractor = selectedContractor
@@ -522,13 +491,20 @@ export default function AdminCommissionPage() {
         : true;
       const matchStatus =
         batchStatusFilter === "All" ? true : b.status === batchStatusFilter;
+      const matchUnsettled = showUnsettledOnly
+        ? b.status !== "Settled" && b.status !== "Written Off"
+        : true;
       const matchSearch = searchQuery.trim()
         ? b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (b.contractor && b.contractor.toLowerCase().includes(searchQuery.toLowerCase()))
         : true;
-      return matchContractor && matchCountry && matchStatus && matchSearch;
+      return matchContractor && matchCountry && matchStatus && matchUnsettled && matchSearch;
     });
-  }, [commissionBatches, selectedContractor, selectedCountry, batchStatusFilter, searchQuery]);
+  }, [commissionBatches, selectedContractor, selectedCountry, batchStatusFilter, showUnsettledOnly, searchQuery]);
+
+  const totalUnsettledBatchesCount = React.useMemo(() => {
+    return commissionBatches.filter((b) => b.status !== "Settled" && b.status !== "Written Off").length;
+  }, [commissionBatches]);
 
   // =========================================================================
   // 5. Fetch Active Batch Details with Child Items
@@ -600,7 +576,7 @@ export default function AdminCommissionPage() {
       });
       refetchOwed();
       refetchBatches();
-      setActiveTab("details");
+      setActiveTab("batch_management");
     } catch (err: any) {
       toast.error("Batch Creation Failed", {
         description: formatCleanErrorMessage(err),
@@ -610,32 +586,7 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION 2: Trigger Early Commission Accrual
-  const handleTriggerEarlyAccrual = async () => {
-    if (!earlyPlacementName.trim()) {
-      toast.error("Placement Identifier Required", {
-        description: "Please enter the placement ID (e.g. PLM-00001).",
-      });
-      return;
-    }
 
-    setIsTriggeringEarlyAccrual(true);
-    try {
-      const res = await triggerEarlyCommissionAccrualV2(earlyPlacementName.trim());
-      toast.success("Early Commission Accrued", {
-        description: `Commission accrued for placement ${earlyPlacementName.trim()}.`,
-      });
-      setIsEarlyAccrualModalOpen(false);
-      setEarlyPlacementName("");
-      refetchOwed();
-    } catch (err: any) {
-      toast.error("Early Accrual Failed", {
-        description: formatCleanErrorMessage(err),
-      });
-    } finally {
-      setIsTriggeringEarlyAccrual(false);
-    }
-  };
 
   // ACTION 3: Download Invoice PDF
   const handleDownloadInvoicePdf = async (batchName?: string) => {
@@ -670,39 +621,7 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION 4: Upload Payment Proof & Fuzzy Match
-  const handleUploadPaymentProof = async () => {
-    if (!activeBatch?.name || !paymentProofFile) {
-      toast.error("No File Selected", {
-        description: "Select a payment proof CSV or PDF first.",
-      });
-      return;
-    }
 
-    setIsUploadingProof(true);
-    try {
-      const uploadRes = await uploadFileV2(
-        paymentProofFile,
-        false,
-        "Commission Batch Request",
-        activeBatch.name
-      );
-
-      const result = await uploadBatchPaymentProofV2(activeBatch.name, uploadRes.file_url);
-      setProofMatchResult(result);
-      setPaymentProofFile(null);
-
-      toast.success("Payment Proof Analyzed", {
-        description: `Matched ${result.matched_items.length} candidates. ${result.unmatched_names.length} unmatched.`,
-      });
-    } catch (err: any) {
-      toast.error("Payment Proof Processing Failed", {
-        description: formatCleanErrorMessage(err),
-      });
-    } finally {
-      setIsUploadingProof(false);
-    }
-  };
 
   // ACTION 5: Settle Matched Items or Selected Items
   const handleSettleBatchItems = async (itemsToSettle?: string[]) => {
@@ -815,60 +734,7 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // ACTION: Quick Log One-Off Income / Expense
-  const handleQuickLogTransaction = async () => {
-    const amt = Number(quickLogAmount);
-    if (!amt || isNaN(amt) || amt <= 0) {
-      toast.error("Invalid Amount", {
-        description: "Please enter a valid amount greater than zero.",
-      });
-      return;
-    }
-    if (!quickLogDescription.trim()) {
-      toast.error("Description Required", {
-        description: "Please enter a description for this entry.",
-      });
-      return;
-    }
 
-    setIsLoggingQuickTx(true);
-    try {
-      if (quickLogType === "Expense") {
-        await logStageExpenseV2(
-          amt,
-          quickLogCurrency,
-          quickLogDescription.trim(),
-          quickLogPlacement.trim() || undefined,
-          undefined,
-          quickLogApplicant.trim() || undefined
-        );
-      } else {
-        await logStageIncomeV2(
-          amt,
-          quickLogCurrency,
-          quickLogDescription.trim(),
-          quickLogPlacement.trim() || undefined,
-          undefined,
-          quickLogApplicant.trim() || undefined
-        );
-      }
-
-      toast.success(`${quickLogType} Logged Successfully`, {
-        description: `Logged ${amt.toLocaleString()} ${quickLogCurrency} for finance review.`,
-      });
-      setIsQuickLogModalOpen(false);
-      setQuickLogAmount("");
-      setQuickLogDescription("");
-      setQuickLogPlacement("");
-      setQuickLogApplicant("");
-    } catch (err: any) {
-      toast.error(`Failed to Log ${quickLogType}`, {
-        description: formatCleanErrorMessage(err),
-      });
-    } finally {
-      setIsLoggingQuickTx(false);
-    }
-  };
 
   // ACTION: Write-Off Batch
   const handleWriteOffBatch = async () => {
@@ -1074,20 +940,6 @@ export default function AdminCommissionPage() {
             </Button>
           )}
 
-          {isFinanceManagerOrAdmin && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setIsQuickLogModalOpen(true)}
-              className="text-xs h-8 border-slate-300 dark:border-[#2a2a34]"
-              title="Log one-off agency income or expense entry"
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-              Log Income / Expense
-            </Button>
-          )}
-
           <Button
             type="button"
             size="sm"
@@ -1177,7 +1029,7 @@ export default function AdminCommissionPage() {
       </div>
 
       {/* ------------------------------------------------------------------- */}
-      {/* Tab Navigation Navigation Bar                                       */}
+      {/* Tab Navigation Bar (3 Tabs)                                         */}
       {/* ------------------------------------------------------------------- */}
       <div className="flex items-center gap-1 border-b border-slate-200 dark:border-[#262632] overflow-x-auto pb-1 text-xs">
         <button
@@ -1209,86 +1061,30 @@ export default function AdminCommissionPage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab("batches")}
+          onClick={() => setActiveTab("batch_management")}
           className={cn(
             "flex items-center gap-2 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap",
-            activeTab === "batches"
+            activeTab === "batch_management"
               ? "bg-emerald-900 text-white dark:bg-emerald-800"
               : "text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1e1e26]"
           )}
         >
           <Receipt className="h-4 w-4" />
-          <span>Batch Requests</span>
+          <span>Batch Management</span>
           <Badge
             variant="outline"
             className={cn(
               "text-[10px] px-1.5 py-0 h-4 font-bold",
-              activeTab === "batches"
+              activeTab === "batch_management"
                 ? "bg-emerald-950 text-white"
                 : "bg-slate-100 text-slate-700 dark:bg-[#1e1e26] dark:text-zinc-300"
             )}
           >
             {filteredBatches.length}
           </Badge>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("details")}
-          className={cn(
-            "flex items-center gap-2 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap",
-            activeTab === "details"
-              ? "bg-emerald-900 text-white dark:bg-emerald-800"
-              : "text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1e1e26]"
-          )}
-        >
-          <FileText className="h-4 w-4" />
-          <span>Batch Details</span>
           {activeBatch && (
-            <span className="text-[10px] font-mono opacity-80">({activeBatch.name})</span>
+            <span className="text-[10px] font-mono opacity-80">• {activeBatch.name}</span>
           )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("invoice")}
-          className={cn(
-            "flex items-center gap-2 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap",
-            activeTab === "invoice"
-              ? "bg-emerald-900 text-white dark:bg-emerald-800"
-              : "text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1e1e26]"
-          )}
-        >
-          <Download className="h-4 w-4" />
-          <span>Invoice & PDF</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("settlement")}
-          className={cn(
-            "flex items-center gap-2 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap",
-            activeTab === "settlement"
-              ? "bg-emerald-900 text-white dark:bg-emerald-800"
-              : "text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1e1e26]"
-          )}
-        >
-          <ShieldCheck className="h-4 w-4" />
-          <span>Payment & Settlement</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("partial")}
-          className={cn(
-            "flex items-center gap-2 py-2 px-3 rounded-lg font-medium transition-colors whitespace-nowrap",
-            activeTab === "partial"
-              ? "bg-emerald-900 text-white dark:bg-emerald-800"
-              : "text-slate-600 hover:bg-slate-100 dark:text-zinc-300 dark:hover:bg-[#1e1e26]"
-          )}
-        >
-          <CreditCard className="h-4 w-4" />
-          <span>Partial & Advances</span>
         </button>
 
         {isFinanceManagerOrAdmin && (
@@ -1388,17 +1184,6 @@ export default function AdminCommissionPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEarlyAccrualModalOpen(true)}
-                    className="text-xs h-8"
-                  >
-                    <Clock className="mr-1.5 h-3.5 w-3.5 text-amber-600" />
-                    Add Early Commission
-                  </Button>
-
                   <Button
                     type="button"
                     size="sm"
@@ -1518,1159 +1303,862 @@ export default function AdminCommissionPage() {
       )}
 
       {/* ------------------------------------------------------------------- */}
-      {/* TAB 2: BATCH REQUESTS LIST (CBR-#####)                              */}
+      {/* TAB 2: CONSOLIDATED BATCH MANAGEMENT (MASTER-DETAIL)                */}
       {/* ------------------------------------------------------------------- */}
-      {activeTab === "batches" && (
-        <div className="space-y-4">
-          {/* Status Sub-filter Bar */}
-          <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
-            <div className="flex items-center gap-1.5 p-1 rounded-lg bg-slate-100 dark:bg-[#1a1a22]">
-              {["All", "Draft", "Sent", "Partially Settled", "Settled"].map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setBatchStatusFilter(st)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
-                    batchStatusFilter === st
-                      ? "bg-white text-slate-900 shadow-xs dark:bg-[#252532] dark:text-white"
-                      : "text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
-                  )}
-                >
-                  {st}
-                </button>
-              ))}
-            </div>
-
-            <div className="text-xs text-slate-500">
-              Showing <strong>{filteredBatches.length}</strong> batches
-            </div>
-          </div>
-
-          <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
-                    <tr>
-                      <th className="py-2.5 px-3">Batch ID</th>
-                      <th className="py-2.5 px-3">Partner Agency</th>
-                      <th className="py-2.5 px-3">Candidates in Batch</th>
-                      <th className="py-2.5 px-3">Corridor</th>
-                      <th className="py-2.5 px-3">Total</th>
-                      <th className="py-2.5 px-3">Advance Paid</th>
-                      <th className="py-2.5 px-3">Balance Due</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Settlement Reference</th>
-                      <th className="py-2.5 px-3">Created</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                    {isBatchesLoading ? (
-                      <tr>
-                        <td colSpan={11} className="py-8 text-center text-slate-400">
-                          <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
-                          Loading commission batches...
-                        </td>
-                      </tr>
-                    ) : filteredBatches.length > 0 ? (
-                      filteredBatches.map((batch) => {
-                        const isCurrentActive = activeBatch?.name === batch.name;
-                        return (
-                          <tr
-                            key={batch.name}
-                            className={cn(
-                              "hover:bg-slate-50 dark:hover:bg-[#15151c] transition-colors",
-                              isCurrentActive && "bg-emerald-50/30 dark:bg-emerald-950/20"
-                            )}
-                          >
-                            <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
-                              {batch.name}
-                            </td>
-                            <td className="py-2.5 px-3 font-medium">
-                              {batch.contractor_name || batch.contractor}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              {(() => {
-                                const candidates = batchApplicantsMap.get(batch.name) || [];
-                                if (candidates.length === 0) {
-                                  return (
-                                    <span className="text-[11px] text-slate-400 italic">
-                                      0 Candidates (No active lines)
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <div className="flex flex-col gap-1 max-w-[260px]">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <Badge
-                                        variant="outline"
-                                        className={cn(
-                                          "text-[10px] font-bold px-1.5 py-0",
-                                          candidates.length > 1
-                                            ? "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
-                                            : "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-                                        )}
-                                      >
-                                        {candidates.length} {candidates.length === 1 ? "Candidate" : "Candidates"}
-                                      </Badge>
-                                    </div>
-                                    <span
-                                      className="font-semibold text-slate-800 dark:text-zinc-200 truncate text-xs"
-                                      title={candidates.map((c) => `${c.name}${c.appId ? ` (${c.appId})` : ""}`).join(", ")}
-                                    >
-                                      {candidates.map((c) => c.name).join(", ")}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="py-2.5 px-3">{batch.destination_country || "—"}</td>
-                            <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
-                              {(
-                                Number(batch.total_amount_original ?? batch.total_amount) || 0
-                              ).toLocaleString()}{" "}
-                              {batch.currency || "ETB"}
-                            </td>
-                            <td className="py-2.5 px-3 text-emerald-700 dark:text-emerald-400 font-semibold">
-                              {(
-                                Number(batch.advance_amount_original ?? batch.advance_amount) || 0
-                              ).toLocaleString()}{" "}
-                              {batch.currency || "ETB"}
-                            </td>
-                            <td className="py-2.5 px-3 text-amber-700 dark:text-amber-400 font-bold">
-                              {(
-                                batch.balance_due_original !== undefined
-                                  ? Number(batch.balance_due_original)
-                                  : Number(batch.balance_due_birr ?? batch.total_amount) || 0
-                              ).toLocaleString()}{" "}
-                              {batch.currency || "ETB"}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px] font-bold uppercase",
-                                  batch.status === "Settled"
-                                    ? "border-emerald-400 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
-                                    : batch.status === "Partially Settled"
-                                    ? "border-amber-400 text-amber-800 bg-amber-50 dark:bg-amber-950/40"
-                                    : "border-slate-300 text-slate-600 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
-                                )}
-                              >
-                                {batch.status}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-500">
-                              {batch.settlement_reference || "—"}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-400">
-                              {batch.creation
-                                ? new Date(batch.creation).toLocaleDateString()
-                                : "—"}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedBatchName(batch.name);
-                                    setActiveTab("details");
-                                  }}
-                                  className="h-7 text-xs px-2"
-                                >
-                                  Details
-                                </Button>
-
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={isDownloadingPdf}
-                                  onClick={() => handleDownloadInvoicePdf(batch.name)}
-                                  className="h-7 text-xs px-2"
-                                  title="Download Invoice PDF"
-                                >
-                                  <Download className="h-3 w-3 text-emerald-600" />
-                                </Button>
-
-                                {batch.status !== "Settled" && (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedBatchName(batch.name);
-                                      setActiveTab("settlement");
-                                    }}
-                                    className="h-7 text-xs px-2 bg-emerald-900 hover:bg-emerald-950 text-white"
-                                  >
-                                    Settle
-                                  </Button>
-                                )}
-
-                                {batch.status !== "Settled" && batch.status !== "Written Off" && isFinanceManagerOrAdmin && (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setSelectedBatchName(batch.name);
-                                      setActiveBatch(batch);
-                                      const rem =
-                                        batch.balance_due_original ??
-                                        batch.balance_due_birr ??
-                                        (batch.total_amount_original ?? batch.total_amount);
-                                      setWriteOffAmountInput(String(rem || ""));
-                                      setIsWriteOffModalOpen(true);
-                                    }}
-                                    className="h-7 text-xs px-2 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-medium"
-                                    title="Write Off Agreed Discount (Swagger finance_api.write_off_batch)"
-                                  >
-                                    <AlertTriangle className="h-3 w-3 mr-1" />
-                                    Write Off
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-400">
-                          No commission batches found for current filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------------- */}
-      {/* TAB 3: BATCH DETAILS & ITEMS                                        */}
-      {/* ------------------------------------------------------------------- */}
-      {activeTab === "details" && (
-        <div className="space-y-4">
-          {!activeBatch ? (
+      {activeTab === "batch_management" && (
+        <div className="flex flex-col lg:flex-row items-start gap-4">
+          {/* Left Column: Batch Selection Sidebar */}
+          <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-3">
+            {/* Filter Card */}
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardContent className="py-12 text-center space-y-3">
-                <FolderOpen className="h-8 w-8 mx-auto text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                  No Commission Batch Selected
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Select an active batch to inspect candidate line items, balances, and individual item settlement states.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <select
-                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
-                    onChange={(e) => setSelectedBatchName(e.target.value)}
-                    value={selectedBatchName}
-                  >
-                    <option value="">Select an existing batch...</option>
-                    {commissionBatches.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name} — {b.contractor} ({b.status})
-                      </option>
-                    ))}
-                  </select>
-                  <Button
+              <CardContent className="p-3 space-y-2.5">
+                {/* Unsettled Toggle */}
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-[#1f1f26]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Unsettled Batches Only
+                    </span>
+                    {totalUnsettledBatchesCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300">
+                        {totalUnsettledBatchesCount}
+                      </Badge>
+                    )}
+                  </div>
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveTab("batches")}
-                    className="text-xs h-8"
+                    onClick={() => setShowUnsettledOnly((prev) => !prev)}
+                    className={cn(
+                      "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden",
+                      showUnsettledOnly ? "bg-emerald-600" : "bg-slate-300 dark:bg-zinc-700"
+                    )}
+                    title={showUnsettledOnly ? "Showing unsettled only (Click to show all)" : "Showing all batches (Click to show unsettled only)"}
                   >
-                    View Batches List
-                  </Button>
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out",
+                        showUnsettledOnly ? "translate-x-4" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Status Pills */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  {["All", "Draft", "Sent", "Partially Settled", "Settled"].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setBatchStatusFilter(st)}
+                      className={cn(
+                        "px-2 py-0.5 rounded text-[11px] font-semibold transition-colors",
+                        batchStatusFilter === st
+                          ? "bg-emerald-900 text-white dark:bg-emerald-800"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-[#1a1a22] dark:text-zinc-400"
+                      )}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center justify-between">
+                  <span>Showing <strong>{filteredBatches.length}</strong> batches</span>
+                  {selectedBatchName && (
+                    <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
+                      Selected: {selectedBatchName}
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-4">
-              {/* Batch Metadata Header Card */}
-              <Card className="border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10">
-                <CardHeader className="pb-3 border-b border-emerald-100 dark:border-emerald-900/30">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-emerald-600" />
-                        <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
-                          Batch: <span className="font-mono text-emerald-800 dark:text-emerald-400">{activeBatch.name}</span>
+
+            {/* Scrollable Batches List */}
+            <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+              {isBatchesLoading ? (
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="py-8 text-center text-slate-400 text-xs">
+                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
+                    Loading commission batches...
+                  </CardContent>
+                </Card>
+              ) : filteredBatches.length > 0 ? (
+                filteredBatches.map((batch) => {
+                  const isCurrentActive = activeBatch?.name === batch.name || selectedBatchName === batch.name;
+                  const candidates = batchApplicantsMap.get(batch.name) || [];
+                  const balanceDue = batch.balance_due_original !== undefined
+                    ? Number(batch.balance_due_original)
+                    : Number(batch.balance_due_birr ?? batch.total_amount) || 0;
+                  const totalAmt = Number(batch.total_amount_original ?? batch.total_amount) || 0;
+
+                  return (
+                    <div
+                      key={batch.name}
+                      onClick={() => {
+                        setSelectedBatchName(batch.name);
+                        loadBatchDetails(batch.name);
+                      }}
+                      className={cn(
+                        "p-3 rounded-xl border text-xs cursor-pointer transition-all space-y-2",
+                        isCurrentActive
+                          ? "bg-emerald-50/50 border-emerald-500 shadow-xs dark:bg-emerald-950/20 dark:border-emerald-600 ring-1 ring-emerald-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 dark:bg-[#121216] dark:border-[#222228] dark:hover:border-[#30303a]"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={cn(
+                          "font-mono font-bold text-xs",
+                          isCurrentActive ? "text-emerald-900 dark:text-emerald-300" : "text-slate-900 dark:text-white"
+                        )}>
+                          {batch.name}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] font-bold uppercase px-1.5 py-0",
+                            batch.status === "Settled"
+                              ? "border-emerald-400 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+                              : batch.status === "Partially Settled"
+                              ? "border-amber-400 text-amber-800 bg-amber-50 dark:bg-amber-950/40"
+                              : "border-slate-300 text-slate-600 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
+                          )}
+                        >
+                          {batch.status}
+                        </Badge>
+                      </div>
+
+                      <div className="text-[11px] text-slate-600 dark:text-zinc-400 truncate">
+                        {batch.contractor_name || batch.contractor}
+                        {batch.destination_country ? ` • ${batch.destination_country}` : ""}
+                      </div>
+
+                      {/* Candidates count & preview */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] font-medium px-1.5 py-0",
+                            candidates.length > 1
+                              ? "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
+                              : "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          )}
+                        >
+                          {candidates.length} {candidates.length === 1 ? "candidate" : "candidates"}
+                        </Badge>
+                        {candidates.length > 0 && (
+                          <span className="text-[10px] text-slate-400 truncate max-w-[170px]" title={candidates.map(c => c.name).join(", ")}>
+                            {candidates.slice(0, 2).map(c => c.name).join(", ")}{candidates.length > 2 ? ` +${candidates.length - 2}` : ""}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Amount & Balance Due */}
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-[#1f1f26] text-[11px]">
+                        <span className="text-slate-500">
+                          Total: <strong>{totalAmt.toLocaleString()} {batch.currency || "ETB"}</strong>
+                        </span>
+                        <span className={cn(
+                          "font-bold",
+                          balanceDue > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"
+                        )}>
+                          Due: {balanceDue.toLocaleString()} {batch.currency || "ETB"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                  <CardContent className="py-8 text-center text-slate-400 text-xs space-y-2">
+                    <p>
+                      {showUnsettledOnly
+                        ? "No open/unsettled batches for this agency."
+                        : "No batches match the current filters."}
+                    </p>
+                    {showUnsettledOnly && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowUnsettledOnly(false)}
+                        className="text-xs h-7 text-slate-700 dark:text-zinc-300"
+                      >
+                        Show Settled Batches
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Selected Batch Workspace */}
+          <div className="flex-1 w-full space-y-4 min-w-0">
+            {!activeBatch ? (
+              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                <CardContent className="py-16 text-center space-y-3">
+                  <FolderOpen className="h-10 w-10 mx-auto text-slate-400" />
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                    Select a Batch to View & Manage
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Click any batch from the list on the left to instantly inspect candidate line items, download official invoice PDF, execute settlement, or manage advances in one consolidated workspace.
+                  </p>
+                  {filteredBatches.length > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        const first = filteredBatches[0];
+                        setSelectedBatchName(first.name);
+                        loadBatchDetails(first.name);
+                      }}
+                      className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs h-8 mt-2"
+                    >
+                      Select First Batch ({filteredBatches[0].name})
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {/* 1. Header & Summary Card */}
+                <Card className="border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10">
+                  <CardHeader className="pb-3 border-b border-emerald-100 dark:border-emerald-900/30">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Receipt className="h-4 w-4 text-emerald-600" />
+                          <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
+                            Batch: <span className="font-mono text-emerald-800 dark:text-emerald-400">{activeBatch.name}</span>
+                          </CardTitle>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] font-bold uppercase",
+                              activeBatch.status === "Settled"
+                                ? "border-emerald-400 text-emerald-800 bg-emerald-100 dark:bg-emerald-900"
+                                : activeBatch.status === "Partially Settled"
+                                ? "border-amber-400 text-amber-800 bg-amber-100 dark:bg-amber-900"
+                                : "border-slate-300 text-slate-600 bg-slate-100"
+                            )}
+                          >
+                            {activeBatch.status}
+                          </Badge>
+                        </div>
+                        <CardDescription className="text-xs mt-1">
+                          Contractor: <strong>{activeBatch.contractor_name || activeBatch.contractor}</strong> • Corridor: <strong>{activeBatch.destination_country || selectedCountry}</strong> • Created: <strong>{activeBatch.creation ? new Date(activeBatch.creation).toLocaleDateString() : "—"}</strong>
+                        </CardDescription>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isDownloadingPdf}
+                          onClick={() => handleDownloadInvoicePdf(activeBatch.name)}
+                          className="text-xs h-8 bg-white dark:bg-[#121217]"
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                          Download Invoice PDF
+                        </Button>
+
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              setAdvanceAmountInput(activeBatch.requested_advance_amount ? String(activeBatch.requested_advance_amount) : "");
+                              setAdvanceConfirmStep(false);
+                              setIsAdvanceModalOpen(true);
+                            }}
+                            className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
+                          >
+                            <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                            Update Advance
+                          </Button>
+                        )}
+
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Written Off" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const rem =
+                                activeBatch.balance_due_original ??
+                                activeBatch.balance_due_birr ??
+                                (activeBatch.total_amount_original ?? activeBatch.total_amount);
+                              setWriteOffAmountInput(String(rem || ""));
+                              setIsWriteOffModalOpen(true);
+                            }}
+                            className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                            Write Off
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Financial Status Summary Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white dark:bg-[#121216] border border-emerald-200/80 dark:border-emerald-900/40 text-xs mt-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Total Invoice</span>
+                        <p className="font-bold text-slate-900 dark:text-white mt-0.5">
+                          {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Paid</span>
+                        <p className="font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">
+                          {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                        </p>
+                        {activeBatch.advance_reference && (
+                          <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.advance_reference}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400">Settled On</span>
+                        <p className="font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
+                          {activeBatch.settled_on || "Pending"}
+                        </p>
+                        {activeBatch.settlement_reference && (
+                          <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.settlement_reference}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Remaining Balance</span>
+                        <p className="font-bold text-amber-800 dark:text-amber-300 mt-0.5">
+                          {(
+                            activeBatch.balance_due_original !== undefined
+                              ? Number(activeBatch.balance_due_original)
+                              : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
+                          ).toLocaleString()} {activeBatch.currency || "ETB"}
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                {/* Sub-nav tabs within selected batch */}
+                <div className="flex items-center gap-1.5 border-b border-slate-200 dark:border-[#22222a] pb-1 text-xs overflow-x-auto">
+                  <span className="text-[11px] font-semibold text-slate-400 mr-1 shrink-0">Section:</span>
+                  {[
+                    { key: "all", label: "All Sections", icon: Layers },
+                    { key: "items", label: `Candidates (${activeBatch.items?.length || 0})`, icon: Receipt },
+                    { key: "invoice", label: "Invoice & PDF", icon: FileText },
+                    { key: "settlement", label: "Payment & Settlement", icon: ShieldCheck },
+                    { key: "partial", label: "Partial & Advances", icon: CreditCard },
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = batchWorkspaceView === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setBatchWorkspaceView(tab.key as any)}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs whitespace-nowrap cursor-pointer",
+                          isActive
+                            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-[#1a1a22] dark:text-zinc-400"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* SECTION 1: Candidates & Items */}
+                {(batchWorkspaceView === "all" || batchWorkspaceView === "items") && (
+                  <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                          <Receipt className="h-4 w-4 text-emerald-600" />
+                          Batch Candidates & Items ({activeBatch.items?.length || 0})
+                        </CardTitle>
+
+                        {selectedItemRowNames.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isReleasingItems}
+                              onClick={() => handleReleaseUnpaidItems()}
+                              className="h-7 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            >
+                              {isReleasingItems ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                <X className="h-3 w-3 mr-1" />
+                              )}
+                              Release {selectedItemRowNames.length} Unpaid
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isSettlingItems}
+                              onClick={() => handleSettleBatchItems()}
+                              className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                              Settle {selectedItemRowNames.length} Selected Items
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                          <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
+                            <tr>
+                              <th className="py-2 px-3 w-8"></th>
+                              <th className="py-2 px-3">Item Row</th>
+                              <th className="py-2 px-3">Transaction</th>
+                              <th className="py-2 px-3">Candidate / Applicant</th>
+                              <th className="py-2 px-3">Commission Amount</th>
+                              <th className="py-2 px-3">Item Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
+                            {(activeBatch.items || []).length > 0 ? (
+                              activeBatch.items!.map((it: any) => {
+                                const isPending = it.status !== "Paid";
+                                const isSelected = selectedItemRowNames.includes(it.name);
+                                return (
+                                  <tr key={it.name || it.transaction} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
+                                    <td className="py-2 px-3">
+                                      {isPending && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setSelectedItemRowNames((prev) =>
+                                              prev.includes(it.name)
+                                                ? prev.filter((id) => id !== it.name)
+                                                : [...prev, it.name]
+                                            )
+                                          }
+                                        >
+                                          {isSelected ? (
+                                            <CheckSquare className="h-4 w-4 text-emerald-600" />
+                                          ) : (
+                                            <Square className="h-4 w-4 text-slate-300" />
+                                          )}
+                                        </button>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono">{it.name || "Row"}</td>
+                                    <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
+                                    <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                                      {getCandidateName(it)}
+                                    </td>
+                                    <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
+                                    <td className="py-2 px-3">
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[10px]",
+                                          it.status === "Paid"
+                                            ? "border-emerald-300 text-emerald-800 bg-emerald-50"
+                                            : "border-amber-300 text-amber-800 bg-amber-50"
+                                        )}
+                                      >
+                                        {it.status || "Pending"}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-slate-400">
+                                  Batch items list awaiting records.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* SECTION 2: Invoice & PDF */}
+                {(batchWorkspaceView === "all" || batchWorkspaceView === "invoice") && (
+                  <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                            <FileText className="h-4 w-4 text-emerald-600" />
+                            Official Invoice & Billing Breakdown
+                          </CardTitle>
+                          <CardDescription className="text-xs mt-0.5">
+                            Rendered fresh on-demand with official candidate lists and exchange rates.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isDownloadingPdf}
+                          onClick={() => handleDownloadInvoicePdf(activeBatch.name)}
+                          className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+                        >
+                          {isDownloadingPdf ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Download Invoice PDF
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-3 text-xs">
+                      {/* Explanatory Notice for Printed Invoice TOTAL */}
+                      <div className="p-3 rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 text-xs space-y-1">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span>Official PDF Invoice Printed Total Calculation:</span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-blue-900 dark:text-blue-300">
+                          The printed invoice bottom-line <strong>TOTAL</strong> dynamically computes:{" "}
+                          <code className="bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded font-mono font-bold">
+                            Batch Total + Requested Advance + Previous Unpaid Arrears
+                          </code>
+                          . Stored balance due tracks only this batch's own line items.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-[#171720] border border-slate-200/80 dark:border-[#24242e]">
+                        <div>
+                          <span className="text-[10px] uppercase text-slate-400 font-semibold">Total Invoiced</span>
+                          <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
+                            {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase text-emerald-600 font-semibold">Advance Requested</span>
+                          <p className="text-base font-bold text-emerald-800 dark:text-emerald-400 mt-0.5">
+                            {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase text-amber-600 font-semibold">Stored Balance Due</span>
+                          <p className="text-base font-bold text-amber-800 dark:text-amber-400 mt-0.5">
+                            {(
+                              activeBatch.balance_due_original !== undefined
+                                ? Number(activeBatch.balance_due_original)
+                                : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
+                            ).toLocaleString()} {activeBatch.currency || "ETB"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* SECTION 3: Whole Batch Payment & Settlement */}
+                {(batchWorkspaceView === "all" || batchWorkspaceView === "settlement") && (
+                  <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                          Whole Batch Settlement
                         </CardTitle>
                         <Badge
                           variant="outline"
                           className={cn(
                             "text-[10px] font-bold uppercase",
                             activeBatch.status === "Settled"
-                              ? "border-emerald-400 text-emerald-800 bg-emerald-100 dark:bg-emerald-900"
-                              : activeBatch.status === "Partially Settled"
-                              ? "border-amber-400 text-amber-800 bg-amber-100 dark:bg-amber-900"
-                              : "border-slate-300 text-slate-600 bg-slate-100"
+                              ? "border-emerald-400 text-emerald-800 bg-emerald-50"
+                              : "border-amber-400 text-amber-800 bg-amber-50"
                           )}
                         >
                           {activeBatch.status}
                         </Badge>
                       </div>
-                      <CardDescription className="text-xs mt-1">
-                        Contractor: <strong>{activeBatch.contractor}</strong> • Corridor: <strong>{activeBatch.destination_country || selectedCountry}</strong> • Created: <strong>{activeBatch.creation ? new Date(activeBatch.creation).toLocaleDateString() : "—"}</strong>
-                      </CardDescription>
-                    </div>
+                    </CardHeader>
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isDownloadingPdf}
-                        onClick={() => handleDownloadInvoicePdf()}
-                        className="text-xs h-8 bg-white dark:bg-[#121217]"
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
-                        Invoice PDF
-                      </Button>
-
-                      {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            setAdvanceAmountInput(activeBatch.requested_advance_amount ? String(activeBatch.requested_advance_amount) : "");
-                            setAdvanceConfirmStep(false);
-                            setIsAdvanceModalOpen(true);
-                          }}
-                          className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
-                        >
-                          <CreditCard className="h-3.5 w-3.5 mr-1.5" />
-                          Update Advance
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Financial Status Summary Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white dark:bg-[#121216] border border-emerald-200/80 dark:border-emerald-900/40 text-xs mt-3">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Total Invoice</span>
-                      <p className="font-bold text-slate-900 dark:text-white mt-0.5">
-                        {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Received</span>
-                      <p className="font-bold text-emerald-800 dark:text-emerald-300 mt-0.5">
-                        {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                      </p>
-                      {activeBatch.advance_reference && (
-                        <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.advance_reference}</p>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Settled On</span>
-                      <p className="font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">
-                        {activeBatch.settled_on || "Pending"}
-                      </p>
-                      {activeBatch.settlement_reference && (
-                        <p className="text-[10px] text-slate-400 font-mono truncate">Ref: {activeBatch.settlement_reference}</p>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Remaining Balance</span>
-                      <p className="font-bold text-amber-800 dark:text-amber-300 mt-0.5">
-                        {(
-                          activeBatch.balance_due_original !== undefined
-                            ? Number(activeBatch.balance_due_original)
-                            : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
-                        ).toLocaleString()} {activeBatch.currency || "ETB"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* PDF Total Divergence Notice */}
-                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200/80 dark:border-[#262632] text-[11px] text-slate-600 dark:text-slate-400">
-                    <Info className="h-4 w-4 shrink-0 text-blue-500 mt-0.5" />
-                    <div>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">Invoice PDF Total Note:</span>{" "}
-                      The printed invoice TOTAL reflects <strong>Batch Total + Requested Advance + Previous Unpaid Arrears</strong> across open batches for this contractor. The balance due shown here is strictly for this batch record.
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="p-4 space-y-4">
-                  <div className="flex items-center justify-between pb-1">
-                    <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                      Batch Candidates & Items ({activeBatch.items?.length || 0})
-                    </span>
-
-                    {selectedItemRowNames.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={isReleasingItems}
-                          onClick={() => handleReleaseUnpaidItems()}
-                          className="h-7 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                        >
-                          {isReleasingItems ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <X className="h-3 w-3 mr-1" />
-                          )}
-                          Release {selectedItemRowNames.length} Unpaid
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={isSettlingItems}
-                          onClick={() => handleSettleBatchItems()}
-                          className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          Settle {selectedItemRowNames.length} Selected Items
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-[#22222a] bg-white dark:bg-[#121216]">
-                    <table className="w-full text-xs text-left">
-                      <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
-                        <tr>
-                          <th className="py-2 px-3 w-8"></th>
-                          <th className="py-2 px-3">Item Row</th>
-                          <th className="py-2 px-3">Transaction</th>
-                          <th className="py-2 px-3">Candidate / Applicant</th>
-                          <th className="py-2 px-3">Commission Amount</th>
-                          <th className="py-2 px-3">Item Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                        {(activeBatch.items || []).length > 0 ? (
-                          activeBatch.items!.map((it: any) => {
-                            const isPending = it.status !== "Paid";
-                            const isSelected = selectedItemRowNames.includes(it.name);
-                            return (
-                              <tr key={it.name || it.transaction} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
-                                <td className="py-2 px-3">
-                                  {isPending && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setSelectedItemRowNames((prev) =>
-                                          prev.includes(it.name)
-                                            ? prev.filter((id) => id !== it.name)
-                                            : [...prev, it.name]
-                                        )
-                                      }
-                                    >
-                                      {isSelected ? (
-                                        <CheckSquare className="h-4 w-4 text-emerald-600" />
-                                      ) : (
-                                        <Square className="h-4 w-4 text-slate-300" />
-                                      )}
-                                    </button>
-                                  )}
-                                </td>
-                                <td className="py-2 px-3 font-mono">{it.name || "Row"}</td>
-                                <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
-                                <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
-                                  {getCandidateName(it)}
-                                </td>
-                                <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
-                                <td className="py-2 px-3">
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      "text-[10px]",
-                                      it.status === "Paid"
-                                        ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                        : "border-amber-300 text-amber-800 bg-amber-50"
-                                    )}
-                                  >
-                                    {it.status || "Pending"}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        ) : (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-400">
-                              Batch items list awaiting records.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------------- */}
-      {/* TAB 4: INVOICE & ON-DEMAND PDF                                      */}
-      {/* ------------------------------------------------------------------- */}
-      {activeTab === "invoice" && (
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {!activeBatch ? (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardContent className="py-12 text-center space-y-3">
-                <Download className="h-8 w-8 mx-auto text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                  Select a Batch to Generate Invoice
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Invoices are rendered fresh on-demand with official candidate lists and exchange rates.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <select
-                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
-                    onChange={(e) => setSelectedBatchName(e.target.value)}
-                    value={selectedBatchName}
-                  >
-                    <option value="">Select an existing batch...</option>
-                    {commissionBatches.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name} — {b.contractor}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-sm">
-              <CardHeader className="border-b border-slate-100 dark:border-[#202028] pb-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
-                      OFFICIAL INVOICE PREVIEW
-                    </span>
-                    <CardTitle className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-0.5">
-                      {activeBatch.name}
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      Foreign Contractor: <strong>{activeBatch.contractor}</strong> • Corridor: <strong>{activeBatch.destination_country || selectedCountry}</strong>
-                    </CardDescription>
-                  </div>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={isDownloadingPdf}
-                    onClick={() => handleDownloadInvoicePdf()}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-9 font-semibold shadow-xs"
-                  >
-                    {isDownloadingPdf ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    ) : (
-                      <Download className="h-4 w-4 mr-1.5" />
-                    )}
-                    Download Invoice PDF
-                  </Button>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-6 space-y-6 text-xs">
-                {/* Billing Summary Box */}
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#171720] border border-slate-200/80 dark:border-[#24242e] grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <span className="text-[10px] uppercase text-slate-400 font-semibold">Total Invoiced</span>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
-                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase text-emerald-600 font-semibold">Advance Requested</span>
-                    <p className="text-lg font-bold text-emerald-800 dark:text-emerald-400 mt-0.5">
-                      {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase text-amber-600 font-semibold">Stored Balance Due</span>
-                    <p className="text-lg font-bold text-amber-800 dark:text-amber-400 mt-0.5">
-                      {(
-                        activeBatch.balance_due_original !== undefined
-                          ? Number(activeBatch.balance_due_original)
-                          : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
-                      ).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Explanatory Notice for Printed Invoice TOTAL */}
-                <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 text-blue-950 dark:text-blue-200 text-xs space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Layers className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span>Official PDF Invoice Printed Total:</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-blue-900 dark:text-blue-300">
-                    The printed invoice bottom-line <strong>TOTAL</strong> is dynamically computed at PDF render time as:{" "}
-                    <code className="bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded font-mono font-bold">
-                      Batch Total + Requested Advance + Previous Unpaid Arrears
-                    </code>
-                    . System stored balance due (<span className="font-mono font-semibold">balance_due_original</span>) deliberately tracks only this batch's own line items.
-                  </p>
-                </div>
-
-                {/* Candidate Lines */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 mb-2">
-                    Itemized Commission Transactions ({activeBatch.items?.length || 0})
-                  </h4>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-[#22222a]">
-                    <table className="w-full text-xs text-left">
-                      <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
-                        <tr>
-                          <th className="py-2 px-3">Item #</th>
-                          <th className="py-2 px-3">Transaction</th>
-                          <th className="py-2 px-3">Candidate</th>
-                          <th className="py-2 px-3">Amount</th>
-                          <th className="py-2 px-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                        {(activeBatch.items || []).map((it: any, idx: number) => (
-                          <tr key={it.name || idx}>
-                            <td className="py-2 px-3 font-mono">{idx + 1}</td>
-                            <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
-                            <td className="py-2 px-3 font-medium">{getCandidateName(it)}</td>
-                            <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
-                            <td className="py-2 px-3">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px]",
-                                  it.status === "Paid"
-                                    ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                    : "border-amber-300 text-amber-800 bg-amber-50"
-                                )}
-                              >
-                                {it.status || "Pending"}
-                              </Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/30 text-[11px] text-blue-900 dark:text-blue-300 space-y-1">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <Info className="h-4 w-4 shrink-0 text-blue-600" />
-                    <span>Official Commission Billing Invoice PDF Notice</span>
-                  </div>
-                  <p className="text-[10px] text-blue-800 dark:text-blue-400 pl-6 leading-relaxed">
-                    Clicking &quot;Download Invoice PDF&quot; generates the authoritative invoice. <strong>Important:</strong> The bottom-line TOTAL on the printed invoice PDF dynamically reflects <em>Batch Total + Requested Advance + Previous Unpaid Arrears</em> across open batches (Sent/Partially Settled) for this contractor. The stored balance due shown in the table above is strictly for this batch record alone.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------------- */}
-      {/* TAB 5: PAYMENT & SETTLEMENT WORKSPACE                               */}
-      {/* ------------------------------------------------------------------- */}
-      {activeTab === "settlement" && (
-        <div className="space-y-4">
-          {!activeBatch ? (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardContent className="py-12 text-center space-y-3">
-                <ShieldCheck className="h-8 w-8 mx-auto text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                  No Active Batch Selected for Settlement
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Choose a Commission Batch Request to execute whole batch settlement or upload foreign agency payment proof.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <select
-                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
-                    onChange={(e) => setSelectedBatchName(e.target.value)}
-                    value={selectedBatchName}
-                  >
-                    <option value="">Select a batch...</option>
-                    {commissionBatches.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name} — {b.contractor} ({b.status})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Card 1: Settle Entire Batch */}
-              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                      Whole Batch Settlement
-                    </CardTitle>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] font-bold uppercase",
-                        activeBatch.status === "Settled"
-                          ? "border-emerald-400 text-emerald-800 bg-emerald-50"
-                          : "border-amber-400 text-amber-800 bg-amber-50"
-                      )}
-                    >
-                      {activeBatch.status}
-                    </Badge>
-                  </div>
-
-                </CardHeader>
-
-                <CardContent className="p-4 space-y-4 text-xs">
-                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#171720] border border-slate-200 dark:border-[#24242e] space-y-1">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Amount to Settle</span>
-                    <p className="text-base font-bold text-slate-900 dark:text-white">
-                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                    {activeBatch.settlement_reference && (
-                      <p className="text-[11px] text-emerald-700 font-mono">
-                        Existing Ref: {activeBatch.settlement_reference}
-                      </p>
-                    )}
-                  </div>
-
-                  {activeBatch.status === "Settled" ? (
-                    <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span>
-                        This batch was fully settled on <strong>{activeBatch.settled_on || "recorded date"}</strong>.
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs font-semibold">Bank Wire / Transaction Reference *</Label>
-                        <Input
-                          type="text"
-                          value={settlementReference}
-                          onChange={(e) => setSettlementReference(e.target.value)}
-                          placeholder="e.g. WIRE-KW-2026-9942 or CBE-TRX-10294"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={!settlementReference.trim() || isSettlingWholeBatch || needsSecondApprover}
-                        onClick={() => setIsSettleBatchConfirmOpen(true)}
-                        className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs"
-                      >
-                        {isSettlingWholeBatch ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                        ) : (
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Mark Entire Batch as Settled
-                      </Button>
-                      {needsSecondApprover && (
-                        <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                          This batch exceeds 100,000 ETB and was created by you. An Admin must approve the settlement.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Card 2: Upload Payment Proof & Fuzzy Match */}
-              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
-                      <FileUp className="h-4 w-4 text-emerald-600" />
-                      Agency Payment Proof Fuzzy-Matcher
-                    </CardTitle>
-                    <span className="text-[10px] text-slate-400">CSV / PDF</span>
-                  </div>
-
-                </CardHeader>
-
-                <CardContent className="p-4 space-y-4 text-xs">
-                  <div className="p-3 rounded-lg border-2 border-dashed border-slate-200 dark:border-[#262632] text-center space-y-2">
-                    <input
-                      type="file"
-                      accept=".csv,.pdf"
-                      onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
-                      className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:bg-slate-100 dark:file:bg-[#1e1e28] file:text-slate-800 dark:file:text-white"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      Supports agency applicant payment reports in CSV or PDF format.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!paymentProofFile || isUploadingProof}
-                    onClick={handleUploadPaymentProof}
-                    className="w-full h-8 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 text-white font-semibold text-xs"
-                  >
-                    {isUploadingProof ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Analyze & Fuzzy-Match Proof
-                  </Button>
-
-                  {proofMatchResult && (
-                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#171720] border border-slate-200 dark:border-[#24242e] space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-400">
-                          ✓ {proofMatchResult.matched_items.length} Matched
-                        </span>
-                        <span className="font-bold text-amber-800 dark:text-amber-400">
-                          • {proofMatchResult.unmatched_names.length} Unmatched
-                        </span>
-                      </div>
-
-                      {proofMatchResult.matched_items.length > 0 && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={isSettlingItems}
-                          onClick={() => handleSettleBatchItems(proofMatchResult.matched_items)}
-                          className="w-full h-7 text-xs bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
-                        >
-                          Settle All {proofMatchResult.matched_items.length} Matched Items
-                        </Button>
-                      )}
-
-                      {proofMatchResult.unmatched_names.length > 0 && (
-                        <p className="text-[11px] text-slate-500">
-                          Unmatched from file: {proofMatchResult.unmatched_names.join(", ")}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------------- */}
-      {/* TAB 6: PARTIAL PAYMENT & ADVANCES                                   */}
-      {/* ------------------------------------------------------------------- */}
-      {activeTab === "partial" && (
-        <div className="space-y-4">
-          {!activeBatch ? (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardContent className="py-12 text-center space-y-3">
-                <CreditCard className="h-8 w-8 mx-auto text-slate-400" />
-                <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                  Select a Batch to Manage Partial Settlements
-                </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Record advance wire payments or settle specific candidate line items independently.
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <select
-                    className="h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
-                    onChange={(e) => setSelectedBatchName(e.target.value)}
-                    value={selectedBatchName}
-                  >
-                    <option value="">Select a batch...</option>
-                    {commissionBatches.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name} — {b.contractor}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {/* Balances Card */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-3.5">
-                    <span className="text-[10px] uppercase font-bold text-slate-400">Total Batch Amount</span>
-                    <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-                      {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-3.5">
-                    <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Advance Paid</span>
-                    <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300 mt-1">
-                      {(Number(activeBatch.advance_amount_original ?? activeBatch.advance_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {activeBatch.advance_reference ? `Ref: ${activeBatch.advance_reference}` : "No reference"}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-3.5">
-                    <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Remaining Balance</span>
-                    <p className="text-xl font-bold text-amber-800 dark:text-amber-300 mt-1">
-                      {(
-                        activeBatch.balance_due_original !== undefined
-                          ? Number(activeBatch.balance_due_original)
-                          : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
-                      ).toLocaleString()} {activeBatch.currency || "ETB"}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Action Panels */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Advance Updating Card */}
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                    <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
-                      <CreditCard className="h-4 w-4 text-amber-600" />
-                      Update Requested Advance
-                    </CardTitle>
-                    <CardDescription className="text-xs text-slate-500">
-                      Set requested contractor advance. Pass 0 to clear. Prints as an addition on the batch invoice PDF total.
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="p-4 space-y-3 text-xs">
-                    {activeBatch.status === "Settled" ? (
-                      <div className="p-3 rounded-lg bg-slate-50 text-slate-500 text-xs">
-                        This batch is fully Settled.
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold">Requested Advance ({activeBatch?.currency || "ETB"}) *</Label>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="e.g. 50000 (0 to clear)"
-                            value={advanceAmountInput}
-                            onChange={(e) => setAdvanceAmountInput(e.target.value)}
-                            className="text-xs h-8"
-                          />
+                    <CardContent className="p-4 space-y-3 text-xs">
+                      {activeBatch.status === "Settled" ? (
+                        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <span>
+                            This batch was fully settled on <strong>{activeBatch.settled_on || "recorded date"}</strong>.
+                            {activeBatch.settlement_reference && (
+                              <span className="font-mono ml-1.5">Ref: {activeBatch.settlement_reference}</span>
+                            )}
+                          </span>
                         </div>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={isSubmittingAdvance}
-                          onClick={() => {
-                            const amt = Number(advanceAmountInput);
-                            if (isNaN(amt) || amt < 0) {
-                              toast.error("Invalid Amount", {
-                                description: "Please enter a valid non-negative amount (0 to clear).",
-                              });
-                              return;
-                            }
-                            handleRecordAdvance();
-                          }}
-                          className="w-full h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs mt-2"
-                        >
-                          {isSubmittingAdvance ? (
-                            <>
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                              Updating Advance...
-                            </>
-                          ) : (
-                            "Save Requested Advance"
-                          )}
-                        </Button>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Settle Selected Pending Items Card */}
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        Settle Specific Candidate Items
-                      </CardTitle>
-                      {selectedItemRowNames.length > 0 && (
-                        <span className="text-xs font-bold text-emerald-700">
-                          {selectedItemRowNames.length} selected
-                        </span>
-                      )}
-                    </div>
-
-                  </CardHeader>
-
-                  <CardContent className="p-4 space-y-3 text-xs">
-                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
-                      {(activeBatch.items || [])
-                        .filter((it: any) => it.status !== "Paid")
-                        .map((it: any) => {
-                          const isSelected = selectedItemRowNames.includes(it.name);
-                          return (
-                            <div
-                              key={it.name}
-                              onClick={() =>
-                                setSelectedItemRowNames((prev) =>
-                                  prev.includes(it.name)
-                                    ? prev.filter((id) => id !== it.name)
-                                    : [...prev, it.name]
-                                )
-                              }
-                              className={cn(
-                                "p-2 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-colors",
-                                isSelected
-                                  ? "bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30"
-                                  : "border-slate-200 dark:border-[#222228] hover:bg-slate-50"
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                {isSelected ? (
-                                  <CheckSquare className="h-4 w-4 text-emerald-600" />
-                                ) : (
-                                  <Square className="h-4 w-4 text-slate-300" />
-                                )}
-                                <div>
-                                  <p className="font-semibold text-slate-900 dark:text-white">
-                                    {getCandidateName(it)}
-                                  </p>
-                                  <p className="text-[10px] font-mono text-slate-400">
-                                    {it.transaction || it.name}
-                                  </p>
-                                </div>
-                              </div>
-                              <span className="font-bold text-slate-800 dark:text-zinc-200">
-                                {it.amount ? `${Number(it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}
-                              </span>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#171720] border border-slate-200 dark:border-[#24242e] flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Amount to Settle</span>
+                              <p className="text-base font-bold text-slate-900 dark:text-white">
+                                {(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}
+                              </p>
                             </div>
-                          );
-                        })}
-
-                      {(activeBatch.items || []).filter((it: any) => it.status !== "Paid").length ===
-                        0 && (
-                        <p className="text-center py-6 text-slate-400 text-xs">
-                          All items in this batch are already marked as Paid.
-                        </p>
-                      )}
-                    </div>
-
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={selectedItemRowNames.length === 0 || isSettlingItems}
-                      onClick={() => handleSettleBatchItems()}
-                      className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs"
-                    >
-                      {isSettlingItems ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Mark {selectedItemRowNames.length} Items as Paid
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={selectedItemRowNames.length === 0 || isReleasingItems}
-                      onClick={() => handleReleaseUnpaidItems()}
-                      className="w-full h-8 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold text-xs mt-1.5"
-                    >
-                      {isReleasingItems ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                      ) : (
-                        <X className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Release {selectedItemRowNames.length} Unpaid Items to Unbatched Pool
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Write-Off Card */}
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] lg:col-span-2">
-                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div>
-                        <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
-                          <AlertTriangle className="h-4 w-4 text-rose-600" />
-                          Write Off Batch Balance (Bad Debt Discharge)
-                        </CardTitle>
-
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off"}
-                        onClick={() => {
-                          const rem =
-                            activeBatch.balance_due_original ??
-                            activeBatch.balance_due_birr ??
-                            (activeBatch.total_amount_original ?? activeBatch.total_amount);
-                          setWriteOffAmountInput(String(rem || ""));
-                          setIsWriteOffModalOpen(true);
-                        }}
-                        className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                        Write Off Batch
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  {(activeBatch.write_offs && activeBatch.write_offs.length > 0) && (
-                    <CardContent className="pt-3 space-y-2 text-xs">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                        Write-Off History
-                      </div>
-                      {activeBatch.write_offs.map((wo: any, idx: number) => (
-                        <div
-                          key={wo?.name || idx}
-                          className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                              {new Date(wo?.creation || wo?.creation_date || Date.now()).toLocaleDateString()}
-                            </span>
-                            <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
-                              -{Number(wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0).toLocaleString()} {activeBatch.currency}
-                            </span>
+                            {activeBatch.settlement_reference && (
+                              <p className="text-[11px] text-emerald-700 font-mono">
+                                Ref: {activeBatch.settlement_reference}
+                              </p>
+                            )}
                           </div>
-                          {wo?.write_off_reason && (
-                            <p className="text-[11px] text-slate-600 dark:text-zinc-300">{wo.write_off_reason}</p>
+
+                          <div className="space-y-1">
+                            <Label className="text-xs font-semibold">Bank Wire / Transaction Reference *</Label>
+                            <Input
+                              type="text"
+                              value={settlementReference}
+                              onChange={(e) => setSettlementReference(e.target.value)}
+                              placeholder="e.g. WIRE-KW-2026-9942 or CBE-TRX-10294"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!settlementReference.trim() || isSettlingWholeBatch || needsSecondApprover}
+                            onClick={() => setIsSettleBatchConfirmOpen(true)}
+                            className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs"
+                          >
+                            {isSettlingWholeBatch ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            Mark Entire Batch as Settled
+                          </Button>
+                          {needsSecondApprover && (
+                            <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                              This batch exceeds 100,000 ETB and was created by you. An Admin must approve the settlement.
+                            </p>
                           )}
                         </div>
-                      ))}
+                      )}
                     </CardContent>
-                  )}
-                </Card>
+                  </Card>
+                )}
+
+                {/* SECTION 4: Partial Payments & Advances */}
+                {(batchWorkspaceView === "all" || batchWorkspaceView === "partial") && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Advance Updating Card */}
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                        <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <CreditCard className="h-4 w-4 text-amber-600" />
+                          Update Requested Advance
+                        </CardTitle>
+                        <CardDescription className="text-xs text-slate-500">
+                          Set requested contractor advance. Pass 0 to clear. Prints as an addition on the batch invoice PDF total.
+                        </CardDescription>
+                      </CardHeader>
+
+                      <CardContent className="p-4 space-y-3 text-xs">
+                        {activeBatch.status === "Settled" ? (
+                          <div className="p-3 rounded-lg bg-slate-50 text-slate-500 text-xs">
+                            This batch is fully Settled.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-semibold">Requested Advance ({activeBatch?.currency || "ETB"}) *</Label>
+                              <Input
+                                type="number"
+                                step="any"
+                                min="0"
+                                placeholder="e.g. 50000 (0 to clear)"
+                                value={advanceAmountInput}
+                                onChange={(e) => setAdvanceAmountInput(e.target.value)}
+                                className="text-xs h-8"
+                              />
+                            </div>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isSubmittingAdvance}
+                              onClick={() => {
+                                const amt = Number(advanceAmountInput);
+                                if (isNaN(amt) || amt < 0) {
+                                  toast.error("Invalid Amount", {
+                                    description: "Please enter a valid non-negative amount (0 to clear).",
+                                  });
+                                  return;
+                                }
+                                handleRecordAdvance();
+                              }}
+                              className="w-full h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs mt-2"
+                            >
+                              {isSubmittingAdvance ? (
+                                <>
+                                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                  Updating Advance...
+                                </>
+                              ) : (
+                                "Save Requested Advance"
+                              )}
+                            </Button>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Settle Specific Candidate Items Card */}
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            Settle Specific Candidate Items
+                          </CardTitle>
+                          {selectedItemRowNames.length > 0 && (
+                            <span className="text-xs font-bold text-emerald-700">
+                              {selectedItemRowNames.length} selected
+                            </span>
+                          )}
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="p-4 space-y-3 text-xs">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                          {(activeBatch.items || [])
+                            .filter((it: any) => it.status !== "Paid")
+                            .map((it: any) => {
+                              const isSelected = selectedItemRowNames.includes(it.name);
+                              return (
+                                <div
+                                  key={it.name}
+                                  onClick={() =>
+                                    setSelectedItemRowNames((prev) =>
+                                      prev.includes(it.name)
+                                        ? prev.filter((id) => id !== it.name)
+                                        : [...prev, it.name]
+                                    )
+                                  }
+                                  className={cn(
+                                    "p-2 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-colors",
+                                    isSelected
+                                      ? "bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30"
+                                      : "border-slate-200 dark:border-[#222228] hover:bg-slate-50"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {isSelected ? (
+                                      <CheckSquare className="h-4 w-4 text-emerald-600" />
+                                    ) : (
+                                      <Square className="h-4 w-4 text-slate-300" />
+                                    )}
+                                    <div>
+                                      <p className="font-semibold text-slate-900 dark:text-white">
+                                        {getCandidateName(it)}
+                                      </p>
+                                      <p className="text-[10px] font-mono text-slate-400">
+                                        {it.transaction || it.name}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <span className="font-bold text-slate-800 dark:text-zinc-200">
+                                    {it.amount ? `${Number(it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+
+                          {(activeBatch.items || []).filter((it: any) => it.status !== "Paid").length === 0 && (
+                            <p className="text-center py-6 text-slate-400 text-xs">
+                              All items in this batch are already marked as Paid.
+                            </p>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={selectedItemRowNames.length === 0 || isSettlingItems}
+                          onClick={() => handleSettleBatchItems()}
+                          className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs"
+                        >
+                          {isSettlingItems ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Mark {selectedItemRowNames.length} Items as Paid
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Write-Off Card */}
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] lg:col-span-2">
+                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            Write Off Batch Balance (Bad Debt Discharge)
+                          </CardTitle>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off"}
+                            onClick={() => {
+                              const rem =
+                                activeBatch.balance_due_original ??
+                                activeBatch.balance_due_birr ??
+                                (activeBatch.total_amount_original ?? activeBatch.total_amount);
+                              setWriteOffAmountInput(String(rem || ""));
+                              setIsWriteOffModalOpen(true);
+                            }}
+                            className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                            Write Off Batch
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      {(activeBatch.write_offs && activeBatch.write_offs.length > 0) && (
+                        <CardContent className="pt-3 space-y-2 text-xs">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                            Write-Off History
+                          </div>
+                          {activeBatch.write_offs.map((wo: any, idx: number) => (
+                            <div
+                              key={wo?.name || idx}
+                              className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                                  {new Date(wo?.creation || wo?.creation_date || Date.now()).toLocaleDateString()}
+                                </span>
+                                <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
+                                  -{Number(wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0).toLocaleString()} {activeBatch.currency}
+                                </span>
+                              </div>
+                              {wo?.write_off_reason && (
+                                <p className="text-[11px] text-slate-600 dark:text-zinc-300">{wo.write_off_reason}</p>
+                              )}
+                            </div>
+                          ))}
+                        </CardContent>
+                      )}
+                    </Card>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -2861,66 +2349,6 @@ export default function AdminCommissionPage() {
         </div>
       )}
 
-      {/* ------------------------------------------------------------------- */}
-      {/* MODAL 1: TRIGGER EARLY COMMISSION ACCRUAL                           */}
-      {/* ------------------------------------------------------------------- */}
-      <Dialog open={isEarlyAccrualModalOpen} onOpenChange={setIsEarlyAccrualModalOpen}>
-        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-500" />
-              Trigger Early Commission Accrual
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Accrue commission into the finance pipeline before the applicant officially departs.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3.5 text-xs">
-            <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-200 dark:border-[#26262f] space-y-1">
-              <p className="text-[11px] font-medium text-slate-700 dark:text-zinc-300">
-                • <strong>Muayena placements</strong>: Requires manual commission amount and currency specified on Placement.<br />
-                • <strong>Standard placements</strong>: Uses the contractor&apos;s default corridor commission rate.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Placement Identifier (e.g. PLM-00001) *</Label>
-              <Input
-                type="text"
-                value={earlyPlacementName}
-                onChange={(e) => setEarlyPlacementName(e.target.value)}
-                placeholder="PLM-00001"
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-
-            <DialogFooter className="mt-4 flex sm:justify-between items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEarlyAccrualModalOpen(false)}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={!earlyPlacementName.trim() || isTriggeringEarlyAccrual}
-                onClick={handleTriggerEarlyAccrual}
-                className="bg-emerald-900 hover:bg-emerald-950 text-white font-bold text-xs"
-              >
-                {isTriggeringEarlyAccrual ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <Check className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Trigger Accrual
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* ------------------------------------------------------------------- */}
       {/* MODAL 2: UPDATE BATCH ADVANCE AMOUNT                                */}
@@ -3346,142 +2774,6 @@ export default function AdminCommissionPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Log One-Off Income / Expense Modal */}
-      <Dialog open={isQuickLogModalOpen} onOpenChange={setIsQuickLogModalOpen}>
-        <DialogContent className="sm:max-w-md dark:bg-[#121216] dark:border-[#26262f]">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Plus className="h-5 w-5 text-emerald-600" />
-              Log One-Off Financial Transaction
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Record a general agency income or expense entry (e.g. advance, fee, or one-off operational disbursement).
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3.5 text-xs py-1">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setQuickLogType("Income")}
-                className={cn(
-                  "py-2 rounded-lg font-bold border text-center transition-all",
-                  quickLogType === "Income"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-600 shadow-xs"
-                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-400"
-                )}
-              >
-                + Log Income
-              </button>
-              <button
-                type="button"
-                onClick={() => setQuickLogType("Expense")}
-                className={cn(
-                  "py-2 rounded-lg font-bold border text-center transition-all",
-                  quickLogType === "Expense"
-                    ? "bg-rose-50 border-rose-500 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-600 shadow-xs"
-                    : "border-slate-200 text-slate-600 dark:border-zinc-700 dark:text-zinc-400"
-                )}
-              >
-                - Log Expense
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px] font-semibold">Amount *</Label>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  placeholder="e.g. 5000"
-                  value={quickLogAmount}
-                  onChange={(e) => setQuickLogAmount(e.target.value)}
-                  className="h-8 text-xs mt-1"
-                />
-              </div>
-
-              <div>
-                <Label className="text-[11px] font-semibold">Currency *</Label>
-                <select
-                  value={quickLogCurrency}
-                  onChange={(e) => setQuickLogCurrency(e.target.value as V2SupportedCurrency)}
-                  className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs mt-1 font-semibold text-slate-900 dark:text-white"
-                >
-                  <option value="ETB" className="dark:bg-[#121217]">ETB (Birr)</option>
-                  <option value="SAR" className="dark:bg-[#121217]">SAR (Saudi Riyal)</option>
-                  <option value="USD" className="dark:bg-[#121217]">USD (US Dollar)</option>
-                  <option value="KWD" className="dark:bg-[#121217]">KWD (Kuwaiti Dinar)</option>
-                  <option value="AED" className="dark:bg-[#121217]">AED (UAE Dirham)</option>
-                  <option value="QAR" className="dark:bg-[#121217]">QAR (Qatari Riyal)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-[11px] font-semibold">Description / Purpose *</Label>
-              <Input
-                type="text"
-                placeholder="e.g. Agency advance disbursement or contractor initial deposit"
-                value={quickLogDescription}
-                onChange={(e) => setQuickLogDescription(e.target.value)}
-                className="h-8 text-xs mt-1"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-500">Placement ID (Optional)</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. PLM-0001"
-                  value={quickLogPlacement}
-                  onChange={(e) => setQuickLogPlacement(e.target.value)}
-                  className="h-8 text-xs mt-1 font-mono"
-                />
-              </div>
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-500">Applicant ID (Optional)</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. APP-0001"
-                  value={quickLogApplicant}
-                  onChange={(e) => setQuickLogApplicant(e.target.value)}
-                  className="h-8 text-xs mt-1 font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsQuickLogModalOpen(false)}
-              className="text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={isLoggingQuickTx}
-              onClick={handleQuickLogTransaction}
-              className="text-xs bg-emerald-900 hover:bg-emerald-950 text-white font-bold"
-            >
-              {isLoggingQuickTx ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Recording...
-                </>
-              ) : (
-                `Submit ${quickLogType}`
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
