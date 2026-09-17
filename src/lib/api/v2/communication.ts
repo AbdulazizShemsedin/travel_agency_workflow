@@ -109,7 +109,9 @@ export async function listAllThreadsForOversightV2(): Promise<V2ChatThread[]> {
  * Gets all messages in a thread.
  */
 export async function getThreadMessagesV2(threadName: string): Promise<V2ChatMessage[]> {
-  const result = await requestV2<V2ChatMessage[] | { messages?: V2ChatMessage[] }>(
+  const result = await requestV2<
+    V2ChatMessage[] | { message?: V2ChatMessage[]; messages?: V2ChatMessage[]; participants?: { user: string; last_read_at?: string | null }[] }
+  >(
     "/api/method/agency_tracking.chat_api.get_thread_messages",
     {
       method: "POST",
@@ -117,9 +119,19 @@ export async function getThreadMessagesV2(threadName: string): Promise<V2ChatMes
     }
   );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).messages)) return (result as any).messages;
-  return [];
+  let messages: V2ChatMessage[] = [];
+  let participants: { user: string; last_read_at?: string | null }[] = [];
+
+  if (Array.isArray(result)) {
+    messages = result;
+  } else if (result) {
+    if (Array.isArray((result as any).message)) messages = (result as any).message;
+    else if (Array.isArray((result as any).messages)) messages = (result as any).messages;
+    if (Array.isArray((result as any).participants)) participants = (result as any).participants;
+  }
+
+  (messages as any).participants = participants;
+  return messages;
 }
 
 /**

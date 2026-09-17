@@ -71,100 +71,51 @@ export function RoleWorkspaceContainer() {
       };
     }
 
-    const r = (roles || []).map((x) => String(x).toLowerCase().trim()).join(" ");
-    const allowed: string[] = [];
-    let prefTab = "";
+    const r = (roles || []).map((x) => String(x).toLowerCase().trim());
+    const hasRoleKeyword = (keywords: string[]) =>
+      r.some((roleName) => keywords.some((k) => roleName.includes(k)));
+
     let prefCorridor = "All";
+    if (hasRoleKeyword(["saudi"])) prefCorridor = "Saudi Arabia";
+    if (hasRoleKeyword(["kuwait"])) prefCorridor = "Kuwait";
 
-    if (r.includes("saudi")) prefCorridor = "Saudi Arabia";
-    if (r.includes("kuwait")) prefCorridor = "Kuwait";
+    const allowed: string[] = ["directory"]; // All internal staff can access the Applicant List directory
+    let prefTab = "directory";
 
-    // 1. LMIS Ministry Clearance specialist
-    if (r.includes("lms") || r.includes("lmis")) {
+    // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
+    if (hasRoleKeyword(["lms", "lmis"])) {
       allowed.push("lms");
-      if (!prefTab) prefTab = "lms";
-    }
-
-    // 2. Te'shir / Injaz MOFA specialist
-    if (r.includes("taeshir") || r.includes("teshir") || r.includes("te'shir") || r.includes("injaz") || r.includes("telesign")) {
-      allowed.push("injaz");
-      if (!prefTab) prefTab = "injaz";
-    }
-
-    // 3. Embassy & Stamping specialist (includes Wakala / Musaned)
-    if (r.includes("embassy") || r.includes("wakala")) {
-      allowed.push("embassy");
-      if (!prefTab) prefTab = "embassy";
-    }
-
-    // 4. Ticketing & Logistics specialist
-    if (r.includes("ticket") || r.includes("departure")) {
-      allowed.push("departure");
-      if (!prefTab) prefTab = "departure";
-    }
-
-    // 5. Candidate Intake & Registrar
-    if (r.includes("registrar") || r.includes("recruiter") || r.includes("intake") || r.includes("applicant viewer")) {
-      allowed.push("directory");
-      if (!prefTab) prefTab = "directory";
-    }
-
-    // 6. Medical Officer
-    if (r.includes("medical")) {
-      allowed.push("directory", "departure");
-      if (!prefTab) prefTab = "directory";
-    }
-
-    // 7. Contract Parser
-    if (r.includes("contract") || r.includes("parser")) {
-      allowed.push("directory");
-      if (!prefTab) prefTab = "directory";
-    }
-
-    // 8. Generic Clearance Officer fallback
-    if (r.includes("clearance") && allowed.length === 0) {
-      allowed.push("lms", "injaz", "embassy", "clearance");
       prefTab = "lms";
     }
 
-    // Fallback: internal staff member with unrecognized role → grant full access
-    // This handles production admin users whose Frappe role names don't match the keyword list above
-    const isInternalStaff = authUser?.is_internal_staff === true;
-    const hasNoSpecialistRole = allowed.filter((t) => t !== "directory" && t !== "clearance").length === 0;
-    if (isInternalStaff && hasNoSpecialistRole) {
-      return {
-        availableTabs: allTabsConfig,
-        defaultTab: "directory",
-        defaultCorridor: prefCorridor,
-      };
+    // 2. Te'shir / Injaz table: strictly restricted to Te'shir roles (Saudi Taeshir, Kuwait Telesign) or Admin
+    if (hasRoleKeyword(["taeshir", "teshir", "te'shir", "injaz", "telesign"])) {
+      allowed.push("injaz");
+      if (prefTab === "directory") prefTab = "injaz";
     }
 
-    // Always ensure directory tab is visible as the primary overview
-    if (!allowed.includes("directory")) {
-      allowed.unshift("directory");
+    // 3. Embassy & Stamping table: strictly restricted to Embassy roles (Saudi Embassy, Kuwait Embassy) or Admin
+    if (hasRoleKeyword(["embassy"])) {
+      allowed.push("embassy");
+      if (prefTab === "directory") prefTab = "embassy";
     }
 
-    // Ensure clearance queue tab is visible only for clearance roles or admin
-    const hasClearanceRole =
-      isAdmin ||
-      r.includes("clearance") ||
-      r.includes("lms") ||
-      r.includes("lmis") ||
-      r.includes("taeshir") ||
-      r.includes("injaz") ||
-      r.includes("embassy");
-
-    if (hasClearanceRole && !allowed.includes("clearance")) {
-      allowed.push("clearance");
+    // 4. Ticket & Departure table: strictly restricted to Ticket role (Ticketer) or Admin
+    if (hasRoleKeyword(["ticket", "ticketer"])) {
+      allowed.push("departure");
+      if (prefTab === "directory") prefTab = "departure";
     }
+
+    // 5. Clearance List (Step Pipeline): strictly restricted to Admin (Administrator, System Manager, Admin, Manager)
+    // Non-admin roles are never granted access to the Clearance list table.
 
     const filteredTabs = allTabsConfig.filter((tab) => allowed.includes(tab.id));
     return {
       availableTabs: filteredTabs,
-      defaultTab: "directory",
+      defaultTab: prefTab,
       defaultCorridor: prefCorridor,
     };
-  }, [isAdmin, roles, authUser, can]);
+  }, [isAdmin, roles]);
 
   const rolesKey = React.useMemo(() => (roles || []).join(","), [roles]);
   const searchParams = useSearchParams();
@@ -201,6 +152,7 @@ export function RoleWorkspaceContainer() {
 
   // Fetch live workspace data for active operational stream
   const isOperationalTab = activeTab !== "directory" && activeTab !== "clearance";
+  const isTabAllowed = availableTabs.some((t) => t.id === activeTab);
   const streamType = (isOperationalTab ? activeTab : "lms") as OperationalStreamType;
 
   const {
@@ -211,7 +163,7 @@ export function RoleWorkspaceContainer() {
   } = useQuery({
     queryKey: ["operational_workspace_v2", streamType, corridorFilter],
     queryFn: () => fetchOperationalWorkspaceDataV2(streamType, corridorFilter),
-    enabled: isOperationalTab,
+    enabled: isOperationalTab && isTabAllowed,
     staleTime: 0,
   });
 
@@ -315,9 +267,9 @@ export function RoleWorkspaceContainer() {
       {/* Active Operational Workspace Rendering                        */}
       {/* ------------------------------------------------------------- */}
       <div>
-        {activeTab === "directory" && <ApplicantTable />}
+        {activeTab === "directory" && isTabAllowed && <ApplicantTable />}
 
-        {activeTab === "lms" && (
+        {activeTab === "lms" && isTabAllowed && (
           <LMISWorkspace
             data={workspaceData}
             isLoading={isLoading || isRefetching}
@@ -328,7 +280,7 @@ export function RoleWorkspaceContainer() {
           />
         )}
 
-        {activeTab === "injaz" && (
+        {activeTab === "injaz" && isTabAllowed && (
           <InjazWorkspace
             data={workspaceData}
             isLoading={isLoading || isRefetching}
@@ -339,7 +291,7 @@ export function RoleWorkspaceContainer() {
           />
         )}
 
-        {activeTab === "embassy" && (
+        {activeTab === "embassy" && isTabAllowed && (
           <EmbassyWorkspace
             data={workspaceData}
             isLoading={isLoading || isRefetching}
@@ -350,7 +302,7 @@ export function RoleWorkspaceContainer() {
           />
         )}
 
-        {activeTab === "departure" && (
+        {activeTab === "departure" && isTabAllowed && (
           <DepartureWorkspace
             data={workspaceData}
             isLoading={isLoading || isRefetching}
@@ -361,7 +313,19 @@ export function RoleWorkspaceContainer() {
           />
         )}
 
-        {activeTab === "clearance" && <V2ClearanceQueueWorkspace />}
+        {activeTab === "clearance" && isTabAllowed && <V2ClearanceQueueWorkspace />}
+
+        {!isTabAllowed && (
+          <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-amber-600" />
+              <h3 className="text-sm font-bold">Access Restricted</h3>
+            </div>
+            <p className="leading-relaxed">
+              You do not have permission to view this operational clearance table. Please switch to an authorized workspace or contact an Administrator.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

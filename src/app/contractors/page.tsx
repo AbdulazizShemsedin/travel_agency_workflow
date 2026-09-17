@@ -40,15 +40,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
+import { isAdminUser } from "@/lib/auth/permissions";
 
 export default function ContractorsPage() {
   const queryClient = useQueryClient();
-  const { authUser, user, can, roles } = useAuth();
+  const { authUser, user, roles } = useAuth();
   const isAdmin = Boolean(
+    isAdminUser(authUser) ||
     user === "Administrator" ||
     (authUser?.email && (authUser.email.toLowerCase().startsWith("admin") || authUser.email.toLowerCase() === "administrator")) ||
-    can("manageContractors") ||
-    can("manageUsers") ||
     (roles || []).some((r: any) => {
       const s = String(r?.role || r?.name || r).toLowerCase().trim();
       return s === "administrator" || s === "system manager" || s === "admin";

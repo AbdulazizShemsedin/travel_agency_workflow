@@ -27,6 +27,7 @@ import {
   acknowledgeComplaintV2,
   listContractorsV2,
   listApplicantsV2,
+  listPlacementsV2,
   uploadFileV2,
   V2ComplaintItem,
 } from "@/lib/api/v2";
@@ -113,6 +114,11 @@ export default function AdminComplaintsPage() {
   const filteredAndSortedComplaints = React.useMemo(() => {
     let list = (complaints as any[]);
 
+    // Filter by Partner Agency
+    if (contractorFilter !== "All Agencies") {
+      list = list.filter((c) => c.contractor === contractorFilter);
+    }
+
     // Filter by Category
     if (categoryFilter !== "All Categories") {
       list = list.filter((c) => c.complaint_category === categoryFilter || c.category === categoryFilter);
@@ -139,21 +145,74 @@ export default function AdminComplaintsPage() {
     });
 
     return list;
-  }, [complaints, categoryFilter, severityFilter, sortOrder]);
+  }, [complaints, contractorFilter, categoryFilter, severityFilter, sortOrder]);
 
   const { data: applicants = [] } = useQuery({
     queryKey: ["applicants-v2-complaints"],
     queryFn: () => listApplicantsV2(),
   });
 
+  const { data: placements = [] } = useQuery({
+    queryKey: ["placements-v2-complaints"],
+    queryFn: () => listPlacementsV2(),
+  });
+
+  // Filter candidates placed strictly under the selected Foreign Partner Agency
+  const agencyCandidates = React.useMemo(() => {
+    if (!submitForm.contractor) return [];
+
+    const matchedPlacements = (placements as any[]).filter(
+      (p) => p.contractor === submitForm.contractor
+    );
+
+    return matchedPlacements.map((p) => {
+      const a = (applicants as any[]).find((app) => app.name === p.applicant);
+      const displayName = a?.full_name || a?.first_name || p.full_name || p.applicant_name || p.applicant;
+      const passport = a?.passport_number || p.passport_number || "";
+      const status = p.status || a?.applicant_state || "Placed";
+      const destination = p.destination_country || a?.destination_country || "";
+
+      return {
+        placement_id: p.name,
+        applicant_id: p.applicant,
+        full_name: displayName,
+        passport_number: passport,
+        status: status,
+        destination_country: destination,
+        displayLabel: `${displayName} (${p.applicant}) ${passport ? `• ${passport} ` : ""}- ${status}${destination ? ` [${destination}]` : ""}`,
+      };
+    });
+  }, [placements, applicants, submitForm.contractor]);
+
+  const getApplicantDisplayName = React.useCallback((c: any) => {
+    if (c.full_name) return c.full_name;
+    const placement = (placements as any[]).find((p) => p.name === c.placement);
+    if (placement) {
+      const applicant = (applicants as any[]).find((a) => a.name === placement.applicant);
+      if (applicant) return applicant.full_name || applicant.first_name || applicant.name;
+      if (placement.full_name || placement.applicant_name) return placement.full_name || placement.applicant_name;
+      if (placement.applicant) return placement.applicant;
+    }
+    const directApplicant = (applicants as any[]).find((a) => a.name === c.applicant || a.name === c.placement);
+    if (directApplicant) return directApplicant.full_name || directApplicant.first_name || directApplicant.name;
+    return c.applicant || "Applicant";
+  }, [placements, applicants]);
+
   const availableReplacements = (applicants as any[]).filter((a) => a.applicant_state === "Registered" || a.applicant_state === "CV Generated");
 
   const submitMutation = useMutation({
     mutationFn: async (data: typeof submitForm) => {
+      const matched = agencyCandidates.find(
+        (c) => c.placement_id === data.applicant_search || c.applicant_id === data.applicant_search
+      );
       return await createComplaintV2(
         data.applicant_search,
         `[${data.complaint_category} - ${data.severity}] ${data.complaint_details}`,
-        "Working Abroad"
+        "Working Abroad",
+        {
+          applicant: matched?.applicant_id,
+          applicant_name: matched?.full_name || data.full_name,
+        }
       );
     },
     onSuccess: (res) => {
@@ -439,7 +498,7 @@ export default function AdminComplaintsPage() {
                   <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{c.name}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800 dark:text-zinc-200">{c.contractor}</td>
                   <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-900 dark:text-white">{c.full_name || c.applicant || "Applicant"}</div>
+                    <div className="font-semibold text-slate-900 dark:text-white">{getApplicantDisplayName(c)}</div>
                     <span className="text-[10px] text-slate-400 font-mono">{c.placement || c.applicant || ""}</span>
                   </td>
                   <td className="px-4 py-3">
@@ -632,10 +691,20 @@ export default function AdminComplaintsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Foreign Partner Agency *</Label>
                 <select
-                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                  required
+                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs font-medium text-slate-800 dark:text-zinc-200"
                   value={submitForm.contractor}
-                  onChange={(e) => setSubmitForm({ ...submitForm, contractor: e.target.value })}
+                  onChange={(e) => {
+                    const newContractor = e.target.value;
+                    setSubmitForm((prev) => ({
+                      ...prev,
+                      contractor: newContractor,
+                      applicant_search: "",
+                      full_name: "",
+                    }));
+                  }}
                 >
+                  <option value="">-- Select Foreign Agency --</option>
                   {contractors.map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.company_name || c.name}
@@ -645,29 +714,50 @@ export default function AdminComplaintsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Candidate *</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Candidate *</Label>
+                  {submitForm.contractor && (
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {agencyCandidates.length} candidate{agencyCandidates.length === 1 ? "" : "s"} placed
+                    </span>
+                  )}
+                </div>
                 <select
                   required
-                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
+                  disabled={!submitForm.contractor || agencyCandidates.length === 0}
+                  className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs font-medium text-slate-800 dark:text-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   value={submitForm.applicant_search}
                   onChange={(e) => {
-                    const sel = applicants.find((a) => a.name === e.target.value);
-                    const candidateContractor = (sel as any)?.contractor || (sel as any)?.locked_contractor || (sel as any)?.selected_by;
-                    setSubmitForm({
-                      ...submitForm,
+                    const sel = agencyCandidates.find(
+                      (c) => c.placement_id === e.target.value || c.applicant_id === e.target.value
+                    );
+                    setSubmitForm((prev) => ({
+                      ...prev,
                       applicant_search: e.target.value,
-                      full_name: sel ? (sel.full_name || (sel as any).first_name || "") : "",
-                      contractor: candidateContractor || submitForm.contractor || (contractors[0] as any)?.name || "",
-                    });
+                      full_name: sel ? sel.full_name : "",
+                    }));
                   }}
                 >
-                  <option value="">-- Select Registered Applicant --</option>
-                  {applicants.map((a) => (
-                    <option key={a.name} value={a.name}>
-                      {a.full_name || a.first_name} ({a.name}) {a.passport_number ? `• ${a.passport_number}` : ""} - {a.applicant_state}
-                    </option>
-                  ))}
+                  {!submitForm.contractor ? (
+                    <option value="">-- Select a Foreign Agency First --</option>
+                  ) : agencyCandidates.length === 0 ? (
+                    <option value="">-- No candidates placed with this agency --</option>
+                  ) : (
+                    <>
+                      <option value="">-- Select Agency Candidate ({agencyCandidates.length} available) --</option>
+                      {agencyCandidates.map((c) => (
+                        <option key={c.placement_id} value={c.placement_id}>
+                          {c.displayLabel}
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
+                {submitForm.contractor && agencyCandidates.length === 0 && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    No candidates are currently placed with {submitForm.contractor}. Complaints can only be filed against candidates with active or historical placements at this foreign agency.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

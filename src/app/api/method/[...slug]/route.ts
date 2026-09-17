@@ -206,6 +206,35 @@ async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: R
   }
 }
 
+let cachedAllThreads: { data: any[]; timestamp: number } | null = null;
+
+async function getAllThreadsCached(config: any, elevatedHeaders: Record<string, string>): Promise<any[]> {
+  const now = Date.now();
+  if (cachedAllThreads && now - cachedAllThreads.timestamp < 10000) {
+    return cachedAllThreads.data;
+  }
+  try {
+    const allRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.chat_api.list_all_threads`, {
+      method: "POST",
+      headers: elevatedHeaders,
+      body: "{}",
+    });
+    const allData = await allRes.json().catch(() => ({}));
+    const allList: any[] = Array.isArray(allData.message)
+      ? allData.message
+      : Array.isArray(allData.threads)
+      ? allData.threads
+      : [];
+    if (allList.length > 0) {
+      cachedAllThreads = { data: allList, timestamp: now };
+    }
+    return allList;
+  } catch (err) {
+    console.warn("[PROXY getAllThreadsCached] failed:", err);
+    return cachedAllThreads?.data || [];
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
@@ -213,6 +242,15 @@ export async function POST(
   const { slug } = await params;
   const methodPath = slug.join("/");
   const config = getFrappeConfig(req, methodPath);
+
+  // Invalidate chat threads cache on thread mutations
+  if (
+    methodPath.includes("create_internal_thread") ||
+    methodPath.includes("create_agency_thread") ||
+    methodPath.includes("add_participant")
+  ) {
+    cachedAllThreads = null;
+  }
 
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -400,14 +438,87 @@ export async function POST(
       }
     }
 
-    const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-      method: "POST",
-      headers: forwardHeaders,
-      body: bodyText || "{}",
-    });
+    const isHeavyCvOrPdf =
+      methodPath === "agency_tracking.cv_api.generate_cv" ||
+      methodPath === "agency_tracking.cv_api.render_cv_pdf";
+    const postMaxRetries = isHeavyCvOrPdf ? 0 : 2;
+    const postTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
+
+    const res = await fetchWithRetry(
+      `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
+      {
+        method: "POST",
+        headers: forwardHeaders,
+        body: bodyText || "{}",
+      },
+      postMaxRetries,
+      postTimeoutMs
+    );
+
+    // Special handler for get_thread_messages: enrich with thread participants presence & read receipts
+    if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
+      let effectiveRes = res;
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
+
+      if (!res.ok) {
+        const isSupervisor = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
+        if (isSupervisor) {
+          const elevatedHeaders: Record<string, string> = {
+            ...forwardHeaders,
+            Authorization: systemAuthHeader,
+          };
+          delete elevatedHeaders["cookie"];
+          delete elevatedHeaders["Cookie"];
+
+          effectiveRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
+            method: "POST",
+            headers: elevatedHeaders,
+            body: bodyText || "{}",
+          });
+        }
+      }
+
+      if (effectiveRes.ok) {
+        const rawData = await effectiveRes.json().catch(() => ({ message: [] }));
+        const messagesList: any[] = Array.isArray(rawData.message)
+          ? rawData.message
+          : Array.isArray(rawData)
+          ? rawData
+          : [];
+
+        let participants: any[] = [];
+        try {
+          const parsed = JSON.parse(bodyText || "{}");
+          const targetThreadName = parsed.thread_name;
+          if (targetThreadName) {
+            const threadDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: systemAuthHeader,
+              },
+              body: JSON.stringify({ doctype: "Chat Thread", name: targetThreadName }),
+            });
+            if (threadDocRes.ok) {
+              const threadDoc = await threadDocRes.json().catch(() => ({}));
+              participants = (threadDoc.message?.participants || []).map((p: any) => ({
+                user: p.user,
+                last_read_at: p.last_read_at || null,
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn("[PROXY CHAT] Error fetching participants for thread:", err);
+        }
+
+        const response = NextResponse.json({ message: messagesList, participants }, { status: 200 });
+        forwardSetCookieHeaders(effectiveRes, response);
+        return response;
+      }
+    }
 
     // Elevated Retry for whitelisted internal queries blocked by Frappe role restrictions
-    // (e.g. list_contractors & commission rate management for staff, get_thread_messages for Admin/Oversight)
+    // (e.g. list_contractors & commission rate management for staff)
     if (res.status === 403) {
       if (
         methodPath === "agency_tracking.contractor_api.list_contractors" ||
@@ -433,31 +544,6 @@ export async function POST(
           const response = NextResponse.json(retryData, { status: 200 });
           forwardSetCookieHeaders(res, response);
           return response;
-        }
-      } else if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
-        // Only elevate message viewing if user is Admin or Communication Manager
-        const isSupervisor = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
-        if (isSupervisor) {
-          const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-          const elevatedHeaders: Record<string, string> = {
-            ...forwardHeaders,
-            Authorization: systemAuthHeader,
-          };
-          delete elevatedHeaders["cookie"];
-          delete elevatedHeaders["Cookie"];
-
-          const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-            method: "POST",
-            headers: elevatedHeaders,
-            body: bodyText || "{}",
-          });
-
-          if (retryRes.ok) {
-            const retryData = await retryRes.json().catch(() => ({ message: [] }));
-            const response = NextResponse.json(retryData, { status: 200 });
-            forwardSetCookieHeaders(res, response);
-            return response;
-          }
         }
       } else if (methodPath === "agency_tracking.placement_api.list_placements") {
         const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
@@ -823,6 +909,55 @@ export async function POST(
           if (Array.isArray(data.message)) data.message = enriched;
           else if (Array.isArray(data)) (data as any) = enriched;
         }
+      } else if (methodPath === "agency_tracking.chat_api.list_threads") {
+        const rawThreads: any[] = Array.isArray(data.message)
+          ? data.message
+          : Array.isArray(data.threads)
+          ? data.threads
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        if (rawThreads.length > 0) {
+          try {
+            const allThreads = await getAllThreadsCached(config, elevatedHeaders);
+            if (allThreads.length > 0) {
+              const detailsMap = new Map<string, any>();
+              allThreads.forEach((t) => {
+                if (t.name) detailsMap.set(t.name, t);
+              });
+
+              const enriched = rawThreads.map((t) => {
+                const fullThread = detailsMap.get(t.name);
+                return {
+                  ...t,
+                  participants: fullThread?.participants || t.participants || [],
+                  contractor: fullThread?.contractor || t.contractor || null,
+                  creation: fullThread?.creation || t.creation,
+                };
+              });
+
+              if (Array.isArray(data.message)) data.message = enriched;
+              else if (Array.isArray(data.threads)) data.threads = enriched;
+              else if (Array.isArray(data)) (data as any) = enriched;
+            }
+          } catch (enrichErr) {
+            console.warn("[PROXY list_threads] could not enrich participants:", enrichErr);
+          }
+        }
+      } else if (methodPath === "agency_tracking.chat_api.list_all_threads") {
+        const rawList = Array.isArray(data?.message) ? data.message : Array.isArray(data) ? data : [];
+        if (!res.ok || rawList.length === 0 || data?.exc_type === "PermissionError") {
+          try {
+            const allThreads = await getAllThreadsCached(config, elevatedHeaders);
+            data.message = allThreads;
+            data.exc_type = undefined;
+            data.exception = undefined;
+            const response = NextResponse.json({ message: allThreads }, { status: 200 });
+            forwardSetCookieHeaders(res, response);
+            return response;
+          } catch {}
+        }
       }
     }
 
@@ -874,11 +1009,22 @@ export async function GET(
   const config = getFrappeConfig(req, methodPath);
 
   try {
-    const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-      method: "GET",
-      headers: config.headers,
-      cache: "no-store",
-    });
+    const isHeavyCvOrPdf =
+      methodPath === "agency_tracking.cv_api.render_cv_pdf" ||
+      methodPath.includes("get_batch_invoice_pdf");
+    const getMaxRetries = isHeavyCvOrPdf ? 0 : 2;
+    const getTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
+
+    const res = await fetchWithRetry(
+      `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
+      {
+        method: "GET",
+        headers: config.headers,
+        cache: "no-store",
+      },
+      getMaxRetries,
+      getTimeoutMs
+    );
 
     const resContentType = res.headers.get("content-type") || "";
     const contentDisposition = res.headers.get("content-disposition") || "";

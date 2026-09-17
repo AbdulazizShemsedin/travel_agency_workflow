@@ -27,6 +27,7 @@ import {
   createComplaintV2,
   uploadFileV2,
   listPlacementsV2,
+  listApplicantsV2,
   V2ComplaintItem,
 } from "@/lib/api/v2";
 import {
@@ -80,15 +81,50 @@ export default function AgentComplaintsPage() {
 
   // Fetch all placements for searchable dropdown
   const { data: allAvailableCandidates = [] } = useQuery({
-    queryKey: ["all-agency-placements", activeContractor],
+    queryKey: ["all-agency-placements", effectiveContractor],
     queryFn: () => listPlacementsV2(),
   });
 
+  const { data: applicants = [] } = useQuery({
+    queryKey: ["all-agency-applicants-for-complaints"],
+    queryFn: () => listApplicantsV2(),
+  });
+
+  // Reset candidate selection if active contractor changes
+  React.useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      applicant_search: "",
+      full_name: "",
+    }));
+  }, [effectiveContractor]);
+
+  // Strictly filter candidates placed with THIS Foreign Agency
+  const agencyPlacements = React.useMemo(() => {
+    if (!effectiveContractor) return [];
+    return (allAvailableCandidates as any[])
+      .filter((c) => c.contractor === effectiveContractor)
+      .map((c) => {
+        const a = (applicants as any[]).find((app) => app.name === c.applicant);
+        const displayName = a?.full_name || a?.first_name || c.full_name || c.applicant_name || c.applicant;
+        const passport = a?.passport_number || c.passport_number || "";
+        const status = c.status || a?.applicant_state || "Placed";
+        const destination = c.destination_country || a?.destination_country || "";
+        return {
+          ...c,
+          full_name: displayName,
+          passport_number: passport,
+          status,
+          destination_country: destination,
+        };
+      });
+  }, [allAvailableCandidates, applicants, effectiveContractor]);
+
   // Dynamic filter by first name, last name, full name, or ID
   const filteredCandidateOptions = React.useMemo(() => {
-    if (!candidateSearchQuery.trim()) return allAvailableCandidates;
+    if (!candidateSearchQuery.trim()) return agencyPlacements;
     const q = candidateSearchQuery.toLowerCase().trim();
-    return (allAvailableCandidates as any[]).filter((c) => {
+    return agencyPlacements.filter((c) => {
       const fullName = (c.full_name || c.applicant_name || "").toLowerCase();
       const parts = fullName.split(" ").filter(Boolean);
       const firstName = parts[0] || "";
@@ -106,7 +142,7 @@ export default function AgentComplaintsPage() {
         pass.includes(q)
       );
     });
-  }, [allAvailableCandidates, candidateSearchQuery]);
+  }, [agencyPlacements, candidateSearchQuery]);
 
   // Query Complaints
   const {
@@ -155,10 +191,17 @@ export default function AgentComplaintsPage() {
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const placementTarget = data.applicant_search;
+      const matched = agencyPlacements.find(
+        (c) => c.name === placementTarget || c.applicant === placementTarget
+      );
       return await createComplaintV2(
         placementTarget,
         `[${data.complaint_category} - ${data.severity}] ${data.complaint_details}`,
-        "Working Abroad"
+        "Working Abroad",
+        {
+          applicant: matched?.applicant,
+          applicant_name: matched?.full_name || data.full_name,
+        }
       );
     },
     onSuccess: (res) => {
@@ -539,7 +582,9 @@ export default function AgentComplaintsPage() {
                           <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-[#202028] rounded-lg">
                             {filteredCandidateOptions.length === 0 ? (
                               <div className="p-4 text-center text-[11px] text-slate-400">
-                                No registered applicants match &quot;{candidateSearchQuery}&quot;
+                                {agencyPlacements.length === 0
+                                  ? `No candidates are currently placed with ${effectiveContractor || "this agency"}.`
+                                  : `No agency candidates match "${candidateSearchQuery}"`}
                               </div>
                             ) : (
                               filteredCandidateOptions.map((cand) => (
@@ -567,7 +612,7 @@ export default function AgentComplaintsPage() {
                                         {cand.full_name}
                                       </p>
                                       <p className="text-[10px] text-slate-400 font-mono">
-                                        {cand.name} {cand.passport_number ? `• ${cand.passport_number}` : ""}
+                                        {cand.applicant ? `${cand.applicant} • ` : ""}{cand.name} {cand.passport_number ? `• ${cand.passport_number}` : ""} {cand.status ? `(${cand.status})` : ""}
                                       </p>
                                     </div>
                                   </div>

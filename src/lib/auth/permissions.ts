@@ -5,6 +5,7 @@ export type PermissionAction =
   | "viewDashboard"
   | "viewApplicants"
   | "registerApplicant"
+  | "generateCv"
   | "manageClearances"
   | "viewFinance"
   | "manageCommission"
@@ -113,6 +114,21 @@ export function hasExactRole(user: AuthUser | null | undefined, targetRole: stri
 }
 
 /**
+ * Checks if the user holds an authoritative administrative role
+ * (Administrator, System Manager, or Admin).
+ */
+export function isAdminUser(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
+  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (!Array.isArray(user.roles)) return false;
+  return user.roles.some((r) => {
+    const norm = extractRoleName(r);
+    return norm === "administrator" || norm === "system manager" || norm === "admin";
+  });
+}
+
+/**
  * Determines if a user is purely an external Foreign Agency partner without internal operational privileges.
  */
 export function isPureForeignAgency(user: AuthUser | null | undefined): boolean {
@@ -203,6 +219,13 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Manager",
     "Registrar",
   ],
+  generateCv: [
+    "System Manager",
+    "Administrator",
+    "Admin",
+    "Manager",
+    "Registrar",
+  ],
   manageClearances: [
     "System Manager",
     "Administrator",
@@ -248,15 +271,12 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "System Manager",
     "Administrator",
     "Admin",
-    "Registrar",
-    "Finance Manager",
   ],
   accessAgentPortal: [
     "Foreign Agency",
     "System Manager",
     "Administrator",
     "Admin",
-    "Manager",
   ],
   manageCommunication: [
     "Communication Manager",

@@ -76,9 +76,27 @@ function WhatsAppDoubleCheck({ className }: { className?: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className || "h-3.5 w-3.5 text-[#53bdeb] shrink-0"}
+      aria-label="Seen by recipient"
     >
       <path d="M1 6.2L4.2 9.5L11.5 2" />
       <path d="M5.5 6.2L8.7 9.5L16 2" />
+    </svg>
+  );
+}
+
+function WhatsAppSingleCheck({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 11"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className || "h-3.5 w-3.5 text-slate-400 dark:text-zinc-400 shrink-0"}
+      aria-label="Sent"
+    >
+      <path d="M1 6.2L4.2 9.5L11.5 2" />
     </svg>
   );
 }
@@ -317,22 +335,36 @@ export function ChatContainer() {
   }, [allOversightThreads]);
 
   // Priority role resolution: Admin/Administrator > Communication Manager > Operations Manager > Supervisor > other
+  // Priority role resolution: Specific Corridor Roles > Functional Managers > Officers > General
   const resolvePrimaryRole = React.useCallback((rolesList: string[] = []): string => {
     const cleanRoles = rolesList.map((r) => String(r).toLowerCase().trim());
-    if (
-      cleanRoles.some((r) => r === "administrator" || r === "system manager" || r === "admin")
-    ) {
-      return "Admin";
-    }
-    if (cleanRoles.some((r) => r.includes("communication manager") || r === "communication")) {
-      return "Communication Manager";
-    }
-    if (cleanRoles.some((r) => r.includes("operations manager"))) {
-      return "Operations Manager";
-    }
-    if (cleanRoles.some((r) => r.includes("supervisor"))) {
-      return "Supervisor";
-    }
+
+    // 1. Specific Corridor Roles (highest operational specificity)
+    if (cleanRoles.some((r) => r.includes("kuwait embassy"))) return "Kuwait Embassy Officer";
+    if (cleanRoles.some((r) => r.includes("kuwait lmis"))) return "Kuwait LMIS Officer";
+    if (cleanRoles.some((r) => r.includes("kuwait telesign"))) return "Kuwait Telesign Officer";
+    if (cleanRoles.some((r) => r.includes("saudi embassy"))) return "Saudi Embassy Officer";
+    if (cleanRoles.some((r) => r.includes("saudi lmis"))) return "Saudi LMIS Officer";
+    if (cleanRoles.some((r) => r.includes("saudi taeshir"))) return "Saudi Taeshir Officer";
+
+    // 2. Specialized Operational Manager / Officer roles
+    if (cleanRoles.some((r) => r.includes("complaint"))) return "Complaint Manager";
+    if (cleanRoles.some((r) => r.includes("ticket"))) return "Ticketer";
+    if (cleanRoles.some((r) => r.includes("medical"))) return "Medical Officer";
+    if (cleanRoles.some((r) => r.includes("finance"))) return "Finance Manager";
+    if (cleanRoles.some((r) => r.includes("registrar"))) return "Registrar";
+
+    // 3. Managerial / Administrative Roles
+    if (cleanRoles.some((r) => r.includes("communication manager") || r === "communication")) return "Communication Manager";
+    if (cleanRoles.some((r) => r.includes("operations manager"))) return "Operations Manager";
+    if (cleanRoles.some((r) => r === "administrator" || r === "system manager" || r === "admin")) return "Admin";
+    if (cleanRoles.some((r) => r.includes("supervisor"))) return "Supervisor";
+    if (cleanRoles.some((r) => r.includes("clearance officer"))) return "Clearance Officer";
+
+    // 4. Foreign Agency
+    if (cleanRoles.some((r) => r.includes("foreign agency") || r.includes("foreign agent") || r === "agent")) return "Foreign Agency";
+
+    // 5. Filter out noise roles
     const filtered = rolesList.filter((r) => {
       const l = String(r).toLowerCase().trim();
       return l !== "desk user" && l !== "all";
@@ -340,66 +372,90 @@ export function ChatContainer() {
     return filtered[0] || "Internal Staff";
   }, []);
 
-  // Resolves any user email/identifier to full name and primary role
+  // Resolves any user email/identifier to actual person name and primary role
   const resolveUserDisplay = React.useCallback(
     (emailOrUsername: string) => {
-      if (!emailOrUsername) return { name: "Unknown", email: "", role: "User", isStaff: true };
+      if (!emailOrUsername) return { name: "Unknown", email: "", role: "User", isStaff: true, isSelf: false };
       const clean = emailOrUsername.toLowerCase().trim();
-      
-      // 1. If Administrator
-      if (clean === "administrator" || clean === "admin") {
-        return {
-          name: authUser?.full_name || user || "System Administrator",
-          email: "Administrator",
-          role: "Admin",
-          isStaff: true,
-        };
-      }
 
-      // 2. Check if this is the current logged-in user (e.g. tutu)
+      // 1. Check if this is the current logged-in user
       const currentAuthEmail = (authUser?.email || "").toLowerCase().trim();
       const currentUserName = (user || "").toLowerCase().trim();
       const currentAuthFullName = (authUser?.full_name || "").toLowerCase().trim();
-      if (
+      const isSelf =
         clean === currentAuthEmail ||
         clean === currentUserName ||
         (currentAuthFullName && clean === currentAuthFullName) ||
-        clean === currentEmail
-      ) {
+        clean === currentEmail;
+
+      if (isSelf) {
+        const selfEmp = internalEmployees.find(
+          (e: any) =>
+            (e.email || "").toLowerCase().trim() === clean ||
+            (e.name || "").toLowerCase().trim() === clean
+        );
         const primaryRole = isAdmin
           ? "Admin"
           : isCommunicationManager
           ? "Communication Manager"
-          : resolvePrimaryRole(roles as string[]);
+          : resolvePrimaryRole(selfEmp?.roles || (roles as string[]));
+
+        let selfName = selfEmp?.first_name || (authUser as any)?.first_name;
+        if (!selfName) {
+          const raw = authUser?.full_name || user || "Staff";
+          selfName = raw.includes("@") ? raw.split("@")[0] : raw;
+        }
 
         return {
-          name: authUser?.full_name || user || "You",
+          name: selfName,
           email: authUser?.email || user || clean,
           role: primaryRole,
           isStaff: true,
+          isSelf: true,
+        };
+      }
+
+      // 2. If Administrator (and not self)
+      if (clean === "administrator" || clean === "admin") {
+        return {
+          name: "Administrator",
+          email: "Administrator",
+          role: "Admin",
+          isStaff: true,
+          isSelf: false,
         };
       }
 
       // 3. Search in internalEmployees
       const emp = internalEmployees.find(
-        (e) =>
+        (e: any) =>
           (e.email || "").toLowerCase().trim() === clean ||
           (e.name || "").toLowerCase().trim() === clean ||
           (e.full_name || "").toLowerCase().trim() === clean
       );
       if (emp) {
         const primaryRole = resolvePrimaryRole(emp.roles || []);
+        // Prefer first_name (e.g. "Kenenisa", "Tariq", "Zaid", "Dawit")
+        let displayName = emp.first_name?.trim();
+        if (!displayName || displayName.toLowerCase() === (emp.email || "").toLowerCase()) {
+          if (emp.full_name && emp.full_name.trim()) {
+            displayName = emp.full_name.trim();
+          } else {
+            displayName = emp.email?.includes("@") ? emp.email.split("@")[0] : emp.name;
+          }
+        }
         return {
-          name: emp.full_name || emp.name,
+          name: displayName || emp.name,
           email: emp.email || emp.name,
           role: primaryRole,
           isStaff: true,
+          isSelf: false,
         };
       }
 
       // 4. Search in availableContractors
       const con = availableContractors.find(
-        (c) =>
+        (c: any) =>
           (c.user || "").toLowerCase().trim() === clean ||
           (c.name || "").toLowerCase().trim() === clean ||
           (c.company_name || "").toLowerCase().trim() === clean
@@ -410,19 +466,42 @@ export function ChatContainer() {
           email: con.user || emailOrUsername,
           role: `Foreign Agency (${con.country || "GCC"})`,
           isStaff: false,
+          isSelf: false,
         };
       }
 
-      // 5. Fallback: clean up username from email
-      const fallbackName = emailOrUsername.includes("@")
+      // 5. Fallback: Parse name and infer role from email or username (never use generic "Colleague")
+      const rawUser = emailOrUsername.includes("@")
         ? emailOrUsername.split("@")[0]
         : emailOrUsername;
+      const cleanName = rawUser
+        .replace(/^test_/, "")
+        .replace(/[._-]/g, " ")
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+
+      let inferredRole = "Internal Staff";
+      const lower = emailOrUsername.toLowerCase();
+      if (lower.includes("complaint")) inferredRole = "Complaint Manager";
+      else if (lower.includes("kuwait_embassy")) inferredRole = "Kuwait Embassy Officer";
+      else if (lower.includes("kuwait_lmis")) inferredRole = "Kuwait LMIS Officer";
+      else if (lower.includes("kuwait_telesign")) inferredRole = "Kuwait Telesign Officer";
+      else if (lower.includes("saudi_embassy")) inferredRole = "Saudi Embassy Officer";
+      else if (lower.includes("saudi_lmis")) inferredRole = "Saudi LMIS Officer";
+      else if (lower.includes("saudi_taeshir")) inferredRole = "Saudi Taeshir Officer";
+      else if (lower.includes("ticket")) inferredRole = "Ticketer";
+      else if (lower.includes("finance")) inferredRole = "Finance Manager";
+      else if (lower.includes("comms")) inferredRole = "Communication Manager";
+      else if (lower.includes("med")) inferredRole = "Medical Officer";
+      else if (lower.includes("registrar")) inferredRole = "Registrar";
 
       return {
-        name: fallbackName,
+        name: cleanName || emailOrUsername,
         email: emailOrUsername,
-        role: "Staff Member",
+        role: inferredRole,
         isStaff: true,
+        isSelf: false,
       };
     },
     [user, authUser, currentEmail, isAdmin, isCommunicationManager, roles, internalEmployees, availableContractors, resolvePrimaryRole]
@@ -430,14 +509,21 @@ export function ChatContainer() {
 
   // Resolves communicating parties for any thread: who communicated with whom
   const getThreadParties = React.useCallback(
-    (thread: V2ChatThread) => {
+    (thread: V2ChatThread, threadMessages?: V2ChatMessage[]) => {
       const isAgency = thread.thread_type === "Agency";
-      const participants: string[] = thread.participants || [];
+      const rawParticipants: any[] = thread.participants || [];
+      const participants: string[] = rawParticipants
+        .map((p: any) => {
+          if (typeof p === "string") return p;
+          if (p && typeof p === "object") return p.user || p.email || p.name || "";
+          return "";
+        })
+        .filter(Boolean);
 
       if (isAgency) {
         // Agency Channel: Staff <-> Foreign Agency Partner
         const con = availableContractors.find(
-          (c) =>
+          (c: any) =>
             c.name === thread.contractor ||
             c.company_name === thread.contractor ||
             (thread.title && thread.title.toLowerCase().includes(c.name.toLowerCase())) ||
@@ -462,7 +548,12 @@ export function ChatContainer() {
 
         const staffInfo = staffEmail
           ? resolveUserDisplay(staffEmail)
-          : { name: authUser?.full_name || user || "Staff Member", role: isAdmin ? "Admin" : "Communication Manager" };
+          : { name: (authUser as any)?.first_name || authUser?.full_name || user || "Staff Member", role: isAdmin ? "Admin" : "Communication Manager" };
+
+        const counterpartyName = isForeignAgency
+          ? (staffInfo.name || "Agency Headquarters")
+          : `${agencyName}${agencyCountry}`;
+        const counterpartyRole = isForeignAgency ? staffInfo.role : `Foreign Agency${agencyCountry}`;
 
         return {
           type: "Agency" as const,
@@ -470,13 +561,15 @@ export function ChatContainer() {
           staffRole: staffInfo.role,
           agencyName,
           agencyCountry,
+          counterpartyName,
+          counterpartyRole,
           badgeLabel: "Staff ↔ Foreign Agency",
-          partyLine: `${staffInfo.name} ⟷ ${agencyName}${agencyCountry}`,
-          shortParties: `${staffInfo.name} ⟷ ${agencyName}`,
+          partyLine: `${staffInfo.name} (${staffInfo.role}) <--> ${agencyName}${agencyCountry}`,
+          shortParties: `${staffInfo.name} <--> ${agencyName}`,
           participantsList: participants,
         };
       } else {
-        // Internal Thread: Display actual names and roles for internal colleagues
+        // Internal Thread: Display actual names and roles for internal staff participants
         const uniqueParticipants = Array.from(
           new Set([
             thread.owner,
@@ -484,37 +577,76 @@ export function ChatContainer() {
           ].filter(Boolean) as string[])
         );
 
+        // If participants list has fewer than 2 participants, check message senders
+        if (uniqueParticipants.length < 2 && threadMessages && threadMessages.length > 0) {
+          threadMessages.forEach((m) => {
+            if (m.sender && !uniqueParticipants.includes(m.sender)) {
+              uniqueParticipants.push(m.sender);
+            }
+          });
+        }
+
         const displays = uniqueParticipants.map((p) => resolveUserDisplay(p));
 
-        let p1 = displays[0];
-        if (!p1 || p1.name === "Staff A") {
-          const currentStaffName = authUser?.full_name || user || "Operations Officer";
-          p1 = {
-            name: currentStaffName,
-            email: currentEmail,
-            role: isAdmin ? "Administrator" : "Operations Officer",
-            isStaff: true,
-          };
-        }
+        // Counterparts excluding current session user
+        const otherParticipants = displays.filter((d) => !d.isSelf);
 
-        let p2 = displays[1];
-        if (!p2) {
-          const otherEmp = internalEmployees.find(
-            (e) => (e.email || e.name || "").toLowerCase() !== (p1.email || "").toLowerCase()
-          );
-          if (otherEmp) {
-            p2 = {
-              name: otherEmp.full_name || otherEmp.name,
-              email: otherEmp.email || otherEmp.name,
-              role: (otherEmp as any).role || "Operations Officer",
-              isStaff: true,
-            };
-          } else {
-            p2 = { name: "Operations Colleague", email: "", role: "Staff", isStaff: true };
-          }
-        }
+        // Primary counterpart
+        const primaryCounterpart = otherParticipants[0] || displays.find((d) => !d.isSelf) || displays[1] || displays[0] || {
+          name: "Staff",
+          email: "",
+          role: "Internal Staff",
+          isStaff: true,
+          isSelf: false,
+        };
+
+        const counterpartyName =
+          otherParticipants.length > 0
+            ? otherParticipants.map((o) => o.name).join(", ")
+            : primaryCounterpart.name;
+
+        const counterpartyRole =
+          otherParticipants.length > 0
+            ? otherParticipants.length === 1
+              ? otherParticipants[0].role
+              : `${otherParticipants.length} Staff Members`
+            : primaryCounterpart.role;
+
+        // P1 is the first participant (or current user if participating)
+        const selfDisplay = displays.find((d) => d.isSelf);
+        const p1 = displays[0] || selfDisplay || {
+          name: (authUser as any)?.first_name || authUser?.full_name || user || "Staff",
+          email: currentEmail,
+          role: isAdmin ? "Admin" : "Internal Staff",
+          isStaff: true,
+          isSelf: true,
+        };
+
+        // P2 is the second participant (or counterpart)
+        const p2 = (displays[1] && displays[1].email !== p1.email ? displays[1] : otherParticipants[0]) || {
+          name: primaryCounterpart.name,
+          email: primaryCounterpart.email,
+          role: primaryCounterpart.role,
+          isStaff: true,
+          isSelf: false,
+        };
 
         const extras = displays.length > 2 ? ` (+${displays.length - 2} more)` : "";
+
+        // Formatted party line: "Kenenisa (Complaint Manager) <--> Tariq (Kuwait Embassy Officer)"
+        const partyLine =
+          p1.name !== p2.name && p2.name !== "Staff"
+            ? `${p1.name} (${p1.role}) <--> ${p2.name} (${p2.role})${extras}`
+            : displays.length > 1
+            ? `${displays[0].name} (${displays[0].role}) <--> ${displays[1].name} (${displays[1].role})${extras}`
+            : `${p1.name} (${p1.role})`;
+
+        const shortParties =
+          p1.name !== p2.name && p2.name !== "Staff"
+            ? `${p1.name} <--> ${p2.name}${extras}`
+            : displays.length > 1
+            ? `${displays[0].name} <--> ${displays[1].name}${extras}`
+            : p1.name;
 
         return {
           type: "Internal" as const,
@@ -522,21 +654,23 @@ export function ChatContainer() {
           p1Role: p1.role,
           p2Name: p2.name,
           p2Role: p2.role,
-          badgeLabel: "Staff ↔ Staff",
-          partyLine: `${p1.name} (${p1.role}) ⟷ ${p2.name} (${p2.role})${extras}`,
-          shortParties: `${p1.name} ⟷ ${p2.name}${extras}`,
-          participantsList: participants,
+          counterpartyName,
+          counterpartyRole,
+          badgeLabel: counterpartyRole,
+          partyLine,
+          shortParties,
+          participantsList: uniqueParticipants,
         };
       }
     },
-    [availableContractors, resolveUserDisplay, authUser, user, currentEmail, isAdmin, internalEmployees]
+    [availableContractors, resolveUserDisplay, authUser, user, currentEmail, isAdmin, isForeignAgency]
   );
 
   // Filter threads
   const filteredThreads = React.useMemo(() => {
     return activeThreads.filter((t) => {
-      // Type filter
-      if (threadTypeFilter !== "All" && t.thread_type !== threadTypeFilter) {
+      // Type filter (only active if user has foreign agency communication privileges)
+      if (canCommunicateWithForeignAgents && threadTypeFilter !== "All" && t.thread_type !== threadTypeFilter) {
         return false;
       }
 
@@ -563,12 +697,18 @@ export function ChatContainer() {
         t.last_message?.toLowerCase().includes(q) ||
         parties.partyLine.toLowerCase().includes(q) ||
         parties.shortParties.toLowerCase().includes(q) ||
-        (t.participants || []).some((p) => p.toLowerCase().includes(q))
+        parties.counterpartyName.toLowerCase().includes(q) ||
+        parties.counterpartyRole.toLowerCase().includes(q) ||
+        (t.participants || []).some((p) => {
+          const raw = typeof p === "string" ? p : (p as any)?.user || (p as any)?.email || (p as any)?.name || "";
+          return raw.toLowerCase().includes(q);
+        })
       );
     });
   }, [
     activeThreads,
     threadTypeFilter,
+    canCommunicateWithForeignAgents,
     isSupervisorOrAdmin,
     viewMode,
     oversightStaffFilter,
@@ -622,16 +762,99 @@ export function ChatContainer() {
     refetchInterval: 10000,
   });
 
-  // 4. Automatically Mark as Read when Thread is opened
+  // 4. In-Chat Presence Heartbeat & Auto Mark-As-Read
+  // Pings markReadV2 on load and every 25s while this thread is open and window is visible.
+  // This updates the user's last_read_at in Frappe so counterparties know this user is truly in the chat window.
   React.useEffect(() => {
-    if (selectedThread?.name && selectedThread.unread_count && selectedThread.unread_count > 0) {
-      markReadV2(selectedThread.name)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["chat_threads_my"] });
-        })
-        .catch(() => {});
-    }
-  }, [selectedThread, queryClient]);
+    if (!selectedThread?.name) return;
+
+    const ping = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        markReadV2(selectedThread.name)
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: ["chat_threads_my"] });
+          })
+          .catch(() => {});
+      }
+    };
+
+    ping();
+    const interval = setInterval(ping, 25000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        ping();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [selectedThread?.name, queryClient]);
+
+  // Extract thread participants with live last_read_at timestamps
+  const threadParticipants: { user: string; last_read_at?: string | null }[] = React.useMemo(() => {
+    return (messages as any)?.participants || [];
+  }, [messages]);
+
+  // Counterparty participants (excluding self)
+  const counterparties = React.useMemo(() => {
+    return threadParticipants.filter((p) => {
+      const u = (p.user || "").toLowerCase().trim();
+      return u !== currentEmail && u !== (user || "").toLowerCase().trim();
+    });
+  }, [threadParticipants, currentEmail, user]);
+
+  // True Online / In-Chat detection:
+  // Counterparty is active ONLY if their last_read_at was updated within the last 60 seconds.
+  const isCounterpartyActiveInChat = React.useMemo(() => {
+    if (counterparties.length === 0) return false;
+    const now = Date.now();
+    return counterparties.some((p) => {
+      if (!p.last_read_at) return false;
+      const readTime = new Date(p.last_read_at.replace(" ", "T")).getTime();
+      if (isNaN(readTime)) return false;
+      return now - readTime >= 0 && now - readTime < 60000;
+    });
+  }, [counterparties]);
+
+  // Formatted counterparty last seen text
+  const counterpartyLastSeenText = React.useMemo(() => {
+    if (counterparties.length === 0) return "";
+    let latestMs = 0;
+    counterparties.forEach((p) => {
+      if (!p.last_read_at) return;
+      const ms = new Date(p.last_read_at.replace(" ", "T")).getTime();
+      if (!isNaN(ms) && ms > latestMs) latestMs = ms;
+    });
+    if (!latestMs) return "";
+    const diffSec = Math.max(0, Math.floor((Date.now() - latestMs) / 1000));
+    if (diffSec < 60) return "Just now";
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return new Date(latestMs).toLocaleDateString([], { month: "short", day: "numeric" });
+  }, [counterparties]);
+
+  // Check if counterparty has seen a message (last_read_at >= msg.creation)
+  const isMessageSeen = React.useCallback(
+    (msg: V2ChatMessage) => {
+      if (!msg.creation || counterparties.length === 0) return false;
+      const msgCreationTime = new Date(msg.creation.replace(" ", "T")).getTime();
+      if (isNaN(msgCreationTime)) return false;
+
+      return counterparties.some((p) => {
+        if (!p.last_read_at) return false;
+        const readTime = new Date(p.last_read_at.replace(" ", "T")).getTime();
+        if (isNaN(readTime)) return false;
+        return readTime >= msgCreationTime;
+      });
+    },
+    [counterparties]
+  );
 
   // Auto-scroll messages to bottom
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -879,6 +1102,7 @@ export function ChatContainer() {
       }
     },
     onSuccess: (res: any) => {
+      const recipient = newThreadRecipient.trim();
       const isAgencyThread = isForeignAgency || newThreadType === "Agency" || Boolean(selectedContractorId);
       toast.success(
         isForeignAgency
@@ -902,6 +1126,7 @@ export function ChatContainer() {
         setSelectedThread({
           name: threadName,
           thread_type: isAgencyThread ? "Agency" : "Internal",
+          participants: isAgencyThread ? undefined : [currentEmail, recipient].filter(Boolean),
         });
         setIsMobileThreadOpen(true);
       }
@@ -922,6 +1147,15 @@ export function ChatContainer() {
       return await addParticipantV2(selectedThread.name, newParticipantEmail.trim());
     },
     onSuccess: () => {
+      const addedEmail = newParticipantEmail.trim();
+      setSelectedThread((prev) => {
+        if (!prev) return prev;
+        const currentParts = prev.participants || [];
+        if (!currentParts.includes(addedEmail)) {
+          return { ...prev, participants: [...currentParts, addedEmail] };
+        }
+        return prev;
+      });
       toast.success("Participant added to conversation thread");
       setIsAddParticipantModalOpen(false);
       setNewParticipantEmail("");
@@ -946,7 +1180,7 @@ export function ChatContainer() {
   };
 
   const isAgencyThread = selectedThread?.thread_type === "Agency";
-  const selectedParties = selectedThread ? getThreadParties(selectedThread) : null;
+  const selectedParties = selectedThread ? getThreadParties(selectedThread, messages) : null;
 
   return (
     <div className="h-[calc(100dvh-56px)] lg:h-[calc(100vh-120px)] w-full min-w-0 max-w-full -m-3 sm:m-0 flex flex-col rounded-none lg:rounded-2xl border-0 lg:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none lg:shadow-sm">
@@ -1151,8 +1385,8 @@ export function ChatContainer() {
               </div>
             )}
 
-            {/* Filter Pills */}
-            {!isForeignAgency && (
+            {/* Filter Pills - strictly for authorized staff (Admin & Communication Manager) */}
+            {!isForeignAgency && canCommunicateWithForeignAgents && (
               <div className="flex items-center gap-1 pt-0.5">
                 {[
                   {
@@ -1282,7 +1516,9 @@ export function ChatContainer() {
                               : "border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30"
                           )}
                         >
-                          {parties.badgeLabel}
+                          {viewMode === "oversight"
+                            ? parties.badgeLabel
+                            : parties.counterpartyRole}
                         </Badge>
                         {thread.context_type && thread.context_type !== "General" && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-200/80 dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300">
@@ -1388,17 +1624,34 @@ export function ChatContainer() {
                             : "border-white/40 lg:border-emerald-300 text-white lg:text-emerald-800 lg:dark:text-emerald-400 bg-white/10 lg:bg-emerald-50/50"
                         )}
                       >
-                        {selectedParties?.badgeLabel || selectedThread.thread_type || "Internal"}
+                        {selectedParties?.counterpartyRole || selectedParties?.badgeLabel || selectedThread.thread_type || "Internal"}
                       </Badge>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-[11px] lg:text-xs text-emerald-100 lg:text-slate-500 dark:text-emerald-200/80 lg:dark:text-zinc-400 mt-0.5 truncate">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#25d366] shrink-0" />
-                      <span className="truncate">
-                        {isAgencyThread
-                          ? `Online • ${selectedParties?.agencyName || "Foreign Agency"} ↔ ${selectedParties?.staffName || "Staff"}`
-                          : `Active • ${(selectedThread.participants || []).map((p) => resolveUserDisplay(p).name).filter(Boolean).join(", ") || "Internal Staff"}`}
-                      </span>
+                      {isCounterpartyActiveInChat ? (
+                        <>
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#25d366] opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#25d366]" />
+                          </span>
+                          <span className="truncate text-emerald-200 lg:text-emerald-700 dark:text-emerald-400 font-semibold">
+                            Active now • {isAgencyThread
+                              ? `${selectedParties?.agencyName || "Foreign Agency"} <--> ${selectedParties?.staffName || "Staff"}`
+                              : (selectedParties?.shortParties || "Internal Staff")}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-zinc-600 shrink-0" />
+                          <span className="truncate text-slate-200 lg:text-slate-500 dark:text-zinc-400">
+                            {counterpartyLastSeenText ? `Offline (${counterpartyLastSeenText}) • ` : "Offline • "}
+                            {isAgencyThread
+                              ? `${selectedParties?.agencyName || "Foreign Agency"} <--> ${selectedParties?.staffName || "Staff"}`
+                              : (selectedParties?.shortParties || "Internal Staff")}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1579,7 +1832,11 @@ export function ChatContainer() {
                           >
                             <span>{formattedTime}</span>
                             {isOutgoing && (
-                              <WhatsAppDoubleCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
+                              isMessageSeen(msg) ? (
+                                <WhatsAppDoubleCheck className="h-3.5 w-3.5 text-[#53bdeb]" />
+                              ) : (
+                                <WhatsAppSingleCheck className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-400" />
+                              )
                             )}
                           </div>
                         </div>

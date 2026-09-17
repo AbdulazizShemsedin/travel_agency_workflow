@@ -31,11 +31,14 @@ import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function CandidateCvPreviewPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const canGenerateCv = can("generateCv");
   const applicantId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
 
   const { data: applicant, isLoading, refetch } = useQuery<V2ApplicantDetails>({
@@ -332,16 +335,18 @@ export default function CandidateCvPreviewPage() {
             <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy Share Link
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refreshCvMutation.mutate()}
-            disabled={refreshCvMutation.isPending}
-            className="text-xs border-slate-300 dark:border-[#26262d]"
-          >
-            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshCvMutation.isPending ? "animate-spin" : ""}`} />
-            {refreshCvMutation.isPending ? "Generating..." : "Regenerate Official CV"}
-          </Button>
+          {canGenerateCv && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refreshCvMutation.mutate()}
+              disabled={refreshCvMutation.isPending}
+              className="text-xs border-slate-300 dark:border-[#26262d]"
+            >
+              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshCvMutation.isPending ? "animate-spin" : ""}`} />
+              {refreshCvMutation.isPending ? "Generating..." : "Regenerate Official CV"}
+            </Button>
+          )}
 
           <Button
             onClick={handlePrint}
@@ -382,7 +387,7 @@ export default function CandidateCvPreviewPage() {
         </div>
       </div>
 
-      {/* If Draft, prompt generation */}
+      {/* If Draft, prompt registration on applicant page */}
       {isDraft && (
         <div className="print:hidden rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-start gap-2.5">
@@ -390,18 +395,45 @@ export default function CandidateCvPreviewPage() {
             <div>
               <strong className="text-sm font-bold text-amber-950 dark:text-amber-100">Draft Candidate Profile</strong>
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
-                Click below to compile and generate the official bilateral recruitment CV dossier.
+                Candidate profile is currently in Draft status. Complete KYC registration and satisfy field-floor requirements before compiling the official CV dossier.
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => refreshCvMutation.mutate()}
-            disabled={refreshCvMutation.isPending}
-            className="bg-blue-900 hover:bg-blue-950 text-white text-xs font-semibold shrink-0 shadow-xs"
-          >
-            {refreshCvMutation.isPending ? "Generating..." : "Generate Official CV Now"}
-          </Button>
+          <Link href={`/applicants/${encodeURIComponent(applicant.name)}`}>
+            <Button
+              size="sm"
+              className="bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold shrink-0 shadow-xs"
+            >
+              Go to Applicant Details to Register
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* If Registered (not yet CV Generated), prompt CV Generation */}
+      {applicant.applicant_state === "Registered" && (
+        <div className="print:hidden rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-4 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-sm font-bold text-emerald-950 dark:text-emerald-100">Registered Candidate Ready</strong>
+              <p className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-300">
+                {canGenerateCv
+                  ? "Click below to compile and generate the official bilateral recruitment CV dossier."
+                  : "Candidate profile is Registered. Generating the official CV requires Registrar or Administrator permissions."}
+              </p>
+            </div>
+          </div>
+          {canGenerateCv && (
+            <Button
+              size="sm"
+              onClick={() => refreshCvMutation.mutate()}
+              disabled={refreshCvMutation.isPending}
+              className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-semibold shrink-0 shadow-xs"
+            >
+              {refreshCvMutation.isPending ? "Generating..." : "Generate Official CV Now"}
+            </Button>
+          )}
         </div>
       )}
 

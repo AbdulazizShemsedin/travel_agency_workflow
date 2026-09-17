@@ -105,18 +105,23 @@ export default function ReportsPage() {
   const periodParam = searchParams.get("period");
 
   const userRoles = Array.isArray(roles) ? roles.map((r) => String(r)) : [];
-  const isAdminOrFinance = userRoles.some((r) =>
-    ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
+  const isAdmin = userRoles.some((r) =>
+    ["Administrator", "System Manager", "Admin"].includes(r)
   );
   const isManagerOrAdmin = userRoles.some((r) =>
-    ["Administrator", "System Manager", "Admin", "Manager", "Finance Manager"].includes(r)
+    ["Administrator", "System Manager", "Admin", "Manager"].includes(r)
+  );
+  const isAdminOrFinance = userRoles.some((r) =>
+    ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
   );
 
   // Role guard
   const canViewReports = can("viewReports");
 
-  // All hooks must come before any conditional returns
-  const [activeTab, setActiveTab] = React.useState<ReportTab>("operations");
+  // All hooks must come before any conditional returns - tab determination based on authoritative RBAC
+  const [activeTab, setActiveTab] = React.useState<ReportTab>(() => {
+    return isManagerOrAdmin ? "operations" : "transactions";
+  });
   const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "custom">("yearly");
   const [fromDate, setFromDate] = React.useState<string>("2026-01-01");
   const [toDate, setToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
@@ -154,15 +159,24 @@ export default function ReportsPage() {
   React.useEffect(() => {
     if (periodParam === "daily" || periodParam === "weekly" || periodParam === "monthly" || periodParam === "yearly") {
       setPreset(periodParam);
-      if (periodParam === "daily") {
+      if (periodParam === "daily" && isManagerOrAdmin) {
         setActiveTab("daily_work");
       }
     }
-  }, [periodParam, setPreset]);
+  }, [periodParam, setPreset, isManagerOrAdmin]);
+
+  // If user does not have Manager/Admin privileges and is on a manager tab, redirect to transactions
+  React.useEffect(() => {
+    if (userRoles.length > 0 && !isManagerOrAdmin) {
+      if (["operations", "daily_work", "aging"].includes(activeTab)) {
+        setActiveTab("transactions");
+      }
+    }
+  }, [isManagerOrAdmin, userRoles.length, activeTab]);
 
   const dateParams = React.useMemo(() => ({ from_date: fromDate, to_date: toDate }), [fromDate, toDate]);
 
-  // 1. Operations Summary & Funnel
+  // 1. Operations Summary & Funnel (Manager & Admin only)
   const {
     data: opsSummary,
     isLoading: isOpsLoading,
@@ -170,10 +184,11 @@ export default function ReportsPage() {
   } = useQuery<V2OperationsSummary>({
     queryKey: ["report_operations_summary", dateParams],
     queryFn: () => getOperationsSummaryV2(dateParams),
+    enabled: Boolean(isManagerOrAdmin && activeTab === "operations"),
     staleTime: 60000,
   });
 
-  // 2. Daily Work Report
+  // 2. Daily Work Report (Manager & Admin only)
   const {
     data: dailyWork,
     isLoading: isDailyLoading,
@@ -181,11 +196,11 @@ export default function ReportsPage() {
   } = useQuery<V2DailyWorkReport>({
     queryKey: ["report_daily_work", dateParams],
     queryFn: () => getDailyWorkReportV2(dateParams),
-    enabled: activeTab === "daily_work",
+    enabled: Boolean(isManagerOrAdmin && activeTab === "daily_work"),
     staleTime: 60000,
   });
 
-  // 3. Staff Performance Report
+  // 3. Staff Performance Report (Manager & Admin only)
   const {
     data: staffPerformance = [],
     isLoading: isStaffLoading,
@@ -193,11 +208,11 @@ export default function ReportsPage() {
   } = useQuery<V2StaffPerformanceItem[]>({
     queryKey: ["report_staff_performance", dateParams],
     queryFn: () => getStaffPerformanceReportV2(dateParams),
-    enabled: activeTab === "daily_work",
+    enabled: Boolean(isManagerOrAdmin && activeTab === "daily_work"),
     staleTime: 60000,
   });
 
-  // 4. Placement Aging Report
+  // 4. Placement Aging Report (Manager & Admin only)
   const {
     data: placementAging,
     isLoading: isPlacementAgingLoading,
@@ -205,11 +220,11 @@ export default function ReportsPage() {
   } = useQuery<V2PlacementAgingReport>({
     queryKey: ["report_placement_aging"],
     queryFn: getPlacementAgingReportV2,
-    enabled: activeTab === "aging",
+    enabled: Boolean(isManagerOrAdmin && activeTab === "aging"),
     staleTime: 30000,
   });
 
-  // 5. Complaint Aging Report
+  // 5. Complaint Aging Report (Manager & Admin only)
   const {
     data: complaintAging,
     isLoading: isComplaintAgingLoading,
@@ -217,7 +232,7 @@ export default function ReportsPage() {
   } = useQuery<V2ComplaintAgingSummary>({
     queryKey: ["report_complaint_aging"],
     queryFn: getComplaintAgingReportV2,
-    enabled: activeTab === "aging",
+    enabled: Boolean(isManagerOrAdmin && activeTab === "aging"),
     staleTime: 30000,
   });
 
@@ -238,7 +253,7 @@ export default function ReportsPage() {
       });
       return Array.from(map.values());
     },
-    enabled: activeTab === "aging",
+    enabled: Boolean(isManagerOrAdmin && activeTab === "aging"),
     staleTime: 30000,
   });
 
@@ -278,7 +293,7 @@ export default function ReportsPage() {
     return [];
   }, [activeComplaints, complaintAging]);
 
-  // 6. Financial Overview (Admin / Finance Manager)
+  // 6. Financial Overview (Admin only)
   const {
     data: financialOverview,
     isLoading: isFinancialLoading,
@@ -286,11 +301,11 @@ export default function ReportsPage() {
   } = useQuery<V2FinancialOverviewReport>({
     queryKey: ["report_financial_overview", dateParams],
     queryFn: () => getFinancialOverviewV2(dateParams),
-    enabled: activeTab === "financial" && isAdminOrFinance,
+    enabled: Boolean(activeTab === "financial" && isAdmin),
     staleTime: 60000,
   });
 
-  // 7. Cost Breakdown Report (Admin)
+  // 7. Cost Breakdown Report (Admin only)
   const {
     data: costBreakdown,
     isLoading: isCostLoading,
@@ -298,11 +313,11 @@ export default function ReportsPage() {
   } = useQuery<V2CostBreakdownReport>({
     queryKey: ["report_cost_breakdown", dateParams],
     queryFn: () => getCostBreakdownReportV2(dateParams),
-    enabled: activeTab === "financial" && isAdminOrFinance,
+    enabled: Boolean(activeTab === "financial" && isAdmin),
     staleTime: 60000,
   });
 
-  // 8. Employee Financial Report (Admin)
+  // 8. Employee Financial Report (Admin only)
   const {
     data: employeeFinancial = [],
     isLoading: isEmployeeFinancialLoading,
@@ -310,11 +325,11 @@ export default function ReportsPage() {
   } = useQuery<V2EmployeeFinancialItem[]>({
     queryKey: ["report_employee_financial", dateParams],
     queryFn: () => getEmployeeFinancialReportV2(dateParams),
-    enabled: activeTab === "financial" && isAdminOrFinance,
+    enabled: Boolean(activeTab === "financial" && isAdmin),
     staleTime: 60000,
   });
 
-  // 9. Pending Approval Queue (Admin)
+  // 9. Pending Approval Queue (Admin only)
   const {
     data: pendingApprovals = [],
     isLoading: isApprovalsLoading,
@@ -322,7 +337,7 @@ export default function ReportsPage() {
   } = useQuery<V2PendingApprovalItem[]>({
     queryKey: ["report_pending_approvals"],
     queryFn: getPendingApprovalQueueV2,
-    enabled: activeTab === "approvals" && isAdminOrFinance,
+    enabled: Boolean(activeTab === "approvals" && isAdmin),
     staleTime: 20000,
   });
 
@@ -341,7 +356,7 @@ export default function ReportsPage() {
         transactionType: txnTypeFilter !== "All" ? txnTypeFilter : undefined,
         limitPageLength: 200,
       }),
-    enabled: activeTab === "transactions" && isAdminOrFinance,
+    enabled: Boolean(activeTab === "transactions" && isAdminOrFinance),
     staleTime: 30000,
   });
 
@@ -545,8 +560,8 @@ export default function ReportsPage() {
             ))}
           </div>
 
-          {isManagerOrAdmin && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {isManagerOrAdmin && (
               <Button
                 type="button"
                 size="sm"
@@ -558,7 +573,9 @@ export default function ReportsPage() {
                 <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
                 {isExportingXlsx ? "Exporting..." : "Export Commissions (.xlsx)"}
               </Button>
+            )}
 
+            {isAdminOrFinance && (
               <Button
                 type="button"
                 variant="outline"
@@ -571,8 +588,8 @@ export default function ReportsPage() {
                 <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
                 {isExportingTransactionsXlsx ? "Exporting..." : "Export Transactions (.xlsx)"}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -580,54 +597,60 @@ export default function ReportsPage() {
       {/* Primary Report Navigation Tabs                                */}
       {/* ------------------------------------------------------------- */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab("operations")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "operations"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <TrendingUp className="h-3.5 w-3.5" />
-          Funnel & Operations Summary
-        </button>
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("operations")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "operations"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            Funnel & Operations Summary
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("daily_work")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "daily_work"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <Activity className="h-3.5 w-3.5" />
-          Daily Work & Staff Activity
-        </button>
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("daily_work")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "daily_work"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Daily Work & Staff Activity
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("aging")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "aging"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <Clock className="h-3.5 w-3.5" />
-          Placement & Complaint Aging
-          {opsSummary?.pending_overdue?.placements_critical_not_departed ? (
-            <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-bold">
-              {opsSummary.pending_overdue.placements_critical_not_departed}
-            </span>
-          ) : null}
-        </button>
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("aging")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "aging"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Placement & Complaint Aging
+            {opsSummary?.pending_overdue?.placements_critical_not_departed ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[10px] font-bold">
+                {opsSummary.pending_overdue.placements_critical_not_departed}
+              </span>
+            ) : null}
+          </button>
+        )}
 
-        {isAdminOrFinance && (
+        {isAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab("financial")}
@@ -664,7 +687,7 @@ export default function ReportsPage() {
           </button>
         )}
 
-        {isAdminOrFinance && (
+        {isAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab("approvals")}
@@ -684,7 +707,7 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {/* TAB 1: EXECUTIVE OPERATIONS SUMMARY & FUNNEL                  */}
       {/* ------------------------------------------------------------- */}
-      {activeTab === "operations" && (
+      {activeTab === "operations" && isManagerOrAdmin && (
         <div className="space-y-6">
           {/* Key SLA Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -793,7 +816,7 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {/* TAB 2: DAILY WORK & STAFF PERFORMANCE                         */}
       {/* ------------------------------------------------------------- */}
-      {activeTab === "daily_work" && (
+      {activeTab === "daily_work" && isManagerOrAdmin && (
         <div className="space-y-6">
           {/* Daily Work Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -886,7 +909,7 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {/* TAB 3: PLACEMENT & COMPLAINT AGING                            */}
       {/* ------------------------------------------------------------- */}
-      {activeTab === "aging" && (
+      {activeTab === "aging" && isManagerOrAdmin && (
         <div className="space-y-6">
           {/* Critical Placements Not Departed Table */}
           <Card className="border-red-200 dark:border-red-950/60 bg-white dark:bg-[#121216]">
@@ -1007,14 +1030,14 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "financial" && (
         <>
-          {!isAdminOrFinance ? (
+          {!isAdmin ? (
             <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
               <div className="flex items-center gap-2">
                 <Lock className="h-5 w-5 text-amber-600" />
                 <h3 className="text-sm font-bold">Financial Ledgers are Role-Restricted</h3>
               </div>
               <p className="leading-relaxed">
-                Access to Financial Overview, Cost Breakdown, and Employee Financial reports is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
+                Access to Financial Overview, Cost Breakdown, and Employee Financial reports is restricted to <strong>Administrator</strong> roles.
               </p>
             </div>
           ) : (
@@ -1483,14 +1506,14 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "approvals" && (
         <>
-          {!isAdminOrFinance ? (
+          {!isAdmin ? (
             <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
               <div className="flex items-center gap-2">
                 <Lock className="h-5 w-5 text-amber-600" />
                 <h3 className="text-sm font-bold">Approval Queue is Admin-Restricted</h3>
               </div>
               <p className="leading-relaxed">
-                Access to Pending Approval Queue is restricted to <strong>Administrator</strong> and <strong>Finance Manager</strong> roles.
+                Access to Pending Approval Queue is restricted to <strong>Administrator</strong> roles.
               </p>
             </div>
           ) : (

@@ -6,6 +6,7 @@
  */
 
 import { ApiV2Error, requestV2 } from "./client";
+import { getApplicantV2 } from "./applicants";
 
 export interface V2GenerateCvResponse {
   applicant_name: string;
@@ -21,29 +22,55 @@ export interface V2GenerateCvResponse {
  * Authoritative Backend Endpoint: cv_api.generate_cv
  */
 export async function generateCvV2(applicantName: string): Promise<V2GenerateCvResponse> {
-  const res = await requestV2<{ message?: any } | any>(
-    "/api/method/agency_tracking.cv_api.generate_cv",
-    {
-      method: "POST",
-      body: { applicant_name: applicantName },
+  try {
+    const res = await requestV2<{ message?: any; applicant_status?: string; cv_record?: string } | any>(
+      "/api/method/agency_tracking.cv_api.generate_cv",
+      {
+        method: "POST",
+        body: { applicant_name: applicantName },
+      }
+    );
+
+    const cvRecord =
+      res?.message?.cv_file_url ||
+      res?.message?.cv_record ||
+      res?.cv_file_url ||
+      res?.cv_record ||
+      (typeof res?.message === "string" ? res.message : undefined);
+
+    return {
+      applicant_name: applicantName,
+      cv_file_url: cvRecord,
+      cv_record: cvRecord,
+      status: res?.message?.applicant_status || res?.applicant_status || "CV Generated",
+      message: "Official bilateral CV compiled and generated successfully",
+      ...res,
+    } as V2GenerateCvResponse;
+  } catch (err: any) {
+    // If the server took long or an error occurred, check if the backend actually finished
+    // generating the CV record and transitioning state in the background.
+    for (let check = 0; check < 3; check++) {
+      try {
+        if (check > 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        const app = await getApplicantV2(applicantName);
+        const state = app?.applicant_state || app?.status;
+        if (state === "CV Generated" || app?.cv_record) {
+          return {
+            applicant_name: applicantName,
+            cv_file_url: app.cv_record || (app as any).cv_pdf_url,
+            cv_record: app.cv_record,
+            status: "CV Generated",
+            message: "Official bilateral CV compiled and generated successfully",
+          };
+        }
+      } catch {
+        // Continue checking
+      }
     }
-  );
-
-  const cvRecord =
-    res?.message?.cv_file_url ||
-    res?.message?.cv_record ||
-    res?.cv_file_url ||
-    res?.cv_record ||
-    (typeof res?.message === "string" ? res.message : undefined);
-
-  return {
-    applicant_name: applicantName,
-    cv_file_url: cvRecord,
-    cv_record: cvRecord,
-    status: res?.applicant_status || "CV Generated",
-    message: "Official bilateral CV compiled and generated successfully",
-    ...res,
-  } as V2GenerateCvResponse;
+    throw err;
+  }
 }
 
 /**

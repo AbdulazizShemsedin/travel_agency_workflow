@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { PermissionAction, isPureForeignAgency, normalizeRoleDisplay } from "@/lib/auth/permissions";
+import { PermissionAction, isPureForeignAgency, normalizeRoleDisplay, isAdminUser } from "@/lib/auth/permissions";
 
 interface NavItemConfig {
   label: string;
@@ -62,6 +62,17 @@ export function AppSidebar({
   // Check if current user is an external Foreign Agency partner
   const isForeignAgency = isPureForeignAgency(authUser);
 
+  // Check if current user holds an authoritative admin role
+  const isAdmin = Boolean(
+    isAdminUser(authUser) ||
+    user === "Administrator" ||
+    (authUser?.email && (authUser.email.toLowerCase().startsWith("admin") || authUser.email.toLowerCase() === "administrator")) ||
+    (roles || []).some((r: any) => {
+      const s = String(r?.role || r?.name || r).toLowerCase().trim();
+      return s === "administrator" || s === "system manager" || s === "admin";
+    })
+  );
+
   // If user is authenticated, filter nav items based on verified backend roles
   const visibleNavItems = React.useMemo(() => {
     if (isForeignAgency) {
@@ -69,12 +80,19 @@ export function AppSidebar({
       return [];
     }
     if (!user) return navItems; // Unauthenticated preview
-    return navItems.filter((item) => can(item.action));
-  }, [user, authUser, can, isForeignAgency]);
+    return navItems.filter((item) => {
+      // The contractor sidebar page section (/contractors) is strictly reserved for users with an Admin role
+      if (item.action === "manageContractors" && !isAdmin) {
+        return false;
+      }
+      return can(item.action);
+    });
+  }, [user, authUser, can, isForeignAgency, isAdmin]);
 
   const canRegister =
     !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
-  const canAccessAgentPortal = can("accessAgentPortal") || isForeignAgency;
+  const canAccessAgentPortal =
+    (isAdmin && can("accessAgentPortal")) || isForeignAgency;
   const showLabels = isMobileOpen || !isCollapsed;
 
   return (

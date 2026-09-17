@@ -1074,16 +1074,6 @@ export default function ApplicantDetailPage() {
                 </p>
               </div>
             </div>
-            {(isAdminOrOps || can("manageContractors")) && (
-              <Button
-                size="sm"
-                onClick={() => setIsMusanedModalOpen(true)}
-                className="shrink-0 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold shadow-xs"
-              >
-                <Building2 className="mr-1.5 h-3.5 w-3.5" />
-                Select Agency
-              </Button>
-            )}
           </div>
         </div>
       )}
@@ -1184,22 +1174,28 @@ export default function ApplicantDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={() => generateCvMutation.mutate()}
-                disabled={generateCvMutation.isPending}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-                title="Generate bilateral recruitment CV"
-              >
-                {generateCvMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating CV...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
-                  </>
-                )}
-              </Button>
+              {can("generateCv") ? (
+                <Button
+                  onClick={() => generateCvMutation.mutate()}
+                  disabled={generateCvMutation.isPending}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+                  title="Generate bilateral recruitment CV"
+                >
+                  {generateCvMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Generating CV...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-500 dark:text-zinc-400 italic">
+                  CV generation requires Registrar or Administrator permissions.
+                </span>
+              )}
             </div>
           </div>
         )}
