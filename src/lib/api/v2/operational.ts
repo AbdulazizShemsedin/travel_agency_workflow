@@ -327,10 +327,11 @@ export async function fetchOperationalWorkspaceDataV2(
         dossier: null,
         dsrName: plc?.name,
         destinationCountry: dest,
-        fullName:
+        fullName: (
           applicant.full_name ||
           `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() ||
-          applicant.name,
+          applicant.name
+        ).toUpperCase(),
         passportNumber: applicant.passport_number || "—",
         phone: applicant.phone || applicant.phone_number || undefined,
         medicalStatus: resolvedMedical,
@@ -363,14 +364,22 @@ export async function fetchOperationalWorkspaceDataV2(
 
         // Sheet normalized properties (labor_id is strictly applicant.labor_id, NEVER applicant ID or national ID)
         laborId: applicant.labor_id && !applicant.labor_id.toUpperCase().startsWith("APP-") ? applicant.labor_id : "",
+        nationalId: applicant.national_id || "",
+        emergencyContactName: applicant.emergency_contact_name || (applicant as any).relative_name || "",
+        emergencyContactPhone: applicant.emergency_contact_phone || (applicant as any).relative_phone || "",
+        cocStatus: applicant.coc_status || "Not Started",
         contractDate: contractDate || "—",
         duration: duration || 0,
         medicalRemaining,
         medicalRemainingDays,
         injazPayment,
+        injazApplicationId:
+          (injazStep as any)?.injaz_application_id ||
+          (injazStep as any)?.reference_no ||
+          "",
         appointmentDate:
-          injazStep?.date_started ||
           injazStep?.appointment_date ||
+          injazStep?.date_started ||
           injazStep?.due_date ||
           "—",
         contact:
@@ -379,6 +388,7 @@ export async function fetchOperationalWorkspaceDataV2(
           applicant.phone_number ||
           "—",
         remark:
+          applicant.remarks ||
           lmsStep?.rejection_remark ||
           lmsStep?.notes ||
           embassyStep?.rejection_remark ||
@@ -394,6 +404,11 @@ export async function fetchOperationalWorkspaceDataV2(
         issueDate: lmsStep?.date_completed || (lmsStep?.creation ? lmsStep.creation.split(" ")[0] : undefined),
         ticketStatus,
         ticketNumber,
+        flightDate: plc?.flight_date ? plc.flight_date.split(" ")[0] : "",
+        flightTime:
+          (plc as any)?.flight_time ||
+          (plc?.flight_date?.includes(" ") ? plc.flight_date.split(" ")[1] : "") ||
+          "",
 
         // Clearances records
         lms: lmsStep,
@@ -401,7 +416,16 @@ export async function fetchOperationalWorkspaceDataV2(
         wakala: undefined,
         embassy: embassyStep,
         stamp: embassyStep?.status === "Stamped" ? embassyStep : undefined,
-        ticket: plc?.ticket_number ? ({ ticket_number: plc.ticket_number, flight_date: plc.flight_date } as any) : undefined,
+        ticket: plc
+          ? ({
+              ticket_number: plc.ticket_number || "",
+              flight_date: plc.flight_date ? plc.flight_date.split(" ")[0] : "",
+              flight_time:
+                (plc as any)?.flight_time ||
+                (plc.flight_date?.includes(" ") ? plc.flight_date.split(" ")[1] : "") ||
+                "",
+            } as any)
+          : undefined,
         departure: plc?.departed_on ? ({ departed_on: plc.departed_on } as any) : undefined,
 
         // V2 Context

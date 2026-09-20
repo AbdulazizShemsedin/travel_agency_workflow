@@ -268,6 +268,7 @@ export default function ReportsPage() {
             : 0;
         return {
           complaint_name: c.name,
+          display_no: c.display_no,
           full_name: c.full_name || c.applicant || "—",
           contractor_name: c.contractor_name || c.contractor || "—",
           days_unresolved: daysOpen,
@@ -283,6 +284,7 @@ export default function ReportsPage() {
     if (Array.isArray((complaintAging as any)?.unresolved) && (complaintAging as any).unresolved.length > 0) {
       return (complaintAging as any).unresolved.map((u: any) => ({
         complaint_name: u.name || u.complaint_name,
+        display_no: u.display_no,
         full_name: u.applicant || u.full_name || "—",
         contractor_name: u.contractor_name || u.contractor || "—",
         days_unresolved: u.age_days ?? u.days_unresolved ?? 0,
@@ -1001,7 +1003,9 @@ export default function ReportsPage() {
                     {displayedComplaints.length > 0 ? (
                       displayedComplaints.map((c: any, idx: number) => (
                         <tr key={c.complaint_name || idx} className="hover:bg-slate-50 dark:hover:bg-[#1a1a22]">
-                          <td className="py-2.5 px-3 font-mono font-semibold">{c.complaint_name}</td>
+                          <td className="py-2.5 px-3 font-mono font-semibold">
+                            {c.display_no ? `#${c.display_no}` : c.complaint_name}
+                          </td>
                           <td className="py-2.5 px-3">{c.full_name || c.applicant}</td>
                           <td className="py-2.5 px-3">{c.contractor_name || c.contractor}</td>
                           <td className="py-2.5 px-3 font-bold text-amber-800 dark:text-amber-400">{c.days_unresolved}d</td>

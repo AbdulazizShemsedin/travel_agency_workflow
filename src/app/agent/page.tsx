@@ -123,6 +123,9 @@ export default function AgentDiscoveryPage() {
   const [destinationCountry, setDestinationCountry] = React.useState("All Countries");
   const [jobApplied, setJobApplied] = React.useState("All Jobs");
   const [religion, setReligion] = React.useState("All Religions");
+  const [medicalStatus, setMedicalStatus] = React.useState("All Medical");
+  const [placeOfBirth, setPlaceOfBirth] = React.useState("");
+  const [experience, setExperience] = React.useState("All Experience");
   const [viewMode, setViewMode] = React.useState<"grid" | "table">("grid");
 
   // Selection & Detail Modal State
@@ -173,6 +176,41 @@ export default function AgentDiscoveryPage() {
         if (destinationCountry !== "All Countries" && (c.destination_country || "").toLowerCase() !== destinationCountry.toLowerCase()) return false;
         if (jobApplied !== "All Jobs" && ((c.job_applied || "").toLowerCase() !== jobApplied.toLowerCase() && (c.target_job || "").toLowerCase() !== jobApplied.toLowerCase())) return false;
         if (religion !== "All Religions" && (c.religion || "").toLowerCase() !== religion.toLowerCase()) return false;
+
+        // Medical status filter
+        if (medicalStatus !== "All Medical") {
+          const med = (c.medical_status || "").toUpperCase();
+          if (medicalStatus === "FIT") {
+            if (!med.includes("FIT") || med.includes("UNFIT")) return false;
+          } else if (medicalStatus === "UNFIT") {
+            if (!med.includes("UNFIT")) return false;
+          } else if (medicalStatus === "Pending") {
+            if (!med.includes("PENDING") && !med.includes("PROGRESS")) return false;
+          } else if (medicalStatus === "Not Done") {
+            if (med && !med.includes("NONE") && !med.includes("NOT DONE")) return false;
+          }
+        }
+
+        // Place of birth filter
+        if (placeOfBirth.trim()) {
+          const pob = (c.place_of_birth || c.leaving_town || "").toLowerCase();
+          if (!pob.includes(placeOfBirth.trim().toLowerCase())) return false;
+        }
+
+        // Experience filter
+        if (experience !== "All Experience") {
+          const rawCountry = (c.experience_country || "").trim().toLowerCase();
+          const isExp = Boolean(
+            rawCountry &&
+              rawCountry !== "none" &&
+              rawCountry !== "first time" &&
+              rawCountry !== "first time applicant" &&
+              rawCountry !== "overseas"
+          );
+          if (experience === "Experienced" && !isExp) return false;
+          if (experience === "First Time" && isExp) return false;
+        }
+
         if (!searchTerm.trim()) return true;
         const q = searchTerm.toLowerCase();
         return (
@@ -181,10 +219,11 @@ export default function AgentDiscoveryPage() {
           c.job_applied?.toLowerCase().includes(q) ||
           c.target_job?.toLowerCase().includes(q) ||
           c.experience_country?.toLowerCase().includes(q) ||
+          c.place_of_birth?.toLowerCase().includes(q) ||
           c.nationality?.toLowerCase().includes(q)
         );
       });
-  }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion]);
+  }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion, medicalStatus, placeOfBirth, experience]);
 
   // Selection Mutation
   const selectMutation = useMutation({
@@ -319,6 +358,9 @@ export default function AgentDiscoveryPage() {
     setDestinationCountry("All Countries");
     setJobApplied("All Jobs");
     setReligion("All Religions");
+    setMedicalStatus("All Medical");
+    setPlaceOfBirth("");
+    setExperience("All Experience");
   };
 
   return (
@@ -444,6 +486,12 @@ export default function AgentDiscoveryPage() {
           onJobChange={setJobApplied}
           religion={religion}
           onReligionChange={setReligion}
+          medicalStatus={medicalStatus}
+          onMedicalStatusChange={setMedicalStatus}
+          placeOfBirth={placeOfBirth}
+          onPlaceOfBirthChange={setPlaceOfBirth}
+          experience={experience}
+          onExperienceChange={setExperience}
           onReset={handleResetFilters}
           totalAvailable={visibleCandidates.length}
         />
@@ -629,10 +677,26 @@ export default function AgentDiscoveryPage() {
 
                           {/* Medical Status */}
                           <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              {candidate.medical_status || "Fit / Passed"}
-                            </span>
+                            {(() => {
+                              const med = (candidate.medical_status || "").toUpperCase();
+                              const isFit = med.includes("FIT") && !med.includes("UNFIT");
+                              const isUnfit = med.includes("UNFIT");
+                              const isPending = med.includes("PENDING") || med.includes("PROGRESS");
+                              const label = isFit ? "FIT ✓" : isUnfit ? "UNFIT ✕" : isPending ? "Pending" : "Not Done";
+                              const color = isFit
+                                ? "text-emerald-700 dark:text-emerald-400"
+                                : isUnfit
+                                ? "text-rose-700 dark:text-rose-400"
+                                : isPending
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-slate-500 dark:text-zinc-400";
+                              return (
+                                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${color}`}>
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  {label}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* Actions */}

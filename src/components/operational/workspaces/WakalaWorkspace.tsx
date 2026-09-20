@@ -13,7 +13,11 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Edit3,
+  Sparkles,
 } from "lucide-react";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
 import {
@@ -193,6 +197,26 @@ export function WakalaWorkspace({
   // Columns definition matching Wakala Sheet specifications (Exact 10 Columns)
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
     {
+      id: "edit",
+      header: "EDIT",
+      width: "48px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedRow(row);
+          }}
+          className="p-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40 transition-colors"
+          title="Edit Wakala Record"
+        >
+          <Edit3 className="h-4 w-4" />
+        </button>
+      ),
+    },
+    {
       id: "no",
       header: "NO",
       width: "50px",
@@ -324,22 +348,49 @@ export function WakalaWorkspace({
     {
       id: "action",
       header: "ACTION",
-      width: "80px",
+      width: "140px",
       align: "center",
       sortable: false,
       cell: (row) => (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedRow(row);
-          }}
-          className="h-6 px-2 text-[11px] font-semibold border-emerald-600/30 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
-        >
-          Edit
-        </Button>
+        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Send to Browser Extension Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await sendApplicantToExtension(row.applicant || (row as any));
+                if (res.success) {
+                  toast.success(`${row.fullName} loaded into Extension!`);
+                } else {
+                  toast.info(`Candidate dispatched to Extension (${row.applicantId})`);
+                }
+              } catch (err: any) {
+                toast.error("Failed to send candidate to extension", {
+                  description: formatCleanErrorMessage(err),
+                });
+              }
+            }}
+            className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
+            title="Load into Chrome Extension for Musaned / Wakala verification"
+          >
+            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <span>Extension</span>
+          </Button>
+
+          {/* Edit Drawer Trigger */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedRow(row)}
+            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+            title="Inspect Wakala Details"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       ),
     },
   ];

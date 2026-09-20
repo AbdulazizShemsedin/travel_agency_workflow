@@ -60,6 +60,7 @@ import {
   settleBatchV2,
   updateBatchAdvanceV2,
   writeOffBatchV2,
+  listBatchWriteOffsV2,
   releaseUnpaidItemsV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
@@ -513,8 +514,14 @@ export default function AdminCommissionPage() {
     if (!batchName) return;
     setIsLoadingBatchDetail(true);
     try {
-      const doc = await getCommissionBatchV2(batchName);
+      const [doc, writeOffs] = await Promise.all([
+        getCommissionBatchV2(batchName),
+        listBatchWriteOffsV2(batchName).catch(() => []),
+      ]);
       if (doc) {
+        if (Array.isArray(writeOffs) && writeOffs.length > 0) {
+          doc.write_offs = writeOffs;
+        }
         setActiveBatch(doc);
         setSelectedBatchName(doc.name);
         setSelectedItemRowNames([]);
@@ -1827,11 +1834,11 @@ export default function AdminCommissionPage() {
                           <span>Official PDF Invoice Printed Total Calculation:</span>
                         </div>
                         <p className="text-[11px] leading-relaxed text-blue-900 dark:text-blue-300">
-                          The printed invoice bottom-line <strong>TOTAL</strong> dynamically computes:{" "}
+                          The printed invoice bottom-line <strong>TOTAL</strong> dynamically lists every write-off (date + reason) and computes:{" "}
                           <code className="bg-blue-100 dark:bg-blue-900/60 px-1.5 py-0.5 rounded font-mono font-bold">
-                            Batch Total + Requested Advance + Previous Unpaid Arrears
+                            Batch Total + Requested Advance + Previous Unpaid Arrears − Write-Offs
                           </code>
-                          . Stored balance due tracks only this batch's own line items.
+                          . Stored balance due tracks this batch's own line items minus write-offs and settlements.
                         </p>
                       </div>
 
@@ -2133,24 +2140,33 @@ export default function AdminCommissionPage() {
                           <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
                             Write-Off History
                           </div>
-                          {activeBatch.write_offs.map((wo: any, idx: number) => (
-                            <div
-                              key={wo?.name || idx}
-                              className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                                  {new Date(wo?.creation || wo?.creation_date || Date.now()).toLocaleDateString()}
-                                </span>
-                                <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
-                                  -{Number(wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0).toLocaleString()} {activeBatch.currency}
-                                </span>
+                          {activeBatch.write_offs.map((wo: any, idx: number) => {
+                            const woDate = wo?.write_off_date || wo?.creation || wo?.creation_date;
+                            const woAmt = Number(wo?.amount_original ?? wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0);
+                            const woReason = wo?.reason || wo?.write_off_reason || "Negotiated discount / bad debt write-off";
+                            const woTxn = wo?.transaction || wo?.write_off_transaction;
+                            return (
+                              <div
+                                key={wo?.name || idx}
+                                className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                                    {woDate ? new Date(woDate).toLocaleDateString() : "Recorded"}
+                                    {woTxn && (
+                                      <span className="ml-2 font-mono text-[10px] text-slate-400 font-semibold">
+                                        ({woTxn})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
+                                    -{woAmt.toLocaleString()} {activeBatch.currency}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-600 dark:text-zinc-300">{woReason}</p>
                               </div>
-                              {wo?.write_off_reason && (
-                                <p className="text-[11px] text-slate-600 dark:text-zinc-300">{wo.write_off_reason}</p>
-                              )}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </CardContent>
                       )}
                     </Card>

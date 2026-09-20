@@ -13,6 +13,7 @@
  */
 
 import { requestV2 } from "./client";
+import { V2UserTodoItem } from "@/types/workspace";
 
 export interface V2ClearanceStepItem {
   name: string;
@@ -222,10 +223,13 @@ export async function recordWakalaPaymentV2(
 
 /**
  * Marks an Embassy step Stamped (Thursday success outcome).
+ * Backend Note (2026-09-16): Blocks on unpaid Wakala on the Saudi corridor with 417.
+ * Managers/Admins can supply overrideReason if authorized.
  */
 export async function stampEmbassyStepV2(
   clearanceStepName: string,
-  referenceNo?: string
+  referenceNo?: string,
+  overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.stamp_embassy_step",
@@ -234,6 +238,7 @@ export async function stampEmbassyStepV2(
       body: {
         clearance_step_name: clearanceStepName,
         ...(referenceNo ? { reference_no: referenceNo } : {}),
+        ...(overrideReason ? { override_reason: overrideReason } : {}),
       },
     }
   );
@@ -575,4 +580,21 @@ export async function getClearanceStepDocV2(
   }
 }
 
+/**
+ * Fetches the calling user's To-Do queue with human-readable task descriptions.
+ * Authoritative Backend Endpoint: clearance_api.list_my_todos (New 2026-09-16)
+ * @param status Optional filter: "Open" (default), "Closed", "Cancelled", or "" for all.
+ */
+export async function listMyTodosV2(
+  status: string = "Open"
+): Promise<V2UserTodoItem[]> {
+  const res = await requestV2<{ message: V2UserTodoItem[] }>(
+    "/api/method/agency_tracking.clearance_api.list_my_todos",
+    {
+      method: "POST",
+      body: status !== undefined ? { status } : {},
+    }
+  );
+  return Array.isArray(res?.message) ? res.message : Array.isArray(res) ? (res as any) : [];
+}
 

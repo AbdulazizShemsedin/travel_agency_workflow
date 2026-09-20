@@ -12,7 +12,7 @@ import {
   Loader2,
   Sparkles,
   User,
-  ImageOff,
+  HeartPulse,
 } from "lucide-react";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
@@ -96,19 +96,52 @@ export function CandidateCard({
 
       {/* 2. Identity & Facts Section */}
       <div className="flex flex-1 flex-col p-4">
-        {/* Name & Destination */}
+        {/* Name, Destination & Medical Status */}
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors uppercase">
               {candidate.full_name}
             </h3>
             <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 mt-0.5">
               {candidate.job_applied || "Housemaid"}
             </p>
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-[#1c1c22] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
-            <Globe2 className="h-3 w-3 text-slate-500" />
-            <span>{candidate.destination_country || "GCC"}</span>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-[#1c1c22] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+              <Globe2 className="h-3 w-3 text-slate-500" />
+              <span>{candidate.destination_country || "GCC"}</span>
+            </div>
+
+            {/* Medical Status Badge */}
+            {(() => {
+              const med = (candidate.medical_status || "").toUpperCase();
+              const isFit = med.includes("FIT") && !med.includes("UNFIT");
+              const isUnfit = med.includes("UNFIT");
+              const isPending = med.includes("PENDING") || med.includes("PROGRESS");
+              const label = isFit
+                ? "Medical: FIT ✓"
+                : isUnfit
+                ? "Medical: UNFIT ✕"
+                : isPending
+                ? "Medical: Pending"
+                : "Medical: Not Done";
+              const badgeClasses = isFit
+                ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                : isUnfit
+                ? "bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800"
+                : isPending
+                ? "bg-amber-50 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                : "bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700";
+
+              return (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${badgeClasses}`}
+                >
+                  <HeartPulse className="h-3 w-3" />
+                  <span>{label}</span>
+                </span>
+              );
+            })()}
           </div>
         </div>
 
@@ -118,14 +151,16 @@ export function CandidateCard({
           const rawCountry = candidate.experience_country?.trim() || "";
           const isExperienced = Boolean(
             rawCountry &&
-            rawCountry !== "" &&
-            rawCountry.toLowerCase() !== "none" &&
-            rawCountry.toLowerCase() !== "first time" &&
-            rawCountry.toLowerCase() !== "first time applicant" &&
-            rawCountry.toLowerCase() !== "overseas"
+              rawCountry !== "" &&
+              rawCountry.toLowerCase() !== "none" &&
+              rawCountry.toLowerCase() !== "first time" &&
+              rawCountry.toLowerCase() !== "first time applicant" &&
+              rawCountry.toLowerCase() !== "overseas"
           );
           const expDisplay = isExperienced
-            ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? `${rawCountry} (${rawPeriod})` : `${rawCountry} Exp`)
+            ? rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years"
+              ? `${rawCountry} (${rawPeriod})`
+              : `${rawCountry} Exp`
             : "First Time";
           const priorWorkDisplay = isExperienced ? rawCountry : "First Time Applicant";
 
@@ -152,28 +187,45 @@ export function CandidateCard({
               <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span>Age: <strong className="text-slate-900 dark:text-white">{ageDisplay}</strong></span>
+                  <span>
+                    Age: <strong className="text-slate-900 dark:text-white">{ageDisplay}</strong>
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Religion: <strong className="text-slate-900 dark:text-white">{candidate.religion || "Not Specified"}</strong></span>
+                  <span className="truncate">
+                    Religion:{" "}
+                    <strong className="text-slate-900 dark:text-white">
+                      {candidate.religion || "Not Specified"}
+                    </strong>
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Birthplace: <strong className="text-slate-900 dark:text-white">{candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}</strong></span>
+                  <span className="truncate">
+                    Birthplace:{" "}
+                    <strong className="text-slate-900 dark:text-white">
+                      {candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}
+                    </strong>
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">Exp: <strong className="text-slate-900 dark:text-white">{expDisplay}</strong></span>
+                  <span className="truncate">
+                    Exp:{" "}
+                    <strong className="text-slate-900 dark:text-white">{expDisplay}</strong>
+                  </span>
                 </div>
               </div>
 
               {/* Prior Work & Salary Row */}
               {(() => {
-                const isKuwait = (candidate.destination_country || "").toLowerCase().includes("kuwait");
+                const isKuwait = (candidate.destination_country || "")
+                  .toLowerCase()
+                  .includes("kuwait");
                 const salaryCurrency = isKuwait ? "KD" : "SAR";
                 const salaryDisplay = (() => {
                   const num = Number(candidate.monthly_salary);
@@ -182,12 +234,23 @@ export function CandidateCard({
                     if (!isExperienced && num === 1200) return isKuwait ? "120" : "1,000";
                     return num.toLocaleString();
                   }
-                  return isKuwait ? (isExperienced ? "140" : "120") : (isExperienced ? "1,200" : "1,000");
+                  return isKuwait
+                    ? isExperienced
+                      ? "140"
+                      : "120"
+                    : isExperienced
+                    ? "1,200"
+                    : "1,000";
                 })();
 
                 return (
                   <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 px-0.5">
-                    <span className="truncate max-w-[60%]">Prior Work: <strong className="text-slate-700 dark:text-zinc-300">{priorWorkDisplay}</strong></span>
+                    <span className="truncate max-w-[60%]">
+                      Prior Work:{" "}
+                      <strong className="text-slate-700 dark:text-zinc-300">
+                        {priorWorkDisplay}
+                      </strong>
+                    </span>
                     <span className="font-semibold text-emerald-800 dark:text-emerald-400 font-mono shrink-0">
                       {salaryDisplay} {salaryCurrency}/mo
                     </span>

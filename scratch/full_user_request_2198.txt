@@ -1,0 +1,523 @@
+<USER_REQUEST>
+Frontend notes — commission-currency-invoicing branch
+SUPERSEDES the 2026-09-16 entry below: passport OCR is now OCR.space, not PaddleOCR (2026-09-19)
+The "passport OCR now runs on PaddleOCR" entry right below this one is out of date — the engine
+was swapped again after that note was written. Current state: OCR.space is the primary OCR
+engine (PaddleOCR was dropped — memory footprint issues on the deploy target). No API shape
+change either time — parse_passport_file/enqueue_parse_passport_file still take the same
+params, return the same field shape. If you already did the "Action needed" below (switching
+parsePassportFileV2 to the async enqueue_parse_passport_file + poll pattern), nothing more to
+do — that's still correct today, just needed regardless of which OCR engine is behind it.
+NEW (2026-09-19): Applicant.place_of_birth — passport parsing now extracts it
+New field, separate from the existing city field it used to fall back to on the CV/Injaz PDFs
+(cv_api.py/clearance_api.py now prefer place_of_birth, falling back to city only if it's
+empty — so nothing breaks for applicants entered before this). Passport parsing
+(parse_passport_file) fills it in automatically when it can read the printed "Place of Birth"
+line off the passport's visual zone (the MRZ itself has no such field — ICAO 9303). Heads up on
+reliability: live-tested against 2 real passports, this only successfully extracted it on 1 of
+them — OCR quality on the visual zone (as opposed to the MRZ, which is far more robust) means this
+field will sometimes come back empty even on a passport that clearly has a Place of Birth printed
+on it. Treat it as a helpful auto-fill, not a guaranteed one — worth a normal (optional, editable)
+form field on the Applicant screen if you don't have one already, same as any other
+parser-assisted field.
+NEW (2026-09-19): Complaint.display_no — show this instead of CMP-00001
+Every Complaint now has a display_no (plain integer: 1, 2, 3, ...) alongside its existing name
+(CMP-00001, CMP-00002, ...). Action needed: wherever a complaint number is shown to a user
+(list rows, detail headers, notifications), display "#" + display_no instead of name —
+name stays the real identifier for API calls (complaint_name params, linking, etc.), it just
+shouldn't be the human-facing label anymore. Already included in the response of
+list_unresolved_complaints, list_new_complaints, list_complaints, create_complaint,
+acknowledge_complaint, and resolve_complaint — no new call needed, just read the new field.
+NEW (2026-09-19): Commission batch write-offs now shown on the invoice PDF + a listing endpoint
+Multiple write-offs per batch already worked on the backend (negotiated discounts, each with its
+own reason) but the printed invoice PDF never showed them or subtracted them from TOTAL — fixed:
+the invoice now lists every write-off (date + reason) and TOTAL correctly comes out lower.
+No frontend call changes needed for the PDF itself (still get_batch_invoice_pdf/
+enqueue_get_batch_invoice_pdf, same params). If you want to show a batch's write-off history
+somewhere in the UI (not just on the printed PDF), there's now a dedicated endpoint for that:
+agency_tracking.finance_api.list_batch_write_offs (param: batch_name) — returns each row's
+amount_original, amount_birr, reason, transaction, write_off_date. (write_off_batch
+already returned the full batch including this data too, via .write_offs — this is just a
+lighter-weight way to get only that list.)
+NEW (2026-09-19): Ticketing now auto-calculates known corridor fees — stop manually logging LMIS/Taeshir/Embassy costs
+Product decision: LMIS, Insurance, Taeshir Appointment, Injaz, Wakala, Kuwait LMIS, and Police
+Ashara fees are known in advance per corridor (destination country), so staff shouldn't have to
+hand-log each one as a separate income/expense entry while working that clearance step anymore.
+Action needed — stop doing this, if your UI currently does it: do NOT call
+finance_api.log_stage_expense / log_stage_income with stage set to a clearance step type
+(LMIS Clearance, Kuwait LMIS, Telesign, Taeshir, Embassy, Kuwait Embassy) anymore —
+this would now double-count that cost. (This directly affects the generic "log income/expense"
+button asked for in the 2026-09-12 NOTE below — that button is still correct for genuinely ad-hoc
+costs like reschedule fees or general office expenses, just no longer for these six.)
+What happens instead: the moment placement_api.record_ticket_details is called with a
+ticket_cost, the backend sums that corridor's configured known fees + the ticket cost into ONE
+already-Approved Applicant Transaction expense — no Finance review step, since it's a
+system-computed total, not a discretionary entry. This only fires once per placement (correcting
+the ticket number later via a second call won't double-log it).
+currency (optional param on record_ticket_details) must match the corridor's configured fee
+currency if that corridor has any non-zero fee set — passing a mismatched one now returns a 417
+before anything is saved (safe to retry). Omit it and it'll default to the corridor's fee
+currency automatically, or ETB if the corridor has no fees configured yet.
+Not live yet — no visible behavior change until this is done: the actual fee amounts
+(Corridor Definition.known_fees, one row per fee type, set to 0 for whichever a corridor doesn't
+charge) haven't been entered for Saudi Arabia / Kuwait yet. Until they are, this behaves exactly
+like before (just the ticket cost gets logged, nothing added).
+CHANGED (2026-09-16): passport OCR now runs on PaddleOCR, not Tesseract
+No API shape change -- parse_passport_file/enqueue_parse_passport_file take the same params
+and return the same field shape as before. Purely a backend engine swap, but worth knowing why:
+after several rounds of Tesseract-specific misread bugs (each fixed individually, each a new
+failure mode on a new real passport), switched the primary OCR engine to PaddleOCR -- a modern
+deep-learning OCR that does real text detection (finds where the text actually is) instead of
+needing a guessed crop, and includes its own orientation correction. Verified against both real
+passports on file: it read the full, untouched image correctly in a single pass on both,
+byte-exact against the true MRZ, including the low-resolution one that needed several rounds of
+Tesseract-specific fixes to get right. The whole previous Tesseract/PassportEye pipeline is kept
+intact as an automatic fallback if PaddleOCR isn't available or doesn't produce a usable read --
+this is an addition ahead of it, not a replacement, so it can't regress anything that worked
+before.
+Heads up on deploy: this adds ~1GB to the backend Docker image (PaddleOCR's deep-learning
+dependencies) and the OCR call itself takes several seconds per image (2-20s observed) rather
+than Tesseract's near-instant read -- expect a noticeably longer build/deploy.
+Action needed: parsePassportFileV2 (documents.ts) calls the synchronous
+parse_passport_file directly, not the async enqueue_parse_passport_file + poll pattern that
+already exists in the backend for exactly this "OCR can be slow" scenario. A 2-20 second
+synchronous call on the passport upload step is going to feel like a hang/freeze in the UI now --
+switch this call to the async endpoint (poll background_jobs.get_job_status(job) for the
+result) before this ships to a real user.
+FIXED (2026-09-16): passport OCR — stop pre-cropping to the MRZ before upload
+Action needed: if your passport upload flow crops the image down to just the MRZ strip
+before sending it (a workaround for OCR failing/returning garbage on the full photo), stop
+doing that — upload the full passport photo like any other document. Two problems, one fix:
+The garbage-name bug (cjjjjjsjadnajdnajdnajsdnj-type results) is fixed. Root cause: on a
+full, uncropped photo, the OCR could lock onto the wrong region of the image (the photo
+border, a security pattern, other printed text), and since passport names carry no checksum
+at all in the MRZ standard (unlike the passport number/DOB/expiry, which do), garbage from the
+wrong region had nothing checking it before landing in first/last name. Fixed by requiring the
+document number, DOB, and expiry checksums to all agree before a name is trusted at all — if
+they don't, the result now comes back with those fields blank and needs_passport_review: 1
+instead of a confident-looking wrong name.
+This is also why cropping was breaking the CV: whatever image you upload for OCR is the
+same one that ends up as the stored passport photo — crop it down to the MRZ strip and that's
+what shows up on the generated CV instead of an actual passport photo. OCR no longer needs the
+pre-crop (see below), so uploading the full photo fixes both problems in one move.
+Why the full photo works reliably now: the backend no longer solely depends on the MRZ
+auto-detector finding the right region. It also corrects photo orientation (sideways/upside-down
+phone photos) and tries several MRZ-band crops itself (the MRZ is always at a fixed position at
+the bottom of a passport's bio page), independent of whether the auto-detector succeeds. Verified
+against synthetic passport photos with decoy text/patterns elsewhere on the page, rotated 90°/180°,
+and tilted up to 15° — all read correctly; a photo with no real MRZ at all correctly returns
+nothing rather than a guess.
+No API shape change — parse_passport_file/enqueue_parse_passport_file take the same
+file_url param and return the same field shape as before.
+UPDATE (same day): a live test surfaced a second, narrower bug in the same area: two given
+names could get glued into one ("ASNEKECHSTEDESSE" instead of first="Asnekech"/middle="Tedesse")
+when the OCR misread the single separator character between them as a stray letter. Fixed by
+having the pipeline keep trying its other crop attempts (it already tries several, at different
+effective resolutions) whenever a name looks suspiciously long, instead of stopping at the first
+attempt that got the passport number/DOB/expiry right — a different crop can OCR the exact same
+line's separator more cleanly. If every attempt still comes back with a suspiciously long name,
+it's now returned with needs_passport_review: 1 instead of looking like a clean, confirmed
+read — worth surfacing that flag in the UI if you don't already (e.g. a small "please verify"
+badge) so staff know to double-check.
+FIXED (2026-09-16): the "LMIS officer" pinged for ticketing follow-up was picked arbitrarily
+No API shape change, purely a backend correctness fix that changes who shows up as
+allocated_to on one of the ToDo rows list_my_todos returns. When a Placement reaches
+Stamped, the officer who handled its LMIS step gets a personal "Book ticket for..." ToDo
+alongside the broadcast to every Ticketer (continuity, so the LMIS person can follow their case
+into ticketing). That officer was previously picked via "whoever has the most recent ToDo
+creation timestamp on the LMIS step" — but LMIS steps broadcast an open ToDo to every holder
+of the matching country role, not one exclusive assignee, so with 2+ Saudi/Kuwait LMIS holders
+this could land on an arbitrary one of them, unrelated to who actually did the work. Fixed to use
+Clearance Step.completed_by (who actually completed it) instead. Verified live with 8 Saudi
+LMIS holders: the old heuristic would have pinged whichever one happened to load last; the fix
+correctly pings the real completer regardless.
+NEW (2026-09-16): list_my_todos — the calling user's To-Do queue, human-readable
+New endpoint: POST /api/method/agency_tracking.clearance_api.list_my_todos. Returns the
+current user's own ToDo rows (Clearance Step assignments/broadcasts + Placement
+ticketing/departure tasks) — no ID param, it's always frappe.session.user, same pattern as
+the notification feed endpoints.
+status (optional, formData) — defaults to "Open" (the real open task list). Pass "" to
+get every status (Open/Closed/Cancelled), e.g. for a "my task history" view.
+Each row: name, reference_type ("Clearance Step" or "Placement"), reference_name,
+description, status, creation, plus placement/step_type/step_status/is_mandatory
+filled in when reference_type is "Clearance Step" (so you don't have to do a second
+lookup just to build a link or badge).
+description is now human-readable — this fixes the same "PLM-00220" / "CLR-00045" problem
+across the board, at the source (clearance_engine.py), so it's readable wherever it already
+showed up (Frappe desk ToDo list, this new endpoint, anywhere else that reads ToDo.description),
+not just in this new endpoint's response:
+Clearance Step ToDos: "{Step Type} — {Applicant full name} [{step ID}]", e.g.
+"Embassy — Fatuma Muhammed Abi [CLR-2026-00045]" (was: "Clearance Step CLR-2026-00045").
+Broadcast ones (the six country+step roles) append the role: "... (Saudi Embassy)".
+Placement ToDos: "Book ticket for {Applicant full name} [{placement ID}]" /
+"Confirm departure for {Applicant full name} [{placement ID}]" (was: "... for Placement PLM-00220").
+Status lifecycle, if you're building "is this actually done" UI around it:
+Open -> Closed: automatically, when the underlying Clearance Step reaches its terminal
+outcome (complete_clearance_step for LMIS/Taeshir/Telesign, stamp_embassy_step /
+reject_embassy_step for Embassy).
+Open -> Cancelled: automatically, only for the exclusive single-officer ToDos (Clearance
+Officer/Ticketer model), when the step is reassigned to someone else — the old ToDo is
+cancelled, a fresh one opened for the new assignee. Broadcast ToDos (the six country+step
+roles) are never cancelled this way; they close only via the terminal-outcome path above.
+UPDATE (same day): Placement-level ToDos now auto-close too — "Book ticket..." closes the
+moment the Placement reaches Ticketed (ticket genuinely recorded, since Stamped -> Ticketed is gated on ticket_number existing), and "Confirm departure..." closes the moment
+it reaches Departed. Both verified end-to-end on a seeded Placement (clearance_engine.py's
+_close_placement_todos, wired into notify_departure_due and a new
+finance_engine._on_placement_departed wrapper around accrue_commission). A Ticketer's "0
+open tasks" will now actually reach 0 once they're genuinely caught up.
+FIXED (2026-09-16): stamp_embassy_step now blocks on unpaid Wakala too — same gate as Submit
+stamp_embassy_step (Saudi "Embassy" step_type only — Kuwait Embassy doesn't carry a Wakala fee)
+previously let a step reach Stamped regardless of wakala_status. It now throws a 417
+ValidationError — "Wakala must be Paid before Embassy documents can be Stamped." — under
+the exact same conditions submit_embassy_step already enforced for Submit. This closes a real
+gap: a step that got past Submit unpaid (via the Manager override below, or wakala_status being
+reverted back to unpaid via record_wakala_payment after Submit) could previously still be
+Stamped with no further check.
+Action needed if your Embassy stamping UI doesn't already handle this: whatever
+unpaid-Wakala warning/confirmation you show before Submit, show the same thing before Stamp — a
+step can be Submitted while Wakala is still Pending (Submit doesn't require Taeshir or forbid
+this on its own), so the unpaid state can absolutely still be sitting there by the time someone
+clicks Stamp.
+Override, both endpoints: both submit_embassy_step and stamp_embassy_step accept an
+optional override_reason param. If the acting user holds Manager/Admin/System Manager and
+sends a non-empty override_reason, the call proceeds anyway (and the override is written to the
+Process Event / activity log with that reason). Without a role match and reason, it's a hard
+block — there is no way to bypass this from a non-management account. If your Embassy
+submit/stamp UI has a "confirm override" checkbox, make sure it's actually plumbed to send
+override_reason in the request body — a checkbox that doesn't populate this param will still
+get rejected by the backend even for a Manager/Admin account.
+Only affects the Saudi corridor's "Embassy" step_type; "Kuwait Embassy" steps are untouched
+(no Wakala field on that corridor).
+FIXED (2026-09-12): render_cv_pdf no longer silently "succeeds" with a fake document
+If a CV render genuinely fails (missing wkhtmltopdf, a bad photo, a template error),
+render_cv_pdf previously returned a 200 with a ~60-byte fake PDF stub as if it worked. It
+now correctly returns a 417 ValidationError ("Could not generate the CV PDF. Try again
+shortly or contact support.") instead. If your download flow only checked the HTTP status and
+assumed 200 meant a real file, add error handling for this 417 — it was always possible for the
+render to fail, this just makes the failure honest instead of silent. generate_cv (the
+Applicant-lifecycle action) is unaffected in its own success/failure contract — it already
+degraded gracefully on a render failure and still does, just without a fake attachment now.
+NEW (2026-09-12): Excel exports — new endpoint, real formatting, different columns
+If you have (or are building) an "Export to Excel" button anywhere in Finance, read this.
+Root cause of the earlier "the Excel looks wrong" report: the .xlsx library was never
+actually installed as a real dependency, so export_commissions_xlsx was silently falling back
+to a bare, unformatted CSV every single time — that's why money had no comma formatting and the
+Date column showed ########. Fixed (real dependency now, real formatting): comma-separated
+money (#,##0.00), real date values, a title banner with your actual agency name (pulled from
+Agency Tracking Settings), a colored header row, alternating row shading, frozen header,
+autofilter.
+Column changes on export_commissions_xlsx (client-facing, explicit request): no more raw
+internal IDs leading the sheet. New column order:
+Applicant | Foreign Agency | Type | Original Amount | Currency | ETB Amount | Status | Date | Transaction ID | Placement
+— applicant's real name and the contractor's real name lead the sheet; Transaction ID and
+Placement are kept (not removed) but pushed to the last two columns as reference-only fields.
+Same for the Applicant name specifically: it's built from first_name + middle_name + last_name
+directly (not the cached full_name field, which can go stale if those get edited later) — this
+matters for this app's naming convention where middle_name/last_name carry the father's/
+grandfather's name.
+export_transactions_xlsx — new endpoint
+export_commissions_xlsx only ever covered Commission-type transactions. This new one covers
+every transaction type and status (Expense/Income/Commission), matching whatever
+finance_api.list_transactions or the Pending Financial Approvals Queue shows.
+Method: POST /api/method/agency_tracking.report_api.export_transactions_xlsx
+Auth: Finance Manager/Admin/System Manager.
+Param	Type	Required	Notes
+status	string	no	e.g. "Pending", "Approved", "Rejected", "Voided".
+transaction_type	string	no	e.g. "Expense", "Income", "Commission".
+placement	string	no	
+applicant	string	no	
+from_date / to_date	date	no	
+Response (200): binary .xlsx download. Columns: Applicant | Foreign Agency | Type | Status | Original Amount | Currency | ETB Amount | Description | Logged By | Approved By | Approved On | Rejection Reason | Logged At | Transaction ID | Placement.
+NEW (2026-09-12): create_commission_batch — "include unpaid from previous" option
+New param: include_unpaid_from_previous (boolean). When true, on top of whatever this new batch
+would normally include, it also pulls in every still-unpaid item sitting in this contractor's
+other open batches (Sent/Partially Settled) in the same currency, releases them from their old
+batch, and makes them real line items on this new one — trackable per item afterward exactly like
+any other item (settle_batch_items, etc.), not just a printed courtesy number.
+Side effect worth knowing: the OLD batch(es) those items came from will have their own
+total_amount_original shrink, and — if that was the only thing still unpaid on them — their
+status will flip to "Settled" automatically. That's correct (nothing's left owed on that
+batch), but it can look surprising in a UI if "Settled" reads as "fully paid in cash" rather than
+"nothing left owed here, some of it moved elsewhere." Worth a distinct label/tooltip if your UI
+shows batch status prominently.
+REMOVED (2026-09-12): record_batch_advance — if you call this, stop
+agency_tracking.finance_api.record_batch_advance no longer exists. It was never wired to
+anything visible (didn't show on the invoice, didn't affect balance_due/Settled status) — pure
+dead weight, so it's been deleted rather than left as a confusing no-op.
+Advance is, and stays, exactly one thing: requested_advance_amount, a param on
+create_commission_batch. Pass it when you create the batch — that's the only place it can be
+set — and it becomes a line added into that batch's printed invoice total
+(Batch Total + requested_advance_amount + previous_unpaid_original). Nothing else needed, no
+separate "confirm advance received" call, no reference number, no received-date. Just a number at
+creation time, full stop.
+UPDATE: gap closed. New endpoint — agency_tracking.finance_api.update_batch_advance:
+Param	Type	Required	Notes
+batch_name	string	yes	
+requested_advance_amount	number	yes	In the batch's own currency. Pass 0 to clear a previously-set advance.
+Same simple model as create_commission_batch's own param — no reference number, no
+received-date, nothing else. Finance Manager/Admin/System Manager only. 417 on a negative amount
+or an invalid batch_name.
+NOTE (2026-09-12): please add a plain "log income / expense" button somewhere in Finance
+Small reminder, not urgent: agency_tracking.finance_api.log_stage_income and
+log_stage_expense already exist on the backend (params: amount, currency, description,
+placement, applicant) but as far as I can tell there's no simple, general-purpose button in
+the UI that just logs a one-off income or expense entry outside of a specific existing flow.
+Worth adding one in the Finance area.
+Relevant because of where the Advance/loan discussion is heading: an "Advance" (money the agency
+receives ahead of time, effectively a loan) is very likely going to end up logged the same simple
+way — just another income entry — once that's wired up on the backend, rather than needing its
+own special form. So this one button quietly covers both cases. Nothing to build differently
+today, just flagging it so it's on the radar before Advance/loan tracking lands.
+NEW (2026-09-12): Clearance Step human-error correction toolkit
+Scenario this was built for: an LMIS officer marks a step "Issued" by mistake, notices while the
+case is already on the Embassy stage, and today has no way to fix it. Five changes, all on
+agency_tracking.clearance_api unless noted. If your UI has any "mark complete / stamp / reject /
+reassign" action on a Clearance Step, read this whole section before your next release.
+complete_clearance_step — new date_completed param
+Param	Type	Required	Notes
+clearance_step_name	string	yes	unchanged
+reference_no	string	no	unchanged
+amount	number	no	unchanged
+date_completed	date (YYYY-MM-DD)	no	New. Only applied when passed. Omit it and behavior is unchanged (today's date on a fresh completion, untouched on a correction). Pass it to backdate a correction to the real date.
+New 417 case: calling this on a step whose status isn't Pending/In Progress (a fresh
+completion) or the step's own terminal status (a correction) now fails with "A '<status>' clearance step cannot be completed." — this closes a gap, it was never legal before either, just
+silently unguarded.
+reopen_clearance_step — new endpoint
+Reverses a step's own terminal outcome (Issued/Complete/Stamped/Rejected) — not just a wrong
+field on it (that's what the date_completed/reference_no/amount correction path above is
+for). Use this when the determination itself was wrong, e.g. "LMIS should never have been marked
+Issued." Manager/Admin/System Manager only.
+Method: POST /api/method/agency_tracking.clearance_api.reopen_clearance_step
+Param	Type	Required	Notes
+clearance_step_name	string	yes	
+reason	string	yes	Written reason, recorded on the audit trail.
+target_status	string	no	Defaults to "In Progress". Must be "Pending" or "In Progress" — also "Submitted" for an Embassy/Kuwait Embassy step.
+Response (200): the full updated Clearance Step doc ({"message": {...}}).
+403: caller isn't Manager/Admin/System Manager.
+417: missing reason, invalid target_status for this step_type, or the step is already at
+target_status.
+Side effect worth knowing: date_completed/completed_by are cleared, and (Embassy only)
+rejection_remark is cleared if it was Rejected. A fresh ToDo is recreated for whoever
+completed it originally plus every current holder of that step_type's role — if your UI shows a
+"my tasks" queue, this step will reappear there for the relevant officers.
+Important: once a mandatory step is reopened, the parent Placement cannot reach
+"Ticketed" until it's re-completed — record_ticket_details/whatever drives your "Ticketed"
+action will start returning a 417 naming the incomplete step if this happens on an
+already-Stamped placement. This is deliberate, not a bug.
+record_police_ashara — new endpoint
+Kuwait LMIS's own sub-check (appointment/status/payment/remark) — previously only editable via a
+raw desk-form field with no validation. Mirrors record_wakala_payment below.
+Method: POST /api/method/agency_tracking.clearance_api.record_police_ashara
+Param	Type	Required	Notes
+clearance_step_name	string	yes	Must be step_type == "Kuwait LMIS".
+police_ashara_status	string	no	"Pending" / "Scheduled" / "Completed" / "Failed".
+police_ashara_payment_status	string	no	"Not Applicable" / "Pending" / "Paid".
+police_ashara_amount	number	no	
+police_ashara_appointment_date	date	no	
+police_ashara_remark	string	no	Required if police_ashara_status is "Failed" (417 otherwise).
+Response (200): full updated Clearance Step doc.
+403: not permitted (same actionable-step rule as the other clearance actions).
+417: invalid status/payment_status, wrong step_type, or "Failed" with no remark.
+record_other_payment — new endpoint
+A generic "Other Payments" line-item table on any Clearance Step — for anything not covered by a
+dedicated field (Wakala, Police Ashara, Injaz), e.g. an insurance premium. Supports both adding a
+new row and correcting an existing one.
+Method: POST /api/method/agency_tracking.clearance_api.record_other_payment
+Param	Type	Required	Notes
+clearance_step_name	string	yes	Any step_type.
+payment_type	string	yes for a NEW row	Free text, e.g. "Insurance".
+amount	number	no	
+currency	string	no	SAR / KWD / USD / ETB / AED / QAR.
+status	string	no	"Pending" / "Paid".
+remark	string	no	
+receipt_url	string	no	
+payment_row_name	string	no	Pass an existing row's name (from a previous response's payments array) to correct it instead of adding a new one — payment_type is not required in that case.
+Response (200): full updated Clearance Step doc, including the payments array with each
+row's own name — save that if you want to correct the row later.
+417: invalid currency/status, or a new row without payment_type, or an unknown
+payment_row_name.
+record_injaz_payment — new payment_status param
+Param	Type	Required	Notes
+...existing params unchanged...			
+payment_status	string	no	New. "Paid" (default, unchanged) or "Unpaid" to correct a mistaken confirmation — clears paid_date, leaves amount/currency/receipt_number untouched.
+Distinct from forfeit_injaz_and_restart — that treats the fee as genuinely lost and opens a
+brand new attempt. This is a plain "I clicked Paid by mistake, nothing was actually paid" fix on
+the same attempt.
+assign_clearance_step — now has real guards (behavior change, not just an addition)
+Previously this endpoint had no terminal-placement check and no audit log at all — unlike
+reassign_clearance_step, which already had both. If your UI calls assign_clearance_step
+anywhere (rather than reassign_clearance_step), it can now get a new 417 it never got
+before: "<placement> is already Departed/Cancelled; its clearance steps can no longer be edited." This was a real permission gap being closed, not a new restriction added arbitrarily —
+if you were relying on this succeeding on a closed-out placement, that was already a bug.
+NEW (2026-09-11): list_employee_roster — replace any direct User listing call
+If your staff picker (clearance-step assignment dropdown, chat participant labels, etc.) calls
+frappe.client.get_list on the User doctype directly, or fetches each user one by one with
+frappe.client.get, switch it to this. The direct path had no role gate at all — any logged-in
+employee could pull the full staff directory including security roles — and was doing one query
+per user besides.
+Method: POST /api/method/agency_tracking.employee_api.list_employee_roster (no params)
+Auth: any INTERNAL_STAFF_ROLES member (not just Admin/Manager — e.g. a Ticketer needs this
+to see who holds "Saudi LMIS" to assign a step to them).
+Response (200): {"message": [{"name", "email", "full_name", "first_name", "last_name", "enabled", "roles": [...]}, ...]} — enabled System Users only, name/email/roles only (no
+phone/mobile/creation/etc., nothing account-management-shaped).
+403: caller holds no internal staff role.
+NEW (2026-09-11): Clearance Step data corrections now allowed after terminal status
+Product decision: once a Clearance Step reaches its own terminal status (Issued/Complete/
+Stamped/Rejected), its DATA (reference numbers, amounts, rejection remarks, assigned officer)
+stays correctable through the normal actions — the status itself still can't regress this way
+(that needs reopen_clearance_step above). Concretely:
+complete_clearance_step / stamp_embassy_step / reject_embassy_step /
+reassign_clearance_step no longer throw "<step> is already <status> (terminal)" just because
+the step itself is done — only a Departed/Cancelled Placement still hard-blocks everything.
+stamp_embassy_step changed from a silent no-op (returned the old doc, never applied a new
+reference_no) to actually re-saving the correction when called again on an already-Stamped
+step. If your UI treated a repeat "Stamp" call as a safe no-op, it now genuinely updates the
+reference number.
+New dedicated wakala_reference_no field — record_wakala_payment's own reference_no param
+now writes there, not the step's shared reference_no (which is the Embassy visa/stamp
+number set by stamp_embassy_step). If you were displaying or diffing reference_no for
+Wakala, switch to wakala_reference_no.
+NEW (2026-09-11): Commission Batch status — a real "stuck at Partially Settled forever" bug fixed
+If every remaining item on a "Partially Settled" batch got carried into a later batch (via
+release_unpaid_items), the batch used to freeze at "Partially Settled" forever with
+balance_due_original = 0.0, even though nothing was actually owed. It now correctly reaches
+"Settled" in this case. No API shape change — just don't be surprised if a batch your UI showed
+as permanently "Partially Settled" now reports "Settled" the next time it's touched.
+NEW (2026-09-11): Employee role/status changes can now be blocked by an admin-lockout guard
+update_employee_roles and toggle_employee_status (disable) can now fail with a new 417:
+"Refusing to remove your own Admin/Manager/System Manager access -- ..." — caller tried to
+strip their own last admin-capable role.
+"Refusing: <email> is the last remaining staff-admin account. ..." — would leave nobody able
+to manage staff.
+If your staff-admin screen doesn't already surface arbitrary 417 messages from these two calls,
+add that now — this is a real, reachable case, not an edge case to ignore.
+Informational: many more endpoints now return a clean 417 instead of a raw 500
+Two backend sweeps (chat_engine.get_placement_officers, then 37 more endpoints across
+applicant_api/finance_api/placement_api/clearance_api/passport_parser/contract_parser/
+background_jobs/corridor_engine/notification_api/cv_api) now validate required params with
+a proper frappe.ValidationError (417, JSON error body) instead of raising a raw Python
+TypeError that surfaced as an unhandled 500. Zero behavior change on a correctly-called
+request — only matters if your error handling special-cased a raw 500 from one of these calls;
+it'll now be a 417 with a specific "X is required" message instead.
+Two behavior changes on travel/main as of commit c6f88d4. If you have any UI touching an
+Embassy Clearance Step (Saudi corridor) or the "Submit to Embassy" action, read this before your
+next release.
+agency_tracking.clearance_api.record_wakala_payment — new endpoint
+Records the Wakala fee payment on a Saudi-corridor Embassy step only (step_type == "Embassy" — Kuwait's own "Kuwait Embassy" step_type doesn't carry this fee at all and this
+endpoint will reject it). This is the only whitelisted write path for these fields now — there
+was previously none (a raw desk-form field edit was the only way to change it, with no
+validation and no audit trail).
+Method: POST /api/method/agency_tracking.clearance_api.record_wakala_payment
+Auth: session cookie, same as every other endpoint in this app.
+Param	Type	Required	Notes
+clearance_step_name	string	yes	The Clearance Step name (e.g. CLR-00027). Must be step_type == "Embassy".
+wakala_status	string	no	"Pending" or "Paid" — anything else is a 417.
+wakala_amount	number	no	Currency amount.
+paid_date	date (YYYY-MM-DD)	no	Only used when wakala_status is set to "Paid"; defaults to today if omitted. Ignored if wakala_status isn't "Paid".
+Response (200): the full updated Clearance Step doc ({"message": {...}}), same shape as
+submit_embassy_step/stamp_embassy_step.
+403: caller isn't permitted — same rule as submit/stamp/reject (Manager/Admin/System
+Manager, the officer actually assigned to that step, or a Saudi Embassy role holder).
+417: wrong step_type (not "Embassy"), or an invalid wakala_status value.
+Every successful call writes a Process Event (audit trail) — visible on the Clearance Step's
+own timeline in the desk.
+submit_embassy_step — now blocks on unpaid Wakala (Saudi corridor only)
+No param removed, one added:
+Param	Type	Required	Notes
+clearance_step_name	string	yes	unchanged
+override_reason	string	no	New. Only takes effect for a Manager/Admin/System Manager caller — anyone else passing this gets the same 417 as if they hadn't.
+New 417 case: if the step is step_type == "Embassy" (Saudi corridor) and its
+wakala_status != "Paid", the call now fails with "Wakala must be Paid before Embassy documents can be Submitted." — call record_wakala_payment first (or have a Manager/Admin retry with
+override_reason set). This did not exist before; any UI flow that calls
+submit_embassy_step should be ready to show this error and, ideally, surface a "Record Wakala
+Payment" action before letting the user hit Submit on a Saudi Embassy step with an unpaid fee.
+Nothing else about submit_embassy_step's existing behavior (Pending/In Progress -> Submitted,
+already-Submitted idempotency, terminal/Departed/Cancelled guards) changed.
+Working notes, not part of the app repo history (kept local like raw.md/chan.md). Covers
+what changed on top of commit 8f95ddc (branch feat/commission-currency-invoicing) that the
+frontend team should know about. Backend testing status is at the bottom.
+1. Invoice PDF: TOTAL line now diverges from balance_due_original — important
+The printed Commission Batch invoice's bottom-line TOTAL is now:
+Batch Total + Advance (requested_advance_amount) + Unpaid from previous batches (previous_unpaid_original)
+previous_unpaid_original is the sum of balance_due_original across the same contractor's
+other open batches (status Sent / Partially Settled) in the same currency — computed fresh at
+PDF-render time, not stored anywhere.
+balance_due_original itself is unchanged — it's still just this batch's own total minus
+paid amounts/write-offs. The advance and cross-batch arrears are print-only additions to the
+invoice; they are deliberately never folded into the stored due-amount.
+Consequence: any screen that shows an "amount due" or a batch total sourced from the API
+(total_amount_original / balance_due_original via get_commission_batch or similar) will
+not match the number printed at the bottom of the invoice PDF once a batch has a requested
+advance, or the contractor has other open unpaid batches in the same currency. This is by
+design, not a bug — but expect support tickets ("PDF total doesn't match the app") unless the UI
+either explains the discrepancy or mirrors the same calculation for display.
+2. CV PDF: green "Al Qurashi Recruitment Office" badge removed from header
+Purely visual — the badge block is gone from the CV header entirely (left blank). No field or
+API contract change. Any reference screenshots / QA baselines of generated CVs are now stale.
+3. CV & Injaz PDFs: embedded photos are downsized + recompressed
+Photos (photo_passport, photo_full_body, passport_scan, injaz photo_src) are now run
+through a new embed_image_datauri() helper that thumbnails anything above a per-field max
+dimension (450–1600px depending on field) and re-encodes it as JPEG — only when a resize
+actually happens; an already-small image passes through untouched. This is a generation-speed
+fix (source photos are routinely multi-MB phone-camera originals). No API shape change, but
+images inside those PDFs may look very slightly softer than before on the largest originals.
+Worth a heads-up if anyone does visual diffing on generated PDFs.
+4. Two endpoints newly documented in swagger (already existed, already worked)
+get_owed_commissions_by_currency and list_transactions are now in public/swagger.json.
+Nothing to change on the frontend side — just now discoverable via /docs.
+5. No frontend action needed
+Four N+1 query fixes (finance_engine.py, finance_api.py, chat_engine.py, chat_api.py)
+— same response shape, fewer DB round-trips.
+Gunicorn gthread worker-class + threads change (docker/entrypoint.sh,
+docker/supervisord.conf) — pure infra, invisible to the API contract. Should reduce
+"whole site freezes during a PDF/OCR-heavy request" symptoms; does not make any single
+PDF/OCR request itself faster.
+Backend testing status — all PASS, no bugs found
+Tested without a live Frappe/bench instance (local bench venv is broken) using hand-mocked
+frappe calls backed by synthetic data, plus real Pillow/jinja2/weasyprint/gunicorn in a
+throwaway venv.
+embed_image_datauri — PASS (20/20 checks). Empty/None→None; data:/http(s)://
+pass through unchanged; missing file→None; small image passes through byte-identical; large
+image resizes to ≤max_dimension preserving aspect ratio and re-encodes to JPEG; RGBA converts
+to RGB before JPEG save; grayscale stays grayscale; corrupt bytes fall back to embedding the
+original bytes/content_type (best-effort path, log_error called, no raise); boundary case
+exactly at max_dimension is left untouched (> not >=).
+Invoice TOTAL math — PASS (28/28 checks), via real jinja2 rendering of the actual
+template. TOTAL = Batch Total + Advance + arrears verified across advance-only, arrears-only,
+both, neither, None values, and missing context keys (no crash — Jinja Undefined is falsy
+under or 0). Confirmed balance_due_original is never referenced in this template — the
+advance/arrears total is genuinely print-only, as described above.
+Three N+1 refactors — PASS (8/8 checks). Old vs. new logic produced byte-identical output
+on synthetic data including dangling foreign keys, shared/duplicate keys, and a thread with
+zero participants.
+Injaz barcode/table-layout fix — PASS (14/14 checks). Real barcodes generated (short:
+242px, long: 990px). Walked weasyprint's actual layout box tree and confirmed the wide
+barcode's rendered image box never exceeds its column width — the fix genuinely works, not
+just "doesn't crash."
+Gunicorn config — PASS. Booted real gunicorn 26.2.0 with the exact flag string from
+supervisord.conf: Using worker: gthread, 4 workers boot, a live HTTP request returns 200.
+swagger.json — PASS. Both files are valid JSON. AST-scanned all 120
+@frappe.whitelist() functions across 21 API modules: public/swagger.json has full 120/120
+parity (0 missing); root swagger.json is missing exactly 15/120, confirming the previously
+recorded "~15 behind" figure.
+
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-19T18:23:13+03:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\Assets\01-applicant-contract.md (LANGUAGE_MARKDOWN)
+Cursor is on line: 1
+Other open documents:
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\scratch\test_new_features_suite.mjs (LANGUAGE_JAVASCRIPT)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\components\providers\AuthProvider.tsx (LANGUAGE_TSX)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\app\applicants\[id]\cv\page.tsx (LANGUAGE_TSX)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\components\applicant\steps\Step1PersonalInfo.tsx (LANGUAGE_TSX)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\components\ui\badge.tsx (LANGUAGE_TSX)
+Browser State:
+  Page 8701F019FA2C459EBC1FA9B3DD48E5B8 (Travel Agency Portal) - http://localhost:3000/applicants [ACTIVE]
+    Viewport: 1264x805, Page Height: 989
+Running terminal commands:
+- npm run dev (in c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow, running for 1h16m53s)
+</ADDITIONAL_METADATA>

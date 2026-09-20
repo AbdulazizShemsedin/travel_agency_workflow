@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import { toast } from "sonner";
 
 interface Step2EducationExperienceProps {
@@ -50,9 +51,7 @@ export function Step2EducationExperience({
   const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
   const videoUrl = watch("video_url" as any) || watch("intro_video" as any);
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleVideoFileSelect = async (file: File) => {
     try {
       setIsUploadingVideo(true);
       const res = await uploadFileV2(file, false, "Applicant");
@@ -63,7 +62,7 @@ export function Step2EducationExperience({
         toast.success("Candidate video uploaded successfully!");
       }
     } catch (err: any) {
-      toast.error("Video upload failed", { description: "We couldn't upload the video. Please check the file size or format and try again." });
+      toast.error("Video upload failed", { description: err?.message || "Could not upload the video. Please check your connection and try again." });
     } finally {
       setIsUploadingVideo(false);
     }
@@ -582,39 +581,24 @@ export function Step2EducationExperience({
               </div>
 
               {/* Video Upload Field (Conditionally shown for experienced applicants) */}
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#2a2a35] bg-slate-50/50 dark:bg-[#141419] p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="video_upload" className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <Film className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-                    Candidate Introduction / Skill Video <span className="text-slate-400 font-normal">(Optional)</span>
-                  </Label>
-                  {videoUrl && (
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                      <CheckCircle2 className="h-3 w-3" /> Video Attached
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="video_upload"
-                    type="file"
-                    accept="video/*"
-                    disabled={isUploadingVideo}
-                    onChange={handleVideoUpload}
-                    className="text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-800 hover:file:bg-emerald-100 dark:file:bg-emerald-950 dark:file:text-emerald-300 cursor-pointer"
-                  />
-                  {isUploadingVideo && (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-800 dark:text-emerald-400 shrink-0">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Uploading...</span>
-                    </div>
-                  )}
-                </div>
-                {videoUrl && (
-                  <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 truncate">
-                    Attached URL: {videoUrl}
-                  </p>
-                )}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Film className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
+                  Candidate Introduction / Skill Video <span className="text-slate-400 font-normal">(Optional)</span>
+                </Label>
+                <PremiumDropzone
+                  id="candidate-video-dropzone"
+                  variant="video"
+                  value={videoUrl}
+                  isLoading={isUploadingVideo}
+                  loadingText="Uploading candidate video..."
+                  onFileSelect={handleVideoFileSelect}
+                  onRemove={() => {
+                    setValue("video_url" as any, "", { shouldDirty: true });
+                    setValue("intro_video" as any, "", { shouldDirty: true });
+                    toast.info("Candidate video removed");
+                  }}
+                />
               </div>
             </div>
           )}

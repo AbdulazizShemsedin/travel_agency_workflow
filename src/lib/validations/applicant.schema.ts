@@ -17,6 +17,7 @@ z.setErrorMap(businessZodErrorMap);
 export const GENDER_OPTIONS = ["Male", "Female"] as const;
 
 export const RELIGION_OPTIONS = [
+  "Islam",
   "Muslim",
   "Orthodox",
   "Protestant",
@@ -32,6 +33,10 @@ export const MARITAL_STATUS_OPTIONS = [
 ] as const;
 
 export const EDUCATION_OPTIONS = [
+  "SECONDARY LEVEL",
+  "PRIMARY LEVEL",
+  "Primary Level",
+  "Secondary Level",
   "High School",
   "Associate Degree",
   "Bachelor's Degree",
@@ -49,6 +54,7 @@ export const LANGUAGE_LEVEL_OPTIONS = ["None", "Basic", "Good", "Fluent"] as con
 export const COMPLEXION_OPTIONS = ["FAIR", "MEDIUM", "DARK"] as const;
 
 export const JOB_APPLIED_OPTIONS = [
+  "HOUSE WORKER",
   "House worker",
   "Domestic Worker",
   "Driver",
@@ -103,12 +109,13 @@ const optionalBoolean = z.preprocess((val) => {
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS).default("Standard"),
+  application_number: z.string().trim().optional().or(z.literal("")),
   first_name: z.string().trim().default(""),
   middle_name: z.string().trim().optional().or(z.literal("")),
   last_name: z.string().trim().default(""),
-  gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default(""),
-  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
-  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
+  gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default("Female"),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Islam"),
+  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default("Single"),
   children: z.preprocess(
     (val) => {
       if (val === "" || val === null || val === undefined) return 0;
@@ -135,9 +142,10 @@ export const baseApplicantSchema = z.object({
   passport_number: z.string().optional().or(z.literal("")),
   passport_issue_date: z.string().optional().or(z.literal("")),
   passport_expiry: z.string().optional().or(z.literal("")),
-  place_of_issue: z.string().trim().optional().or(z.literal("")),
-  job_applied: z.string().trim().default("House worker"),
-  highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
+  place_of_issue: z.string().trim().optional().or(z.literal("")).default("ADDIS ABABA"),
+  place_of_birth: z.string().trim().optional().or(z.literal("")),
+  job_applied: z.string().trim().default("HOUSE WORKER"),
+  highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
   labour_id: z.string().optional().or(z.literal("")),
   national_id: z.string().optional().or(z.literal("")),
   contact_person_name: z.string().optional().or(z.literal("")),
@@ -152,15 +160,15 @@ export const baseApplicantSchema = z.object({
   medical_expiry_date: z.string().optional().or(z.literal("")),
 
   // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
-  target_job: z.string().trim().optional().or(z.literal("")),
-  education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default(""),
+  target_job: z.string().trim().optional().or(z.literal("")).default("HOUSE WORKER"),
+  education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
   salary_amount: optionalNumber(
     z.number({ invalid_type_error: "Please enter a valid salary amount" }).min(0, "Salary amount cannot be negative")
   ),
   salary_currency: z.enum(["SAR", "KWD", "USD", "ETB", "AED", "QAR"]).default("SAR"),
   photograph: z.string().optional().or(z.literal("")),
   passport_expiry_date: z.string().optional().or(z.literal("")),
-  passport_issue_place: z.string().trim().optional().or(z.literal("")),
+  passport_issue_place: z.string().trim().optional().or(z.literal("")).default("ADDIS ABABA"),
   labor_id: z.string().optional().or(z.literal("")),
 
   // Photos & Attachments
@@ -194,7 +202,6 @@ export const baseApplicantSchema = z.object({
   height: z.string().trim().optional().or(z.literal("")),
   weight: z.string().trim().optional().or(z.literal("")),
   complexion: z.string().trim().default("FAIR"),
-  place_of_birth: z.string().trim().optional().or(z.literal("")),
   leaving_town: z.string().trim().optional().or(z.literal("")),
 
   // Stage 3: Optional Context & Skills Matrix Fields
@@ -228,10 +235,52 @@ export const baseApplicantSchema = z.object({
   remarks: z.string().optional().or(z.literal("")),
   medical_remarks: z.string().optional().or(z.literal("")),
   education_remarks: z.string().optional().or(z.literal("")),
+
+  // Client Preferred Form Structure Fields (Screen Recording 2026-09-17)
+  full_name: z.string().trim().optional().or(z.literal("")),
+  registration_date: z.string().optional().or(z.literal("")),
+  is_active: optionalBoolean.default(true),
+  passport_type: z.string().trim().default("Normal"),
+  qualification: z.string().trim().optional().or(z.literal("")).default("SECONDARY LEVEL"),
+  visa_number: z.string().trim().optional().or(z.literal("")),
+  sponsor_name: z.string().trim().optional().or(z.literal("")),
+  sponsor_id: z.string().trim().optional().or(z.literal("")),
+  sponsor_phone: z.string().trim().optional().or(z.literal("")),
+  sponsor_address: z.string().trim().optional().or(z.literal("")),
+  agent: z.string().trim().optional().or(z.literal("")),
+  sponsor_arabic: z.string().trim().optional().or(z.literal("")),
+  visa_type: z.string().trim().default("Work"),
+  relative_name: z.string().trim().optional().or(z.literal("")),
+  relative_phone: z.string().trim().optional().or(z.literal("")),
+  relative_kinship: z.string().trim().optional().or(z.literal("")),
+  address_region: z.string().trim().optional().or(z.literal("")),
+  relative_woreda: z.string().trim().optional().or(z.literal("")),
+  relative_house_no: z.string().trim().optional().or(z.literal("")),
+  relative_gender: z.string().trim().optional().or(z.literal("")),
+  r_birth_date: z.string().trim().optional().or(z.literal("")),
+  woreda: z.string().trim().optional().or(z.literal("")),
+  house_no: z.string().trim().optional().or(z.literal("")),
+  file_no: z.string().trim().optional().or(z.literal("")),
+  contract_number: z.string().trim().optional().or(z.literal("")),
+  wakala_number: z.string().trim().optional().or(z.literal("")),
+  sticker_visa_number: z.string().trim().optional().or(z.literal("")),
+  signed_on: z.string().trim().optional().or(z.literal("")),
+  biometric_id: z.string().trim().optional().or(z.literal("")),
+  contact_person_2nd: z.string().trim().optional().or(z.literal("")),
+  contact_phone_2nd: z.string().trim().optional().or(z.literal("")),
+  coc_center: z.string().trim().optional().or(z.literal("")),
+  certified_date: z.string().trim().optional().or(z.literal("")),
+  certificate_no: z.string().trim().optional().or(z.literal("")),
+  training_type: z.string().trim().optional().or(z.literal("")),
+  photos_2: optionalBoolean,
+  is_filed: optionalBoolean,
+  relative_id_card: optionalBoolean,
+  works_in: z.string().trim().optional().or(z.literal("")),
+  reference_no: z.string().trim().optional().or(z.literal("")),
 });
 
-// Stage 1 Schema: Minimal Requirements to Save an In-Progress Draft
-export const stage1DraftSchema = baseApplicantSchema.extend({
+// Stage 1 Base Object Schema
+export const stage1DraftBaseSchema = baseApplicantSchema.extend({
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS, {
     errorMap: () => ({ message: "Please select an Applicant Type" }),
   }).default("Standard"),
@@ -242,11 +291,11 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
     .default("Saudi Arabia"),
 
   first_name: z
-    .string({ required_error: "First Name is required to save a draft" })
+    .string()
     .trim()
-    .min(2, "First Name must be at least 2 characters")
     .max(50, "First Name must not exceed 50 characters")
-    .regex(NAME_REGEX, "First Name can only contain letters, hyphens, and spaces"),
+    .optional()
+    .or(z.literal("")),
 
   middle_name: z.string().trim().max(50, "Father Name must not exceed 50 characters").optional().or(z.literal("")),
 
@@ -254,9 +303,9 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
 
   gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default("Female"),
 
-  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default(""),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Islam"),
 
-  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default(""),
+  marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default("Single"),
 
   children: z.preprocess(
     (val) => {
@@ -282,25 +331,43 @@ export const stage1DraftSchema = baseApplicantSchema.extend({
 
   city: z.string().trim().optional().or(z.literal("")),
 
+  place_of_birth: z.string().trim().optional().or(z.literal("")),
+
   country: z.string().trim().default("Ethiopia"),
 });
 
+// Stage 1 Schema: Minimal Requirements to Save an In-Progress Draft
+export const stage1DraftSchema = stage1DraftBaseSchema.superRefine((data: any, ctx: z.RefinementCtx) => {
+  const hasName =
+    (data.full_name && data.full_name.trim().length >= 2) ||
+    (data.first_name && data.first_name.trim().length >= 2);
+  if (!hasName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Full Name or First Name is required to save a draft (at least 2 characters)",
+      path: ["full_name"],
+    });
+  }
+});
+
 // Stage 2 Schema: Strictly Validates All Requirements for Registration
-export const stage2RegistrationSchema = stage1DraftSchema
+export const stage2RegistrationSchema = stage1DraftBaseSchema
   .extend({
+    full_name: z.string().trim().optional().or(z.literal("")),
+
     middle_name: z
-      .string({ required_error: "Father Name (Middle Name) is required for registration" })
+      .string()
       .trim()
-      .min(2, "Father Name must be at least 2 characters")
       .max(50, "Father Name must not exceed 50 characters")
-      .regex(NAME_REGEX, "Father Name can only contain letters, hyphens, and spaces"),
+      .optional()
+      .or(z.literal("")),
 
     last_name: z
-      .string({ required_error: "Last Name is required for registration" })
+      .string()
       .trim()
-      .min(2, "Last Name must be at least 2 characters")
       .max(50, "Last Name must not exceed 50 characters")
-      .regex(NAME_REGEX, "Last Name can only contain letters, hyphens, and spaces"),
+      .optional()
+      .or(z.literal("")),
 
     gender: z.enum(GENDER_OPTIONS, {
       errorMap: () => ({ message: "Please select a Gender (Male or Female)" }),
@@ -426,7 +493,7 @@ export const stage2RegistrationSchema = stage1DraftSchema
         return isValid(parseISO(val));
       }, "Please enter a valid Medical Expiration Date"),
   })
-  .superRefine((data, ctx) => {
+  .superRefine((data: any, ctx: z.RefinementCtx) => {
     const isMuayena = data.applicant_type === "Muayena";
 
     // For Standard applicants: CV generation fields and salary are mandatory
@@ -494,6 +561,18 @@ export const stage2RegistrationSchema = stage1DraftSchema
           path: ["place_of_birth"],
         });
       }
+    }
+
+    const nameStr = (
+      data.full_name ||
+      `${data.first_name || ""} ${data.middle_name || ""} ${data.last_name || ""}`
+    ).trim();
+    if (nameStr.split(/\s+/).filter(Boolean).length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Full Name must contain at least First Name and Father's Name",
+        path: ["full_name"],
+      });
     }
 
     if (data.medical_status === "UNFIT") {
@@ -584,4 +663,16 @@ export function deriveFullName(
   return [first.trim(), middle.trim(), last.trim()]
     .filter(Boolean)
     .join(" ");
+}
+
+export function splitFullName(fullName: string = ""): {
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+} {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const first_name = parts[0] || "";
+  const middle_name = parts[1] || "";
+  const last_name = parts.slice(2).join(" ") || "";
+  return { first_name, middle_name, last_name };
 }

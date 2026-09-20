@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function AgentComplaintsPage() {
@@ -228,24 +229,21 @@ export default function AgentComplaintsPage() {
     },
   });
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploadingAttachment(true);
-      setFormError(null);
-      try {
-        const res = await uploadFileV2(file, true);
-        const fileUrl = res?.file_url || "";
-        if (fileUrl) {
-          setFormData((prev) => ({ ...prev, attachment: fileUrl }));
-        } else {
-          throw new Error("No file URL returned from server.");
-        }
-      } catch (err: any) {
-        setFormError(err?.message || "Failed to upload attachment file to server. Please try again.");
-      } finally {
-        setIsUploadingAttachment(false);
+  const handleFileSelect = async (file: File) => {
+    setIsUploadingAttachment(true);
+    setFormError(null);
+    try {
+      const res = await uploadFileV2(file, true);
+      const fileUrl = res?.file_url || "";
+      if (fileUrl) {
+        setFormData((prev) => ({ ...prev, attachment: fileUrl }));
+      } else {
+        throw new Error("No file URL returned from server.");
       }
+    } catch (err: any) {
+      setFormError(err?.message || "Failed to upload attachment file to server. Please try again.");
+    } finally {
+      setIsUploadingAttachment(false);
     }
   };
 
@@ -425,7 +423,7 @@ export default function AgentComplaintsPage() {
                   <div className="space-y-1.5 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-xs text-slate-900 dark:text-white bg-slate-100 dark:bg-[#202026] px-2 py-0.5 rounded-md">
-                        {c.name}
+                        {c.display_no ? `#${c.display_no}` : c.name}
                       </span>
                       {getSeverityBadge(c.severity)}
                       <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
@@ -673,13 +671,18 @@ export default function AgentComplaintsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Attach Evidence / Medical Report (PDF or Image)</Label>
-                  <Input
-                    type="file"
-                    onChange={handleFileUpload}
-                    accept=".pdf,.jpg,.jpeg,.png"
+                  <Label className="text-xs font-semibold">Attach Evidence / Medical Report (Optional)</Label>
+                  <PremiumDropzone
+                    id="complaint-evidence-dropzone"
+                    variant="compact"
+                    value={formData.attachment}
+                    isLoading={isUploadingAttachment}
+                    loadingText="Uploading dispute evidence..."
+                    label="Attach Incident Evidence / Medical Report"
+                    description="Drag & drop PDF or photo or paste screenshot (Ctrl+V) • Max 15MB"
+                    onFileSelect={handleFileSelect}
+                    onRemove={() => setFormData((prev) => ({ ...prev, attachment: "" }))}
                   />
-                  {isUploadingAttachment && <p className="text-[11px] text-emerald-600">Uploading document...</p>}
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 dark:border-[#202026] flex items-center justify-end gap-2">

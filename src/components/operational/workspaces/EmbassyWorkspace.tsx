@@ -7,7 +7,6 @@ import {
   Building2,
   FileCheck2,
   Calendar,
-  CreditCard,
   User,
   FileText,
   Loader2,
@@ -17,15 +16,12 @@ import {
   CheckCircle2,
   ShieldAlert,
   RotateCcw,
+  Edit3,
+  FileDown,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
-import {
-  OperationalDrawer,
-  DrawerField,
-  DrawerSection,
-} from "../OperationalDrawer";
-import { StageFeeSection } from "@/components/operational/StageFeeSection";
+import { ExcelTextInput, ExcelSelect, ExcelDateInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,15 +43,15 @@ import {
   rejectEmbassyStepV2,
   reassignClearanceStepV2,
   reopenClearanceStepV2,
-  getClearanceStepDocV2,
   recordWakalaPaymentV2,
 } from "@/lib/api/v2/clearance";
-import { getApplicantV2 } from "@/lib/api/v2/applicants";
-import { logStageExpenseV2 } from "@/lib/api/v2/finance";
+import { updateApplicantForLmisV2, updateApplicantV2, getApplicantV2 } from "@/lib/api/v2/applicants";
+import { updatePlacementParsedFieldsV2 } from "@/lib/api/v2/placements";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { downloadInjazDocumentPDF, InjazCandidateData } from "@/lib/pdf/injazDocumentGenerator";
 
 interface EmbassyWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -77,227 +73,232 @@ export function EmbassyWorkspace({
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
 
-  const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
+  const authUserV2 = authUser
+    ? {
+        user: authUser.email,
+        full_name: authUser.full_name || authUser.email,
+        roles: Array.isArray(authUser.roles) ? authUser.roles : [],
+      }
+    : null;
   const isStrictAdmin = Boolean(
     (authUser?.email || "").toLowerCase() === "administrator" ||
-    (authUser?.email || "").toLowerCase() === "admin" ||
-    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
-    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+      (authUser?.email || "").toLowerCase() === "admin" ||
+      (roles || []).some((r: any) =>
+        ["admin", "administrator", "system manager"].includes(
+          String(r).trim().toLowerCase()
+        )
+      ) ||
+      (authUserV2?.roles || []).some((r: any) =>
+        ["admin", "administrator", "system manager"].includes(
+          String(r).trim().toLowerCase()
+        )
+      )
   );
-  const isAdmin = isStrictAdmin || (authUserV2?.roles || []).some((r: any) => ["manager", "agency admin"].includes(String(r).trim().toLowerCase()));
-  const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer"]);
+  const isAdmin =
+    isStrictAdmin ||
+    (authUserV2?.roles || []).some((r: any) =>
+      ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
+    );
+  const canEdit =
+    isAdmin ||
+    hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer"]);
 
-  const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  // Edit Modal State (Triggered ONLY via Action 'Edit' button, not row click)
+  const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
-  // Form State for Drawer
-  const [status, setStatus] = React.useState<"Pending" | "Submitted" | "Approved" | "Rejected">("Pending");
-  const [submissionDate, setSubmissionDate] = React.useState("");
-  const [feeStatus, setFeeStatus] = React.useState<"Unpaid" | "Paid">("Unpaid");
-  const [embassyFee, setEmbassyFee] = React.useState("");
-  const [receiptNo, setReceiptNo] = React.useState("");
-  const [employee, setEmployee] = React.useState("");
-  const [stampNumber, setStampNumber] = React.useState("");
-  const [stampDate, setStampDate] = React.useState("");
-  const [rejectionRemark, setRejectionRemark] = React.useState("");
+  // Form State for Edit Modal (Wakala fee amount and fee date removed as requested)
+  const [modalStatus, setModalStatus] = React.useState<
+    "Pending" | "Submitted" | "Approved" | "Rejected"
+  >("Pending");
+  const [modalSubmissionDate, setModalSubmissionDate] = React.useState("");
+  const [modalStampNumber, setModalStampNumber] = React.useState("");
+  const [modalStampDate, setModalStampDate] = React.useState("");
+  const [modalRejectionRemark, setModalRejectionRemark] = React.useState("");
+  const [modalEmployee, setModalEmployee] = React.useState("");
+  const [modalWakalaStatus, setModalWakalaStatus] = React.useState<"Pending" | "Paid">("Pending");
   const [confirmUnpaidWakala, setConfirmUnpaidWakala] = React.useState(false);
-  const [wakalaStatus, setWakalaStatus] = React.useState<"Pending" | "Paid">("Pending");
-  const [wakalaAmount, setWakalaAmount] = React.useState("");
-  const [wakalaPaidDate, setWakalaPaidDate] = React.useState(() => new Date().toISOString().split("T")[0]);
-  const [wakalaRefNo, setWakalaRefNo] = React.useState("");
   const [wakalaOverrideReason, setWakalaOverrideReason] = React.useState("");
   const [isRecordingWakala, setIsRecordingWakala] = React.useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
-
-  const isEmbassyOfficer =
-    hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer"] as any) ||
-    roles.some((r) => ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer", "Embassy Officer", "Embassy"].includes(r));
-  const isAssignedOfficer = Boolean(
-    authUser?.email &&
-      (selectedRow?.embassy?.assigned_officer === authUser.email || (selectedRow as any)?.assigned_officer === authUser.email)
-  );
-  const canUpdateWakala = isAdmin || isEmbassyOfficer || isAssignedOfficer;
-
-  const currentEmbassyStatus = selectedRow?.embassy?.status;
-  const isPlacementDeparted =
-    selectedRow?.placementStatus === "Departed" ||
-    selectedRow?.ticketStatus === "Departed" ||
-    Boolean((selectedRow as any)?.isDeparted);
-  const isEmbassyTerminal = [
-    "Issued",
-    "Complete",
-    "Completed",
-    "Stamped",
-    "Approved",
-    "Rejected",
-    "Cancelled",
-  ].includes(currentEmbassyStatus || "");
 
   // Reopen Step Modal State & Mutation
   const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
   const [reopenReason, setReopenReason] = React.useState("");
-  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending" | "Submitted">("In Progress");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<
+    "In Progress" | "Pending" | "Submitted"
+  >("In Progress");
 
-  const reopenMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRow) return;
-      const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
-      if (!stepName) return;
-      if (!reopenReason.trim()) {
-        throw new Error("Reason is required to reopen this clearance step.");
-      }
-      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
-    },
-    onSuccess: async () => {
-      toast.success("Embassy clearance step reopened successfully!");
-      setIsReopenModalOpen(false);
-      setReopenReason("");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
-        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
-        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
-        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
-        queryClient.invalidateQueries({ queryKey: ["placements"] }),
-      ]);
-      onRefresh();
-      setSelectedRow(null);
-    },
-    onError: (err: any) => {
-      toast.error("Failed to reopen clearance step", {
-        description: formatCleanErrorMessage(err),
-      });
-    },
-  });
-
-  // Sync drawer form state when row changes
+  // Sync edit modal state when editingRow changes
   React.useEffect(() => {
-    if (!selectedRow) return;
+    if (!editingRow) return;
 
-    let isMounted = true;
-
-    // 1. Initialize synchronously from table row
     setConfirmUnpaidWakala(false);
-    const embassy = selectedRow.embassy;
+    const embassy = editingRow.embassy;
     const st = embassy?.status;
-    if (st === "Approved" || st === "Stamped" || selectedRow.embassyStatus === "Approved") {
-      setStatus("Approved");
+    if (st === "Approved" || st === "Stamped" || editingRow.embassyStatus === "Approved") {
+      setModalStatus("Approved");
     } else if (st === "Submitted") {
-      setStatus("Submitted");
+      setModalStatus("Submitted");
     } else if (st === "Rejected") {
-      setStatus("Rejected");
+      setModalStatus("Rejected");
     } else {
-      setStatus("Pending");
+      setModalStatus("Pending");
     }
 
-    setSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
-    const isPaid = (embassy?.payment_status || "").toLowerCase().includes("paid");
-    setFeeStatus(isPaid ? "Paid" : "Unpaid");
-    setEmbassyFee((embassy as any)?.fee ? String((embassy as any).fee) : (embassy as any)?.amount ? String((embassy as any).amount) : "");
-    setReceiptNo(embassy?.reference_no || embassy?.receipt_no || "");
-    setEmployee(embassy?.assigned_officer || embassy?.employee || "");
-    setStampNumber(selectedRow.visaNumber || (selectedRow.applicant as any)?.visa_number || "");
-    setStampDate(selectedRow.appointmentDate || (selectedRow.applicant as any)?.stamp_date || "");
-    setRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || "");
+    setModalSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
+    setModalEmployee(embassy?.assigned_officer || embassy?.employee || "");
+    setModalStampNumber(editingRow.visaNumber || (editingRow.applicant as any)?.visa_number || "");
+    setModalStampDate(editingRow.appointmentDate || (editingRow.applicant as any)?.stamp_date || "");
+    setModalRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || editingRow.remark || "");
 
-    const isWakalaPaid = (selectedRow.wakalaStatus || "").toLowerCase() === "paid";
-    setWakalaStatus(isWakalaPaid ? "Paid" : "Pending");
-    setWakalaAmount(selectedRow.wakalaAmount ? String(selectedRow.wakalaAmount) : "");
-    setWakalaPaidDate(selectedRow.wakalaPaidDate || new Date().toISOString().split("T")[0]);
-    setWakalaRefNo((selectedRow as any)?.wakalaReferenceNo || (selectedRow.embassy as any)?.wakala_reference_no || "");
+    const isWakalaPaid = (editingRow.wakalaStatus || "").toLowerCase() === "paid";
+    setModalWakalaStatus(isWakalaPaid ? "Paid" : "Pending");
     setWakalaOverrideReason("");
+  }, [editingRow]);
 
-    // 2. Fetch fresh clearance step doc and fresh applicant in background
-    const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
-    Promise.all([
-      stepName ? getClearanceStepDocV2(stepName).catch(() => null) : null,
-      getApplicantV2(selectedRow.applicantId).catch(() => null),
-    ]).then(([freshStep, freshApp]) => {
-      if (!isMounted) return;
-      if (freshStep) {
-        if (freshStep.status === "Approved" || freshStep.status === "Stamped") {
-          setStatus("Approved");
-        } else if (freshStep.status === "Submitted") {
-          setStatus("Submitted");
-        } else if (freshStep.status === "Rejected") {
-          setStatus("Rejected");
+  const isEmbassyTerminal = (status?: string) =>
+    ["Issued", "Complete", "Completed", "Stamped", "Approved", "Rejected", "Cancelled"].includes(
+      status || ""
+    );
+
+  // In-cell quick update helper: Visa Number / Stamp Number (Placement.visa_number)
+  const handleUpdateVisaNumber = async (row: WorkspaceApplicantRow, visaNo: string) => {
+    const placementName = row.placementId || row.dsrName;
+    if (!placementName) {
+      toast.error("No linked placement found for candidate.");
+      throw new Error("No linked placement found");
+    }
+
+    try {
+      await updatePlacementParsedFieldsV2(placementName, {
+        visa_number: visaNo.trim(),
+      });
+      toast.success("Visa Number saved");
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      await queryClient.invalidateQueries({ queryKey: ["placements"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save visa number");
+      throw err;
+    }
+  };
+
+  // In-cell quick update helper: Status change
+  const handleUpdateStatus = async (
+    row: WorkspaceApplicantRow,
+    newStatus: "Pending" | "Submitted" | "Approved" | "Rejected"
+  ) => {
+    const stepName = row.clearanceStepName || row.embassy?.name;
+    if (!stepName) {
+      toast.error("No active Embassy clearance step found for candidate.");
+      throw new Error("No active Embassy clearance step found");
+    }
+
+    const isRowDeparted =
+      row.placementStatus === "Departed" || row.ticketStatus === "Departed";
+    if (isRowDeparted) {
+      toast.error("Placement is Departed/Cancelled; clearance steps cannot be modified.");
+      return;
+    }
+
+    try {
+      if (newStatus === "Approved") {
+        const isSaudi = row.destinationCountry?.toLowerCase().includes("saudi");
+        if (isSaudi && (row.wakalaStatus || "").toLowerCase() !== "paid") {
+          toast.error("Wakala must be Paid before Embassy documents can be Stamped. Open Edit dialog to apply manager override.");
+          return;
         }
-        if (freshStep.date_started) setSubmissionDate(freshStep.date_started);
-        const fPaid = (freshStep.payment_status || "").toLowerCase().includes("paid");
-        setFeeStatus(fPaid ? "Paid" : "Unpaid");
-        if (freshStep.amount || (freshStep as any).fee) {
-          setEmbassyFee(String(freshStep.amount || (freshStep as any).fee));
+        await stampEmbassyStepV2(stepName, row.visaNumber || undefined);
+        toast.success(`Embassy visa stamped for ${row.fullName}!`);
+      } else if (newStatus === "Submitted") {
+        const isSaudi = row.destinationCountry?.toLowerCase().includes("saudi");
+        if (isSaudi && (row.wakalaStatus || "").toLowerCase() !== "paid") {
+          toast.error("Wakala must be Paid before Embassy documents can be Submitted.");
+          return;
         }
-        if (freshStep.reference_no) setReceiptNo(freshStep.reference_no);
-        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
-          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
-        }
-        if (freshStep.rejection_remark || freshStep.notes) {
-          setRejectionRemark(freshStep.rejection_remark || freshStep.notes || "");
-        }
-        if (freshStep.wakala_status) {
-          setWakalaStatus(freshStep.wakala_status === "Paid" ? "Paid" : "Pending");
-        }
-        if (freshStep.wakala_amount) {
-          setWakalaAmount(String(freshStep.wakala_amount));
-        }
-        if ((freshStep as any).paid_date || (freshStep as any).wakala_paid_date) {
-          setWakalaPaidDate((freshStep as any).paid_date || (freshStep as any).wakala_paid_date);
-        }
-        if ((freshStep as any).wakala_reference_no) {
-          setWakalaRefNo((freshStep as any).wakala_reference_no);
-        }
+        await submitEmbassyStepV2(stepName);
+        toast.success(`Embassy documents submitted for ${row.fullName}`);
+      } else if (newStatus === "Rejected") {
+        await rejectEmbassyStepV2(stepName, "Embassy visa rejected");
+        toast.info(`Embassy step marked Rejected for ${row.fullName}`);
+      } else if (newStatus === "Pending") {
+        await startClearanceStepV2(stepName);
+        toast.info(`Embassy step set to Pending for ${row.fullName}`);
       }
-      if (freshApp) {
-        if (freshApp.visa_number) setStampNumber(freshApp.visa_number);
-      }
-    });
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update embassy status");
+      throw err;
+    }
+  };
 
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedRow]);
+  // In-cell quick update helper: Remark (Applicant.remarks)
+  const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
+    try {
+      await updateApplicantV2(row.applicantId, {
+        remarks: remark,
+      });
+      toast.success("Remark saved");
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      await queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save remark");
+      throw err;
+    }
+  };
 
-  // Mutation to persist Embassy Clearance via V2 endpoints
-  const mutation = useMutation({
+  // Modal Save Mutation
+  const modalSaveMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedRow) return;
-      const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
+      if (!editingRow) return;
+      const stepName = editingRow.clearanceStepName || editingRow.embassy?.name;
 
-      if (embassyFee && Number(embassyFee) > 0 && selectedRow.dsrName) {
-        try {
-          await logStageExpenseV2(
-            Number(embassyFee),
-            "USD",
-            "Embassy Visa Stamping Fee",
-            selectedRow.dsrName,
-            "Embassy"
-          );
-        } catch (err: any) {
-          console.warn("logStageExpenseV2 embassy fee error:", err);
-        }
-      }
-
-      if (isPlacementDeparted) {
-        throw new Error("Placement is Departed/Cancelled; its clearance steps can no longer be edited.");
+      const isRowDeparted =
+        editingRow.placementStatus === "Departed" || editingRow.ticketStatus === "Departed";
+      if (isRowDeparted) {
+        throw new Error("Placement is Departed/Cancelled; clearance steps cannot be edited.");
       }
 
       if (stepName) {
-        const stepStatus = selectedRow.embassy?.status;
-        const isSaudi = selectedRow.destinationCountry?.toLowerCase().includes("saudi");
+        const stepStatus = editingRow.embassy?.status;
+        const isSaudi = editingRow.destinationCountry?.toLowerCase().includes("saudi");
         const isTaeshirDone =
-          selectedRow.injaz?.status === "Completed" ||
-          selectedRow.injaz?.status === "Complete" ||
-          selectedRow.injaz?.status === "Issued" ||
-          selectedRow.injaz?.status === "Approved";
+          editingRow.injaz?.status === "Completed" ||
+          editingRow.injaz?.status === "Complete" ||
+          editingRow.injaz?.status === "Issued" ||
+          editingRow.injaz?.status === "Approved";
 
-        if (status === "Approved") {
-          if (!isEmbassyTerminal && isSaudi && !isTaeshirDone) {
+        if (modalStatus === "Approved") {
+          if (!isEmbassyTerminal(stepStatus) && isSaudi && !isTaeshirDone) {
             throw new Error(
               "Cannot stamp Embassy step: Taeshir clearance must be completed first on the Saudi Arabia corridor."
             );
           }
-          await stampEmbassyStepV2(stepName, stampNumber || selectedRow.visaNumber || undefined);
-        } else if (status === "Submitted" && stepStatus !== "Submitted" && !isEmbassyTerminal) {
-          if (isSaudi && wakalaStatus !== "Paid") {
+          if (isSaudi && modalWakalaStatus !== "Paid") {
+            if (isAdmin && confirmUnpaidWakala) {
+              await stampEmbassyStepV2(
+                stepName,
+                modalStampNumber || editingRow.visaNumber || undefined,
+                wakalaOverrideReason.trim() || "Manager manual override for unpaid Wakala"
+              );
+            } else {
+              throw new Error(
+                "Wakala must be Paid before Embassy documents can be Stamped. Please record Wakala payment or provide an authorized manager override."
+              );
+            }
+          } else {
+            await stampEmbassyStepV2(
+              stepName,
+              modalStampNumber || editingRow.visaNumber || undefined
+            );
+          }
+        } else if (
+          modalStatus === "Submitted" &&
+          stepStatus !== "Submitted" &&
+          !isEmbassyTerminal(stepStatus)
+        ) {
+          if (isSaudi && modalWakalaStatus !== "Paid") {
             if (isAdmin && confirmUnpaidWakala) {
               await submitEmbassyStepV2(
                 stepName,
@@ -311,69 +312,126 @@ export function EmbassyWorkspace({
           } else {
             await submitEmbassyStepV2(stepName);
           }
-        } else if (status === "Rejected") {
-          if (!rejectionRemark.trim()) {
+        } else if (modalStatus === "Rejected") {
+          if (!modalRejectionRemark.trim()) {
             throw new Error("Rejection remark is required when rejecting Embassy step.");
           }
-          await rejectEmbassyStepV2(stepName, rejectionRemark.trim());
-        } else if (status === "Pending" && stepStatus === "Pending" && !isEmbassyTerminal) {
+          await rejectEmbassyStepV2(stepName, modalRejectionRemark.trim());
+        } else if (
+          modalStatus === "Pending" &&
+          stepStatus === "Pending" &&
+          !isEmbassyTerminal(stepStatus)
+        ) {
           await startClearanceStepV2(stepName);
         }
 
-        // Also persist Wakala payment updates if modified by authorized embassy officer/admin
-        if (isSaudi && canUpdateWakala) {
-          const origWakalaStatus = (selectedRow.wakalaStatus || "").toLowerCase() === "paid" ? "Paid" : "Pending";
-          if (wakalaStatus !== origWakalaStatus || wakalaAmount || wakalaRefNo) {
+        // Wakala Status toggle (without fee amount or payment date)
+        if (isSaudi) {
+          const origWakalaStatus =
+            (editingRow.wakalaStatus || "").toLowerCase() === "paid" ? "Paid" : "Pending";
+          if (modalWakalaStatus !== origWakalaStatus) {
             try {
-              const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
-              await recordWakalaPaymentV2(
-                stepName,
-                wakalaStatus,
-                amt,
-                wakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined,
-                wakalaRefNo.trim() || undefined
-              );
+              await recordWakalaPaymentV2(stepName, modalWakalaStatus);
             } catch (wErr: any) {
               console.warn("recordWakalaPaymentV2 notice during save:", wErr);
             }
           }
         }
 
-        if (isAdmin && employee && employee !== (selectedRow.embassy?.assigned_officer || selectedRow.embassy?.employee)) {
+        // Admin reassign officer
+        if (
+          isAdmin &&
+          modalEmployee &&
+          modalEmployee !== (editingRow.embassy?.assigned_officer || editingRow.embassy?.employee)
+        ) {
           try {
-            await reassignClearanceStepV2(stepName, employee);
+            await reassignClearanceStepV2(stepName, modalEmployee);
           } catch (err: any) {
             console.warn("reassignClearanceStepV2 warning:", err);
           }
         }
       }
-    },
-    onSuccess: () => {
-      const isStampedNow = status === "Approved";
-      if (isStampedNow) {
-        toast.success(
-          `Embassy visa stamped for ${selectedRow?.fullName}! Placement auto-advanced to Stamped stage.`
-        );
-      } else {
-        toast.success(`Embassy Clearance for ${selectedRow?.fullName} updated successfully!`);
+
+      // Update visa number on placement if provided
+      const plcName = editingRow.placementId || editingRow.dsrName;
+      if (modalStampNumber.trim() && plcName) {
+        try {
+          await updatePlacementParsedFieldsV2(plcName, {
+            visa_number: modalStampNumber.trim(),
+          });
+        } catch (err) {
+          console.warn("Placement visa_number update warning:", err);
+        }
       }
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
-      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["placements"] });
+
+      // Update remark on applicant record
+      if (modalRejectionRemark.trim()) {
+        try {
+          await updateApplicantV2(editingRow.applicantId, {
+            remarks: modalRejectionRemark.trim(),
+          });
+        } catch (err) {
+          console.warn("Applicant doc update warning:", err);
+        }
+      }
+    },
+    onSuccess: async () => {
+      toast.success(`Embassy Clearance for ${editingRow?.fullName} updated successfully!`);
+      setEditingRow(null);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
-      setSelectedRow(null);
     },
     onError: (err: any) => {
-      toast.error("Failed to update Embassy record", {
-        description: formatCleanErrorMessage(err),
-      });
+      toast.error(formatCleanErrorMessage(err));
     },
   });
 
-  // Columns definition matching EMBASSY Sheet specifications (Exact 9 Columns)
+  // Reopen Mutation
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingRow) return;
+      const stepName = editingRow.clearanceStepName || editingRow.embassy?.name;
+      if (!stepName) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: async () => {
+      toast.success("Embassy clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      setEditingRow(null);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    },
+    onError: (err: any) => {
+      toast.error(formatCleanErrorMessage(err));
+    },
+  });
+
+  // Excel-like Columns definition with in-cell editing and elevated fields
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
+    {
+      id: "edit",
+      header: "EDIT",
+      width: "48px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingRow(row);
+          }}
+          className="p-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40 transition-colors"
+          title="Edit Candidate Record"
+        >
+          <Edit3 className="h-4 w-4" />
+        </button>
+      ),
+    },
     {
       id: "no",
       header: "NO",
@@ -426,32 +484,60 @@ export function EmbassyWorkspace({
     },
     {
       id: "visaNumber",
-      header: "WAKALA & VISA NO",
+      header: "VISA NO",
       accessorKey: "visaNumber",
-      width: "170px",
+      width: "150px",
       cell: (row) => (
-        <div className="space-y-0.5">
-          <div className="font-mono text-xs text-blue-900 dark:text-blue-300 font-bold">
-            {row.visaNumber || (row.applicant as any)?.visa_number || "—"}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span
-              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold border ${
-                row.wakalaStatus === "Paid"
-                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
-                  : "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-              }`}
-            >
-              Wakala: {row.wakalaStatus || "Pending"}
-            </span>
-            {row.wakalaAmount ? (
-              <span className="text-[9px] font-mono font-semibold text-slate-500 dark:text-zinc-400">
-                ${row.wakalaAmount}
-              </span>
-            ) : null}
-          </div>
-        </div>
+        <ExcelTextInput
+          value={row.visaNumber || (row.applicant as any)?.visa_number || ""}
+          placeholder="Visa #"
+          disabled={!canEdit}
+          onSave={(val) => handleUpdateVisaNumber(row, val)}
+          className="font-mono font-bold text-blue-900 dark:text-blue-300"
+        />
       ),
+    },
+    {
+      id: "wakalaStatus",
+      header: "WAKALA STATUS",
+      width: "130px",
+      align: "center",
+      cell: (row) => {
+        const isPaid = (row.wakalaStatus || "").toLowerCase() === "paid";
+        return (
+          <Badge
+            className={`font-semibold text-[10px] ${
+              isPaid
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+            }`}
+          >
+            {isPaid ? "Paid ✓" : "Pending"}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "submissionDate",
+      header: "SUBMISSION DATE",
+      width: "140px",
+      cell: (row) => {
+        const subDate = row.embassy?.date_started || row.embassy?.submission_date || "";
+        return (
+          <ExcelDateInput
+            value={subDate}
+            disabled={!canEdit}
+            onSave={async (val) => {
+              const stepName = row.clearanceStepName || row.embassy?.name;
+              if (stepName && val) {
+                await submitEmbassyStepV2(stepName);
+                toast.success("Submission date updated");
+                onRefresh();
+              }
+            }}
+          />
+        );
+      },
     },
     {
       id: "sponsor",
@@ -480,41 +566,153 @@ export function EmbassyWorkspace({
       id: "status",
       header: "STATUS",
       accessorKey: "embassyStatus",
-      width: "130px",
+      width: "140px",
       align: "center",
       cell: (row) => {
-        const s = row.embassyStatus || "Pending";
-        let colorClass = "bg-amber-500 text-white";
-        if (s === "Approved" || s === "Stamped") colorClass = "bg-emerald-600 text-white";
-        if (s === "Submitted") colorClass = "bg-blue-600 text-white";
-        if (s === "Rejected") colorClass = "bg-rose-600 text-white";
+        const currentSt = row.embassyStatus || "Pending";
+        const normalizedVal =
+          currentSt === "Approved" || currentSt === "Stamped" ? "Approved" : currentSt;
 
         return (
-          <Badge className={`font-semibold text-[10px] ${colorClass}`}>
-            {s === "Approved" ? "Stamped" : s}
-          </Badge>
+          <ExcelSelect
+            value={normalizedVal}
+            options={[
+              { value: "Pending", label: "Pending" },
+              { value: "Submitted", label: "Submitted" },
+              { value: "Approved", label: "Stamped" },
+              { value: "Rejected", label: "Rejected" },
+            ]}
+            disabled={!canEdit}
+            onSave={(val) => handleUpdateStatus(row, val as any)}
+            className={
+              normalizedVal === "Approved"
+                ? "font-bold text-emerald-700 dark:text-emerald-400"
+                : normalizedVal === "Submitted"
+                ? "font-bold text-blue-700 dark:text-blue-400"
+                : normalizedVal === "Rejected"
+                ? "font-bold text-rose-700 dark:text-rose-400"
+                : "font-semibold text-amber-700 dark:text-amber-400"
+            }
+          />
         );
       },
     },
     {
+      id: "remark",
+      header: "REMARK",
+      accessorKey: "remark",
+      width: "170px",
+      cell: (row) => (
+        <ExcelTextInput
+          value={row.remark || row.embassy?.rejection_remark || (row.embassy as any)?.notes || ""}
+          placeholder="Remark / Note"
+          disabled={!canEdit}
+          onSave={(val) => handleUpdateRemark(row, val)}
+          className="text-xs"
+        />
+      ),
+    },
+    {
       id: "action",
       header: "ACTION",
-      width: "140px",
+      width: "165px",
       align: "center",
       sortable: false,
       cell: (row) => (
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Injaz PDF Download Button */}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedRow(row);
+            onClick={async () => {
+              try {
+                toast.info("Generating Injaz document...");
+                const injazData: InjazCandidateData = {
+                  fullName: row.fullName,
+                  applicantId: row.applicantId,
+                  passportNumber: row.passportNumber,
+                  visaNumber: row.visaNumber || (row.applicant as any)?.visa_number || "",
+                  sponsorName: row.sponsorName || (row.applicant as any)?.sponsor_name || "",
+                  sponsorId: row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+                  injazNumber:
+                    (row.injaz as any)?.injaz_application_id ||
+                    (row as any).injazApplicationId ||
+                    (row.injaz as any)?.reference_no ||
+                    (row.injaz as any)?.injaz_number ||
+                    "",
+                  targetJob: row.jobApplied || "House worker",
+                  nationality: (row.applicant as any)?.nationality || "Ethiopian",
+                  photoUrl: (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
+                  destinationCountry: row.destinationCountry || "Saudi Arabia",
+                };
+
+                if (!injazData.photoUrl && row.applicantId) {
+                  try {
+                    const freshApp = await getApplicantV2(row.applicantId);
+                    const photo =
+                      freshApp?.photo_passport ||
+                      freshApp?.photograph ||
+                      freshApp?.profile_photo_url ||
+                      freshApp?.photo_full_body ||
+                      "";
+                    if (photo) injazData.photoUrl = photo;
+                  } catch (appErr) {
+                    console.warn("Could not fetch fresh applicant record for photo:", appErr);
+                  }
+                }
+
+                await downloadInjazDocumentPDF(injazData);
+                toast.success("Injaz document downloaded!");
+              } catch (err: any) {
+                toast.error("Failed to generate Injaz document", {
+                  description: formatCleanErrorMessage(err),
+                });
+              }
             }}
-            className="h-6 px-2 text-[11px] font-semibold border-emerald-600/30 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+            className="h-7 px-2 text-[11px] font-semibold gap-1 text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+            title="Download Official Injaz PDF"
           >
-            Edit
+            <FileDown className="h-3 w-3" />
+            <span>PDF</span>
+          </Button>
+
+          {/* Send to Browser Extension Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await sendApplicantToExtension(row.applicant || (row as any));
+                if (res.success) {
+                  toast.success(`${row.fullName} loaded into Extension!`);
+                } else {
+                  toast.info(`Candidate dispatched to Extension (${row.applicantId})`);
+                }
+              } catch (err: any) {
+                toast.error("Failed to send candidate to extension", {
+                  description: formatCleanErrorMessage(err),
+                });
+              }
+            }}
+            className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
+            title="Load into Chrome Extension for MOFA / Visa Platform autofill"
+          >
+            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <span>Extension</span>
+          </Button>
+
+          {/* Edit Dialog Trigger */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditingRow(row)}
+            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+            title="Edit Clearance Record"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),
@@ -529,584 +727,371 @@ export function EmbassyWorkspace({
         columns={columns}
         data={data}
         isLoading={isLoading}
-        selectedRowId={selectedRow?.applicantId}
-        onRowClick={(row) => setSelectedRow(row)}
+        selectedRowId={editingRow?.applicantId}
+        onRowClick={() => {
+          // Explicitly do not open modal on row click as requested
+        }}
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
       />
 
-      <OperationalDrawer
-        isOpen={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
-        title="Embassy Submission & Stamping Details"
-        applicantName={selectedRow?.fullName || ""}
-        applicantId={selectedRow?.applicantId || ""}
-        passportNumber={selectedRow?.passportNumber}
-        statusBadge={
-          <Badge
-            className={
-              status === "Approved"
-                ? "bg-emerald-600 text-white font-bold text-[10px]"
-                : status === "Submitted"
-                ? "bg-blue-600 text-white font-bold text-[10px]"
-                : status === "Rejected"
-                ? "bg-rose-600 text-white font-bold text-[10px]"
-                : "bg-amber-500 text-white font-bold text-[10px]"
-            }
-          >
-            {status === "Approved" ? "Stamped" : status}
-          </Badge>
-        }
-        canEdit={canEdit && !isPlacementDeparted}
-        isSaving={mutation.isPending}
-        onSave={() => {
-          if (isPlacementDeparted) {
-            toast.error(
-              `This placement is Departed/Cancelled — clearance steps can no longer be edited.`
-            );
-            return;
-          }
-          setIsConfirmOpen(true);
-        }}
-        leftAction={
-          isEmbassyTerminal && !isPlacementDeparted && isAdmin ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setReopenReason("");
-                setReopenTargetStatus("In Progress");
-                setIsReopenModalOpen(true);
-              }}
-              className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Reopen Step
-            </Button>
-          ) : undefined
-        }
-      >
-        <DrawerSection title="Candidate & Visa Dossier" icon={Building2}>
-          <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
-          <DrawerField label="Passport Number" value={selectedRow?.passportNumber} isReadOnly />
-          <DrawerField label="Destination Embassy" value={selectedRow?.destinationCountry} isReadOnly />
-          <DrawerField label="Sponsor Name" value={selectedRow?.sponsorName || "—"} isReadOnly />
-          <DrawerField label="MOFA / Visa Number" value={selectedRow?.visaNumber || "—"} isReadOnly />
-          <DrawerField label="Contract Number" value={selectedRow?.contractNumber || "—"} isReadOnly />
-        </DrawerSection>
-
-        <DrawerSection title="Wakala & Attestation" icon={FileText}>
-          {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && selectedRow?.wakalaStatus !== "Paid" && (
-            <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-              <div>
-                <span className="font-bold">Wakala Unpaid — Embassy submission should not proceed</span>
-                <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-                  Wakala authorization status is currently {selectedRow?.wakalaStatus || "Pending"}. Embassy submission requires verified Wakala payment.
-                </p>
-              </div>
-            </div>
-          )}
-          <DrawerField label="Wakala Authorization Status" value={selectedRow?.wakalaStatus || "Pending"} isReadOnly />
-          <DrawerField label="Wakala Fee Amount" value={selectedRow?.wakalaAmount ? `$${selectedRow.wakalaAmount}` : "—"} isReadOnly />
-          <DrawerField label="Wakala Paid Date" value={selectedRow?.wakalaPaidDate || "—"} isReadOnly />
-          <DrawerField label="Contract Attestation №" value={selectedRow?.contractNumber || "—"} isReadOnly />
-          <DrawerField label="Foreign Agency Partner" value={selectedRow?.company || selectedRow?.lockedContractor || "—"} isReadOnly />
-        </DrawerSection>
-
-        <DrawerSection title="Embassy Submission Details" icon={FileCheck2}>
-          {isEmbassyTerminal && (
-            <div className="sm:col-span-2 rounded-xl border-2 border-blue-400/40 dark:border-blue-600/40 bg-blue-50/60 dark:bg-blue-950/40 p-3.5 shadow-xs text-blue-950 dark:text-blue-100 flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 mt-0.5">
-                <ShieldAlert className="h-4.5 w-4.5 text-blue-700 dark:text-blue-300" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
-                  Step Finalized — Data Corrections Allowed
-                </p>
-                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 leading-relaxed">
-                  This Embassy clearance step is finalized (<span className="font-bold underline">{currentEmbassyStatus}</span>). You can correct visa stamp number, stamped date, rejection remarks, or handler assignment. To reverse the outcome itself, click <strong className="underline">Reopen Step</strong> above.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") &&
-            !(
-              selectedRow?.injaz?.status === "Completed" ||
-              selectedRow?.injaz?.status === "Complete" ||
-              selectedRow?.injaz?.status === "Issued" ||
-              selectedRow?.injaz?.status === "Approved"
-            ) && (
-              <div className="sm:col-span-2 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-                <div>
-                  <span className="font-bold">Taeshir Pending — Stamping Gated on Saudi Corridor</span>
-                  <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-                    Taeshir clearance step is currently {selectedRow?.injaz?.status || "Pending"}. On the Saudi Arabia corridor, Embassy visa stamping requires Taeshir to be completed first.
-                  </p>
-                </div>
-              </div>
-            )}
-
-        {/* Saudi Corridor: Wakala Payment & Authorization Management (2026-09-11) */}
-        {selectedRow?.destinationCountry?.toLowerCase().includes("saudi") && (
-          <DrawerSection title="Wakala Payment & Authorization (Saudi Arabia)" icon={CreditCard}>
-            <div className="sm:col-span-2 space-y-3">
-              {wakalaStatus !== "Paid" ? (
-                <div className="rounded-lg border border-rose-300 dark:border-rose-900 bg-rose-50/90 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
-                    <div>
-                      <span className="font-bold">Wakala Payment Required for Embassy Submission</span>
-                      <p className="mt-0.5 text-[11px] text-rose-700 dark:text-rose-400">
-                        Wakala is currently <strong>{wakalaStatus}</strong>. Submission to the Saudi Embassy is gated until the Wakala fee is marked as Paid.
-                      </p>
-                    </div>
-                  </div>
-                  {canUpdateWakala && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={async () => {
-                        const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
-                        if (!stepName) return;
-                        try {
-                          setIsRecordingWakala(true);
-                          const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
-                          await recordWakalaPaymentV2(
-                            stepName,
-                            "Paid",
-                            amt,
-                            wakalaPaidDate || new Date().toISOString().split("T")[0]
-                          );
-                          setWakalaStatus("Paid");
-                          setConfirmUnpaidWakala(false);
-                          toast.success("Wakala fee recorded as Paid! Embassy documents can now be submitted.");
-                          queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-                          queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
-                          onRefresh();
-                        } catch (e: any) {
-                          toast.error(e?.message || "Failed to record Wakala payment.");
-                        } finally {
-                          setIsRecordingWakala(false);
-                        }
-                      }}
-                      disabled={isRecordingWakala}
-                      className="shrink-0 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm"
-                    >
-                      {isRecordingWakala ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3 w-3" />}
-                      Mark Wakala Paid
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                    <div>
-                      <span className="font-bold">Wakala Payment Verified (Paid)</span>
-                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                        Paid on {wakalaPaidDate || "Record"} {wakalaAmount ? `• Amount: ${wakalaAmount} SAR` : ""}. Embassy documents are eligible for submission.
-                      </p>
-                    </div>
-                  </div>
-                  {canUpdateWakala && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        const stepName = selectedRow?.clearanceStepName || selectedRow?.embassy?.name;
-                        if (!stepName) return;
-                        try {
-                          setIsRecordingWakala(true);
-                          await recordWakalaPaymentV2(stepName, "Pending");
-                          setWakalaStatus("Pending");
-                          toast.info("Wakala fee reverted to Pending.");
-                          queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-                          queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
-                          onRefresh();
-                        } catch (e: any) {
-                          toast.error(e?.message || "Failed to revert Wakala status.");
-                        } finally {
-                          setIsRecordingWakala(false);
-                        }
-                      }}
-                      disabled={isRecordingWakala}
-                      className="shrink-0 text-xs border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100"
-                    >
-                      Revert to Pending
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-                <div>
-                  <Label className="text-[11px] font-semibold">Wakala Fee Status</Label>
-                  <select
-                    value={wakalaStatus}
-                    disabled={!canUpdateWakala || isRecordingWakala}
-                    onChange={(e) => setWakalaStatus(e.target.value as "Pending" | "Paid")}
-                    className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
-                  >
-                    <option value="Pending">Pending (Unpaid)</option>
-                    <option value="Paid">Paid (Authorized)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <Label className="text-[11px] font-semibold">Wakala Fee Amount (SAR)</Label>
-                  <Input
-                    type="number"
-                    placeholder="e.g. 2000"
-                    value={wakalaAmount}
-                    disabled={!canUpdateWakala || isRecordingWakala}
-                    onChange={(e) => setWakalaAmount(e.target.value)}
-                    className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-[11px] font-semibold">Payment Date</Label>
-                  <Input
-                    type="date"
-                    value={wakalaPaidDate}
-                    disabled={!canUpdateWakala || isRecordingWakala || wakalaStatus !== "Paid"}
-                    onChange={(e) => setWakalaPaidDate(e.target.value)}
-                    className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] disabled:opacity-50"
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-[11px] font-semibold">Wakala Reference №</Label>
-                  <Input
-                    type="text"
-                    placeholder="e.g. WAK-99281"
-                    value={wakalaRefNo}
-                    disabled={!canUpdateWakala || isRecordingWakala}
-                    onChange={(e) => setWakalaRefNo(e.target.value)}
-                    className="h-9 mt-1 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-                  />
-                </div>
-              </div>
-
-              {/* Manager Written Override Input if Submitting Unpaid Wakala */}
-              {status === "Submitted" && wakalaStatus !== "Paid" && isAdmin && (
-                <div className="mt-2 p-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 text-xs space-y-2">
-                  <label className="flex items-start gap-2 cursor-pointer font-semibold text-amber-900 dark:text-amber-200">
-                    <input
-                      type="checkbox"
-                      checked={confirmUnpaidWakala}
-                      onChange={(e) => setConfirmUnpaidWakala(e.target.checked)}
-                      className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>
-                      Manager Override: Proceed with Embassy Submission despite Unpaid Wakala.
-                    </span>
-                  </label>
-                  {confirmUnpaidWakala && (
-                    <div>
-                      <Label className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
-                        Manager Written Override Reason *
-                      </Label>
-                      <Input
-                        type="text"
-                        placeholder="e.g. Approved by Operations Manager / Foreign agency verified offline"
-                        value={wakalaOverrideReason}
-                        onChange={(e) => setWakalaOverrideReason(e.target.value)}
-                        className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-amber-300 dark:border-amber-800"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </DrawerSection>
-        )}
-
-          <DrawerField label="Embassy Clearance Status" isReadOnly={false}>
-            <select
-              value={status}
-              disabled={!canEdit || mutation.isPending || isEmbassyTerminal || isPlacementDeparted}
-              onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
-            >
-              <option value="Pending">Pending (Awaiting Submission)</option>
-              <option value="Submitted">Submitted (At Embassy)</option>
-              <option value="Approved">Approved (Visa Stamped)</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </DrawerField>
-
-          <DrawerField label="Embassy Submission Date" isReadOnly={false}>
-            <Input
-              type="date"
-              value={submissionDate}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setSubmissionDate(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-
-          {status === "Rejected" && (
-            <div className="sm:col-span-2">
-              <DrawerField label="Rejection Cause / Remark" isReadOnly={false}>
-                <Input
-                  type="text"
-                  placeholder="e.g. Passport damage / photo mismatch"
-                  value={rejectionRemark}
-                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-                  onChange={(e) => setRejectionRemark(e.target.value)}
-                  className="h-9 text-xs border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30"
-                />
-              </DrawerField>
-            </div>
-          )}
-
-          {/* Assigned Officer Field: Visible ONLY to Admins */}
-          {isStrictAdmin && (
-            <div className="sm:col-span-2">
-              <DrawerField label="Assigned Embassy Officer (Admin Only)" isReadOnly={false}>
-                <select
-                  value={employee}
-                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-                  onChange={(e) => setEmployee(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
-                >
-                  <option value="">-- Select Handler Employee --</option>
-                  {employees.map((emp) => (
-                    <option key={emp.name} value={emp.name}>
-                      {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
-                    </option>
-                  ))}
-                </select>
-              </DrawerField>
-            </div>
-          )}
-        </DrawerSection>
-
-        <DrawerSection title="Visa Stamp Registration" icon={ShieldCheck}>
-          <DrawerField label="Visa Stamp Number" isReadOnly={false}>
-            <Input
-              type="text"
-              placeholder="e.g. 1908334046"
-              value={stampNumber}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setStampNumber(e.target.value)}
-              className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-          <DrawerField label="Visa Stamped Date" isReadOnly={false}>
-            <Input
-              type="date"
-              value={stampDate}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setStampDate(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-        </DrawerSection>
-
-        <DrawerSection title="Browser Extension Autofill" icon={Sparkles}>
-          <div className="space-y-2 text-xs">
-            <p className="text-slate-500 dark:text-zinc-400">
-              Load this candidate into the Travel Agency browser extension for instant 1-click autofill into MOFA, Enjaz, or the Embassy Visa Platform.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                if (!selectedRow) return;
-                try {
-                  const res = await sendApplicantToExtension(selectedRow.applicant || (selectedRow as any));
-                  if (res.success) {
-                    toast.success("Candidate loaded into Browser Extension for Visa Platform autofill!");
-                  } else {
-                    toast.info("Candidate ready in browser extension storage.");
-                  }
-                } catch (err: any) {
-                  toast.error("Failed to send candidate to browser extension", {
-                    description: formatCleanErrorMessage(err),
-                  });
-                }
-              }}
-              className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              Send to Extension (MOFA / Visa Platform)
-            </Button>
-          </div>
-        </DrawerSection>
-
-        {/* Stage Fee Required Logging (Routes to Finance) */}
-        <StageFeeSection
-          placementId={selectedRow?.dsrName}
-          stageName="Embassy Clearance"
-          defaultDirection="Expense"
-          disabled={isEmbassyTerminal || !canEdit}
-        />
-      </OperationalDrawer>
-
       {/* ------------------------------------------------------------- */}
-      {/* Finalize / Save Confirmation Dialog                           */}
+      {/* Edit Modal Dialog (Replaces Side Drawer)                     */}
       {/* ------------------------------------------------------------- */}
-      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <DialogContent className="sm:max-w-md border-amber-200 dark:border-amber-800 bg-white dark:bg-[#121216]">
+      <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white dark:bg-[#121216] border-slate-200 dark:border-[#2a2a35] p-6 shadow-2xl">
           <DialogHeader>
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="h-5 w-5" />
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-800">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="uppercase">{editingRow?.fullName}</span>
+                    <Badge
+                      className={
+                        modalStatus === "Approved"
+                          ? "bg-emerald-600 text-white font-bold text-[10px]"
+                          : modalStatus === "Submitted"
+                          ? "bg-blue-600 text-white font-bold text-[10px]"
+                          : modalStatus === "Rejected"
+                          ? "bg-rose-600 text-white font-bold text-[10px]"
+                          : "bg-amber-500 text-white font-bold text-[10px]"
+                      }
+                    >
+                      {modalStatus === "Approved" ? "Stamped" : modalStatus}
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                    Passport: <span className="font-mono font-bold text-slate-700 dark:text-zinc-300">{editingRow?.passportNumber}</span> | Country: {editingRow?.destinationCountry || "Saudi Arabia"}
+                  </DialogDescription>
+                </div>
               </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                  {isEmbassyTerminal
-                    ? "Confirm Embassy Data Correction"
-                    : status === "Approved"
-                    ? "Confirm Embassy Visa Stamping"
-                    : "Confirm Save Changes"}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Review your changes before saving.
-                </DialogDescription>
-              </div>
+              {isEmbassyTerminal(editingRow?.embassy?.status) && isAdmin && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setReopenReason("");
+                    setReopenTargetStatus("In Progress");
+                    setIsReopenModalOpen(true);
+                  }}
+                  className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                  Reopen Step
+                </Button>
+              )}
             </div>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            {/* Warning or info box */}
-            <div
-              className={cn(
-                "rounded-xl border-2 p-3.5",
-                isEmbassyTerminal
-                  ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-200"
-                  : "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200"
-              )}
-            >
-              <div className="flex items-start gap-2.5">
-                <ShieldAlert
-                  className={cn(
-                    "h-4 w-4 shrink-0 mt-0.5",
-                    isEmbassyTerminal ? "text-blue-600 dark:text-blue-400" : "text-amber-600"
-                  )}
-                />
-                <div className="text-xs leading-relaxed">
-                  <p className="font-bold uppercase tracking-wide mb-0.5">
-                    {isEmbassyTerminal ? "Clearance Step Data Correction" : "Permanent Action Warning"}
-                  </p>
-                  <p>
-                    {isEmbassyTerminal ? (
-                      <>
-                        This step is already finalized. Data modifications to visa stamp number, stamped date, rejection remarks, and handler assignment will be updated without reversing completion status.
-                      </>
-                    ) : status === "Approved" ? (
-                      <>
-                        Setting this clearance step to <strong className="underline">Approved (Stamped)</strong> will permanently finalize it. Once saved, status reversals require the Reopen Step action.
-                      </>
-                    ) : status === "Rejected" ? (
-                      <>
-                        Rejecting this embassy clearance step will mark it as terminal. Once saved, reversing requires the Reopen Step action.
-                      </>
-                    ) : (
-                      <>
-                        Once saved, embassy clearance updates are permanently recorded. Please verify all information is accurate before confirming.
-                      </>
-                    )}
-                  </p>
+          <div className="space-y-4 py-3 text-xs">
+            {/* Candidate & Sponsor Dossier Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-[#18181f] border border-slate-200 dark:border-[#262632]">
+              <div>
+                <Label className="text-[11px] text-slate-500 dark:text-zinc-400">Destination Embassy</Label>
+                <div className="font-semibold text-slate-800 dark:text-zinc-200 mt-0.5">
+                  {editingRow?.destinationCountry || "Saudi Arabia"}
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-500 dark:text-zinc-400">Sponsor Name</Label>
+                <div className="font-semibold text-slate-800 dark:text-zinc-200 mt-0.5 uppercase">
+                  {editingRow?.sponsorName || "—"}
+                </div>
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-500 dark:text-zinc-400">Contract Number</Label>
+                <div className="font-mono font-semibold text-slate-800 dark:text-zinc-200 mt-0.5">
+                  {editingRow?.contractNumber || "—"}
                 </div>
               </div>
             </div>
 
-            {/* Candidate & Field Summary */}
-            <div className="rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50/60 dark:bg-[#16161c] p-3.5 space-y-2 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                <span className="text-slate-500 dark:text-zinc-400">Candidate:</span>
-                <span className="font-bold text-slate-900 dark:text-white">{selectedRow?.fullName}</span>
+            {/* Wakala Section: Fee amount and payment date strictly removed */}
+            {editingRow?.destinationCountry?.toLowerCase().includes("saudi") && (
+              <div className="rounded-xl border border-slate-200 dark:border-[#2c2c36] p-4 bg-white dark:bg-[#16161c] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-zinc-200">
+                    <FileText className="h-4 w-4 text-emerald-600" />
+                    <span>Wakala Authorization Status</span>
+                  </div>
+                  <Badge
+                    className={
+                      modalWakalaStatus === "Paid"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300"
+                    }
+                  >
+                    Wakala: {modalWakalaStatus}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="w-1/2">
+                    <Label className="text-[11px] font-semibold">Wakala Status</Label>
+                    <select
+                      value={modalWakalaStatus}
+                      disabled={!canEdit || isRecordingWakala}
+                      onChange={(e) => setModalWakalaStatus(e.target.value as "Pending" | "Paid")}
+                      className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
+                    >
+                      <option value="Pending">Pending (Unpaid)</option>
+                      <option value="Paid">Paid (Authorized)</option>
+                    </select>
+                  </div>
+
+                  {canEdit && (
+                    <div className="flex items-end h-9 mt-4">
+                      {modalWakalaStatus !== "Paid" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isRecordingWakala}
+                          onClick={async () => {
+                            const stepName = editingRow?.clearanceStepName || editingRow?.embassy?.name;
+                            if (!stepName) return;
+                            try {
+                              setIsRecordingWakala(true);
+                              await recordWakalaPaymentV2(stepName, "Paid");
+                              setModalWakalaStatus("Paid");
+                              toast.success("Wakala recorded as Paid!");
+                              onRefresh();
+                            } catch (e: any) {
+                              toast.error(e?.message || "Failed to update Wakala status.");
+                            } finally {
+                              setIsRecordingWakala(false);
+                            }
+                          }}
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold h-9"
+                        >
+                          {isRecordingWakala ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
+                          Mark Wakala Paid
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isRecordingWakala}
+                          onClick={async () => {
+                            const stepName = editingRow?.clearanceStepName || editingRow?.embassy?.name;
+                            if (!stepName) return;
+                            try {
+                              setIsRecordingWakala(true);
+                              await recordWakalaPaymentV2(stepName, "Pending");
+                              setModalWakalaStatus("Pending");
+                              toast.info("Wakala reverted to Pending.");
+                              onRefresh();
+                            } catch (e: any) {
+                              toast.error(e?.message || "Failed to revert Wakala status.");
+                            } finally {
+                              setIsRecordingWakala(false);
+                            }
+                          }}
+                          className="text-xs h-9"
+                        >
+                          Revert to Pending
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Manager Written Override if submitting or stamping unpaid Wakala */}
+                {(modalStatus === "Submitted" || modalStatus === "Approved") && modalWakalaStatus !== "Paid" && isAdmin && (
+                  <div className="p-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/30 text-xs space-y-2 mt-2">
+                    <label className="flex items-start gap-2 cursor-pointer font-semibold text-amber-900 dark:text-amber-200">
+                      <input
+                        type="checkbox"
+                        checked={confirmUnpaidWakala}
+                        onChange={(e) => setConfirmUnpaidWakala(e.target.checked)}
+                        className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>
+                        Manager Override: Proceed with Embassy {modalStatus === "Approved" ? "Stamping" : "Submission"} despite Unpaid Wakala.
+                      </span>
+                    </label>
+                    {confirmUnpaidWakala && (
+                      <div>
+                        <Label className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">
+                          Manager Written Override Reason *
+                        </Label>
+                        <Input
+                          type="text"
+                          placeholder="e.g. Approved by Operations Manager / Foreign agency verified offline"
+                          value={wakalaOverrideReason}
+                          onChange={(e) => setWakalaOverrideReason(e.target.value)}
+                          className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-amber-300 dark:border-amber-800"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                <span className="text-slate-500 dark:text-zinc-400">Embassy Status to Apply:</span>
-                <Badge
-                  className={
-                    status === "Approved"
-                      ? "bg-emerald-600 text-white font-bold text-[10px]"
-                      : status === "Rejected"
-                      ? "bg-rose-600 text-white font-bold text-[10px]"
-                      : status === "Submitted"
-                      ? "bg-blue-600 text-white font-bold text-[10px]"
-                      : "bg-amber-500 text-white font-bold text-[10px]"
-                  }
+            )}
+
+            {/* Embassy Stamping & Submission Form */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  Embassy Clearance Status
+                </Label>
+                <select
+                  value={modalStatus}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalStatus(e.target.value as any)}
+                  className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
                 >
-                  {status === "Approved" ? "Stamped" : status}
-                </Badge>
+                  <option value="Pending">Pending (Awaiting Submission)</option>
+                  <option value="Submitted">Submitted (At Embassy)</option>
+                  <option value="Approved">Approved (Visa Stamped)</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
               </div>
-              {stampNumber && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Visa / Stamp №:</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">{stampNumber}</span>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  Embassy Submission Date
+                </Label>
+                <Input
+                  type="date"
+                  value={modalSubmissionDate}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalSubmissionDate(e.target.value)}
+                  className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  Visa Stamp Number
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. 1908334046"
+                  value={modalStampNumber}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalStampNumber(e.target.value)}
+                  className="h-9 mt-1 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  Visa Stamped Date
+                </Label>
+                <Input
+                  type="date"
+                  value={modalStampDate}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalStampDate(e.target.value)}
+                  className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  {modalStatus === "Rejected" ? "Rejection Cause / Remark *" : "Notes & Remarks"}
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Approved by mission / Stamped successfully"
+                  value={modalRejectionRemark}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalRejectionRemark(e.target.value)}
+                  className={`h-9 mt-1 text-xs ${
+                    modalStatus === "Rejected"
+                      ? "border-rose-300 dark:border-rose-800 bg-rose-50/50 dark:bg-rose-950/30"
+                      : "bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                  }`}
+                />
+              </div>
+
+              {/* Handler Employee: Admin only */}
+              {isStrictAdmin && (
+                <div className="sm:col-span-2">
+                  <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                    Assigned Embassy Officer (Admin Only)
+                  </Label>
+                  <select
+                    value={modalEmployee}
+                    disabled={!canEdit || modalSaveMutation.isPending}
+                    onChange={(e) => setModalEmployee(e.target.value)}
+                    className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium"
+                  >
+                    <option value="">-- Select Handler Employee --</option>
+                    {employees.map((emp) => (
+                      <option key={emp.name} value={emp.name}>
+                        {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
-              {submissionDate && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Submission Date:</span>
-                  <span className="text-slate-800 dark:text-zinc-200">{submissionDate}</span>
+            </div>
+
+            {/* Browser Extension Autofill Action */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" />
+                  Browser Extension Autofill
                 </div>
-              )}
-              {receiptNo && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Receipt / Ref №:</span>
-                  <span className="font-mono text-slate-800 dark:text-zinc-200">{receiptNo}</span>
+                <div className="text-[11px] text-indigo-700/80 dark:text-indigo-400">
+                  Load this candidate into the extension for 1-click filling into MOFA / Visa Platform.
                 </div>
-              )}
-              {embassyFee && (
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-500 dark:text-zinc-400">Embassy Fee:</span>
-                  <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
-                    ${embassyFee} USD
-                  </span>
-                </div>
-              )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!editingRow) return;
+                  try {
+                    const res = await sendApplicantToExtension(
+                      editingRow.applicant || (editingRow as any)
+                    );
+                    if (res.success) {
+                      toast.success("Candidate loaded into Browser Extension!");
+                    } else {
+                      toast.info("Candidate sent to browser extension.");
+                    }
+                  } catch (err: any) {
+                    toast.error("Failed to send candidate to extension", {
+                      description: formatCleanErrorMessage(err),
+                    });
+                  }
+                }}
+                className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950"
+              >
+                Send to Extension
+              </Button>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-slate-100 dark:border-zinc-800">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={mutation.isPending}
-              onClick={() => setIsConfirmOpen(false)}
+              disabled={modalSaveMutation.isPending}
+              onClick={() => setEditingRow(null)}
               className="text-xs font-semibold"
             >
-              Cancel / Review
+              Cancel
             </Button>
             <Button
               type="button"
               size="sm"
-              disabled={mutation.isPending}
-              onClick={() => {
-                setIsConfirmOpen(false);
-                mutation.mutate();
-              }}
-              className={cn(
-                "text-xs font-semibold text-white",
-                status === "Rejected"
-                  ? "bg-rose-600 hover:bg-rose-700"
-                  : "bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500"
-              )}
+              disabled={modalSaveMutation.isPending}
+              onClick={() => modalSaveMutation.mutate()}
+              className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
             >
-              {mutation.isPending
-                ? "Submitting..."
-                : status === "Rejected"
-                ? "Yes, Confirm Rejection"
-                : isEmbassyTerminal
-                ? "Yes, Save Corrections"
-                : "Yes, Confirm & Save"}
+              {modalSaveMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1121,7 +1106,7 @@ export function EmbassyWorkspace({
               Reopen Embassy Clearance Step
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Reversing this step will reset its terminal outcome and notify the assigned handler. A written audit reason is mandatory.
+              Reversing this step will reset its terminal outcome. A written audit reason is mandatory.
             </DialogDescription>
           </DialogHeader>
 
@@ -1147,7 +1132,7 @@ export function EmbassyWorkspace({
               </label>
               <Textarea
                 rows={3}
-                placeholder="Explain why this Embassy clearance step needs to be reopened (e.g. stamped visa revoked by embassy, correction needed before departure)..."
+                placeholder="Explain why this Embassy clearance step needs to be reopened..."
                 value={reopenReason}
                 onChange={(e) => setReopenReason(e.target.value)}
                 className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"

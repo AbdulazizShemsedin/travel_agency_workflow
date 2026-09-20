@@ -143,7 +143,7 @@ export default function MyReservedCandidatesPage() {
                 size="sm"
                 className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white"
               >
-                Browse Marketplace
+                Browse Candidate Pool
               </Button>
             </Link>
           </div>
@@ -188,11 +188,11 @@ export default function MyReservedCandidatesPage() {
                 No Selected Applicants Yet
               </h3>
               <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 max-w-sm">
-                You haven&apos;t selected any applicants from the marketplace yet. Browse available applicants to allocate them to your agency.
+                You haven&apos;t selected any applicants from the candidate directory yet. Browse available applicants to allocate them to your agency.
               </p>
               <Link href="/agent" className="mt-4">
                 <Button size="sm" className="text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white">
-                  Go to Candidate Marketplace
+                  Go to Candidate Directory
                 </Button>
               </Link>
             </div>

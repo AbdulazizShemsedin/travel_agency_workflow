@@ -19,6 +19,7 @@ export type V2ComplaintResolutionStatus =
 
 export interface V2ComplaintRecord {
   name: string;
+  display_no?: number;
   placement: string;
   applicant?: string;
   full_name?: string;

@@ -4,7 +4,7 @@
 **Backend Authority**: `https://travelagency-production-b48d.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-08T00:00:00Z
+**Last Updated**: 2026-09-19T17:50:00Z
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
 |---|---|---|---|---|---|---|
-| **86** | **36** | **49** | **0** | **0** | **0** | **1** |
+| **88** | **39** | **48** | **0** | **0** | **0** | **1** |
 
 ---
 
@@ -23,8 +23,8 @@
 | 1 | **Session Authentication (Login / Logout)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. Tested against live Railway backend. |
 | 2 | **CSRF Token Lifecycle & Caching** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. In-memory caching and transparent header attachment operational. |
 | 3 | **Current User Context & Role Rehydration** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | None. AuthProvider rehydrates 16 canonical V2 roles. |
-| 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | PARTIAL | YES | **IMPLEMENTED** | Verified no demo fallback on error; propagates honest ApiV2Error. |
-| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified on Railway backend: field-floor normalization for Standard track (target_job, education, salary_amount, salary_currency, photograph with full-body photo support) prevents 417 floor validation errors. |
+| 4 | **Applicant Intake & Draft Creation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Client recording layout aligned, with top media tabs, 2-col core grid, sponsor/visa info, accordions, restored passport quick-scan extractor & warning, standard/muayena track toggle, and high-contrast tab selection. Verified no demo fallback. |
+| 5 | **Applicant Registration (Draft -> Registered)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified on Railway backend: field-floor normalization for Standard track (target_job, education, salary_amount, salary_currency, photograph with full-body photo support) prevents 417 floor validation errors. Derives first/middle/last names from full_name automatically. |
 | 6 | **Applicant Profile Retrieval & Listing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on query error; empty list preserved as empty. |
 | 7 | **Applicant Full Editing & Uniqueness Validation** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Multi-entry fee logging integrated with auto-save submission. |
 | 8 | **Applicant LMIS Fast-Path Editing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Reusable LmisFastPathModal built & integrated into clearance queue drawer & applicant profile calling update_applicant_for_lmis (TODO-P2-01). |
@@ -49,7 +49,7 @@
 | 27 | **Placement Predeparture Medical (Ticketed -> Departed)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Pre-departure Medical 2 screening persisted via record_predeparture_medical_result; strictly gates departure. |
 | 28 | **Placement Departure & Terminal State Guard** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Final departure clearance strictly requires Medical 2 FIT; dedicated time selection; honest errors surfaced. |
 | 29 | **Dynamic Corridor Step Discovery** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Ensure dynamic rendering is used everywhere. |
-| 30 | **Clearance Queue Retrieval (list_my_clearance_steps)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated across recovered Excel-like Workspaces (LMIS, Te'shir, Embassy, Departure) and V2ClearanceQueueWorkspace, with strict role-allowlist access control and queries gated against unpermitted tabs. |
+| 30 | **Clearance Queue Retrieval (list_my_clearance_steps)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated across recovered Excel-like Workspaces (LMIS, Te'shir, Embassy, Departure, Wakala) and V2ClearanceQueueWorkspace, with direct page size buttons [10, 25, 50, 100], spreadsheet in-cell editing with verified backend schema conformance & persistence (remarks via update_applicant, visa # via update_placement_parsed_fields, E-no & appointment dates via set_taeshir_appointment, ticketing via record_ticket_details), first-column blue pencil edit modal, and header column filter inputs matching reference UI. |
 | 31 | **Clearance Step Start & In-Progress Marking** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls start_clearance_step. |
 | 32 | **Clearance Step Completion (LMIS / Taeshir / Telesign)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls complete_clearance_step with reference/amount and optional date_completed backdating. |
 | 33 | **Embassy Step Monday Submission** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated in OperationalDrawer; calls submit_embassy_step with unpaid Wakala guard and manager override reason. |
@@ -106,6 +106,8 @@
 | 84 | **Foreign Agency Selection Confirmation Dialog, 7s Undo, & System-Wide Lazy Loading** | YES | YES | YES | `IMPLEMENTED` | YES | YES | YES | YES | **IMPLEMENTED** | 1. Confirmation popup (Radix Dialog, emerald-themed) before every foreign-agency candidate selection on /agent — shows candidate thumbnail, job, destination, religion, experience, and the 7s-undo notice; atomic `portal_api.select_candidate` only fires after explicit confirm. 2. Post-selection 7-second Undo bar with inline countdown-window badge — calls `placement_api.advance_placement(name, "Cancelled")` (Selected→Cancelled is the sanctioned revert edge; Departed is terminal), restores the candidate to the available pool and decrements the session selection count. 3. Lazy loading throughout: 23 route-level `loading.tsx` skeleton files (shared `ui/skeleton.tsx` primitives styled to the slate/emerald light+dark theme) plus `next/dynamic` code-splitting for the heavy `RoleWorkspaceContainer` (applicants) and full-screen `CandidateDetailModal` (agent). Verified clean TypeScript (`npx tsc --noEmit`) and production Next.js build (`npm run build`). |
 | 85 | **All-Transactions Binary XLSX Export & Commission XLSX Column Ordering** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | exportTransactionsXlsxV2 integrated on /expenses-income and /reports covering Expense/Income/Commission; export_commissions_xlsx real formatting, agency banner, and updated client-facing column order. |
 | 86 | **Clearance Step Human-Error Correction Toolkit & Role-Gated Employee Roster** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | date_completed backdating on completions/corrections; dedicated wakala_reference_no; Kuwait LMIS police_ashara_payment_status & failure remark; generic record_other_payment line items; list_employee_roster migration; admin-lockout 417 messages preserved. |
+| 87 | **Production File Upload Capacity & 413 Handling (`upload_file`)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Resolved live Frappe default 25MB limit by updating System Settings max_file_size to 1024 MB via authenticated frappe.client.set_value on live Railway backend. Verified 25MB and 30MB uploads returning 200 OK. Hardened Next.js proxy route parseJsonOrFriendlyMessage to handle 413 explicitly and prevent stream consumption errors. Updated PremiumDropzone size recommendations. |
+| 88 | **Commission-Currency-Invoicing Updates & User To-Do Queue (`list_my_todos`, Async Passport OCR, Stamping Wakala Guard)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Integrated: 1. `list_my_todos` To-Do queue in Notifications & Action Center with direct queue navigation. 2. `Applicant.place_of_birth` and `needs_passport_review` flag in passport intake & registration. 3. `Complaint.display_no` across all user-facing views. 4. `list_batch_write_offs` dedicated endpoint in Commission Batch details. 5. Automatic corridor known fee calculation on ticketing, with optional currency in `record_ticket_details`. 6. Async passport OCR background queue (`enqueue_parse_passport_file` + `get_job_status`) with sync fallback. 7. Unpaid Wakala guard on Embassy Stamping with Manager override support and error translation. |
 
 ---
 

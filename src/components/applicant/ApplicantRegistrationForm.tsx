@@ -3,48 +3,62 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Bookmark,
   FileCheck2,
   FileText,
   Loader2,
-  AlertTriangle,
   Save,
-  CheckCircle2,
-  Download,
-  ExternalLink,
-  User,
-  GraduationCap,
+  Camera,
+  UploadCloud,
+  Trash2,
+  Video,
   ShieldCheck,
-  HeartPulse,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  ExternalLink,
+  ScanLine,
   Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardPaste,
+  Globe2,
+  User,
+  Check,
 } from "lucide-react";
 import {
   BaseApplicantFormValues,
   stage1DraftSchema,
   stage2RegistrationSchema,
+  splitFullName,
+  deriveFullName,
+  GENDER_OPTIONS,
+  RELIGION_OPTIONS,
+  MARITAL_STATUS_OPTIONS,
+  DESTINATION_COUNTRY_OPTIONS,
 } from "@/lib/validations/applicant.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createApplicantV2,
   updateApplicantV2,
   registerApplicantV2,
-  generateCvV2,
-  getApplicantV2,
-  logApplicantFeeV2,
+  uploadFileV2,
+  parsePassportFileV2,
   normalizeApplicantFields,
-  ApiV2Error,
 } from "@/lib/api/v2";
-import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
-import { Step1PersonalInfo } from "./steps/Step1PersonalInfo";
-import { Step2EducationExperience } from "./steps/Step2EducationExperience";
-import { Step3IdentificationContact } from "./steps/Step3IdentificationContact";
-import { Step4CocMedical } from "./steps/Step4CocMedical";
+import { listContractorsV2 } from "@/lib/api/v2/contractors";
+import { parseMRZText, performOpticalPassportOCR, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import {
   Dialog,
   DialogContent,
@@ -61,168 +75,55 @@ interface ApplicantRegistrationFormProps {
   onSuccessRedirect?: (applicantId: string) => void;
 }
 
-const SECTIONS = [
-  { id: "section-personal", label: "1. Personal & Passport", icon: User },
-  { id: "section-education", label: "2. Education & Skills", icon: GraduationCap },
-  { id: "section-identification", label: "3. ID & Contacts", icon: ShieldCheck },
-  { id: "section-medical", label: "4. Medical & COC", icon: HeartPulse },
-];
+type MediaTabType = "photo" | "full_size" | "passport" | "video";
 
-// Map every form field to its respective wizard section
-const FIELD_TO_SECTION_MAP: Record<string, string> = {
-  applicant_type: "section-personal",
-  destination_country: "section-personal",
-  first_name: "section-personal",
-  middle_name: "section-personal",
-  last_name: "section-personal",
-  gender: "section-personal",
-  date_of_birth: "section-personal",
-  religion: "section-personal",
-  marital_status: "section-personal",
-  children: "section-personal",
-  nationality: "section-personal",
-  passport_number: "section-personal",
-  passport_issue_date: "section-personal",
-  passport_expiry: "section-personal",
-  passport_issue_place: "section-personal",
-  place_of_issue: "section-personal",
-  place_of_birth: "section-personal",
-  photo_passport: "section-personal",
-  profile_photo_url: "section-personal",
-  photograph: "section-personal",
-  photo_full_body: "section-personal",
-  passport_scan: "section-personal",
-  leaving_town: "section-personal",
-  city: "section-personal",
-  country: "section-personal",
-  phone_number: "section-personal",
-  alternate_phone: "section-personal",
-  email: "section-personal",
-  sub_region: "section-personal",
-  address_line_1: "section-personal",
-  fee_required: "section-personal",
-  registration_fee_amount: "section-personal",
-  fee_type: "section-personal",
-  fee_direction: "section-personal",
-  fee_status: "section-personal",
+const PASSPORT_TYPE_OPTIONS = ["Normal", "Diplomatic", "Special", "Service"] as const;
+const VISA_TYPE_OPTIONS = ["Work", "Visit", "Tourist", "Business", "Other"] as const;
+const LANGUAGE_PROFICIENCY_OPTIONS = ["Select..", "None", "Poor", "Fair", "Basic", "Good", "Fluent"] as const;
+const QUALIFICATION_OPTIONS = [
+  "PRIMARY LEVEL",
+  "SECONDARY LEVEL",
+  "HIGH SCHOOL",
+  "DIPLOMA",
+  "BACHELOR'S DEGREE",
+  "MASTER'S DEGREE",
+  "OTHER",
+] as const;
+const OCCUPATION_OPTIONS = [
+  "HOUSE WORKER",
+  "DOMESTIC WORKER",
+  "DRIVER",
+  "COOK",
+  "GENERAL CAREGIVER",
+  "CLEANER",
+  "BABYSITTER",
+  "OTHER",
+] as const;
+const RELATIVE_KINSHIP_OPTIONS = [
+  "Mother",
+  "Father",
+  "Spouse",
+  "Brother",
+  "Sister",
+  "Uncle",
+  "Aunt",
+  "Child",
+  "Other",
+] as const;
+const EXPERIENCE_ABROAD_OPTIONS = [
+  "None / First Time",
+  "Saudi Arabia",
+  "Kuwait",
+  "United Arab Emirates",
+  "Qatar",
+  "Oman",
+  "Jordan",
+  "Lebanon",
+  "Bahrain",
+  "Other",
+] as const;
 
-  job_applied: "section-education",
-  target_job: "section-education",
-  highest_education: "section-education",
-  education: "section-education",
-  english_level: "section-education",
-  arabic_level: "section-education",
-  experience_country: "section-education",
-  experience_period: "section-education",
-  years_of_experience: "section-education",
-  height: "section-education",
-  weight: "section-education",
-  complexion: "section-education",
-  monthly_salary: "section-education",
-  salary_amount: "section-education",
-  salary_currency: "section-education",
-  skill_cleaning: "section-education",
-  skill_cooking: "section-education",
-  skill_washing: "section-education",
-  skill_ironing: "section-education",
-  skill_baby_sitting: "section-education",
-  skill_children_care: "section-education",
-  skill_arabic_cooking: "section-education",
-  skill_elderly_care: "section-education",
-  skill_driving: "section-education",
-  skill_sewing: "section-education",
-  video_url: "section-education",
-  intro_video: "section-education",
-
-  national_id: "section-identification",
-  labor_id: "section-identification",
-  labour_id: "section-identification",
-  contact_person_name: "section-identification",
-  contact_person_phone: "section-identification",
-  emergency_relationship: "section-identification",
-  emergency_contact_name: "section-identification",
-  emergency_contact_phone: "section-identification",
-  applicant_address: "section-identification",
-
-  medical_status: "section-medical",
-  medical_issue_date: "section-medical",
-  medical_expiry_date: "section-medical",
-  coc_status: "section-medical",
-  exam_date: "section-medical",
-  medical_remarks: "section-medical",
-  remarks: "section-medical",
-};
-
-// Friendly user-facing field titles in simple English
-const FIELD_FRIENDLY_NAMES: Record<string, string> = {
-  first_name: "First Name",
-  middle_name: "Father's Name (Middle Name)",
-  last_name: "Grandfather's Name (Last Name)",
-  gender: "Gender",
-  date_of_birth: "Date of Birth",
-  religion: "Religion",
-  marital_status: "Marital Status",
-  children: "Number of Children",
-  nationality: "Nationality",
-  destination_country: "Destination Country",
-  applicant_type: "Applicant Type",
-  photo_passport: "Passport Photo",
-  profile_photo_url: "Passport Photo",
-  photograph: "Passport Photo",
-  photo_full_body: "Full-Body Photo",
-  passport_scan: "Passport Scan Copy",
-  passport_number: "Passport Number",
-  passport_issue_date: "Passport Issue Date",
-  passport_expiry: "Passport Expiry Date",
-  place_of_birth: "Place of Birth",
-  city: "City",
-  country: "Country",
-  phone_number: "Primary Phone Number",
-  job_applied: "Job Position",
-  highest_education: "Education Level",
-  english_level: "English Level",
-  arabic_level: "Arabic Level",
-  monthly_salary: "Monthly Salary",
-  national_id: "National ID (Fayda)",
-  labor_id: "Ministry Labour ID",
-  labour_id: "Ministry Labour ID",
-  contact_person_name: "Emergency Contact Name",
-  contact_person_phone: "Emergency Contact Phone",
-  emergency_relationship: "Emergency Relationship",
-  medical_status: "Medical Status",
-  medical_issue_date: "Medical Exam Date",
-  medical_expiry_date: "Medical Expiry Date",
-};
-
-function formatSimpleErrorMessage(fieldName: string, rawMessage?: string): string {
-  const title = FIELD_FRIENDLY_NAMES[fieldName] || fieldName.replace(/_/g, " ");
-  if (!rawMessage || rawMessage.toLowerCase().includes("required") || rawMessage.toLowerCase().includes("at least 1") || rawMessage.toLowerCase().includes("cannot be left blank")) {
-    return `${title} is required. Please enter or select ${title}.`;
-  }
-  if (/expected number|received nan/i.test(rawMessage)) {
-    if (fieldName === "children") {
-      return "Please enter a valid number of children (e.g. 0, 1, 2).";
-    }
-    if (fieldName.includes("salary")) {
-      return "Please enter a valid monthly salary amount.";
-    }
-    if (fieldName.includes("fee") || fieldName.includes("amount")) {
-      return `Please enter a valid payment amount for ${title}.`;
-    }
-    return `Please enter a valid number or amount for ${title}.`;
-  }
-  if (rawMessage.toLowerCase().includes("invalid enum") || rawMessage.toLowerCase().includes("expected option")) {
-    return `Please select a valid option for ${title}.`;
-  }
-  return formatCleanErrorMessage(rawMessage);
-}
-
-function describeApiError(err?: ApiV2Error | null): string {
-  if (!err) return "Please review the form and try again.";
-  return formatCleanErrorMessage(err);
-}
-
-// Core identity fields locked server-side once an active Placement is in flight (#13)
+// Fields locked when an active placement is running
 const IDENTITY_FIELDS = [
   "full_name",
   "first_name",
@@ -263,329 +164,482 @@ export function ApplicantRegistrationForm({
   const [draftApplicantId, setDraftApplicantId] = React.useState<string | null>(
     existingApplicantId || null
   );
-  const [applicantState, setApplicantState] = React.useState<string>("Draft");
-  const [activeSection, setActiveSection] = React.useState<string>("section-personal");
-
-  // Session-level guard: once the fee is successfully logged (in this form session),
-  // never attempt to log it again regardless of stale initialData.
-  const feeAlreadyLoggedRef = React.useRef<boolean>(
-    Boolean(
-      initialData?.fee_transaction ||
-      (initialData?.fee_status && initialData.fee_status !== "Pending") ||
-      (initialData as any)?.registration_fee_status === "Paid"
-    )
+  const [applicantState, setApplicantState] = React.useState<string>(
+    (initialData as any)?.status || (initialData as any)?.applicant_state || "Draft"
   );
+
+  // Active top media tab
+  const [activeMediaTab, setActiveMediaTab] = React.useState<MediaTabType>("photo");
+  const [isUploadingMedia, setIsUploadingMedia] = React.useState(false);
+
+  // Passport Scanner & MRZ dialog states
+  const [isScanningOCR, setIsScanningOCR] = React.useState(false);
+  const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
+  const [mrzInputText, setMrzInputText] = React.useState("");
+  const [ocrSuccessData, setOcrSuccessData] = React.useState<ParsedPassportMRZ | null>(null);
+
+  // Collapsible Accordions state (as in video)
+  const [isRelativeOpen, setIsRelativeOpen] = React.useState<boolean>(false);
+  const [isOtherInfoOpen, setIsOtherInfoOpen] = React.useState<boolean>(false);
+  const [isSkillsOpen, setIsSkillsOpen] = React.useState<boolean>(true);
 
   // Dialog state
   const [isConfirmRegisterOpen, setIsConfirmRegisterOpen] = React.useState(false);
 
-  // React Hook Form
+  // Live duplicate passport feedback
+  const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
+
+  // Registered Foreign Contractor Agents query
+  const { data: contractors = [] } = useQuery({
+    queryKey: ["foreign-contractors-registered"],
+    queryFn: () => listContractorsV2(),
+    staleTime: 60_000,
+  });
+
+  // Initial full_name derivation
+  const initFullName =
+    initialData?.full_name ||
+    deriveFullName(
+      initialData?.first_name || "",
+      initialData?.middle_name || "",
+      initialData?.last_name || ""
+    );
+
   const form = useForm<BaseApplicantFormValues>({
     mode: "onTouched",
-    // @ts-expect-error zodResolver generic widening across runtime-normalized optional fields
+    // @ts-expect-error zodResolver type widening across optional schema fields
     resolver: zodResolver(stage1DraftSchema),
     defaultValues: {
       applicant_type: (initialData?.applicant_type as any) || "Standard",
+      destination_country: initialData?.destination_country || "Saudi Arabia",
+      application_number: (initialData as any)?.application_number || draftApplicantId || "",
+      full_name: initFullName,
       first_name: initialData?.first_name || "",
       middle_name: initialData?.middle_name || "",
       last_name: initialData?.last_name || "",
-      gender: initialData?.gender || "",
-      religion: initialData?.religion || "",
-      marital_status: initialData?.marital_status || "",
+      gender: initialData?.gender || "Female",
+      religion: initialData?.religion === "Muslim" ? "Islam" : initialData?.religion || "Islam",
+      marital_status: initialData?.marital_status || "Single",
       children: initialData?.children ?? 0,
       nationality: initialData?.nationality || "Ethiopia",
-      destination_country: initialData?.destination_country || "Saudi Arabia",
-      phone_number: initialData?.phone_number || "",
-      alternate_phone: initialData?.alternate_phone || "",
-      email: initialData?.email || "",
+      phone_number: initialData?.phone_number || (initialData as any)?.phone || "",
       city: initialData?.city || "",
       country: initialData?.country || "Ethiopia",
       region: initialData?.region || "",
       sub_region: initialData?.sub_region || "",
-      address_line_1: initialData?.address_line_1 || "",
+      address_line_1: initialData?.address_line_1 || (initialData as any)?.address || "",
       date_of_birth: initialData?.date_of_birth || "",
+      place_of_birth: initialData?.place_of_birth || "",
       passport_number: initialData?.passport_number || "",
       passport_issue_date: initialData?.passport_issue_date || "",
       passport_expiry: initialData?.passport_expiry || initialData?.passport_expiry_date || "",
-      place_of_issue: initialData?.place_of_issue || initialData?.passport_issue_place || "",
-      job_applied: initialData?.job_applied || initialData?.target_job || "House worker",
-      target_job: initialData?.target_job || initialData?.job_applied || "House worker",
-      highest_education: initialData?.highest_education || initialData?.education || "",
-      education: initialData?.education || initialData?.highest_education || "",
-      institution: initialData?.institution || "",
-      graduation_year: initialData?.graduation_year ?? undefined,
-      current_employer: initialData?.current_employer || "",
-      years_of_experience: initialData?.years_of_experience ?? undefined,
-      english_level: initialData?.english_level || "",
-      arabic_level: initialData?.arabic_level || "",
-      experience_country: initialData?.experience_country || "",
-      experience_period: initialData?.experience_period || "",
+      place_of_issue: initialData?.place_of_issue || initialData?.passport_issue_place || "ADDIS ABABA",
+      passport_type: (initialData as any)?.passport_type || "Normal",
+      job_applied: initialData?.job_applied || initialData?.target_job || "HOUSE WORKER",
+      target_job: initialData?.target_job || initialData?.job_applied || "HOUSE WORKER",
+      highest_education: (initialData as any)?.qualification || initialData?.highest_education || initialData?.education || "SECONDARY LEVEL",
+      education: (initialData as any)?.qualification || initialData?.education || initialData?.highest_education || "SECONDARY LEVEL",
+      qualification: (initialData as any)?.qualification || initialData?.education || "SECONDARY LEVEL",
       monthly_salary: initialData?.monthly_salary || (initialData?.salary_amount ? String(initialData.salary_amount) : "1000"),
       salary_amount: initialData?.salary_amount || (initialData?.monthly_salary ? Number(initialData.monthly_salary) : 1000),
       salary_currency: initialData?.salary_currency || "SAR",
-      complexion: initialData?.complexion || "FAIR",
-      skill_cleaning:
-        initialData?.skill_cleaning !== undefined
-          ? initialData.skill_cleaning === 1 ||
-            initialData.skill_cleaning === "1" ||
-            initialData.skill_cleaning === "YES" ||
-            initialData.skill_cleaning === true
-            ? 1
-            : 0
-          : initialData?.job_applied?.toLowerCase().includes("driver")
-          ? 0
-          : 1,
-      skill_cooking:
-        initialData?.skill_cooking === 1 ||
-        initialData?.skill_cooking === "1" ||
-        initialData?.skill_cooking === "YES" ||
-        initialData?.skill_cooking === true
-          ? 1
-          : 0,
-      skill_washing:
-        initialData?.skill_washing !== undefined
-          ? initialData.skill_washing === 1 ||
-            initialData.skill_washing === "1" ||
-            initialData.skill_washing === "YES" ||
-            initialData.skill_washing === true
-            ? 1
-            : 0
-          : initialData?.job_applied?.toLowerCase().includes("driver")
-          ? 0
-          : 1,
-      skill_ironing:
-        initialData?.skill_ironing === 1 ||
-        initialData?.skill_ironing === "1" ||
-        initialData?.skill_ironing === "YES" ||
-        initialData?.skill_ironing === true
-          ? 1
-          : 0,
-      skill_baby_sitting:
-        initialData?.skill_baby_sitting === 1 ||
-        initialData?.skill_baby_sitting === "1" ||
-        initialData?.skill_baby_sitting === "YES" ||
-        initialData?.skill_baby_sitting === true
-          ? 1
-          : 0,
-      skill_children_care:
-        initialData?.skill_children_care === 1 ||
-        initialData?.skill_children_care === "1" ||
-        initialData?.skill_children_care === "YES" ||
-        initialData?.skill_children_care === true
-          ? 1
-          : 0,
-      skill_arabic_cooking:
-        initialData?.skill_arabic_cooking === 1 ||
-        initialData?.skill_arabic_cooking === "1" ||
-        initialData?.skill_arabic_cooking === "YES" ||
-        initialData?.skill_arabic_cooking === true
-          ? 1
-          : 0,
-      skill_sewing:
-        initialData?.skill_sewing === 1 ||
-        initialData?.skill_sewing === "1" ||
-        initialData?.skill_sewing === "YES" ||
-        initialData?.skill_sewing === true
-          ? 1
-          : 0,
-      skill_elderly_care:
-        initialData?.skill_elderly_care === 1 ||
-        initialData?.skill_elderly_care === "1" ||
-        initialData?.skill_elderly_care === "YES" ||
-        initialData?.skill_elderly_care === true
-          ? 1
-          : 0,
-      skill_driving:
-        initialData?.skill_driving !== undefined
-          ? initialData.skill_driving === 1 ||
-            initialData.skill_driving === "1" ||
-            initialData.skill_driving === "YES" ||
-            initialData.skill_driving === true
-            ? 1
-            : 0
-          : initialData?.job_applied?.toLowerCase().includes("driver")
-          ? 1
-          : 0,
-      labour_id: initialData?.labour_id || "",
-      national_id: initialData?.national_id || "",
-      contact_person_name:
-        initialData?.contact_person_name ||
-        (initialData?.applicant_type === "Muayena" ? "Muayena" : ""),
-      contact_person_phone: initialData?.contact_person_phone || "",
-      emergency_contact_name: initialData?.emergency_contact_name || "",
-      emergency_contact_phone: initialData?.emergency_contact_phone || "",
-      emergency_relationship:
-        initialData?.emergency_relationship ||
-        (initialData?.applicant_type === "Muayena" ? "Muayena / Sponsor" : ""),
-      coc_status: initialData?.coc_status || "",
-      exam_date: initialData?.exam_date || "",
-      medical_status: initialData?.medical_status || "",
-      medical_issue_date: initialData?.medical_issue_date || "",
-      medical_expiry_date: initialData?.medical_expiry_date || "",
-      remarks: initialData?.remarks || "",
-      medical_remarks: initialData?.medical_remarks || "",
-      education_remarks: initialData?.education_remarks || "",
-      fee_required: initialData?.fee_required || false,
-      registration_fee_amount: initialData?.registration_fee_amount || 0,
-      fee_transaction: initialData?.fee_transaction || "",
-      fee_status: initialData?.fee_status || "Pending",
-      profile_photo_url: initialData?.profile_photo_url || initialData?.photograph || "",
-      photo_passport: initialData?.photo_passport || initialData?.photograph || "",
       photograph: initialData?.photograph || initialData?.photo_passport || initialData?.profile_photo_url || "",
+      photo_passport: initialData?.photo_passport || initialData?.photograph || initialData?.profile_photo_url || "",
+      profile_photo_url: initialData?.profile_photo_url || initialData?.photograph || "",
       photo_full_body: initialData?.photo_full_body || "",
       passport_scan: initialData?.passport_scan || "",
+      video_url: initialData?.video_url || (initialData as any)?.intro_video || "",
+      is_active: (initialData as any)?.is_active ?? true,
+      registration_date: (initialData as any)?.registration_date || new Date().toISOString().slice(0, 10),
+
+      // Sponsor & Visa
+      visa_number: (initialData as any)?.visa_number || "",
+      sponsor_name: (initialData as any)?.sponsor_name || "",
+      sponsor_id: (initialData as any)?.sponsor_id || "",
+      sponsor_phone: (initialData as any)?.sponsor_phone || "",
+      sponsor_address: (initialData as any)?.sponsor_address || "",
+      agent: (initialData as any)?.agent || (initialData as any)?.contractor_name || "",
+      national_id: initialData?.national_id || "",
+      sponsor_arabic: (initialData as any)?.sponsor_arabic || "",
+      email: initialData?.email || "",
+      visa_type: (initialData as any)?.visa_type || "Work",
+
+      // Relative Info
+      relative_name: (initialData as any)?.relative_name || initialData?.emergency_contact_name || initialData?.contact_person_name || "",
+      relative_phone: (initialData as any)?.relative_phone || initialData?.emergency_contact_phone || initialData?.contact_person_phone || "",
+      relative_kinship: (initialData as any)?.relative_kinship || initialData?.emergency_relationship || "Mother",
+      emergency_contact_name: initialData?.emergency_contact_name || (initialData as any)?.relative_name || "",
+      emergency_contact_phone: initialData?.emergency_contact_phone || (initialData as any)?.relative_phone || "",
+      emergency_relationship: initialData?.emergency_relationship || (initialData as any)?.relative_kinship || "Mother",
+      address_region: (initialData as any)?.address_region || "",
+      relative_woreda: (initialData as any)?.relative_woreda || "",
+      relative_house_no: (initialData as any)?.relative_house_no || "",
+      relative_gender: (initialData as any)?.relative_gender || "Female",
+      r_birth_date: (initialData as any)?.r_birth_date || "",
+
+      // Other Info
+      woreda: (initialData as any)?.woreda || "",
+      house_no: (initialData as any)?.house_no || initialData?.address_line_1 || "",
+      file_no: (initialData as any)?.file_no || "",
+      contract_number: (initialData as any)?.contract_number || "",
+      wakala_number: (initialData as any)?.wakala_number || (initialData as any)?.wakala_no || "",
+      sticker_visa_number: (initialData as any)?.sticker_visa_number || "",
+      signed_on: (initialData as any)?.signed_on || "",
+      biometric_id: (initialData as any)?.biometric_id || "",
+      labour_id: initialData?.labour_id || initialData?.labor_id || "",
+      labor_id: initialData?.labor_id || initialData?.labour_id || "",
+      contact_person_2nd: (initialData as any)?.contact_person_2nd || "",
+      contact_phone_2nd: (initialData as any)?.contact_phone_2nd || "",
+      coc_center: (initialData as any)?.coc_center || "",
+      certified_date: (initialData as any)?.certified_date || initialData?.exam_date || "",
+      exam_date: initialData?.exam_date || (initialData as any)?.certified_date || "",
+      certificate_no: (initialData as any)?.certificate_no || "",
+      training_type: (initialData as any)?.training_type || "",
+      photos_2: (initialData as any)?.photos_2 ?? false,
+      is_filed: (initialData as any)?.is_filed ?? false,
+      relative_id_card: (initialData as any)?.relative_id_card ?? false,
+
+      // Skills & Experience
+      english_level: initialData?.english_level || "Poor",
+      arabic_level: initialData?.arabic_level || "Fair",
+      experience_country: initialData?.experience_country || "None / First Time",
+      works_in: (initialData as any)?.works_in || "",
+      height: initialData?.height || "",
+      weight: initialData?.weight || "",
+      reference_no: (initialData as any)?.reference_no || "",
+      remarks: initialData?.remarks || "",
+      skill_cleaning: initialData?.skill_cleaning !== undefined ? (Number(initialData.skill_cleaning) ? 1 : 0) : 1,
+      skill_cooking: Number(initialData?.skill_cooking) ? 1 : 0,
+      skill_washing: initialData?.skill_washing !== undefined ? (Number(initialData.skill_washing) ? 1 : 0) : 1,
+      skill_ironing: Number(initialData?.skill_ironing) ? 1 : 0,
+      skill_baby_sitting: Number(initialData?.skill_baby_sitting) ? 1 : 0,
+      skill_children_care: Number(initialData?.skill_children_care) ? 1 : 0,
+      skill_arabic_cooking: Number(initialData?.skill_arabic_cooking) ? 1 : 0,
+      skill_sewing: Number(initialData?.skill_sewing) ? 1 : 0,
+
+      // Medical gate
+      medical_status: initialData?.medical_status || "Pending",
+      medical_issue_date: initialData?.medical_issue_date || "",
+      medical_expiry_date: initialData?.medical_expiry_date || "",
     },
   });
 
-  const { getValues, setError, clearErrors, reset } = form;
+  const { register, watch, setValue, getValues, setError, clearErrors, reset, formState: { errors } } = form;
 
+  // React to initialData updates
   React.useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
-      const normalizedInit = normalizeApplicantFields(initialData);
+      const normalized = normalizeApplicantFields(initialData);
+      const name =
+        normalized.full_name ||
+        deriveFullName(
+          normalized.first_name || "",
+          normalized.middle_name || "",
+          normalized.last_name || ""
+        );
       reset({
         ...getValues(),
-        ...normalizedInit,
-        job_applied: normalizedInit.job_applied || normalizedInit.target_job || getValues("job_applied") || "House worker",
-        target_job: normalizedInit.target_job || normalizedInit.job_applied || getValues("target_job") || "House worker",
-        highest_education: normalizedInit.highest_education || normalizedInit.education || getValues("highest_education") || "High School",
-        education: normalizedInit.education || normalizedInit.highest_education || getValues("education") || "High School",
-        monthly_salary: normalizedInit.monthly_salary || (normalizedInit.salary_amount ? String(normalizedInit.salary_amount) : getValues("monthly_salary") || "1000"),
-        salary_amount: normalizedInit.salary_amount || (normalizedInit.monthly_salary ? Number(normalizedInit.monthly_salary) : getValues("salary_amount") || 1000),
-        salary_currency: normalizedInit.salary_currency || getValues("salary_currency") || "SAR",
-        complexion: normalizedInit.complexion || getValues("complexion") || "FAIR",
-        fee_transaction: normalizedInit.fee_transaction || initialData?.fee_transaction || getValues("fee_transaction") || "",
-        fee_status: normalizedInit.fee_status || initialData?.fee_status || getValues("fee_status") || "Pending",
-        photograph: normalizedInit.photograph || normalizedInit.photo_passport || normalizedInit.profile_photo_url || normalizedInit.photo_full_body || getValues("photograph") || "",
-        photo_passport: normalizedInit.photo_passport || normalizedInit.photograph || normalizedInit.profile_photo_url || normalizedInit.photo_full_body || getValues("photo_passport") || "",
+        ...normalized,
+        full_name: name,
       });
       if (existingApplicantId) {
         setDraftApplicantId(existingApplicantId);
       }
     }
-  }, [initialData, existingApplicantId]);
+  }, [initialData, existingApplicantId, reset]);
 
-  // Smooth scroll directly to input element on error & switch active section
-  const scrollToFieldWithError = (fieldName?: string) => {
-    if (!fieldName) return;
-    const targetSection = FIELD_TO_SECTION_MAP[fieldName] || "section-personal";
-    setActiveSection(targetSection);
+  // Synchronize full_name to first_name, middle_name, last_name (always UPPERCASE)
+  const handleFullNameChange = (val: string) => {
+    const upper = val.toUpperCase();
+    setValue("full_name", upper, { shouldValidate: true });
+    const { first_name, middle_name, last_name } = splitFullName(upper);
+    setValue("first_name", (first_name || "").toUpperCase());
+    setValue("middle_name", (middle_name || "").toUpperCase());
+    setValue("last_name", (last_name || "").toUpperCase());
+  };
 
-    const findFieldElement = (name: string): HTMLElement | null => {
-      // Direct ID or trigger or wrapper
-      const candidates = [
-        `trigger-${name}`,
-        `select-wrapper-${name}`,
-        name,
-        `field-${name}`,
-        `input-${name}`,
-        name === "photo_passport" ? "passport-photo-upload" : "",
-        name === "photo_full_body" ? "fullbody-photo-upload" : "",
-        name === "passport_scan" ? "passport-auto-scan-input" : "",
-        name === "target_job" ? "job_applied" : "",
-        name === "job_applied" ? "target_job" : "",
-        name === "education" ? "highest_education" : "",
-        name === "highest_education" ? "education" : "",
-        name === "passport_expiry_date" ? "passport_expiry" : "",
-        name === "passport_expiry" ? "passport_expiry_date" : "",
-        name === "phone" ? "phone_number" : "",
-        name === "phone_number" ? "phone" : "",
-        name === "salary_amount" ? "monthly_salary" : "",
-        name === "monthly_salary" ? "salary_amount" : "",
-        name === "medical_expiry_date" ? "medical_expiry_date" : "",
-      ].filter(Boolean);
-      for (const id of candidates) {
-        const found = document.getElementById(id);
-        if (found) return found;
-      }
-      const byName = document.querySelector<HTMLElement>(`[name="${name}"]`);
-      if (byName) return byName;
-      const byData = document.querySelector<HTMLElement>(`[data-field="${name}"]`);
-      if (byData) return byData;
-
-      // Specialized aliases for photos and document scans
-      if (name === "photo_passport" || name === "profile_photo_url" || name === "photograph") {
-        return (
-          document.getElementById("field-photo_passport") ||
-          document.getElementById("profile-photo-upload")?.closest("label") ||
-          document.getElementById("profile-photo-upload") ||
-          null
-        );
-      }
-      if (name === "photo_full_body") {
-        return (
-          document.getElementById("field-photo_full_body") ||
-          document.getElementById("fullbody-photo-upload")?.closest("label") ||
-          document.getElementById("fullbody-photo-upload") ||
-          null
-        );
-      }
-      if (name === "passport_scan") {
-        return (
-          document.getElementById("field-passport_scan") ||
-          document.getElementById("passport-auto-scan-input")?.closest("label") ||
-          document.getElementById("passport-auto-scan-input") ||
-          null
-        );
-      }
-      return null;
-    };
-
-    const targetEl = findFieldElement(fieldName);
-
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
-
-      // Focus the input if focusable
-      setTimeout(() => {
-        if (typeof targetEl.focus === "function" && targetEl.tagName !== "DIV") {
-          targetEl.focus({ preventScroll: true });
-        } else {
-          const child = targetEl.querySelector<HTMLElement>("input, select, textarea, button");
-          child?.focus({ preventScroll: true });
-        }
-      }, 50);
-
-      // Add prominent red ring animation
-      targetEl.classList.add(
-        "ring-4",
-        "ring-rose-500",
-        "ring-offset-2",
-        "bg-rose-50/70",
-        "dark:bg-rose-950/40",
-        "transition-all",
-        "duration-500"
-      );
-      setTimeout(() => {
-        targetEl.classList.remove(
-          "ring-4",
-          "ring-rose-500",
-          "ring-offset-2",
-          "bg-rose-50/70",
-          "dark:bg-rose-950/40"
-        );
-      }, 5000);
+  // Live duplicate passport check
+  const handlePassportBlur = async () => {
+    const pNum = (getValues("passport_number") || "").toUpperCase().trim();
+    if (!pNum || pNum.length < 4) {
+      setPassportConflict(null);
+      clearErrors("passport_number");
+      return;
+    }
+    const res = await checkApplicantUniquenessV2("passport_number", pNum, existingApplicantId);
+    if (res.isConflict && res.message) {
+      setPassportConflict(res.message);
+      setError("passport_number", { type: "manual", message: res.message });
     } else {
-      const secEl = document.getElementById(targetSection);
-      if (secEl) {
-        secEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      setPassportConflict(null);
+      clearErrors("passport_number");
     }
   };
 
-  const scrollToSection = (sectionId: string) => {
-    setActiveSection(sectionId);
-    const el = document.getElementById(sectionId);
-    if (el) {
-      const offset = 80;
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = el.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
+  // Helper to apply parsed passport/MRZ fields to form
+  const applyExtractedPassportData = async (parsed: ParsedPassportMRZ, sourceLabel = "passport scan") => {
+    if (!parsed) return;
+    setOcrSuccessData(parsed);
 
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth",
+    // Name (Strictly UPPERCASE per system requirement)
+    const firstName = (parsed.first_name || "").toUpperCase();
+    const middleName = (parsed.middle_name || "").toUpperCase();
+    const lastName = (parsed.last_name || "").toUpperCase();
+    const fullNameCombined = [firstName, middleName, lastName].filter(Boolean).join(" ").toUpperCase();
+
+    if (fullNameCombined) {
+      handleFullNameChange(fullNameCombined);
+    }
+    const pNum = (parsed.passport_number || "").toUpperCase().trim();
+    if (pNum) {
+      setValue("passport_number", pNum, { shouldValidate: true });
+    }
+    if (parsed.date_of_birth) {
+      setValue("date_of_birth", parsed.date_of_birth);
+    }
+    if (parsed.passport_expiry) {
+      setValue("passport_expiry", parsed.passport_expiry);
+    }
+    if (parsed.passport_issue_date) {
+      setValue("passport_issue_date", parsed.passport_issue_date);
+    }
+    if (parsed.place_of_issue) {
+      setValue("place_of_issue", parsed.place_of_issue.toUpperCase());
+    }
+    if (parsed.place_of_birth) {
+      setValue("place_of_birth", parsed.place_of_birth.toUpperCase().trim());
+    }
+    if (parsed.gender) {
+      const g = parsed.gender.toLowerCase();
+      if (g.startsWith("f")) {
+        setValue("gender", "Female");
+      } else if (g.startsWith("m")) {
+        setValue("gender", "Male");
+      }
+    }
+    if (parsed.nationality) {
+      setValue("nationality", parsed.nationality);
+    }
+
+    // Check duplicate passport uniqueness immediately upon extraction
+    if (pNum && pNum.length >= 4) {
+      const check = await checkApplicantUniquenessV2("passport_number", pNum, existingApplicantId);
+      if (check.isConflict && check.message) {
+        setPassportConflict(check.message);
+        setError("passport_number", { type: "manual", message: check.message });
+        toast.error("Duplicate Passport Detected!", {
+          description: check.message,
+          duration: 9000,
+        });
+        return;
+      } else {
+        setPassportConflict(null);
+        clearErrors("passport_number");
+      }
+    }
+
+    if (parsed.needs_passport_review) {
+      toast.warning("Please verify: extracted name or passport details should be double-checked against original document.", { duration: 6000 });
+    }
+
+    toast.success(`Applicant details auto-filled from ${sourceLabel}!`, {
+      description: `Extracted: ${pNum || ""} (${fullNameCombined || "Candidate"})`,
+    });
+  };
+
+  // Main Passport Auto-Scan Handler
+  const handlePassportAutoScan = async (file: File) => {
+    if (!file) return;
+    setIsScanningOCR(true);
+    const toastId = toast.loading("Uploading and analyzing passport scan...");
+
+    try {
+      // 1. Upload scan file
+      const uploadRes = await uploadFileV2(file, false, "Applicant", draftApplicantId || undefined);
+      const fileUrl = (uploadRes as any)?.message?.file_url || (uploadRes as any)?.file_url;
+      if (fileUrl) {
+        setValue("passport_scan", fileUrl);
+      }
+
+      // 2. Run Optical OCR / Passport Parser
+      let parsedData: ParsedPassportMRZ | null = null;
+
+      // Try client-side optical OCR first
+      try {
+        parsedData = await performOpticalPassportOCR(file);
+      } catch (ocrErr) {
+        console.warn("Client OCR fallback:", ocrErr);
+      }
+
+      // If client OCR didn't catch MRZ, try backend parser endpoint
+      if (!parsedData || !parsedData.passport_number) {
+        try {
+          if (fileUrl) {
+            const serverParsed = await parsePassportFileV2(fileUrl);
+            if (serverParsed && (serverParsed.passport_number || serverParsed.first_name)) {
+              parsedData = {
+                passport_number: serverParsed.passport_number || "",
+                first_name: serverParsed.first_name || "",
+                middle_name: serverParsed.middle_name || "",
+                last_name: serverParsed.last_name || "",
+                nationality: serverParsed.nationality || "Ethiopia",
+                date_of_birth: serverParsed.date_of_birth || serverParsed.dob || "",
+                gender: serverParsed.gender || "Female",
+                passport_expiry: serverParsed.passport_expiry || serverParsed.passport_expiry_date || "",
+                passport_issue_date: serverParsed.passport_issue_date || "",
+                place_of_issue: serverParsed.place_of_issue || "Addis Ababa",
+                place_of_birth: serverParsed.place_of_birth || serverParsed.birth_place || "",
+                needs_passport_review: Boolean(serverParsed.needs_passport_review),
+              };
+            }
+          }
+        } catch (serverErr) {
+          console.warn("Backend parse endpoint fallback:", serverErr);
+        }
+      }
+
+      toast.dismiss(toastId);
+
+      if (parsedData && (parsedData.passport_number || parsedData.first_name || parsedData.date_of_birth)) {
+        await applyExtractedPassportData(parsedData, "uploaded passport scan");
+      } else {
+        toast.info("Passport file uploaded. OCR could not read the MRZ automatically; please verify details or paste code.", {
+          duration: 6000,
+        });
+      }
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      toast.error("Passport scanning error", {
+        description: formatCleanErrorMessage(err),
       });
+    } finally {
+      setIsScanningOCR(false);
+    }
+  };
+
+  // Decode manually pasted MRZ code
+  const handleDecodePastedMrz = async () => {
+    if (!mrzInputText || !mrzInputText.trim()) {
+      toast.error("Please paste the passport code lines first.");
+      return;
+    }
+    const parsed = parseMRZText(mrzInputText);
+    if (!parsed || (!parsed.passport_number && !parsed.first_name)) {
+      toast.error("Could not parse passport code. Please check that both lines with '<' are pasted.", {
+        duration: 5000,
+      });
+      return;
+    }
+
+    await applyExtractedPassportData(parsed, "pasted passport code");
+    setIsMrzDialogOpen(false);
+    setMrzInputText("");
+  };
+
+  // Paste from clipboard helper
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setMrzInputText(text);
+        toast.info("Pasted from clipboard!");
+      } else {
+        toast.error("Clipboard is empty.");
+      }
+    } catch {
+      toast.error("Please paste manually using Ctrl+V.");
+    }
+  };
+
+  // Build clean backend payload
+  const buildPayload = () => {
+    const data = getValues();
+    const { first_name, middle_name, last_name } = splitFullName(data.full_name || "");
+    const finalFirst = data.first_name || first_name || data.full_name || "Applicant";
+    const finalLast = data.last_name || last_name || "Unknown";
+    const finalMiddle = data.middle_name || middle_name || "";
+
+    const salaryNum =
+      Number(data.salary_amount) > 0
+        ? Number(data.salary_amount)
+        : Number(data.monthly_salary) > 0
+        ? Number(data.monthly_salary)
+        : 1000;
+
+    const rawPayload: Record<string, any> = {
+      ...data,
+      full_name: data.full_name || `${finalFirst} ${finalMiddle} ${finalLast}`.trim(),
+      first_name: finalFirst,
+      middle_name: finalMiddle,
+      last_name: finalLast,
+      entry_track: data.applicant_type || "Standard",
+      target_job: data.target_job || data.job_applied || "HOUSE WORKER",
+      job_applied: data.job_applied || data.target_job || "HOUSE WORKER",
+      education: data.qualification || data.education || data.highest_education || "SECONDARY LEVEL",
+      highest_education: data.qualification || data.highest_education || data.education || "SECONDARY LEVEL",
+      qualification: data.qualification || "SECONDARY LEVEL",
+      religion: data.religion || "Islam",
+      gender: data.gender || "Female",
+      marital_status: data.marital_status || "Single",
+      visa_type: data.visa_type || "Work",
+      application_number: data.application_number || "",
+      salary_amount: salaryNum,
+      monthly_salary: String(salaryNum),
+      salary_currency: data.salary_currency || "SAR",
+      photograph: data.photograph || data.photo_passport || data.profile_photo_url || "",
+      photo_passport: data.photo_passport || data.photograph || "",
+      passport_scan: data.passport_scan || "",
+      photo_full_body: data.photo_full_body || "",
+      emergency_contact_name: data.relative_name || data.emergency_contact_name || "",
+      emergency_contact_phone: data.relative_phone || data.emergency_contact_phone || "",
+      emergency_relationship: data.relative_kinship || data.emergency_relationship || "Mother",
+      contact_person_name: data.relative_name || data.contact_person_name || "",
+      contact_person_phone: data.relative_phone || data.contact_person_phone || "",
+      phone: data.phone_number || "",
+      passport_issue_place: data.place_of_issue || "ADDIS ABABA",
+      passport_expiry_date: data.passport_expiry || "",
+      contract_number: data.contract_number || "",
+      exam_date: data.certified_date || data.exam_date || "",
+    };
+
+    return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
+  };
+
+  // Upload handler for active media tab
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingMedia(true);
+    try {
+      const res = await uploadFileV2(file, false, "Applicant", draftApplicantId || undefined);
+      const url = (res as any)?.message?.file_url || (res as any)?.file_url;
+      if (!url) throw new Error("Upload succeeded but no file URL returned.");
+
+      if (activeMediaTab === "photo") {
+        setValue("photograph", url);
+        setValue("photo_passport", url);
+        setValue("profile_photo_url", url);
+        toast.success("Photo uploaded successfully!");
+      } else if (activeMediaTab === "full_size") {
+        setValue("photo_full_body", url);
+        toast.success("Full-size photo uploaded successfully!");
+      } else if (activeMediaTab === "passport") {
+        setValue("passport_scan", url);
+        toast.success("Passport scan uploaded!");
+        // Run OCR on passport
+        handlePassportAutoScan(file);
+      } else if (activeMediaTab === "video") {
+        setValue("video_url", url);
+        toast.success("Video interview uploaded successfully!");
+      }
+    } catch (err: any) {
+      toast.error("Upload failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsUploadingMedia(false);
+      e.target.value = "";
     }
   };
 
@@ -593,222 +647,83 @@ export function ApplicantRegistrationForm({
   const saveDraftMutation = useMutation({
     mutationFn: async () => {
       clearErrors();
-      const formData = getValues();
-      const validation = stage1DraftSchema.safeParse(formData);
-
-      if (!validation.success) {
-        validation.error.errors.forEach((err) => {
-          if (err.path[0]) {
-            const fieldName = err.path[0] as string;
-            setError(err.path[0] as keyof BaseApplicantFormValues, {
-              type: "manual",
-              message: formatSimpleErrorMessage(fieldName, err.message),
-            });
-          }
-        });
-
-        const firstError = validation.error.errors[0];
-        const errorField = (firstError?.path[0] as string) || "first_name";
-        scrollToFieldWithError(errorField);
-
-        const friendlyMsg =
-          errorField === "first_name"
-            ? "Please enter the candidate's First Name before saving a draft."
-            : formatSimpleErrorMessage(errorField, firstError?.message);
-        throw new Error(friendlyMsg || "Please enter the candidate's First Name before saving a draft.");
-      }
-
-      const payload = normalizeApplicantFields(
-        stripLockedIdentityFields(
-          {
-            ...formData,
-            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-            gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
-            nationality: formData.nationality || "Ethiopia",
-            entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
-            destination_country: formData.destination_country || "Saudi Arabia",
-            target_job: formData.target_job || formData.job_applied || "House worker",
-            job_applied: formData.job_applied || formData.target_job || "House worker",
-            education: formData.education || formData.highest_education || "High School",
-            highest_education: formData.highest_education || formData.education || "High School",
-            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-            salary_currency: formData.salary_currency || "SAR",
-            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-          },
-          lockedIdentityFields
-        )
-      );
-
+      const payload = buildPayload();
       let res;
       if (draftApplicantId) {
         res = await updateApplicantV2(draftApplicantId, payload);
       } else {
-        res = await createApplicantV2(payload);
-      }
-
-      const activeId = res?.name || draftApplicantId;
-      const isFeeAlreadyLoggedOnDraft =
-        feeAlreadyLoggedRef.current ||
-        Boolean(
-          formData.fee_transaction ||
-          (formData.fee_status && formData.fee_status !== "Pending") ||
-          initialData?.fee_transaction ||
-          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
-          (initialData as any)?.registration_fee_status === "Paid"
-        );
-      if (activeId && !isFeeAlreadyLoggedOnDraft && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
-        try {
-          await logApplicantFeeV2(activeId);
-          feeAlreadyLoggedRef.current = true;
-        } catch (feeErr: any) {
-          if (String(feeErr?.message || "").includes("already logged")) {
-            feeAlreadyLoggedRef.current = true;
-          } else {
-            console.warn("Auto-log applicant fee on draft save:", feeErr);
-          }
-        }
+        res = await createApplicantV2(payload as any);
       }
       return res;
     },
     onSuccess: (data) => {
-      const savedName = data.name || draftApplicantId;
-      if (savedName) setDraftApplicantId(savedName);
-      setApplicantState(data.status || data.applicant_state || "Draft");
+      const savedId = data?.name || draftApplicantId;
+      if (savedId) setDraftApplicantId(savedId);
+      setApplicantState(data?.status || data?.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      toast.success(`Draft Saved Successfully (ID: ${savedName || ""})`, {
-        description: "Applicant record saved. Redirecting to details...",
+      toast.success(`Applicant Saved Successfully (ID: ${savedId || ""})`, {
+        description: "Draft saved. Redirecting to details...",
       });
-      if (onSuccessRedirect && savedName) {
-        onSuccessRedirect(savedName);
-      } else if (savedName) {
-        router.push(`/applicants/${encodeURIComponent(savedName)}`);
+      if (onSuccessRedirect && savedId) {
+        onSuccessRedirect(savedId);
+      } else if (savedId) {
+        router.push(`/applicants/${encodeURIComponent(savedId)}`);
       }
     },
     onError: (error: unknown) => {
-      const err = error as ApiV2Error;
-      toast.error("Could Not Save Draft", {
-        description: describeApiError(err),
-        duration: 6000,
+      toast.error("Could not save applicant", {
+        description: formatCleanErrorMessage(error),
       });
     },
   });
 
-  // DIRECT SAVE / UPDATE CHANGES (FOR EDIT MODE)
+  // 2. SAVE CHANGES MUTATION (FOR EDIT MODE)
   const saveChangesMutation = useMutation({
     mutationFn: async () => {
-      if (!draftApplicantId) throw new Error("No applicant ID available to update.");
-      const formData = getValues();
-      const payload = normalizeApplicantFields(
-        stripLockedIdentityFields(
-          {
-            ...formData,
-            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-            target_job: formData.target_job || formData.job_applied || "House worker",
-            job_applied: formData.job_applied || formData.target_job || "House worker",
-            education: formData.education || formData.highest_education || "High School",
-            highest_education: formData.highest_education || formData.education || "High School",
-            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-            salary_currency: formData.salary_currency || "SAR",
-            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-          },
-          lockedIdentityFields
-        )
-      );
-      const res = await updateApplicantV2(draftApplicantId, payload);
-      const isFeeAlreadyLoggedOnSave =
-        feeAlreadyLoggedRef.current ||
-        Boolean(
-          formData.fee_transaction ||
-          (formData.fee_status && formData.fee_status !== "Pending") ||
-          initialData?.fee_transaction ||
-          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
-          (initialData as any)?.registration_fee_status === "Paid"
-        );
-      if (!isFeeAlreadyLoggedOnSave && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
-        try {
-          await logApplicantFeeV2(draftApplicantId);
-          feeAlreadyLoggedRef.current = true;
-        } catch (feeErr: any) {
-          if (String(feeErr?.message || "").includes("already logged")) {
-            feeAlreadyLoggedRef.current = true;
-          } else {
-            console.warn("Auto-log applicant fee on save changes:", feeErr);
-          }
-        }
-      }
-      return res;
+      if (!draftApplicantId) throw new Error("No applicant ID to update.");
+      const payload = buildPayload();
+      return await updateApplicantV2(draftApplicantId, payload);
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
-      toast.success("Applicant changes saved successfully!", {
-        description: "All profile details and official CV have been updated.",
-      });
+      toast.success("Applicant changes saved successfully!");
       if (onSuccessRedirect && draftApplicantId) {
         onSuccessRedirect(draftApplicantId);
       }
     },
-    onError: (error: unknown) => {
-      const err = error as ApiV2Error;
+    onError: (err: unknown) => {
       toast.error("Failed to save changes", {
-        description: describeApiError(err),
+        description: formatCleanErrorMessage(err),
       });
     },
   });
 
-  // 2. REGISTER APPLICANT MUTATION
+  // 3. REGISTER APPLICANT MUTATION
   const registerMutation = useMutation({
     mutationFn: async () => {
       clearErrors();
       const formData = getValues();
-
       const validation = stage2RegistrationSchema.safeParse(formData);
+
       if (!validation.success) {
-        validation.error.errors.forEach((err) => {
+        validation.error.errors.forEach((err: any) => {
           if (err.path[0]) {
-            const fieldName = err.path[0] as string;
             setError(err.path[0] as keyof BaseApplicantFormValues, {
               type: "manual",
-              message: formatSimpleErrorMessage(fieldName, err.message),
+              message: err.message,
             });
           }
         });
-
-        const firstError = validation.error.errors[0];
-        const firstField = firstError?.path[0] as string;
-        scrollToFieldWithError(firstField);
-
-        const friendlyFirst = formatSimpleErrorMessage(firstField, firstError?.message);
-        throw new Error(friendlyFirst || "Please complete all registration requirements.");
+        const firstErr = validation.error.errors[0]?.message || "Please complete all registration requirements.";
+        throw new Error(firstErr);
       }
 
       let activeId = draftApplicantId;
-      const payload = normalizeApplicantFields(
-        stripLockedIdentityFields(
-          {
-            ...formData,
-            full_name: `${formData.first_name || ""} ${formData.middle_name || ""} ${formData.last_name || ""}`.trim() || formData.first_name || "Applicant",
-            gender: (formData.gender as "Male" | "Female" | "Other") || "Female",
-            nationality: formData.nationality || "Ethiopia",
-            entry_track: (formData.applicant_type as "Standard" | "Muayena") || "Standard",
-            destination_country: formData.destination_country || "Saudi Arabia",
-            target_job: formData.target_job || formData.job_applied || "House worker",
-            job_applied: formData.job_applied || formData.target_job || "House worker",
-            education: formData.education || formData.highest_education || "High School",
-            highest_education: formData.highest_education || formData.education || "High School",
-            salary_amount: Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000,
-            monthly_salary: String(Number(formData.salary_amount) > 0 ? Number(formData.salary_amount) : Number(formData.monthly_salary) > 0 ? Number(formData.monthly_salary) : 1000),
-            salary_currency: formData.salary_currency || "SAR",
-            photograph: formData.photograph || formData.photo_passport || formData.profile_photo_url || formData.photo_full_body || "",
-          },
-          lockedIdentityFields
-        )
-      );
+      const payload = buildPayload();
 
       if (!activeId) {
-        const draft = await createApplicantV2(payload);
+        const draft = await createApplicantV2(payload as any);
         activeId = draft.name || "";
         setDraftApplicantId(activeId);
       } else {
@@ -816,39 +731,16 @@ export function ApplicantRegistrationForm({
       }
 
       const regRes = await registerApplicantV2(activeId);
-      const isFeeAlreadyLoggedOnRegister =
-        feeAlreadyLoggedRef.current ||
-        Boolean(
-          formData.fee_transaction ||
-          (formData.fee_status && formData.fee_status !== "Pending") ||
-          initialData?.fee_transaction ||
-          (initialData?.fee_status && initialData.fee_status !== "Pending") ||
-          (initialData as any)?.registration_fee_status === "Paid"
-        );
-      if (activeId && !isFeeAlreadyLoggedOnRegister && (formData.fee_required || (formData.registration_fee_amount && Number(formData.registration_fee_amount) > 0))) {
-        try {
-          await logApplicantFeeV2(activeId);
-          feeAlreadyLoggedRef.current = true;
-        } catch (feeErr: any) {
-          if (String(feeErr?.message || "").includes("already logged")) {
-            feeAlreadyLoggedRef.current = true;
-          } else {
-            console.warn("Auto-log applicant fee on registration:", feeErr);
-          }
-        }
-      }
       return { ...regRes, applicantId: activeId };
     },
     onSuccess: (data: any) => {
-      const targetId = data?.applicantId || draftApplicantId || data?.name;
+      const targetId = data?.applicantId || draftApplicantId;
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      if (targetId) {
-        queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
-      }
-      toast.success(data?.message || "Applicant Successfully Registered!", {
-        description: "Status transitioned to Registered. Redirecting to details...",
+      if (targetId) queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
+      toast.success("Applicant Registered Successfully!", {
+        description: `Record ${targetId} is now Registered.`,
       });
       if (onSuccessRedirect && targetId) {
         onSuccessRedirect(targetId);
@@ -856,463 +748,1720 @@ export function ApplicantRegistrationForm({
         router.push(`/applicants/${encodeURIComponent(targetId)}`);
       }
     },
-    onError: (error: unknown) => {
-      const err = error as ApiV2Error;
-      setIsConfirmRegisterOpen(false);
-      const rawMsg = err?.message || String(error || "");
-
-      // 1. Check for missing required fields from backend
-      // Backend pattern: "<track> track, Registered status requires: <fields>" OR "Mandatory fields required: <fields>"
-      const requiresMatch = rawMsg.match(/(?:requires|mandatory fields required:?)\s*:?\s*([^.\n]+)/i);
-      const parsedFields: (keyof BaseApplicantFormValues)[] = [];
-      if (requiresMatch && requiresMatch[1]) {
-        const fieldListStr = requiresMatch[1];
-        const rawTokens = fieldListStr.split(/[,•;]|\band\b/i).map((s) => s.trim()).filter(Boolean);
-
-        for (const token of rawTokens) {
-          const lower = token.toLowerCase();
-          if (lower.includes("photo") || lower.includes("photograph")) parsedFields.push("photo_passport");
-          else if (lower.includes("passport scan") || lower.includes("passport_scan")) parsedFields.push("passport_scan");
-          else if (lower.includes("passport number") || lower.includes("passport_number")) parsedFields.push("passport_number");
-          else if (lower.includes("passport expiry") || lower.includes("passport_expiry")) parsedFields.push("passport_expiry");
-          else if (lower.includes("date of birth") || lower.includes("birth") || lower.includes("dob")) parsedFields.push("date_of_birth");
-          else if (lower.includes("job") || lower.includes("position")) parsedFields.push("job_applied");
-          else if (lower.includes("education")) parsedFields.push("highest_education");
-          else if (lower.includes("salary")) parsedFields.push("monthly_salary");
-          else if (lower.includes("medical expiry") || lower.includes("medical_expiry")) parsedFields.push("medical_expiry_date");
-          else if (lower.includes("medical") && (lower.includes("unfit") || lower.includes("status"))) parsedFields.push("medical_status");
-          else if (lower.includes("first name") || lower.includes("first_name")) parsedFields.push("first_name");
-          else if (lower.includes("middle name") || lower.includes("middle_name") || lower.includes("father")) parsedFields.push("middle_name");
-          else if (lower.includes("last name") || lower.includes("last_name") || lower.includes("grandfather")) parsedFields.push("last_name");
-          else if (lower.includes("national id") || lower.includes("fayda") || lower.includes("fan")) parsedFields.push("national_id");
-          else if (lower.includes("labor id") || lower.includes("labour id")) parsedFields.push("labor_id");
-          else if (lower.includes("phone")) parsedFields.push("phone_number");
-          else if (lower.includes("place of birth") || lower.includes("birth place")) parsedFields.push("place_of_birth");
-        }
-      }
-
-      // 2. Check for Duplicate Entry collisions from backend
-      if (/Duplicate entry|already exists|already has (National ID|Passport Number|Labor ID)/i.test(rawMsg)) {
-        if (/national_id|national id|fayda|fan/i.test(rawMsg)) {
-          parsedFields.push("national_id");
-          setError("national_id", {
-            type: "manual",
-            message: "This National ID (Fayda / FAN) is already registered in the system.",
-          });
-        } else if (/passport/i.test(rawMsg)) {
-          parsedFields.push("passport_number");
-          setError("passport_number", {
-            type: "manual",
-            message: "This Passport Number is already registered in the system.",
-          });
-        } else if (/labor_id|labour_id|labor id|labour id/i.test(rawMsg)) {
-          parsedFields.push("labor_id");
-          setError("labor_id", {
-            type: "manual",
-            message: "This Ministry Labour ID is already registered in the system.",
-          });
-        }
-      }
-
-      // 3. Highlight conflicting/missing fields and scroll directly to the input
-      if (parsedFields.length > 0) {
-        parsedFields.forEach((fld) => {
-          const friendly = FIELD_FRIENDLY_NAMES[fld] || (fld as string).replace(/_/g, " ");
-          setError(fld, {
-            type: "manual",
-            message: `${friendly} is required to complete registration.`,
-          });
-        });
-        scrollToFieldWithError(parsedFields[0]);
-      }
-
-      // 4. Format user-friendly toast description
-      let friendlyDescription = describeApiError(err);
-      if (/Application failed to respond|Bad Gateway|Gateway Timeout/i.test(rawMsg)) {
-        friendlyDescription = "The registration server is taking longer than usual to respond. Your applicant draft has been saved. Please try registering again in a few moments.";
-      }
-
+    onError: (err: unknown) => {
       toast.error("Registration Requirements Not Met", {
-        description: friendlyDescription,
+        description: formatCleanErrorMessage(err),
         duration: 7000,
       });
     },
   });
 
-  const handleRegisterClick = async () => {
-    clearErrors();
-    const formData = getValues();
-    const validation = stage2RegistrationSchema.safeParse(formData);
+  const photoValue = watch("photograph") || watch("photo_passport") || watch("profile_photo_url");
+  const fullSizeValue = watch("photo_full_body");
+  const passportValue = watch("passport_scan");
+  const videoValue = watch("video_url");
+  const currentApplicantType = watch("applicant_type") || "Standard";
+  const currentDestCountry = watch("destination_country") || "Saudi Arabia";
 
-    if (!validation.success) {
-      validation.error.errors.forEach((err) => {
-        if (err.path[0]) {
-          const fieldName = err.path[0] as string;
-          setError(err.path[0] as keyof BaseApplicantFormValues, {
-            type: "manual",
-            message: formatSimpleErrorMessage(fieldName, err.message),
-          });
-        }
-      });
-
-      const firstError = validation.error.errors[0];
-      const errorField = firstError?.path[0] as string;
-
-      scrollToFieldWithError(errorField);
-
-      const simpleMsg = formatSimpleErrorMessage(errorField, firstError?.message);
-
-      toast.error("Please complete the required information", {
-        description: simpleMsg,
-        duration: 6000,
-      });
-      return;
+  // Determine current preview file based on selected media tab
+  const getMediaPreview = () => {
+    switch (activeMediaTab) {
+      case "photo":
+        return photoValue;
+      case "full_size":
+        return fullSizeValue;
+      case "passport":
+        return passportValue;
+      case "video":
+        return videoValue;
+      default:
+        return null;
     }
-
-    if (formData.medical_status === "UNFIT") {
-      scrollToFieldWithError("medical_status");
-      toast.error("Medical Status is Unfit", {
-        description:
-          "The applicant cannot be registered while medical status is Unfit. You can save as Draft until cleared.",
-      });
-      return;
-    }
-
-    // Live Uniqueness Verification Pre-Check before confirming registration
-    const passportVal = (formData.passport_number || "").trim();
-    if (passportVal) {
-      const passportCheck = await checkApplicantUniquenessV2(
-        "passport_number",
-        passportVal,
-        existingApplicantId
-      );
-      if (passportCheck.isConflict && passportCheck.message) {
-        setError("passport_number", { type: "manual", message: passportCheck.message });
-        scrollToFieldWithError("passport_number");
-        toast.error("Duplicate Passport Number", {
-          description: passportCheck.message,
-          duration: 6000,
-        });
-        return;
-      }
-    }
-
-    const nationalVal = (formData.national_id || "").trim();
-    if (nationalVal) {
-      const nationalCheck = await checkApplicantUniquenessV2(
-        "national_id",
-        nationalVal,
-        existingApplicantId
-      );
-      if (nationalCheck.isConflict && nationalCheck.message) {
-        setError("national_id", { type: "manual", message: nationalCheck.message });
-        scrollToFieldWithError("national_id");
-        toast.error("Duplicate National ID (Fayda)", {
-          description: nationalCheck.message,
-          duration: 6000,
-        });
-        return;
-      }
-    }
-
-    const labourVal = (formData.labour_id || (formData as any).labor_id || "").trim();
-    if (labourVal) {
-      const labourCheck = await checkApplicantUniquenessV2(
-        "labour_id",
-        labourVal,
-        existingApplicantId
-      );
-      if (labourCheck.isConflict && labourCheck.message) {
-        setError("labour_id", { type: "manual", message: labourCheck.message });
-        scrollToFieldWithError("labour_id");
-        toast.error("Duplicate Ministry Labour ID", {
-          description: labourCheck.message,
-          duration: 6000,
-        });
-        return;
-      }
-    }
-
-    setIsConfirmRegisterOpen(true);
   };
 
-  const isSavingDraft = saveDraftMutation.isPending;
-  const isRegistering = registerMutation.isPending;
-  const isMedicalUnfit = form.watch("medical_status") === "UNFIT";
-  const isRegistered = applicantState === "Registered" || applicantState === "CV Generated";
+  const activeMediaUrl = getMediaPreview();
+  const isSaving = saveDraftMutation.isPending || saveChangesMutation.isPending;
 
   return (
-    <div className="space-y-6">
-      {/* Edit Mode Top Banner */}
-      {existingApplicantId && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-950/30 p-3.5 shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-xs">
-              <Save className="h-4 w-4" />
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Top Header Card: Title & Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#15151a] p-4 rounded-xl border border-slate-200 dark:border-[#26262d] shadow-xs">
+        <div>
+          <h1 className="text-xl font-bold uppercase tracking-wide text-slate-900 dark:text-white">
+            {existingApplicantId ? "EDIT APPLICANT" : "CREATE APPLICANT"}
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-zinc-400">
+            {existingApplicantId ? `Editing details for candidate ${existingApplicantId}` : "Register a new applicant into the agency workflow system"}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {draftApplicantId && (
+            <span className="px-2.5 py-1 text-xs font-mono font-semibold rounded-md bg-slate-100 dark:bg-[#1f1f26] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#2b2b35]">
+              ID: {draftApplicantId}
             </span>
-            <div>
-              <div className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
-                Editing Applicant ({existingApplicantId})
+          )}
+          <span
+            className={`px-2.5 py-1 text-xs font-bold rounded-md uppercase tracking-wider ${
+              applicantState === "Registered" || applicantState === "CV Generated"
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                : "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+            }`}
+          >
+            {applicantState}
+          </span>
+        </div>
+      </div>
+
+      {/* 1. STANDARD VS MUAYENA DEPLOYMENT TRACK SELECTION (Previous UI Feature restored) */}
+      <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] shadow-xs overflow-hidden">
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            {/* Deployment Type Toggle */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-700" />
+                  Applicant Deployment Type <span className="text-rose-500">*</span>
+                </Label>
+                <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  {currentApplicantType === "Muayena" ? "Direct Client Placement" : "Agency Pool"}
+                </span>
               </div>
-              <div className="text-[11px] text-emerald-800/80 dark:text-emerald-400">
-                All sections are available on this page. Update any field and save your changes.
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                Choose Standard agency pool or Muayena (direct client allocation).
+              </p>
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#26262d] p-1 bg-slate-100 dark:bg-[#121215] w-full">
+                <button
+                  type="button"
+                  disabled={lockedIdentityFields}
+                  onClick={() => {
+                    setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
+                    if (watch("relative_name") === "Muayena") {
+                      setValue("relative_name", "");
+                      setValue("relative_kinship", "Mother");
+                    }
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition text-center ${
+                    lockedIdentityFields ? "cursor-not-allowed opacity-60" : ""
+                  } ${
+                    currentApplicantType === "Standard"
+                      ? "bg-emerald-900 text-white shadow-md font-bold"
+                      : "text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Standard Track
+                </button>
+                <button
+                  type="button"
+                  disabled={lockedIdentityFields}
+                  onClick={() => {
+                    setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
+                    const currentContact = watch("relative_name");
+                    if (!currentContact || currentContact === "") {
+                      setValue("relative_name", "Muayena");
+                      setValue("relative_kinship", "Other");
+                    }
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition text-center ${
+                    lockedIdentityFields ? "cursor-not-allowed opacity-60" : ""
+                  } ${
+                    currentApplicantType === "Muayena"
+                      ? "bg-emerald-900 text-white shadow-md font-bold"
+                      : "text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Muayena Track
+                </button>
+              </div>
+            </div>
+
+            {/* Destination Corridor & Context */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Globe2 className="h-4 w-4 text-emerald-700" />
+                Destination Country Corridor <span className="text-rose-500">*</span>
+              </Label>
+              <select
+                {...register("destination_country")}
+                disabled={lockedIdentityFields}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {DESTINATION_COUNTRY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-0.5">
+                {currentDestCountry.toLowerCase() === "kuwait"
+                  ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
+                  : currentDestCountry.toLowerCase() === "saudi arabia"
+                  ? "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."
+                  : "🌐 International Corridor: Standard visa and contract processing pipeline."}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. PASSPORT QUICK-SCAN & AUTO-FILL HERO EXTRACTOR (Previous UI Feature restored) */}
+      <Card
+        id="field-passport_scan"
+        className={`border-2 border-dashed ${
+          errors.passport_scan
+            ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20"
+            : "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 dark:border-emerald-500/30"
+        } overflow-hidden shadow-xs`}
+      >
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-800 text-white shadow-md">
+                <ScanLine className="h-6 w-6 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Passport Quick-Scan & Auto-Fill
+                  </h3>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                    <Sparkles className="h-3 w-3" /> Auto-Fill Enabled
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
+                  Upload candidate passport photo or paste the 2 lines of code from the bottom. The system will automatically read them and fill in Name, Passport Number, Date of Birth, Gender, and Expiry Date.
+                </p>
+
+                {/* Important Warning requested by user */}
+                <div className="flex items-start sm:items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1.5 mt-1 max-w-2xl">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
+                  <span>
+                    <strong>Important Note:</strong> Data extraction may not produce accurate results if the passport photo is blurry, dark, rotated, or low quality. Please review and verify all auto-filled fields before proceeding.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full md:w-auto">
+              {/* Paste code button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsMrzDialogOpen(true)}
+                className="text-xs font-semibold border-emerald-300 text-emerald-900 dark:text-emerald-300 hover:bg-emerald-100/50"
+              >
+                <FileText className="mr-1.5 h-3.5 w-3.5" />
+                Paste Passport Code
+              </Button>
+            </div>
+          </div>
+
+          {/* Premium Passport Dropzone for Quick Scan */}
+          <div className="mt-4">
+            <PremiumDropzone
+              id="registration-passport-scan-dropzone"
+              variant="passport"
+              value={watch("passport_scan")}
+              isLoading={isScanningOCR}
+              loadingText="Scanning passport & running OCR extraction..."
+              onFileSelect={handlePassportAutoScan}
+              onRemove={() => {
+                setValue("passport_scan", "");
+                setOcrSuccessData(null);
+                setPassportConflict(null);
+                toast.info("Passport scan cleared");
+              }}
+            />
+          </div>
+
+          {/* Extracted Data Pill Banner */}
+          {ocrSuccessData && (
+            <div className="mt-4 pt-3.5 border-t border-emerald-200/60 dark:border-emerald-900/40 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5 mr-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Extracted & Auto-Filled:
+              </span>
+              {ocrSuccessData.first_name && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Name: <strong>{ocrSuccessData.first_name} {ocrSuccessData.last_name || ""}</strong>
+                </span>
+              )}
+              {ocrSuccessData.passport_number && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200 font-mono">
+                  Passport: <strong>{ocrSuccessData.passport_number}</strong>
+                </span>
+              )}
+              {ocrSuccessData.date_of_birth && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  DOB: <strong>{ocrSuccessData.date_of_birth}</strong>
+                </span>
+              )}
+              {ocrSuccessData.gender && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Gender: <strong>{ocrSuccessData.gender}</strong>
+                </span>
+              )}
+              {ocrSuccessData.passport_expiry && (
+                <span className="rounded-lg bg-white dark:bg-[#1c1c24] border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-xs font-medium text-slate-800 dark:text-zinc-200">
+                  Expiry: <strong>{ocrSuccessData.passport_expiry}</strong>
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Extracted Duplicate Passport Conflict Warning */}
+          {passportConflict && (
+            <div className="mt-3 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300 animate-in fade-in duration-200">
+              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Duplicate Passport Detected:</span>{" "}
+                <span>{passportConflict}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3. MEDIA TABS & UPLOAD SECTION (With crystal-clear selected background) */}
+      <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] overflow-hidden shadow-xs">
+        {/* Unmistakable High-Contrast Media Tabs (User Feedback Addressed) */}
+        <div className="p-3 border-b border-slate-200 dark:border-[#26262d] bg-slate-50/90 dark:bg-[#16161e]">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Tab: Photo */}
+            <button
+              type="button"
+              onClick={() => setActiveMediaTab("photo")}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs ${
+                activeMediaTab === "photo"
+                  ? "bg-emerald-900 dark:bg-emerald-700 text-white ring-2 ring-emerald-500 shadow-md font-extrabold scale-[1.02]"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-[#1a1a24] dark:hover:bg-[#242432] dark:text-zinc-300 dark:border-[#333346] font-medium"
+              }`}
+            >
+              <Camera className={`h-3.5 w-3.5 ${activeMediaTab === "photo" ? "text-emerald-200" : "text-slate-500"}`} />
+              <span>Photo</span>
+              {activeMediaTab === "photo" ? (
+                <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
+                  <Check className="h-2.5 w-2.5" /> Selected
+                </span>
+              ) : photoValue ? (
+                <span className="h-2 w-2 rounded-full bg-emerald-600" title="File uploaded" />
+              ) : null}
+            </button>
+
+            {/* Tab: Full Size */}
+            <button
+              type="button"
+              onClick={() => setActiveMediaTab("full_size")}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs ${
+                activeMediaTab === "full_size"
+                  ? "bg-emerald-900 dark:bg-emerald-700 text-white ring-2 ring-emerald-500 shadow-md font-extrabold scale-[1.02]"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-[#1a1a24] dark:hover:bg-[#242432] dark:text-zinc-300 dark:border-[#333346] font-medium"
+              }`}
+            >
+              <User className={`h-3.5 w-3.5 ${activeMediaTab === "full_size" ? "text-emerald-200" : "text-slate-500"}`} />
+              <span>Full Size</span>
+              {activeMediaTab === "full_size" ? (
+                <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
+                  <Check className="h-2.5 w-2.5" /> Selected
+                </span>
+              ) : fullSizeValue ? (
+                <span className="h-2 w-2 rounded-full bg-emerald-600" title="File uploaded" />
+              ) : null}
+            </button>
+
+            {/* Tab: Passport */}
+            <button
+              type="button"
+              onClick={() => setActiveMediaTab("passport")}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs ${
+                activeMediaTab === "passport"
+                  ? "bg-emerald-900 dark:bg-emerald-700 text-white ring-2 ring-emerald-500 shadow-md font-extrabold scale-[1.02]"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-[#1a1a24] dark:hover:bg-[#242432] dark:text-zinc-300 dark:border-[#333346] font-medium"
+              }`}
+            >
+              <FileText className={`h-3.5 w-3.5 ${activeMediaTab === "passport" ? "text-emerald-200" : "text-slate-500"}`} />
+              <span>Passport</span>
+              {activeMediaTab === "passport" ? (
+                <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
+                  <Check className="h-2.5 w-2.5" /> Selected
+                </span>
+              ) : passportValue ? (
+                <span className="h-2 w-2 rounded-full bg-emerald-600" title="File uploaded" />
+              ) : null}
+            </button>
+
+            {/* Tab: Video */}
+            <button
+              type="button"
+              onClick={() => setActiveMediaTab("video")}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs ${
+                activeMediaTab === "video"
+                  ? "bg-emerald-900 dark:bg-emerald-700 text-white ring-2 ring-emerald-500 shadow-md font-extrabold scale-[1.02]"
+                  : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 dark:bg-[#1a1a24] dark:hover:bg-[#242432] dark:text-zinc-300 dark:border-[#333346] font-medium"
+              }`}
+            >
+              <Video className={`h-3.5 w-3.5 ${activeMediaTab === "video" ? "text-emerald-200" : "text-slate-500"}`} />
+              <span>Video Interview</span>
+              {activeMediaTab === "video" ? (
+                <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
+                  <Check className="h-2.5 w-2.5" /> Selected
+                </span>
+              ) : videoValue ? (
+                <span className="h-2 w-2 rounded-full bg-emerald-600" title="File uploaded" />
+              ) : null}
+            </button>
+          </div>
+        </div>
+
+        {/* Unmistakable Selection Status Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-emerald-50/90 dark:bg-emerald-950/40 border-b border-emerald-100 dark:border-emerald-900/40 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-600 dark:text-zinc-400">Active Option:</span>
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-900 dark:bg-emerald-700 text-white px-2.5 py-1 text-xs font-bold uppercase tracking-wider shadow-xs">
+              {activeMediaTab === "photo" && <><Camera className="h-3.5 w-3.5 text-emerald-200" /> Photo (Passport Size)</>}
+              {activeMediaTab === "full_size" && <><User className="h-3.5 w-3.5 text-emerald-200" /> Full Size Photo</>}
+              {activeMediaTab === "passport" && <><FileText className="h-3.5 w-3.5 text-emerald-200" /> Passport Scan</>}
+              {activeMediaTab === "video" && <><Video className="h-3.5 w-3.5 text-emerald-200" /> Video Interview</>}
+            </span>
+          </div>
+          <div className="text-[11px] font-medium">
+            {activeMediaUrl ? (
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> File attached and ready
+              </span>
+            ) : (
+              <span className="text-slate-500 dark:text-zinc-400">
+                No file attached yet. Choose or drop a file below.
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Media Dropzone & Preview */}
+        <CardContent className="p-6">
+          <PremiumDropzone
+            id={`registration-media-${activeMediaTab}`}
+            variant={
+              activeMediaTab === "photo"
+                ? "portrait"
+                : activeMediaTab === "full_size"
+                ? "full_body"
+                : activeMediaTab === "video"
+                ? "video"
+                : "passport"
+            }
+            value={activeMediaUrl}
+            isLoading={isUploadingMedia}
+            loadingText={`Uploading ${
+              activeMediaTab === "photo"
+                ? "passport photo"
+                : activeMediaTab === "full_size"
+                ? "full size photo"
+                : activeMediaTab === "video"
+                ? "candidate video"
+                : "passport scan"
+            }...`}
+            onFileSelect={async (file) => {
+              if (activeMediaTab === "passport") {
+                handlePassportAutoScan(file);
+              } else {
+                try {
+                  setIsUploadingMedia(true);
+                  const res = await uploadFileV2(file, false, "Applicant");
+                  const url = res.file_url || (res as any).message?.file_url;
+                  if (url) {
+                    if (activeMediaTab === "photo") {
+                      setValue("photograph", url);
+                      setValue("photo_passport", url);
+                      setValue("profile_photo_url", url);
+                    } else if (activeMediaTab === "full_size") {
+                      setValue("photo_full_body", url);
+                    } else if (activeMediaTab === "video") {
+                      setValue("video_url", url);
+                    }
+                    toast.success("File uploaded successfully");
+                  }
+                } catch (err: any) {
+                  toast.error("Upload failed", { description: err.message });
+                } finally {
+                  setIsUploadingMedia(false);
+                }
+              }
+            }}
+            onRemove={() => {
+              if (activeMediaTab === "photo") {
+                setValue("photograph", "");
+                setValue("photo_passport", "");
+                setValue("profile_photo_url", "");
+              } else if (activeMediaTab === "full_size") {
+                setValue("photo_full_body", "");
+              } else if (activeMediaTab === "passport") {
+                setValue("passport_scan", "");
+              } else if (activeMediaTab === "video") {
+                setValue("video_url", "");
+              }
+              toast.info("Media cleared");
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 4. CORE DETAILS 2-COLUMN GRID (Matching Video Layout) */}
+      <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] shadow-xs">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            {/* Row 1: Application No. | Date */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Application No.
+              </Label>
+              <Input
+                placeholder="e.g. APP-00102"
+                {...register("application_number")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Date
+              </Label>
+              <Input
+                type="date"
+                {...register("registration_date")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Row 2: Full Name | Active ? */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                  Full Name <Info className="h-3 w-3 text-slate-400" />
+                </Label>
+                {errors.full_name && (
+                  <span className="text-[11px] text-rose-600 font-medium">
+                    {errors.full_name.message}
+                  </span>
+                )}
+              </div>
+              <Input
+                placeholder="e.g. ALFIYA KEDIR UMER"
+                value={watch("full_name") || ""}
+                onChange={(e) => handleFullNameChange(e.target.value)}
+                disabled={lockedIdentityFields}
+                className={`text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215] ${
+                  errors.full_name ? "border-rose-500 focus-visible:ring-rose-500" : ""
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1.5 flex flex-col justify-center">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 mb-2">
+                Status
+              </Label>
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  {...register("is_active")}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                />
+                <span>Active ?</span>
+              </label>
+            </div>
+
+            {/* Row 3: Passport No. | Passport Type */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                  Passport No. <Info className="h-3 w-3 text-slate-400" />
+                </Label>
+                {(passportConflict || errors.passport_number) && (
+                  <span className="text-[11px] text-rose-600 font-medium">
+                    {passportConflict || errors.passport_number?.message}
+                  </span>
+                )}
+              </div>
+              <Input
+                placeholder="e.g. EP00646924"
+                {...register("passport_number")}
+                onBlur={handlePassportBlur}
+                disabled={lockedIdentityFields}
+                className={`text-xs uppercase font-mono border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215] ${
+                  passportConflict || errors.passport_number ? "border-rose-500 focus-visible:ring-rose-500" : ""
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Passport Type
+              </Label>
+              <select
+                {...register("passport_type")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {PASSPORT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Row 4: Date of Birth | Place of Birth */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Date of Birth
+              </Label>
+              <Input
+                type="date"
+                {...register("date_of_birth")}
+                disabled={lockedIdentityFields}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Place of Birth
+              </Label>
+              <Input
+                placeholder="e.g. ARSI"
+                {...register("place_of_birth")}
+                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Row 5: Date of Issue | Date of Expiry */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Date of Issue
+              </Label>
+              <Input
+                type="date"
+                {...register("passport_issue_date")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Date of Expiry
+              </Label>
+              <Input
+                type="date"
+                {...register("passport_expiry")}
+                disabled={lockedIdentityFields}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Row 6: Place of Issue | Place of Birth */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Place of Issue
+              </Label>
+              <Input
+                placeholder="e.g. ADDIS ABABA"
+                {...register("place_of_issue")}
+                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Place of Birth
+                </Label>
+                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+              </div>
+              <Input
+                placeholder="e.g. ADDIS ABABA, OROMIA"
+                {...register("place_of_birth")}
+                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Phone No.
+              </Label>
+              <Input
+                placeholder="e.g. +251911223344"
+                {...register("phone_number")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Row 7: Religion | Marital Status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Religion
+              </Label>
+              <select
+                {...register("religion")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {RELIGION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Marital Status
+              </Label>
+              <select
+                {...register("marital_status")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {MARITAL_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Row 8: Gender | Occupation */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Gender
+              </Label>
+              <select
+                {...register("gender")}
+                disabled={lockedIdentityFields}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {GENDER_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Occupation
+              </Label>
+              <select
+                {...register("job_applied")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700 uppercase"
+              >
+                {OCCUPATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Row 9: Qualification | City */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Qualification
+              </Label>
+              <select
+                {...register("qualification")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700 uppercase"
+              >
+                {QUALIFICATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                City
+              </Label>
+              <Input
+                placeholder="e.g. Addis Ababa"
+                {...register("city")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. SECTION: SPONSOR & VISA INFORMATION (Matching Video Layout) */}
+      <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] shadow-xs">
+        <div className="px-6 py-3 border-b border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#1b1b24]">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+            SPONSOR & VISA INFORMATION
+          </h2>
+        </div>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            {/* Visa Number | Sponsor Name */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Visa Number
+              </Label>
+              <Input
+                placeholder="Enter visa number"
+                {...register("visa_number")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Sponsor Name
+              </Label>
+              <Input
+                placeholder="Enter sponsor name"
+                {...register("sponsor_name")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Sponsor ID | Sponsor Phone */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Sponsor ID
+              </Label>
+              <Input
+                placeholder="e.g. 1029384756"
+                {...register("sponsor_id")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Sponsor Phone
+              </Label>
+              <Input
+                placeholder="e.g. +966..."
+                {...register("sponsor_phone")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Sponsor Address | Agent */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Sponsor Address
+              </Label>
+              <Input
+                placeholder="e.g. JEDDAH"
+                {...register("sponsor_address")}
+                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Agent
+              </Label>
+              <select
+                {...register("agent")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                <option value="">Select Foreign Contractor Agent...</option>
+                {contractors.map((c) => {
+                  const val = c.contractor_name || c.company_name || c.name;
+                  const label = c.company_name || c.contractor_name || c.name;
+                  return (
+                    <option key={c.name} value={val}>
+                      {label} ({c.country || "Saudi Arabia"})
+                    </option>
+                  );
+                })}
+                {watch("agent") &&
+                  !contractors.some(
+                    (c) => (c.contractor_name || c.company_name || c.name) === watch("agent")
+                  ) && (
+                    <option value={watch("agent")}>{watch("agent")}</option>
+                  )}
+              </select>
+            </div>
+
+            {/* National ID | Sponsor Arabic */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                National ID
+              </Label>
+              <Input
+                placeholder="Fayda / FAN National ID"
+                {...register("national_id")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Sponsor Arabic
+              </Label>
+              <Input
+                placeholder="اسم الكفيل"
+                {...register("sponsor_arabic")}
+                dir="rtl"
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            {/* Email | Visa Type */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Email
+              </Label>
+              <Input
+                type="email"
+                placeholder="applicant@example.com"
+                {...register("email")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Visa Type
+              </Label>
+              <select
+                {...register("visa_type")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {VISA_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 6. COLLAPSIBLE ACCORDION: Relative Information */}
+      <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] overflow-hidden shadow-xs">
+        <button
+          type="button"
+          onClick={() => setIsRelativeOpen(!isRelativeOpen)}
+          className="w-full flex items-center justify-between px-6 py-3.5 bg-slate-50/80 dark:bg-[#1b1b24] hover:bg-slate-100 dark:hover:bg-[#20202b] transition text-left"
+        >
+          <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 tracking-wide">
+            Relative Information
+          </span>
+          {isRelativeOpen ? (
+            <ChevronUp className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+
+        {isRelativeOpen && (
+          <div className="p-6 border-t border-slate-200 dark:border-[#26262d] grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative Name
+              </Label>
+              <Input
+                placeholder="Relative / Next of kin name"
+                {...register("relative_name")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Address Region
+              </Label>
+              <Input
+                placeholder="e.g. Oromia / Addis Ababa"
+                {...register("address_region")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative Phone
+              </Label>
+              <Input
+                placeholder="e.g. +251..."
+                {...register("relative_phone")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative Kinship
+              </Label>
+              <select
+                {...register("relative_kinship")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                {RELATIVE_KINSHIP_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                City
+              </Label>
+              <Input
+                placeholder="e.g. Adama"
+                {...register("city")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Subcity/Zone
+              </Label>
+              <Input
+                placeholder="e.g. Arsi Zone"
+                {...register("sub_region")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative Woreda
+              </Label>
+              <Input
+                placeholder="Woreda number/name"
+                {...register("relative_woreda")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative House #
+              </Label>
+              <Input
+                placeholder="House number"
+                {...register("relative_house_no")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Relative Gender
+              </Label>
+              <select
+                {...register("relative_gender")}
+                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+              >
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                R-Birth Date
+              </Label>
+              <Input
+                type="date"
+                {...register("r_birth_date")}
+                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 7. COLLAPSIBLE ACCORDION: Other Information */}
+      <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] overflow-hidden shadow-xs">
+        <button
+          type="button"
+          onClick={() => setIsOtherInfoOpen(!isOtherInfoOpen)}
+          className="w-full flex items-center justify-between px-6 py-3.5 bg-slate-50/80 dark:bg-[#1b1b24] hover:bg-slate-100 dark:hover:bg-[#20202b] transition text-left"
+        >
+          <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 tracking-wide">
+            Other Information
+          </span>
+          {isOtherInfoOpen ? (
+            <ChevronUp className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+
+        {isOtherInfoOpen && (
+          <div className="p-6 border-t border-slate-200 dark:border-[#26262d] space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Region
+                </Label>
+                <Input
+                  placeholder="e.g. Oromia"
+                  {...register("region")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Subcity
+                </Label>
+                <Input
+                  placeholder="Subcity"
+                  {...register("sub_region")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Woreda
+                </Label>
+                <Input
+                  placeholder="Woreda"
+                  {...register("woreda")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  House No.
+                </Label>
+                <Input
+                  placeholder="House No"
+                  {...register("house_no")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  File No.
+                </Label>
+                <Input
+                  placeholder="File #"
+                  {...register("file_no")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Contract #
+                </Label>
+                <Input
+                  placeholder="Contract #"
+                  {...register("contract_number")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Wakala #
+                </Label>
+                <Input
+                  placeholder="Wakala #"
+                  {...register("wakala_number")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Sticker Visa #
+                </Label>
+                <Input
+                  placeholder="Sticker Visa #"
+                  {...register("sticker_visa_number")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Signed On
+                </Label>
+                <Input
+                  type="date"
+                  {...register("signed_on")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Nationality
+                </Label>
+                <select
+                  {...register("nationality")}
+                  disabled={lockedIdentityFields}
+                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                >
+                  <option value="Ethiopia">Ethiopia</option>
+                  <option value="Kenya">Kenya</option>
+                  <option value="Uganda">Uganda</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Biometric Id
+                </Label>
+                <Input
+                  placeholder="Biometric ID"
+                  {...register("biometric_id")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Labor ID
+                </Label>
+                <Input
+                  placeholder="Ministry Labor ID"
+                  {...register("labor_id")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Contact Person(2nd)
+                </Label>
+                <Input
+                  placeholder="Secondary contact name"
+                  {...register("contact_person_2nd")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Contact Phone(2nd)
+                </Label>
+                <Input
+                  placeholder="Secondary contact phone"
+                  {...register("contact_phone_2nd")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+            </div>
+
+            {/* Checkbox Group: Photos (2) | Is(f)Filed | Relative ID Card */}
+            <div className="pt-3 border-t border-slate-100 dark:border-[#26262d] flex flex-wrap items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  {...register("photos_2")}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                />
+                <span>Photos (2)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  {...register("is_filed")}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                />
+                <span>IsIDFiled</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  {...register("relative_id_card")}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                />
+                <span>Relative ID Card</span>
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 8. COLLAPSIBLE ACCORDION: Skills & Experience */}
+      <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] overflow-hidden shadow-xs">
+        <button
+          type="button"
+          onClick={() => setIsSkillsOpen(!isSkillsOpen)}
+          className="w-full flex items-center justify-between px-6 py-3.5 bg-slate-50/80 dark:bg-[#1b1b24] hover:bg-slate-100 dark:hover:bg-[#20202b] transition text-left"
+        >
+          <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 tracking-wide">
+            Skills & Experience
+          </span>
+          {isSkillsOpen ? (
+            <ChevronUp className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+
+        {isSkillsOpen && (
+          <div className="p-6 border-t border-slate-200 dark:border-[#26262d] space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  English
+                </Label>
+                <select
+                  {...register("english_level")}
+                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                >
+                  {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt === "Select.." ? "" : opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Arabic
+                </Label>
+                <select
+                  {...register("arabic_level")}
+                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                >
+                  {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt === "Select.." ? "" : opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Experience Abroad
+                </Label>
+                <select
+                  {...register("experience_country")}
+                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                >
+                  {EXPERIENCE_ABROAD_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Salary (SAR / Monthly)
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="1000"
+                  {...register("salary_amount")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Works In
+                </Label>
+                <Input
+                  placeholder="Specific sector or position"
+                  {...register("works_in")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Children
+                </Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  {...register("children")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Height
+                </Label>
+                <Input
+                  placeholder="e.g. 165 cm"
+                  {...register("height")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Weight
+                </Label>
+                <Input
+                  placeholder="e.g. 60 kg"
+                  {...register("weight")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Reference No
+                </Label>
+                <Input
+                  placeholder="Reference number"
+                  {...register("reference_no")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Remark
+                </Label>
+                <Input
+                  placeholder="Candidate remarks"
+                  {...register("remarks")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+              </div>
+            </div>
+
+            {/* Skills Checkboxes: 4 columns x 2 rows (Matching Video Grid) */}
+            <div className="pt-4 border-t border-slate-100 dark:border-[#26262d] space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                Skills Checklist
+              </Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_ironing")) === 1}
+                    onChange={(e) => setValue("skill_ironing", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Ironing</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_sewing")) === 1}
+                    onChange={(e) => setValue("skill_sewing", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Sewing</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_baby_sitting")) === 1}
+                    onChange={(e) => setValue("skill_baby_sitting", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>B.Sitting</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_children_care")) === 1}
+                    onChange={(e) => setValue("skill_children_care", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Ch.Care</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_arabic_cooking")) === 1}
+                    onChange={(e) => setValue("skill_arabic_cooking", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Ar.Cooking</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_cleaning")) === 1}
+                    onChange={(e) => setValue("skill_cleaning", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Cleaning</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_washing")) === 1}
+                    onChange={(e) => setValue("skill_washing", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Washing</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
+                  <input
+                    type="checkbox"
+                    checked={Number(watch("skill_cooking")) === 1}
+                    onChange={(e) => setValue("skill_cooking", e.target.checked ? 1 : 0)}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>Cooking</span>
+                </label>
               </div>
             </div>
           </div>
-          <Button
-            type="button"
-            onClick={() => saveChangesMutation.mutate()}
-            disabled={saveChangesMutation.isPending}
-            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
-          >
-            {saveChangesMutation.isPending ? (
-              <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Changes...
-              </>
-            ) : (
-              <>
-                <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes
-              </>
-            )}
-          </Button>
+        )}
+      </div>
+
+      {/* 9. MEDICAL FITNESS STATUS GATE */}
+      <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#15151a] p-4 text-xs space-y-3">
+        <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-zinc-200">
+          <ShieldCheck className="h-4 w-4 text-emerald-700" />
+          <span>Medical Fitness & Regulatory Status</span>
         </div>
-      )}
 
-      {/* Sticky Section Quick-Jump Bar */}
-      <div className="sticky top-2 z-20 w-full overflow-x-auto rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-2 shadow-xs backdrop-blur-md">
-        <div className="flex items-center gap-1.5 min-w-max">
-          {SECTIONS.map((sec) => {
-            const Icon = sec.icon;
-            const isActive = activeSection === sec.id;
-            return (
-              <button
-                key={sec.id}
-                type="button"
-                onClick={() => scrollToSection(sec.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  isActive
-                    ? "bg-emerald-900 text-white shadow-xs"
-                    : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#18181e]"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{sec.label}</span>
-              </button>
-            );
-          })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+              Medical Fitness Result
+            </Label>
+            <select
+              {...register("medical_status")}
+              className="w-full h-8 rounded border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-2 py-0.5 text-xs text-slate-900 dark:text-zinc-200 font-medium"
+            >
+              <option value="FIT">FIT</option>
+              <option value="Pending">Pending / In Progress</option>
+              <option value="Not Done">Not Done / None</option>
+              <option value="UNFIT">UNFIT</option>
+            </select>
+          </div>
 
-          {draftApplicantId && (
-            <div className="ml-auto pl-3 flex items-center gap-2 border-l border-slate-200 dark:border-[#222227]">
-              <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
-                ID: <strong className="text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                  isRegistered
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                    : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                }`}
-              >
-                {applicantState}
-              </span>
-            </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+              Medical Expiry Date
+            </Label>
+            <Input
+              type="date"
+              {...register("medical_expiry_date")}
+              className="text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 10. BOTTOM ACTION TOOLBAR (With Video-Matching Primary Save Button) */}
+      <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-[#26262d] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-xl backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          {draftApplicantId ? (
+            <span className="text-xs text-slate-600 dark:text-zinc-400 font-mono">
+              ID: <strong className="text-slate-900 dark:text-white">{draftApplicantId}</strong>
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500 dark:text-zinc-400">
+              New Applicant Registration Form
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 ml-auto">
+          {/* Save as Draft Button (for new or draft records) */}
+          {!existingApplicantId && (
+            <Button
+              type="button"
+              onClick={() => saveDraftMutation.mutate()}
+              disabled={isSaving || registerMutation.isPending}
+              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
+            >
+              {saveDraftMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Draft...
+                </>
+              ) : (
+                <>
+                  <Bookmark className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Save as Draft
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Save Changes Button (when editing an existing applicant) */}
+          {existingApplicantId && (
+            <Button
+              type="button"
+              onClick={() => saveChangesMutation.mutate()}
+              disabled={isSaving}
+              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
+            >
+              {saveChangesMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Update Profile
+                </>
+              )}
+            </Button>
+          )}
+
+          {/* Register Applicant Button (promotes to Registered via backend gate) */}
+          {applicantState !== "Registered" && applicantState !== "CV Generated" && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsConfirmRegisterOpen(true)}
+              disabled={registerMutation.isPending || isSaving || watch("medical_status") === "UNFIT"}
+              className="border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold"
+            >
+              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" /> Register Applicant
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Main Single Vertical Form Body */}
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-10">
-        {/* Section 1: Personal & Passport */}
-        <section id="section-personal" className="scroll-mt-20 space-y-4">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-              1
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Personal & Passport Information
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Passport scan, personal details, and home address.
-              </p>
-            </div>
-          </div>
-          <Step1PersonalInfo form={form} locked={lockedIdentityFields} editingApplicantName={existingApplicantId} />
-        </section>
+      {/* Manual Passport Code Paste Dialog Modal */}
+      <Dialog open={isMrzDialogOpen} onOpenChange={setIsMrzDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <FileText className="h-5 w-5 text-emerald-600" />
+              Paste Passport Code
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Paste the 2 lines of code printed at the very bottom of the candidate's passport photo page.
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Section 2: Education & Skills */}
-        <section id="section-education" className="scroll-mt-20 space-y-4">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-              2
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Education, Experience & Skills Matrix
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Academic qualifications, work experience abroad, language proficiencies, and domestic skills.
-              </p>
-            </div>
-          </div>
-          <Step2EducationExperience form={form} />
-        </section>
-
-        {/* Section 3: National ID & Contacts */}
-        <section id="section-identification" className="scroll-mt-20 space-y-4">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-              3
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                National Identification & Emergency Contacts
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Fayda / National ID, Ministry Labour ID, target profession, and emergency family member.
-              </p>
-            </div>
-          </div>
-          <Step3IdentificationContact form={form} editingApplicantName={existingApplicantId} />
-        </section>
-
-        {/* Section 4: Medical & COC */}
-        <section id="section-medical" className="scroll-mt-20 space-y-4">
-          <div className="flex items-center gap-2.5 pb-2 border-b border-slate-200/80 dark:border-[#222227]">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-              4
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Medical Fitness & COC Certification
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                GAMCA laboratory medical fitness result and Ministry COC examination certificate.
-              </p>
-            </div>
-          </div>
-          <Step4CocMedical form={form} />
-        </section>
-
-        {/* Sticky Bottom Action Toolbar */}
-        <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#121215]/95 p-4 shadow-xl backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            {draftApplicantId ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 dark:text-zinc-400">
-                  Record ID: <strong className="font-mono text-slate-800 dark:text-zinc-200">{draftApplicantId}</strong>
-                </span>
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    isRegistered
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                      : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                  }`}
+          <div className="space-y-3 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="mrz-raw-input" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                Passport Code Lines (Bottom of Photo Page)
+              </Label>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePasteClipboard}
+                  className="h-7 px-2 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
                 >
-                  {applicantState}
-                </span>
+                  <ClipboardPaste className="h-3.5 w-3.5 mr-1" />
+                  Paste from Clipboard
+                </Button>
+                {mrzInputText && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMrzInputText("")}
+                    className="h-7 px-2 text-[11px] text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  >
+                    Clear
+                  </Button>
+                )}
               </div>
-            ) : (
-              <span className="text-xs text-slate-500 dark:text-zinc-400">
-                New Applicant Registration Form
-              </span>
-            )}
+            </div>
+
+            <Textarea
+              id="mrz-raw-input"
+              rows={4}
+              value={mrzInputText}
+              onChange={(e) => setMrzInputText(e.target.value)}
+              placeholder={`P<ETHMOHAMMED<<FATUMA<<<<<<<<<<<<<<<<<<<<<<<\nEP12345674ETH9501018F2812316<<<<<<<<<<<<<<04`}
+              className="font-mono text-xs uppercase tracking-wider bg-slate-50 dark:bg-[#16161b] border-slate-300 dark:border-zinc-800 focus-visible:ring-emerald-600 leading-relaxed"
+            />
+
+            <div className="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 p-2.5 text-[11px] text-amber-900 dark:text-amber-300 space-y-1">
+              <div className="font-semibold flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Format Guidelines:</span>
+              </div>
+              <p className="text-amber-800/90 dark:text-amber-300/80 pl-5 leading-relaxed">
+                • Standard passports have <strong>2 lines of 44 characters</strong> with chevrons (<code className="font-mono font-bold">&lt;</code>).
+                <br />
+                • Line 1 starts with <code className="font-mono font-bold">P&lt;</code> followed by Country and Name.
+                <br />
+                • Line 2 contains Passport Number, DOB, Gender, and Expiry Date.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* If in edit mode, provide Save Changes button */}
-            {existingApplicantId ? (
-              <Button
-                type="button"
-                onClick={() => saveChangesMutation.mutate()}
-                disabled={saveChangesMutation.isPending}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
-              >
-                {saveChangesMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Changes...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-1.5 h-3.5 w-3.5" /> Save Changes
-                  </>
-                )}
-              </Button>
-            ) : (
-              /* Save Draft Action */
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => saveDraftMutation.mutate()}
-                disabled={isSavingDraft || isRegistering}
-                className="border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#16161b] hover:bg-slate-50 dark:hover:bg-[#1e1e26] text-slate-800 dark:text-zinc-200 font-medium text-xs shadow-xs"
-              >
-                {isSavingDraft ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Saving Draft...
-                  </>
-                ) : (
-                  <>
-                    <Bookmark className="mr-1.5 h-3.5 w-3.5 text-emerald-800 dark:text-emerald-400" />
-                    Save as Draft
-                  </>
-                )}
-              </Button>
-            )}
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsMrzDialogOpen(false);
+                setMrzInputText("");
+              }}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDecodePastedMrz}
+              className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+              Apply Extracted Data to Form
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            {/* Register Applicant Action */}
-            {!isRegistered && (
-              <Button
-                type="button"
-                onClick={handleRegisterClick}
-                disabled={isRegistering || isSavingDraft || isMedicalUnfit}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-xs"
-              >
-                {isRegistering ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Registering...
-                  </>
-                ) : (
-                  <>
-                    <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
-                    Register Applicant
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-        </div>
-      </form>
-
-      {/* Registration Confirmation Dialog Modal */}
+      {/* Confirmation Modal for Registering Applicant */}
       <Dialog open={isConfirmRegisterOpen} onOpenChange={setIsConfirmRegisterOpen}>
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white text-base">
               <FileCheck2 className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
               Confirm Applicant Registration
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
-              Are you sure you want to register this applicant? This will validate all Stage 1 & Stage 2 requirements and transition the record from <strong>Draft</strong> to <strong>Registered</strong>.
+              Are you sure you want to promote this applicant to <strong>Registered</strong>? This will validate all KYC, medical requirements, and field floors in accordance with <code>state_machine.py</code>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50 dark:bg-[#16161b] p-3 text-xs space-y-1.5">
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-zinc-400">Applicant:</span>
+              <span className="text-slate-500 dark:text-zinc-400">Full Name:</span>
               <span className="font-semibold text-slate-900 dark:text-white">
-                {form.getValues("first_name")} {form.getValues("last_name")}
+                {watch("full_name") || `${watch("first_name")} ${watch("last_name")}`}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-zinc-400">Passport:</span>
-              <span className="font-mono text-slate-900 dark:text-zinc-200">{form.getValues("passport_number")}</span>
+              <span className="text-slate-500 dark:text-zinc-400">Passport Number:</span>
+              <span className="font-mono text-slate-900 dark:text-zinc-200">
+                {watch("passport_number") || "Not entered"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500 dark:text-zinc-400">Medical Status:</span>
-              <span className="font-semibold text-emerald-700 dark:text-emerald-400">{form.getValues("medical_status")}</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                {watch("medical_status")}
+              </span>
             </div>
           </div>
 
@@ -1321,20 +2470,19 @@ export function ApplicantRegistrationForm({
               type="button"
               variant="outline"
               onClick={() => setIsConfirmRegisterOpen(false)}
-              className="dark:border-[#26262d] text-xs"
+              className="text-xs"
             >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={() => registerMutation.mutate()}
-              disabled={isRegistering}
+              disabled={registerMutation.isPending}
               className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs"
             >
-              {isRegistering ? (
+              {registerMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Registering...
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Registering...
                 </>
               ) : (
                 "Confirm & Register"

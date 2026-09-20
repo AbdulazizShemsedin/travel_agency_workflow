@@ -1684,7 +1684,7 @@ export default function ApplicantDetailPage() {
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Job Applied</span>
-                <p className="font-semibold text-slate-900 dark:text-white">{applicant.job_applied || "House Maid / General"}</p>
+                <p className="font-semibold text-slate-900 dark:text-white">{applicant.job_applied || "House Worker / General"}</p>
               </div>
               <div>
                 <span className="text-slate-500 dark:text-zinc-400">Destination</span>
@@ -2227,19 +2227,17 @@ export default function ApplicantDetailPage() {
                   </div>
 
                   <div>
-                    <Label className="text-[11px] font-semibold">Stage / Category</Label>
+                    <Label className="text-[11px] font-semibold">Category / Ad-Hoc Stage</Label>
                     <select
                       value={entry.stage}
                       onChange={(e) => handleUpdateProfileFeeRow(entry.id, { stage: e.target.value })}
                       className="h-8 w-full mt-1 rounded-md border border-slate-200 dark:border-[#2b2b35] bg-white dark:bg-[#1a1a20] px-2 text-xs"
                     >
-                      <option value="Registration">Registration</option>
-                      <option value="Selected">Selected / Contract</option>
-                      <option value="LMIS Clearance">LMIS Clearance</option>
-                      <option value="Taeshir / Biometrics">Taeshir / Injaz</option>
-                      <option value="Embassy Clearance">Embassy Clearance</option>
-                      <option value="Departure">Departure / Ticketing</option>
-                      <option value="General">General Administrative</option>
+                      <option value="Registration">Registration / Intake</option>
+                      <option value="Selected">Selected / Placement Contract</option>
+                      <option value="Ticketing Reschedule">Ticket Reschedule Fee</option>
+                      <option value="Departure">Departure & Airport Logistics</option>
+                      <option value="General">General Office & Ad-hoc</option>
                     </select>
                   </div>
                 </div>
@@ -2247,11 +2245,14 @@ export default function ApplicantDetailPage() {
                 <div>
                   <Label className="text-[11px] font-semibold">Description / Receipt Note</Label>
                   <Input
-                    placeholder="e.g. GAMCA medical screening fee, Biometrics appointment receipt"
+                    placeholder="e.g. Flight reschedule penalty, luggage fee, office receipt"
                     value={entry.description}
                     onChange={(e) => handleUpdateProfileFeeRow(entry.id, { description: e.target.value })}
                     className="h-8 mt-1 text-xs bg-white dark:bg-[#1a1a20]"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    ℹ️ Corridor clearance fees (LMIS, Insurance, Taeshir, Injaz, Wakala, Police Ashara) are auto-computed upon ticketing — do not log clearance stage fees manually.
+                  </p>
                 </div>
               </div>
             ))}

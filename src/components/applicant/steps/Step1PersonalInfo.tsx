@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { ImageCropModal } from "@/components/ui/ImageCropModal";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -223,6 +224,10 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     if (placeOfIssue) {
       setValue("place_of_issue", placeOfIssue, { shouldDirty: true, shouldValidate: true, shouldTouch: true });
     }
+    const placeOfBirth = d.place_of_birth || d.birth_place;
+    if (placeOfBirth) {
+      setValue("place_of_birth", String(placeOfBirth).toUpperCase().trim(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+    }
 
     setOcrSuccessData({
       ...d,
@@ -230,8 +235,13 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       passport_expiry: expiry || d.passport_expiry,
       passport_expiry_date: expiry || d.passport_expiry_date,
       place_of_issue: placeOfIssue || d.place_of_issue,
+      place_of_birth: placeOfBirth || d.place_of_birth,
+      needs_passport_review: Boolean(d.needs_passport_review),
     });
     setIsOcrReviewOpen(false);
+    if (d.needs_passport_review) {
+      toast.warning("Please verify: extracted name or passport details should be double-checked against original.", { duration: 6000 });
+    }
     if (source === "mrz") {
       toast.success("Passport details read successfully and filled into the form!");
     } else {
@@ -239,16 +249,21 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     }
   };
 
-  // Main Passport Auto-Scan Handler (Async Non-Blocking Queue with Timeout Guard & Client Fallback)
-  const handlePassportAutoScan = async (file: File) => {
+  const handlePassportFileSelect = async (file: File) => {
     if (!file) return;
-    const localUrl = URL.createObjectURL(file);
-    setPassportScanPreview(localUrl);
-    setIsScanningOCR(true);
-    const toastId = toast.loading("Reading passport details in the background... You can continue filling out the form.");
 
+    // Fast-fail: Reject obvious non-image / corrupted zero-byte files
+    if (file.size === 0) {
+      toast.error("The selected file is empty. Please select a valid passport photo.");
+      return;
+    }
+
+    const toastId = "passport-scan-loading";
     try {
-      // 1. Upload passport scan file
+      setIsScanningOCR(true);
+      toast.loading("Reading passport photo with AI OCR scanner...", { id: toastId });
+
+      // 1. Upload original uncropped photo to secure Frappe storage
       let uploadedUrl = "";
       try {
         const uploadRes = await uploadFileV2(file, true);
@@ -263,12 +278,12 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         console.warn("File upload notice:", e);
       }
 
-      // 2. Dispatch file_url to backend Python OCR engine with a 12s non-blocking timeout guard
-      // This prevents browser 502 timeouts if a large/non-passport file (e.g. wallpaper) is uploaded
+      // 2. Dispatch file_url to backend OCR engine with a 35s non-blocking timeout guard
+      // Accommodates deep-learning / visual zone place_of_birth extraction without premature cutoff
       let extractedData: any = null;
       if (uploadedUrl) {
         try {
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000));
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 35000));
           const ocrPromise = parsePassportFileV2(uploadedUrl).catch(() => null);
           const ocrRes = await Promise.race([ocrPromise, timeoutPromise]);
           if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth || ocrRes.passport_expiry || ocrRes.passport_expiry_date)) {
@@ -496,41 +511,6 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                 Paste Passport Code
               </Button>
 
-              <label
-                htmlFor="passport-auto-scan-input"
-                className="flex items-center justify-center gap-2 cursor-pointer rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white px-4 py-2 text-xs font-bold shadow-md transition hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {isScanningOCR ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Reading Passport...</span>
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="h-4 w-4" />
-                    <span>Upload Passport Scan</span>
-                  </>
-                )}
-                <input
-                  id="passport-auto-scan-input"
-                  type="file"
-                  accept="image/png, image/jpeg, image/jpg, image/webp"
-                  className="sr-only"
-                  disabled={isScanningOCR}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setCropModalState({
-                        open: true,
-                        file: f,
-                        type: "passport",
-                      });
-                      e.target.value = "";
-                    }
-                  }}
-                />
-              </label>
-
               {(passportScanPreview || ocrSuccessData) && (
                 <Button
                   type="button"
@@ -545,6 +525,27 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                 </Button>
               )}
             </div>
+          </div>
+
+          {/* Premium Drag & Drop Passport Scan Zone */}
+          <div className="mt-4">
+            <PremiumDropzone
+              id="passport-scan-dropzone"
+              variant="passport"
+              value={passportScanPreview}
+              isLoading={isScanningOCR}
+              loadingText="Reading passport & extracting candidate details..."
+              error={errors.passport_scan?.message}
+              disabled={locked}
+              onFileSelect={(file) => {
+                setCropModalState({
+                  open: true,
+                  file,
+                  type: "passport",
+                });
+              }}
+              onRemove={() => setPhotoToRemove("passport")}
+            />
           </div>
 
           {/* Extracted Data Confirmation Banner */}
@@ -778,83 +779,26 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center pt-2">
-              <label
-                htmlFor="profile-photo-upload"
-                className={`group relative flex h-36 w-36 cursor-pointer flex-col items-center justify-center rounded-full border-2 border-dashed transition overflow-hidden ${
-                  errors.photo_passport || errors.profile_photo_url
-                    ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30"
-                    : "border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] hover:border-emerald-700 hover:bg-emerald-50/50"
-                }`}
-              >
-                {isUploadingPassport ? (
-                  <div className="flex flex-col items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
-                    <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
-                  </div>
-                ) : photoPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photoPreview}
-                    alt="Profile headshot"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-4 text-center">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
-                      <Camera className="h-5 w-5 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
-                    </div>
-                    <span className="mt-2 text-xs font-medium text-slate-600 dark:text-zinc-300">
-                      Upload Photo
-                    </span>
-                  </div>
-                )}
-                <input
-                  id="profile-photo-upload"
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setCropModalState({
-                        open: true,
-                        file: f,
-                        type: "portrait",
-                      });
-                      e.target.value = "";
-                    }
-                  }}
-                  disabled={isUploadingPassport}
-                />
-              </label>
-
-              {(errors.photo_passport || errors.profile_photo_url) && (
-                <p className="mt-2 text-center text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
-                  {(errors.photo_passport || errors.profile_photo_url)?.message}
-                </p>
-              )}
-
-              {photoPreview && !isUploadingPassport && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPhotoToRemove("portrait");
-                  }}
-                  className="mt-2.5 h-7 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
-                  title="Remove candidate passport photo"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Remove Photo
-                </Button>
-              )}
+              <PremiumDropzone
+                id="profile-photo-dropzone"
+                variant="portrait"
+                value={photoPreview}
+                isLoading={isUploadingPassport}
+                loadingText="Uploading passport photo..."
+                error={(errors.photo_passport || errors.profile_photo_url)?.message}
+                disabled={locked}
+                onFileSelect={(file) => {
+                  setCropModalState({
+                    open: true,
+                    file,
+                    type: "portrait",
+                  });
+                }}
+                onRemove={() => setPhotoToRemove("portrait")}
+              />
 
               <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
-                JPG, PNG format (passport photo 35x45mm)
+                JPG, PNG, WebP format (Standard 35x45mm ID Photo)
               </p>
             </CardContent>
           </Card>
@@ -875,83 +819,26 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center pt-2">
-              <label
-                htmlFor="fullbody-photo-upload"
-                className={`group relative flex h-40 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed transition overflow-hidden ${
-                  errors.photo_full_body
-                    ? "border-rose-500 ring-2 ring-rose-500/30 bg-rose-50/60 dark:bg-rose-950/30"
-                    : "border-slate-300 dark:border-[#2a2a32] bg-slate-50 dark:bg-[#16161b] hover:border-emerald-700 hover:bg-emerald-50/50"
-                }`}
-              >
-                {isUploadingFullBody ? (
-                  <div className="flex flex-col items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-emerald-700 dark:text-emerald-400" />
-                    <span className="text-[10px] text-slate-500 mt-1">Uploading...</span>
-                  </div>
-                ) : fullBodyPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={fullBodyPreview}
-                    alt="Full body photo"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-3 text-center">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-[#202028] shadow-xs group-hover:scale-105">
-                      <ImageIcon className="h-4 w-4 text-slate-500 group-hover:text-emerald-800 dark:text-zinc-400" />
-                    </div>
-                    <span className="mt-2 text-[11px] font-medium text-slate-600 dark:text-zinc-300">
-                      Full Body
-                    </span>
-                  </div>
-                )}
-                <input
-                  id="fullbody-photo-upload"
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setCropModalState({
-                        open: true,
-                        file: f,
-                        type: "fullbody",
-                      });
-                      e.target.value = "";
-                    }
-                  }}
-                  disabled={isUploadingFullBody}
-                />
-              </label>
-
-              {errors.photo_full_body && (
-                <p className="mt-2 text-center text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center justify-center gap-1">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" />
-                  {errors.photo_full_body.message}
-                </p>
-              )}
-
-              {fullBodyPreview && !isUploadingFullBody && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setPhotoToRemove("fullbody");
-                  }}
-                  className="mt-2.5 h-7 px-2.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/50"
-                  title="Remove candidate full-body photo"
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Remove Photo
-                </Button>
-              )}
+              <PremiumDropzone
+                id="fullbody-photo-dropzone"
+                variant="full_body"
+                value={fullBodyPreview}
+                isLoading={isUploadingFullBody}
+                loadingText="Uploading full body photo..."
+                error={errors.photo_full_body?.message}
+                disabled={locked}
+                onFileSelect={(file) => {
+                  setCropModalState({
+                    open: true,
+                    file,
+                    type: "fullbody",
+                  });
+                }}
+                onRemove={() => setPhotoToRemove("fullbody")}
+              />
 
               <p className="mt-2 text-center text-xs text-slate-500 dark:text-zinc-400">
-                Standing full-body portrait (3:4 ratio)
+                Full length head-to-toe photo for foreign agent bio (3:4 ratio)
               </p>
             </CardContent>
           </Card>
@@ -1379,6 +1266,25 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.passport_issue_date.message}</p>
                   )}
                 </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                      Place of Birth
+                    </Label>
+                    <span className="text-[10px] text-slate-400 font-normal">Optional / Auto-extracted</span>
+                  </div>
+                  <Input
+                    id="place_of_birth"
+                    placeholder="e.g., ADDIS ABABA, OROMIA, HAWASSA"
+                    {...register("place_of_birth")}
+                    disabled={locked}
+                    className="h-9 text-xs uppercase"
+                  />
+                  {errors.place_of_birth && (
+                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1693,7 +1599,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       onConfirm={(resultFile) => {
         setCropModalState((prev) => ({ ...prev, open: false }));
         if (cropModalState.type === "passport") {
-          handlePassportAutoScan(resultFile);
+          handlePassportFileSelect(resultFile);
         } else if (cropModalState.type === "portrait") {
           handlePhotoUpload(resultFile);
         } else if (cropModalState.type === "fullbody") {

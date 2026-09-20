@@ -495,7 +495,9 @@ export default function AdminComplaintsPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
               {filteredAndSortedComplaints.map((c) => (
                 <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{c.name}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">
+                    {c.display_no ? `#${c.display_no}` : c.name}
+                  </td>
                   <td className="px-4 py-3 font-semibold text-slate-800 dark:text-zinc-200">{c.contractor}</td>
                   <td className="px-4 py-3">
                     <div className="font-semibold text-slate-900 dark:text-white">{getApplicantDisplayName(c)}</div>
@@ -588,7 +590,9 @@ export default function AdminComplaintsPage() {
           <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#121216] p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#202026]">
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Resolve Complaint #{selectedComplaintForResolve.name}</h3>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Resolve Complaint {selectedComplaintForResolve.display_no ? `#${selectedComplaintForResolve.display_no}` : selectedComplaintForResolve.name}
+                </h3>
                 <p className="text-xs text-slate-500">Agency: {selectedComplaintForResolve.contractor}</p>
               </div>
               <button onClick={() => setSelectedComplaintForResolve(null)} className="text-slate-400">✕</button>

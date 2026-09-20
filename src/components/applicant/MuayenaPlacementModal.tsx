@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import { createMuayenaPlacementV2 } from "@/lib/api/v2/placements";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
 import { requestV2 } from "@/lib/api/v2/client";
@@ -98,7 +99,7 @@ export function MuayenaPlacementModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            Directly bind candidate with contract in hand to an international contractor. Enters directly at Selected stage without CV generation or marketplace listing.
+            Directly bind candidate with contract in hand to an international contractor. Enters directly at Selected stage without CV generation or candidate directory listing.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,17 +140,17 @@ export function MuayenaPlacementModal({
 
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">Signed Contract Document (Optional)</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => setContractFile(e.target.files?.[0] || null)}
-                className="text-xs h-9"
-              />
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Contract document can also be uploaded later in the Placement Document Center.
-            </p>
+            <PremiumDropzone
+              id="muayena-contract-dropzone"
+              variant="compact"
+              value={contractFile}
+              fileName={contractFile?.name}
+              fileSize={contractFile?.size}
+              label="Drop Contract Document"
+              description="PDF or image up to 15MB • Can also be uploaded later"
+              onFileSelect={(file) => setContractFile(file)}
+              onRemove={() => setContractFile(null)}
+            />
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2">

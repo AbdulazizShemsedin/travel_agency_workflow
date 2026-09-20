@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Award, HeartPulse, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { HeartPulse, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import {
   BaseApplicantFormValues,
-  COC_STATUS_OPTIONS,
   MEDICAL_STATUS_OPTIONS,
   calculateRemainingDays,
   getExpiryBadgeStatus,
@@ -30,90 +29,18 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
     formState: { errors },
   } = form;
 
-  const examDate = watch("exam_date");
   const medicalStatus = watch("medical_status");
   const medicalExpiryDate = watch("medical_expiry_date");
 
-  const examDaysRemaining = React.useMemo(
-    () => calculateRemainingDays(examDate),
-    [examDate]
-  );
   const medicalDaysRemaining = React.useMemo(
     () => calculateRemainingDays(medicalExpiryDate),
     [medicalExpiryDate]
   );
 
-  const examBadge = getExpiryBadgeStatus(examDaysRemaining);
   const medicalBadge = getExpiryBadgeStatus(medicalDaysRemaining);
 
   return (
     <div className="space-y-6">
-      {/* COC (Certificate of Competence) Card */}
-      <Card className="border-slate-200/80">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold text-slate-900">
-                Certificate of Competence (COC)
-              </CardTitle>
-            </div>
-            <span className="rounded-md bg-slate-100 dark:bg-zinc-800 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700">
-              Optional
-            </span>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="coc_status" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                COC Status <span className="text-slate-400 font-normal">(Optional)</span>
-              </Label>
-              <Select
-                id="coc_status"
-                placeholder="Select COC Status (Optional)"
-                {...register("coc_status")}
-                error={!!errors.coc_status}
-              >
-                <option value="">Select COC Status (Optional)</option>
-                {COC_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </Select>
-              {errors.coc_status && (
-                <p className="text-xs text-rose-600">{errors.coc_status.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="exam_date" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  COC Exam Date <span className="text-slate-400 font-normal">(Optional)</span>
-                </Label>
-                {examDate && (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${examBadge.bgClass} ${examBadge.textClass} ${examBadge.borderClass}`}
-                  >
-                    <Clock className="h-3 w-3" />
-                    {examBadge.label}
-                  </span>
-                )}
-              </div>
-              <Input
-                id="exam_date"
-                type="date"
-                {...register("exam_date")}
-                className={errors.exam_date ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
-              />
-              {errors.exam_date && (
-                <p className="text-xs text-rose-600">{errors.exam_date.message}</p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Medical Assessment Card */}
       <Card className="border-slate-200/80">

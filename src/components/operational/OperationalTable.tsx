@@ -164,6 +164,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
         meta: {
           align: col.align || "left",
           width: col.width,
+          isActionCol:
+            col.id === "action" ||
+            col.id === "actions" ||
+            (typeof col.header === "string" && col.header.toUpperCase() === "ACTION"),
         },
       };
     });
@@ -500,6 +504,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
             )}
           </div>
 
+
           {/* Corridor Selector */}
           {onCorridorChange && (
             <div className="flex items-center rounded-lg border border-slate-200 dark:border-[#2c2c36] bg-white dark:bg-[#1a1a20] p-0.5">
@@ -554,11 +559,11 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
       <div className="relative w-full max-w-full min-w-0 overflow-x-auto min-h-[360px] touch-pan-x">
-        <table className="w-full min-w-[720px] text-left text-xs border-collapse">
+        <table className="w-full min-w-[720px] text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100/90 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#272730]">
+          <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] backdrop-blur-xs border-b border-slate-300 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
                   const canSort = header.column.getCanSort();
                   const isSorted = header.column.getIsSorted();
@@ -566,6 +571,9 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   const width = (header.column.columnDef.meta as any)?.width;
                   const isFirstCol = colIdx === 0;
                   const isSecondCol = colIdx === 1;
+                  const isThirdCol = colIdx === 2;
+                  const isLastCol = colIdx === headerGroup.headers.length - 1;
+                  const isActionCol = (header.column.columnDef.meta as any)?.isActionCol;
 
                   return (
                     <th
@@ -573,13 +581,18 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       scope="col"
                       style={{
                         width,
-                        ...(isFirstCol ? { left: 0 } : {}),
-                        ...(isSecondCol ? { left: "50px" } : {}),
+                        minWidth: width,
+                        ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                        ...(isSecondCol ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
+                        ...(isThirdCol ? { left: "98px" } : {}),
+                        ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
-                        "py-2.5 px-3 select-none",
+                        "py-2 px-2.5 select-none border-r border-slate-300 dark:border-[#272730]",
                         isFirstCol && "sticky left-0 z-20 bg-slate-100 dark:bg-[#181820]",
-                        isSecondCol && "sticky z-20 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                        isSecondCol && "sticky z-20 bg-slate-100 dark:bg-[#181820]",
+                        isThirdCol && "sticky z-20 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                        isActionCol && isLastCol && "sticky right-0 z-20 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -623,22 +636,30 @@ export function OperationalTable<T extends Record<string, any> = any>({
               // Loading Skeleton
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {visibleColumns.map((col, idx) => (
-                    <td
-                      key={idx}
-                      style={{
-                        ...(idx === 0 ? { left: 0 } : {}),
-                        ...(idx === 1 ? { left: "50px" } : {}),
-                      }}
-                      className={cn(
-                        "py-3 px-3",
-                        idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]",
-                        idx === 1 && "sticky z-10 bg-white dark:bg-[#121215] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]"
-                      )}
-                    >
-                      <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
-                    </td>
-                  ))}
+                  {visibleColumns.map((col, idx) => {
+                    const isLastCol = idx === visibleColumns.length - 1;
+                    const isActionCol = (col.columnDef.meta as any)?.isActionCol;
+                    return (
+                      <td
+                        key={idx}
+                        style={{
+                          ...(idx === 0 ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                          ...(idx === 1 ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
+                          ...(idx === 2 ? { left: "98px" } : {}),
+                          ...(isActionCol && isLastCol ? { right: 0 } : {}),
+                        }}
+                        className={cn(
+                          "py-3 px-3",
+                          idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]",
+                          idx === 1 && "sticky z-10 bg-white dark:bg-[#121215]",
+                          idx === 2 && "sticky z-10 bg-white dark:bg-[#121215] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]",
+                          isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121215] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.08)] border-l border-slate-200 dark:border-[#22222a]"
+                        )}
+                      >
+                        <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
+                      </td>
+                    );
+                  })}
                 </tr>
               ))
             ) : table.getRowModel().rows.length === 0 ? (
@@ -678,20 +699,31 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       const align = (cell.column.columnDef.meta as any)?.align || "left";
                       const isFirstCol = colIdx === 0;
                       const isSecondCol = colIdx === 1;
+                      const isThirdCol = colIdx === 2;
+                      const isLastCol = colIdx === row.getVisibleCells().length - 1;
+                      const isActionCol = (cell.column.columnDef.meta as any)?.isActionCol;
 
                       return (
                         <td
                           key={cell.id}
                           style={{
-                            ...(isFirstCol ? { left: 0 } : {}),
-                            ...(isSecondCol ? { left: "50px" } : {}),
+                            width: (cell.column.columnDef.meta as any)?.width,
+                            minWidth: (cell.column.columnDef.meta as any)?.width,
+                            ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                            ...(isSecondCol ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
+                            ...(isThirdCol ? { left: "98px" } : {}),
+                            ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
-                            "py-2 px-3 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs",
+                            "py-1.5 px-2.5 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
                             isFirstCol && "sticky left-0 z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26]",
-                            isSecondCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                            isSecondCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26]",
+                            isThirdCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                            isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]",
                             isSelected && isFirstCol && "bg-emerald-50 dark:bg-[#183428]",
                             isSelected && isSecondCol && "bg-emerald-50 dark:bg-[#183428]",
+                            isSelected && isThirdCol && "bg-emerald-50 dark:bg-[#183428]",
+                            isSelected && isActionCol && isLastCol && "bg-emerald-50 dark:bg-[#183428]",
                             align === "center" && "text-center",
                             align === "right" && "text-right"
                           )}
@@ -709,10 +741,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Pagination Footer                                             */}
+      {/* Pagination Footer with Direct UI Page Size Buttons            */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2.5 border-t border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#15151a] text-xs text-slate-500 dark:text-zinc-400">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#222227] bg-slate-50/80 dark:bg-[#15151a] text-xs text-slate-500 dark:text-zinc-400">
+        <div className="flex flex-wrap items-center gap-4">
           <span>
             Showing <strong className="text-slate-800 dark:text-white">{totalEntries === 0 ? 0 : startIndex + 1}</strong> to{" "}
             <strong className="text-slate-800 dark:text-white">
@@ -721,19 +753,29 @@ export function OperationalTable<T extends Record<string, any> = any>({
             of <strong className="text-slate-800 dark:text-white">{totalEntries}</strong> entries
           </span>
 
-          <div className="w-28">
-            <SimpleSelect
-              value={String(table.getState().pagination.pageSize)}
-              onValueChange={(val) => table.setPageSize(Number(val))}
-              options={[
-                { value: "10", label: "10 / page" },
-                { value: "15", label: "15 / page" },
-                { value: "25", label: "25 / page" },
-                { value: "50", label: "50 / page" },
-              ]}
-              triggerClassName="h-7 px-2 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-              aria-label="Items per page"
-            />
+          {/* Direct Clickable Page Size Buttons (10, 25, 50, 100) */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
+              Show:
+            </span>
+            {[10, 25, 50, 100].map((size) => {
+              const isCurrent = table.getState().pagination.pageSize === size;
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => table.setPageSize(size)}
+                  className={cn(
+                    "h-6 px-2 text-xs font-bold rounded transition-all border",
+                    isCurrent
+                      ? "bg-emerald-900 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-700 shadow-xs"
+                      : "bg-white dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-[#2c2c36] hover:bg-slate-100 dark:hover:bg-[#25252e]"
+                  )}
+                >
+                  {size}
+                </button>
+              );
+            })}
           </div>
         </div>
 

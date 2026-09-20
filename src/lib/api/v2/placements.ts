@@ -260,7 +260,7 @@ export async function recordTicketDetailsV2(
   ticketNumber: string,
   flightDate: string,
   ticketCost?: number,
-  currency: string = "ETB"
+  currency?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_ticket_details",
@@ -270,7 +270,8 @@ export async function recordTicketDetailsV2(
         placement_name: placementName,
         ticket_number: ticketNumber,
         flight_date: flightDate,
-        ...(ticketCost !== undefined ? { ticket_cost: ticketCost, currency } : {}),
+        ...(ticketCost !== undefined ? { ticket_cost: ticketCost } : {}),
+        ...(currency ? { currency } : {}),
       },
     }
   );

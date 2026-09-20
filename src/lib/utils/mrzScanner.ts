@@ -217,10 +217,10 @@ export function parseMRZText(rawText: string): ParsedPassportMRZ | null {
   }
 
   return {
-    passport_number: passportNo || "",
-    first_name: firstName || lastName,
-    middle_name: middleName || "",
-    last_name: lastName || firstName,
+    passport_number: (passportNo || "").toUpperCase(),
+    first_name: (firstName || lastName || "").toUpperCase(),
+    middle_name: (middleName || "").toUpperCase(),
+    last_name: (lastName || firstName || "").toUpperCase(),
     nationality: country,
     date_of_birth: dob || "",
     dob: dob || "",
@@ -342,10 +342,10 @@ export async function performOpticalPassportOCR(
 
     if (extractedPass || parsed.first_name || extractedDob) {
       return {
-        passport_number: extractedPass || parsed.passport_number || "",
-        first_name: parsed.first_name || "",
-        middle_name: parsed.middle_name || "",
-        last_name: parsed.last_name || "",
+        passport_number: (extractedPass || parsed.passport_number || "").toUpperCase(),
+        first_name: (parsed.first_name || "").toUpperCase(),
+        middle_name: (parsed.middle_name || "").toUpperCase(),
+        last_name: (parsed.last_name || "").toUpperCase(),
         nationality: parsed.nationality || "Ethiopia",
         date_of_birth: extractedDob || parsed.date_of_birth || "",
         gender: parsed.gender || "Female",

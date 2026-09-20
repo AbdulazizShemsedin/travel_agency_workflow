@@ -28,6 +28,7 @@ import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { extractRoleName } from "@/lib/auth/permissions";
+import { cn } from "@/lib/utils";
 
 // Live backend truth: the Applicant's own `status` stays at the intake lifecycle stop
 // (Draft / Registered / CV Generated / Cancelled) even after a Placement exists — the
@@ -124,7 +125,7 @@ export function ApplicantTable() {
     return "All";
   });
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [pageSize] = React.useState(10);
+  const [pageSize, setPageSize] = React.useState(10);
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
 
   // Sync stage filter if URL parameter changes
@@ -561,7 +562,7 @@ export function ApplicantTable() {
                             {applicant.first_name?.[0] || "A"}
                           </div>
                           <div>
-                            <span className="font-medium text-slate-900 dark:text-slate-100 block">
+                            <span className="font-medium text-slate-900 dark:text-slate-100 block uppercase">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
@@ -684,16 +685,45 @@ export function ApplicantTable() {
 
         {/* Pagination Footer */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-          <div>
-            Showing{" "}
-            <span className="font-semibold text-slate-900 dark:text-white">
-              {filteredApplicants.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
-            </span>{" "}
-            to{" "}
-            <span className="font-semibold text-slate-900 dark:text-white">
-              {Math.min(currentPage * pageSize, filteredApplicants.length)}
-            </span>{" "}
-            of <span className="font-semibold text-slate-900 dark:text-white">{filteredApplicants.length}</span> entries
+          <div className="flex items-center gap-3">
+            <div>
+              Showing{" "}
+              <span className="font-semibold text-slate-900 dark:text-white">
+                {filteredApplicants.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}
+              </span>{" "}
+              to{" "}
+              <span className="font-semibold text-slate-900 dark:text-white">
+                {Math.min(currentPage * pageSize, filteredApplicants.length)}
+              </span>{" "}
+              of <span className="font-semibold text-slate-900 dark:text-white">{filteredApplicants.length}</span> entries
+            </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
+              Show:
+            </span>
+            {[10, 25, 50, 100].map((size) => {
+              const isCurrent = pageSize === size;
+              return (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => {
+                    setPageSize(size);
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-6 px-2 text-xs font-bold rounded transition-all border",
+                    isCurrent
+                      ? "bg-emerald-900 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-700 shadow-xs"
+                      : "bg-white dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-[#25252e]"
+                  )}
+                >
+                  {size}
+                </button>
+              );
+            })}
+          </div>
           </div>
 
           <div className="flex items-center gap-1.5">

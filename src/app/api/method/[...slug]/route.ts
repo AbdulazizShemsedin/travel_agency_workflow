@@ -84,18 +84,53 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2, ti
 }
 
 async function parseJsonOrFriendlyMessage(res: Response) {
+  if (res.status === 413) {
+    return {
+      message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the video before uploading (recommended under 30MB).",
+      error: "Request Entity Too Large",
+      status_code: 413,
+    };
+  }
+
   const isUpstreamError = !res.ok && res.status >= 500;
   const fallbackMessage = isUpstreamError
-    ? "The server is temporarily busy. Please try again in a few moments."
+    ? "The server is temporarily busy or timed out processing the file. Please try again with a compressed or smaller file."
     : "Could not complete this request right now. Please try again in a moment.";
+
   try {
-    return await res.json();
-  } catch {
-    let snippet = "";
+    const rawText = await res.text();
+    if (!rawText || !rawText.trim()) {
+      return { message: fallbackMessage };
+    }
     try {
-      snippet = (await res.text()).slice(0, 200);
-    } catch {}
-    return { message: snippet ? `${fallbackMessage} (${snippet})` : fallbackMessage };
+      return JSON.parse(rawText);
+    } catch {
+      // Non-JSON response (e.g. Werkzeug or Nginx HTML error page)
+      if (
+        res.status === 413 ||
+        rawText.includes("413 Request Entity Too Large") ||
+        rawText.includes("Request Entity Too Large") ||
+        rawText.includes("The file is too large")
+      ) {
+        return {
+          message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the video before uploading (recommended under 30MB).",
+          error: "Request Entity Too Large",
+          status_code: 413,
+        };
+      }
+      const cleanSnippet = rawText
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160);
+      return {
+        message: cleanSnippet ? `${fallbackMessage} (${cleanSnippet})` : fallbackMessage,
+        raw_error: cleanSnippet || undefined,
+        status_code: res.status,
+      };
+    }
+  } catch {
+    return { message: fallbackMessage };
   }
 }
 
@@ -258,11 +293,16 @@ export async function POST(
     // Handle multipart file upload transparently
     if (contentType.includes("multipart/form-data") || methodPath === "upload_file") {
       const formData = await req.formData();
-      const res = await fetchWithRetry(`${config.url}/api/method/${methodPath}`, {
-        method: "POST",
-        headers: config.headers,
-        body: formData,
-      });
+      const res = await fetchWithRetry(
+        `${config.url}/api/method/${methodPath}`,
+        {
+          method: "POST",
+          headers: config.headers,
+          body: formData,
+        },
+        0,
+        300000
+      );
 
       const data = await parseJsonOrFriendlyMessage(res);
       const response = NextResponse.json(data, { status: res.status });

@@ -445,6 +445,8 @@ export interface PortalAvailableCandidate {
   marital_status?: string;
   complexion?: string;
   passport_number?: string;
+  medical_status?: string;
+  medical_issue_date?: string;
   cv_file_url?: string;
   selected_at?: string;
   selected_by?: string;
@@ -503,7 +505,8 @@ export const COMPLAINT_OUTCOMES = [
 export type ComplaintOutcome = (typeof COMPLAINT_OUTCOMES)[number] | string;
 
 export interface AgencyComplaint {
-  name: string; // e.g. "CMP-00001"
+  name: string; // e.g. "CMP-00001" (internal DocType ID)
+  display_no?: number; // Human-facing identifier: #1, #2, etc.
   contractor: string;
   applicant: string;
   full_name?: string;

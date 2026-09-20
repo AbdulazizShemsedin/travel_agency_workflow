@@ -10,7 +10,7 @@
 import { requestV2 } from "./client";
 
 /**
- * Candidate item presented on Foreign Agency marketplace.
+ * Candidate item presented on Foreign Agency Candidate Directory.
  * Note: Non-PII fields only per backend specification.
  */
 export interface V2PortalCandidate {
@@ -38,6 +38,9 @@ export interface V2PortalCandidate {
   marital_status?: string;
   children?: number;
   monthly_salary?: string | number;
+  medical_status?: string;
+  medical_issue_date?: string;
+  place_of_birth?: string;
   [key: string]: any;
 }
 
@@ -92,8 +95,16 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
         if (age > 0) computedAge = age;
       }
     }
+    const rawFullName = cand.full_name || cand.applicant_name || [cand.first_name, cand.last_name].filter(Boolean).join(" ") || cand.name || "";
+    const fullName = String(rawFullName).trim().toUpperCase();
     return {
       ...cand,
+      full_name: fullName,
+      first_name: cand.first_name ? String(cand.first_name).toUpperCase() : undefined,
+      last_name: cand.last_name ? String(cand.last_name).toUpperCase() : undefined,
+      medical_status: cand.medical_status || (cand as any)?.medicalStatus || (cand as any)?.medical || "",
+      medical_issue_date: cand.medical_issue_date || (cand as any)?.medical_date || "",
+      place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || cand.leaving_town || "",
       age: computedAge || cand.age,
       photo_passport:
         cand.photo_passport ||

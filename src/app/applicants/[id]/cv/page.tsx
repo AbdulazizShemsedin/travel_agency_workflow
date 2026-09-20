@@ -291,7 +291,7 @@ export default function CandidateCvPreviewPage() {
   const passportNumber = (applicant.passport_number || "N/A").toUpperCase();
   const nationality = (applicant.nationality || "Ethiopia").toUpperCase();
   const religion = (applicant.religion || "N/A").toUpperCase();
-  const jobApplied = (applicant.target_job || applicant.job_applied || "House Maid").toUpperCase();
+  const jobApplied = (applicant.target_job || applicant.job_applied || "House Worker").toUpperCase();
   const salaryDisplay = applicant.monthly_salary
     ? `${applicant.monthly_salary} ${isKuwait ? "KD" : "SR"}`
     : isKuwait

@@ -115,25 +115,75 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   if (!payload || typeof payload !== "object") return payload;
   const result: Record<string, any> = { ...payload };
 
-  // 1. Target Job / Position
-  const job = result.target_job || result.job_applied;
-  if (job) {
-    result.target_job = job;
-    result.job_applied = job;
-  } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
-    result.target_job = "House worker";
-    result.job_applied = "House worker";
+  // 0. Full Name / First, Middle, Last Name derivation (always UPPERCASE)
+  if (result.full_name) result.full_name = String(result.full_name).toUpperCase().trim();
+  if (result.first_name) result.first_name = String(result.first_name).toUpperCase().trim();
+  if (result.middle_name) result.middle_name = String(result.middle_name).toUpperCase().trim();
+  if (result.last_name) result.last_name = String(result.last_name).toUpperCase().trim();
+
+  if (result.full_name && (!result.first_name || !result.last_name)) {
+    const parts = String(result.full_name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length > 0 && !result.first_name) {
+      result.first_name = parts[0].toUpperCase();
+    }
+    if (parts.length > 1 && !result.middle_name) {
+      result.middle_name = parts[1].toUpperCase();
+    }
+    if (parts.length > 2 && !result.last_name) {
+      result.last_name = parts.slice(2).join(" ").toUpperCase();
+    } else if (parts.length === 2 && !result.last_name) {
+      result.last_name = parts[1].toUpperCase();
+    }
+  } else if (!result.full_name && (result.first_name || result.last_name)) {
+    result.full_name = [result.first_name, result.middle_name, result.last_name].filter(Boolean).join(" ").trim().toUpperCase();
   }
 
-  // 2. Education
-  const edu = result.education || result.highest_education;
+  // 1. Target Job / Position / Occupation
+  const job = result.target_job || result.job_applied || result.occupation;
+  if (job) {
+    const jobNormalized =
+      String(job).toUpperCase() === "HOUSE MAID" || job === "House maid" || job === "House Maid"
+        ? "HOUSE WORKER"
+        : job;
+    result.target_job = jobNormalized;
+    result.job_applied = jobNormalized;
+    result.occupation = jobNormalized;
+  } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
+    result.target_job = "HOUSE WORKER";
+    result.job_applied = "HOUSE WORKER";
+    result.occupation = "HOUSE WORKER";
+  }
+
+  // 2. Education / Qualification
+  const edu = result.qualification || result.education || result.highest_education;
   if (edu) {
-    result.education = edu;
+    result.qualification = edu;
     result.highest_education = edu;
+    // For Frappe DocType Select option compatibility: if SECONDARY LEVEL or PRIMARY LEVEL, map education field to "High School"
+    if (String(edu).toUpperCase() === "SECONDARY LEVEL" || String(edu).toUpperCase() === "PRIMARY LEVEL") {
+      result.education = "High School";
+    } else {
+      result.education = edu;
+    }
   } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
     result.education = "High School";
     result.highest_education = "High School";
+    result.qualification = "SECONDARY LEVEL";
   }
+
+  // 2.1 Religion (frontend default: Islam; Frappe Select compatibility: Muslim)
+  if (result.religion) {
+    const rel = String(result.religion).trim();
+    if (rel.toLowerCase() === "islam") {
+      result.religion = "Muslim";
+    }
+  } else {
+    result.religion = "Muslim";
+  }
+
+  if (!result.gender) result.gender = "Female";
+  if (!result.marital_status) result.marital_status = "Single";
+  if (!result.visa_type) result.visa_type = "Work";
 
   // 3. Salary Amount & Monthly Salary (Experienced = 1200 SAR, First Timer = 1000 SAR)
   const expCountry = String(result.experience_country || "").trim().toLowerCase();
@@ -209,10 +259,15 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   }
 
   // 7. Passport Issue Place
-  const issuePlace = result.passport_issue_place || result.place_of_issue;
-  if (issuePlace) {
-    result.passport_issue_place = issuePlace;
-    result.place_of_issue = issuePlace;
+  const issuePlace = result.passport_issue_place || result.place_of_issue || "ADDIS ABABA";
+  const upperIssue = String(issuePlace).toUpperCase();
+  result.passport_issue_place = upperIssue;
+  result.place_of_issue = upperIssue;
+
+  // 7.1 Place of Birth (Prefers visual zone extraction, falls back to city)
+  const pob = result.place_of_birth || result.birth_place;
+  if (pob) {
+    result.place_of_birth = String(pob).trim();
   }
 
   // 8. Phone

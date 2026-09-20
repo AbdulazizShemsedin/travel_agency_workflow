@@ -414,9 +414,9 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return "Medical 1 check must be FIT before you can continue.";
   }
 
-  // Wakala Payment Guard on Embassy Submission
-  if (/Wakala must be Paid before Embassy documents can be Submitted/i.test(text)) {
-    return "Wakala must be Paid before sending documents to the Embassy (or get Manager approval).";
+  // Wakala Payment Guard on Embassy Submission and Stamping
+  if (/Wakala must be Paid before Embassy documents can be (?:Submitted|Stamped)/i.test(text)) {
+    return "Wakala must be Paid before Embassy documents can be processed or stamped (or get Manager approval).";
   }
   if (/wakala_amount|wakala_payment_status/i.test(text)) {
     return "Wakala payment is required before you can continue.";

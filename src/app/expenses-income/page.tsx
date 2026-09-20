@@ -62,6 +62,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import { cn } from "@/lib/utils";
 
 type ActiveTab = "ledger" | "approval_queue" | "reconciliation";
@@ -971,35 +972,19 @@ export default function ExpensesIncomePage() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <form onSubmit={handleUploadBankStatement} className="space-y-4">
-                      <div className="border-2 border-dashed border-slate-200 dark:border-[#2a2a35] rounded-xl p-6 text-center hover:border-emerald-500 transition-colors bg-slate-50/40 dark:bg-[#16161f]">
-                        <input
-                          id="bank_statement_csv"
-                          type="file"
-                          accept=".csv"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setStatementFile(e.target.files[0]);
-                            }
-                          }}
-                          className="hidden"
-                        />
-                        <label
-                          htmlFor="bank_statement_csv"
-                          className="cursor-pointer flex flex-col items-center justify-center gap-2"
-                        >
-                          <div className="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
-                            <Upload className="h-5 w-5" />
-                          </div>
-                          <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                            {statementFile ? statementFile.name : "Choose Bank Statement CSV File"}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {statementFile
-                              ? `${(statementFile.size / 1024).toFixed(1)} KB selected`
-                              : "Plain CSV format: date, reference, amount in Birr"}
-                          </span>
-                        </label>
-                      </div>
+                      <PremiumDropzone
+                        id="bank_statement_csv"
+                        variant="spreadsheet"
+                        value={statementFile}
+                        fileName={statementFile?.name}
+                        fileSize={statementFile?.size}
+                        isLoading={isUploadingStatement}
+                        loadingText="Parsing and matching bank transactions..."
+                        label="Upload Bank Statement CSV"
+                        description="Drag & drop bank statement CSV or click to browse • Plain CSV with date, ref, amount"
+                        onFileSelect={(file) => setStatementFile(file)}
+                        onRemove={() => setStatementFile(null)}
+                      />
 
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[11px] text-slate-400 flex items-center gap-1">

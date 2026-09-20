@@ -76,6 +76,11 @@ export interface V2CommissionBatchItem {
 export interface V2CommissionBatchWriteOff {
   name?: string;
   parent?: string;
+  amount_original?: number;
+  amount_birr?: number;
+  reason?: string;
+  transaction?: string;
+  write_off_date?: string;
   write_off_amount?: number;
   write_off_amount_original?: number;
   write_off_amount_birr?: number;
@@ -114,8 +119,22 @@ export interface V2CommissionBatch {
   [key: string]: any;
 }
 
+// Prohibited clearance step types for manual expense/income logging
+// (Known corridor fees are auto-calculated into one expense transaction upon ticketing)
+const PROHIBITED_CLEARANCE_STAGES = new Set([
+  "LMIS Clearance",
+  "Kuwait LMIS",
+  "Telesign",
+  "Taeshir",
+  "Embassy",
+  "Kuwait Embassy",
+  "Taeshir / Biometrics",
+  "Embassy Clearance",
+]);
+
 /**
  * Logs an expense entry into the finance pipeline.
+ * Note: Never passes standard clearance step types to prevent double-counting corridor fees.
  */
 export async function logStageExpenseV2(
   amount: number,
@@ -125,6 +144,10 @@ export async function logStageExpenseV2(
   stageLoggedAt?: string,
   applicant?: string
 ): Promise<{ name?: string; message?: string }> {
+  const safeStage = stageLoggedAt && !PROHIBITED_CLEARANCE_STAGES.has(stageLoggedAt)
+    ? stageLoggedAt
+    : undefined;
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_expense",
     {
@@ -134,7 +157,7 @@ export async function logStageExpenseV2(
         currency,
         description,
         ...(placement ? { placement } : {}),
-        ...(stageLoggedAt ? { stage_logged_at: stageLoggedAt } : {}),
+        ...(safeStage ? { stage_logged_at: safeStage } : {}),
         ...(applicant ? { applicant } : {}),
       },
     }
@@ -143,6 +166,7 @@ export async function logStageExpenseV2(
 
 /**
  * Logs an income entry into the finance pipeline.
+ * Note: Never passes standard clearance step types to prevent double-counting corridor fees.
  */
 export async function logStageIncomeV2(
   amount: number,
@@ -152,6 +176,10 @@ export async function logStageIncomeV2(
   stageLoggedAt?: string,
   applicant?: string
 ): Promise<{ name?: string; message?: string }> {
+  const safeStage = stageLoggedAt && !PROHIBITED_CLEARANCE_STAGES.has(stageLoggedAt)
+    ? stageLoggedAt
+    : undefined;
+
   return requestV2(
     "/api/method/agency_tracking.finance_api.log_stage_income",
     {
@@ -161,7 +189,7 @@ export async function logStageIncomeV2(
         currency,
         description,
         ...(placement ? { placement } : {}),
-        ...(stageLoggedAt ? { stage_logged_at: stageLoggedAt } : {}),
+        ...(safeStage ? { stage_logged_at: safeStage } : {}),
         ...(applicant ? { applicant } : {}),
       },
     }
@@ -594,6 +622,28 @@ export async function writeOffBatchV2(
       },
     }
   );
+}
+
+/**
+ * Dedicated endpoint to retrieve a batch's write-off history.
+ * Method: POST /api/method/agency_tracking.finance_api.list_batch_write_offs
+ * Param: batch_name
+ * Returns: [{ amount_original, amount_birr, reason, transaction, write_off_date }, ...]
+ */
+export async function listBatchWriteOffsV2(
+  batchName: string
+): Promise<V2CommissionBatchWriteOff[]> {
+  const res = await requestV2<V2CommissionBatchWriteOff[] | { message?: V2CommissionBatchWriteOff[] }>(
+    "/api/method/agency_tracking.finance_api.list_batch_write_offs",
+    {
+      method: "POST",
+      body: { batch_name: batchName },
+    }
+  );
+
+  if (Array.isArray(res)) return res;
+  if (res && Array.isArray((res as any).message)) return (res as any).message;
+  return [];
 }
 
 /**

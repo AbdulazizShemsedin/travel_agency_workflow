@@ -5,35 +5,22 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CreditCard,
-  User,
-  ShieldCheck,
-  Building2,
-  FileCheck2,
-  Calendar,
-  ExternalLink,
-  CalendarDays,
   FileText,
-  FileDown,
-  Printer,
-  Loader2,
-  Sparkles,
-  CheckCircle2,
-  ShieldAlert,
-  AlertTriangle,
   RotateCcw,
+  FileDown,
+  Edit3,
+  Sparkles,
 } from "lucide-react";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
 import {
-  OperationalDrawer,
-  DrawerField,
-  DrawerSection,
-} from "../OperationalDrawer";
-import { StageFeeSection } from "@/components/operational/StageFeeSection";
-import { Badge } from "@/components/ui/badge";
+  ExcelTextInput,
+  ExcelSelect,
+  ExcelDateInput,
+} from "../ExcelCellComponents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -43,29 +30,20 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 import {
   startClearanceStepV2,
   completeClearanceStepV2,
   reassignClearanceStepV2,
   reopenClearanceStepV2,
   setTaeshirAppointmentV2,
-  rescheduleTaeshirAppointmentV2,
-  recordInjazPaymentV2,
-  forfeitInjazAndRestartV2,
-  renderInjazPdfV2,
-  getClearanceStepDocV2,
 } from "@/lib/api/v2/clearance";
-import { getApplicantV2 } from "@/lib/api/v2/applicants";
-import { logStageExpenseV2 } from "@/lib/api/v2/finance";
+import { updateApplicantForLmisV2, getApplicantV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import {
   downloadInjazDocumentPDF,
-  openInjazDocumentInNewTab,
   InjazCandidateData,
 } from "@/lib/pdf/injazDocumentGenerator";
-import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 interface InjazWorkspaceProps {
@@ -88,136 +66,111 @@ export function InjazWorkspace({
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
 
-  const authUserV2 = authUser ? { user: authUser.email, full_name: authUser.full_name || authUser.email, roles: Array.isArray(authUser.roles) ? authUser.roles : [] } : null;
+  const authUserV2 = authUser
+    ? {
+        user: authUser.email,
+        full_name: authUser.full_name || authUser.email,
+        roles: Array.isArray(authUser.roles) ? authUser.roles : [],
+      }
+    : null;
+
   const isStrictAdmin = Boolean(
     (authUser?.email || "").toLowerCase() === "administrator" ||
-    (authUser?.email || "").toLowerCase() === "admin" ||
-    (roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())) ||
-    (authUserV2?.roles || []).some((r: any) => ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase()))
+      (authUser?.email || "").toLowerCase() === "admin" ||
+      (roles || []).some((r: any) =>
+        ["admin", "administrator", "system manager"].includes(
+          String(r).trim().toLowerCase()
+        )
+      ) ||
+      (authUserV2?.roles || []).some((r: any) =>
+        ["admin", "administrator", "system manager"].includes(
+          String(r).trim().toLowerCase()
+        )
+      )
   );
-  const isAdmin = isStrictAdmin || (authUserV2?.roles || []).some((r: any) => ["manager", "agency admin"].includes(String(r).trim().toLowerCase()));
-  const canEdit = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign", "Clearance Officer"]);
 
-  const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  const isAdmin =
+    isStrictAdmin ||
+    (authUserV2?.roles || []).some((r: any) =>
+      ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
+    );
 
-  // Form State for Drawer
-  const [status, setStatus] = React.useState<"Pending" | "Completed">("Pending");
-  const [employee, setEmployee] = React.useState("");
-  const [appointmentDate, setAppointmentDate] = React.useState("");
-  const [injazNumber, setInjazNumber] = React.useState("");
-  const [paymentStatus, setPaymentStatus] = React.useState<"PAID" | "UNPAID">("UNPAID");
-  const [paymentNo, setPaymentNo] = React.useState("");
-    const [injazFee, setInjazFee] = React.useState("10.5");
-  const [paymentDate, setPaymentDate] = React.useState("");
-  const [remark, setRemark] = React.useState("");
-  const [isGeneratingInjaz, setIsGeneratingInjaz] = React.useState(false);
+  const canEdit =
+    isAdmin ||
+    hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign", "Clearance Officer"]);
 
-  const [isConfirmOpen, setIsConfirmOpen] = React.useState(false);
+  // Edit Modal State (Triggered ONLY via Action 'Edit' button, not row click)
+  const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
-  const currentInjazStatus = selectedRow?.injaz?.status;
-  const isPlacementDeparted =
-    selectedRow?.placementStatus === "Departed" ||
-    selectedRow?.ticketStatus === "Departed" ||
-    Boolean((selectedRow as any)?.isDeparted);
-  const isInjazTerminal =
-    ["Issued", "Complete", "Completed", "Stamped", "Rejected", "Cancelled"].includes(currentInjazStatus || "");
+  // Form State for Edit Modal (Strictly stripped of fees, receipts, and payment date)
+  const [modalStatus, setModalStatus] = React.useState<"Pending" | "Completed">("Pending");
+  const [modalAppointmentDate, setModalAppointmentDate] = React.useState("");
+  const [modalInjazNumber, setModalInjazNumber] = React.useState("");
+  const [modalRemark, setModalRemark] = React.useState("");
+  const [modalEmployee, setModalEmployee] = React.useState("");
 
-  // Reopen Step Modal State & Mutation
+  // Reopen Step Modal state
   const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
   const [reopenReason, setReopenReason] = React.useState("");
-  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<"In Progress" | "Pending">("In Progress");
+  const [reopenTargetStatus, setReopenTargetStatus] = React.useState<
+    "In Progress" | "Pending"
+  >("In Progress");
 
-  const reopenMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedRow) return;
-      const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-      if (!stepName) return;
-      if (!reopenReason.trim()) {
-        throw new Error("Reason is required to reopen this clearance step.");
-      }
-      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
-    },
-    onSuccess: async () => {
-      toast.success("Te'shir / Injaz clearance step reopened successfully!");
-      setIsReopenModalOpen(false);
-      setReopenReason("");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
-        queryClient.invalidateQueries({ queryKey: ["operational_workspace"] }),
-        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
-        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
-        queryClient.invalidateQueries({ queryKey: ["placements"] }),
-      ]);
-      onRefresh();
-      setSelectedRow(null);
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || "Failed to reopen clearance step.");
-    },
-  });
+  // Sync edit modal state when editingRow changes
+  React.useEffect(() => {
+    if (!editingRow) return;
 
-  // Forfeit and Restart Dialog State
-  const [isForfeitModalOpen, setIsForfeitModalOpen] = React.useState(false);
-  const [forfeitReason, setForfeitReason] = React.useState("");
-  const [forfeitNewDate, setForfeitNewDate] = React.useState("");
-  const [forfeitNewInjazId, setForfeitNewInjazId] = React.useState("");
-  const [isForfeiting, setIsForfeiting] = React.useState(false);
+    const inj = (editingRow.injaz as any) || {};
+    const st = inj?.status;
+    setModalStatus(
+      st === "Complete" || st === "Completed" || st === "Issued"
+        ? "Completed"
+        : "Pending"
+    );
 
-  // Helper to extract Injaz Candidate Data for PDF generation
-  const getInjazDataForRow = (row?: WorkspaceApplicantRow | null): InjazCandidateData => {
-    if (!row) return {};
-    const app = (row.applicant as any) || {};
-    const photo =
-      app?.photo_passport ||
-      app?.photograph ||
-      app?.profile_photo_url ||
-      app?.photo_full_body ||
-      app?.photo ||
-      (row as any)?.photo_passport ||
-      (row as any)?.photograph ||
-      (row as any)?.photo ||
-      "";
+    setModalInjazNumber(
+      inj?.injaz_application_id ||
+        (editingRow as any)?.injazApplicationId ||
+        inj?.reference_no ||
+        inj?.injaz_number ||
+        ""
+    );
 
-    return {
-      applicantId: row.applicantId || "",
-      fullName: row.fullName || "",
-      firstName: app?.first_name || (row.fullName ? row.fullName.split(" ")[0] : ""),
-      middleName: app?.middle_name || (row.fullName ? row.fullName.split(" ")[1] : ""),
-      lastName: app?.last_name || (row.fullName ? row.fullName.split(" ").slice(2).join(" ") : ""),
-      motherName: app?.mother_name || app?.motherName || "",
-      passportNumber: row.passportNumber || "",
-      passportIssueDate: app?.passport_issue_date || app?.issue_date || "",
-      passportExpiry: app?.passport_expiry || app?.expiry_date || "",
-      placeOfIssue: app?.place_of_issue || "",
-      placeOfBirth: app?.place_of_birth || app?.leaving_town || "",
-      dateOfBirth: app?.date_of_birth || "",
-      nationality: app?.nationality || "ETHIOPIAN",
-      gender: app?.gender || "FEMALE",
-      maritalStatus: app?.marital_status || "",
-      religion: app?.religion || "",
-      targetJob: app?.target_job || app?.job_applied || "",
-      educationLevel: app?.education_level || app?.qualification || "",
-      phone: row.contact || app?.phone || "",
-      city: app?.city || "",
+    setModalAppointmentDate(
+      inj?.appointment_date ||
+        (editingRow.appointmentDate !== "—" ? editingRow.appointmentDate : "") ||
+        inj?.date_started ||
+        ""
+    );
+
+    setModalRemark(editingRow.remark || inj?.notes || inj?.rejection_remark || "");
+    setModalEmployee(inj?.assigned_officer || inj?.employee || "");
+  }, [editingRow]);
+
+  // PDF Generator helper
+  const resolveInjazDataWithFreshPhoto = async (
+    row: WorkspaceApplicantRow
+  ): Promise<InjazCandidateData> => {
+    const injazData: InjazCandidateData = {
+      fullName: row.fullName,
+      applicantId: row.applicantId,
+      passportNumber: row.passportNumber,
+      visaNumber: row.visaNumber || (row.applicant as any)?.visa_number || "",
+      sponsorName: row.sponsorName || (row.applicant as any)?.sponsor_name || "",
+      sponsorId: row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+      injazNumber:
+        (row.injaz as any)?.injaz_application_id ||
+        row.injazApplicationId ||
+        (row.injaz as any)?.reference_no ||
+        (row.injaz as any)?.injaz_number ||
+        "",
+      targetJob: row.jobApplied || "House worker",
+      nationality: (row.applicant as any)?.nationality || "Ethiopian",
+      photoUrl: (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
       destinationCountry: row.destinationCountry || "Saudi Arabia",
-      sponsorName: row.sponsorName || app?.sponsor_name || "",
-      sponsorId: row.sponsorId || app?.sponsor_id || "",
-      sponsorPhone: app?.sponsor_phone || "",
-      destinationCity: app?.destination_city || "",
-      contractorName: app?.contractor_name || "",
-      contractNumber: row.contractNumber || app?.contract_number || "",
-      visaNumber: row.visaNumber || app?.visa_number || "",
-      injazNumber: injazNumber || (row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "",
-      paymentNo: paymentNo || (row.injaz as any)?.payment_no || "",
-      appointmentDate: appointmentDate || row.appointmentDate || (row.injaz as any)?.appointment_date || "",
-      photoUrl: photo,
     };
-  };
 
-  // Resolves candidate data guaranteeing a fresh applicant record fetch if photo is missing
-  const resolveInjazDataWithFreshPhoto = async (row?: WorkspaceApplicantRow | null): Promise<InjazCandidateData> => {
-    const injazData = getInjazDataForRow(row);
-    if (!injazData.photoUrl && row?.applicantId) {
+    if (!injazData.photoUrl && row.applicantId) {
       try {
         const freshApp = await getApplicantV2(row.applicantId);
         const photo =
@@ -225,11 +178,8 @@ export function InjazWorkspace({
           freshApp?.photograph ||
           freshApp?.profile_photo_url ||
           freshApp?.photo_full_body ||
-          freshApp?.photo ||
           "";
-        if (photo) {
-          injazData.photoUrl = photo;
-        }
+        if (photo) injazData.photoUrl = photo;
       } catch (appErr) {
         console.warn("Could not fetch fresh applicant record for photo:", appErr);
       }
@@ -237,303 +187,207 @@ export function InjazWorkspace({
     return injazData;
   };
 
-  const handleGenerateInjazDoc = async () => {
-    if (!selectedRow) return;
-    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-    try {
-      setIsGeneratingInjaz(true);
-      const injazData = await resolveInjazDataWithFreshPhoto(selectedRow);
-
-      // Attempt authoritative backend render_injaz_pdf with fast race timeout
-      if (stepName) {
-        try {
-          toast.info("Rendering Injaz PDF...");
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Backend render timeout")), 2500)
-          );
-          const blob = await Promise.race([renderInjazPdfV2(stepName), timeoutPromise]);
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `Injaz_${selectedRow.passportNumber || selectedRow.applicantId}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          toast.success("Official Injaz document downloaded successfully!");
-          return;
-        } catch (backendErr) {
-          console.warn("Backend renderInjazPdfV2 fallback to client generator:", backendErr);
-        }
-      }
-
-      toast.info("Generating Injaz Document...");
-      await downloadInjazDocumentPDF(injazData);
-      toast.success("Injaz document downloaded successfully!", {
-        description: `Official Visa Application Form for ${selectedRow.fullName}`,
-      });
-    } catch (err: any) {
-      console.error("Injaz generation error:", err);
-      toast.error("Failed to generate Injaz document", { description: err?.message || "Generation error" });
-    } finally {
-      setIsGeneratingInjaz(false);
+  // In-cell quick update helper: Appointment & Injaz Number
+  const handleUpdateInjazAppointment = async (
+    row: WorkspaceApplicantRow,
+    appointmentDate: string,
+    injazNo: string
+  ) => {
+    const stepName = row.clearanceStepName || row.injaz?.name;
+    if (!stepName) {
+      toast.error("No active Te'shir clearance step found for candidate.");
+      throw new Error("No active Te'shir clearance step found");
     }
-  };
 
-  const handleOpenInjazDoc = async () => {
-    if (!selectedRow) return;
     try {
-      setIsGeneratingInjaz(true);
-      const injazData = await resolveInjazDataWithFreshPhoto(selectedRow);
-      await openInjazDocumentInNewTab(injazData);
-      toast.success("Injaz document opened in new tab!");
-    } catch (err: any) {
-      console.error("Injaz open error:", err);
-      toast.error("Failed to open Injaz document", { description: err?.message || "Open error" });
-    } finally {
-      setIsGeneratingInjaz(false);
-    }
-  };
-
-
-  const handleForfeitAndRestartInjaz = async () => {
-    if (!selectedRow) return;
-    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-    if (!stepName || !forfeitReason || !forfeitNewDate || !forfeitNewInjazId) {
-      toast.error("Reason, new appointment date, and new Injaz Application ID are required.");
-      return;
-    }
-    setIsForfeiting(true);
-    try {
-      await forfeitInjazAndRestartV2(stepName, forfeitReason, forfeitNewDate, forfeitNewInjazId);
-      toast.success("Injaz forfeited and restarted with new application!");
-      setAppointmentDate(forfeitNewDate);
-      setInjazNumber(forfeitNewInjazId);
-      setIsForfeitModalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      await setTaeshirAppointmentV2(stepName, appointmentDate, injazNo);
+      toast.success("Te'shir details saved");
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
     } catch (err: any) {
-      toast.error("Failed to forfeit and restart Injaz", { description: err?.message });
-    } finally {
-      setIsForfeiting(false);
+      toast.error(err?.message || "Failed to update Te'shir record");
+      throw err;
     }
   };
 
-  // Sync drawer form state when row changes
-  React.useEffect(() => {
-    if (!selectedRow) return;
+  // In-cell quick update helper: Step Status
+  const handleUpdateStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const stepName = row.clearanceStepName || row.injaz?.name;
+    if (!stepName) {
+      toast.error("No active Te'shir clearance step found for candidate.");
+      throw new Error("No active Te'shir clearance step found");
+    }
 
-    let isMounted = true;
-
-    // 1. Initialize synchronously from table row
-    const injaz = selectedRow.injaz;
-    const st = injaz?.status;
-    setStatus(st === "Approved" || st === "Completed" || st === "Complete" || st === "Issued" ? "Completed" : "Pending");
-    setEmployee(injaz?.assigned_officer || injaz?.employee || "");
-    setAppointmentDate(
-      selectedRow.appointmentDate && selectedRow.appointmentDate !== "—"
-        ? selectedRow.appointmentDate
-        : (injaz as any)?.appointment_date || ""
-    );
-    setInjazNumber(
-      injaz?.reference_no ||
-      (injaz as any)?.injaz_number ||
-      ""
-    );
-    const isPaid =
-      selectedRow.injazPayment === "PAID" ||
-      (injaz?.payment_status || "").toLowerCase().includes("paid");
-    setPaymentStatus(isPaid ? "PAID" : "UNPAID");
-    setPaymentNo((injaz as any)?.payment_no || "");
-    setPaymentDate((injaz as any)?.payment_date || "");
-    setInjazFee((injaz as any)?.fee ? String((injaz as any).fee) : "10.5");
-    setRemark(selectedRow.remark && selectedRow.remark !== "—" ? selectedRow.remark : (injaz as any)?.notes || "");
-
-    // 2. Fetch fresh clearance step doc and fresh applicant in background
-    const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-    Promise.all([
-      stepName ? getClearanceStepDocV2(stepName).catch(() => null) : null,
-      getApplicantV2(selectedRow.applicantId).catch(() => null),
-    ]).then(([freshStep, _freshApp]) => {
-      if (!isMounted) return;
-      if (freshStep) {
-        if (freshStep.status) {
-          const freshSt = freshStep.status;
-          setStatus(freshSt === "Approved" || freshSt === "Completed" || freshSt === "Complete" || freshSt === "Issued" ? "Completed" : "Pending");
-        }
-        if (freshStep.assigned_officer || freshStep.employee || freshStep.completed_by) {
-          setEmployee(freshStep.assigned_officer || freshStep.employee || freshStep.completed_by);
-        }
-        if (freshStep.appointment_date || freshStep.date_started) {
-          setAppointmentDate(freshStep.appointment_date || freshStep.date_started || "");
-        }
-        if (freshStep.reference_no || freshStep.injaz_applicant_number || (freshStep as any).injaz_application_id) {
-          setInjazNumber(freshStep.reference_no || freshStep.injaz_applicant_number || (freshStep as any).injaz_application_id || "");
-        }
-        const freshPaid =
-          (freshStep.payment_status || (freshStep as any).injaz_payment_status || "").toLowerCase().includes("paid") ||
-          freshStep.status === "Completed" || freshStep.status === "Issued";
-        setPaymentStatus(freshPaid ? "PAID" : "UNPAID");
-        if ((freshStep as any).payment_no || (freshStep as any).injaz_receipt_number) {
-          setPaymentNo((freshStep as any).payment_no || (freshStep as any).injaz_receipt_number || "");
-        }
-        if ((freshStep as any).payment_date || (freshStep as any).injaz_paid_date) {
-          setPaymentDate((freshStep as any).payment_date || (freshStep as any).injaz_paid_date || "");
-        }
-        if ((freshStep as any).fee || freshStep.amount || (freshStep as any).injaz_amount) {
-          setInjazFee(String((freshStep as any).fee || freshStep.amount || (freshStep as any).injaz_amount));
-        }
-        if (freshStep.notes || freshStep.rejection_remark) {
-          setRemark(freshStep.notes || freshStep.rejection_remark || "");
-        }
+    try {
+      if (newStatus === "Completed") {
+        const injazNo =
+          (row.injaz as any)?.injaz_application_id ||
+          row.injazApplicationId ||
+          (row.injaz as any)?.reference_no ||
+          (row.injaz as any)?.injaz_number;
+        await completeClearanceStepV2(stepName, injazNo || undefined);
+      } else {
+        await startClearanceStepV2(stepName);
       }
-    });
+      toast.success(`Te'shir status updated to ${newStatus}`);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update status");
+      throw err;
+    }
+  };
 
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedRow]);
+  // In-cell quick update helper: Remark (Applicant.remarks)
+  const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
+    try {
+      await updateApplicantV2(row.applicantId, {
+        remarks: remark,
+      });
+      toast.success("Remark saved");
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      await queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save remark");
+      throw err;
+    }
+  };
 
-  // Mutation to persist Te'shir / Injaz changes via V2
-  const mutation = useMutation({
-    mutationFn: async (): Promise<boolean> => {
-      if (!selectedRow) return false;
+  // Modal Save Mutation
+  const modalSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingRow) return;
+      const stepName = editingRow.clearanceStepName || editingRow.injaz?.name;
+      if (!stepName) return;
 
-      let persistedSomething = false;
-
-      if (injazFee && Number(injazFee) > 0 && selectedRow.dsrName) {
-        try {
-          await logStageExpenseV2(
-            Number(injazFee),
-            "USD",
-            "Taeshir / Injaz Fee",
-            selectedRow.dsrName,
-            "Taeshir"
-          );
-          persistedSomething = true;
-        } catch (err: any) {
-          console.warn("logStageExpenseV2 error:", err);
-        }
-      }
-
-      const stepName = selectedRow.clearanceStepName || selectedRow.injaz?.name;
-      if (!stepName) return persistedSomething;
-
-      const stepStatus = selectedRow.injaz?.status;
       const isRowDeparted =
-        selectedRow.placementStatus === "Departed" ||
-        selectedRow.ticketStatus === "Departed" ||
-        Boolean((selectedRow as any)?.isDeparted);
-
+        editingRow.placementStatus === "Departed" ||
+        editingRow.ticketStatus === "Departed";
       if (isRowDeparted) {
         throw new Error("Placement is Departed/Cancelled; clearance steps cannot be edited.");
       }
 
-      // Set Taeshir appointment if details are present (supported for terminal steps)
-      if (appointmentDate && injazNumber) {
+      // Update Appointment & Injaz Number
+      if (modalAppointmentDate || modalInjazNumber) {
+        await setTaeshirAppointmentV2(
+          stepName,
+          modalAppointmentDate || "",
+          modalInjazNumber || ""
+        );
+      }
+
+      // Update Remark on applicant record
+      if (modalRemark.trim()) {
         try {
-          await setTaeshirAppointmentV2(stepName, appointmentDate, injazNumber);
-          persistedSomething = true;
-        } catch (err: any) {
-          console.warn("setTaeshirAppointmentV2 warning:", err);
+          await updateApplicantV2(editingRow.applicantId, {
+            remarks: modalRemark.trim(),
+          });
+        } catch (err) {
+          console.warn("Remark update warning:", err);
         }
       }
 
-      // Record Injaz payment (supports Paid and Unpaid correction)
-      const wasPaid =
-        selectedRow.injazPayment === "PAID" ||
-        (selectedRow.injaz?.payment_status || "").toLowerCase().includes("paid");
+      // Step Completion / Progression
+      if (modalStatus === "Completed") {
+        await completeClearanceStepV2(stepName, modalInjazNumber || undefined);
+      }
+
+      // Reassign officer if modified by Admin
       if (
-        paymentStatus === "PAID" ||
-        (paymentStatus === "UNPAID" && wasPaid) ||
-        (injazFee && Number(injazFee) > 0 && paymentNo)
+        isAdmin &&
+        modalEmployee &&
+        modalEmployee !== (editingRow.injaz?.assigned_officer || editingRow.injaz?.employee)
       ) {
         try {
-          await recordInjazPaymentV2(
-            stepName,
-            Number(injazFee) || 10.5,
-            "USD",
-            paymentNo || undefined,
-            paymentDate || undefined,
-            paymentStatus === "PAID" ? "Paid" : "Unpaid"
-          );
-          persistedSomething = true;
-        } catch (err: any) {
-          console.warn("recordInjazPaymentV2 warning:", err);
-        }
-      }
-
-      // Complete clearance step or update terminal data
-      if (status === "Completed") {
-        await completeClearanceStepV2(stepName, injazNumber || undefined, Number(injazFee) || undefined);
-        persistedSomething = true;
-      } else if (status === "Pending" && stepStatus === "Pending") {
-        await startClearanceStepV2(stepName);
-        persistedSomething = true;
-      }
-
-      // Reassign officer if changed (now permitted on terminal steps)
-      if (isAdmin && employee && employee !== (selectedRow.injaz?.assigned_officer || selectedRow.injaz?.employee)) {
-        try {
-          await reassignClearanceStepV2(stepName, employee);
-          persistedSomething = true;
+          await reassignClearanceStepV2(stepName, modalEmployee);
         } catch (err: any) {
           console.warn("reassignClearanceStepV2 warning:", err);
         }
       }
-
-      return persistedSomething;
     },
-    onSuccess: (persistedSomething?: boolean) => {
-      if (persistedSomething) {
-        toast.success(`Te'shir Clearance & Appointment Date for ${selectedRow?.fullName} updated successfully!`);
-      } else {
-        toast.info(
-          `No changes were saved for ${selectedRow?.fullName}.`
-        );
-      }
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
-      queryClient.invalidateQueries({ queryKey: ["operational_workspace"] });
-      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-      queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["placements"] });
+    onSuccess: async () => {
+      toast.success(`Te'shir / Injaz for ${editingRow?.fullName} updated successfully!`);
+      setEditingRow(null);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
-      setSelectedRow(null);
     },
     onError: (err: any) => {
       toast.error(err?.message || "Failed to update Te'shir record.");
     },
   });
 
-  const handleSave = () => {
-    if (isPlacementDeparted) {
-      toast.error(
-        `This placement is Departed/Cancelled. Clearance steps can no longer be edited.`
-      );
-      return;
-    }
-    setIsConfirmOpen(true);
-  };
+  // Reopen Mutation
+  const reopenMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingRow) return;
+      const stepName = editingRow.clearanceStepName || editingRow.injaz?.name;
+      if (!stepName) return;
+      if (!reopenReason.trim()) {
+        throw new Error("Reason is required to reopen this clearance step.");
+      }
+      await reopenClearanceStepV2(stepName, reopenReason.trim(), reopenTargetStatus);
+    },
+    onSuccess: async () => {
+      toast.success("Te'shir clearance step reopened successfully!");
+      setIsReopenModalOpen(false);
+      setReopenReason("");
+      setEditingRow(null);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to reopen clearance step.");
+    },
+  });
 
-  // Columns definition matching TE'SHIR / INJAZ Sheet specifications
+  // Columns definition with Direct Excel-like In-Cell Editing
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
+    {
+      id: "edit",
+      header: "EDIT",
+      width: "48px",
+      align: "center",
+      sortable: false,
+      cell: (row) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingRow(row);
+          }}
+          className="p-1 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40 transition-colors"
+          title="Edit Candidate Record"
+        >
+          <Edit3 className="h-4 w-4" />
+        </button>
+      ),
+    },
     {
       id: "index",
       header: "#",
       width: "50px",
       align: "center",
-      cell: (_, idx) => <span className="text-slate-600 dark:text-zinc-400 font-mono text-xs">{(idx ?? 0) + 1}</span>,
+      cell: (_, idx) => (
+        <span className="text-slate-600 dark:text-zinc-400 font-mono text-xs">
+          {(idx ?? 0) + 1}
+        </span>
+      ),
     },
     {
       id: "candidate",
       header: "CANDIDATE",
       accessorKey: "fullName",
-      width: "220px",
+      width: "210px",
       cell: (row) => (
         <div className="flex flex-col">
-          <span className="font-bold text-slate-900 dark:text-white uppercase truncate text-xs">{row.fullName}</span>
+          <span className="font-bold text-slate-900 dark:text-white uppercase truncate text-xs">
+            {row.fullName}
+          </span>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400">{row.applicantId}</span>
+            <span className="font-mono text-[10px] text-slate-500 dark:text-zinc-400">
+              {row.applicantId}
+            </span>
             <span className="text-[10px] text-slate-400">•</span>
             <span className="font-mono text-[10px] text-emerald-800 dark:text-emerald-400 font-semibold">
               {row.passportNumber}
@@ -546,7 +400,7 @@ export function InjazWorkspace({
       id: "contract",
       header: "CONTRACT & VISA",
       accessorKey: "contractNumber",
-      width: "180px",
+      width: "170px",
       cell: (row) => (
         <div className="flex flex-col text-xs">
           <span className="font-mono text-slate-900 dark:text-white font-semibold">
@@ -562,9 +416,9 @@ export function InjazWorkspace({
       id: "sponsor",
       header: "SPONSOR (KAFEEL)",
       accessorKey: "sponsorName",
-      width: "220px",
+      width: "200px",
       cell: (row) => (
-        <div className="truncate block max-w-[210px]">
+        <div className="truncate block max-w-[190px]">
           <span className="font-semibold text-slate-900 dark:text-white uppercase block truncate text-xs">
             {row.sponsorName || (row.applicant as any)?.sponsor_name || "—"}
           </span>
@@ -576,9 +430,9 @@ export function InjazWorkspace({
     },
     {
       id: "duration",
-      header: "DURATION FROM CONTRACT",
+      header: "DURATION",
       accessorKey: "duration",
-      width: "140px",
+      width: "100px",
       align: "center",
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
@@ -588,33 +442,31 @@ export function InjazWorkspace({
     },
     {
       id: "injazNumber",
-      header: "INJAZ NO",
+      header: "Application number (E-no)",
       accessorKey: "injaz",
-      width: "130px",
-      cell: (row) => (
-        <span className="font-mono text-xs text-blue-950 dark:text-blue-300 font-bold">
-          {(row.injaz as any)?.reference_no || (row.injaz as any)?.injaz_number || "—"}
-        </span>
-      ),
-    },
-    {
-      id: "injazPayment",
-      header: "INJAZ PAYMENT",
-      accessorKey: "injazPayment",
-      width: "120px",
-      align: "center",
+      width: "190px",
       cell: (row) => {
-        const isPaid = row.injazPayment === "PAID" || (row.injaz as any)?.payment_status === "Paid";
+        const currentInjaz =
+          (row.injaz as any)?.injaz_application_id ||
+          row.injazApplicationId ||
+          (row.injaz as any)?.reference_no ||
+          "";
+        const currentAppDate =
+          (row.injaz as any)?.appointment_date ||
+          (row.appointmentDate !== "—" ? row.appointmentDate || "" : "");
         return (
-          <Badge
-            className={
-              isPaid
-                ? "bg-emerald-600 text-white font-semibold text-[10px]"
-                : "bg-amber-500 text-white font-semibold text-[10px]"
+          <ExcelTextInput
+            value={currentInjaz}
+            disabled={!canEdit}
+            placeholder="e.g. E1928471"
+            onSave={(val) =>
+              handleUpdateInjazAppointment(
+                row,
+                currentAppDate,
+                val
+              )
             }
-          >
-            {isPaid ? "PAID" : "UNPAID"}
-          </Badge>
+          />
         );
       },
     },
@@ -622,53 +474,138 @@ export function InjazWorkspace({
       id: "appointmentDate",
       header: "APPOINTMENT DATE",
       accessorKey: "appointmentDate",
-      width: "140px",
+      width: "135px",
+      cell: (row) => {
+        const currentAppDate =
+          (row.injaz as any)?.appointment_date ||
+          (row.appointmentDate !== "—" ? row.appointmentDate || "" : "");
+        const currentInjaz =
+          (row.injaz as any)?.injaz_application_id ||
+          row.injazApplicationId ||
+          (row.injaz as any)?.reference_no ||
+          "";
+        return (
+          <ExcelDateInput
+            value={currentAppDate}
+            disabled={!canEdit}
+            onSave={(val) => handleUpdateInjazAppointment(row, val, currentInjaz)}
+          />
+        );
+      },
+    },
+    {
+      id: "status",
+      header: "STATUS",
+      width: "125px",
+      align: "center",
+      cell: (row) => {
+        const isComplete =
+          row.injaz?.status === "Complete" ||
+          row.injaz?.status === "Completed" ||
+          row.injaz?.status === "Issued";
+        return (
+          <ExcelSelect
+            value={isComplete ? "Completed" : "Pending"}
+            disabled={!canEdit}
+            options={[
+              {
+                value: "Pending",
+                label: "Pending",
+                badgeClass: "bg-amber-500 text-white font-semibold text-[10px]",
+              },
+              {
+                value: "Completed",
+                label: "Completed",
+                badgeClass: "bg-emerald-600 text-white font-semibold text-[10px]",
+              },
+            ]}
+            onSave={(val) => handleUpdateStatus(row, val)}
+          />
+        );
+      },
+    },
+    {
+      id: "remark",
+      header: "REMARK",
+      accessorKey: "remark",
+      width: "150px",
       cell: (row) => (
-        <span className="text-slate-700 dark:text-zinc-300 font-medium text-xs">
-          {row.appointmentDate || "—"}
-        </span>
+        <ExcelTextInput
+          value={row.remark}
+          disabled={!canEdit}
+          placeholder="Add remark..."
+          onSave={(val) => handleUpdateRemark(row, val)}
+        />
       ),
     },
     {
       id: "action",
       header: "ACTION",
-      width: "140px",
+      width: "165px",
       align: "center",
       sortable: false,
       cell: (row) => (
-        <div className="flex items-center justify-center gap-1.5">
+        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Injaz PDF Download Button */}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedRow(row);
-            }}
-            className="h-6 px-2 text-[11px] font-semibold border-blue-600/30 text-blue-900 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50"
-          >
-            Edit
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async (e) => {
-              e.stopPropagation();
+            onClick={async () => {
               try {
                 toast.info("Generating Injaz document...");
                 const injazData = await resolveInjazDataWithFreshPhoto(row);
                 await downloadInjazDocumentPDF(injazData);
                 toast.success("Injaz document downloaded!");
               } catch (err: any) {
-                toast.error("Failed to generate Injaz document", { description: formatCleanErrorMessage(err) });
+                toast.error("Failed to generate Injaz document", {
+                  description: formatCleanErrorMessage(err),
+                });
               }
             }}
-            className="h-6 px-2 text-[11px] font-semibold border-emerald-600/30 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
-            title="Download Injaz Document"
+            className="h-7 px-2 text-[11px] font-semibold gap-1 text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+            title="Download Official Injaz PDF"
           >
-            <FileDown className="h-3 w-3 mr-1" />
-            Injaz
+            <FileDown className="h-3 w-3" />
+            <span>PDF</span>
+          </Button>
+
+          {/* Send to Browser Extension Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await sendApplicantToExtension(row.applicant || (row as any));
+                if (res.success) {
+                  toast.success(`${row.fullName} loaded into Extension!`);
+                } else {
+                  toast.info(`Candidate dispatched to Extension (${row.applicantId})`);
+                }
+              } catch (err: any) {
+                toast.error("Failed to send candidate to extension", {
+                  description: formatCleanErrorMessage(err),
+                });
+              }
+            }}
+            className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
+            title="Load into Chrome Extension for MOFA / Musaned autofill"
+          >
+            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <span>Extension</span>
+          </Button>
+
+          {/* Edit Dialog Trigger */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditingRow(row)}
+            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
+            title="Edit Candidate Record"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),
@@ -678,563 +615,164 @@ export function InjazWorkspace({
   return (
     <>
       <OperationalTable
-        title="Te'shir / Injaz MOFA Processing"
-        subtitle="Saudi Ministry of Foreign Affairs electronic visa application, fee settlement, and biometric appointment scheduling."
+        title="Te'shir / Injaz / Biometrics Workspace"
+        subtitle="Schedule MOFA biometrics appointment and generate official Injaz visa applications."
         columns={columns}
         data={data}
         isLoading={isLoading}
-        selectedRowId={selectedRow?.applicantId}
-        onRowClick={(row) => setSelectedRow(row)}
+        selectedRowId={editingRow?.applicantId}
+        onRowClick={() => {}}
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
-        availableCorridors={["Saudi Arabia"]}
       />
 
       {/* ------------------------------------------------------------- */}
-      {/* Right-Side Operational Drawer                                 */}
+      {/* Focused Edit Modal (Opens only when 'Edit' is clicked)         */}
       {/* ------------------------------------------------------------- */}
-      <OperationalDrawer
-        isOpen={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
-        title="Te'shir / MOFA Visa Processing Details"
-        applicantName={selectedRow?.fullName || ""}
-        applicantId={selectedRow?.applicantId || ""}
-        passportNumber={selectedRow?.passportNumber}
-        statusBadge={
-          <Badge
-            className={
-              status === "Completed"
-                ? "bg-emerald-600 text-white font-bold text-[10px]"
-                : "bg-blue-600 text-white font-bold text-[10px]"
-            }
-          >
-            {status}
-          </Badge>
-        }
-        canEdit={canEdit && !isPlacementDeparted}
-        isSaving={mutation.isPending}
-        onSave={handleSave}
-        leftAction={
-          isInjazTerminal && !isPlacementDeparted && isAdmin ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setReopenReason("");
-                setReopenTargetStatus("In Progress");
-                setIsReopenModalOpen(true);
-              }}
-              className="text-xs font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Reopen Step
-            </Button>
-          ) : undefined
-        }
-      >
-        {/* Section 1: Read-Only Candidate & Contract Context */}
-        <DrawerSection title="Candidate & Contract Dossier Context" icon={User}>
-          <DrawerField label="Full Name" value={selectedRow?.fullName} isReadOnly />
-          <DrawerField label="Passport Number" value={selectedRow?.passportNumber} isReadOnly />
-          <DrawerField
-            label="Contract Number"
-            value={selectedRow?.contractNumber || (selectedRow?.applicant as any)?.contract_number || "2005450415"}
-            isReadOnly
-          />
-          <DrawerField
-            label="Sponsor / Kafeel Name"
-            value={selectedRow?.sponsorName || (selectedRow?.applicant as any)?.sponsor_name || "ABDULLAH AMER MUGHABBIRI ALBARIQI"}
-            isReadOnly
-          />
-          <DrawerField
-            label="Sponsor National ID"
-            value={selectedRow?.sponsorId || (selectedRow?.applicant as any)?.sponsor_id || "1130373143"}
-            isReadOnly
-          />
-          <DrawerField
-            label="MOFA Visa Number"
-            value={selectedRow?.visaNumber || (selectedRow?.applicant as any)?.visa_number || "1908334046"}
-            isReadOnly
-          />
-          <DrawerField
-            label="Saudi Agency (Contractor)"
-            value={(selectedRow?.applicant as any)?.contractor_name || selectedRow?.lockedContractor || "—"}
-            isReadOnly
-          />
-        </DrawerSection>
-
-        {/* Section 2: Editable Te'shir & Appointment Processing Fields */}
-        <DrawerSection title="Te'shir Appointment & Clearance Actions" icon={CalendarDays}>
-          {isInjazTerminal && (
-            <div className="sm:col-span-2 rounded-xl border-2 border-blue-400/40 dark:border-blue-600/40 bg-blue-50/60 dark:bg-blue-950/40 p-3.5 shadow-xs text-blue-950 dark:text-blue-100 flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-200 dark:bg-blue-800 text-blue-900 dark:text-blue-100 mt-0.5">
-                <ShieldAlert className="h-4.5 w-4.5 text-blue-700 dark:text-blue-300" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-blue-900 dark:text-blue-200">
-                  Step Finalized — Data Corrections Allowed
-                </p>
-                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 leading-relaxed">
-                  This Te&apos;shir clearance step is finalized (<span className="font-bold underline">{currentInjazStatus}</span>). You can correct appointment date, E-number, payment status, fee, receipt, and assigned officer. To reverse the completed status itself, click <strong className="underline">Reopen Step</strong> above.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DrawerField label="Te'shir Appointment Date" isReadOnly={false}>
-            <input
-              type="date"
-              value={appointmentDate}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setAppointmentDate(e.target.value)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
-            />
-          </DrawerField>
-
-          <DrawerField label="Te'shir Clearance Status" isReadOnly={false}>
-            <select
-              value={status}
-              disabled={!canEdit || mutation.isPending || isInjazTerminal || isPlacementDeparted}
-              onChange={(e) => setStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white disabled:opacity-60"
-            >
-              <option value="Pending">Pending (Biometrics Scheduled)</option>
-              <option value="Completed">Completed (MOFA Biometrics Endorsed)</option>
-            </select>
-          </DrawerField>
-
-          <DrawerField label="Injaz Application (E-Number)" isReadOnly={false}>
-            <Input
-              type="text"
-              placeholder="e.g. E4982104"
-              value={injazNumber}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setInjazNumber(e.target.value)}
-              className="h-9 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-          <DrawerField label="Injaz Fee Settlement" isReadOnly={false}>
-            <select
-              value={paymentStatus}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setPaymentStatus(e.target.value as any)}
-              className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
-            >
-              <option value="UNPAID">UNPAID (Pending Payment)</option>
-              <option value="PAID">PAID (Settled)</option>
-            </select>
-          </DrawerField>
-
-          <DrawerField label="Injaz Fee (USD)" isReadOnly={false}>
-            <div className="relative">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="10.5"
-                value={injazFee}
-                disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-                onChange={(e) => setInjazFee(e.target.value)}
-                className="h-9 text-xs font-mono pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-              />
-              <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">
-                USD
-              </span>
-            </div>
-          </DrawerField>
-
-          <DrawerField label="Injaz Payment № / Receipt" isReadOnly={false}>
-            <Input
-              type="text"
-              placeholder="Enter receipt number (No default)"
-              value={paymentNo}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setPaymentNo(e.target.value)}
-              className="h-9 text-xs font-mono bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-          <DrawerField label="Injaz Payment Date" isReadOnly={false}>
-            <Input
-              type="date"
-              value={paymentDate}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-          <DrawerField label="Processing Remark / Notes" isReadOnly={false}>
-            <Input
-              type="text"
-              placeholder="Enter processing remarks (No default)"
-              value={remark}
-              disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-              onChange={(e) => setRemark(e.target.value)}
-              className="h-9 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-            />
-          </DrawerField>
-
-          {/* Assigned Officer Field: Visible ONLY to Admins */}
-          {isStrictAdmin && (
-            <div className="sm:col-span-2">
-              <DrawerField label="Assigned Te'shir Officer (Admin Only)" isReadOnly={false}>
-                <select
-                  value={employee}
-                  disabled={!canEdit || mutation.isPending || isPlacementDeparted}
-                  onChange={(e) => setEmployee(e.target.value)}
-                  className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-800 dark:text-zinc-200 font-medium disabled:opacity-60"
-                >
-                  <option value="">-- Select Handler Employee --</option>
-                  {employees.map((emp) => (
-                    <option key={emp.name} value={emp.name}>
-                      {emp.full_name ? `${emp.full_name} (${emp.name})` : emp.name}
-                    </option>
-                  ))}
-                </select>
-              </DrawerField>
-            </div>
-          )}
-        </DrawerSection>
-
-        {/* Section 3: Official Injaz Document Generation */}
-        <DrawerSection title="Official Injaz Document" icon={FileText}>
-          <div className="space-y-2.5">
-            <p className="text-xs text-slate-600 dark:text-zinc-400">
-              Generate the official Saudi Ministry of Foreign Affairs (MOFA) electronic visa application form pre-populated with candidate and sponsor details.
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                type="button"
-                onClick={handleGenerateInjazDoc}
-                disabled={isGeneratingInjaz}
-                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold shadow-xs"
-              >
-                {isGeneratingInjaz ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Generating PDF...
-                  </>
-                ) : (
-                  <>
-                    <FileDown className="mr-1.5 h-3.5 w-3.5" />
-                    Save as PDF
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleOpenInjazDoc}
-                disabled={isGeneratingInjaz}
-                className="text-xs border-slate-300 dark:border-[#2a2a32] font-semibold text-slate-800 dark:text-zinc-200"
-              >
-                <Printer className="mr-1.5 h-3.5 w-3.5 text-slate-600 dark:text-zinc-400" />
-                Print Document
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setForfeitReason("");
-                  setForfeitNewDate("");
-                  setForfeitNewInjazId("");
-                  setIsForfeitModalOpen(true);
-                }}
-                className="text-xs border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-              >
-                <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-                Forfeit &amp; Restart
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (!selectedRow) return;
-                  try {
-                    const res = await sendApplicantToExtension(selectedRow.applicant || (selectedRow as any));
-                    if (res.success) {
-                      toast.success("Candidate sent to extension for MOFA / Visa autofill!");
-                    } else {
-                      toast.info("Candidate loaded into browser extension memory.");
-                    }
-                  } catch (err: any) {
-                    toast.error("Failed to bridge candidate", { description: formatCleanErrorMessage(err) });
-                  }
-                }}
-                className="text-xs border-indigo-500/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-              >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                Send to Extension (MOFA / Visa)
-              </Button>
-            </div>
-          </div>
-        </DrawerSection>
-
-        {/* Stage Fee Required Logging (Routes to Finance) */}
-        <StageFeeSection
-          placementId={selectedRow?.dsrName}
-          stageName="Te'shir / Injaz Clearance"
-          defaultDirection="Expense"
-          disabled={isInjazTerminal || !canEdit}
-        />
-      </OperationalDrawer>
-
-      {/* Forfeit and Restart Injaz Modal */}
-      <Dialog open={isForfeitModalOpen} onOpenChange={setIsForfeitModalOpen}>
-        <DialogContent className="sm:max-w-[440px]">
+      <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-rose-600">
-              <ShieldCheck className="h-4 w-4" />
-              Forfeit Injaz &amp; Restart Application
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Closes the current attempt as forfeited and appends a fresh active attempt with a new Injaz Application ID.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs">
-            <div className="space-y-1">
-              <Label className="font-semibold text-xs">Forfeiture Reason *</Label>
-              <Input
-                type="text"
-                placeholder="e.g. Missed slot; fee forfeited"
-                value={forfeitReason}
-                onChange={(e) => setForfeitReason(e.target.value)}
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="font-semibold text-xs">New Appointment Date *</Label>
-              <Input
-                type="date"
-                value={forfeitNewDate}
-                onChange={(e) => setForfeitNewDate(e.target.value)}
-                className="h-9 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="font-semibold text-xs">New Injaz Application ID (E-number) *</Label>
-              <Input
-                type="text"
-                placeholder="e.g. E49829911"
-                value={forfeitNewInjazId}
-                onChange={(e) => setForfeitNewInjazId(e.target.value)}
-                className="h-9 text-xs font-mono"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsForfeitModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              disabled={isForfeiting || !forfeitReason || !forfeitNewDate || !forfeitNewInjazId}
-              onClick={handleForfeitAndRestartInjaz}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs"
-            >
-              {isForfeiting ? "Forfeiting & Restarting..." : "Forfeit & Restart"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ------------------------------------------------------------- */}
-      {/* Finalize / Save Confirmation Dialog                           */}
-      {/* ------------------------------------------------------------- */}
-      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <DialogContent className="sm:max-w-md border-amber-200 dark:border-amber-800 bg-white dark:bg-[#121216]">
-          <DialogHeader>
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
-                <AlertTriangle className="h-5 w-5" />
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">
+                <CreditCard className="h-5 w-5" />
               </div>
               <div>
                 <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-                  {isInjazTerminal
-                    ? "Confirm Te'shir Data Correction"
-                    : status === "Completed"
-                    ? "Confirm Te'shir Step Completion"
-                    : "Confirm Save Changes"}
+                  Edit Te&apos;shir / Injaz Record
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Review your changes before saving.
+                  Applicant: <strong className="uppercase">{editingRow?.fullName}</strong> ({editingRow?.passportNumber})
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            {/* Warning or info box */}
-            <div
-              className={cn(
-                "rounded-xl border-2 p-3.5",
-                isInjazTerminal
-                  ? "border-blue-400 dark:border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-950 dark:text-blue-200"
-                  : "border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200"
-              )}
-            >
-              <div className="flex items-start gap-2.5">
-                <ShieldAlert
-                  className={cn(
-                    "h-4 w-4 shrink-0 mt-0.5",
-                    isInjazTerminal ? "text-blue-600 dark:text-blue-400" : "text-amber-600"
-                  )}
-                />
-                <div className="text-xs leading-relaxed">
-                  <p className="font-bold uppercase tracking-wide mb-0.5">
-                    {isInjazTerminal ? "Clearance Step Data Correction" : "Permanent Action Warning"}
-                  </p>
-                  <p>
-                    {isInjazTerminal ? (
-                      <>
-                        This step is already finalized. Data modifications to appointment date, Injaz application ID, payment status, fee, and handler will be recorded without altering the step&apos;s completion status.
-                      </>
-                    ) : status === "Completed" ? (
-                      <>
-                        Setting this clearance step to <strong className="underline">Completed</strong> will permanently finalize it. Once saved, the status itself cannot regress except via Reopen Step.
-                      </>
-                    ) : (
-                      <>
-                        Once confirmed, Te&apos;shir updates are recorded in the applicant record. Please verify all information is accurate before confirming.
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
+          <div className="space-y-3.5 py-3 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Application number (E-no)</Label>
+              <Input
+                value={modalInjazNumber}
+                onChange={(e) => setModalInjazNumber(e.target.value)}
+                placeholder="e.g. E1928471"
+                className="h-8 text-xs font-mono"
+              />
             </div>
 
-            {/* Candidate & Field Summary */}
-            <div className="rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50/60 dark:bg-[#16161c] p-3.5 space-y-2 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                <span className="text-slate-500 dark:text-zinc-400">Candidate:</span>
-                <span className="font-bold text-slate-900 dark:text-white">{selectedRow?.fullName}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                <span className="text-slate-500 dark:text-zinc-400">Te&apos;shir Status to Apply:</span>
-                <Badge
-                  className={
-                    status === "Completed"
-                      ? "bg-emerald-600 text-white font-bold text-[10px]"
-                      : "bg-amber-500 text-white font-bold text-[10px]"
-                  }
-                >
-                  {status}
-                </Badge>
-              </div>
-              {injazNumber && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Injaz № / E-Number:</span>
-                  <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">{injazNumber}</span>
-                </div>
-              )}
-              {appointmentDate && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Appointment Date:</span>
-                  <span className="text-slate-800 dark:text-zinc-200">{appointmentDate}</span>
-                </div>
-              )}
-              {paymentNo && (
-                <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-zinc-800">
-                  <span className="text-slate-500 dark:text-zinc-400">Payment / Receipt №:</span>
-                  <span className="font-mono text-slate-800 dark:text-zinc-200">{paymentNo}</span>
-                </div>
-              )}
-              {injazFee && (
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-slate-500 dark:text-zinc-400">Injaz Consular Fee:</span>
-                  <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
-                    ${injazFee} USD
-                  </span>
-                </div>
-              )}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Biometrics Appointment Date</Label>
+              <Input
+                type="date"
+                value={modalAppointmentDate}
+                onChange={(e) => setModalAppointmentDate(e.target.value)}
+                className="h-8 text-xs"
+              />
             </div>
-          </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={mutation.isPending}
-              onClick={() => setIsConfirmOpen(false)}
-              className="text-xs font-semibold"
-            >
-              Cancel / Review
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={mutation.isPending}
-              onClick={() => {
-                setIsConfirmOpen(false);
-                mutation.mutate();
-              }}
-              className="text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
-            >
-              {mutation.isPending ? "Submitting..." : isInjazTerminal ? "Yes, Save Corrections" : "Yes, Confirm & Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Reopen Clearance Step */}
-      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
-        <DialogContent className="max-w-md bg-white dark:bg-[#15151b] border-slate-200 dark:border-[#2a2a35]">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-              <RotateCcw className="h-4.5 w-4.5 text-amber-600" />
-              Reopen Te&apos;shir / Injaz Clearance Step
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Reversing this step will reset its outcome status and notify the assigned handler. A written audit reason is mandatory.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                Target Status
-              </label>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Clearance Status</Label>
               <select
-                value={reopenTargetStatus}
-                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
-                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+                value={modalStatus}
+                onChange={(e) => setModalStatus(e.target.value as any)}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-bold"
               >
-                <option value="In Progress">In Progress (Default)</option>
                 <option value="Pending">Pending</option>
+                <option value="Completed">Completed (Cleared)</option>
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                Reason for Reopening <span className="text-rose-500">*</span>
-              </label>
-              <Textarea
-                rows={3}
-                placeholder="Explain why this Te'shir / Injaz step needs to be reopened (e.g. biometrics rescheduled, wrong outcome recorded)..."
-                value={reopenReason}
-                onChange={(e) => setReopenReason(e.target.value)}
-                className="text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Notes / Remark</Label>
+              <Input
+                value={modalRemark}
+                onChange={(e) => setModalRemark(e.target.value)}
+                placeholder="Optional remark..."
+                className="h-8 text-xs"
               />
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="flex items-center justify-between gap-2 border-t pt-3">
+            {isAdmin &&
+              ["Complete", "Completed", "Issued"].includes(
+                editingRow?.injaz?.status || ""
+              ) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsReopenModalOpen(true)}
+                  className="h-8 px-2.5 text-xs text-amber-700 border-amber-300 hover:bg-amber-50"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" />
+                  Reopen Step
+                </Button>
+              )}
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingRow(null)}
+                className="h-8 px-3 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={modalSaveMutation.isPending}
+                onClick={() => modalSaveMutation.mutate()}
+                className="h-8 px-4 text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
+              >
+                {modalSaveMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reopen Modal */}
+      <Dialog open={isReopenModalOpen} onOpenChange={setIsReopenModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">
+              Reopen Te&apos;shir / Injaz Step
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Provide an authoritative audit reason for resetting this step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Target Status</Label>
+              <select
+                value={reopenTargetStatus}
+                onChange={(e) => setReopenTargetStatus(e.target.value as any)}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a]"
+              >
+                <option value="In Progress">In Progress</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Audit Reason *</Label>
+              <Input
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder="Why is this step being reopened?"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter className="border-t pt-3">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              disabled={reopenMutation.isPending}
               onClick={() => setIsReopenModalOpen(false)}
-              className="text-xs font-semibold"
+              className="h-8 text-xs"
             >
               Cancel
             </Button>
@@ -1243,7 +781,7 @@ export function InjazWorkspace({
               size="sm"
               disabled={reopenMutation.isPending || !reopenReason.trim()}
               onClick={() => reopenMutation.mutate()}
-              className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+              className="h-8 text-xs bg-amber-700 hover:bg-amber-800 text-white"
             >
               {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
             </Button>

@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
 import {
   Dialog,
   DialogContent,
@@ -566,37 +567,26 @@ export default function PlacementDocumentCenterPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                {/* File Dropzone */}
-                <div className="border-2 border-dashed border-slate-200 dark:border-[#2a2a35] rounded-xl p-6 text-center space-y-2 hover:border-emerald-500 transition-all bg-slate-50/50 dark:bg-[#16161e]">
-                  <UploadCloud className="h-8 w-8 mx-auto text-slate-400" />
-                  <div className="text-xs">
-                    <label className="font-semibold text-emerald-700 dark:text-emerald-400 cursor-pointer hover:underline">
-                      Choose Contract Document
-                      <input
-                        type="file"
-                        accept=".pdf,image/png,image/jpeg,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setContractFile(file);
-                            setContractPreviewUrl(URL.createObjectURL(file));
-                          }
-                        }}
-                      />
-                    </label>
-                    <p className="text-slate-500 text-[11px] mt-0.5">
-                      PDF, PNG, JPG, or WebP up to 10MB
-                    </p>
-                  </div>
-
-                  {contractFile && (
-                    <div className="pt-2 text-xs font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                      {contractFile.name} ({(contractFile.size / 1024).toFixed(1)} KB)
-                    </div>
-                  )}
-                </div>
+                {/* Premium Contract File Dropzone */}
+                <PremiumDropzone
+                  id="contract-doc-dropzone"
+                  variant="document"
+                  value={contractFile || contractPreviewUrl}
+                  fileName={contractFile?.name}
+                  fileSize={contractFile?.size}
+                  isLoading={isContractUploading}
+                  loadingText="Processing and parsing contract document..."
+                  label="Employment Contract Document"
+                  description="Drag & drop signed contract PDF/scan or paste image (Ctrl+V) • Max 15MB"
+                  onFileSelect={(file) => {
+                    setContractFile(file);
+                    setContractPreviewUrl(URL.createObjectURL(file));
+                  }}
+                  onRemove={() => {
+                    setContractFile(null);
+                    setContractPreviewUrl("");
+                  }}
+                />
 
                 {/* Upload Action Buttons */}
                 <div className="flex items-center gap-2 pt-1">
@@ -932,37 +922,26 @@ export default function PlacementDocumentCenterPage() {
                   </CardHeader>
 
                   <CardContent className="space-y-4">
-                    {/* File Dropzone */}
-                    <div className="border-2 border-dashed border-slate-200 dark:border-[#2a2a35] rounded-xl p-6 text-center space-y-2 hover:border-emerald-500 transition-all bg-slate-50/50 dark:bg-[#16161e]">
-                      <UploadCloud className="h-8 w-8 mx-auto text-slate-400" />
-                      <div className="text-xs">
-                        <label className="font-semibold text-emerald-700 dark:text-emerald-400 cursor-pointer hover:underline">
-                          Choose Kuwait eVisa Document
-                          <input
-                            type="file"
-                            accept=".pdf,image/png,image/jpeg,image/webp"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                setVisaFile(file);
-                                setVisaPreviewUrl(URL.createObjectURL(file));
-                              }
-                            }}
-                          />
-                        </label>
-                        <p className="text-slate-500 text-[11px] mt-0.5">
-                          PDF, PNG, JPG, or WebP up to 10MB
-                        </p>
-                      </div>
-
-                      {visaFile && (
-                        <div className="pt-2 text-xs font-semibold text-slate-900 dark:text-white flex items-center justify-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                          {visaFile.name} ({(visaFile.size / 1024).toFixed(1)} KB)
-                        </div>
-                      )}
-                    </div>
+                    {/* Premium Kuwait eVisa File Dropzone */}
+                    <PremiumDropzone
+                      id="visa-doc-dropzone"
+                      variant="document"
+                      value={visaFile || visaPreviewUrl}
+                      fileName={visaFile?.name}
+                      fileSize={visaFile?.size}
+                      isLoading={isVisaUploading}
+                      loadingText="Processing and parsing Kuwait eVisa..."
+                      label="Kuwait eVisa Document"
+                      description="Drag & drop visa document PDF/scan or paste image (Ctrl+V) • Max 15MB"
+                      onFileSelect={(file) => {
+                        setVisaFile(file);
+                        setVisaPreviewUrl(URL.createObjectURL(file));
+                      }}
+                      onRemove={() => {
+                        setVisaFile(null);
+                        setVisaPreviewUrl("");
+                      }}
+                    />
 
                     {/* Upload Action Buttons */}
                     <div className="flex items-center gap-2 pt-1">

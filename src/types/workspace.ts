@@ -78,12 +78,17 @@ export interface WorkspaceApplicantRow {
 
   // Normalized / Sheet Computed Fields
   laborId?: string;
+  nationalId?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  cocStatus?: string;
   contractDate?: string;
   duration?: number;
   medicalRemaining?: string;
   medicalRemainingDays?: number;
   examRemainingDays?: number;
   injazPayment?: string;
+  injazApplicationId?: string;
   appointmentDate?: string;
   contact?: string;
   remark?: string;
@@ -97,6 +102,8 @@ export interface WorkspaceApplicantRow {
   issueDate?: string;
   ticketStatus?: string;
   ticketNumber?: string;
+  flightDate?: string;
+  flightTime?: string;
 
   // Stream-specific records
   lms?: any | null;
@@ -114,3 +121,15 @@ export interface WorkspaceApplicantRow {
   [key: string]: any;
 }
 
+export interface V2UserTodoItem {
+  name: string;
+  reference_type: "Clearance Step" | "Placement" | string;
+  reference_name: string;
+  description: string;
+  status: "Open" | "Closed" | "Cancelled" | string;
+  creation: string;
+  placement?: string;
+  step_type?: string;
+  step_status?: string;
+  is_mandatory?: number | boolean;
+}

@@ -20,11 +20,14 @@ import {
   Stamp,
   HeartPulse,
   Briefcase,
+  ListTodo,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getComplianceNotificationsV2, V2AppNotification } from "@/lib/api/v2/notifications";
+import { listMyTodosV2 } from "@/lib/api/v2/clearance";
+import { V2UserTodoItem } from "@/types/workspace";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { toast } from "sonner";
 
@@ -32,7 +35,7 @@ export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const { authUser } = useAuth();
   const [activeFilter, setActiveFilter] = React.useState<
-    "all" | "compliance" | "workflow" | "complaints" | "system"
+    "all" | "tasks" | "compliance" | "workflow" | "complaints" | "system"
   >("all");
   const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
 
@@ -44,6 +47,18 @@ export default function NotificationsPage() {
   } = useQuery<V2AppNotification[]>({
     queryKey: ["v2_compliance_notifications", authUser?.email, authUser?.roles],
     queryFn: () => getComplianceNotificationsV2(authUser),
+    refetchInterval: 30000,
+  });
+
+  const {
+    data: myTodos = [],
+    isLoading: isLoadingTodos,
+    isRefetching: isRefetchingTodos,
+    refetch: refetchTodos,
+  } = useQuery<V2UserTodoItem[]>({
+    queryKey: ["v2_my_todos", authUser?.email],
+    queryFn: () => listMyTodosV2("Open"),
+    enabled: Boolean(authUser?.email),
     refetchInterval: 30000,
   });
 
@@ -116,13 +131,16 @@ export default function NotificationsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refetch()}
-            disabled={isRefetching}
+            onClick={() => {
+              refetch();
+              refetchTodos();
+            }}
+            disabled={isRefetching || isRefetchingTodos}
             className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-slate-700 dark:text-zinc-300"
           >
             <RefreshCw
               className={`mr-1.5 h-3.5 w-3.5 ${
-                isRefetching ? "animate-spin text-emerald-600" : ""
+                isRefetching || isRefetchingTodos ? "animate-spin text-emerald-600" : ""
               }`}
             />
             Refresh
@@ -153,7 +171,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* KPI Overview Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
@@ -163,6 +181,18 @@ export default function NotificationsPage() {
           </div>
           <p className="mt-1 text-xl font-bold text-slate-900 dark:text-white font-mono">
             {notifications.length}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-blue-200 dark:border-blue-950/50 bg-blue-50/50 dark:bg-blue-950/20 p-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">
+              My Assigned Tasks
+            </span>
+            <ListTodo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <p className="mt-1 text-xl font-bold text-blue-700 dark:text-blue-400 font-mono">
+            {myTodos.length}
           </p>
         </div>
 
@@ -216,6 +246,16 @@ export default function NotificationsPage() {
           All Notifications ({notifications.length})
         </button>
         <button
+          onClick={() => setActiveFilter("tasks")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeFilter === "tasks"
+              ? "bg-blue-900 text-white dark:bg-blue-700"
+              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
+          }`}
+        >
+          My Assigned Tasks ({myTodos.length})
+        </button>
+        <button
           onClick={() => setActiveFilter("compliance")}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
             activeFilter === "compliance"
@@ -257,8 +297,93 @@ export default function NotificationsPage() {
         </button>
       </div>
 
-      {/* Notifications List */}
-      {isLoading ? (
+      {/* Tasks Queue View */}
+      {activeFilter === "tasks" ? (
+        isLoadingTodos ? (
+          <div className="py-12 text-center text-xs text-slate-400">
+            Loading your assigned tasks...
+          </div>
+        ) : myTodos.length === 0 ? (
+          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
+            <CardContent className="py-12 text-center space-y-3">
+              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                You're Caught Up! (0 Open Tasks)
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-sm mx-auto">
+                You have no pending Clearance Step assignments or Placement ticketing tasks in your queue.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {myTodos.map((todo) => {
+              const isPlacement = todo.reference_type === "Placement";
+              const targetUrl = isPlacement
+                ? `/applicants?search=${encodeURIComponent(todo.reference_name)}`
+                : todo.placement
+                ? `/applicants?search=${encodeURIComponent(todo.placement)}`
+                : "/clearance";
+
+              return (
+                <Card
+                  key={todo.name}
+                  className="border-l-4 border-l-blue-600 border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] transition hover:shadow-md"
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <ListTodo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <Badge
+                          variant="neutral"
+                          className="text-[10px] uppercase tracking-wider font-bold"
+                        >
+                          {todo.reference_type}
+                        </Badge>
+                        {todo.step_type && (
+                          <Badge
+                            variant="info"
+                            className="text-[10px] uppercase tracking-wider font-bold"
+                          >
+                            {todo.step_type}
+                          </Badge>
+                        )}
+                        <Badge
+                          variant="success"
+                          className="text-[10px] uppercase tracking-wider font-bold"
+                        >
+                          {todo.status}
+                        </Badge>
+                      </div>
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 font-mono">
+                        {todo.reference_name}
+                      </span>
+                    </div>
+                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white mt-1.5">
+                      {todo.description}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-0">
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500">
+                        Assigned on: {todo.creation ? new Date(todo.creation).toLocaleDateString() : "Active"}
+                      </span>
+                      <Link href={targetUrl} className="ml-auto">
+                        <Button
+                          size="sm"
+                          className="text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white"
+                        >
+                          Open Queue Item <ExternalLink className="ml-1.5 h-3 w-3" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )
+      ) : isLoading ? (
         <div className="py-12 text-center text-xs text-slate-400">
           Loading live operational alerts...
         </div>

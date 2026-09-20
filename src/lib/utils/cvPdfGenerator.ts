@@ -99,7 +99,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
   page.drawText(candName || "CANDIDATE", { x: 90, y: cursorY - 18, size: 10, font: fontBold, color: primaryDark });
 
   page.drawText("ROLE APPLIED:", { x: 340, y: cursorY - 18, size: 8, font: fontBold, color: textMuted });
-  page.drawText((applicant.job_applied || applicant.target_job || "HOUSE MAID").replace(/[^\x00-\x7F]/g, "").toUpperCase(), { x: 420, y: cursorY - 18, size: 10, font: fontBold, color: textDark });
+  page.drawText((applicant.job_applied || applicant.target_job || "HOUSE WORKER").replace(/[^\x00-\x7F]/g, "").toUpperCase(), { x: 420, y: cursorY - 18, size: 10, font: fontBold, color: textDark });
 
   cursorY -= 50;
 
