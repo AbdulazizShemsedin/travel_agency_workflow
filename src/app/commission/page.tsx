@@ -1186,7 +1186,7 @@ export default function AdminCommissionPage() {
                     Unbatched Approved Commissions
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500 mt-0.5">
-                    Departed candidates awaiting grouping into an invoice batch. Once batched, they move to the Batch Requests tab.
+                    Departed candidates awaiting invoice grouping.
                   </CardDescription>
                 </div>
 
@@ -1642,6 +1642,9 @@ export default function AdminCommissionPage() {
                               ? Number(activeBatch.balance_due_original)
                               : Number(activeBatch.balance_due_birr ?? activeBatch.total_amount) || 0
                           ).toLocaleString()} {activeBatch.currency || "ETB"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5" title="The printed invoice bottom-line total adds requested advance and cross-batch unpaid arrears">
+                          Batch balance only (Invoice PDF includes advance & arrears)
                         </p>
                       </div>
                     </div>

@@ -7,6 +7,8 @@ export interface OperationalColumn<T = any> {
   width?: string;
   align?: "left" | "center" | "right";
   sortable?: boolean;
+  isReadOnly?: boolean;
+  editable?: boolean;
   cell: (row: T, index?: number) => React.ReactNode;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ExcelTextInputProps {
@@ -31,8 +31,14 @@ export function ExcelTextInput({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    setCurrentValue(value !== undefined && value !== null ? String(value) : "");
-  }, [value]);
+    // Skip syncing from prop while a save is in-flight so the user's
+    // just-entered value stays visible (optimistic display). The sync
+    // will happen on the next render once isSaving is false and the
+    // fresh backend value has arrived.
+    if (!isSaving) {
+      setCurrentValue(value !== undefined && value !== null ? String(value) : "");
+    }
+  }, [value, isSaving]);
 
   React.useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -68,14 +74,18 @@ export function ExcelTextInput({
 
   if (disabled) {
     return (
-      <span
+      <div
         className={cn(
-          "text-slate-600 dark:text-zinc-400 font-medium select-none text-xs block truncate",
+          "w-full min-h-[26px] px-1.5 py-1 text-xs text-slate-500 dark:text-zinc-400 select-none flex items-center justify-between cursor-default",
           className
         )}
+        title="Field is read-only"
       >
-        {value || placeholder}
-      </span>
+        <span className={cn("truncate", uppercase && "uppercase")}>
+          {value || placeholder}
+        </span>
+        <Lock className="h-2.5 w-2.5 text-slate-400/60 dark:text-zinc-600 shrink-0 ml-1" />
+      </div>
     );
   }
 
@@ -87,8 +97,8 @@ export function ExcelTextInput({
           setIsEditing(true);
         }}
         className={cn(
-          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs text-slate-800 dark:text-zinc-200 truncate cursor-pointer rounded transition-all flex items-center justify-between",
-          "hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-400 dark:hover:ring-emerald-700/60",
+          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs text-slate-800 dark:text-zinc-200 truncate cursor-pointer rounded transition-all flex items-center justify-between border border-transparent",
+          "hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
           className
         )}
         title="Click to edit"
@@ -102,8 +112,10 @@ export function ExcelTextInput({
         >
           {currentValue || placeholder}
         </span>
-        {isSaving && (
+        {isSaving ? (
           <Loader2 className="h-3 w-3 animate-spin text-emerald-600 shrink-0 ml-1" />
+        ) : (
+          <Pencil className="h-2.5 w-2.5 text-emerald-600/80 dark:text-emerald-400/80 shrink-0 ml-1 opacity-0 group-hover/excel-cell:opacity-100 transition-opacity" />
         )}
       </div>
     );
@@ -192,12 +204,14 @@ export function ExcelSelect({
     return (
       <span
         className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold select-none",
-          selectedOpt?.badgeClass || "bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300",
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold select-none cursor-default",
+          selectedOpt?.badgeClass || "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400",
           className
         )}
+        title="Field is read-only"
       >
-        {selectedOpt?.label || currentVal || "—"}
+        <span>{selectedOpt?.label || currentVal || "—"}</span>
+        <Lock className="h-2.5 w-2.5 text-slate-400/70 dark:text-zinc-500" />
       </span>
     );
   }
@@ -210,7 +224,7 @@ export function ExcelSelect({
           setIsEditing(true);
         }}
         className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all border",
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all border",
           selectedOpt?.badgeClass ||
             "bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-zinc-700",
           "hover:ring-1 hover:ring-emerald-500/50 hover:border-emerald-500",
@@ -219,8 +233,10 @@ export function ExcelSelect({
         title="Click to change"
       >
         <span>{selectedOpt?.label || currentVal || "—"}</span>
-        {isSaving && (
+        {isSaving ? (
           <Loader2 className="h-3 w-3 animate-spin text-emerald-600 shrink-0 ml-1.5" />
+        ) : (
+          <Pencil className="h-2.5 w-2.5 text-emerald-600/70 dark:text-emerald-400/70 shrink-0 opacity-0 hover:opacity-100" />
         )}
       </div>
     );
@@ -283,8 +299,10 @@ export function ExcelDateInput({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    setDateVal(value || "");
-  }, [value]);
+    if (!isSaving) {
+      setDateVal(value || "");
+    }
+  }, [value, isSaving]);
 
   React.useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -309,14 +327,16 @@ export function ExcelDateInput({
 
   if (disabled) {
     return (
-      <span
+      <div
         className={cn(
-          "text-slate-600 dark:text-zinc-400 font-mono text-xs select-none block truncate",
+          "w-full min-h-[26px] px-1.5 py-1 text-xs font-mono text-slate-500 dark:text-zinc-400 select-none flex items-center justify-between cursor-default",
           className
         )}
+        title="Date is read-only"
       >
-        {value || "—"}
-      </span>
+        <span>{value || "—"}</span>
+        <Lock className="h-2.5 w-2.5 text-slate-400/60 dark:text-zinc-600 shrink-0 ml-1" />
+      </div>
     );
   }
 
@@ -328,8 +348,8 @@ export function ExcelDateInput({
           setIsEditing(true);
         }}
         className={cn(
-          "w-full min-h-[26px] px-1.5 py-1 text-xs font-mono text-slate-700 dark:text-zinc-300 truncate cursor-pointer rounded transition-all flex items-center justify-between",
-          "hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-400 dark:hover:ring-emerald-700/60",
+          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs font-mono text-slate-700 dark:text-zinc-300 truncate cursor-pointer rounded transition-all flex items-center justify-between border border-transparent",
+          "hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
           className
         )}
         title="Click to edit date"
@@ -337,8 +357,10 @@ export function ExcelDateInput({
         <span className={!dateVal ? "text-slate-400 dark:text-zinc-500 italic" : undefined}>
           {dateVal || "—"}
         </span>
-        {isSaving && (
+        {isSaving ? (
           <Loader2 className="h-3 w-3 animate-spin text-emerald-600 shrink-0 ml-1" />
+        ) : (
+          <Pencil className="h-2.5 w-2.5 text-emerald-600/80 dark:text-emerald-400/80 shrink-0 ml-1 opacity-0 group-hover/excel-cell:opacity-100 transition-opacity" />
         )}
       </div>
     );

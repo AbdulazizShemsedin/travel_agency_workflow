@@ -102,6 +102,9 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
       full_name: fullName,
       first_name: cand.first_name ? String(cand.first_name).toUpperCase() : undefined,
       last_name: cand.last_name ? String(cand.last_name).toUpperCase() : undefined,
+      job_applied: cand.job_applied || (cand as any).target_job || "Housemaid",
+      passport_number: cand.passport_number || (cand as any).passport_no || "",
+      monthly_salary: cand.salary_amount || cand.monthly_salary || "",
       medical_status: cand.medical_status || (cand as any)?.medicalStatus || (cand as any)?.medical || "",
       medical_issue_date: cand.medical_issue_date || (cand as any)?.medical_date || "",
       place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || cand.leaving_town || "",
@@ -119,6 +122,21 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
         "",
     };
   });
+}
+
+/**
+ * Fetches full profile details for a single candidate upon card expansion.
+ * Calls sanctioned portal RPC: agency_tracking.portal_api.get_candidate_detail
+ */
+export async function getCandidateDetailV2(applicantName: string): Promise<any> {
+  const result = await requestV2<{ message?: any } | any>(
+    "/api/method/agency_tracking.portal_api.get_candidate_detail",
+    {
+      method: "POST",
+      body: { applicant_name: applicantName },
+    }
+  );
+  return result?.message || result;
 }
 
 /**

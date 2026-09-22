@@ -444,6 +444,9 @@ export interface PortalAvailableCandidate {
   leaving_town?: string;
   marital_status?: string;
   complexion?: string;
+  children?: number;
+  arabic_level?: string;
+  english_level?: string;
   passport_number?: string;
   medical_status?: string;
   medical_issue_date?: string;

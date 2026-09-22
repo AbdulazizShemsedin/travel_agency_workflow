@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://travelagency-production-b48d.up.railway.app";
+    "https://agencytracking-production-2a06.up.railway.app";
 
   const clientAccept = req.headers.get("accept");
   const headers: Record<string, string> = {
@@ -169,7 +169,7 @@ async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, stri
     if (loggedUser === "administrator") return true;
 
     // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
+    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
     const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
       method: "POST",
       headers: {
@@ -202,7 +202,7 @@ async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: R
     if (loggedUser === "administrator") return true;
 
     // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
+    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
     const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
       method: "POST",
       headers: {
@@ -484,12 +484,51 @@ export async function POST(
     const postMaxRetries = isHeavyCvOrPdf ? 0 : 2;
     const postTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
 
+    let effectiveBodyText = bodyText || "{}";
+    if (methodPath === "login" || methodPath.endsWith("/login")) {
+      try {
+        const parsed = JSON.parse(effectiveBodyText);
+        if (parsed.usr && typeof parsed.usr === "string" && !parsed.usr.includes("@")) {
+          const lowerUsr = parsed.usr.trim().toLowerCase();
+          if (lowerUsr !== "administrator" && lowerUsr !== "guest") {
+            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
+            const lookupRes = await fetchWithRetry(
+              `${config.url}/api/method/frappe.client.get_list`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: systemAuthHeader,
+                },
+                body: JSON.stringify({
+                  doctype: "User",
+                  filters: [["username", "=", parsed.usr.trim()]],
+                  fields: ["name", "email"],
+                  limit_page_length: 1,
+                }),
+              },
+              1,
+              5000
+            ).catch(() => null);
+            if (lookupRes && lookupRes.ok) {
+              const lookupData = await lookupRes.json().catch(() => ({}));
+              const resolvedEmail = lookupData.message?.[0]?.name || lookupData.message?.[0]?.email;
+              if (resolvedEmail) {
+                parsed.usr = resolvedEmail;
+                effectiveBodyText = JSON.stringify(parsed);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
     const res = await fetchWithRetry(
       `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
       {
         method: "POST",
         headers: forwardHeaders,
-        body: bodyText || "{}",
+        body: effectiveBodyText,
       },
       postMaxRetries,
       postTimeoutMs
@@ -498,7 +537,7 @@ export async function POST(
     // Special handler for get_thread_messages: enrich with thread participants presence & read receipts
     if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
       let effectiveRes = res;
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
+      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
 
       if (!res.ok) {
         const isSupervisor = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
@@ -629,56 +668,7 @@ export async function POST(
         });
 
         if (retryRes.ok) {
-          let retryData: any = await retryRes.json().catch(() => ({ message: [] }));
-          const rawPlacements: any[] = Array.isArray(retryData.message)
-            ? retryData.message
-            : Array.isArray(retryData)
-            ? retryData
-            : [];
-
-          if (rawPlacements.length > 0) {
-            const applicantNames = Array.from(new Set(rawPlacements.map((p) => p.applicant).filter(Boolean)));
-            const applicantMap = new Map<string, any>();
-
-            await Promise.all(
-              applicantNames.map(async (appName) => {
-                try {
-                  const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                    method: "POST",
-                    headers: elevatedHeaders,
-                    body: JSON.stringify({ doctype: "Applicant", name: appName }),
-                  });
-                  const aData = await aRes.json().catch(() => ({}));
-                  if (aData.message) {
-                    applicantMap.set(appName, aData.message);
-                  }
-                } catch {}
-              })
-            );
-
-            const enriched = rawPlacements.map((p) => {
-              const a = applicantMap.get(p.applicant) || {};
-              const computedFullName = a.full_name || [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ");
-              return {
-                ...p,
-                full_name: computedFullName || a.applicant_name || p.full_name || p.applicant,
-                applicant_name: a.applicant_name || computedFullName || p.applicant,
-                passport_number: a.passport_number || p.passport_number || "",
-                photo_passport: a.photo_passport || a.photograph || p.photo_passport || "",
-                photo_full_body: a.photo_full_body || p.photo_full_body || "",
-                job_applied: a.target_job || a.job_applied || p.target_job || "",
-                destination_country: a.destination_country || p.destination_country || "",
-                nationality: a.nationality || "Ethiopian",
-                gender: a.gender || p.gender || "",
-                religion: a.religion || "",
-                age: a.age || "",
-              };
-            });
-
-            if (Array.isArray(retryData.message)) retryData.message = enriched;
-            else if (Array.isArray(retryData)) (retryData as any) = enriched;
-          }
-
+          const retryData = await retryRes.json().catch(() => ({ message: [] }));
           const response = NextResponse.json(retryData, { status: 200 });
           forwardSetCookieHeaders(res, response);
           return response;
@@ -819,133 +809,6 @@ export async function POST(
               }
             })
           );
-          if (Array.isArray(data.message)) data.message = enriched;
-          else if (Array.isArray(data)) (data as any) = enriched;
-        }
-      } else if (methodPath === "agency_tracking.portal_api.list_portal_candidates") {
-        const rawCands: any[] = Array.isArray(data.message?.candidates)
-          ? data.message.candidates
-          : Array.isArray(data.message)
-          ? data.message
-          : Array.isArray(data)
-          ? data
-          : [];
-
-        if (rawCands.length > 0) {
-          const enriched = await Promise.all(
-            rawCands.map(async (cand) => {
-              try {
-                const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                  method: "POST",
-                  headers: elevatedHeaders,
-                  body: JSON.stringify({ doctype: "Applicant", name: cand.name }),
-                });
-                const aData = await aRes.json().catch(() => ({}));
-                const a = aData.message || {};
-
-                // Calculate age from date_of_birth if age is missing or 0
-                const dob = a.date_of_birth || cand.date_of_birth;
-                let computedAge = Number(a.age) || Number(cand.age) || 0;
-                if (!computedAge && dob) {
-                  const birthDate = new Date(dob);
-                  if (!isNaN(birthDate.getTime())) {
-                    const today = new Date();
-                    let diff = today.getFullYear() - birthDate.getFullYear();
-                    const m = today.getMonth() - birthDate.getMonth();
-                    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                      diff--;
-                    }
-                    if (diff > 0) computedAge = diff;
-                  }
-                }
-
-                return {
-                  ...cand,
-                  age: computedAge || cand.age,
-                  date_of_birth: dob,
-                  religion: a.religion || cand.religion || "",
-                  photo_passport: a.photo_passport || a.photograph || cand.photograph || cand.photo_passport || "",
-                  photo_full_body: a.photo_full_body || cand.photo_full_body || "",
-                  destination_country: a.destination_country || cand.destination_country || "",
-                  job_applied: a.target_job || a.job_applied || cand.job_applied || cand.target_job || "Housemaid",
-                  target_job: a.target_job || cand.target_job || "Housemaid",
-                  experience_country: a.experience_country || cand.experience_country || "",
-                  experience_period: a.experience_period || cand.experience_period || "",
-                  years_of_experience: a.years_of_experience ?? cand.years_of_experience,
-                  monthly_salary: a.salary_amount || cand.monthly_salary || 1200,
-                  marital_status: a.marital_status || cand.marital_status || "",
-                  children: a.children ?? cand.children,
-                  place_of_birth: a.passport_issue_place || a.city || a.leaving_town || cand.place_of_birth || "Ethiopia",
-                  leaving_town: a.leaving_town || cand.leaving_town || "",
-                  nationality: a.nationality || cand.nationality || "Ethiopia",
-                  education: a.education || cand.education || "High School",
-                  passport_number: a.passport_number || cand.passport_number || "",
-                  skill_cleaning: a.skill_cleaning ?? cand.skill_cleaning ?? 0,
-                  skill_cooking: a.skill_cooking ?? cand.skill_cooking ?? 0,
-                  skill_washing: a.skill_washing ?? cand.skill_washing ?? 0,
-                  skill_ironing: a.skill_ironing ?? cand.skill_ironing ?? 0,
-                  skill_baby_sitting: a.skill_baby_sitting ?? cand.skill_baby_sitting ?? 0,
-                  skill_children_care: a.skill_children_care ?? cand.skill_children_care ?? 0,
-                  skill_arabic_cooking: a.skill_arabic_cooking ?? cand.skill_arabic_cooking ?? 0,
-                  skill_elderly_care: a.skill_elderly_care ?? cand.skill_elderly_care ?? 0,
-                  skill_driving: a.skill_driving ?? cand.skill_driving ?? 0,
-                  skill_sewing: a.skill_sewing ?? cand.skill_sewing ?? 0,
-                };
-              } catch {
-                return cand;
-              }
-            })
-          );
-          if (Array.isArray(data.message?.candidates)) data.message.candidates = enriched;
-          else if (Array.isArray(data.message)) data.message = enriched;
-          else if (Array.isArray(data)) (data as any) = enriched;
-        }
-      } else if (methodPath === "agency_tracking.placement_api.list_placements") {
-        const rawPlacements: any[] = Array.isArray(data.message)
-          ? data.message
-          : Array.isArray(data)
-          ? data
-          : [];
-
-        if (rawPlacements.length > 0) {
-          const applicantNames = Array.from(new Set(rawPlacements.map((p) => p.applicant).filter(Boolean)));
-          const applicantMap = new Map<string, any>();
-
-          await Promise.all(
-            applicantNames.map(async (appName) => {
-              try {
-                const aRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                  method: "POST",
-                  headers: elevatedHeaders,
-                  body: JSON.stringify({ doctype: "Applicant", name: appName }),
-                });
-                const aData = await aRes.json().catch(() => ({}));
-                if (aData.message) {
-                  applicantMap.set(appName, aData.message);
-                }
-              } catch {}
-            })
-          );
-
-          const enriched = rawPlacements.map((p) => {
-            const a = applicantMap.get(p.applicant) || {};
-            const computedFullName = a.full_name || [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(" ");
-            return {
-              ...p,
-              full_name: computedFullName || a.applicant_name || p.full_name || p.applicant,
-              applicant_name: a.applicant_name || computedFullName || p.applicant,
-              passport_number: a.passport_number || p.passport_number || "",
-              photo_passport: a.photo_passport || a.photograph || p.photo_passport || "",
-              photo_full_body: a.photo_full_body || p.photo_full_body || "",
-              job_applied: a.target_job || a.job_applied || p.target_job || "",
-              destination_country: a.destination_country || p.destination_country || "",
-              nationality: a.nationality || "Ethiopian",
-              gender: a.gender || p.gender || "",
-              religion: a.religion || "",
-              age: a.age || "",
-            };
-          });
-
           if (Array.isArray(data.message)) data.message = enriched;
           else if (Array.isArray(data)) (data as any) = enriched;
         }

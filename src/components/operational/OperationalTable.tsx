@@ -33,6 +33,7 @@ import {
   Eye,
   CheckSquare,
   Square,
+  Lock,
 } from "lucide-react";
 import { OperationalColumn } from "@/types/workspace";
 import { Button } from "@/components/ui/button";
@@ -168,6 +169,8 @@ export function OperationalTable<T extends Record<string, any> = any>({
             col.id === "action" ||
             col.id === "actions" ||
             (typeof col.header === "string" && col.header.toUpperCase() === "ACTION"),
+          isReadOnly: col.isReadOnly ?? (col.editable === false ? true : (col.editable ? false : undefined)),
+          editable: col.editable,
         },
       };
     });
@@ -561,7 +564,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
       <div className="relative w-full max-w-full min-w-0 overflow-x-auto min-h-[360px] touch-pan-x">
         <table className="w-full min-w-[720px] text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] backdrop-blur-xs border-b border-slate-300 dark:border-[#272730]">
+          <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
@@ -574,6 +577,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   const isThirdCol = colIdx === 2;
                   const isLastCol = colIdx === headerGroup.headers.length - 1;
                   const isActionCol = (header.column.columnDef.meta as any)?.isActionCol;
+                  const isReadOnly = (header.column.columnDef.meta as any)?.isReadOnly;
 
                   return (
                     <th
@@ -583,16 +587,16 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         width,
                         minWidth: width,
                         ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                        ...(isSecondCol ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
-                        ...(isThirdCol ? { left: "98px" } : {}),
+                        ...(isSecondCol ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                        ...(isThirdCol ? { left: "96px" } : {}),
                         ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
                         "py-2 px-2.5 select-none border-r border-slate-300 dark:border-[#272730]",
-                        isFirstCol && "sticky left-0 z-20 bg-slate-100 dark:bg-[#181820]",
-                        isSecondCol && "sticky z-20 bg-slate-100 dark:bg-[#181820]",
-                        isThirdCol && "sticky z-20 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
-                        isActionCol && isLastCol && "sticky right-0 z-20 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-300 dark:border-[#272730]",
+                        isFirstCol && "sticky left-0 z-30 bg-slate-100 dark:bg-[#181820]",
+                        isSecondCol && "sticky z-30 bg-slate-100 dark:bg-[#181820]",
+                        isThirdCol && "sticky z-30 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]",
+                        isActionCol && isLastCol && "sticky right-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -609,6 +613,11 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         {header.isPlaceholder
                           ? null
                           : flexRender(header.column.columnDef.header, header.getContext())}
+                        {isReadOnly && !isFirstCol && !isActionCol && (
+                          <span title="Read-only field" className="inline-flex opacity-60 hover:opacity-100">
+                            <Lock className="h-2.5 w-2.5 text-slate-400 dark:text-zinc-500 shrink-0" />
+                          </span>
+                        )}
                         {canSort && (
                           <span className="text-slate-400">
                             {isSorted ? (
@@ -644,16 +653,16 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         key={idx}
                         style={{
                           ...(idx === 0 ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                          ...(idx === 1 ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
-                          ...(idx === 2 ? { left: "98px" } : {}),
+                          ...(idx === 1 ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                          ...(idx === 2 ? { left: "96px" } : {}),
                           ...(isActionCol && isLastCol ? { right: 0 } : {}),
                         }}
                         className={cn(
                           "py-3 px-3",
-                          idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121215]",
-                          idx === 1 && "sticky z-10 bg-white dark:bg-[#121215]",
-                          idx === 2 && "sticky z-10 bg-white dark:bg-[#121215] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)]",
-                          isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121215] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.08)] border-l border-slate-200 dark:border-[#22222a]"
+                          idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121216]",
+                          idx === 1 && "sticky z-10 bg-white dark:bg-[#121216]",
+                          idx === 2 && "sticky z-10 bg-white dark:bg-[#121216] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                          isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121216] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
                         )}
                       >
                         <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
@@ -702,6 +711,9 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       const isThirdCol = colIdx === 2;
                       const isLastCol = colIdx === row.getVisibleCells().length - 1;
                       const isActionCol = (cell.column.columnDef.meta as any)?.isActionCol;
+                      const isStickyCol = isFirstCol || isSecondCol || isThirdCol || (isActionCol && isLastCol);
+
+                      const isReadOnly = (cell.column.columnDef.meta as any)?.isReadOnly;
 
                       return (
                         <td
@@ -710,20 +722,23 @@ export function OperationalTable<T extends Record<string, any> = any>({
                             width: (cell.column.columnDef.meta as any)?.width,
                             minWidth: (cell.column.columnDef.meta as any)?.width,
                             ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                            ...(isSecondCol ? { left: "48px", width: "50px", minWidth: "50px", maxWidth: "50px" } : {}),
-                            ...(isThirdCol ? { left: "98px" } : {}),
+                            ...(isSecondCol ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
+                            ...(isThirdCol ? { left: "96px" } : {}),
                             ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
                             "py-1.5 px-2.5 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
-                            isFirstCol && "sticky left-0 z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26]",
-                            isSecondCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26]",
-                            isThirdCol && "sticky z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
-                            isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121215] group-hover:bg-emerald-50/70 dark:group-hover:bg-[#1a2e26] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]",
-                            isSelected && isFirstCol && "bg-emerald-50 dark:bg-[#183428]",
-                            isSelected && isSecondCol && "bg-emerald-50 dark:bg-[#183428]",
-                            isSelected && isThirdCol && "bg-emerald-50 dark:bg-[#183428]",
-                            isSelected && isActionCol && isLastCol && "bg-emerald-50 dark:bg-[#183428]",
+                            isStickyCol && "sticky z-20",
+                            isFirstCol && "left-0",
+                            isThirdCol && "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]",
+                            isActionCol && isLastCol && "right-0 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
+                            isStickyCol && (
+                              isSelected
+                                ? "!bg-emerald-100 dark:!bg-[#183428]"
+                                : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-emerald-50 dark:group-hover:!bg-[#1a2c24]"
+                            ),
+                            isReadOnly && !isStickyCol && "bg-slate-50/90 dark:bg-[#141419] text-slate-700 dark:text-zinc-300 cursor-default select-text",
+                            isReadOnly && isStickyCol && "text-slate-700 dark:text-zinc-300 cursor-default select-text",
                             align === "center" && "text-center",
                             align === "right" && "text-right"
                           )}

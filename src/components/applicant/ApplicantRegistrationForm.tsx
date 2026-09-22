@@ -21,7 +21,6 @@ import {
   Info,
   ExternalLink,
   ScanLine,
-  Sparkles,
   AlertTriangle,
   CheckCircle2,
   ClipboardPaste,
@@ -791,7 +790,7 @@ export function ApplicantRegistrationForm({
             {existingApplicantId ? "EDIT APPLICANT" : "CREATE APPLICANT"}
           </h1>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            {existingApplicantId ? `Editing details for candidate ${existingApplicantId}` : "Register a new applicant into the agency workflow system"}
+            {existingApplicantId ? `Editing details for candidate ${existingApplicantId}` : "Register a new applicant."}
           </p>
         </div>
 
@@ -885,7 +884,7 @@ export function ApplicantRegistrationForm({
               <select
                 {...register("destination_country")}
                 disabled={lockedIdentityFields}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {DESTINATION_COUNTRY_OPTIONS.map((c) => (
                   <option key={c} value={c}>
@@ -898,7 +897,7 @@ export function ApplicantRegistrationForm({
                   ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
                   : currentDestCountry.toLowerCase() === "saudi arabia"
                   ? "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."
-                  : "🌐 International Corridor: Standard visa and contract processing pipeline."}
+                  : " International Corridor: Standard visa and contract processing pipeline."}
               </p>
             </div>
           </div>
@@ -926,19 +925,17 @@ export function ApplicantRegistrationForm({
                     Passport Quick-Scan & Auto-Fill
                   </h3>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                    <Sparkles className="h-3 w-3" /> Auto-Fill Enabled
+                    <ScanLine className="h-3 w-3" /> Auto-Fill Enabled
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
-                  Upload candidate passport photo or paste the 2 lines of code from the bottom. The system will automatically read them and fill in Name, Passport Number, Date of Birth, Gender, and Expiry Date.
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Upload passport scan or paste code to auto-fill details.
                 </p>
 
-                {/* Important Warning requested by user */}
-                <div className="flex items-start sm:items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1.5 mt-1 max-w-2xl">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
-                  <span>
-                    <strong>Important Note:</strong> Data extraction may not produce accurate results if the passport photo is blurry, dark, rotated, or low quality. Please review and verify all auto-filled fields before proceeding.
-                  </span>
+                {/* Important Warning */}
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1 mt-1">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Ensure passport photo is clear and well-lit.</span>
                 </div>
               </div>
             </div>
@@ -1299,7 +1296,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("passport_type")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {PASSPORT_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1401,7 +1398,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("religion")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {RELIGION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1417,7 +1414,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("marital_status")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {MARITAL_STATUS_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1435,7 +1432,7 @@ export function ApplicantRegistrationForm({
               <select
                 {...register("gender")}
                 disabled={lockedIdentityFields}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {GENDER_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1451,7 +1448,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("job_applied")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700 uppercase"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
               >
                 {OCCUPATION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1468,7 +1465,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("qualification")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700 uppercase"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
               >
                 {QUALIFICATION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1565,7 +1562,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("agent")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 <option value="">Select Foreign Contractor Agent...</option>
                 {contractors.map((c) => {
@@ -1629,7 +1626,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("visa_type")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {VISA_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1700,7 +1697,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("relative_kinship")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 {RELATIVE_KINSHIP_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -1760,7 +1757,7 @@ export function ApplicantRegistrationForm({
               </Label>
               <select
                 {...register("relative_gender")}
-                className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
               >
                 <option value="Female">Female</option>
                 <option value="Male">Male</option>
@@ -1907,7 +1904,7 @@ export function ApplicantRegistrationForm({
                 <select
                   {...register("nationality")}
                   disabled={lockedIdentityFields}
-                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
                 >
                   <option value="Ethiopia">Ethiopia</option>
                   <option value="Kenya">Kenya</option>
@@ -2020,7 +2017,7 @@ export function ApplicantRegistrationForm({
                 </Label>
                 <select
                   {...register("english_level")}
-                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
                 >
                   {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
                     <option key={opt} value={opt === "Select.." ? "" : opt}>
@@ -2036,7 +2033,7 @@ export function ApplicantRegistrationForm({
                 </Label>
                 <select
                   {...register("arabic_level")}
-                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
                 >
                   {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
                     <option key={opt} value={opt === "Select.." ? "" : opt}>
@@ -2052,7 +2049,7 @@ export function ApplicantRegistrationForm({
                 </Label>
                 <select
                   {...register("experience_country")}
-                  className="w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-emerald-700"
+                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
                 >
                   {EXPERIENCE_ABROAD_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -2393,7 +2390,7 @@ export function ApplicantRegistrationForm({
 
             <div className="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 p-2.5 text-[11px] text-amber-900 dark:text-amber-300 space-y-1">
               <div className="font-semibold flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>Format Guidelines:</span>
               </div>
               <p className="text-amber-800/90 dark:text-amber-300/80 pl-5 leading-relaxed">

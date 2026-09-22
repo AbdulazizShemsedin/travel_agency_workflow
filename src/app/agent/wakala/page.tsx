@@ -225,7 +225,7 @@ export default function AgentWakalaRequestsPage() {
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Review pending Wakala authorization requests for your agency&apos;s placements before the Monday Embassy submission deadline.
+              Review pending Wakala authorizations.
             </p>
           </div>
 

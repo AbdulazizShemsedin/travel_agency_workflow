@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Sparkles,
   Eye,
   RefreshCw,
   Film,
@@ -57,7 +56,7 @@ export function PremiumDropzone({
   id,
   variant = "document",
   accept,
-  maxSizeMB = 15,
+  maxSizeMB = 0,
   value,
   fileName,
   fileSize,
@@ -286,7 +285,7 @@ export function PremiumDropzone({
               <User className="h-8 w-8 text-purple-700 dark:text-purple-400" />
             </div>
             <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-purple-800 text-white shadow-md">
-              <Sparkles className="h-3 w-3" />
+              <Camera className="h-3 w-3" />
             </div>
           </div>
         );
@@ -358,20 +357,20 @@ export function PremiumDropzone({
     if (description) return description;
     switch (variant) {
       case "passport":
-        return "Drag & drop scan or paste image (Ctrl+V) for instant auto-fill";
+        return "JPG, PNG, or PDF";
       case "portrait":
-        return "Standard 35x45mm ID photo • Drag, drop or click to browse";
+        return "Standard 35x45mm ID photo";
       case "full_body":
-        return "Full length head-to-toe photo (CV Page 2) • Drag & drop or paste";
+        return "Full-length standing photo";
       case "video":
-        return "MP4, WebM, or MOV (Recommended under 30MB) • Drag & drop or paste candidate video";
+        return "MP4, WebM, or MOV video";
       case "spreadsheet":
-        return "Plain CSV format with date, reference & amount • Drag & drop";
+        return "CSV with date, reference & amount";
       case "compact":
-        return "PDF or image up to 15MB";
+        return "PDF or image";
       case "document":
       default:
-        return "Drag & drop PDF, PNG, JPG or WebP document • Max 15MB";
+        return "PDF, PNG, JPG or WebP";
     }
   }, [description, variant]);
 
@@ -432,14 +431,14 @@ export function PremiumDropzone({
       <div
         className={cn(
           "relative overflow-hidden rounded-2xl border-2 transition-all duration-300",
-          // Normal Idle state
+          // Normal Idle state (Distinct, inviting dropzone for non-technical users)
           !isDragOver &&
             !error &&
             !dragError &&
-            "border-dashed border-slate-300/90 dark:border-[#2b2b35] bg-slate-50/60 dark:bg-[#121217] hover:border-emerald-500/70 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/10",
+            "border-dashed border-2 border-emerald-600/40 dark:border-emerald-500/40 bg-emerald-50/20 dark:bg-[#101814]/40 hover:border-emerald-600 dark:hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-[#14231b]/60 shadow-xs",
           // Drag Over state (WOW Factor)
           isDragOver &&
-            "border-solid border-emerald-500 dark:border-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/15 ring-4 ring-emerald-500/30 scale-[1.01] shadow-xl",
+            "border-solid border-emerald-500 dark:border-emerald-400 bg-emerald-500/15 dark:bg-emerald-500/20 ring-4 ring-emerald-500/30 scale-[1.01] shadow-xl",
           // Error state
           (error || dragError) &&
             "border-rose-500/80 bg-rose-50/40 dark:bg-rose-950/20 ring-2 ring-rose-500/20",
@@ -599,8 +598,8 @@ export function PremiumDropzone({
 
             {/* Bottom Actions Bar for Attached File */}
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
-                <CheckCircle2 className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-300/80 dark:border-emerald-700/80 shadow-xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 {displayFileName ? `${displayFileName} attached` : "File attached"}
               </span>
 
@@ -611,7 +610,7 @@ export function PremiumDropzone({
                 onClick={handleTriggerClick}
                 className="h-7 px-2.5 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg"
               >
-                <RefreshCw className="h-3 w-3 mr-1" /> Change
+                <RefreshCw className="h-3 w-3 mr-1" /> Replace File
               </Button>
 
               {onCrop && isImagePreview && (
@@ -646,40 +645,74 @@ export function PremiumDropzone({
             </div>
           </div>
         ) : (
-          /* EMPTY UPLOAD STATE */
+          /* EMPTY UPLOAD STATE (Highly Obvious & Intuitive for Non-Technical Users) */
           <div
             onClick={handleTriggerClick}
-            className={cn(
-              "cursor-pointer flex flex-col items-center justify-center text-center transition-all duration-200",
-              variant === "compact" ? "p-3 py-4" : "p-6 sm:p-8"
-            )}
+            className="cursor-pointer text-center transition-all duration-200"
           >
-            {/* Graphic Icon */}
-            {renderVariantGraphic()}
+            {variant === "compact" ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4">
+                <div className="flex items-center gap-3 text-left">
+                  {renderVariantGraphic()}
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      {defaultTitle}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Drag & drop file here or click to browse • {defaultSubtitle}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-bold shadow-xs transition-transform group-hover:scale-105 active:scale-95">
+                    <FileUp className="h-3.5 w-3.5" />
+                    Browse File
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 sm:p-8 flex flex-col items-center justify-center">
+                {/* Graphic Icon */}
+                {renderVariantGraphic()}
 
-            {/* Title & Description */}
-            <div className="mt-3.5 space-y-1 max-w-sm">
-              <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                {defaultTitle}
-              </h4>
-              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-zinc-400 line-clamp-2">
-                {defaultSubtitle}
-              </p>
-            </div>
+                {/* Primary Title */}
+                <h4 className="mt-3 text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition-colors">
+                  {defaultTitle}
+                </h4>
 
-            {/* Visual Action Indicator Badge */}
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-bold shadow-xs transition-transform group-hover:scale-105 active:scale-95">
-                <UploadCloud className="h-3.5 w-3.5" />
-                Browse File
-              </span>
+                {/* Obvious Drag & Drop Callout */}
+                <div className="mt-1 flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400">
+                  <UploadCloud className="h-4 w-4 shrink-0 animate-bounce" />
+                  <span>Drag & drop file here</span>
+                </div>
 
-              {enablePaste && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-200/70 dark:bg-[#1f1f26] text-slate-700 dark:text-zinc-400 text-[11px] font-mono font-medium border border-slate-300/60 dark:border-[#2a2a34]">
-                  <kbd className="font-sans font-bold text-[10px]">Ctrl</kbd>+<kbd className="font-sans font-bold text-[10px]">V</kbd> to paste
-                </span>
-              )}
-            </div>
+                {/* "OR" Divider */}
+                <div className="my-2.5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+                  <span className="h-px w-10 bg-slate-300 dark:bg-[#2b2b35]" />
+                  <span>or</span>
+                  <span className="h-px w-10 bg-slate-300 dark:bg-[#2b2b35]" />
+                </div>
+
+                {/* Big Action Button */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-bold shadow-md transition-all group-hover:scale-105 active:scale-95 ring-2 ring-emerald-600/20">
+                    <FileUp className="h-4 w-4" />
+                    Browse device
+                  </span>
+
+                  {enablePaste && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#1a1a22] text-slate-600 dark:text-zinc-400 text-[11px] font-mono font-medium border border-slate-200 dark:border-[#2b2b35] shadow-xs">
+                      <kbd className="font-sans font-bold text-[10px]">Ctrl</kbd>+<kbd className="font-sans font-bold text-[10px]">V</kbd> to paste
+                    </span>
+                  )}
+                </div>
+
+                {/* Format & Size Requirements */}
+                <p className="mt-3 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
+                  {defaultSubtitle}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

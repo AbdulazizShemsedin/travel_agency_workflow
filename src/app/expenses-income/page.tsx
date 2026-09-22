@@ -575,7 +575,7 @@ export default function ExpensesIncomePage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Add expenses and income, approve payments, and check bank records.
+            Manage expenses, income, approvals, and reconciliation.
           </p>
         </div>
 
@@ -628,7 +628,7 @@ export default function ExpensesIncomePage() {
             onClick={() => setIsAddModalOpen(true)}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs h-8 shadow-xs"
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Payment
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Log Income / Expense
           </Button>
         </div>
       </div>
@@ -758,7 +758,7 @@ export default function ExpensesIncomePage() {
                 Financial Audit & Ledger Rules
               </CardTitle>
               <CardDescription className="text-xs">
-                In compliance with V2 accounting rules, newly logged transactions begin in <strong>Pending</strong> state. They only impact ledger totals after formal approval by a <strong>Finance Manager</strong> or <strong>Administrator</strong>.
+                Transactions require Finance Manager approval before impacting ledger totals.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -965,7 +965,7 @@ export default function ExpensesIncomePage() {
                           Bank Statement Auto-Matching
                         </CardTitle>
                         <CardDescription className="text-xs mt-0.5">
-                          Upload banking CSV (date, reference, amount in ETB). Automatically matches unsettled commission batches.
+                          Upload CSV to auto-match commission batches.
                         </CardDescription>
                       </div>
                     </div>
@@ -981,7 +981,7 @@ export default function ExpensesIncomePage() {
                         isLoading={isUploadingStatement}
                         loadingText="Parsing and matching bank transactions..."
                         label="Upload Bank Statement CSV"
-                        description="Drag & drop bank statement CSV or click to browse • Plain CSV with date, ref, amount"
+                        description="CSV with date, ref, and amount (Max 15MB)"
                         onFileSelect={(file) => setStatementFile(file)}
                         onRemove={() => setStatementFile(null)}
                       />
@@ -989,7 +989,7 @@ export default function ExpensesIncomePage() {
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[11px] text-slate-400 flex items-center gap-1">
                           <HelpCircle className="h-3 w-3" />
-                          Matches lines by total amount & disambiguates via reference
+                          Auto-matched by amount and reference.
                         </span>
                         <Button
                           type="submit"
@@ -1080,7 +1080,7 @@ export default function ExpensesIncomePage() {
                       </div>
 
                       <p className="text-[10px] text-slate-400 leading-relaxed">
-                        Matches the selected statement line directly to the target batch, updating settlement and ledger records.
+                        Matches statement line directly to target batch.
                       </p>
 
                       <Button
@@ -1112,7 +1112,7 @@ export default function ExpensesIncomePage() {
                           Manual Matching: Select Applicants from Batch & Settle
                         </CardTitle>
                         <CardDescription className="text-xs mt-0.5">
-                          Multi-select applicants from a batch, enter deposited bank amount and agency expense, and submit for settlement.
+                          Select applicants, enter deposit, and settle batch.
                         </CardDescription>
                       </div>
                     </div>
@@ -1444,7 +1444,7 @@ export default function ExpensesIncomePage() {
                   <DollarSign className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Record Transaction</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Log Income / Expense</h3>
                   <p className="text-xs text-slate-500 dark:text-zinc-400">Submits in Pending status for approval</p>
                 </div>
               </div>

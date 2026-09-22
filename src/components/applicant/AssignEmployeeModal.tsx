@@ -13,7 +13,6 @@ import {
   Loader2,
   Check,
   UserCog,
-  Sparkles,
 } from "lucide-react";
 import {
   reassignClearanceStepV2,
@@ -379,7 +378,7 @@ export function AssignEmployeeModal({
 
                   {isSelectedDefault && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 dark:bg-emerald-950/70 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                      <Sparkles className="h-3 w-3" />
+                      <Check className="h-3 w-3" />
                       Default Specialist
                     </span>
                   )}

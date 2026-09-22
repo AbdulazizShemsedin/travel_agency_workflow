@@ -11,7 +11,6 @@ import {
   Check,
   X,
   FileCheck,
-  Sparkles,
   ArrowRight,
 } from "lucide-react";
 import {
@@ -696,7 +695,7 @@ export function ImageCropModal({
         {/* Footer Actions */}
         <DialogFooter className="p-4 bg-slate-50 dark:bg-[#18181f] border-t border-slate-100 dark:border-[#26262f] flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            <Crop className="h-3.5 w-3.5 text-emerald-600" />
             <span>Drag borders to crop, or use full image directly.</span>
           </div>
 

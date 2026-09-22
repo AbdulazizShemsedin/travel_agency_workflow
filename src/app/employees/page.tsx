@@ -18,7 +18,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
-  Sparkles,
+  Key,
   Layers,
   Calendar,
   MoreVertical,
@@ -304,6 +304,15 @@ export default function EmployeesPage() {
     staleTime: 20000,
   });
 
+  // Check if the email being entered in Add Employee already exists in the loaded directory
+  const isDuplicateAddEmail = React.useMemo(() => {
+    const trimmed = addForm.email.trim().toLowerCase();
+    if (!trimmed) return false;
+    return employees.some(
+      (emp) => emp.email.toLowerCase() === trimmed || emp.name.toLowerCase() === trimmed
+    );
+  }, [addForm.email, employees]);
+
   // Filtered employees
   const filteredEmployees = React.useMemo(() => {
     return employees.filter((emp) => {
@@ -475,7 +484,7 @@ export default function EmployeesPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-            Provision internal user accounts, configure multi-role permissions, and manage staff credentials.
+            Manage staff accounts and permissions.
           </p>
         </div>
 
@@ -1279,7 +1288,7 @@ export default function EmployeesPage() {
                   Add New Employee
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                  Register an internal staff account, grant security roles, and define initial login credentials.
+                  Create staff account and assign roles.
                 </DialogDescription>
               </div>
             </div>
@@ -1288,15 +1297,25 @@ export default function EmployeesPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!addForm.email.trim() || !addForm.first_name.trim()) {
+              const normalizedEmail = addForm.email.trim().toLowerCase();
+              if (!normalizedEmail || !addForm.first_name.trim()) {
                 toast.error("Please fill in full name and a valid email address.");
+                return;
+              }
+              if (isDuplicateAddEmail) {
+                toast.error("Employee already exists", {
+                  description: `An employee account with email '${normalizedEmail}' is already registered in the directory.`,
+                });
                 return;
               }
               if (!addForm.password.trim()) {
                 toast.error("Please provide an initial password.");
                 return;
               }
-              createMutation.mutate(addForm);
+              createMutation.mutate({
+                ...addForm,
+                email: normalizedEmail,
+              });
             }}
             className="space-y-4 py-3 text-xs"
           >
@@ -1343,8 +1362,17 @@ export default function EmployeesPage() {
                   placeholder="staff@agency.et"
                   value={addForm.email}
                   onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
-                  className="h-8.5 text-xs font-mono"
+                  className={cn(
+                    "h-8.5 text-xs font-mono",
+                    isDuplicateAddEmail && "border-amber-500 focus-visible:ring-amber-500 bg-amber-50/20 dark:bg-amber-950/20"
+                  )}
                 />
+                {isDuplicateAddEmail && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    An employee with this email is already registered in the directory.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -1372,7 +1400,7 @@ export default function EmployeesPage() {
                   onClick={handleGenerateRandomPassword}
                   className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium"
                 >
-                  <Sparkles className="h-3 w-3" />
+                  <Key className="h-3 w-3" />
                   Generate Strong Password
                 </button>
               </div>
@@ -1467,7 +1495,7 @@ export default function EmployeesPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending}
+                disabled={createMutation.isPending || isDuplicateAddEmail}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
               >
                 {createMutation.isPending ? (
@@ -1594,7 +1622,7 @@ export default function EmployeesPage() {
                     Reset Staff Password
                   </DialogTitle>
                   <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                    Set a new secure password for <strong>{selectedForPassword.email}</strong>.
+                    Set new password for {selectedForPassword.email}.
                   </DialogDescription>
                 </div>
               </div>

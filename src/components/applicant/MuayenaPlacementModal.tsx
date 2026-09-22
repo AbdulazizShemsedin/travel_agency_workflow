@@ -99,7 +99,7 @@ export function MuayenaPlacementModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            Directly bind candidate with contract in hand to an international contractor. Enters directly at Selected stage without CV generation or candidate directory listing.
+            Bind candidate directly to a contractor.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +118,7 @@ export function MuayenaPlacementModal({
                 value={contractorName}
                 onChange={(e) => setContractorName(e.target.value)}
                 required
-                className="flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-emerald-700/20"
+                className="select-styled flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100 shadow-xs"
               >
                 <option value="">Select an international partner...</option>
                 {contractors.map((c) => (
@@ -146,8 +146,8 @@ export function MuayenaPlacementModal({
               value={contractFile}
               fileName={contractFile?.name}
               fileSize={contractFile?.size}
-              label="Drop Contract Document"
-              description="PDF or image up to 15MB • Can also be uploaded later"
+              label="Contract Document"
+              description="PDF or image"
               onFileSelect={(file) => setContractFile(file)}
               onRemove={() => setContractFile(null)}
             />

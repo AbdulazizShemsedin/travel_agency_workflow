@@ -10,7 +10,7 @@ import {
   User,
   FileText,
   Loader2,
-  Sparkles,
+  Puzzle,
   ShieldCheck,
   AlertTriangle,
   CheckCircle2,
@@ -435,9 +435,10 @@ export function EmbassyWorkspace({
     {
       id: "no",
       header: "NO",
-      width: "50px",
+      width: "48px",
       align: "center",
       sortable: false,
+      isReadOnly: true,
       cell: (_row, index) => (
         <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">
           {index ?? 1}
@@ -449,6 +450,7 @@ export function EmbassyWorkspace({
       header: "NAME",
       accessorKey: "fullName",
       width: "200px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
@@ -465,6 +467,7 @@ export function EmbassyWorkspace({
       header: "PASSPORT",
       accessorKey: "passportNumber",
       width: "120px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
           {row.passportNumber}
@@ -476,6 +479,7 @@ export function EmbassyWorkspace({
       header: "DESTINATION EMBASSY",
       accessorKey: "destinationCountry",
       width: "160px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-medium text-slate-700 dark:text-zinc-300">
           {row.destinationCountry || "Saudi Arabia"}
@@ -487,6 +491,7 @@ export function EmbassyWorkspace({
       header: "VISA NO",
       accessorKey: "visaNumber",
       width: "150px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.visaNumber || (row.applicant as any)?.visa_number || ""}
@@ -502,6 +507,7 @@ export function EmbassyWorkspace({
       header: "WAKALA STATUS",
       width: "130px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => {
         const isPaid = (row.wakalaStatus || "").toLowerCase() === "paid";
         return (
@@ -521,6 +527,7 @@ export function EmbassyWorkspace({
       id: "submissionDate",
       header: "SUBMISSION DATE",
       width: "140px",
+      editable: true,
       cell: (row) => {
         const subDate = row.embassy?.date_started || row.embassy?.submission_date || "";
         return (
@@ -544,6 +551,7 @@ export function EmbassyWorkspace({
       header: "SPONSOR",
       accessorKey: "sponsorName",
       width: "180px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="text-slate-800 dark:text-zinc-200 uppercase font-medium truncate block max-w-[170px]">
           {row.sponsorName || (row.applicant as any)?.sponsor_name || "—"}
@@ -556,6 +564,7 @@ export function EmbassyWorkspace({
       accessorKey: "duration",
       width: "140px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
           {row.duration ?? 0} DAYS
@@ -568,6 +577,7 @@ export function EmbassyWorkspace({
       accessorKey: "embassyStatus",
       width: "140px",
       align: "center",
+      editable: true,
       cell: (row) => {
         const currentSt = row.embassyStatus || "Pending";
         const normalizedVal =
@@ -602,6 +612,7 @@ export function EmbassyWorkspace({
       header: "REMARK",
       accessorKey: "remark",
       width: "170px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.remark || row.embassy?.rejection_remark || (row.embassy as any)?.notes || ""}
@@ -613,9 +624,9 @@ export function EmbassyWorkspace({
       ),
     },
     {
-      id: "action",
+      id: "final_action",
       header: "ACTION",
-      width: "165px",
+      width: "135px",
       align: "center",
       sortable: false,
       cell: (row) => (
@@ -699,20 +710,8 @@ export function EmbassyWorkspace({
             className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
             title="Load into Chrome Extension for MOFA / Visa Platform autofill"
           >
-            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
-          </Button>
-
-          {/* Edit Dialog Trigger */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditingRow(row)}
-            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            title="Edit Clearance Record"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),
@@ -1038,7 +1037,7 @@ export function EmbassyWorkspace({
             <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-900/50">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4" />
+                  <Puzzle className="h-4 w-4" />
                   Browser Extension Autofill
                 </div>
                 <div className="text-[11px] text-indigo-700/80 dark:text-indigo-400">

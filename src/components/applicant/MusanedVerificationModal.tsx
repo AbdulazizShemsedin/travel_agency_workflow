@@ -147,7 +147,7 @@ export function MusanedVerificationModal({
                 Confirm Musaned Registration
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Confirm or update candidate pre-registration on Musaned to enable CV generation.
+                Confirm Musaned pre-registration.
               </DialogDescription>
             </div>
           </div>

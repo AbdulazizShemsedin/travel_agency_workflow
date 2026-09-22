@@ -9,7 +9,7 @@ import {
   RotateCcw,
   FileDown,
   Edit3,
-  Sparkles,
+  Puzzle,
 } from "lucide-react";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
@@ -366,8 +366,9 @@ export function InjazWorkspace({
     {
       id: "index",
       header: "#",
-      width: "50px",
+      width: "48px",
       align: "center",
+      isReadOnly: true,
       cell: (_, idx) => (
         <span className="text-slate-600 dark:text-zinc-400 font-mono text-xs">
           {(idx ?? 0) + 1}
@@ -379,6 +380,7 @@ export function InjazWorkspace({
       header: "CANDIDATE",
       accessorKey: "fullName",
       width: "210px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex flex-col">
           <span className="font-bold text-slate-900 dark:text-white uppercase truncate text-xs">
@@ -401,6 +403,7 @@ export function InjazWorkspace({
       header: "CONTRACT & VISA",
       accessorKey: "contractNumber",
       width: "170px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex flex-col text-xs">
           <span className="font-mono text-slate-900 dark:text-white font-semibold">
@@ -417,6 +420,7 @@ export function InjazWorkspace({
       header: "SPONSOR (KAFEEL)",
       accessorKey: "sponsorName",
       width: "200px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="truncate block max-w-[190px]">
           <span className="font-semibold text-slate-900 dark:text-white uppercase block truncate text-xs">
@@ -434,6 +438,7 @@ export function InjazWorkspace({
       accessorKey: "duration",
       width: "100px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
           {row.duration ?? 0} DAYS
@@ -445,6 +450,7 @@ export function InjazWorkspace({
       header: "Application number (E-no)",
       accessorKey: "injaz",
       width: "190px",
+      editable: true,
       cell: (row) => {
         const currentInjaz =
           (row.injaz as any)?.injaz_application_id ||
@@ -475,6 +481,7 @@ export function InjazWorkspace({
       header: "APPOINTMENT DATE",
       accessorKey: "appointmentDate",
       width: "135px",
+      editable: true,
       cell: (row) => {
         const currentAppDate =
           (row.injaz as any)?.appointment_date ||
@@ -498,6 +505,7 @@ export function InjazWorkspace({
       header: "STATUS",
       width: "125px",
       align: "center",
+      editable: true,
       cell: (row) => {
         const isComplete =
           row.injaz?.status === "Complete" ||
@@ -529,6 +537,7 @@ export function InjazWorkspace({
       header: "REMARK",
       accessorKey: "remark",
       width: "150px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.remark}
@@ -539,9 +548,9 @@ export function InjazWorkspace({
       ),
     },
     {
-      id: "action",
+      id: "final_action",
       header: "ACTION",
-      width: "165px",
+      width: "135px",
       align: "center",
       sortable: false,
       cell: (row) => (
@@ -592,20 +601,8 @@ export function InjazWorkspace({
             className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
             title="Load into Chrome Extension for MOFA / Musaned autofill"
           >
-            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
-          </Button>
-
-          {/* Edit Dialog Trigger */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditingRow(row)}
-            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            title="Edit Candidate Record"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),

@@ -113,7 +113,7 @@ const CANONICAL_STAGES = [
 const STAGE_DISPLAY_LABELS: Record<string, string> = {
   Draft: "Draft",
   Registered: "Registered",
-  "CV Generated": "Waiting to be Selected",
+  "CV Generated": "CV Generated",
   Selected: "Selected",
   Processing: "Processing (LMIS & Te'shir)",
   Stamped: "Embassy",
@@ -1200,14 +1200,20 @@ export default function ApplicantDetailPage() {
           </div>
         )}
 
-        {/* Stage 3: CV Generated / Waiting to be Selected */}
+        {/* Stage 3: CV Generated */}
         {currentStage === "CV Generated" && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                Stage: Waiting to be Selected (Listed on Foreign Agency Portal)
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  Stage: CV Generated
+                </h3>
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-950/80 px-2.5 py-0.5 text-[11px] font-bold text-purple-900 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-600 animate-ping" />
+                  Waiting to be Selected
+                </span>
+              </div>
               <p className="text-xs text-slate-600 dark:text-zinc-400">
                 {isSaudiApplicant ? (
                   <>
@@ -1219,11 +1225,11 @@ export default function ApplicantDetailPage() {
                         {" "}• Ref: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.musaned_reference_no}</strong>
                       </>
                     ) : null}
-                    . Applicant is listed and waiting to be selected by a foreign partner agency.
+                    . This applicant is published on the Foreign Agency Portal and is waiting to be selected by a partner agency.
                   </>
                 ) : (
                   <>
-                    Applicant CV is created and published for {applicant.destination_country || "Kuwait"}. Partner agencies can view and select this applicant on their portal.
+                    Applicant CV is created and published on the Foreign Agency Portal for {applicant.destination_country || "Kuwait"}. Currently waiting to be selected by a partner agency.
                   </>
                 )}
               </p>
@@ -2045,8 +2051,8 @@ export default function ApplicantDetailPage() {
               <HeartPulse className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
               Record / Update Medical Result
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Selected to Processing Gate: Enter medical screening fitness result (must be FIT) and examination date for candidate to proceed to Processing.
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Record medical fitness and examination date.
             </DialogDescription>
           </DialogHeader>
 
@@ -2155,8 +2161,8 @@ export default function ApplicantDetailPage() {
               <DollarSign className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
               Log Candidate Fees &amp; Clearance Expenses
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Record multiple income entries or operational clearance expenses for candidate {applicant?.full_name || applicantId}. Entries are forwarded directly to the Finance ledger approval queue.
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Log candidate fees and clearance expenses.
             </DialogDescription>
           </DialogHeader>
 
@@ -2298,7 +2304,7 @@ export default function ApplicantDetailPage() {
               Set Country Ban (Ashara Teyezuwal)
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Establish a permanent per-applicant country blacklist. This candidate will be restricted from placement in the specified corridor.
+              Restrict candidate placement for this country corridor.
             </DialogDescription>
           </DialogHeader>
 
@@ -2359,7 +2365,7 @@ export default function ApplicantDetailPage() {
               Manager Override — Lift Country Ban
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Only authorized management accounts can remove a permanent blacklist entry.
+              Remove country restriction with manager override.
             </DialogDescription>
           </DialogHeader>
 
@@ -2415,7 +2421,7 @@ export default function ApplicantDetailPage() {
               Cancel Applicant Process
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Cancelling this applicant will freeze any active placement and linked clearance steps to Cancelled.
+              Cancel applicant and linked clearance steps.
             </DialogDescription>
           </DialogHeader>
 
@@ -2460,7 +2466,7 @@ export default function ApplicantDetailPage() {
               Restart Applicant Case
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Restarting returns this cancelled candidate to the pipeline, automatically incrementing the cycle count.
+              Return cancelled candidate to the pipeline.
             </DialogDescription>
           </DialogHeader>
 

@@ -11,7 +11,7 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
-  Sparkles,
+  PlusCircle,
   ShieldAlert,
   Info,
 } from "lucide-react";
@@ -396,7 +396,7 @@ export function ContractorRateMatrixModal({
                   onClick={() => handleAddCountrySet(presetCountry)}
                   className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
                 >
-                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  <PlusCircle className="h-3.5 w-3.5 mr-1" />
                   Add 4 Standard Rows ({presetCountry})
                 </Button>
               </div>
@@ -685,7 +685,7 @@ export function ContractorRateMatrixModal({
                               onClick={() => handleAddCountrySet("Saudi Arabia")}
                               className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs h-7"
                             >
-                              <Sparkles className="h-3 w-3 mr-1" />
+                              <PlusCircle className="h-3 w-3 mr-1" />
                               Add 4 Default Rows for Saudi Arabia
                             </Button>
                           </div>

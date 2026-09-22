@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Edit3,
-  Sparkles,
+  Puzzle,
 } from "lucide-react";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
@@ -219,9 +219,10 @@ export function WakalaWorkspace({
     {
       id: "no",
       header: "NO",
-      width: "50px",
+      width: "48px",
       align: "center",
       sortable: false,
+      isReadOnly: true,
       cell: (_row, index) => (
         <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">
           {index ?? 1}
@@ -233,6 +234,7 @@ export function WakalaWorkspace({
       header: "NAME",
       accessorKey: "fullName",
       width: "200px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
@@ -249,6 +251,7 @@ export function WakalaWorkspace({
       header: "PASSPORT",
       accessorKey: "passportNumber",
       width: "120px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-medium text-slate-700 dark:text-zinc-300">
           {row.passportNumber}
@@ -260,6 +263,7 @@ export function WakalaWorkspace({
       header: "SPONSOR NAME",
       accessorKey: "sponsorName",
       width: "160px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="truncate block max-w-[150px] font-medium uppercase text-xs">
           {row.sponsorName || "—"}
@@ -271,6 +275,7 @@ export function WakalaWorkspace({
       header: "VISA #",
       accessorKey: "visaNumber",
       width: "120px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono text-slate-700 dark:text-zinc-300 text-xs">
           {row.visaNumber || "—"}
@@ -282,6 +287,7 @@ export function WakalaWorkspace({
       header: "CONTRACT #",
       accessorKey: "contractNumber",
       width: "120px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono text-slate-700 dark:text-zinc-300 text-xs">
           {row.contractNumber || "—"}
@@ -294,6 +300,7 @@ export function WakalaWorkspace({
       accessorKey: "duration",
       width: "130px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200 text-xs">
           {row.duration ?? 0} DAYS
@@ -305,6 +312,7 @@ export function WakalaWorkspace({
       header: "PARTNER AGENCY",
       accessorKey: "lockedContractor",
       width: "150px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="truncate block max-w-[140px] text-slate-600 dark:text-zinc-400 text-xs">
           {row.lockedContractor || "—"}
@@ -317,6 +325,7 @@ export function WakalaWorkspace({
       accessorKey: "wakalaStatus",
       width: "130px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => {
         const isCompleted =
           (row.wakalaStatus || "").toLowerCase().includes("completed") ||
@@ -339,6 +348,7 @@ export function WakalaWorkspace({
       header: "CONTACT",
       accessorKey: "contact",
       width: "130px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="text-slate-700 dark:text-zinc-300 truncate block max-w-[120px] text-xs">
           {row.contact || "Unassigned"}
@@ -346,9 +356,9 @@ export function WakalaWorkspace({
       ),
     },
     {
-      id: "action",
+      id: "final_action",
       header: "ACTION",
-      width: "140px",
+      width: "90px",
       align: "center",
       sortable: false,
       cell: (row) => (
@@ -375,20 +385,8 @@ export function WakalaWorkspace({
             className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
             title="Load into Chrome Extension for Musaned / Wakala verification"
           >
-            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
-          </Button>
-
-          {/* Edit Drawer Trigger */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedRow(row)}
-            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            title="Inspect Wakala Details"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),

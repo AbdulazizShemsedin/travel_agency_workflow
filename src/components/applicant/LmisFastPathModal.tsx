@@ -181,9 +181,8 @@ export function LmisFastPathModal({
             }}
             className="space-y-4"
           >
-            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
-              Updates narrow allowlisted fields captured specifically at the LMIS clearance gate.
-              Values are validated and stored on the Candidate record without modifying overall applicant lifecycle status.
+            <p className="text-xs text-slate-500 dark:text-zinc-400">
+              Update LMIS clearance fields for candidate.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -227,7 +226,7 @@ export function LmisFastPathModal({
                   id="coc_status"
                   value={cocStatus}
                   onChange={(e) => setCocStatus(e.target.value)}
-                  className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs"
+                  className="select-styled w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-white dark:bg-[#141418] text-xs"
                 >
                   <option value="Not Started">Not Started (Not Globally Mandatory)</option>
                   <option value="Pending">Pending Evaluation</option>

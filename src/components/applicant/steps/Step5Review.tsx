@@ -91,7 +91,7 @@ export function Step5Review({
                   variant={isRegistered ? "success" : "neutral"}
                   dotColor={isRegistered ? "bg-emerald-600" : "bg-slate-500"}
                 >
-                  {applicantState === "CV Generated" ? "Waiting to be Selected" : applicantState}
+                  {applicantState}
                 </Badge>
                 <span className="rounded-md bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                   {values.applicant_type || "Standard"}

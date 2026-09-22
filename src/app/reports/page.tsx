@@ -519,7 +519,7 @@ export default function ReportsPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Authoritative operational funnels, daily work logs, staff SLAs, financial ledgers, and aging queues.
+            Operational funnels, staff logs, and financial ledgers.
           </p>
         </div>
 
@@ -789,7 +789,7 @@ export default function ReportsPage() {
                 </span>
               </CardTitle>
               <CardDescription className="text-xs">
-                Candidate progression counts across each lifecycle stage computed authoritatively.
+                Candidate progression by stage.
               </CardDescription>
             </CardHeader>
 
@@ -857,7 +857,7 @@ export default function ReportsPage() {
                 </span>
               </CardTitle>
               <CardDescription className="text-xs">
-                Per-officer operational completions recorded across clearance gates, ticketing, and departures.
+                Officer completions by stage.
               </CardDescription>
             </CardHeader>
 
@@ -926,7 +926,7 @@ export default function ReportsPage() {
                 </Badge>
               </CardTitle>
               <CardDescription className="text-xs">
-                Placements exceeding 30 days since candidate's Musaned contract upload without departure confirmation.
+                Placements exceeding 30-day departure SLA.
               </CardDescription>
             </CardHeader>
 
@@ -1260,7 +1260,7 @@ export default function ReportsPage() {
                         Complete Financial Transactions Ledger
                       </CardTitle>
                       <CardDescription className="text-xs text-slate-500 dark:text-zinc-400">
-                        Authoritative ledger of all operational expenses, stage fees, and incomes across every status.
+                        Complete ledger of expenses and income.
                       </CardDescription>
                     </div>
 
@@ -1547,7 +1547,7 @@ export default function ReportsPage() {
                   </div>
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Applicant transaction expenses and receipts awaiting Finance Manager audit and formal approval.
+                  Transactions awaiting finance approval.
                 </CardDescription>
               </CardHeader>
 

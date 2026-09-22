@@ -83,51 +83,36 @@ export async function listEmployeesV2(): Promise<V2EmployeeRecord[]> {
 
 /**
  * Creates a new system employee account with specified credentials and multi-role assignments.
+ * Backed by authoritative agency_tracking.employee_api.create_employee.
  */
 export async function createEmployeeV2(payload: CreateEmployeePayload): Promise<V2EmployeeRecord> {
+  const created = await createEmployeeApiV2({
+    email: payload.email,
+    first_name: payload.first_name,
+    last_name: payload.last_name,
+    phone: payload.phone,
+    password: payload.password,
+    roles: payload.roles,
+    send_welcome_email: payload.send_welcome_email,
+  });
+
   const email = payload.email.trim().toLowerCase();
   const firstName = payload.first_name.trim();
   const lastName = payload.last_name?.trim() || "";
   const phone = payload.phone?.trim() || "";
-  const password = payload.password?.trim() || "AgencyStaff123!";
 
-  // Ensure Desk User role is present for UI access
-  const roleSet = new Set(payload.roles);
-  roleSet.add("Desk User");
-
-  const doc = {
-    doctype: "User",
-    email,
-    first_name: firstName,
-    last_name: lastName,
-    phone,
-    mobile_no: phone,
-    new_password: password,
-    send_welcome_email: payload.send_welcome_email ? 1 : 0,
-    roles: Array.from(roleSet).map((role) => ({
-      doctype: "Has Role",
-      role,
-    })),
-  };
-
-  const res = await requestV2<any>("/api/method/frappe.client.insert", {
-    method: "POST",
-    body: { doc },
-  });
-
-  const created = res?.message || res;
   return {
     name: created.name || email,
     email: created.email || email,
     full_name: created.full_name || `${firstName} ${lastName}`.trim(),
     first_name: created.first_name || firstName,
-    last_name: created.last_name || lastName,
-    phone: created.phone || phone,
-    mobile_no: created.mobile_no || phone,
-    enabled: created.enabled ?? 1,
+    last_name: created.last_name || (lastName ? lastName : null),
+    phone: created.phone || (phone ? phone : null),
+    mobile_no: created.mobile_no || (phone ? phone : null),
+    enabled: typeof created.enabled === "number" ? created.enabled : created.enabled ? 1 : 0,
     user_type: created.user_type || "System User",
     creation: created.creation || new Date().toISOString(),
-    roles: Array.from(roleSet),
+    roles: Array.isArray(created.roles) ? created.roles : payload.roles,
   };
 }
 
@@ -145,20 +130,13 @@ export async function updateEmployeeRolesV2(
 
 /**
  * Resets employee login password.
+ * Uses agency_tracking.employee_api.reset_employee_password.
  */
 export async function resetEmployeePasswordV2(
   userEmail: string,
   newPassword: string
 ): Promise<void> {
-  await requestV2("/api/method/frappe.client.set_value", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      name: userEmail,
-      fieldname: "new_password",
-      value: newPassword.trim(),
-    },
-  });
+  await resetEmployeePasswordApiV2(userEmail, newPassword);
 }
 
 /**
@@ -174,15 +152,10 @@ export async function toggleEmployeeStatusV2(
 
 /**
  * Permanently removes an employee account.
+ * Uses agency_tracking.employee_api.delete_employee.
  */
 export async function deleteEmployeeV2(userEmail: string): Promise<void> {
-  await requestV2("/api/method/frappe.client.delete", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      name: userEmail,
-    },
-  });
+  await deleteEmployeeApiV2(userEmail);
 }
 
 /**

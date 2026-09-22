@@ -15,7 +15,7 @@ import {
   RotateCcw,
   Edit3,
   FileDown,
-  Sparkles,
+  Puzzle,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -416,9 +416,10 @@ export function LMISWorkspace({
     {
       id: "no",
       header: "NO",
-      width: "45px",
+      width: "48px",
       align: "center",
       sortable: false,
+      isReadOnly: true,
       cell: (_row, index) => (
         <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">
           {index ?? 1}
@@ -430,6 +431,7 @@ export function LMISWorkspace({
       header: "NAME",
       accessorKey: "fullName",
       width: "190px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
@@ -446,6 +448,7 @@ export function LMISWorkspace({
       header: "PASSPORT",
       accessorKey: "passportNumber",
       width: "115px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-medium text-slate-700 dark:text-zinc-300">
           {row.passportNumber}
@@ -457,6 +460,7 @@ export function LMISWorkspace({
       header: "LABOR ID",
       accessorKey: "laborId",
       width: "135px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.laborId}
@@ -471,6 +475,7 @@ export function LMISWorkspace({
       header: "NATIONAL ID",
       accessorKey: "nationalId",
       width: "135px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.nationalId || (row.applicant as any)?.national_id}
@@ -485,6 +490,7 @@ export function LMISWorkspace({
       header: "EMERGENCY CONTACT",
       accessorKey: "emergencyContactName",
       width: "150px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.emergencyContactName || (row.applicant as any)?.emergency_contact_name}
@@ -502,6 +508,7 @@ export function LMISWorkspace({
       header: "EMERGENCY PHONE",
       accessorKey: "emergencyContactPhone",
       width: "135px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.emergencyContactPhone || (row.applicant as any)?.emergency_contact_phone}
@@ -519,6 +526,7 @@ export function LMISWorkspace({
       accessorKey: "cocStatus",
       width: "120px",
       align: "center",
+      editable: true,
       cell: (row) => (
         <ExcelSelect
           value={row.cocStatus || (row.applicant as any)?.coc_status || "Not Started"}
@@ -549,6 +557,7 @@ export function LMISWorkspace({
       header: "CONTRACT DATE",
       accessorKey: "contractDate",
       width: "115px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="text-slate-700 dark:text-zinc-300 font-medium">
           {row.contractDate || "—"}
@@ -561,6 +570,7 @@ export function LMISWorkspace({
       accessorKey: "duration",
       width: "100px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-bold text-slate-800 dark:text-zinc-200">
           {row.duration ?? 0} DAYS
@@ -573,6 +583,7 @@ export function LMISWorkspace({
       accessorKey: "medicalStatus",
       width: "90px",
       align: "center",
+      isReadOnly: true,
       cell: (row) => {
         const raw = (row.medicalStatus || "").toUpperCase().trim();
         const isFit =
@@ -608,6 +619,7 @@ export function LMISWorkspace({
       accessorKey: "lmisStatus",
       width: "125px",
       align: "center",
+      editable: true,
       cell: (row) => (
         <ExcelSelect
           value={row.lmisStatus || "Pending"}
@@ -643,6 +655,7 @@ export function LMISWorkspace({
       header: "ISSUE DATE",
       accessorKey: "issueDate",
       width: "125px",
+      editable: true,
       cell: (row) => (
         <ExcelDateInput
           value={row.issueDate}
@@ -656,6 +669,7 @@ export function LMISWorkspace({
       header: "REMARK",
       accessorKey: "remark",
       width: "150px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.remark}
@@ -666,9 +680,9 @@ export function LMISWorkspace({
       ),
     },
     {
-      id: "action",
+      id: "final_action",
       header: "ACTION",
-      width: "165px",
+      width: "135px",
       align: "center",
       sortable: false,
       cell: (row) => (
@@ -724,20 +738,8 @@ export function LMISWorkspace({
             className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
             title="Load into Chrome Extension for LMIS / Ministry autofill"
           >
-            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
-          </Button>
-
-          {/* Edit Dialog Trigger */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditingRow(row)}
-            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            title="Edit LMIS Record"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),

@@ -120,7 +120,7 @@ export default function MyReservedCandidatesPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Applicants selected and reserved by your foreign agency. Click any row or Details button to view full candidate profile.
+              Candidates reserved by your agency.
             </p>
           </div>
 

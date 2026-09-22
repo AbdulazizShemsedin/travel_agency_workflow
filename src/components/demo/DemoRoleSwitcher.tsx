@@ -4,7 +4,7 @@ import * as React from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isDemoMode, setDemoModeOverride } from "@/lib/config/env";
 import { DEMO_USERS } from "@/lib/demo/users";
-import { Shield, Sparkles, CheckCircle2, ChevronDown } from "lucide-react";
+import { Shield, CheckCircle2, ChevronDown } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -38,7 +38,7 @@ export function DemoRoleSwitcher() {
             type="button"
             className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 text-xs font-semibold transition cursor-pointer shadow-sm"
           >
-            <Sparkles className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+            <Shield className="h-3.5 w-3.5 text-amber-500" />
             <span className="hidden md:inline font-mono text-[11px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
               Demo:
             </span>

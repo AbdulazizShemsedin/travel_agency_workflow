@@ -22,7 +22,6 @@ import {
   Printer,
   AlertCircle,
   ExternalLink,
-  Sparkles,
   Plane,
   Shield,
   Stamp,
@@ -411,7 +410,7 @@ export default function PlacementDocumentCenterPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Upload, inspect, and parse employment contracts and Kuwait eVisas directly to the active Placement record.
+            Upload and verify placement contracts and visas.
           </p>
         </div>
 
@@ -562,7 +561,7 @@ export default function PlacementDocumentCenterPage() {
                   )}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Upload signed employment contract. The system automatically parses dates, salary, and sponsor details from the uploaded document.
+                  Upload signed contract to extract terms.
                 </CardDescription>
               </CardHeader>
 
@@ -577,7 +576,7 @@ export default function PlacementDocumentCenterPage() {
                   isLoading={isContractUploading}
                   loadingText="Processing and parsing contract document..."
                   label="Employment Contract Document"
-                  description="Drag & drop signed contract PDF/scan or paste image (Ctrl+V) • Max 15MB"
+                  description="PDF or image"
                   onFileSelect={(file) => {
                     setContractFile(file);
                     setContractPreviewUrl(URL.createObjectURL(file));
@@ -625,7 +624,7 @@ export default function PlacementDocumentCenterPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <FileCheck2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       Extracted Contract Terms
                     </CardTitle>
                     <CardDescription className="text-xs">
@@ -917,7 +916,7 @@ export default function PlacementDocumentCenterPage() {
                       )}
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Upload Kuwait eVisa document. The system automatically extracts visa number, validity dates, and sponsor civil ID.
+                      Upload Kuwait eVisa to extract details.
                     </CardDescription>
                   </CardHeader>
 
@@ -932,7 +931,7 @@ export default function PlacementDocumentCenterPage() {
                       isLoading={isVisaUploading}
                       loadingText="Processing and parsing Kuwait eVisa..."
                       label="Kuwait eVisa Document"
-                      description="Drag & drop visa document PDF/scan or paste image (Ctrl+V) • Max 15MB"
+                      description="PDF or image"
                       onFileSelect={(file) => {
                         setVisaFile(file);
                         setVisaPreviewUrl(URL.createObjectURL(file));
@@ -978,7 +977,7 @@ export default function PlacementDocumentCenterPage() {
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <FileCheck2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       Extracted Visa Information
                     </CardTitle>
                     <CardDescription className="text-xs">

@@ -1,10 +1,26 @@
 # MASTER SYSTEM STATUS — V2 CONFORMANCE TRACKER
 
 **Target Branch**: `production_version_non_mock`  
-**Backend Authority**: `https://travelagency-production-b48d.up.railway.app`  
+**Backend Authority**: `https://agencytracking-production-2a06.up.railway.app`  
 **Baseline Specification**: `FINAL_V2_CONFORMANCE_MATRIX.md` & `V2_FRONTEND_TODO.md`  
 **Operating Policy**: Real Backend Only • No Demo Mode • No Mock Business Data • No V1 Fallbacks  
-**Last Updated**: 2026-09-19T17:50:00Z
+**Last Updated**: 2026-09-21T11:25:00Z
+
+---
+
+## 9. Conformance to Backend Changelog (2026-09-11 through 2026-09-19)
+- **Purged N+1 Enrichment Bursts**: Completely removed the post-query and retry `frappe.client.get` loops in `src/app/api/method/[...slug]/route.ts` for `list_placements` and `list_portal_candidates`. Rely exclusively on the backend batched joined fields (`full_name`, `passport_number`, `photograph`, `photo_full_body`, `target_job`, `nationality`, `gender`, `religion`, `age`, `date_of_birth`).
+- **Full CV-Equivalent Candidate Cards**: Removed restrictive filters from `src/components/agent/CandidateCard.tsx` and mapped candidate fields in `src/lib/api/v2/portal.ts` and `src/types/applicant.ts`. Candidate cards now display passport number badges, marital status, children, languages, and skills tags without needing single-candidate drilldown.
+- **Async Passport OCR Integration**: Confirmed `parsePassportFileV2` in `src/lib/api/v2/documents.ts` uses the asynchronous `enqueue_parse_passport_file` + polling against `background_jobs.get_job_status`. Supports uncropped photos and surfaces `needs_passport_review` flags.
+- **Applicant `place_of_birth` Extraction**: Confirmed dedicated `place_of_birth` field in intake and edit forms (`Step1PersonalInfo.tsx`, `ApplicantRegistrationForm.tsx`).
+- **Complaint Human-Facing Display Number**: Verified `#${display_no}` is used across list rows, detail modals, and headers while maintaining `name` (`CMP-#####`) for API mutations.
+- **Batch Write-Offs & Invoice PDF Total Math**: Integrated `listBatchWriteOffsV2` (`agency_tracking.finance_api.list_batch_write_offs`). Added clear guidance explaining that the printed invoice bottom-line `TOTAL = Batch Total + Requested Advance + Previous Unpaid Arrears − Write-Offs`, while stored batch balance tracks line items.
+- **Automated Corridor Fees & Finance Button**: Replaced "Add Payment" in `src/app/expenses-income/page.tsx` with "Log Income / Expense" for ad-hoc costs and advance receipts; ensured clearance step types are not manually double-counted as expenses.
+- **Saudi Wakala Gate & Manager Override**: Embassy submission and stamping in `EmbassyWorkspace.tsx` enforce the paid Wakala rule with an explicit `override_reason` dialog for Managers/Admins.
+- **Honest 417 Error Handling**: `cv.ts` cleanly propagates 417 `ValidationError` when PDF generation fails instead of returning fake stubs.
+- **Excel Exports**: Sourced formatted multi-column `.xlsx` exports via `export_transactions_xlsx` and updated `export_commissions_xlsx`.
+- **Clearance Step Human-Error Correction Toolkit**: Supported `date_completed` backdating on `complete_clearance_step`, `reopen_clearance_step` with audit reason, `record_police_ashara`, `record_other_payment`, `record_injaz_payment` status toggling, and terminal data corrections.
+- **Staff Roster RPC**: Replaced direct `frappe.client.get_list("User")` calls with `agency_tracking.employee_api.list_employee_roster`.
 
 ---
 

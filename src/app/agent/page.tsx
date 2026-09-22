@@ -11,7 +11,6 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
-  Sparkles,
   Building2,
   ShieldCheck,
   UserCheck,
@@ -382,7 +381,7 @@ export default function AgentDiscoveryPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Browse pre-screened candidates with verified GAMCA medical clearance, passport OCR validation, and bilingual profiles.
+              Browse verified candidates ready for placement.
             </p>
           </div>
 

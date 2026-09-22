@@ -187,7 +187,7 @@ export default function AgentCommissionPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Bilateral commission accounts, departed candidate billings, and formal invoice statements for {activeContractor}.
+              Commission accounts and billing statements.
             </p>
           </div>
 
@@ -269,7 +269,7 @@ export default function AgentCommissionPage() {
               Official Accounting Statements
             </h3>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Export and download certified billing reports in Excel or PDF format.
+              Export billing reports in Excel or PDF.
             </p>
           </div>
 

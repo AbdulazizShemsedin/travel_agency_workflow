@@ -67,7 +67,6 @@ export default function DashboardPage() {
   const { data: clearanceStepsData = [] } = useQuery({
     queryKey: ["dashboard-clearance-steps"],
     queryFn: () => listMyClearanceStepsV2(),
-    enabled: Boolean(canAccessClearances),
     staleTime: 30000,
     retry: false,
   });
@@ -75,6 +74,24 @@ export default function DashboardPage() {
   const isLoading = isApplicantsLoading || isPlacementsLoading;
 
   const applicants = rawApplicants as V2ApplicantDetails[];
+
+  // Live backend truth: determine which placements have finished all clearance steps
+  const clearedPlacementNames = React.useMemo(() => {
+    const doneStatuses = new Set(["complete", "issued", "stamped"]);
+    const stepsByPlc = new Map<string, Array<any>>();
+    for (const s of clearanceStepsData) {
+      if (!s.placement) continue;
+      if (!stepsByPlc.has(s.placement)) stepsByPlc.set(s.placement, []);
+      stepsByPlc.get(s.placement)!.push(s);
+    }
+    const set = new Set<string>();
+    for (const [plcName, steps] of stepsByPlc.entries()) {
+      if (steps.length > 0 && steps.every((s) => doneStatuses.has(String(s.status || "").toLowerCase()))) {
+        set.add(plcName);
+      }
+    }
+    return set;
+  }, [clearanceStepsData]);
 
   // Join active placement onto applicants to resolve true lifecycle state
   const applicantRows = React.useMemo(() => {
@@ -102,9 +119,10 @@ export default function DashboardPage() {
       copy.applicant_state = derivedStage;
       copy.active_placement = plc.name;
       copy.placement_status = plc.status;
+      copy.is_cleared = clearedPlacementNames.has(plc.name);
       return copy;
     });
-  }, [applicants, placementsData]);
+  }, [applicants, placementsData, clearedPlacementNames]);
 
   // Calculate dynamic stats matching authoritative live database state
   const totalCount = applicantRows.length;
@@ -138,7 +156,15 @@ export default function DashboardPage() {
     return s !== "Draft" && s !== "Departed" && s !== "Cancelled";
   }).length;
 
-  const completedCount = stampedCount + ticketedCount;
+  // Completed (but not departed): Stamped, Ticketed, or all clearance steps completed prior to departure
+  const completedCount = applicantRows.filter((a) => {
+    const s = String(a.status || a.applicant_state || "");
+    if (s === "Departed" || s === "Cancelled") return false;
+    if (s === "Stamped" || s === "Ticketed") return true;
+    if ((a as any).ticket_number) return true;
+    const plcName = (a as any).active_placement;
+    return Boolean(plcName && clearedPlacementNames.has(plcName));
+  }).length;
 
   // Sub-stream breakdown for parallel Processing stage from live clearance steps
   const { lmisActiveCount, injazActiveCount } = React.useMemo(() => {
@@ -338,12 +364,12 @@ export default function DashboardPage() {
     },
     {
       step: 2,
-      title: "Waiting to be Selected",
+      title: "CV Generated",
       count: cvCount,
-      badge: "Waiting to be Selected",
+      badge: "CV Generated",
       color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 hover:border-purple-400 dark:hover:border-purple-700",
       accent: "bg-purple-600",
-      link: "/applicants?status=Waiting to be Selected",
+      link: "/applicants?status=CV Generated",
     },
     {
       step: 3,
@@ -488,7 +514,7 @@ export default function DashboardPage() {
         >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-              Completed / Cleared
+              Completed (but not departed)
             </CardDescription>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
               <CheckCircle2 className="h-4.5 w-4.5" />

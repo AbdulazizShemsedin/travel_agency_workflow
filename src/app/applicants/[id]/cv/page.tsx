@@ -14,7 +14,6 @@ import {
   Printer,
   ShieldCheck,
   CheckCircle2,
-  Sparkles,
   MapPin,
   Calendar,
   Globe2,
@@ -391,11 +390,11 @@ export default function CandidateCvPreviewPage() {
       {isDraft && (
         <div className="print:hidden rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-start gap-2.5">
-            <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <FileCheck2 className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <strong className="text-sm font-bold text-amber-950 dark:text-amber-100">Draft Candidate Profile</strong>
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
-                Candidate profile is currently in Draft status. Complete KYC registration and satisfy field-floor requirements before compiling the official CV dossier.
+                Complete candidate registration before compiling CV.
               </p>
             </div>
           </div>
@@ -414,7 +413,7 @@ export default function CandidateCvPreviewPage() {
       {applicant.applicant_state === "Registered" && (
         <div className="print:hidden rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-4 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-start gap-2.5">
-            <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <strong className="text-sm font-bold text-emerald-950 dark:text-emerald-100">Registered Candidate Ready</strong>
               <p className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-300">

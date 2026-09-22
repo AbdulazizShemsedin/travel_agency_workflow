@@ -4,7 +4,7 @@ function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://travelagency-production-b48d.up.railway.app";
+    "https://agencytracking-production-2a06.up.railway.app";
 
   const headers: Record<string, string> = {
     Accept: "*/*",
@@ -50,7 +50,8 @@ export async function GET(
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
   const { slug } = await params;
-  const filePath = slug.map(encodeURIComponent).join("/");
+  const rawPath = slug.join("/");
+  const encodedPath = slug.map(encodeURIComponent).join("/");
   const config = getFrappeConfig(req);
 
   const systemHeaders: Record<string, string> = { Accept: "*/*" };
@@ -58,14 +59,18 @@ export async function GET(
     systemHeaders["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
   }
 
-  // Candidates for URLs to attempt (including authoritative download_file RPC)
+  // Candidates for URLs to attempt (authoritative download_file RPC with raw & encoded paths, then direct URLs)
   const attempts = [
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${filePath}`)}`, headers: systemHeaders },
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${filePath}`)}`, headers: systemHeaders },
-    { url: `${config.url}/private/files/${filePath}`, headers: config.headers },
-    { url: `${config.url}/private/files/${filePath}`, headers: systemHeaders },
-    { url: `${config.url}/files/${filePath}`, headers: systemHeaders },
-    { url: `${config.url}/files/${filePath}`, headers: config.headers },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`, headers: config.headers },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`, headers: config.headers },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${encodedPath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${encodedPath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/private/files/${encodedPath}`, headers: config.headers },
+    { url: `${config.url}/private/files/${encodedPath}`, headers: systemHeaders },
+    { url: `${config.url}/files/${encodedPath}`, headers: systemHeaders },
+    { url: `${config.url}/files/${encodedPath}`, headers: config.headers },
   ];
 
   try {
@@ -80,12 +85,19 @@ export async function GET(
           const contentType = res.headers.get("content-type") || "application/octet-stream";
           const buffer = await res.arrayBuffer();
 
+          const responseHeaders: Record<string, string> = {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+            "Accept-Ranges": "bytes",
+          };
+          const contentDisposition = res.headers.get("content-disposition");
+          if (contentDisposition) {
+            responseHeaders["Content-Disposition"] = contentDisposition;
+          }
+
           const response = new NextResponse(buffer, {
             status: 200,
-            headers: {
-              "Content-Type": contentType,
-              "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
-            },
+            headers: responseHeaders,
           });
           const setCookie = res.headers.get("set-cookie");
           if (setCookie) response.headers.set("set-cookie", setCookie);

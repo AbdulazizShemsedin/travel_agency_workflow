@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, Sparkles, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste } from "lucide-react";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { listApplicantsV2, checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
@@ -477,17 +477,15 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     Passport Quick-Scan & Auto-Fill
                   </h3>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                    <Sparkles className="h-3 w-3" /> Auto-Fill Enabled
+                    <ScanLine className="h-3 w-3" /> Auto-Fill Enabled
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-zinc-400 max-w-2xl">
-                  Upload candidate passport photo or paste the 2 lines of code from the bottom. The system will automatically read them and fill in Name, Passport Number, Date of Birth, Gender, and Expiry Date.
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Upload passport scan or paste code to auto-fill details.
                 </p>
-                <div className="flex items-start sm:items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1.5 mt-1 max-w-2xl">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5 sm:mt-0" />
-                  <span>
-                    <strong>Important Note:</strong> Data extraction may not produce accurate results if the passport photo is blurry, dark, rotated, or low quality. Please review and verify all auto-filled fields before proceeding.
-                  </span>
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-900/60 rounded-lg px-2.5 py-1 mt-1">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Ensure passport photo is clear and well-lit.</span>
                 </div>
                 {errors.passport_scan && (
                   <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 rounded-lg px-2.5 py-1.5 mt-2">
@@ -710,7 +708,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
             <div className="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 p-2.5 text-[11px] text-amber-900 dark:text-amber-300 space-y-1">
               <div className="font-semibold flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>Format Guidelines:</span>
               </div>
               <p className="text-amber-800/90 dark:text-amber-300/80 pl-5 leading-relaxed">

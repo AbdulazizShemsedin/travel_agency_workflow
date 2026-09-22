@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   Edit3,
   FileDown,
-  Sparkles,
+  Puzzle,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -454,9 +454,10 @@ export function DepartureWorkspace({
     {
       id: "no",
       header: "NO",
-      width: "50px",
+      width: "48px",
       align: "center",
       sortable: false,
+      isReadOnly: true,
       cell: (_row, index) => (
         <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">
           {index ?? 1}
@@ -468,6 +469,7 @@ export function DepartureWorkspace({
       header: "NAME",
       accessorKey: "fullName",
       width: "200px",
+      isReadOnly: true,
       cell: (row) => (
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
@@ -484,6 +486,7 @@ export function DepartureWorkspace({
       header: "PASSPORT",
       accessorKey: "passportNumber",
       width: "120px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="font-mono font-medium text-slate-700 dark:text-zinc-300">
           {row.passportNumber}
@@ -494,6 +497,7 @@ export function DepartureWorkspace({
       id: "ticketNumber",
       header: "TICKET NUMBER",
       width: "150px",
+      editable: true,
       cell: (row) => {
         const val =
           row.ticketNumber && row.ticketNumber !== "—"
@@ -514,6 +518,7 @@ export function DepartureWorkspace({
       id: "flightDate",
       header: "FLIGHT DATE",
       width: "140px",
+      editable: true,
       cell: (row) => {
         const fDate = row.flightDate || (row.ticket as any)?.flight_date || "";
         return (
@@ -529,6 +534,7 @@ export function DepartureWorkspace({
       id: "flightTime",
       header: "FLIGHT TIME",
       width: "110px",
+      editable: true,
       cell: (row) => {
         const fTime =
           row.flightTime ||
@@ -551,6 +557,7 @@ export function DepartureWorkspace({
       header: "MEDICAL 2 RESULT",
       width: "130px",
       align: "center",
+      editable: true,
       cell: (row) => {
         const med2 =
           (row.departure as any)?.medical_2_result ||
@@ -581,6 +588,7 @@ export function DepartureWorkspace({
       header: "DEPARTURE STATUS",
       width: "140px",
       align: "center",
+      editable: true,
       cell: (row) => {
         const isDep = Boolean((row.departure as any)?.departed_on);
         const currentVal = isDep ? "Departed" : "Pending";
@@ -610,6 +618,7 @@ export function DepartureWorkspace({
       header: "SPONSOR NAME",
       accessorKey: "sponsorName",
       width: "160px",
+      isReadOnly: true,
       cell: (row) => (
         <span className="text-slate-900 dark:text-white uppercase font-semibold truncate block max-w-[150px]">
           {row.sponsorName || "—"}
@@ -620,6 +629,7 @@ export function DepartureWorkspace({
       id: "remark",
       header: "REMARK",
       width: "160px",
+      editable: true,
       cell: (row) => (
         <ExcelTextInput
           value={row.remark || ""}
@@ -631,9 +641,9 @@ export function DepartureWorkspace({
       ),
     },
     {
-      id: "action",
+      id: "final_action",
       header: "ACTION",
-      width: "165px",
+      width: "135px",
       align: "center",
       sortable: false,
       cell: (row) => (
@@ -689,20 +699,8 @@ export function DepartureWorkspace({
             className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
             title="Load into Chrome Extension for flight manifest & eVisa checks"
           >
-            <Sparkles className="h-3 w-3 text-indigo-500" />
+            <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
-          </Button>
-
-          {/* Edit Dialog Trigger */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditingRow(row)}
-            className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50"
-            title="Edit Departure Record"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
           </Button>
         </div>
       ),

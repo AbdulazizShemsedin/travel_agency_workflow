@@ -171,7 +171,7 @@ export function AppNavbar({
             }
           }}
           title="Log Out of System?"
-          description="Are you sure you want to log out? Any unsaved changes on open screens will be lost."
+          description="Any unsaved progress will be lost."
           confirmLabel="Log Out"
           cancelLabel="Stay Signed In"
           variant="danger"

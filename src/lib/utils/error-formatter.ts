@@ -547,6 +547,23 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     /already has (National ID|Passport Number|Labor ID|Labour ID)/i.test(text) ||
     /DuplicateEntryError/i.test(text)
   ) {
+    // User / Employee account duplicate email detection
+    const userMatch = text.match(/User\s+['"]?([^'"]+?)['"]?\s+already exists/i);
+    if (userMatch) {
+      const identifier = userMatch[1].trim();
+      return `An employee account with the email '${identifier}' already exists. Please use a different email address or edit the existing account.`;
+    }
+
+    const emailMatch = text.match(/Duplicate entry '([^']+)' for key '(?:PRIMARY|email)'/i);
+    if (emailMatch && emailMatch[1].includes("@")) {
+      return `An employee account with the email '${emailMatch[1]}' already exists. Please use a different email address or edit the existing account.`;
+    }
+
+    const duplicateEntryEmailMatch = text.match(/Duplicate entry '([^']+)'/i);
+    if (duplicateEntryEmailMatch && duplicateEntryEmailMatch[1].includes("@")) {
+      return `An employee account with the email '${duplicateEntryEmailMatch[1]}' already exists. Please use a different email address or edit the existing account.`;
+    }
+
     // Exact Frappe Applicant.validate_uniqueness() exception:
     // e.g. "Another Applicant (APP-00027) already has National ID 'FAN-999888111'."
     const specificApplicantMatch = text.match(

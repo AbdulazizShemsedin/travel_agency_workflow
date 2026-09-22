@@ -13,7 +13,7 @@ export default function SettingsPage() {
           System Settings
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Configure agency portal parameters, default notifications, and ERP integration.
+          Configure agency preferences and thresholds.
         </p>
       </div>
 

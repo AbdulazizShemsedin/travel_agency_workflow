@@ -9,7 +9,6 @@ import {
   Heart,
   HeartPulse,
   MapPin,
-  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -89,7 +88,7 @@ export function CandidateFilters({
   ];
 
   const EXPERIENCES = [
-    { value: "All Experience", label: "Experience (All)", icon: <Sparkles className="h-3.5 w-3.5 text-slate-400" /> },
+    { value: "All Experience", label: "Experience (All)", icon: <Briefcase className="h-3.5 w-3.5 text-slate-400" /> },
     { value: "Experienced", label: "Experienced (Ex-GCC)" },
     { value: "First Time", label: "First Time / Fresher" },
   ];

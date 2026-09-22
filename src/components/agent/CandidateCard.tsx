@@ -10,7 +10,6 @@ import {
   Eye,
   CheckCircle2,
   Loader2,
-  Sparkles,
   User,
   HeartPulse,
 } from "lucide-react";
@@ -102,9 +101,16 @@ export function CandidateCard({
             <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors uppercase">
               {candidate.full_name}
             </h3>
-            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-400 mt-0.5">
-              {candidate.job_applied || "Housemaid"}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">
+                {candidate.job_applied || "Housemaid"}
+              </span>
+              {candidate.passport_number && (
+                <span className="font-mono text-[10px] font-bold text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-[#1a1a22] px-1.5 py-0.2 rounded border border-slate-200/80 dark:border-[#2a2a35]">
+                  {candidate.passport_number}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-[#1c1c22] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
@@ -182,6 +188,27 @@ export function CandidateCard({
             return "N/A";
           })();
 
+          const maritalDisplay = candidate.marital_status || "Single";
+          const childrenCount = Number(candidate.children);
+          const maritalWithChildren =
+            childrenCount > 0
+              ? `${maritalDisplay} (${childrenCount} ch.)`
+              : maritalDisplay;
+
+          // Extract top verified skills
+          const c = candidate as any;
+          const topSkills: string[] = [];
+          if (c.skill_cooking || c.skill_arabic_cooking) topSkills.push("Cooking");
+          if (c.skill_cleaning) topSkills.push("Cleaning");
+          if (c.skill_baby_sitting || c.skill_babysitting || c.skill_children_care) topSkills.push("Babysitting");
+          if (c.skill_washing || c.skill_ironing) topSkills.push("Laundry");
+          if (c.skill_elderly_care) topSkills.push("Elderly Care");
+          if (c.skill_sewing) topSkills.push("Sewing");
+          if (topSkills.length === 0) {
+            if (c.arabic_level && c.arabic_level.toLowerCase() !== "none") topSkills.push(`Arabic: ${c.arabic_level}`);
+            if (c.english_level && c.english_level.toLowerCase() !== "none") topSkills.push(`English: ${c.english_level}`);
+          }
+
           return (
             <>
               <div className="mt-3.5 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 dark:bg-[#17171c] p-2.5 text-xs text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-[#222229]">
@@ -193,11 +220,21 @@ export function CandidateCard({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <Globe2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                   <span className="truncate">
                     Religion:{" "}
                     <strong className="text-slate-900 dark:text-white">
                       {candidate.religion || "Not Specified"}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">
+                    Marital:{" "}
+                    <strong className="text-slate-900 dark:text-white">
+                      {maritalWithChildren}
                     </strong>
                   </span>
                 </div>
@@ -219,7 +256,34 @@ export function CandidateCard({
                     <strong className="text-slate-900 dark:text-white">{expDisplay}</strong>
                   </span>
                 </div>
+
+                <div className="flex items-center gap-1.5">
+                  <Globe2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">
+                    Lang:{" "}
+                    <strong className="text-slate-900 dark:text-white">
+                      {candidate.arabic_level || candidate.english_level || "Amharic"}
+                    </strong>
+                  </span>
+                </div>
               </div>
+
+              {/* Skills Tags */}
+              {topSkills.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 px-0.5">
+                  <span className="text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                    Skills:
+                  </span>
+                  {topSkills.slice(0, 3).map((sk) => (
+                    <span
+                      key={sk}
+                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                    >
+                      {sk}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Prior Work & Salary Row */}
               {(() => {

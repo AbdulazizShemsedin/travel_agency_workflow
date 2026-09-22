@@ -10,7 +10,6 @@ import {
   MapPin,
   FileText,
   CheckCircle2,
-  Sparkles,
   ShieldCheck,
   DollarSign,
   Download,
@@ -22,8 +21,7 @@ import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import { getApplicantV2 } from "@/lib/api/v2/applicants";
-import { getCandidatePhotoUrl } from "@/lib/api/v2/portal";
+import { getCandidateDetailV2, getCandidatePhotoUrl } from "@/lib/api/v2/portal";
 
 interface CandidateDetailModalProps {
   candidate: PortalAvailableCandidate | null;
@@ -45,10 +43,10 @@ export function CandidateDetailModal({
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
 
-  // Fetch full live applicant document to guarantee all skills and fields are loaded
+  // Fetch full live candidate document on demand via sanctioned portal RPC
   const { data: fullApplicant } = useQuery({
     queryKey: ["candidate_detail_full", candidate?.name],
-    queryFn: () => (candidate?.name ? getApplicantV2(candidate.name) : Promise.resolve(null)),
+    queryFn: () => (candidate?.name ? getCandidateDetailV2(candidate.name) : Promise.resolve(null)),
     enabled: isOpen && !!candidate?.name,
     staleTime: 60000,
   });
@@ -160,7 +158,7 @@ export function CandidateDetailModal({
 
   // Experienced salary is 1200 SAR (140 KD), first timers are 1000 SAR (120 KD)
   const salaryAmountDisplay = (() => {
-    const rawVal = merged.monthly_salary || candidate.monthly_salary;
+    const rawVal = merged.salary_amount || merged.monthly_salary || candidate.monthly_salary;
     const num = Number(rawVal);
     if (!isNaN(num) && num > 0) {
       if (isExperienced && num === 1000) {
@@ -259,7 +257,7 @@ export function CandidateDetailModal({
           </div>
 
           {/* Key Qualifications & Profile Attributes */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Age / DOB</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
@@ -271,6 +269,13 @@ export function CandidateDetailModal({
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Religion</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
                 {candidate.religion || "Not Specified"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
+              <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Marital Status</span>
+              <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                {merged.marital_status || "Single"} {merged.children ? `(${merged.children} ch.)` : ""}
               </p>
             </div>
 

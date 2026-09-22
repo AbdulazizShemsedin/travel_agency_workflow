@@ -14,7 +14,6 @@ import {
   ArrowRight,
   ShieldCheck,
   ChevronDown,
-  Sparkles,
   ShoppingBag,
   ExternalLink,
   Receipt,

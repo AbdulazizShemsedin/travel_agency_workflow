@@ -280,7 +280,7 @@ export default function AgentComplaintsPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              File and track dispute tickets, arrival medical failures, runway claims, and free candidate replacement requests.
+              File and track dispute tickets.
             </p>
           </div>
 
@@ -679,7 +679,7 @@ export default function AgentComplaintsPage() {
                     isLoading={isUploadingAttachment}
                     loadingText="Uploading dispute evidence..."
                     label="Attach Incident Evidence / Medical Report"
-                    description="Drag & drop PDF or photo or paste screenshot (Ctrl+V) • Max 15MB"
+                    description="PDF or photo"
                     onFileSelect={handleFileSelect}
                     onRemove={() => setFormData((prev) => ({ ...prev, attachment: "" }))}
                   />

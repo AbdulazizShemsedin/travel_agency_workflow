@@ -312,7 +312,7 @@ export default function ContractorsPage() {
         </div>
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">Admin Access Restricted</h2>
         <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-md mt-1 mb-5">
-          Contractor management, agency onboarding, and portal credential configuration are strictly reserved for users with Administrator / Admin privileges.
+          Administrator privileges required.
         </p>
         <Link href="/dashboard">
           <Button variant="outline" size="sm" className="text-xs">
@@ -331,7 +331,7 @@ export default function ContractorsPage() {
             Foreign Agencies
           </h2>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Manage partner foreign agencies, set managers, and manage login accounts.
+            Manage partner agencies and credentials.
           </p>
         </div>
         <Button

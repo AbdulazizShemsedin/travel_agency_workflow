@@ -172,36 +172,36 @@ export function RoleWorkspaceContainer() {
     if (activeTab === "lms") {
       return {
         title: "LMIS Clearance",
-        subtitle: "Ministry of Labor clearance and COC documents.",
+        subtitle: "Labor clearance and COC documents.",
       };
     }
     if (activeTab === "injaz") {
       return {
         title: "Te'shir & Injaz",
-        subtitle: "Saudi MOFA visa application, payments, and finger-print appointments.",
+        subtitle: "MOFA applications and biometric appointments.",
       };
     }
     if (activeTab === "embassy") {
       return {
         title: "Embassy & Stamping",
-        subtitle: "Send passports to the embassy and record visa stamping.",
+        subtitle: "Embassy submissions and visa stamping.",
       };
     }
     if (activeTab === "departure") {
       return {
         title: "Tickets & Departure",
-        subtitle: "Flight bookings, pre-departure medical checks, and airport departures.",
+        subtitle: "Flight bookings and departures.",
       };
     }
     if (activeTab === "clearance") {
       return {
         title: "Clearance List",
-        subtitle: "Track clearance steps for all applicants.",
+        subtitle: "Clearance pipeline tracking.",
       };
     }
     return {
       title: "Applicants",
-      subtitle: "Manage all applicants here.",
+      subtitle: "Applicant directory and lifecycle management.",
     };
   };
 

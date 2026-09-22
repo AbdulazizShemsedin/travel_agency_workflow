@@ -151,8 +151,11 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
           return next;
         });
 
+        // Re-fetch active rate badges so they reflect what was just saved by fetch_fx_rates_now
+        await fetchAllActiveRates();
+
         toast.success("Live FX Rates Synchronized", {
-          description: `Automatically populated ${result.count} currency rate fields with live market data.`,
+          description: `${result.count} currency rate fields pre-filled with live market data. Review and click "Save Official FX Rates" to apply.`,
         });
       } else {
         toast.info("Source Temporarily Unavailable", {
@@ -284,9 +287,14 @@ export function FxRateModal({ isOpen, onClose, canMutate = true, onSuccess }: Fx
             {liveRatesResult && (
               <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-900/30 text-[11px]">
                 {liveRatesResult.count > 0 && Object.keys(liveRatesResult.recorded).length > 0 ? (
-                  <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>Auto-filled {liveRatesResult.count} currency rate fields with live market exchange.</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Auto-filled {liveRatesResult.count} currency fields with live market rates.</span>
+                    </div>
+                    <p className="text-amber-700 dark:text-amber-400 pl-5">
+                      ↳ Review the pre-filled values below, then click <strong>Save Official FX Rates</strong> to apply system-wide.
+                    </p>
                   </div>
                 ) : (
                   <p className="text-slate-500 italic">
