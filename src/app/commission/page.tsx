@@ -62,6 +62,7 @@ import {
   writeOffBatchV2,
   listBatchWriteOffsV2,
   releaseUnpaidItemsV2,
+  triggerEarlyCommissionAccrualV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
   V2CommissionBatchItem,
@@ -107,7 +108,7 @@ export default function AdminCommissionPage() {
 
   // Global Scope Filters
   const [selectedContractor, setSelectedContractor] = React.useState<string>("");
-  const [selectedCountry, setSelectedCountry] = React.useState<string>("Saudi Arabia");
+  const [selectedCountry, setSelectedCountry] = React.useState<string>("");
   const [searchQuery, setSearchQuery] = React.useState<string>("");
 
   // Multi-select for Batch Creation (Unbatched Owed Commissions)
@@ -252,6 +253,20 @@ export default function AdminCommissionPage() {
     staleTime: 30000,
     retry: false,
   });
+
+  // Sync configRates when contractor default rates load from backend
+  React.useEffect(() => {
+    if (contractorRates && contractorRates.length > 0) {
+      setConfigRates(
+        contractorRates.map((r) => ({
+          destination_country: r.destination_country,
+          gender: r.gender || "Both",
+          rate: Number(r.rate) || 0,
+          currency: r.currency || "USD",
+        }))
+      );
+    }
+  }, [contractorRates]);
 
   // =========================================================================
   // 3. Fetch Owed (Unbatched, Approved) Commissions
@@ -444,6 +459,84 @@ export default function AdminCommissionPage() {
     });
   }, [owedCommissions, searchQuery, getCandidateName]);
 
+  // Existing commission transactions by placement
+  const commissionTxPlacementSet = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allTransactions) {
+      if (t.transaction_type === "Commission" && t.placement) {
+        set.add(String(t.placement).toLowerCase().trim());
+      }
+    }
+    for (const o of owedCommissions) {
+      if (o.placement) {
+        set.add(String(o.placement).toLowerCase().trim());
+      }
+    }
+    return set;
+  }, [allTransactions, owedCommissions]);
+
+  // Departed placements that have NOT yet accrued a commission transaction
+  const pendingAccrualPlacements = React.useMemo(() => {
+    return placements.filter((p) => {
+      if (p.status !== "Departed") return false;
+      if (selectedContractor && p.contractor !== selectedContractor) return false;
+      if (selectedCountry && p.destination_country !== selectedCountry) return false;
+      return !commissionTxPlacementSet.has(String(p.name).toLowerCase().trim());
+    });
+  }, [placements, selectedContractor, selectedCountry, commissionTxPlacementSet]);
+
+  const [isAccruingPlacement, setIsAccruingPlacement] = React.useState<string | null>(null);
+  const [isBatchAccruing, setIsBatchAccruing] = React.useState<boolean>(false);
+
+  const handleAccrueCommission = async (placementName: string) => {
+    try {
+      setIsAccruingPlacement(placementName);
+      await triggerEarlyCommissionAccrualV2(placementName);
+      toast.success("Commission Accrued", {
+        description: `Successfully accrued commission for placement ${placementName}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_all_applicant_transactions_for_commission"] });
+      refetchOwed();
+    } catch (err: any) {
+      toast.error("Accrual Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsAccruingPlacement(null);
+    }
+  };
+
+  const handleAccrueAllDeparted = async () => {
+    if (pendingAccrualPlacements.length === 0) return;
+    setIsBatchAccruing(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const plc of pendingAccrualPlacements) {
+      try {
+        await triggerEarlyCommissionAccrualV2(plc.name);
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success("Accrual Complete", {
+        description: `Accrued commission for ${successCount} departed placement(s).${failCount > 0 ? ` (${failCount} failed)` : ""}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_all_applicant_transactions_for_commission"] });
+      refetchOwed();
+    } else {
+      toast.error("Batch Accrual Failed", {
+        description: "Failed to accrue commission. Please ensure default rates are configured for this contractor and corridor.",
+      });
+    }
+    setIsBatchAccruing(false);
+  };
+
   // Toggle selection for batching
   const toggleSelectTx = (txName: string) => {
     setSelectedTxNames((prev) =>
@@ -562,9 +655,15 @@ export default function AdminCommissionPage() {
       });
       return;
     }
-    if (!selectedCountry) {
+    const targetCountry =
+      selectedCountry ||
+      filteredOwed.find((item) => selectedTxNames.includes(item.transaction_name || item.name))
+        ?.destination_country ||
+      filteredOwed[0]?.destination_country;
+
+    if (!targetCountry) {
       toast.error("Destination Country Required", {
-        description: "Please specify the destination country.",
+        description: "Please specify the destination country for this batch.",
       });
       return;
     }
@@ -574,7 +673,7 @@ export default function AdminCommissionPage() {
       const advNum = createBatchAdvance.trim() ? Number(createBatchAdvance) : undefined;
       const batch = await createCommissionBatchV2(
         selectedContractor,
-        selectedCountry,
+        targetCountry,
         selectedTxNames.length > 0 ? selectedTxNames : undefined,
         undefined,
         advNum,
@@ -856,8 +955,13 @@ export default function AdminCommissionPage() {
         batch_threshold: Number(configBatchThreshold) || 10,
       });
 
+      if (configRates && configRates.length > 0) {
+        await setCommissionRatesV2(targetContractor, configRates as any);
+        refetchContractorRates();
+      }
+
       toast.success("Configuration Saved", {
-        description: `Updated batch mode and threshold for ${targetContractor}.`,
+        description: `Updated batch mode, threshold, and rates for ${targetContractor}.`,
       });
       refetchContractorDoc();
     } catch (err: any) {
@@ -1007,6 +1111,7 @@ export default function AdminCommissionPage() {
               }}
               className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-transparent text-xs text-slate-900 dark:text-white"
             >
+              <option value="" className="dark:bg-[#121217]">All Countries / Corridors</option>
               <option value="Saudi Arabia" className="dark:bg-[#121217]">Saudi Arabia (SAR)</option>
               <option value="Kuwait" className="dark:bg-[#121217]">Kuwait (KWD)</option>
               <option value="United Arab Emirates" className="dark:bg-[#121217]">United Arab Emirates (AED)</option>
@@ -1072,6 +1177,15 @@ export default function AdminCommissionPage() {
               {filteredOwed.length}
             </Badge>
           )}
+          {pendingAccrualPlacements.length > 0 && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 h-4 font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300"
+              title={`${pendingAccrualPlacements.length} departed candidates awaiting financial accrual`}
+            >
+              +{pendingAccrualPlacements.length} pending
+            </Badge>
+          )}
         </button>
 
         <button
@@ -1125,7 +1239,10 @@ export default function AdminCommissionPage() {
       {activeTab === "owed" && (
         <div className="space-y-4">
           {/* Threshold & Status Banner */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className={cn(
+            "grid grid-cols-1 gap-3",
+            pendingAccrualPlacements.length > 0 ? "sm:grid-cols-4" : "sm:grid-cols-3"
+          )}>
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
               <CardContent className="p-3.5">
                 <span className="text-[10px] uppercase font-bold text-slate-400">
@@ -1135,10 +1252,26 @@ export default function AdminCommissionPage() {
                   {filteredOwed.length} <span className="text-xs font-normal text-slate-400">records</span>
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Scope: {selectedContractor || "All"} • {selectedCountry}
+                  Scope: {selectedContractor || "All Contractors"} • {selectedCountry || "All Corridors"}
                 </p>
               </CardContent>
             </Card>
+
+            {pendingAccrualPlacements.length > 0 && (
+              <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
+                <CardContent className="p-3.5">
+                  <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400">
+                    Awaiting Accrual
+                  </span>
+                  <p className="text-xl font-bold text-amber-900 dark:text-amber-200 mt-1">
+                    {pendingAccrualPlacements.length} <span className="text-xs font-normal text-amber-600/70">departed</span>
+                  </p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                    Departed placements awaiting ledger accrual
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
               <CardContent className="p-3.5">
@@ -1305,7 +1438,7 @@ export default function AdminCommissionPage() {
                     ) : (
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-slate-400">
-                          No unbatched commissions for this agency in {selectedCountry}.
+                          No unbatched commissions for this agency in {selectedCountry || "any corridor"}.
                         </td>
                       </tr>
                     )}
@@ -1314,6 +1447,94 @@ export default function AdminCommissionPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Departed Placements Awaiting Financial Accrual */}
+          {pendingAccrualPlacements.length > 0 && (
+            <Card className="border-amber-200 dark:border-amber-900/50 bg-white dark:bg-[#121216] shadow-sm">
+              <CardHeader className="pb-3 border-b border-amber-100 dark:border-amber-900/30 bg-amber-50/40 dark:bg-amber-950/10">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      Departed Candidates Awaiting Financial Accrual ({pendingAccrualPlacements.length})
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500 mt-0.5">
+                      These placements have reached departed status, but their commission transaction has not yet been accrued into the general ledger.
+                    </CardDescription>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isBatchAccruing}
+                    onClick={handleAccrueAllDeparted}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-sm gap-1.5 h-8 text-xs"
+                  >
+                    {isBatchAccruing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    <span>Accrue All ({pendingAccrualPlacements.length})</span>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto max-h-72">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 dark:bg-[#181820] text-slate-500 font-semibold uppercase tracking-wider sticky top-0 border-b border-slate-100 dark:border-[#202028]">
+                      <tr>
+                        <th className="py-2.5 px-3">Placement</th>
+                        <th className="py-2.5 px-3">Candidate</th>
+                        <th className="py-2.5 px-3">Contractor</th>
+                        <th className="py-2.5 px-3">Destination</th>
+                        <th className="py-2.5 px-3">Departure Date</th>
+                        <th className="py-2.5 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
+                      {pendingAccrualPlacements.map((plc) => (
+                        <tr key={plc.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] transition-colors">
+                          <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white">
+                            {plc.name}
+                          </td>
+                          <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                            {getCandidateName(plc)}
+                          </td>
+                          <td className="py-2 px-3 text-slate-600 dark:text-zinc-300">
+                            {plc.contractor || "—"}
+                          </td>
+                          <td className="py-2 px-3 text-slate-600 dark:text-zinc-300">
+                            {plc.destination_country || "—"}
+                          </td>
+                          <td className="py-2 px-3 text-slate-500">
+                            {plc.departure_date ? new Date(plc.departure_date).toLocaleDateString() : "—"}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isAccruingPlacement === plc.name || isBatchAccruing}
+                              onClick={() => handleAccrueCommission(plc.name)}
+                              className="h-7 text-xs border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 gap-1"
+                            >
+                              {isAccruingPlacement === plc.name ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              <span>Accrue Commission</span>
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
