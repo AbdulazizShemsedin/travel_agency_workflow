@@ -156,6 +156,7 @@ export interface ExcelSelectOption {
   value: string;
   label: string;
   badgeClass?: string;
+  disabled?: boolean;
 }
 
 interface ExcelSelectProps {
@@ -263,7 +264,11 @@ export function ExcelSelect({
           <option
             key={opt.value}
             value={opt.value}
-            className="bg-white dark:bg-[#15151a] text-slate-900 dark:text-zinc-100 font-normal"
+            disabled={opt.disabled}
+            className={cn(
+              "bg-white dark:bg-[#15151a] text-slate-900 dark:text-zinc-100 font-normal",
+              opt.disabled && "text-slate-400 dark:text-zinc-500 bg-slate-50 dark:bg-[#1a1a22]"
+            )}
           >
             {opt.label}
           </option>

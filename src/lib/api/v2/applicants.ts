@@ -369,9 +369,25 @@ export async function getApplicantV2(
  */
 export async function listApplicantsV2(
   filters?: Record<string, any> | any[] | string,
+  limitPageLength?: number,
+  orderBy?: string,
+  limitStart?: number,
+  withTotal?: 0
+): Promise<V2ApplicantDetails[]>;
+export async function listApplicantsV2(
+  filters: Record<string, any> | any[] | string | undefined,
+  limitPageLength: number | undefined,
+  orderBy: string | undefined,
+  limitStart: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2ApplicantDetails[]; total_count: number }>;
+export async function listApplicantsV2(
+  filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "modified desc"
-): Promise<V2ApplicantDetails[]> {
+  orderBy: string = "modified desc",
+  limitStart: number = 0,
+  withTotal: number = 0
+): Promise<V2ApplicantDetails[] | { data: V2ApplicantDetails[]; total_count: number }> {
   // Guard against TanStack Query passing QueryFunctionContext ({ queryKey, signal }) as filters
   let cleanFilters = filters;
   if (
@@ -383,13 +399,15 @@ export async function listApplicantsV2(
   }
 
   const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
-  const result = await requestV2<V2ApplicantDetails[] | { applicants?: V2ApplicantDetails[] }>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.applicant_api.list_applicants",
     {
       method: "POST",
       body: {
         ...(filtersParam ? { filters: filtersParam } : {}),
         limit_page_length: limitPageLength,
+        limit_start: limitStart,
+        ...(withTotal ? { with_total: withTotal } : {}),
         order_by: orderBy,
       },
     }
@@ -397,17 +415,17 @@ export async function listApplicantsV2(
 
   const rawList = Array.isArray(result)
     ? result
-    : result && Array.isArray((result as any).applicants)
-    ? (result as any).applicants
-    : result && Array.isArray((result as any).data)
-    ? (result as any).data
-    : result && Array.isArray((result as any).items)
-    ? (result as any).items
-    : result && Array.isArray((result as any).message)
-    ? (result as any).message
+    : result && Array.isArray(result.applicants)
+    ? result.applicants
+    : result && Array.isArray(result.data)
+    ? result.data
+    : result && Array.isArray(result.items)
+    ? result.items
+    : result && Array.isArray(result.message)
+    ? result.message
     : [];
 
-  return rawList.map((item: V2ApplicantDetails) => {
+  const mapped = rawList.map((item: V2ApplicantDetails) => {
     const normalized = normalizeApplicantFields(item);
     Object.assign(item, normalized);
     if (item.status && !item.applicant_state) {
@@ -418,20 +436,36 @@ export async function listApplicantsV2(
     }
     return item;
   });
+
+  if (withTotal) {
+    return {
+      data: mapped,
+      total_count: Number(result?.total_count ?? mapped.length),
+    };
+  }
+
+  return mapped;
 }
 
 /**
  * Promotes an Applicant from Draft -> Registered.
  * Field-floor and medical checks run inside Applicant.validate() on backend.
+ * Accepts optional Manager override for country bans.
  */
 export async function registerApplicantV2(
-  applicantName: string
+  applicantName: string,
+  overrideBan?: number,
+  overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.applicant_api.register_applicant",
     {
       method: "POST",
-      body: { applicant_name: applicantName },
+      body: {
+        applicant_name: applicantName,
+        ...(overrideBan ? { override_ban: overrideBan } : {}),
+        ...(overrideReason ? { override_reason: overrideReason } : {}),
+      },
     }
   );
 }
@@ -522,7 +556,9 @@ export async function cancelApplicantV2(
  */
 export async function restartApplicantV2(
   applicantName: string,
-  targetStatus: "Draft" | "Registered"
+  targetStatus: "Draft" | "Registered",
+  overrideBan?: number,
+  overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.applicant_api.restart_applicant",
@@ -531,6 +567,8 @@ export async function restartApplicantV2(
       body: {
         applicant_name: applicantName,
         target_status: targetStatus,
+        ...(overrideBan ? { override_ban: overrideBan } : {}),
+        ...(overrideReason ? { override_reason: overrideReason } : {}),
       },
     }
   );
@@ -559,15 +597,20 @@ export async function setCountryBanV2(
 
 /**
  * Lists country bans, optionally scoped to one Applicant.
+ * Defaults to active_only=1; pass active_only=0 for full audit history.
  */
 export async function listCountryBansV2(
-  applicantName?: string
+  applicantName?: string,
+  activeOnly: number = 1
 ): Promise<V2CountryBanRecord[]> {
   const result = await requestV2<V2CountryBanRecord[] | { bans?: V2CountryBanRecord[] }>(
     "/api/method/agency_tracking.applicant_api.list_country_bans",
     {
       method: "POST",
-      body: applicantName ? { applicant_name: applicantName } : {},
+      body: {
+        ...(applicantName ? { applicant_name: applicantName } : {}),
+        active_only: activeOnly,
+      },
     }
   );
 
@@ -578,15 +621,109 @@ export async function listCountryBansV2(
 
 /**
  * Lifts a country ban (Manager / Admin only).
+ * Backend returns {"lifted": ban_name, "status": "success" | "already_lifted" | "not_found"}.
  */
 export async function removeCountryBanV2(
-  banName: string
-): Promise<{ message?: string; [key: string]: any }> {
+  banName: string,
+  liftReason?: string
+): Promise<{ lifted?: string; status?: string; message?: any }> {
   return requestV2(
     "/api/method/agency_tracking.applicant_api.remove_country_ban",
     {
       method: "POST",
-      body: { ban_name: banName },
+      body: {
+        ban_name: banName,
+        ...(liftReason ? { lift_reason: liftReason } : {}),
+      },
+    }
+  );
+}
+
+export interface V2CountryBanRequestItem {
+  name: string;
+  applicant: string;
+  applicant_name?: string;
+  full_name?: string;
+  request_type: "Override" | "Lift";
+  reason: string;
+  action?: "Register" | "Generate CV" | "Restart" | "Change Destination";
+  country?: string;
+  status: "Pending" | "Approved" | "Rejected" | "Used";
+  requested_by?: string;
+  decided_by?: string;
+  decided_on?: string;
+  note?: string;
+  creation?: string;
+  [key: string]: any;
+}
+
+/**
+ * Submits an exception request for a country ban (Registrars or non-managers).
+ */
+export async function requestCountryBanExceptionV2(
+  applicantName: string,
+  requestType: "Override" | "Lift",
+  reason: string,
+  action?: "Register" | "Generate CV" | "Restart" | "Change Destination",
+  country?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.request_country_ban_exception",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        request_type: requestType,
+        reason,
+        ...(action ? { action } : {}),
+        ...(country ? { country } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Lists country ban exception requests (Managers see all, others see their own).
+ */
+export async function listCountryBanRequestsV2(
+  status?: string,
+  applicantName?: string
+): Promise<V2CountryBanRequestItem[]> {
+  const body: Record<string, any> = {};
+  if (status) body.status = status;
+  if (applicantName) body.applicant_name = applicantName;
+
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.applicant_api.list_country_ban_requests",
+    {
+      method: "POST",
+      body,
+    }
+  );
+
+  const payload = result?.message ?? result;
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.requests)) return payload.requests;
+  return [];
+}
+
+/**
+ * Decides a country ban exception request (Approve / Reject) with optional note (Manager / Admin).
+ */
+export async function decideCountryBanRequestV2(
+  requestName: string,
+  decision: "Approve" | "Reject",
+  note?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.decide_country_ban_request",
+    {
+      method: "POST",
+      body: {
+        request_name: requestName,
+        decision,
+        ...(note ? { note } : {}),
+      },
     }
   );
 }
@@ -659,8 +796,8 @@ export async function checkApplicantUniquenessV2(
       { [filterKey]: cleanVal },
       10
     );
-
-    const clash = matches.find((a) => {
+    const rows = Array.isArray(matches) ? matches : (matches as any)?.data || [];
+    const clash = rows.find((a: V2ApplicantDetails) => {
       const fieldVal = String((a as any)[filterKey] || (a as any)[field] || "").trim();
       if (!fieldVal || fieldVal.toLowerCase() !== cleanVal.toLowerCase()) return false;
       if (

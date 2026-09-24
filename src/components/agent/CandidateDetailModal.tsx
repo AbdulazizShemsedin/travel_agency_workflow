@@ -194,6 +194,14 @@ export function CandidateDetailModal({
                 <span className="rounded-md bg-slate-200/80 dark:bg-[#22222a] px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
                   {candidate.name}
                 </span>
+                {(candidate.medical_status === "FIT" || (merged as any).medical_status === "FIT") && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-bold border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  >
+                    FIT ✓
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-zinc-400">
                 {candidate.job_applied || "Hospitality Candidate"} • Destination: {candidate.destination_country || "GCC"}

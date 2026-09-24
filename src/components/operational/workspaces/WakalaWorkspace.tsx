@@ -146,13 +146,12 @@ export function WakalaWorkspace({
       const stepName = selectedRow.clearanceStepName || selectedRow.embassy?.name;
 
       if (stepName && canEdit) {
-        const amt = wakalaAmount ? Number(wakalaAmount) : undefined;
         const targetWakalaStatus = status === "Completed" ? "Paid" : "Pending";
         await recordWakalaPaymentV2(
           stepName,
           targetWakalaStatus,
-          amt,
-          targetWakalaStatus === "Paid" ? (wakalaPaidDate || new Date().toISOString().split("T")[0]) : undefined,
+          undefined,
+          undefined,
           wakalaRefNo || undefined
         );
       }
@@ -521,7 +520,7 @@ export function WakalaWorkspace({
                 <div>
                   <span className="font-bold">Wakala Fee Verified (Paid)</span>
                   <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                    Paid on {wakalaPaidDate || "Record"} {wakalaAmount ? `• Amount: ${wakalaAmount} SAR` : ""}. Eligible for embassy submission.
+                    Wakala payment verified. Eligible for embassy submission.
                   </p>
                 </div>
               </div>
@@ -573,27 +572,6 @@ export function WakalaWorkspace({
                 <option value="Pending">Pending (Unpaid)</option>
                 <option value="Completed">Paid (Authorized)</option>
               </select>
-            </DrawerField>
-
-            <DrawerField label="Wakala Fee Amount (SAR)" isReadOnly={false}>
-              <input
-                type="number"
-                placeholder="e.g. 2000"
-                value={wakalaAmount}
-                disabled={!canEdit || mutation.isPending || isRecordingWakala}
-                onChange={(e) => setWakalaAmount(e.target.value)}
-                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white disabled:opacity-60"
-              />
-            </DrawerField>
-
-            <DrawerField label="Payment Date" isReadOnly={false}>
-              <input
-                type="date"
-                value={wakalaPaidDate}
-                disabled={!canEdit || mutation.isPending || isRecordingWakala || status !== "Completed"}
-                onChange={(e) => setWakalaPaidDate(e.target.value)}
-                className="h-9 w-full px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white disabled:opacity-50"
-              />
             </DrawerField>
 
             <DrawerField label="Musaned Reference №" isReadOnly={false}>

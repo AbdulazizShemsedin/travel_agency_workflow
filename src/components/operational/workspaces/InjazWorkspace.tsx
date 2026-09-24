@@ -45,6 +45,7 @@ import {
   InjazCandidateData,
 } from "@/lib/pdf/injazDocumentGenerator";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
 
 interface InjazWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -220,6 +221,15 @@ export function InjazWorkspace({
 
     try {
       if (newStatus === "Completed") {
+        const isPaid =
+          ((row.injaz as any)?.payment_status || (row.injaz as any)?.injaz_payment_status || row.injazPayment || "")
+            .toLowerCase() === "paid";
+        if (!isPaid) {
+          toast.error("Injaz Payment Required", {
+            description: "Taeshir cannot be completed until the Injaz payment is marked Paid.",
+          });
+          return;
+        }
         const injazNo =
           (row.injaz as any)?.injaz_application_id ||
           row.injazApplicationId ||
@@ -251,6 +261,37 @@ export function InjazWorkspace({
     } catch (err: any) {
       toast.error(err?.message || "Failed to save remark");
       throw err;
+    }
+  };
+
+  const [isExportingTaeshir, setIsExportingTaeshir] = React.useState(false);
+
+  const handleExportTaeshir = async () => {
+    try {
+      setIsExportingTaeshir(true);
+      const applicantIds = data
+        .map((r) => r.applicantId || (r.applicant as any)?.name)
+        .filter(Boolean);
+      if (applicantIds.length === 0) {
+        toast.error("No candidates in the workspace to export.");
+        return;
+      }
+      toast.info(`Exporting Taeshir schedule for ${applicantIds.length} applicants...`);
+      const blob = await exportGroupScheduleBioXlsV2(applicantIds);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const fallbackFilename = `Group_Schedule_Bio_Applicants_${new Date().toISOString().split("T")[0]}.xls`;
+      a.download = (blob as any).filename || fallbackFilename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Export for Taeshir (.xls) downloaded successfully!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to export Taeshir (.xls) file.");
+    } finally {
+      setIsExportingTaeshir(false);
     }
   };
 
@@ -290,6 +331,18 @@ export function InjazWorkspace({
 
       // Step Completion / Progression
       if (modalStatus === "Completed") {
+        const isPaid =
+          ((editingRow.injaz as any)?.payment_status ||
+            (editingRow.injaz as any)?.injaz_payment_status ||
+            editingRow.injazPayment ||
+            "")
+            .toLowerCase() === "paid";
+        if (
+          !isPaid &&
+          !["Complete", "Completed", "Issued"].includes(editingRow.injaz?.status || "")
+        ) {
+          throw new Error("Taeshir cannot be completed until the Injaz payment is marked Paid.");
+        }
         await completeClearanceStepV2(stepName, modalInjazNumber || undefined);
       }
 
@@ -447,7 +500,7 @@ export function InjazWorkspace({
     },
     {
       id: "injazNumber",
-      header: "Application number (E-no)",
+      header: "E-number (Injaz Application No.)",
       accessorKey: "injaz",
       width: "190px",
       editable: true,
@@ -511,6 +564,9 @@ export function InjazWorkspace({
           row.injaz?.status === "Complete" ||
           row.injaz?.status === "Completed" ||
           row.injaz?.status === "Issued";
+        const isInjazPaid =
+          ((row.injaz as any)?.payment_status || (row.injaz as any)?.injaz_payment_status || row.injazPayment || "")
+            .toLowerCase() === "paid";
         return (
           <ExcelSelect
             value={isComplete ? "Completed" : "Pending"}
@@ -523,8 +579,9 @@ export function InjazWorkspace({
               },
               {
                 value: "Completed",
-                label: "Completed",
+                label: isComplete || isInjazPaid ? "Completed" : "Completed (Injaz Unpaid)",
                 badgeClass: "bg-emerald-600 text-white font-semibold text-[10px]",
+                disabled: !isComplete && !isInjazPaid,
               },
             ]}
             onSave={(val) => handleUpdateStatus(row, val)}
@@ -622,6 +679,20 @@ export function InjazWorkspace({
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
+        extraHeaderActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportTaeshir}
+            disabled={isExportingTaeshir}
+            className="h-8 gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+            title="Export for Taeshir (.xls)"
+          >
+            <FileDown className="h-3.5 w-3.5" />
+            <span>{isExportingTaeshir ? "Exporting..." : "Export for Taeshir (.xls)"}</span>
+          </Button>
+        }
       />
 
       {/* ------------------------------------------------------------- */}
@@ -647,7 +718,7 @@ export function InjazWorkspace({
 
           <div className="space-y-3.5 py-3 text-xs">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Application number (E-no)</Label>
+              <Label className="text-xs font-semibold">E-number (Injaz Application No.)</Label>
               <Input
                 value={modalInjazNumber}
                 onChange={(e) => setModalInjazNumber(e.target.value)}
@@ -668,14 +739,32 @@ export function InjazWorkspace({
 
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Clearance Status</Label>
-              <select
-                value={modalStatus}
-                onChange={(e) => setModalStatus(e.target.value as any)}
-                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-bold"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed (Cleared)</option>
-              </select>
+              {(() => {
+                const isPaid =
+                  ((editingRow?.injaz as any)?.payment_status ||
+                    (editingRow?.injaz as any)?.injaz_payment_status ||
+                    editingRow?.injazPayment ||
+                    "")
+                    .toLowerCase() === "paid";
+                const isAlreadyCompleted = ["Complete", "Completed", "Issued"].includes(
+                  editingRow?.injaz?.status || ""
+                );
+                return (
+                  <select
+                    value={modalStatus}
+                    onChange={(e) => setModalStatus(e.target.value as any)}
+                    className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-bold"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option
+                      value="Completed"
+                      disabled={!isPaid && !isAlreadyCompleted}
+                    >
+                      Completed (Cleared) {!isPaid && !isAlreadyCompleted ? "— (Requires Injaz Paid)" : ""}
+                    </option>
+                  </select>
+                );
+              })()}
             </div>
 
             <div className="space-y-1">

@@ -65,24 +65,50 @@ export interface V2CreateContractorPayload {
  */
 export async function listContractorsV2(
   filters?: Record<string, any> | any[] | string,
-  limitPageLength: number = 100
-): Promise<V2ContractorRecord[]> {
+  limitPageLength?: number,
+  limitStart?: number,
+  withTotal?: 0
+): Promise<V2ContractorRecord[]>;
+export async function listContractorsV2(
+  filters: Record<string, any> | any[] | string | undefined,
+  limitPageLength: number | undefined,
+  limitStart: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2ContractorRecord[]; total_count: number }>;
+export async function listContractorsV2(
+  filters?: Record<string, any> | any[] | string,
+  limitPageLength: number = 100,
+  limitStart: number = 0,
+  withTotal: number = 0
+): Promise<V2ContractorRecord[] | { data: V2ContractorRecord[]; total_count: number }> {
   const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
-  const result = await requestV2<V2ContractorRecord[] | { contractors?: V2ContractorRecord[] }>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.contractor_api.list_contractors",
     {
       method: "POST",
       body: {
         ...(filtersParam ? { filters: filtersParam } : {}),
         limit_page_length: limitPageLength,
+        limit_start: limitStart,
+        ...(withTotal ? { with_total: withTotal } : {}),
       },
     }
   );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).message)) return (result as any).message;
-  if (result && Array.isArray((result as any).contractors)) return (result as any).contractors;
-  return [];
+  let list: V2ContractorRecord[] = [];
+  if (Array.isArray(result)) list = result;
+  else if (result && Array.isArray((result as any).data)) list = (result as any).data;
+  else if (result && Array.isArray((result as any).message)) list = (result as any).message;
+  else if (result && Array.isArray((result as any).contractors)) list = (result as any).contractors;
+
+  if (withTotal) {
+    return {
+      data: list,
+      total_count: Number(result?.total_count ?? list.length),
+    };
+  }
+
+  return list;
 }
 
 /**

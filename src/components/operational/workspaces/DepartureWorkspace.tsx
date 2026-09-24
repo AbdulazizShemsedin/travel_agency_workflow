@@ -368,8 +368,7 @@ export function DepartureWorkspace({
           placementName,
           modalTicketNumber.trim(),
           fullFlightDate,
-          typeof modalTicketCost === "number" ? modalTicketCost : undefined,
-          modalTicketCurrency
+          typeof modalTicketCost === "number" ? modalTicketCost : undefined
         );
 
         if (modalTicketStatus === "Booked") {

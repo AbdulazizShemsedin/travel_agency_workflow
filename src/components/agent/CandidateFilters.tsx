@@ -84,7 +84,6 @@ export function CandidateFilters({
     { value: "FIT", label: "FIT (Medically Cleared)" },
     { value: "Pending", label: "In Progress / Pending" },
     { value: "Not Done", label: "Not Done / None" },
-    { value: "UNFIT", label: "UNFIT" },
   ];
 
   const EXPERIENCES = [

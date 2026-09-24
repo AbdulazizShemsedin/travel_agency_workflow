@@ -64,7 +64,6 @@ import {
   reassignClearanceStepV2,
   reopenClearanceStepV2,
   recordWakalaPaymentV2,
-  recordOtherPaymentV2,
   getClearanceStepDocV2,
   V2ClearanceStepItem,
 } from "@/lib/api/v2/clearance";
@@ -350,11 +349,20 @@ export function V2ClearanceQueueWorkspace() {
   });
 
   const stampEmbassyMutation = useMutation({
-    mutationFn: ({ stepName, refNo }: { stepName: string; refNo?: string }) =>
-      stampEmbassyStepV2(stepName, refNo),
+    mutationFn: ({
+      stepName,
+      refNo,
+      overrideReason,
+    }: {
+      stepName: string;
+      refNo?: string;
+      overrideReason?: string;
+    }) => stampEmbassyStepV2(stepName, refNo, overrideReason),
     onSuccess: () => {
       toast.success("Embassy visa stamped successfully");
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+      setEmbassyOverrideReason("");
+      setConfirmUnpaidWakalaOverride(false);
       setIsDrawerOpen(false);
     },
     onError: (err: any) => {
@@ -423,16 +431,22 @@ export function V2ClearanceQueueWorkspace() {
           await completeClearanceStepV2(
             selectedRow.name,
             referenceNo.trim() || undefined,
-            amount ? Number(amount) : undefined,
+            undefined,
             dateCompleted.trim() || undefined
           );
         }
       } else if (stepStatus === "in progress" && !isEmbassyStep) {
-        // For In Progress non-embassy steps: complete the step with the ref/amount/dateCompleted
+        if (selectedRow.step_type === "Taeshir") {
+          const isPaid = (selectedRow.injaz_payment_status || selectedRow.payment_status || "").toLowerCase() === "paid";
+          if (!isPaid) {
+            throw new Error("Taeshir can't be completed until the Injaz payment is marked Paid.");
+          }
+        }
+        // For In Progress non-embassy steps: complete the step with ref and dateCompleted
         await completeClearanceStepV2(
           selectedRow.name,
           referenceNo.trim() || undefined,
-          amount ? Number(amount) : undefined,
+          undefined,
           dateCompleted.trim() || undefined
         );
       } else if (stepStatus === "in progress" && isEmbassyStep) {
@@ -509,35 +523,7 @@ export function V2ClearanceQueueWorkspace() {
     };
   }, [selectedRow?.name]);
 
-  const handleRecordOtherPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRow || !otherPaymentType.trim()) {
-      toast.error("Payment Type is required (e.g. Insurance)");
-      return;
-    }
-    setIsRecordingOtherPayment(true);
-    try {
-      const res = await recordOtherPaymentV2(selectedRow.name, {
-        payment_type: otherPaymentType.trim(),
-        amount: otherPaymentAmount ? Number(otherPaymentAmount) : undefined,
-        currency: otherPaymentCurrency,
-        status: otherPaymentStatus,
-        remark: otherPaymentRemark.trim() || undefined,
-      });
-      toast.success("Payment line-item recorded successfully!");
-      if (res?.message?.payments) {
-        setStepPayments(res.message.payments);
-      }
-      setOtherPaymentType("");
-      setOtherPaymentAmount("");
-      setOtherPaymentRemark("");
-      queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to record payment");
-    } finally {
-      setIsRecordingOtherPayment(false);
-    }
-  };
+
 
   const isEmbassyStep = React.useMemo<boolean>(() => {
     if (!selectedRow) return false;
@@ -986,15 +972,15 @@ export function V2ClearanceQueueWorkspace() {
       ),
     },
     {
-      id: "feeStatus",
-      header: "FEE STATUS",
-      width: "110px",
+      id: "wakalaStatus",
+      header: "WAKALA STATUS",
+      width: "120px",
       align: "center",
       cell: (row) => {
-        const isPaid = (row.payment_status || "").toLowerCase().includes("paid");
+        const isPaid = (row.wakala_status || "").toLowerCase() === "paid";
         return (
-          <Badge className={isPaid ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-rose-500 text-white font-bold text-[10px]"}>
-            {isPaid ? "PAID" : "UNPAID"}
+          <Badge className={isPaid ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-amber-500 text-white font-bold text-[10px]"}>
+            {isPaid ? "PAID" : "PENDING"}
           </Badge>
         );
       },
@@ -1618,20 +1604,6 @@ export function V2ClearanceQueueWorkspace() {
                 />
               </DrawerField>
 
-              <DrawerField label="Clearance Fee / Amount (Optional)" isReadOnly={false}>
-                <div className="relative">
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    disabled={!canOperateSelectedStep || isSaving || isRowDeparted}
-                    className="h-9 text-xs pr-12 bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
-                  />
-                  <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400 pointer-events-none">ETB</span>
-                </div>
-              </DrawerField>
-
               <DrawerField label="Completion / Issue Date" isReadOnly={false}>
                 <Input
                   type="date"
@@ -1672,114 +1644,6 @@ export function V2ClearanceQueueWorkspace() {
                   </DrawerField>
                 </div>
               )}
-            </DrawerSection>
-
-            {/* Section 4b: Other Line-Item Payments (Insurance, Misc Fees) */}
-            <DrawerSection title="Other Clearance Payments & Insurance" icon={CreditCard}>
-              <div className="col-span-2 space-y-3">
-                {stepPayments && stepPayments.length > 0 ? (
-                  <div className="rounded-lg border border-slate-200 dark:border-[#2a2a35] overflow-hidden text-xs">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 dark:bg-[#181820] text-slate-500 text-[10px] uppercase font-bold">
-                        <tr>
-                          <th className="p-2">Type</th>
-                          <th className="p-2">Amount</th>
-                          <th className="p-2">Status</th>
-                          <th className="p-2">Remark</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-[#202028]">
-                        {stepPayments.map((p, idx) => (
-                          <tr key={p.name || idx}>
-                            <td className="p-2 font-semibold">{p.payment_type || "Fee"}</td>
-                            <td className="p-2 font-mono">{p.amount ? `${p.amount} ${p.currency || "ETB"}` : "—"}</td>
-                            <td className="p-2">
-                              <Badge variant="outline" className={p.status === "Paid" ? "border-emerald-400 text-emerald-800 bg-emerald-50" : "border-amber-400 text-amber-800 bg-amber-50"}>
-                                {p.status || "Pending"}
-                              </Badge>
-                            </td>
-                            <td className="p-2 text-slate-400">{p.remark || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">No other payment line items recorded for this clearance step.</p>
-                )}
-
-                {canOperateSelectedStep && !isRowDeparted && (
-                  <form onSubmit={handleRecordOtherPayment} className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-2.5">
-                    <span className="text-xs font-bold block text-slate-800 dark:text-zinc-200">
-                      Record Other Clearance Fee / Insurance Line Item
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Payment Type *</label>
-                        <Input
-                          placeholder="e.g. Insurance Premium"
-                          value={otherPaymentType}
-                          onChange={(e) => setOtherPaymentType(e.target.value)}
-                          className="h-7 text-xs"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Amount</label>
-                        <Input
-                          type="number"
-                          placeholder="0.00"
-                          value={otherPaymentAmount}
-                          onChange={(e) => setOtherPaymentAmount(e.target.value)}
-                          className="h-7 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Currency</label>
-                        <select
-                          value={otherPaymentCurrency}
-                          onChange={(e) => setOtherPaymentCurrency(e.target.value)}
-                          className="h-7 w-full px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded"
-                        >
-                          <option value="ETB">ETB</option>
-                          <option value="SAR">SAR</option>
-                          <option value="USD">USD</option>
-                          <option value="KWD">KWD</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Payment Status</label>
-                        <select
-                          value={otherPaymentStatus}
-                          onChange={(e) => setOtherPaymentStatus(e.target.value as "Pending" | "Paid")}
-                          className="h-7 w-full px-2 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded"
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="Paid">Paid</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-semibold text-slate-500">Remark</label>
-                      <Input
-                        placeholder="Optional receipt number or notes"
-                        value={otherPaymentRemark}
-                        onChange={(e) => setOtherPaymentRemark(e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={isRecordingOtherPayment || !otherPaymentType.trim()}
-                      className="text-xs h-7 bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-700"
-                    >
-                      {isRecordingOtherPayment ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      Add Payment Line Item
-                    </Button>
-                  </form>
-                )}
-              </div>
             </DrawerSection>
 
             {/* Section 5: Authoritative Operational Actions */}
@@ -1828,81 +1692,86 @@ export function V2ClearanceQueueWorkspace() {
               )}
 
               {/* Action: In Progress & NOT Embassy -> Complete Step */}
-              {!isTerminalStatus && selectedRow.status === "In Progress" && !isEmbassyStep && (
-                <div className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-white">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    Complete Clearance Step
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Completing this step marks it <strong>{selectedRow.step_type.includes("LMIS") ? "Issued" : "Complete"}</strong>.
-                  </p>
+              {!isTerminalStatus && selectedRow.status === "In Progress" && !isEmbassyStep && (() => {
+                const isTaeshir = selectedRow.step_type === "Taeshir";
+                const isInjazPaid =
+                  !isTaeshir ||
+                  (selectedRow.injaz_payment_status || selectedRow.payment_status || "").toLowerCase() === "paid";
 
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-                        Reference Number (e.g. Labor ID / Permit / MOFA No)
-                      </label>
-                      <Input
-                        value={referenceNo}
-                        onChange={(e) => setReferenceNo(e.target.value)}
-                        placeholder="e.g. REF-2026-91823"
-                        disabled={!canOperateSelectedStep || isSaving}
-                        className="h-8 text-xs font-mono mt-1"
-                      />
+                return (
+                  <div className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-white">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      Complete Clearance Step
                     </div>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
+                      Completing this step marks it <strong>{selectedRow.step_type.includes("LMIS") ? "Issued" : "Complete"}</strong>.
+                    </p>
 
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-                        Clearance Fee / Amount (Optional)
-                      </label>
-                      <Input
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
-                        disabled={!canOperateSelectedStep || isSaving}
-                        className="h-8 text-xs mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-                        Completion Date (Optional)
-                      </label>
-                      <Input
-                        type="date"
-                        value={dateCompleted}
-                        onChange={(e) => setDateCompleted(e.target.value)}
-                        disabled={!canOperateSelectedStep || isSaving}
-                        className="h-8 text-xs mt-1"
-                        title="Leave blank for today's date, or select to backdate"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    disabled={!canOperateSelectedStep || isSaving}
-                    onClick={() =>
-                      completeMutation.mutate({
-                        stepName: selectedRow.name,
-                        refNo: referenceNo.trim() || undefined,
-                        amt: amount ? Number(amount) : undefined,
-                        dateDone: dateCompleted.trim() || undefined,
-                      })
-                    }
-                    className="w-full bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold h-9"
-                  >
-                    {completeMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    ) : (
-                      <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                    {isTaeshir && !isInjazPaid && (
+                      <div className="p-2.5 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                        <div>
+                          <span className="font-bold">Injaz Payment Required</span>
+                          <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                            Taeshir cannot be completed until the Injaz payment is marked Paid.
+                          </p>
+                        </div>
+                      </div>
                     )}
-                    Mark Step Complete
-                  </Button>
-                </div>
-              )}
+
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                          Reference Number (e.g. Labor ID / Permit / MOFA No)
+                        </label>
+                        <Input
+                          value={referenceNo}
+                          onChange={(e) => setReferenceNo(e.target.value)}
+                          placeholder="e.g. REF-2026-91823"
+                          disabled={!canOperateSelectedStep || isSaving}
+                          className="h-8 text-xs font-mono mt-1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                          Completion Date (Optional)
+                        </label>
+                        <Input
+                          type="date"
+                          value={dateCompleted}
+                          onChange={(e) => setDateCompleted(e.target.value)}
+                          disabled={!canOperateSelectedStep || isSaving}
+                          className="h-8 text-xs mt-1"
+                          title="Leave blank for today's date, or select to backdate"
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      disabled={!canOperateSelectedStep || isSaving || !isInjazPaid}
+                      onClick={() =>
+                        completeMutation.mutate({
+                          stepName: selectedRow.name,
+                          refNo: referenceNo.trim() || undefined,
+                          amt: undefined,
+                          dateDone: dateCompleted.trim() || undefined,
+                        })
+                      }
+                      className="w-full bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold h-9 disabled:opacity-50"
+                    >
+                      {completeMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                      )}
+                      Mark Step Complete
+                    </Button>
+                  </div>
+                );
+              })()}
 
               {/* Action: In Progress & IS Embassy -> Submit to Embassy */}
               {!isTerminalStatus && selectedRow.status === "In Progress" && isEmbassyStep && (() => {
@@ -1954,8 +1823,7 @@ export function V2ClearanceQueueWorkspace() {
                             onClick={async () => {
                               try {
                                 setIsRecordingWakala(true);
-                                const amt = wakalaAmountInput ? Number(wakalaAmountInput) : undefined;
-                                await recordWakalaPaymentV2(selectedRow.name, "Paid", amt);
+                                await recordWakalaPaymentV2(selectedRow.name, "Paid");
                                 toast.success("Wakala payment recorded as Paid! Embassy documents can now be submitted.");
                                 queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
                                 queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
@@ -2029,14 +1897,57 @@ export function V2ClearanceQueueWorkspace() {
               })()}
 
               {/* Action: Submitted (Embassy) -> Stamp OR Reject */}
-              {!isTerminalStatus && selectedRow.status === "Submitted" && isEmbassyStep && (
-                <div className="space-y-3">
+              {!isTerminalStatus && selectedRow.status === "Submitted" && isEmbassyStep && (() => {
+                const isSaudi = (selectedRow.destination_country || "").toLowerCase().includes("saudi") || selectedRow.step_type === "Embassy";
+                const isWakalaPaid = (selectedRow.wakala_status || "").toLowerCase() === "paid";
+                return (
+                  <div className="space-y-3">
                   {/* Outcome 1: Stamp */}
                   <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
                     <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 dark:text-emerald-300">
                       <Stamp className="h-4 w-4 text-emerald-600" />
                       Diplomatic Mission Visa Stamped
                     </div>
+
+                    {/* Unpaid Wakala Gate Warning on Saudi Corridor */}
+                    {isSaudi && !isWakalaPaid && (
+                      <div className="p-2.5 rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div>
+                            <span className="font-bold">Wakala Payment Required (Stamp Gate)</span>
+                            <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                              Wakala fee must be marked as Paid before embassy documents can be stamped.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Manager / Admin Override Option */}
+                        {isManagerOrAdmin && (
+                          <div className="pt-1.5 border-t border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-950 dark:text-amber-200 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={confirmUnpaidWakalaOverride}
+                                onChange={(e) => setConfirmUnpaidWakalaOverride(e.target.checked)}
+                                className="rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                              />
+                              <span>Manager Override: Stamp despite unpaid Wakala</span>
+                            </label>
+                            {confirmUnpaidWakalaOverride && (
+                              <Input
+                                type="text"
+                                placeholder="Manager written override reason *"
+                                value={embassyOverrideReason}
+                                onChange={(e) => setEmbassyOverrideReason(e.target.value)}
+                                className="h-7 text-xs bg-white dark:bg-[#1a1a20] border-amber-300"
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div>
                       <label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
                         Visa Sticker / Reference Number
@@ -2051,11 +1962,18 @@ export function V2ClearanceQueueWorkspace() {
                     </div>
                     <Button
                       type="button"
-                      disabled={!canOperateSelectedStep || isSaving}
+                      disabled={
+                        !canOperateSelectedStep ||
+                        isSaving ||
+                        (isSaudi && !isWakalaPaid && (!isManagerOrAdmin || !confirmUnpaidWakalaOverride || !embassyOverrideReason.trim()))
+                      }
                       onClick={() =>
                         stampEmbassyMutation.mutate({
                           stepName: selectedRow.name,
                           refNo: referenceNo.trim() || undefined,
+                          overrideReason: isSaudi && !isWakalaPaid && isManagerOrAdmin && confirmUnpaidWakalaOverride
+                            ? embassyOverrideReason.trim() || "Manager authorized override"
+                            : undefined,
                         })
                       }
                       className="w-full bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white text-xs font-semibold h-9"
@@ -2104,7 +2022,8 @@ export function V2ClearanceQueueWorkspace() {
                     </Button>
                   </div>
                 </div>
-              )}
+                );
+              })()}
               {/* Wakala Payment Details & Actions (Saudi Embassy) */}
               {isEmbassyStep && !isTerminalStatus && (() => {
                 const isPaid = (selectedRow.wakala_status || "").toLowerCase() === "paid";
@@ -2131,70 +2050,55 @@ export function V2ClearanceQueueWorkspace() {
                     <div className="text-[11px] text-slate-600 dark:text-zinc-300">
                       {isPaid ? (
                         <p className="text-emerald-700 dark:text-emerald-300">
-                          Wakala fee payment verified. {selectedRow.wakala_amount ? `• Amount: ${selectedRow.wakala_amount} SAR` : ""} {selectedRow.wakala_paid_date ? `• Paid on ${selectedRow.wakala_paid_date}` : ""}
+                          Wakala fee payment verified. Eligible for embassy submission and stamping.
                         </p>
                       ) : (
                         <p className="text-slate-500 dark:text-zinc-400">
-                          Wakala must be paid by the contractor before Monday embassy submission.
+                          Wakala must be paid by the contractor before embassy submission and stamping.
                         </p>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Wakala Fee (SAR)</label>
-                        <Input
-                          type="number"
-                          placeholder="e.g. 2000"
-                          value={wakalaAmountInput}
-                          disabled={!canUpdateWakala || isRecordingWakala}
-                          onChange={(e) => setWakalaAmountInput(e.target.value)}
-                          className="h-7 text-xs mt-0.5"
-                        />
-                      </div>
-
-                      <div className="flex items-end">
-                        {canUpdateWakala && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                setIsRecordingWakala(true);
-                                const nextStatus = isPaid ? "Pending" : "Paid";
-                                const amt = wakalaAmountInput ? Number(wakalaAmountInput) : undefined;
-                                await recordWakalaPaymentV2(selectedRow.name, nextStatus, amt);
-                                toast.success(
-                                  nextStatus === "Paid"
-                                    ? "Wakala payment recorded as Paid!"
-                                    : "Wakala status reverted to Pending."
-                                );
-                                queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
-                                setSelectedRow((prev) => (prev ? { ...prev, wakala_status: nextStatus } : null));
-                              } catch (e: any) {
-                                toast.error(e?.message || "Failed to update Wakala payment.");
-                              } finally {
-                                setIsRecordingWakala(false);
-                              }
-                            }}
-                            disabled={isRecordingWakala}
-                            className={cn(
-                              "w-full text-xs font-semibold h-7",
-                              isPaid
-                                ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200"
-                                : "bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
-                            )}
-                          >
-                            {isRecordingWakala ? (
-                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            ) : isPaid ? (
-                              "Revert to Pending"
-                            ) : (
-                              "Mark Wakala Paid"
-                            )}
-                          </Button>
-                        )}
-                      </div>
+                    <div>
+                      {canUpdateWakala && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              setIsRecordingWakala(true);
+                              const nextStatus = isPaid ? "Pending" : "Paid";
+                              await recordWakalaPaymentV2(selectedRow.name, nextStatus);
+                              toast.success(
+                                nextStatus === "Paid"
+                                  ? "Wakala payment recorded as Paid!"
+                                  : "Wakala status reverted to Pending."
+                              );
+                              queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] });
+                              setSelectedRow((prev) => (prev ? { ...prev, wakala_status: nextStatus } : null));
+                            } catch (e: any) {
+                              toast.error(e?.message || "Failed to update Wakala payment.");
+                            } finally {
+                              setIsRecordingWakala(false);
+                            }
+                          }}
+                          disabled={isRecordingWakala}
+                          className={cn(
+                            "w-full text-xs font-semibold h-8",
+                            isPaid
+                              ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200"
+                              : "bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
+                          )}
+                        >
+                          {isRecordingWakala ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : isPaid ? (
+                            "Revert Wakala to Pending"
+                          ) : (
+                            "Mark Wakala Paid"
+                          )}
+                        </Button>
+                      )}
                     </div>
 
                     {!isPaid && (

@@ -983,17 +983,29 @@ export function ApplicantTable() {
                           {stage === "Registered" && !cvGeneratedSet.has(applicant.name) && can("generateCv") && (
                             <button
                               type="button"
-                              disabled={isGeneratingCv || generateCvMutation.isPending}
-                              onClick={() => generateCvMutation.mutate(applicant.name)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
-                              title="Generate bilateral recruitment CV"
+                              disabled={isGeneratingCv || generateCvMutation.isPending || applicant.medical_status === "UNFIT"}
+                              onClick={() => {
+                                if (applicant.medical_status === "UNFIT") {
+                                  toast.error("Medically UNFIT", {
+                                    description: `${applicant.full_name || applicant.name} is medically UNFIT -- a CV cannot be generated.`,
+                                  });
+                                  return;
+                                }
+                                generateCvMutation.mutate(applicant.name);
+                              }}
+                              className={
+                                applicant.medical_status === "UNFIT"
+                                  ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                                  : "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              }
+                              title={applicant.medical_status === "UNFIT" ? "Medically UNFIT -- cannot generate CV" : "Generate bilateral recruitment CV"}
                             >
                               {isGeneratingCv ? (
                                 <Loader2 className="h-3 w-3 animate-spin text-emerald-700" />
                               ) : (
                                 <FileText className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                               )}
-                              <span>{isGeneratingCv ? "Generating..." : "Generate CV"}</span>
+                              <span>{isGeneratingCv ? "Generating..." : applicant.medical_status === "UNFIT" ? "UNFIT" : "Generate CV"}</span>
                             </button>
                           )}
 

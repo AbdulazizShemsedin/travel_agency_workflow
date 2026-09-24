@@ -176,18 +176,12 @@ export default function AgentDiscoveryPage() {
         if (jobApplied !== "All Jobs" && ((c.job_applied || "").toLowerCase() !== jobApplied.toLowerCase() && (c.target_job || "").toLowerCase() !== jobApplied.toLowerCase())) return false;
         if (religion !== "All Religions" && (c.religion || "").toLowerCase() !== religion.toLowerCase()) return false;
 
-        // Medical status filter
+        // Medical status filter (FIT only per 2026-09-23 spec)
+        if (c.medical_status === "UNFIT") return false;
         if (medicalStatus !== "All Medical") {
-          const med = (c.medical_status || "").toUpperCase();
-          if (medicalStatus === "FIT") {
-            if (!med.includes("FIT") || med.includes("UNFIT")) return false;
-          } else if (medicalStatus === "UNFIT") {
-            if (!med.includes("UNFIT")) return false;
-          } else if (medicalStatus === "Pending") {
-            if (!med.includes("PENDING") && !med.includes("PROGRESS")) return false;
-          } else if (medicalStatus === "Not Done") {
-            if (med && !med.includes("NONE") && !med.includes("NOT DONE")) return false;
-          }
+          const isFit = c.medical_status === "FIT";
+          if (medicalStatus === "FIT" && !isFit) return false;
+          if ((medicalStatus === "Pending" || medicalStatus === "Not Done") && isFit) return false;
         }
 
         // Place of birth filter
@@ -676,26 +670,14 @@ export default function AgentDiscoveryPage() {
 
                           {/* Medical Status */}
                           <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                            {(() => {
-                              const med = (candidate.medical_status || "").toUpperCase();
-                              const isFit = med.includes("FIT") && !med.includes("UNFIT");
-                              const isUnfit = med.includes("UNFIT");
-                              const isPending = med.includes("PENDING") || med.includes("PROGRESS");
-                              const label = isFit ? "FIT ✓" : isUnfit ? "UNFIT ✕" : isPending ? "Pending" : "Not Done";
-                              const color = isFit
-                                ? "text-emerald-700 dark:text-emerald-400"
-                                : isUnfit
-                                ? "text-rose-700 dark:text-rose-400"
-                                : isPending
-                                ? "text-amber-700 dark:text-amber-400"
-                                : "text-slate-500 dark:text-zinc-400";
-                              return (
-                                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${color}`}>
-                                  <CheckCircle2 className="h-3.5 w-3.5" />
-                                  {label}
-                                </span>
-                              );
-                            })()}
+                            {candidate.medical_status === "FIT" ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-bold border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              >
+                                FIT ✓
+                              </Badge>
+                            ) : null}
                           </td>
 
                           {/* Actions */}

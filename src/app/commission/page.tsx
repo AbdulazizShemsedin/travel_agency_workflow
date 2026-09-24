@@ -491,7 +491,15 @@ export default function AdminCommissionPage() {
         ? !b.destination_country || b.destination_country === selectedCountry
         : true;
       const matchStatus =
-        batchStatusFilter === "All" ? true : b.status === batchStatusFilter;
+        batchStatusFilter === "All"
+          ? true
+          : batchStatusFilter === "Paid"
+          ? b.status === "Settled"
+          : batchStatusFilter === "Partly Paid"
+          ? b.status === "Partially Settled"
+          : batchStatusFilter === "Unpaid"
+          ? b.status !== "Settled" && b.status !== "Partially Settled"
+          : b.status === batchStatusFilter;
       const matchUnsettled = showUnsettledOnly
         ? b.status !== "Settled" && b.status !== "Written Off"
         : true;
@@ -1351,7 +1359,7 @@ export default function AdminCommissionPage() {
 
                 {/* Status Pills */}
                 <div className="flex items-center gap-1 flex-wrap">
-                  {["All", "Draft", "Sent", "Partially Settled", "Settled"].map((st) => (
+                  {["All", "Paid", "Partly Paid", "Unpaid"].map((st) => (
                     <button
                       key={st}
                       type="button"
@@ -1426,10 +1434,10 @@ export default function AdminCommissionPage() {
                               ? "border-emerald-400 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
                               : batch.status === "Partially Settled"
                               ? "border-amber-400 text-amber-800 bg-amber-50 dark:bg-amber-950/40"
-                              : "border-slate-300 text-slate-600 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
+                              : "border-slate-300 text-slate-700 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
                           )}
                         >
-                          {batch.status}
+                          {batch.status === "Settled" ? "Paid" : batch.status === "Partially Settled" ? "Partly Paid" : "Unpaid"}
                         </Badge>
                       </div>
 
@@ -1546,10 +1554,10 @@ export default function AdminCommissionPage() {
                                 ? "border-emerald-400 text-emerald-800 bg-emerald-100 dark:bg-emerald-900"
                                 : activeBatch.status === "Partially Settled"
                                 ? "border-amber-400 text-amber-800 bg-amber-100 dark:bg-amber-900"
-                                : "border-slate-300 text-slate-600 bg-slate-100"
+                                : "border-slate-300 text-slate-700 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
                             )}
                           >
-                            {activeBatch.status}
+                            {activeBatch.status === "Settled" ? "Paid" : activeBatch.status === "Partially Settled" ? "Partly Paid" : "Unpaid"}
                           </Badge>
                         </div>
                         <CardDescription className="text-xs mt-1">

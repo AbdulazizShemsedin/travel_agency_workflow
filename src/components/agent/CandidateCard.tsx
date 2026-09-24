@@ -118,36 +118,13 @@ export function CandidateCard({
               <span>{candidate.destination_country || "GCC"}</span>
             </div>
 
-            {/* Medical Status Badge */}
-            {(() => {
-              const med = (candidate.medical_status || "").toUpperCase();
-              const isFit = med.includes("FIT") && !med.includes("UNFIT");
-              const isUnfit = med.includes("UNFIT");
-              const isPending = med.includes("PENDING") || med.includes("PROGRESS");
-              const label = isFit
-                ? "Medical: FIT ✓"
-                : isUnfit
-                ? "Medical: UNFIT ✕"
-                : isPending
-                ? "Medical: Pending"
-                : "Medical: Not Done";
-              const badgeClasses = isFit
-                ? "bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
-                : isUnfit
-                ? "bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800"
-                : isPending
-                ? "bg-amber-50 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
-                : "bg-slate-100 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700";
-
-              return (
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${badgeClasses}`}
-                >
-                  <HeartPulse className="h-3 w-3" />
-                  <span>{label}</span>
-                </span>
-              );
-            })()}
+            {/* Medical Status Badge - show FIT only, otherwise show nothing */}
+            {candidate.medical_status === "FIT" && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border bg-emerald-50 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800">
+                <HeartPulse className="h-3 w-3" />
+                <span>FIT</span>
+              </span>
+            )}
           </div>
         </div>
 

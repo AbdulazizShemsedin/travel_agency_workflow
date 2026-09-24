@@ -422,8 +422,8 @@ export async function rescheduleTaeshirAppointmentV2(
  */
 export async function recordInjazPaymentV2(
   clearanceStepName: string,
-  amount: number,
-  currency: string = "USD",
+  amount?: number,
+  currency?: string,
   receiptNumber?: string,
   paidDate?: string,
   paymentStatus: "Paid" | "Unpaid" = "Paid"
@@ -434,9 +434,9 @@ export async function recordInjazPaymentV2(
       method: "POST",
       body: {
         clearance_step_name: clearanceStepName,
-        amount,
-        currency,
         payment_status: paymentStatus,
+        ...(typeof amount === "number" ? { amount } : {}),
+        ...(currency ? { currency } : {}),
         ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
         ...(paidDate ? { paid_date: paidDate } : {}),
       },

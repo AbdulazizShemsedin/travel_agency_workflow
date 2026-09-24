@@ -22,6 +22,20 @@
 - **Clearance Step Human-Error Correction Toolkit**: Supported `date_completed` backdating on `complete_clearance_step`, `reopen_clearance_step` with audit reason, `record_police_ashara`, `record_other_payment`, `record_injaz_payment` status toggling, and terminal data corrections.
 - **Staff Roster RPC**: Replaced direct `frappe.client.get_list("User")` calls with `agency_tracking.employee_api.list_employee_roster`.
 
+## 10. Conformance to Backend Changelog (2026-09-23 `commission-currency-invoicing`)
+- **Clearance & Corridor Fee Hiding**: Removed manual fee inputs (`amount`, `payment_status`, `wakala_amount`, `wakala_paid_date`, `police_ashara_amount`, `police_ashara_payment_status`) and the "Other Payments" table from operational drawers and screens. Fees are recorded automatically by the corridor engine upon step completion.
+- **Injaz Attempt Sanitization & Taeshir Gate**: Removed `injaz_amount`, `injaz_currency`, `receipt_number`, and `receipt_photo`. Kept `payment_status` (Paid/Unpaid) and `paid_date`. Strictly gated Taeshir step completion on Injaz payment showing `Paid`.
+- **Saudi Embassy Wakala Gate**: Both Embassy `submit` and `stamp` operations enforce the paid Wakala rule with Manager/Admin `override_reason` bypass options.
+- **Placement Pre-Departure Medical 2**: Restricted pre-departure medical tracking to FIT / UNFIT outcome only; removed `medical_2_examination_date` from forms and tables.
+- **Registration Form COC Removal & Medical Recognition**: Removed COC certificate status and LMIS exam date from registration screens; confirmed unexpired registration FIT covers after-selection medical.
+- **Ticketing & Reschedule Separation**: Enforced ETB-only ticket costs (`fee_type: "Ticket"`). Separated reschedule actions into `Airport` (no fee) vs `Internal` (requires ETB cost, creates own ledger row).
+- **Financial Ledger & Currency Badges**: Added "Awaiting FX Rate" badge for ledger rows with `awaiting_fx_rate = 1` and surfaced notice when `awaiting_fx.count > 0` in financial overviews.
+- **Invoice Status Simplification**: Displayed only paid status states (`Paid`, `Partly Paid`, `Unpaid`) on commission batches; eliminated Draft/Sent states and send actions.
+- **Taeshir Export (.xls) & E-Number Labeling**: Sourced legacy `.xls` format via `exportGroupScheduleBioXlsV2` with `Content-Type: application/vnd.ms-excel`, populated "E-number (Injaz Application No.)" from `injaz_application_id`, and added "Agency Email" to settings.
+- **Pagination with Total Count**: Added TypeScript function overloads supporting `with_total=1` across all 7 primary listing endpoints (`list_applicants`, `list_placements`, `list_contractors`, `list_transactions`, `list_complaints`, `list_portal_candidates`, `list_my_placements`).
+- **Portal Medical & CV Gating**: Hidden UNFIT candidates from the foreign agency portal; displayed "FIT" badge only when `medical_status === "FIT"`; disabled CV generation for medically UNFIT applicants.
+- **Country Ban Exception Requests**: Implemented `removeCountryBanV2` (`lifted`, `lift_reason`), `requestCountryBanExceptionV2`, `listCountryBanRequestsV2`, and `decideCountryBanRequestV2` with dedicated `CountryBanRequestsWorkspace` queue.
+
 ---
 
 ## 1. System-Wide Conformance Summary

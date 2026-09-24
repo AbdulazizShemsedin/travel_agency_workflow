@@ -35,6 +35,10 @@ export interface V2TransactionRecord {
   description: string;
   placement?: string;
   stage_logged_at?: string;
+  fee_type?: string;
+  clearance_step?: string;
+  awaiting_fx_rate?: number;
+  amount_birr?: number;
   creation?: string;
   modified?: string;
   [key: string]: any;
@@ -386,9 +390,39 @@ export async function listTransactionsV2(
     fromDate?: string;
     toDate?: string;
     orderBy?: string;
+    limitStart?: number;
     limitPageLength?: number;
+    withTotal?: 0;
   }
-): Promise<V2TransactionRecord[]> {
+): Promise<V2TransactionRecord[]>;
+export async function listTransactionsV2(
+  filters: {
+    status?: string;
+    transactionType?: string;
+    placement?: string;
+    applicant?: string;
+    fromDate?: string;
+    toDate?: string;
+    orderBy?: string;
+    limitStart?: number;
+    limitPageLength?: number;
+    withTotal: 1;
+  }
+): Promise<{ data: V2TransactionRecord[]; total_count: number }>;
+export async function listTransactionsV2(
+  filters?: {
+    status?: string;
+    transactionType?: string;
+    placement?: string;
+    applicant?: string;
+    fromDate?: string;
+    toDate?: string;
+    orderBy?: string;
+    limitStart?: number;
+    limitPageLength?: number;
+    withTotal?: number;
+  }
+): Promise<V2TransactionRecord[] | { data: V2TransactionRecord[]; total_count: number }> {
   const body: Record<string, any> = {};
   if (filters?.status) body.status = filters.status;
   if (filters?.transactionType) body.transaction_type = filters.transactionType;
@@ -397,9 +431,11 @@ export async function listTransactionsV2(
   if (filters?.fromDate) body.from_date = filters.fromDate;
   if (filters?.toDate) body.to_date = filters.toDate;
   if (filters?.orderBy) body.order_by = filters.orderBy;
+  if (filters?.limitStart !== undefined) body.limit_start = filters.limitStart;
   if (filters?.limitPageLength) body.limit_page_length = filters.limitPageLength;
+  if (filters?.withTotal) body.with_total = filters.withTotal;
 
-  const result = await requestV2<V2TransactionRecord[] | { transactions?: V2TransactionRecord[] }>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.finance_api.list_transactions",
     {
       method: "POST",
@@ -407,9 +443,20 @@ export async function listTransactionsV2(
     }
   );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).transactions)) return (result as any).transactions;
-  return [];
+  let list: V2TransactionRecord[] = [];
+  if (Array.isArray(result)) list = result;
+  else if (result && Array.isArray((result as any).transactions)) list = (result as any).transactions;
+  else if (result && Array.isArray((result as any).data)) list = (result as any).data;
+  else if (result && Array.isArray((result as any).message)) list = (result as any).message;
+
+  if (filters?.withTotal) {
+    return {
+      data: list,
+      total_count: Number(result?.total_count ?? list.length),
+    };
+  }
+
+  return list;
 }
 
 /**

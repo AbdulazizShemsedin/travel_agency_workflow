@@ -54,10 +54,7 @@ export function Step5Review({
     values.last_name
   );
 
-  const examRemaining = calculateRemainingDays(values.exam_date);
   const medicalRemaining = calculateRemainingDays(values.medical_expiry_date);
-
-  const examBadge = getExpiryBadgeStatus(examRemaining);
   const medicalBadge = getExpiryBadgeStatus(medicalRemaining);
 
   const isMedicalUnfit = values.medical_status === "UNFIT";
@@ -112,15 +109,6 @@ export function Step5Review({
           {/* Quick Stats Badges */}
           <div className="flex flex-wrap gap-2 sm:flex-col sm:items-end">
             <div className="flex items-center gap-1 text-xs text-slate-600">
-              <span className="font-semibold text-slate-700">COC Exam:</span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${examBadge.bgClass} ${examBadge.textClass} ${examBadge.borderClass}`}
-              >
-                <Clock className="h-3 w-3" />
-                {examBadge.label}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-slate-600">
               <span className="font-semibold text-slate-700">Medical:</span>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${medicalBadge.bgClass} ${medicalBadge.textClass} ${medicalBadge.borderClass}`}
@@ -143,7 +131,7 @@ export function Step5Review({
                 Applicant cannot be registered while medical status is UNFIT.
               </p>
               <p className="text-xs text-rose-700 mt-1">
-                You can save this record as a Draft. To register, please return to Step 4 (COC & Medical) and update the medical status once medical clearance is obtained.
+                You can save this record as a Draft. To register, please return to Step 4 (Medical Assessment) and update the medical status once medical clearance is obtained.
               </p>
               <Button
                 type="button"
@@ -430,13 +418,13 @@ export function Step5Review({
           </CardContent>
         </Card>
 
-        {/* Section 5: COC & Medical Assessment */}
+        {/* Section 5: Medical Assessment */}
         <Card className="border-slate-200/80">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div className="flex items-center gap-2">
               <HeartPulse className="h-4 w-4 text-emerald-800" />
               <CardTitle className="text-base font-semibold text-slate-900">
-                COC & Medical Assessment
+                Medical Assessment
               </CardTitle>
             </div>
             <Button
@@ -450,14 +438,6 @@ export function Step5Review({
             </Button>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
-            <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">COC Status:</span>
-              <span className="font-medium text-slate-900">{values.coc_status || "—"}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">COC Exam Date:</span>
-              <span className="font-medium text-slate-900">{values.exam_date || "—"}</span>
-            </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-500">Medical Status:</span>
               <span

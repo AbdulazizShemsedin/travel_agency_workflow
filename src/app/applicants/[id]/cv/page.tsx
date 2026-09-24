@@ -23,10 +23,10 @@ import {
   Share2,
   Copy,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
-import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
@@ -339,11 +339,12 @@ export default function CandidateCvPreviewPage() {
               variant="outline"
               size="sm"
               onClick={() => refreshCvMutation.mutate()}
-              disabled={refreshCvMutation.isPending}
-              className="text-xs border-slate-300 dark:border-[#26262d]"
+              disabled={refreshCvMutation.isPending || applicant?.medical_status === "UNFIT"}
+              className="text-xs border-slate-300 dark:border-[#26262d] disabled:opacity-50"
+              title={applicant?.medical_status === "UNFIT" ? "Applicant is medically UNFIT -- CV cannot be generated." : undefined}
             >
               <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshCvMutation.isPending ? "animate-spin" : ""}`} />
-              {refreshCvMutation.isPending ? "Generating..." : "Regenerate Official CV"}
+              {refreshCvMutation.isPending ? "Generating..." : applicant?.medical_status === "UNFIT" ? "UNFIT" : "Regenerate Official CV"}
             </Button>
           )}
 
@@ -386,6 +387,19 @@ export default function CandidateCvPreviewPage() {
         </div>
       </div>
 
+      {/* If Medically UNFIT, show warning banner */}
+      {applicant.medical_status === "UNFIT" && (
+        <div className="print:hidden p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-xl text-xs text-rose-900 dark:text-rose-200 flex items-center gap-2.5 shadow-xs">
+          <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0" />
+          <div>
+            <strong className="block text-rose-950 dark:text-rose-100 font-bold">Applicant is Medically UNFIT</strong>
+            <p className="mt-0.5 text-rose-800 dark:text-rose-300">
+              Under bilateral recruitment regulations, candidates with an UNFIT medical status cannot be registered, distributed on the agency portal, or issued a CV dossier.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* If Draft, prompt registration on applicant page */}
       {isDraft && (
         <div className="print:hidden rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -427,23 +441,19 @@ export default function CandidateCvPreviewPage() {
             <Button
               size="sm"
               onClick={() => refreshCvMutation.mutate()}
-              disabled={refreshCvMutation.isPending}
-              className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-semibold shrink-0 shadow-xs"
+              disabled={refreshCvMutation.isPending || applicant.medical_status === "UNFIT"}
+              className={
+                applicant.medical_status === "UNFIT"
+                  ? "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed text-xs font-semibold shrink-0"
+                  : "bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-semibold shrink-0 shadow-xs"
+              }
+              title={applicant.medical_status === "UNFIT" ? "Candidate is medically UNFIT -- a CV cannot be generated" : undefined}
             >
-              {refreshCvMutation.isPending ? "Generating..." : "Generate Official CV Now"}
+              {refreshCvMutation.isPending ? "Generating..." : applicant.medical_status === "UNFIT" ? "UNFIT" : "Generate Official CV Now"}
             </Button>
           )}
         </div>
       )}
-
-      {/* Stage Fee Logging (Print Hidden - Routes to Finance) */}
-      <div className="print:hidden max-w-4xl mx-auto">
-        <StageFeeSection
-          placementId={applicant.active_placement}
-          stageName="CV Generation & Processing"
-          defaultDirection="Expense"
-        />
-      </div>
 
       {/* ========================================================================= */}
       {/* PAGE 1: OFFICIAL BILATERAL RECRUITMENT CV (EXACT MATCH TO ASNEKECH SAMPLE)*/}

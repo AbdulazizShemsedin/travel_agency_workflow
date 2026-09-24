@@ -158,20 +158,26 @@ export default function PlacementDocumentCenterPage() {
       setPreviewFileUrl(fileUrl);
 
       if (previewOnly) {
-        // Run OCR parsing preview only
+        // Run OCR parsing preview only (does not attach to placement)
         const parsed = await parseContractFileV2(fileUrl, destinationCountry);
         setContractParseResult(parsed);
         toast.success("Contract Parsed for Preview", {
-          description: "Structured fields extracted from contract file.",
+          description: "Structured fields extracted from contract file. Review and then attach.",
         });
       } else {
         // Authoritative upload_contract attachment to Placement
-        const res = await uploadContractV2(activePlacement!.name, fileUrl);
-        if (res) {
-          setContractParseResult(res as any);
+        await uploadContractV2(activePlacement!.name, fileUrl);
+
+        // Also run OCR extraction immediately so extracted fields populate
+        try {
+          const parsed = await parseContractFileV2(fileUrl, destinationCountry);
+          setContractParseResult(parsed);
+        } catch {
+          // Non-fatal: OCR parse failed but file is attached
         }
-        toast.success("Contract Successfully Attached to Placement", {
-          description: `Contract attached to ${activePlacement!.name} with extracted dates and terms.`,
+
+        toast.success("Contract Attached & Info Extracted", {
+          description: `Contract attached to ${activePlacement!.name}. Review extracted info below and approve to save.`,
         });
         setContractFile(null);
         queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
@@ -541,7 +547,84 @@ export default function PlacementDocumentCenterPage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "contract" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column: Upload & Actions */}
+          {/* Left Column (first in DOM = left on desktop, top on mobile): Document Viewer */}
+          <div>
+            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <Eye className="h-4 w-4 text-slate-500" />
+                    Document Viewer
+                  </span>
+                  {(contractPreviewUrl || previewFileUrl) && (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = contractPreviewUrl || previewFileUrl;
+                          const win = window.open(url, "_blank");
+                          win?.focus();
+                        }}
+                        className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
+                        title="Print Document"
+                      >
+                        <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                        Print
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          const url = contractPreviewUrl || previewFileUrl;
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `Contract_${applicantId || "candidate"}.pdf`;
+                          a.target = "_blank";
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          toast.success("Document downloaded!");
+                        }}
+                        className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
+                        title="Save as PDF"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Save as PDF
+                      </Button>
+                    </div>
+                  )}
+                  {previewFileUrl && !contractPreviewUrl && (
+                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
+                      {previewFileUrl}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-[420px] p-2 bg-slate-100 dark:bg-[#0d0d11] rounded-xl overflow-hidden flex items-center justify-center">
+                {contractPreviewUrl || previewFileUrl ? (
+                  <iframe
+                    src={contractPreviewUrl || previewFileUrl}
+                    title="Contract Document Viewer"
+                    className="w-full h-full min-h-[420px] rounded-lg border-0"
+                  />
+                ) : (
+                  <div className="text-center text-xs text-slate-400 space-y-2 p-6">
+                    <FileText className="h-10 w-10 text-slate-300 dark:text-zinc-700 mx-auto" />
+                    <p className="font-semibold text-slate-600 dark:text-zinc-300">
+                      No document loaded for preview
+                    </p>
+                    <p className="text-[11px]">
+                      Upload a contract to preview it here. The document will appear automatically after upload.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column (second in DOM = right on desktop, bottom on mobile): Upload & Extracted Fields */}
           <div className="space-y-4">
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
               <CardHeader className="pb-3">
@@ -561,7 +644,7 @@ export default function PlacementDocumentCenterPage() {
                   )}
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Upload signed contract to extract terms.
+                  Upload signed contract — extracted info will appear automatically.
                 </CardDescription>
               </CardHeader>
 
@@ -574,7 +657,7 @@ export default function PlacementDocumentCenterPage() {
                   fileName={contractFile?.name}
                   fileSize={contractFile?.size}
                   isLoading={isContractUploading}
-                  loadingText="Processing and parsing contract document..."
+                  loadingText="Uploading and extracting contract info..."
                   label="Employment Contract Document"
                   description="PDF or image"
                   onFileSelect={(file) => {
@@ -600,7 +683,7 @@ export default function PlacementDocumentCenterPage() {
                     ) : (
                       <FileCheck2 className="h-3.5 w-3.5 mr-1.5" />
                     )}
-                    Attach to Placement
+                    Upload & Attach
                   </Button>
 
                   <Button
@@ -609,10 +692,10 @@ export default function PlacementDocumentCenterPage() {
                     disabled={!contractFile || isContractUploading}
                     onClick={() => handleUploadContract(true)}
                     className="text-xs h-9"
-                    title="Run OCR parsing preview without mutating placement"
+                    title="Extract info without attaching to placement"
                   >
                     <Eye className="h-3.5 w-3.5 mr-1" />
-                    Preview OCR
+                    Extract Info
                   </Button>
                 </div>
               </CardContent>
@@ -796,84 +879,10 @@ export default function PlacementDocumentCenterPage() {
             </Card>
           </div>
 
-          {/* Right Column: Embedded Preview */}
-          <div>
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-slate-500" />
-                    Document Viewer
-                  </span>
-                  {(contractPreviewUrl || previewFileUrl) && (
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const url = contractPreviewUrl || previewFileUrl;
-                          const win = window.open(url, "_blank");
-                          win?.focus();
-                        }}
-                        className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
-                        title="Print Document"
-                      >
-                        <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                        Print
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          const url = contractPreviewUrl || previewFileUrl;
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `Contract_${applicantId || "candidate"}.pdf`;
-                          a.target = "_blank";
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          toast.success("Document downloaded!");
-                        }}
-                        className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
-                        title="Save as PDF"
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1" />
-                        Save as PDF
-                      </Button>
-                    </div>
-                  )}
-                  {previewFileUrl && !contractPreviewUrl && (
-                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
-                      {previewFileUrl}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 min-h-[420px] p-2 bg-slate-100 dark:bg-[#0d0d11] rounded-xl overflow-hidden flex items-center justify-center">
-                {contractPreviewUrl || previewFileUrl ? (
-                  <iframe
-                    src={contractPreviewUrl || previewFileUrl}
-                    title="Contract Document Viewer"
-                    className="w-full h-full min-h-[420px] rounded-lg border-0"
-                  />
-                ) : (
-                  <div className="text-center text-xs text-slate-400 space-y-2 p-6">
-                    <FileText className="h-10 w-10 text-slate-300 dark:text-zinc-700 mx-auto" />
-                    <p className="font-semibold text-slate-600 dark:text-zinc-300">
-                      No document loaded for preview
-                    </p>
-                    <p className="text-[11px]">
-                      Choose a file or select an existing attachment to view here.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </div>
       )}
+
+
 
       {/* ------------------------------------------------------------- */}
       {/* Tab 2: Kuwait eVisa Upload & Parsing                          */}

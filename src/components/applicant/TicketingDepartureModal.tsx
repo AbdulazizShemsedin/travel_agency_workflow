@@ -33,7 +33,6 @@ import {
   advancePlacementV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
-import { StageFeeSection } from "@/components/operational/StageFeeSection";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface TicketingDepartureModalProps {
@@ -70,6 +69,7 @@ export function TicketingDepartureModal({
   const [rescheduleDate, setRescheduleDate] = React.useState("");
   const [rescheduleCause, setRescheduleCause] = React.useState<"Internal" | "Airport">("Internal");
   const [rescheduleCost, setRescheduleCost] = React.useState("");
+  const [newTicketNumber, setNewTicketNumber] = React.useState("");
 
   // Medical 2 State
   const [medical2Status, setMedical2Status] = React.useState<"FIT" | "UNFIT">("FIT");
@@ -91,6 +91,9 @@ export function TicketingDepartureModal({
       const parsedCost = ticketCost ? parseFloat(ticketCost) : undefined;
       const fullFlightDate = flightDate ? (flightTime ? `${flightDate} ${flightTime}` : flightDate) : "";
       const res = await recordTicketDetailsV2(placement.name, ticketNumber.trim(), fullFlightDate, parsedCost);
+      if (res?.warning) {
+        toast.warning("Warning", { description: res.warning });
+      }
       toast.success("Ticket Details Recorded", {
         description: res?.message || `Flight details logged for placement ${placement.name}. Stage moved to Ticketed.`,
       });
@@ -113,14 +116,20 @@ export function TicketingDepartureModal({
       return;
     }
 
+    if (rescheduleCause === "Internal" && (!rescheduleCost || parseFloat(rescheduleCost) <= 0)) {
+      toast.error("Cost Required", { description: "Internal reschedule requires a new ticket cost in ETB." });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const parsedCost = rescheduleCost ? parseFloat(rescheduleCost) : undefined;
+      const parsedCost = rescheduleCause === "Internal" && rescheduleCost ? parseFloat(rescheduleCost) : undefined;
       const res = await recordRescheduleV2(
         placement.name,
         rescheduleDate,
         rescheduleCause,
-        parsedCost
+        parsedCost,
+        rescheduleCause === "Internal" && newTicketNumber.trim() ? newTicketNumber.trim() : undefined
       );
       toast.success("Flight Reschedule Recorded", {
         description: res?.message || `Placement flight rescheduled to ${rescheduleDate}.`,
@@ -302,7 +311,7 @@ export function TicketingDepartureModal({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Ticket Cost (Birr / ETB)</Label>
+              <Label className="text-xs font-semibold">Ticket Cost (ETB)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -312,15 +321,9 @@ export function TicketingDepartureModal({
                 className="h-9 text-xs font-mono"
               />
               <p className="text-[11px] text-slate-400">
-                Supplying cost automatically creates a pending financial disbursement ledger record.
+                Supplying cost automatically creates a pending financial disbursement ledger record in ETB.
               </p>
             </div>
-
-            <StageFeeSection
-              placementId={placement?.name}
-              stageName="Ticketing"
-              defaultDirection="Expense"
-            />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
@@ -366,20 +369,39 @@ export function TicketingDepartureModal({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Reschedule Fee / Cost (ETB)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={rescheduleCost}
-                onChange={(e) => setRescheduleCost(e.target.value)}
-                placeholder="e.g. 5000"
-                className="h-9 text-xs font-mono"
-              />
-              <p className="text-[11px] text-slate-400">
-                Reschedule fee is only billed/logged as an internal expense when cause is Internal.
-              </p>
-            </div>
+            {rescheduleCause === "Airport" ? (
+              <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-zinc-900 text-xs text-slate-600 dark:text-zinc-400">
+                Airport/Airline reschedule: flight date moves automatically. No new ticket purchase required and no fee is charged.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">New Ticket Cost (ETB) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={rescheduleCost}
+                    onChange={(e) => setRescheduleCost(e.target.value)}
+                    placeholder="e.g. 25000"
+                    className="h-9 text-xs font-mono"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Internal reschedule purchases a new ticket and creates an auto-approved expense row.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">New Ticket Number (Optional)</Label>
+                  <Input
+                    type="text"
+                    value={newTicketNumber}
+                    onChange={(e) => setNewTicketNumber(e.target.value)}
+                    placeholder="e.g. ET-089921"
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
@@ -403,35 +425,23 @@ export function TicketingDepartureModal({
           <form onSubmit={handleRecordMedical2} className="space-y-4 py-2">
             <div className="p-3 rounded-lg border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 text-xs space-y-1">
               <div className="font-bold text-indigo-950 dark:text-indigo-300">
-                Pre-Departure Medical 2 Examination (~72h before flight)
+                Pre-Departure Medical 2 Screening (~72h before flight)
               </div>
               <p className="text-slate-600 dark:text-zinc-400 text-[11px]">
                 Final medical fitness screening prior to airport departure. UNFIT status automatically terminates and cancels both the candidate and placement.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Medical Result *</Label>
-                <select
-                  value={medical2Status}
-                  onChange={(e) => setMedical2Status(e.target.value as "FIT" | "UNFIT")}
-                  className="flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100"
-                >
-                  <option value="FIT">FIT — Clear for Travel</option>
-                  <option value="UNFIT">UNFIT — Failed Screening</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Examination Date *</Label>
-                <Input
-                  type="date"
-                  required
-                  value={medical2ExamDate}
-                  onChange={(e) => setMedical2ExamDate(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
+            <div className="space-y-1.5 max-w-xs">
+              <Label className="text-xs font-semibold">Medical Result *</Label>
+              <select
+                value={medical2Status}
+                onChange={(e) => setMedical2Status(e.target.value as "FIT" | "UNFIT")}
+                className="flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100"
+              >
+                <option value="FIT">FIT — Clear for Travel</option>
+                <option value="UNFIT">UNFIT — Failed Screening</option>
+              </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
@@ -489,13 +499,6 @@ export function TicketingDepartureModal({
                 <li>Finalizes the placement pipeline.</li>
               </ul>
             </div>
-
-            <StageFeeSection
-              placementId={placement?.name}
-              stageName="Departure"
-              defaultDirection="Expense"
-              disabled={placement.status !== "Ticketed" && placement.status !== "Departed"}
-            />
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>

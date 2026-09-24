@@ -59,6 +59,7 @@ import {
   listCountryBansV2,
   setCountryBanV2,
   removeCountryBanV2,
+  requestCountryBanExceptionV2,
   listPlacementsV2,
   listMyClearanceStepsV2,
   listEmployeesV2,
@@ -159,6 +160,11 @@ export default function ApplicantDetailPage() {
   const [isLiftBanModalOpen, setIsLiftBanModalOpen] = React.useState(false);
   const [banToLift, setBanToLift] = React.useState<any>(null);
   const [liftBanReason, setLiftBanReason] = React.useState("");
+  const [isExceptionModalOpen, setIsExceptionModalOpen] = React.useState(false);
+  const [exceptionType, setExceptionType] = React.useState<"Override" | "Lift">("Override");
+  const [exceptionAction, setExceptionAction] = React.useState<"Register" | "Generate CV" | "Restart" | "Change Destination">("Register");
+  const [exceptionCountry, setExceptionCountry] = React.useState<string>("");
+  const [exceptionReason, setExceptionReason] = React.useState<string>("");
 
   const canSetBan = roles.some((r) =>
     ["Registrar", "Complaint Manager", "Manager", "Admin", "System Manager", "Administrator"].includes(r)
@@ -441,7 +447,12 @@ export default function ApplicantDetailPage() {
   });
 
   const generateCvMutation = useMutation({
-    mutationFn: () => generateCvV2(applicantId),
+    mutationFn: () => {
+      if (applicant?.medical_status === "UNFIT") {
+        throw new Error(`${applicantId} is medically UNFIT -- a CV cannot be generated.`);
+      }
+      return generateCvV2(applicantId);
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -590,7 +601,7 @@ export default function ApplicantDetailPage() {
   const removeCountryBanMutation = useMutation({
     mutationFn: async () => {
       if (!banToLift?.name) return;
-      return await removeCountryBanV2(banToLift.name);
+      return await removeCountryBanV2(banToLift.name, liftBanReason.trim() || undefined);
     },
     onSuccess: () => {
       toast.success("Country ban lifted successfully by Manager Override.");
@@ -606,6 +617,27 @@ export default function ApplicantDetailPage() {
     },
   });
 
+  const requestExceptionMutation = useMutation({
+    mutationFn: async () => {
+      if (!exceptionReason.trim()) throw new Error("A reason is required to submit a country ban exception request.");
+      return await requestCountryBanExceptionV2(
+        applicantId,
+        exceptionType,
+        exceptionReason.trim(),
+        exceptionType === "Override" ? exceptionAction : undefined,
+        exceptionCountry || undefined
+      );
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || "Ban exception request submitted to Managers for review.");
+      setIsExceptionModalOpen(false);
+      setExceptionReason("");
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to submit exception request.");
+    },
+  });
+
   const advanceToProcessingMutation = useMutation({
     mutationFn: async () => {
       if (!activePlacement) throw new Error("No active placement found");
@@ -618,21 +650,30 @@ export default function ApplicantDetailPage() {
       if (!hasContract) {
         throw new Error("Signed employment contract must be uploaded on the system before advancing to Processing stage.");
       }
-      const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
-      const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
-      if (!isFit) {
-        throw new Error("Medical status must be set to FIT before advancing to Processing.");
-      }
-      if (!medDate) {
-        throw new Error("Date of medical examination must be entered before advancing to Processing.");
-      }
-      if (activePlacement.medical_selected_status !== "FIT") {
-        await recordSelectedMedicalResultV2(
-          activePlacement.name,
-          "FIT",
-          medDate,
-          activePlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
-        );
+
+      const today = new Date().toISOString().split("T")[0];
+      const isRegistrationFitValid =
+        applicant?.medical_status === "FIT" &&
+        Boolean(applicant?.medical_expiry_date) &&
+        (applicant?.medical_expiry_date || "") >= today;
+
+      if (!isRegistrationFitValid) {
+        const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+        const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
+        if (!isFit) {
+          throw new Error("Medical status must be set to FIT before advancing to Processing.");
+        }
+        if (!medDate) {
+          throw new Error("Date of medical examination must be entered before advancing to Processing.");
+        }
+        if (activePlacement.medical_selected_status !== "FIT") {
+          await recordSelectedMedicalResultV2(
+            activePlacement.name,
+            "FIT",
+            medDate,
+            activePlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
+          );
+        }
       }
       return advancePlacementV2(activePlacement.name, "Processing");
     },
@@ -1033,7 +1074,7 @@ export default function ApplicantDetailPage() {
                 </div>
               </div>
             </div>
-            {canLiftBan && (
+            {canLiftBan ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -1045,6 +1086,19 @@ export default function ApplicantDetailPage() {
               >
                 <Unlock className="mr-1.5 h-3.5 w-3.5" />
                 Manager Override (Lift Ban)
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setExceptionCountry(countryBans[0]?.country || applicant?.destination_country || "");
+                  setIsExceptionModalOpen(true);
+                }}
+                className="text-xs border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/60 shrink-0"
+              >
+                <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                Request Ban Exception
               </Button>
             )}
           </div>
@@ -1176,10 +1230,26 @@ export default function ApplicantDetailPage() {
             <div className="flex flex-wrap items-center gap-2">
               {can("generateCv") ? (
                 <Button
-                  onClick={() => generateCvMutation.mutate()}
-                  disabled={generateCvMutation.isPending}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
-                  title="Generate bilateral recruitment CV"
+                  onClick={() => {
+                    if (applicant.medical_status === "UNFIT") {
+                      toast.error("Medically UNFIT", {
+                        description: `${applicantId} is medically UNFIT -- a CV cannot be generated.`,
+                      });
+                      return;
+                    }
+                    generateCvMutation.mutate();
+                  }}
+                  disabled={generateCvMutation.isPending || applicant.medical_status === "UNFIT"}
+                  className={
+                    applicant.medical_status === "UNFIT"
+                      ? "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed text-xs font-semibold"
+                      : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold"
+                  }
+                  title={
+                    applicant.medical_status === "UNFIT"
+                      ? "Candidate is medically UNFIT -- a CV cannot be generated"
+                      : "Generate bilateral recruitment CV"
+                  }
                 >
                   {generateCvMutation.isPending ? (
                     <>
@@ -1187,7 +1257,7 @@ export default function ApplicantDetailPage() {
                     </>
                   ) : (
                     <>
-                      <FileText className="mr-1.5 h-3.5 w-3.5" /> Generate CV & Dossier
+                      <FileText className="mr-1.5 h-3.5 w-3.5" /> {applicant.medical_status === "UNFIT" ? "UNFIT (Cannot Generate CV)" : "Generate CV & Dossier"}
                     </>
                   )}
                 </Button>
@@ -1304,20 +1374,39 @@ export default function ApplicantDetailPage() {
                   )}
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsMedical1ModalOpen(true)}
-                className={`text-xs ${
-                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") && (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
-                    ? "border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/50"
-                    : "border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50"
-                }`}
-              >
-                <HeartPulse className="mr-1.5 h-3.5 w-3.5" />
-                Medical Screening: {(activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") ? "FIT" : (activePlacement?.medical_selected_status || applicant?.medical_status || "Pending")}
-                {(activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date) ? ` (${activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date})` : ""}
-              </Button>
+              {(() => {
+                const today = new Date().toISOString().split("T")[0];
+                const isCoveredByReg =
+                  applicant?.medical_status === "FIT" &&
+                  Boolean(applicant?.medical_expiry_date) &&
+                  (applicant?.medical_expiry_date || "") >= today;
+
+                if (isCoveredByReg) {
+                  return (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                      <HeartPulse className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Covered by registration medical (expires {applicant.medical_expiry_date})
+                    </div>
+                  );
+                }
+
+                return (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsMedical1ModalOpen(true)}
+                    className={`text-xs ${
+                      (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") && (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
+                        ? "border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 hover:bg-emerald-100/50"
+                        : "border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-400 hover:bg-amber-50"
+                    }`}
+                  >
+                    <HeartPulse className="mr-1.5 h-3.5 w-3.5" />
+                    Medical Screening: {(activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") ? "FIT" : (activePlacement?.medical_selected_status || applicant?.medical_status || "Pending")}
+                    {(activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date) ? ` (${activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date})` : ""}
+                  </Button>
+                );
+              })()}
               <Button
                 size="sm"
                 onClick={() => {
@@ -1331,22 +1420,31 @@ export default function ApplicantDetailPage() {
                     });
                     return;
                   }
-                  const isFit = activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
-                  const medDate = activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date;
-                  if (!isFit || !medDate) {
-                    toast.error("Medical FIT & Examination Date Required", {
-                      description: "Candidate's medical status must be entered as FIT and examination date provided before advancing to Processing.",
-                    });
-                    setIsMedical1ModalOpen(true);
-                    return;
+                  const today = new Date().toISOString().split("T")[0];
+                  const isCoveredByReg =
+                    applicant?.medical_status === "FIT" &&
+                    Boolean(applicant?.medical_expiry_date) &&
+                    (applicant?.medical_expiry_date || "") >= today;
+
+                  if (!isCoveredByReg) {
+                    const isFit = activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+                    const medDate = activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date;
+                    if (!isFit || !medDate) {
+                      toast.error("Medical FIT & Examination Date Required", {
+                        description: "Candidate's medical status must be entered as FIT and examination date provided before advancing to Processing.",
+                      });
+                      setIsMedical1ModalOpen(true);
+                      return;
+                    }
                   }
                   advanceToProcessingMutation.mutate();
                 }}
                 disabled={advanceToProcessingMutation.isPending || !hasUploadedContract}
                 className={
                   hasUploadedContract &&
-                  (activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") &&
-                  (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)
+                  ((applicant?.medical_status === "FIT" && Boolean(applicant?.medical_expiry_date) && (applicant?.medical_expiry_date || "") >= new Date().toISOString().split("T")[0]) ||
+                    ((activePlacement?.medical_selected_status === "FIT" || applicant?.medical_status === "FIT") &&
+                      (activePlacement?.medical_selected_examination_date || applicant?.medical_issue_date)))
                     ? "bg-blue-800 hover:bg-blue-900 text-white text-xs font-semibold"
                     : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed text-xs font-semibold"
                 }
@@ -2407,6 +2505,76 @@ export default function ApplicantDetailPage() {
               className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs"
             >
               {removeCountryBanMutation.isPending ? "Lifting Ban..." : "Lift Ban with Override"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Ban Exception Dialog */}
+      <Dialog open={isExceptionModalOpen} onOpenChange={setIsExceptionModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <ShieldAlert className="h-5 w-5 text-amber-600" />
+              Request Country Ban Exception
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Submit a formal request for a Manager to grant an override pass or lift this ban.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Request Type</Label>
+              <select
+                value={exceptionType}
+                onChange={(e) => setExceptionType(e.target.value as "Override" | "Lift")}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a]"
+              >
+                <option value="Override">One-Time Override Pass</option>
+                <option value="Lift">Permanent Ban Lift</option>
+              </select>
+            </div>
+
+            {exceptionType === "Override" && (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Blocked Action</Label>
+                <select
+                  value={exceptionAction}
+                  onChange={(e) => setExceptionAction(e.target.value as any)}
+                  className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a]"
+                >
+                  <option value="Register">Register Candidate</option>
+                  <option value="Generate CV">Generate CV</option>
+                  <option value="Restart">Restart Candidate</option>
+                  <option value="Change Destination">Change Destination</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <Label className="text-xs font-semibold">Justification / Written Reason *</Label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this exception is justified..."
+                value={exceptionReason}
+                onChange={(e) => setExceptionReason(e.target.value)}
+                className="mt-1 text-xs"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setIsExceptionModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => requestExceptionMutation.mutate()}
+              disabled={requestExceptionMutation.isPending || !exceptionReason.trim()}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs"
+            >
+              {requestExceptionMutation.isPending ? "Submitting..." : "Submit Exception Request"}
             </Button>
           </DialogFooter>
         </DialogContent>

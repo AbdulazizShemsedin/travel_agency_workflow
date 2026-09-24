@@ -139,19 +139,60 @@ export async function listNewComplaintsV2(): Promise<V2ComplaintRecord[]> {
 
 /**
  * Lists all complaints, or a single-status slice (e.g. New, Unresolved, Resolved, Dismissed).
+ * Supports pagination params (limit_start, limit_page_length, with_total=1).
  * RBAC: Complaint Manager / Manager / Admin.
  */
-export async function listComplaintsV2(status?: string): Promise<V2ComplaintRecord[]> {
-  const query = status && status.trim() && status !== "All"
-    ? `?status=${encodeURIComponent(status.trim())}`
-    : "";
+export async function listComplaintsV2(
+  status?: string,
+  limitStart?: number,
+  limitPageLength?: number,
+  withTotal?: 0
+): Promise<V2ComplaintRecord[]>;
+export async function listComplaintsV2(
+  status: string | undefined,
+  limitStart: number | undefined,
+  limitPageLength: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2ComplaintRecord[]; total_count: number }>;
+export async function listComplaintsV2(
+  status?: string,
+  limitStart: number = 0,
+  limitPageLength?: number,
+  withTotal: number = 0
+): Promise<V2ComplaintRecord[] | { data: V2ComplaintRecord[]; total_count: number }> {
+  const params = new URLSearchParams();
+  if (status && status.trim() && status !== "All") {
+    params.set("status", status.trim());
+  }
+  if (limitStart > 0) {
+    params.set("limit_start", String(limitStart));
+  }
+  if (limitPageLength !== undefined) {
+    params.set("limit_page_length", String(limitPageLength));
+  }
+  if (withTotal) {
+    params.set("with_total", "1");
+  }
 
-  const result = await requestV2<V2ComplaintRecord[] | { message?: V2ComplaintRecord[] }>(
+  const query = params.toString() ? `?${params.toString()}` : "";
+
+  const result = await requestV2<any>(
     `/api/method/agency_tracking.complaint_api.list_complaints${query}`,
     { method: "GET" }
   );
 
-  if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).message)) return (result as any).message;
-  return [];
+  let list: V2ComplaintRecord[] = [];
+  if (Array.isArray(result)) list = result;
+  else if (result && Array.isArray((result as any).data)) list = (result as any).data;
+  else if (result && Array.isArray((result as any).message)) list = (result as any).message;
+  else if (result && Array.isArray((result as any).complaints)) list = (result as any).complaints;
+
+  if (withTotal) {
+    return {
+      data: list,
+      total_count: Number(result?.total_count ?? list.length),
+    };
+  }
+
+  return list;
 }

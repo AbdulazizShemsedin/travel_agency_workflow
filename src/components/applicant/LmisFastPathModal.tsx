@@ -9,12 +9,10 @@ import {
   Loader2,
   Lock,
   User,
-  Calendar,
   Phone,
   MapPin,
   ShieldCheck,
   Building2,
-  Award,
   IdCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,8 +72,6 @@ export function LmisFastPathModal({
   const [emergencyName, setEmergencyName] = React.useState(initialValues?.emergency_contact_name || "");
   const [emergencyPhone, setEmergencyPhone] = React.useState(initialValues?.emergency_contact_phone || "");
   const [emergencyAddress, setEmergencyAddress] = React.useState(initialValues?.emergency_contact_address || "");
-  const [cocStatus, setCocStatus] = React.useState(initialValues?.coc_status || "Not Started");
-  const [examDate, setExamDate] = React.useState(initialValues?.exam_date || "");
 
   // Update local state when initialValues change
   React.useEffect(() => {
@@ -85,8 +81,6 @@ export function LmisFastPathModal({
       setEmergencyName(initialValues.emergency_contact_name || "");
       setEmergencyPhone(initialValues.emergency_contact_phone || "");
       setEmergencyAddress(initialValues.emergency_contact_address || "");
-      setCocStatus(initialValues.coc_status || "Not Started");
-      setExamDate(initialValues.exam_date || "");
     }
   }, [initialValues]);
 
@@ -99,8 +93,6 @@ export function LmisFastPathModal({
         emergency_contact_name: emergencyName.trim() || undefined,
         emergency_contact_phone: emergencyPhone.trim() || undefined,
         emergency_contact_address: emergencyAddress.trim() || undefined,
-        coc_status: cocStatus || undefined,
-        exam_date: examDate || undefined,
       };
 
       return await updateApplicantForLmisV2(payload);
@@ -216,41 +208,7 @@ export function LmisFastPathModal({
                 />
               </div>
 
-              {/* COC Status */}
-              <div className="space-y-1">
-                <Label htmlFor="coc_status" className="text-xs font-semibold flex items-center gap-1.5">
-                  <Award className="h-3 w-3 text-slate-400" />
-                  COC Certificate Status
-                </Label>
-                <select
-                  id="coc_status"
-                  value={cocStatus}
-                  onChange={(e) => setCocStatus(e.target.value)}
-                  className="select-styled w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2d2d38] bg-white dark:bg-[#141418] text-xs"
-                >
-                  <option value="Not Started">Not Started (Not Globally Mandatory)</option>
-                  <option value="Pending">Pending Evaluation</option>
-                  <option value="Issued">Issued / Certified</option>
-                </select>
-                <p className="text-[10px] text-slate-400">
-                  Per business rule, COC is tracked here but not mandatory across all corridors.
-                </p>
-              </div>
 
-              {/* Exam Date */}
-              <div className="space-y-1">
-                <Label htmlFor="exam_date" className="text-xs font-semibold flex items-center gap-1.5">
-                  <Calendar className="h-3 w-3 text-slate-400" />
-                  LMIS Exam Date
-                </Label>
-                <Input
-                  id="exam_date"
-                  type="date"
-                  value={examDate}
-                  onChange={(e) => setExamDate(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
             </div>
 
             {/* Emergency Contact Section */}

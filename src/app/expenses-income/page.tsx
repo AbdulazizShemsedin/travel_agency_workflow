@@ -690,6 +690,30 @@ export default function ExpensesIncomePage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "ledger" && (
         <div className="space-y-6">
+          {/* Awaiting FX Rate Callout Banner */}
+          {summary?.awaiting_fx && summary.awaiting_fx.count > 0 && (
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm text-amber-950 dark:text-amber-200">
+                    Transactions Awaiting FX Rate
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                    {summary.awaiting_fx.count} transaction{summary.awaiting_fx.count > 1 ? "s" : ""} awaiting FX rate (
+                    {Object.entries(summary.awaiting_fx.by_currency || {})
+                      .map(([curr, amt]) => `${Number(amt).toLocaleString()} ${curr}`)
+                      .join(", ") || "pending rates"}
+                    ) are not in these Birr totals.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="outline" className="border-amber-400 text-amber-900 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold">
+                {summary.awaiting_fx.count} Pending FX
+              </Badge>
+            </div>
+          )}
+
           {/* Top 3 KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card className="border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121215]">
@@ -849,7 +873,12 @@ export default function ExpensesIncomePage() {
                                 </Badge>
                               </td>
                               <td className="py-2.5 px-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
-                                {formattedAmount}
+                                <div>{formattedAmount}</div>
+                                {tx.awaiting_fx_rate === 1 && (
+                                  <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
+                                    Awaiting FX Rate
+                                  </Badge>
+                                )}
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <div className="font-semibold text-slate-900 dark:text-white">
@@ -872,8 +901,17 @@ export default function ExpensesIncomePage() {
                                   {stageStatus}
                                 </Badge>
                               </td>
-                              <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs truncate" title={tx.description}>
-                                {tx.description}
+                              <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs" title={tx.description}>
+                                {tx.fee_type && tx.clearance_step ? (
+                                  <div className="font-semibold text-slate-900 dark:text-zinc-100">
+                                    {tx.fee_type} · {tx.clearance_step}
+                                  </div>
+                                ) : tx.fee_type ? (
+                                  <div className="font-semibold text-slate-900 dark:text-zinc-100">
+                                    {tx.fee_type}
+                                  </div>
+                                ) : null}
+                                <div className="truncate">{tx.description}</div>
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <div className="font-semibold text-slate-900 dark:text-white">

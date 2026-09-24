@@ -66,22 +66,43 @@ export interface V2WakalaRequestItem {
 /**
  * Browses standard-track CV Generated candidates available for foreign agency selection.
  */
-export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
-  const result = await requestV2<V2PortalCandidate[] | { candidates?: V2PortalCandidate[] }>(
+export async function listPortalCandidatesV2(
+  limitStart?: number,
+  limitPageLength?: number,
+  withTotal?: 0
+): Promise<V2PortalCandidate[]>;
+export async function listPortalCandidatesV2(
+  limitStart: number | undefined,
+  limitPageLength: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2PortalCandidate[]; total_count: number }>;
+export async function listPortalCandidatesV2(
+  limitStart: number = 0,
+  limitPageLength?: number,
+  withTotal: number = 0
+): Promise<V2PortalCandidate[] | { data: V2PortalCandidate[]; total_count: number }> {
+  const body: Record<string, any> = {};
+  if (limitStart > 0) body.limit_start = limitStart;
+  if (limitPageLength !== undefined) body.limit_page_length = limitPageLength;
+  if (withTotal) body.with_total = withTotal;
+
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.portal_api.list_portal_candidates",
-    { method: "POST" }
+    { method: "POST", body }
   );
 
   let list: V2PortalCandidate[] = [];
   if (Array.isArray(result)) {
     list = result;
+  } else if (result && Array.isArray((result as any).data)) {
+    list = (result as any).data;
   } else if (result && Array.isArray((result as any).candidates)) {
     list = (result as any).candidates;
   } else if (result && Array.isArray((result as any).message)) {
     list = (result as any).message;
   }
 
-  return list.map((cand) => {
+  const mapped = list.map((cand) => {
     let computedAge = Number(cand.age) || 0;
     if (!computedAge && cand.date_of_birth) {
       const birth = new Date(cand.date_of_birth);
@@ -105,7 +126,7 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
       job_applied: cand.job_applied || (cand as any).target_job || "Housemaid",
       passport_number: cand.passport_number || (cand as any).passport_no || "",
       monthly_salary: cand.salary_amount || cand.monthly_salary || "",
-      medical_status: cand.medical_status || (cand as any)?.medicalStatus || (cand as any)?.medical || "",
+      medical_status: cand.medical_status === "FIT" ? "FIT" : "",
       medical_issue_date: cand.medical_issue_date || (cand as any)?.medical_date || "",
       place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || cand.leaving_town || "",
       age: computedAge || cand.age,
@@ -122,6 +143,15 @@ export async function listPortalCandidatesV2(): Promise<V2PortalCandidate[]> {
         "",
     };
   });
+
+  if (withTotal) {
+    return {
+      data: mapped,
+      total_count: Number(result?.total_count ?? mapped.length),
+    };
+  }
+
+  return mapped;
 }
 
 /**

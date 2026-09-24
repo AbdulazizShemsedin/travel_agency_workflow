@@ -1046,6 +1046,31 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* Awaiting FX Rate Callout Banner */}
+              {((financialOverview?.awaiting_fx && financialOverview.awaiting_fx.count > 0) ||
+                (costBreakdown?.awaiting_fx && costBreakdown.awaiting_fx.count > 0)) && (
+                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm text-amber-950 dark:text-amber-200">
+                        Transactions Awaiting Foreign Exchange Rate
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                        {(financialOverview?.awaiting_fx?.count || costBreakdown?.awaiting_fx?.count || 0)} transactions awaiting FX rate (
+                        {Object.entries((financialOverview?.awaiting_fx?.by_currency || costBreakdown?.awaiting_fx?.by_currency || {}))
+                          .map(([curr, amt]) => `${Number(amt).toLocaleString()} ${curr}`)
+                          .join(", ") || "pending rates"}
+                        ) are not in these Birr totals yet.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="border-amber-400 text-amber-900 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold">
+                    {(financialOverview?.awaiting_fx?.count || costBreakdown?.awaiting_fx?.count || 0)} Pending FX
+                  </Badge>
+                </div>
+              )}
+
               {/* Financial Ledger Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
@@ -1398,6 +1423,15 @@ export default function ReportsPage() {
                                 </td>
 
                                 <td className="py-2.5 px-3 max-w-xs">
+                                  {t.fee_type && t.clearance_step ? (
+                                    <div className="font-semibold text-slate-900 dark:text-zinc-100">
+                                      {t.fee_type} · {t.clearance_step}
+                                    </div>
+                                  ) : t.fee_type ? (
+                                    <div className="font-semibold text-slate-900 dark:text-zinc-100">
+                                      {t.fee_type}
+                                    </div>
+                                  ) : null}
                                   <div className="font-medium text-slate-800 dark:text-zinc-200 line-clamp-1">
                                     {t.description || "No description"}
                                   </div>
@@ -1433,9 +1467,14 @@ export default function ReportsPage() {
                                 </td>
 
                                 <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
-                                  <span className={cn(isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
+                                  <div className={cn(isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
                                     {isExpense ? "-" : "+"} ETB {birrAmt.toLocaleString()}
-                                  </span>
+                                  </div>
+                                  {t.awaiting_fx_rate === 1 && (
+                                    <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
+                                      Awaiting FX Rate
+                                    </Badge>
+                                  )}
                                 </td>
 
                                 <td className="py-2.5 px-3 text-center whitespace-nowrap">

@@ -108,6 +108,10 @@ export interface V2FinancialOverviewReport {
   };
   outstanding_owed_birr?: number;
   settled_in_period_birr?: number;
+  awaiting_fx?: {
+    count: number;
+    by_currency: Record<string, number>;
+  };
   [key: string]: any;
 }
 
@@ -120,6 +124,10 @@ export interface V2CostBreakdownReport {
     avg_cost_per_placement: number;
   }>;
   by_stage?: Record<string, number>;
+  awaiting_fx?: {
+    count: number;
+    by_currency: Record<string, number>;
+  };
   [key: string]: any;
 }
 
@@ -154,6 +162,9 @@ export interface V2PendingApprovalItem {
   owner?: string;
   stage_logged_at?: string;
   creation: string;
+  fee_type?: string;
+  clearance_step?: string;
+  awaiting_fx_rate?: number;
   [key: string]: any;
 }
 
@@ -407,4 +418,25 @@ export async function exportTransactionsXlsxV2(
     }
   );
 }
+
+/**
+ * Exports internal Taeshir appointment candidate schedule as a legacy .xls spreadsheet.
+ * Authoritative Backend Endpoint: report_api.export_group_schedule_bio_xlsx
+ * Response: binary application/vnd.ms-excel stream named Group_Schedule_Bio_Applicants_{date}.xls
+ */
+export async function exportGroupScheduleBioXlsV2(
+  applicants: string[]
+): Promise<Blob> {
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.report_api.export_group_schedule_bio_xlsx",
+    {
+      method: "POST",
+      body: { applicants },
+      headers: {
+        Accept: "application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream, */*",
+      },
+    }
+  );
+}
+
 

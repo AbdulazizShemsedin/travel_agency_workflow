@@ -91,9 +91,25 @@ export async function createMuayenaPlacementV2(
  */
 export async function listPlacementsV2(
   filters?: Record<string, any> | any[] | string,
+  limitPageLength?: number,
+  orderBy?: string,
+  limitStart?: number,
+  withTotal?: 0
+): Promise<V2PlacementRecord[]>;
+export async function listPlacementsV2(
+  filters: Record<string, any> | any[] | string | undefined,
+  limitPageLength: number | undefined,
+  orderBy: string | undefined,
+  limitStart: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2PlacementRecord[]; total_count: number }>;
+export async function listPlacementsV2(
+  filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "modified desc"
-): Promise<V2PlacementRecord[]> {
+  orderBy: string = "modified desc",
+  limitStart: number = 0,
+  withTotal: number = 0
+): Promise<V2PlacementRecord[] | { data: V2PlacementRecord[]; total_count: number }> {
   // Guard against TanStack Query passing QueryFunctionContext ({ queryKey, signal }) as filters
   let cleanFilters = filters;
   if (
@@ -105,34 +121,41 @@ export async function listPlacementsV2(
   }
 
   const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
-  const result = await requestV2<V2PlacementRecord[] | { placements?: V2PlacementRecord[] }>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.placement_api.list_placements",
     {
       method: "POST",
       body: {
         ...(filtersParam ? { filters: filtersParam } : {}),
         limit_page_length: limitPageLength,
+        limit_start: limitStart,
+        ...(withTotal ? { with_total: withTotal } : {}),
         order_by: orderBy,
       },
     }
   );
 
+  let list: V2PlacementRecord[] = [];
   if (Array.isArray(result)) {
-    return result;
+    list = result;
+  } else if (result && Array.isArray((result as any).placements)) {
+    list = (result as any).placements;
+  } else if (result && Array.isArray((result as any).data)) {
+    list = (result as any).data;
+  } else if (result && Array.isArray((result as any).items)) {
+    list = (result as any).items;
+  } else if (result && Array.isArray((result as any).message)) {
+    list = (result as any).message;
   }
-  if (result && Array.isArray((result as any).placements)) {
-    return (result as any).placements;
+
+  if (withTotal) {
+    return {
+      data: list,
+      total_count: Number(result?.total_count ?? list.length),
+    };
   }
-  if (result && Array.isArray((result as any).data)) {
-    return (result as any).data;
-  }
-  if (result && Array.isArray((result as any).items)) {
-    return (result as any).items;
-  }
-  if (result && Array.isArray((result as any).message)) {
-    return (result as any).message;
-  }
-  return [];
+
+  return list;
 }
 
 /**
@@ -253,15 +276,17 @@ export async function advancePlacementV2(
 }
 
 /**
- * Records ticket details and flight date. Auto-creates pending expense if cost is supplied.
+ * Records ticket details and flight date.
+ * Ticket cost is strictly in ETB (backend rejects any other currency).
+ * Re-calling with new ticket cost edits the same ledger row.
+ * Returns optional warning if row was voided/rejected by Finance.
  */
 export async function recordTicketDetailsV2(
   placementName: string,
   ticketNumber: string,
   flightDate: string,
-  ticketCost?: number,
-  currency?: string
-): Promise<{ message?: string; [key: string]: any }> {
+  ticketCost?: number
+): Promise<{ message?: string; warning?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_ticket_details",
     {
@@ -270,8 +295,8 @@ export async function recordTicketDetailsV2(
         placement_name: placementName,
         ticket_number: ticketNumber,
         flight_date: flightDate,
+        currency: "ETB",
         ...(ticketCost !== undefined ? { ticket_cost: ticketCost } : {}),
-        ...(currency ? { currency } : {}),
       },
     }
   );
@@ -279,14 +304,18 @@ export async function recordTicketDetailsV2(
 
 /**
  * Records a ticket reschedule.
+ * Airport reschedule costs nothing (no cost sent).
+ * Internal reschedule requires reschedule_cost (ETB), optional new ticket_number.
+ * Pass transaction=<reschedule_transaction> to correct a previously logged internal reschedule.
  */
 export async function recordRescheduleV2(
   placementName: string,
   rescheduleDate: string,
   rescheduleCause: "Internal" | "Airport",
   rescheduleCost?: number,
-  currency: string = "ETB"
-): Promise<{ message?: string; [key: string]: any }> {
+  ticketNumber?: string,
+  transaction?: string
+): Promise<{ message?: string; reschedule_transaction?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_reschedule",
     {
@@ -295,7 +324,10 @@ export async function recordRescheduleV2(
         placement_name: placementName,
         reschedule_date: rescheduleDate,
         reschedule_cause: rescheduleCause,
-        ...(rescheduleCost !== undefined ? { reschedule_cost: rescheduleCost, currency } : {}),
+        currency: "ETB",
+        ...(rescheduleCause === "Internal" && rescheduleCost !== undefined ? { reschedule_cost: rescheduleCost } : {}),
+        ...(ticketNumber ? { ticket_number: ticketNumber } : {}),
+        ...(transaction ? { transaction } : {}),
       },
     }
   );
@@ -365,4 +397,60 @@ export async function updatePlacementParsedFieldsV2(
   }
   return result as V2PlacementRecord;
 }
+
+/**
+ * Lists Placements scoped to the current foreign agency portal user.
+ * Authoritative Backend Endpoint: placement_api.list_my_placements
+ */
+export async function listMyPlacementsV2(
+  limitStart?: number,
+  limitPageLength?: number,
+  withTotal?: 0
+): Promise<V2PlacementRecord[]>;
+export async function listMyPlacementsV2(
+  limitStart: number | undefined,
+  limitPageLength: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2PlacementRecord[]; total_count: number }>;
+export async function listMyPlacementsV2(
+  limitStart: number = 0,
+  limitPageLength?: number,
+  withTotal: number = 0
+): Promise<V2PlacementRecord[] | { data: V2PlacementRecord[]; total_count: number }> {
+  const body: Record<string, any> = {};
+  if (limitStart > 0) body.limit_start = limitStart;
+  if (limitPageLength !== undefined) body.limit_page_length = limitPageLength;
+  if (withTotal) body.with_total = withTotal;
+
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.placement_api.list_my_placements",
+    {
+      method: "POST",
+      body,
+    }
+  );
+
+  let list: V2PlacementRecord[] = [];
+  if (Array.isArray(result)) {
+    list = result;
+  } else if (result && Array.isArray((result as any).placements)) {
+    list = (result as any).placements;
+  } else if (result && Array.isArray((result as any).data)) {
+    list = (result as any).data;
+  } else if (result && Array.isArray((result as any).items)) {
+    list = (result as any).items;
+  } else if (result && Array.isArray((result as any).message)) {
+    list = (result as any).message;
+  }
+
+  if (withTotal) {
+    return {
+      data: list,
+      total_count: Number(result?.total_count ?? list.length),
+    };
+  }
+
+  return list;
+}
+
 

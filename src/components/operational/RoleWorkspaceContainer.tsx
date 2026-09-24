@@ -10,6 +10,8 @@ import {
   Plane,
   Plus,
   ShieldCheck,
+  FileSpreadsheet,
+  ShieldAlert,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -21,6 +23,8 @@ import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
 import { DepartureWorkspace } from "./workspaces/DepartureWorkspace";
 import { V2ClearanceQueueWorkspace } from "./V2ClearanceQueueWorkspace";
+import { ClearanceGridWorkspace } from "./ClearanceGridWorkspace";
+import { CountryBanRequestsWorkspace } from "./workspaces/CountryBanRequestsWorkspace";
 import { ApplicantTable } from "@/components/applicant/ApplicantTable";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -54,11 +58,13 @@ export function RoleWorkspaceContainer() {
 
   const allTabsConfig = [
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
+    { id: "grid", label: "Clearance Grid", icon: FileSpreadsheet, desc: "Excel-Style Matrix" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
     { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Departure" },
     { id: "clearance", label: "Clearance List", icon: ShieldCheck, desc: "Step Pipeline" },
+    { id: "ban_requests", label: "Ban Requests", icon: ShieldAlert, desc: "Exception Approval Queue" },
   ];
 
   // Determine available tabs and default workspace for current user
@@ -82,6 +88,11 @@ export function RoleWorkspaceContainer() {
     const allowed: string[] = ["directory"]; // All internal staff can access the Applicant List directory
     let prefTab = "directory";
 
+    // 0. Clearance Grid: Accessible to clearance officers & admins
+    if (hasRoleKeyword(["lms", "lmis", "taeshir", "teshir", "te'shir", "injaz", "telesign", "embassy", "clearance"])) {
+      allowed.push("grid");
+    }
+
     // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
     if (hasRoleKeyword(["lms", "lmis"])) {
       allowed.push("lms");
@@ -104,6 +115,11 @@ export function RoleWorkspaceContainer() {
     if (hasRoleKeyword(["ticket", "ticketer"])) {
       allowed.push("departure");
       if (prefTab === "directory") prefTab = "departure";
+    }
+
+    // 5. Country Ban Requests: accessible to registrars, complaint managers, and admins
+    if (hasRoleKeyword(["registrar", "complaint", "manager", "admin", "system manager"])) {
+      allowed.push("ban_requests");
     }
 
     // 5. Clearance List (Step Pipeline): strictly restricted to Admin (Administrator, System Manager, Admin, Manager)
@@ -151,7 +167,7 @@ export function RoleWorkspaceContainer() {
   });
 
   // Fetch live workspace data for active operational stream
-  const isOperationalTab = activeTab !== "directory" && activeTab !== "clearance";
+  const isOperationalTab = activeTab !== "directory" && activeTab !== "clearance" && activeTab !== "grid";
   const isTabAllowed = availableTabs.some((t) => t.id === activeTab);
   const streamType = (isOperationalTab ? activeTab : "lms") as OperationalStreamType;
 
@@ -169,6 +185,12 @@ export function RoleWorkspaceContainer() {
 
   // Workspace Titles & Descriptions for header
   const getHeaderInfo = () => {
+    if (activeTab === "grid") {
+      return {
+        title: "Clearance Grid",
+        subtitle: "Excel-style spreadsheet for batch clearance step management.",
+      };
+    }
     if (activeTab === "lms") {
       return {
         title: "LMIS Clearance",
@@ -313,7 +335,13 @@ export function RoleWorkspaceContainer() {
           />
         )}
 
+        {activeTab === "grid" && isTabAllowed && <ClearanceGridWorkspace />}
+
         {activeTab === "clearance" && isTabAllowed && <V2ClearanceQueueWorkspace />}
+
+        {activeTab === "ban_requests" && isTabAllowed && (
+          <CountryBanRequestsWorkspace onRefresh={refetch} />
+        )}
 
         {!isTabAllowed && (
           <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
