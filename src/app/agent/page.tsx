@@ -86,6 +86,8 @@ export default function AgentDiscoveryPage() {
     queryKey: ["contractors-list"],
     queryFn: () => listContractorsV2(),
     enabled: !defaultContractor,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const fallbackContractor =
@@ -165,6 +167,8 @@ export default function AgentDiscoveryPage() {
       religion,
     ],
     queryFn: () => listPortalCandidatesV2(),
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Filter candidates client-side by search keyword and exclude locally removed

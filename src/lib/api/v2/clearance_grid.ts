@@ -18,11 +18,12 @@ export type ClearanceGridStepType =
   | "Kuwait Embassy";
 
 export interface ClearanceGridColumn {
+  field: string;
   name: string;
   label: string;
-  type?: "string" | "select" | "date" | "boolean" | "number";
+  type?: string;
   editable: boolean;
-  options?: string[]; // Forward-moves only for status
+  options?: string[] | null;
   width?: number;
 }
 
@@ -79,21 +80,31 @@ export interface ClearanceGridListResponse {
 export async function getClearanceGridColumnsV2(
   stepType: ClearanceGridStepType | string
 ): Promise<ClearanceGridColumn[]> {
-  const res = await requestV2<
-    ClearanceGridColumn[] | { message?: ClearanceGridColumn[] | { columns?: ClearanceGridColumn[] } }
-  >("/api/method/agency_tracking.clearance_grid.get_clearance_grid_columns", {
-    method: "POST",
-    body: { step_type: stepType },
-  });
-
-  if (Array.isArray(res)) return res;
-  if (res && "message" in res) {
-    if (Array.isArray(res.message)) return res.message;
-    if (res.message && Array.isArray((res.message as any).columns)) {
-      return (res.message as any).columns;
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.clearance_grid.get_clearance_grid_columns",
+    {
+      method: "POST",
+      body: { step_type: stepType },
     }
-  }
-  return [];
+  );
+
+  const rawList: any[] = Array.isArray(res)
+    ? res
+    : Array.isArray(res?.message)
+    ? res.message
+    : Array.isArray(res?.message?.columns)
+    ? res.message.columns
+    : [];
+
+  return rawList.map((c: any) => ({
+    field: String(c.field || c.name || ""),
+    name: String(c.name || c.field || ""),
+    label: String(c.label || c.field || c.name || ""),
+    type: String(c.type || "Data"),
+    editable: Boolean(c.editable),
+    options: Array.isArray(c.options) ? c.options : null,
+    width: typeof c.width === "number" ? c.width : undefined,
+  }));
 }
 
 /**

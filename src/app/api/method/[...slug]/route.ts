@@ -965,7 +965,8 @@ export async function GET(
         String(data?.exception || "").includes("PermissionError") ||
         String(data?._error_message || "").includes("No permission")
       );
-      if (!isExpectedAuthChallenge && !isPermissionError) {
+      const isPhotoNotFoundError = res.status === 404 && methodPath.includes("get_candidate_photo");
+      if (!isExpectedAuthChallenge && !isPermissionError && !isPhotoNotFoundError) {
         console.error("[PROXY ERROR GET]", methodPath, res.status, data);
       } else if (isPermissionError) {
         console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");

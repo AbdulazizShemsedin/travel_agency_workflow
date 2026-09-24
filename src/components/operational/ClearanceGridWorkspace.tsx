@@ -130,6 +130,14 @@ export function ClearanceGridWorkspace({
   const totalCount = gridData?.total_count || 0;
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
+  // Filter out redundant columns that are already explicitly rendered in the leading section
+  const displayColumns = React.useMemo(() => {
+    return columns.filter((c) => {
+      const k = String(c.field || c.name || "").toLowerCase();
+      return k !== "applicant" && k !== "full_name" && k !== "passport_number";
+    });
+  }, [columns]);
+
   // Track unsaved row count
   const changedRowCount = Object.keys(cellChanges).length;
 
@@ -470,20 +478,22 @@ export function ClearanceGridWorkspace({
                 <th className="py-2.5 px-3 whitespace-nowrap w-12 text-center">#</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Applicant</th>
                 <th className="py-2.5 px-3 whitespace-nowrap">Passport</th>
-                {columns.map((col) => {
+                {displayColumns.map((col) => {
+                  const fieldKey = String(col.field || col.name || "");
+                  const colLabel = String(col.label || fieldKey);
                   const displayLabel =
-                    col.name === "injaz_application_id" ||
-                    col.name === "injaz_number" ||
-                    col.label === "Injaz Application ID" ||
-                    col.label === "E.No" ||
-                    col.label === "E-No" ||
-                    col.label === "E. No" ||
-                    col.label.toLowerCase().includes("e.no")
+                    fieldKey === "injaz_application_id" ||
+                    fieldKey === "injaz_number" ||
+                    colLabel === "Injaz Application ID" ||
+                    colLabel === "E.No" ||
+                    colLabel === "E-No" ||
+                    colLabel === "E. No" ||
+                    colLabel.toLowerCase().includes("e.no")
                       ? "E-number (Injaz Application No.)"
-                      : col.label;
+                      : colLabel;
                   return (
                     <th
-                      key={col.name}
+                      key={fieldKey || colLabel}
                       className="py-2.5 px-3 whitespace-nowrap"
                       style={{ width: col.width ? `${col.width}px` : undefined }}
                     >
@@ -528,18 +538,21 @@ export function ClearanceGridWorkspace({
                     </td>
 
                     {/* Dynamic Columns from get_clearance_grid_columns */}
-                    {columns.map((col) => {
-                      const fieldKey = col.name;
+                    {displayColumns.map((col) => {
+                      const fieldKey = String(col.field || col.name || "");
                       const isStaged = cellChanges[row.name]?.[fieldKey] !== undefined;
                       const currentValue = isStaged
                         ? cellChanges[row.name][fieldKey]
                         : row[fieldKey];
                       const cellError = rowErrors[fieldKey];
+                      const colType = String(col.type || "").toLowerCase();
+                      const isDateField =
+                        colType === "date" || fieldKey.toLowerCase().includes("date");
 
                       if (!col.editable) {
                         return (
                           <td
-                            key={col.name}
+                            key={fieldKey || col.label}
                             className="py-2 px-3 whitespace-nowrap text-slate-500 bg-slate-50/40 dark:bg-[#141419]"
                           >
                             <span className="font-mono text-[11px]">
@@ -552,7 +565,7 @@ export function ClearanceGridWorkspace({
                       // Editable Status Select
                       if (fieldKey === "status" && col.options && col.options.length > 0) {
                         return (
-                          <td key={col.name} className="py-1 px-2 whitespace-nowrap">
+                          <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
                             <div className="relative">
                               <select
                                 value={currentValue || ""}
@@ -598,7 +611,7 @@ export function ClearanceGridWorkspace({
                             : ["Pending", "Scheduled", "Completed", "Failed"];
 
                         return (
-                          <td key={col.name} className="py-1 px-2 whitespace-nowrap">
+                          <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
                             <select
                               value={currentValue || "Pending"}
                               onChange={(e) =>
@@ -628,9 +641,9 @@ export function ClearanceGridWorkspace({
                       }
 
                       // Date Input
-                      if (col.type === "date" || fieldKey.includes("date")) {
+                      if (isDateField) {
                         return (
-                          <td key={col.name} className="py-1 px-2 whitespace-nowrap">
+                          <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
                             <Input
                               type="date"
                               value={currentValue ? String(currentValue).split("T")[0] : ""}
@@ -654,7 +667,7 @@ export function ClearanceGridWorkspace({
 
                       // Generic Text Input
                       return (
-                        <td key={col.name} className="py-1 px-2 whitespace-nowrap">
+                        <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
                           <Input
                             value={currentValue ?? ""}
                             onChange={(e) =>

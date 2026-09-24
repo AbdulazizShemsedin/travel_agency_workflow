@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useQuery } from "@tanstack/react-query";
 import { listContractorsV2, V2ContractorRecord } from "@/lib/api/v2/contractors";
 import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
@@ -49,9 +50,17 @@ export function AgentLayout({
   const [isMobileNavOpen, setIsMobileNavOpen] = React.useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
-  const [contractorsList, setContractorsList] = React.useState<V2ContractorRecord[]>([]);
-
   const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
+
+  // Cached query with 10min staleTime and shared query key to prevent repeated fetches
+  const { data: contractorsList = [] } = useQuery<V2ContractorRecord[]>({
+    queryKey: ["contractors-list"],
+    queryFn: () => listContractorsV2(),
+    enabled: !isAgencyUser,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   const currentAgencyDisplay =
     agencyContext?.contractor?.company_name ||
     agencyContext?.contractor?.name ||
@@ -65,20 +74,10 @@ export function AgentLayout({
   }, [pathname]);
 
   React.useEffect(() => {
-    // Only load contractor list for internal staff who have permission to switch view
-    if (!isAgencyUser) {
-      listContractorsV2()
-        .then((list) => {
-          if (Array.isArray(list) && list.length > 0) {
-            setContractorsList(list);
-            if (!activeContractor && onContractorChange) {
-              onContractorChange(list[0].name || list[0].company_name || "");
-            }
-          }
-        })
-        .catch((err) => console.warn("Failed to load contractors list:", err));
+    if (!isAgencyUser && !activeContractor && contractorsList.length > 0 && onContractorChange) {
+      onContractorChange(contractorsList[0].name || contractorsList[0].company_name || "");
     }
-  }, [isAgencyUser, activeContractor, onContractorChange]);
+  }, [isAgencyUser, activeContractor, contractorsList, onContractorChange]);
 
   React.useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");

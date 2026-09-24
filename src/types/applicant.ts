@@ -427,6 +427,7 @@ export interface PortalAvailableCandidate {
   destination_country: string;
   job_applied: string;
   monthly_salary?: number | string;
+  photograph?: string;
   photo_passport?: string;
   photo_full_body?: string;
   skill_cleaning?: number | string | boolean;

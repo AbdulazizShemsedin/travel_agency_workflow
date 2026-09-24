@@ -37,8 +37,12 @@ export function CandidateCard({
   // file URL fields aren't readable by a foreign agency session.
   const applicantName = candidate.name || "";
 
-  const passportPhotoSrc = getCandidatePhotoUrl(applicantName, "photograph");
-  const fullBodyPhotoSrc = getCandidatePhotoUrl(applicantName, "photo_full_body");
+  // Only request photo if candidate actually has photo metadata on file
+  const rawPassportPhoto = candidate.photograph || candidate.photo_passport;
+  const rawFullBodyPhoto = candidate.photo_full_body;
+
+  const passportPhotoSrc = rawPassportPhoto ? getCandidatePhotoUrl(applicantName, "photograph") : "";
+  const fullBodyPhotoSrc = rawFullBodyPhoto ? getCandidatePhotoUrl(applicantName, "photo_full_body") : "";
 
   const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
   const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);

@@ -59,8 +59,15 @@ export function CandidateDetailModal({
 
   // The portal must load photos via the sanctioned get_candidate_photo endpoint; the raw
   // file URL fields aren't readable by a foreign agency session.
-  const passportPhotoSrc = getCandidatePhotoUrl(candidate.name, "photograph");
-  const fullBodyPhotoSrc = getCandidatePhotoUrl(candidate.name, "photo_full_body");
+  const rawPassportPhoto =
+    merged?.photograph ||
+    merged?.photo_passport ||
+    candidate?.photograph ||
+    candidate?.photo_passport;
+  const rawFullBodyPhoto = merged?.photo_full_body || candidate?.photo_full_body;
+
+  const passportPhotoSrc = rawPassportPhoto ? getCandidatePhotoUrl(candidate.name, "photograph") : "";
+  const fullBodyPhotoSrc = rawFullBodyPhoto ? getCandidatePhotoUrl(candidate.name, "photo_full_body") : "";
 
   const hasPassport = !passportImgError && Boolean(passportPhotoSrc);
   const hasFullBody = !fullBodyImgError && Boolean(fullBodyPhotoSrc);
