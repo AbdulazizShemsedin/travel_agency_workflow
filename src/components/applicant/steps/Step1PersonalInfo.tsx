@@ -1484,7 +1484,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
                 <div className="space-y-1.5">
                   <Label htmlFor="city" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    City <span className="text-rose-500">*</span>
+                    City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                   </Label>
                   <Input
                     id="city"
