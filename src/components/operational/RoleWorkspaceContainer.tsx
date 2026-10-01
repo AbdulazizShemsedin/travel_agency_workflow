@@ -256,7 +256,7 @@ export function RoleWorkspaceContainer() {
       {/* Operational Workspace Navigation Tabs                         */}
       {/* ------------------------------------------------------------- */}
       {availableTabs.length > 1 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
+        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
           {availableTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -265,6 +265,7 @@ export function RoleWorkspaceContainer() {
               <button
                 key={tab.id}
                 type="button"
+                data-tour={`applicants-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   "flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
@@ -298,47 +299,55 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "lms" && isTabAllowed && (
-          <LMISWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
+          <div data-tour="lmis-workspace-table">
+            <LMISWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              employees={employees}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "injaz" && isTabAllowed && (
-          <InjazWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
+          <div data-tour="injaz-workspace-table">
+            <InjazWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              employees={employees}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "embassy" && isTabAllowed && (
-          <EmbassyWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
+          <div data-tour="embassy-workspace-table">
+            <EmbassyWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              employees={employees}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "departure" && isTabAllowed && (
-          <DepartureWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            employees={employees}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-          />
+          <div data-tour="departure-workspace-table">
+            <DepartureWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              employees={employees}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "ban_requests" && isTabAllowed && (

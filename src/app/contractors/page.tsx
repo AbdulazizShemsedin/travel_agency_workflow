@@ -336,6 +336,7 @@ export default function ContractorsPage() {
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
+          data-tour="contractors-rate-matrix-button"
           className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-semibold text-xs shadow-sm"
         >
           <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Agency
@@ -400,7 +401,7 @@ export default function ContractorsPage() {
       </div>
 
       {/* Contractors Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+      <div data-tour="contractors-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />

@@ -600,6 +600,7 @@ export default function EmployeesPage() {
 
         <button
           type="button"
+          data-tour="employees-default-roles-tab"
           onClick={() => setActiveTab("defaults")}
           className={cn(
             "flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors shrink-0",
@@ -716,7 +717,7 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Employees Directory Table                                     */}
       {/* ------------------------------------------------------------- */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] overflow-hidden shadow-xs">
+      <div data-tour="employees-roster-table" className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] overflow-hidden shadow-xs">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
             <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />

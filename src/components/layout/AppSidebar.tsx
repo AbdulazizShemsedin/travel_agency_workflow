@@ -18,10 +18,15 @@ import {
   AlertCircle,
   ExternalLink,
   MessageSquare,
+  Sparkles,
+  Compass,
+  HelpCircle,
+  Keyboard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useTour } from "@/components/tour/TourProvider";
 import { PermissionAction, isPureForeignAgency, normalizeRoleDisplay, isAdminUser } from "@/lib/auth/permissions";
 
 interface NavItemConfig {
@@ -29,18 +34,19 @@ interface NavItemConfig {
   href: string;
   icon: any;
   action: PermissionAction;
+  tourId: string;
 }
 
 const navItems: NavItemConfig[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard" },
-  { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants" },
-  { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication" },
-  { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers" },
-  { label: "Foreign Agencies", href: "/contractors", icon: Building2, action: "manageContractors" },
-  { label: "Commissions", href: "/commission", icon: DollarSign, action: "manageCommission" },
-  { label: "Complaints", href: "/complaints", icon: AlertCircle, action: "manageComplaints" },
-  { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports" },
-  { label: "Finance", href: "/expenses-income", icon: Receipt, action: "viewFinance" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard", tourId: "sidebar-nav-dashboard" },
+  { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants", tourId: "sidebar-nav-applicants" },
+  { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication", tourId: "sidebar-nav-chat" },
+  { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers", tourId: "sidebar-nav-employees" },
+  { label: "Foreign Agencies", href: "/contractors", icon: Building2, action: "manageContractors", tourId: "sidebar-nav-contractors" },
+  { label: "Commissions", href: "/commission", icon: DollarSign, action: "manageCommission", tourId: "sidebar-nav-commission" },
+  { label: "Complaints", href: "/complaints", icon: AlertCircle, action: "manageComplaints", tourId: "sidebar-nav-complaints" },
+  { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports", tourId: "sidebar-nav-reports" },
+  { label: "Finance", href: "/expenses-income", icon: Receipt, action: "viewFinance", tourId: "sidebar-nav-finance" },
 ];
 
 interface AppSidebarProps {
@@ -58,6 +64,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { user, authUser, can, roles } = useAuth();
+  const { openTourSelectModal } = useTour();
 
   // Check if current user is an external Foreign Agency partner
   const isForeignAgency = isPureForeignAgency(authUser);
@@ -116,7 +123,7 @@ export function AppSidebar({
         )}
       >
         {/* Brand Header */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-100 dark:border-[#222227] px-4">
+        <div data-tour="sidebar-brand" className="flex h-16 items-center justify-between border-b border-slate-100 dark:border-[#222227] px-4">
           <Link
             href="/dashboard"
             onClick={onCloseMobile}
@@ -150,7 +157,7 @@ export function AppSidebar({
 
         {/* Primary Action: Add Applicant Button */}
         {canRegister && (
-          <div className="p-3">
+          <div className="p-3" data-tour="add-applicant-button">
             <Link href="/applicants/new" onClick={onCloseMobile}>
               <Button
                 className={cn(
@@ -167,7 +174,7 @@ export function AppSidebar({
         )}
 
         {/* Navigation Links (Role-Aware) */}
-        <nav className="flex-1 space-y-1 px-2.5 py-2 overflow-y-auto">
+        <nav data-tour="sidebar-nav" className="flex-1 space-y-1 px-2.5 py-2 overflow-y-auto">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -180,6 +187,7 @@ export function AppSidebar({
                 <Link
                   href={item.href}
                   onClick={onCloseMobile}
+                  data-tour={item.tourId}
                   title={!showLabels ? item.label : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -204,6 +212,24 @@ export function AppSidebar({
 
         {/* Bottom Section */}
         <div className="border-t border-slate-100 dark:border-[#222227] p-3 space-y-2">
+          {/* Guided Tour & Demo Trigger */}
+          <button
+            type="button"
+            onClick={() => {
+              onCloseMobile?.();
+              openTourSelectModal();
+            }}
+            data-tour="sidebar-tour-button"
+            title={!showLabels ? "Tour & Presentation (Alt+T)" : undefined}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer group",
+              !showLabels ? "justify-center px-2" : ""
+            )}
+          >
+            <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:rotate-12 transition-transform" />
+            {showLabels && <span>Tour & Demo</span>}
+          </button>
+
           {canAccessAgentPortal && (
             <Link
               href="/agent"
@@ -227,6 +253,7 @@ export function AppSidebar({
           <Link
             href="/settings"
             onClick={onCloseMobile}
+            data-tour="sidebar-settings"
             title={!showLabels ? "Settings" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-[#18181f] hover:text-slate-900 dark:hover:text-white transition",
@@ -240,6 +267,7 @@ export function AppSidebar({
           {/* User Card */}
           {user ? (
             <div
+              data-tour="sidebar-user-card"
               className={cn(
                 "flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50/80 dark:bg-[#141418] p-2",
                 !showLabels ? "justify-center p-1.5" : ""

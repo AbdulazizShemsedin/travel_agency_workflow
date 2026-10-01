@@ -455,7 +455,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 1. Top Stat Metric Cards (Clickable redirection) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="dashboard-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card
           onClick={() => router.push("/applicants")}
           role="button"
@@ -558,7 +558,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 2. Pipeline Overview Section */}
-      <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs overflow-hidden">
+      <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs overflow-hidden">
         <CardHeader className="border-b border-slate-100 dark:border-[#222227] pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
@@ -639,7 +639,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* 3. Expiry Alerts & Pending Tasks */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Expiry Alerts */}
         <div className="lg:col-span-6 space-y-4">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">

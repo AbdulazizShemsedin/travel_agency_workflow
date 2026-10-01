@@ -475,7 +475,7 @@ export function CVWorkspace({
       },
       {
         id: "actions",
-        header: "ACTIONS",
+        header: <span data-tour="cv-actions-header">ACTIONS</span>,
         width: "165px",
         align: "center",
         sortable: false,
@@ -625,6 +625,7 @@ export function CVWorkspace({
         type="button"
         variant="outline"
         size="sm"
+        data-tour="cv-export-button"
         onClick={handleExportCsv}
         className="h-8 text-xs gap-1.5 font-semibold text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
         title="Export to CSV Excel"
@@ -636,7 +637,7 @@ export function CVWorkspace({
   );
 
   return (
-    <div className="space-y-4">
+    <div data-tour="cv-workspace-table" className="space-y-4">
       {/* ------------------------------------------------------------- */}
       {/* CV Operational Table (without slide drawer popup)              */}
       {/* ------------------------------------------------------------- */}

@@ -567,6 +567,7 @@ export default function ReportsPage() {
               <Button
                 type="button"
                 size="sm"
+                data-tour="reports-export-xlsx"
                 disabled={isExportingXlsx}
                 onClick={handleExportXlsx}
                 className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
@@ -598,7 +599,7 @@ export default function ReportsPage() {
       {/* ------------------------------------------------------------- */}
       {/* Primary Report Navigation Tabs                                */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
+      <div data-tour="reports-tabs" className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
         {isManagerOrAdmin && (
           <button
             type="button"

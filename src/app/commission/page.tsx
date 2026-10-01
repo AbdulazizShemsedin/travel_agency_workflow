@@ -1318,7 +1318,7 @@ export default function AdminCommissionPage() {
           </div>
 
           {/* Owed Table Card */}
-          <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+          <Card data-tour="commission-owed-table" className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -1542,7 +1542,7 @@ export default function AdminCommissionPage() {
       {/* TAB 2: CONSOLIDATED BATCH MANAGEMENT (MASTER-DETAIL)                */}
       {/* ------------------------------------------------------------------- */}
       {activeTab === "batch_management" && (
-        <div className="flex flex-col lg:flex-row items-start gap-4">
+        <div data-tour="commission-batches-table" className="flex flex-col lg:flex-row items-start gap-4">
           {/* Left Column: Batch Selection Sidebar */}
           <div className="w-full lg:w-80 xl:w-96 shrink-0 space-y-3">
             {/* Filter Card */}

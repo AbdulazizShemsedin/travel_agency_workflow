@@ -440,3 +440,35 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Hoisted state declarations in `src/app/applicants/[id]/cv/page.tsx` before early returns, strictly adhering to React Rules of Hooks.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and successful production build (`npm run build`, 25/25 routes compiled).
 
+### 12. Guided Tour & Universal Keyboard Shortcuts System (2026-10-01)
+- **Unified Reusable Tour Engine (`src/components/tour/*`)**:
+  - Built a production-grade, zero-dependency tour engine supporting two distinct modes on the exact same underlying infrastructure: Mode 1 (Onboarding Tour) and Mode 2 (Client Presentation Tour).
+  - Mode 1: Concise 8-step walkthrough of everyday operational workflows, navigation, and intake actions. Can be skipped, completed (persisted via `localStorage`), and restarted at any time.
+  - Mode 2: Structured into **11 logical sections** based exclusively on the current live application:
+    1. Executive Overview & Intelligence (`/dashboard`)
+    2. Candidate Intake & Smart Registration (`/applicants/new`)
+    3. Candidate CV Database & Verification (`/applicants?tab=cv`)
+    4. Applicant Master Directory & Profiles (`/applicants`)
+    5. Corridor Clearance & Embassy Operations (`/applicants?tab=lms`)
+    6. Real-Time Communication & Messaging (`/chat`)
+    7. Foreign Agencies & Partner Portal (`/contractors`)
+    8. Commission Billing & Settlement (`/commission`)
+    9. Agency Finance & Accounting (`/expenses-income`)
+    10. Management Analytics & Reports (`/reports`)
+    11. System Administration & Role Governance (`/employees`)
+  - **Presenter Controls & Interactive Navigation**:
+    - Section Introductions before entering each major area explaining system capability.
+    - Interactive Table of Contents / Section Menu modal allowing direct section jumping with visited checkmarks.
+    - Progress counters displaying both overall section progress ("Section 3 of 11") and step progress ("Step 2 of 4").
+    - Presenter controls: Previous, Next, Pause/Resume (with a floating live-interaction bar allowing normal page clicks while paused), Skip Section, Exit, and Restart.
+    - Welcome screen with agenda list and Final Summary conclusion screen recapping all visited modules.
+    - Cross-route transitions with 2.5-second resilient element polling and graceful missing-target failsafe alerts (zero frozen overlays).
+- **Universal Keyboard Shortcuts Engine**:
+  - Navigation chords with 900ms sequencing: `g d` (Dashboard), `g a` (Applicants), `g c` (Chat), `g e` (Employees), `g m` (Commission), `g f` (Finance), `g r` (Reports), `g s` (Settings), `g p` (Foreign Agencies), `n a` (New Applicant).
+  - Active tour navigation: `→` or `Enter` (Next), `←` (Previous), `Space` (Pause/Resume presentation), `Esc` (Exit), `m` or `t` (Section Menu).
+  - Global triggers: `?` or `Shift + /` (Shortcuts Cheat Sheet), `Alt + T` (Tour chooser), `Alt + P` (Presentation Mode), `Alt + O` (Onboarding Tour).
+  - Strict input safety: keyboard events are suppressed when user is typing in `<input>`, `<textarea>`, `<select>`, or `contenteditable`.
+- **Zero Mock Data & Zero Data Mutation**:
+  - The tour system strictly highlights and explains real elements without creating fake demo records or mutating backend data.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and successful production build (`npm run build`, 25/25 routes compiled).
+

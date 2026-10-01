@@ -636,7 +636,7 @@ export default function ExpensesIncomePage() {
       {/* ------------------------------------------------------------- */}
       {/* Primary Navigation Tabs                                       */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
+      <div data-tour="finance-tabs" className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("ledger")}
@@ -689,7 +689,7 @@ export default function ExpensesIncomePage() {
       {/* TAB 1: FINANCIAL LEDGER & SUMMARY                             */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "ledger" && (
-        <div className="space-y-6">
+        <div data-tour="finance-ledger-table" className="space-y-6">
           {/* Awaiting FX Rate Callout Banner */}
           {summary?.awaiting_fx && summary.awaiting_fx.count > 0 && (
             <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">

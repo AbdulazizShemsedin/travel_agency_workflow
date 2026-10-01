@@ -625,7 +625,7 @@ export function ApplicantTable() {
       )}
 
       {/* Header Controls: Search, Stage Filter */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div data-tour="applicants-filter-bar" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <Input
@@ -671,7 +671,7 @@ export function ApplicantTable() {
       </div>
 
       {/* Table Container */}
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
+      <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
         <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
           {/*
             Column order:

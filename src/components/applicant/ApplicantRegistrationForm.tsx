@@ -817,7 +817,7 @@ export function ApplicantRegistrationForm({
   const isSaving = saveDraftMutation.isPending || saveChangesMutation.isPending;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div data-tour="registration-form-container" className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header Card: Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white dark:bg-[#15151a] p-4 rounded-xl border border-slate-200 dark:border-[#26262d] shadow-xs">
         <div>
@@ -942,6 +942,7 @@ export function ApplicantRegistrationForm({
       {/* 2. PASSPORT QUICK-SCAN & AUTO-FILL HERO EXTRACTOR (Previous UI Feature restored) */}
       <Card
         id="field-passport_scan"
+        data-tour="passport-dropzone"
         className={`border-2 border-dashed ${
           errors.passport_scan
             ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20"
@@ -1058,7 +1059,7 @@ export function ApplicantRegistrationForm({
       {/* 3. MEDIA TABS & UPLOAD SECTION (With crystal-clear selected background) */}
       <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] overflow-hidden shadow-xs">
         {/* Unmistakable High-Contrast Media Tabs (User Feedback Addressed) */}
-        <div className="p-3 border-b border-slate-200 dark:border-[#26262d] bg-slate-50/90 dark:bg-[#16161e]">
+        <div data-tour="registration-step-nav" className="p-3 border-b border-slate-200 dark:border-[#26262d] bg-slate-50/90 dark:bg-[#16161e]">
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Tab: Photo */}
             <button
