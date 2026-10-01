@@ -114,19 +114,40 @@ export function ChatContainer() {
       typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
     );
     const allRoles = new Set([...userRoles, ...authUserRoles]);
-    const hasAdmin =
-      allRoles.has("administrator") ||
-      allRoles.has("system manager") ||
-      allRoles.has("admin") ||
-      currentEmail === "administrator";
-    if (hasAdmin) return false;
+
+    // Internal staff (Admin, Manager, LMIS, Embassy, Taeshir, etc.) are never foreign agency
+    const internalRoles = [
+      "administrator",
+      "system manager",
+      "admin",
+      "manager",
+      "registrar",
+      "clearance officer",
+      "finance manager",
+      "complaint manager",
+      "ticketer",
+      "communication manager",
+      "contract parser",
+      "saudi lmis",
+      "saudi taeshir",
+      "saudi embassy",
+      "kuwait lmis",
+      "kuwait telesign",
+      "kuwait embassy",
+      "medical officer",
+    ];
+    if (
+      currentEmail === "administrator" ||
+      authUser?.is_internal_staff === true ||
+      internalRoles.some((r) => allRoles.has(r))
+    ) {
+      return false;
+    }
 
     return (
       allRoles.has("foreign agency") ||
       allRoles.has("foreign agent") ||
-      allRoles.has("agent") ||
-      Boolean((authUser as any)?.contractor) ||
-      (authUser as any)?.is_internal_staff === false
+      Boolean((authUser as any)?.contractor)
     );
   }, [roles, authUser, currentEmail]);
 
@@ -188,7 +209,6 @@ export function ChatContainer() {
   const [newThreadRecipient, setNewThreadRecipient] = React.useState<string>("");
   const [selectedContractorId, setSelectedContractorId] = React.useState<string>("");
   const [newThreadContextType, setNewThreadContextType] = React.useState<string>("General");
-  const [newThreadContextRef, setNewThreadContextRef] = React.useState<string>("");
 
   // Sync initial thread type when roles resolve
   React.useEffect(() => {
@@ -260,10 +280,10 @@ export function ChatContainer() {
       // Exclude contractor logins
       if (contractorEmails.has(email) || contractorEmails.has(name)) return false;
 
-      // Exclude users with Foreign Agency / Agent role
+      // Exclude users with Foreign Agency role
       const empRoles = (emp.roles || []).map((r: string) => String(r).toLowerCase().trim());
       const isForeignAgent = empRoles.some(
-        (r: string) => r === "foreign agency" || r === "foreign agent" || r === "agent"
+        (r: string) => r === "foreign agency" || r === "foreign agent"
       );
       if (isForeignAgent) return false;
 
@@ -1070,7 +1090,14 @@ export function ChatContainer() {
         // Strictly uses createAgencyThreadV2 to prevent "A Foreign Agency user can only be a participant in an Agency-type thread"
         return await createAgencyThreadV2();
       } else {
-        const trimmedRecipient = newThreadRecipient.trim();
+        let trimmedRecipient = newThreadRecipient.trim();
+        if (
+          trimmedRecipient.toLowerCase() === "admin@example.com" ||
+          trimmedRecipient.toLowerCase() === "administrator"
+        ) {
+          trimmedRecipient = "Administrator";
+        }
+
         const matchingContractor = availableContractors.find((c: any) => {
           const rec = trimmedRecipient.toLowerCase();
           return (
@@ -1095,14 +1122,19 @@ export function ChatContainer() {
           }
           return await createInternalThreadV2(
             trimmedRecipient,
-            newThreadContextType,
-            newThreadContextRef.trim() || undefined
+            newThreadContextType
           );
         }
       }
     },
     onSuccess: (res: any) => {
-      const recipient = newThreadRecipient.trim();
+      let recipient = newThreadRecipient.trim();
+      if (
+        recipient.toLowerCase() === "admin@example.com" ||
+        recipient.toLowerCase() === "administrator"
+      ) {
+        recipient = "Administrator";
+      }
       const isAgencyThread = isForeignAgency || newThreadType === "Agency" || Boolean(selectedContractorId);
       toast.success(
         isForeignAgency
@@ -1114,7 +1146,6 @@ export function ChatContainer() {
       setIsNewThreadModalOpen(false);
       setNewThreadRecipient("");
       setSelectedContractorId("");
-      setNewThreadContextRef("");
       setNewThreadContextType("General");
 
       queryClient.invalidateQueries({ queryKey: ["chat_threads_my"] });
@@ -1304,6 +1335,7 @@ export function ChatContainer() {
         {/* Left Column: Thread List & Oversight Nav                      */}
         {/* ============================================================= */}
         <div
+          data-tour="chat-thread-list"
           className={cn(
             "w-full lg:w-80 xl:w-96 shrink-0 border-r border-slate-200 dark:border-[#202027] flex flex-col bg-slate-50/30 dark:bg-[#121217]",
             isMobileThreadOpen ? "hidden lg:flex" : "flex"
@@ -1563,6 +1595,7 @@ export function ChatContainer() {
         {/* Right Column: Selected Thread Messages & Composer            */}
         {/* ============================================================= */}
         <div
+          data-tour="chat-active-window"
           className={cn(
             "flex-1 min-w-0 flex flex-col bg-white dark:bg-[#0e0e12]",
             !isMobileThreadOpen ? "hidden lg:flex" : "flex"
@@ -2241,42 +2274,29 @@ export function ChatContainer() {
                         <option value="">-- Select Internal Staff Member --</option>
                         {internalColleagues.map((emp: any) => {
                           const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
+                          const canonicalUser = emp.name === "Administrator" ? "Administrator" : (emp.name || emp.email);
                           return (
-                            <option key={emp.email || emp.name} value={emp.email || emp.name}>
-                              {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
+                            <option key={canonicalUser} value={canonicalUser}>
+                              {emp.full_name || emp.name} ({canonicalUser}) {roleList ? `— [${roleList}]` : ""}
                             </option>
                           );
                         })}
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                          Context Type:
-                        </label>
-                        <select
-                          value={newThreadContextType}
-                          onChange={(e) => setNewThreadContextType(e.target.value)}
-                          className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-                        >
-                          <option value="General">General Coordination</option>
-                          <option value="Applicant">Applicant Specific</option>
-                          <option value="Placement">Placement Specific</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                          Context Reference (Optional):
-                        </label>
-                        <Input
-                          value={newThreadContextRef}
-                          onChange={(e) => setNewThreadContextRef(e.target.value)}
-                          placeholder="e.g. APP-00001"
-                          className="h-8 text-xs font-mono"
-                        />
-                      </div>
+                    <div>
+                      <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
+                        Context Topic:
+                      </label>
+                      <select
+                        value={newThreadContextType}
+                        onChange={(e) => setNewThreadContextType(e.target.value)}
+                        className="w-full h-8 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                      >
+                        <option value="General">General Coordination</option>
+                        <option value="Applicant">Applicant Specific</option>
+                        <option value="Placement">Placement Specific</option>
+                      </select>
                     </div>
                   </div>
                 )}
