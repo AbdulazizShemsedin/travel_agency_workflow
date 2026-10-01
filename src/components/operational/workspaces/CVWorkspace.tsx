@@ -1,37 +1,26 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   FileSpreadsheet,
   FileDown,
-  User,
   Phone,
-  Calendar,
-  ShieldCheck,
-  Heart,
-  Users,
-  MapPin,
   FileText,
-  Search,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Sparkles,
-  ExternalLink,
+  Eye,
+  Loader2,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
-import { OperationalDrawer } from "../OperationalDrawer";
 import { ExcelTextInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { updateApplicantV2 } from "@/lib/api/v2/applicants";
-import { renderCvPdfV2 } from "@/lib/api/v2/cv";
+import { generateCvV2, renderCvPdfV2 } from "@/lib/api/v2/cv";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
 interface CVWorkspaceProps {
@@ -50,25 +39,27 @@ export function CVWorkspace({
   onCorridorChange,
 }: CVWorkspaceProps) {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const canGenerateCv = can("generateCv");
 
-  // Drawer & Row selection state
-  const [selectedRow, setSelectedRow] = React.useState<WorkspaceApplicantRow | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  // Track in-progress CV generation and PDF download states per applicant
+  const [generatingId, setGeneratingId] = React.useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = React.useState<string | null>(null);
+  const [cvGeneratedSet, setCvGeneratedSet] = React.useState<Set<string>>(new Set());
 
   // Additional secondary filters
   const [medicalFilter, setMedicalFilter] = React.useState<string>("All");
   const [religionFilter, setReligionFilter] = React.useState<string>("All");
   const [maritalFilter, setMaritalFilter] = React.useState<string>("All");
-  const [isDownloadingPdf, setIsDownloadingPdf] = React.useState<string | null>(null);
 
-  // Mutation for updating applicant in-cell or via drawer (e.g. remarks, labor_id)
+  // Mutation for updating applicant in-cell (e.g. remarks)
   const updateMutation = useMutation({
     mutationFn: async ({ applicantId, payload }: { applicantId: string; payload: Record<string, any> }) => {
       return updateApplicantV2(applicantId, payload);
     },
     onSuccess: () => {
       toast.success("Applicant updated successfully");
-      queryClient.invalidateQueries({ queryKey: ["v2_operational_workspace"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
     },
     onError: (err: any) => {
@@ -87,6 +78,102 @@ export function CVWorkspace({
     } catch {
       // Handled in mutation onError
     }
+  };
+
+  // Helper to determine if an applicant's official CV has already been compiled
+  const isCvGenerated = React.useCallback(
+    (row: WorkspaceApplicantRow): boolean => {
+      if (cvGeneratedSet.has(row.applicantId)) return true;
+      const app = row.applicant as any;
+      const status = String(app?.status || app?.applicant_state || "").trim();
+
+      // If status is CV Generated or any later operational stage
+      if (
+        status === "CV Generated" ||
+        status === "Selected" ||
+        status === "Processing" ||
+        status === "Stamped" ||
+        status === "Ticketed" ||
+        status === "Departed"
+      ) {
+        return true;
+      }
+
+      // If placement is linked (candidate was already selected by agency)
+      if (row.dsrName || app?.active_placement || row.placementId) {
+        return true;
+      }
+
+      // If official CV document record or URL is stored
+      if (app?.cv_record || app?.cv_file_url || app?.cv_pdf_url) {
+        return true;
+      }
+
+      return false;
+    },
+    [cvGeneratedSet]
+  );
+
+  // Mutation to generate official recruitment CV (calls agency_tracking.cv_api.generate_cv)
+  const generateCvMutation = useMutation({
+    mutationFn: async (applicantId: string) => {
+      return generateCvV2(applicantId);
+    },
+    onSuccess: (data, applicantId) => {
+      toast.success("CV Generated Successfully", {
+        description: data?.message || `Official recruitment CV compiled for ${applicantId}.`,
+      });
+      setCvGeneratedSet((prev) => new Set(prev).add(applicantId));
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      onRefresh();
+    },
+    onError: (err: any) => {
+      const rawMsg = err?.message || "";
+      const isRenderCrash =
+        rawMsg.includes("Non-JSON response") ||
+        rawMsg.includes("non-JSON") ||
+        rawMsg.includes("HTTP 500");
+      const description = isRenderCrash
+        ? "We couldn't generate the official CV document right now. Please verify applicant information and photo, then try again."
+        : formatCleanErrorMessage(err);
+      toast.error("CV Generation Failed", { description });
+    },
+    onSettled: () => {
+      setGeneratingId(null);
+    },
+  });
+
+  const handleGenerateCv = async (row: WorkspaceApplicantRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!canGenerateCv) {
+      toast.error("Permission Denied", {
+        description: "CV generation requires Registrar or Admin permissions.",
+      });
+      return;
+    }
+
+    const med = (row.medicalStatus || (row.applicant as any)?.medical_status || "").toUpperCase().trim();
+    if (med === "UNFIT") {
+      toast.error("Medically UNFIT", {
+        description: `${row.fullName || row.applicantId} is medically UNFIT -- a CV cannot be generated.`,
+      });
+      return;
+    }
+
+    const app = row.applicant as any;
+    const status = String(app?.status || app?.applicant_state || "").trim();
+    if (status === "Draft") {
+      toast.error("Registration Required", {
+        description: `${row.fullName || row.applicantId} is still in Draft status. Complete registration before generating a CV.`,
+      });
+      return;
+    }
+
+    setGeneratingId(row.applicantId);
+    toast.info(`Generating official CV for ${row.fullName || row.applicantId}...`);
+    generateCvMutation.mutate(row.applicantId);
   };
 
   const handleDownloadCvPdf = async (row: WorkspaceApplicantRow, e?: React.MouseEvent) => {
@@ -206,7 +293,7 @@ export function CVWorkspace({
   }, [data, medicalFilter, religionFilter, maritalFilter]);
 
   // Columns definition matching exactly the client's spreadsheet columns
-  // (NO, CONTACT, NAME, PASSPORT, LABOUR ID, MEDICAL, RELIGION, REGION, AGE, MARRIED/NOT, # OF CHILDREN, REMARK)
+  // (NO, CONTACT, NAME, PASSPORT, LABOUR ID, MEDICAL, RELIGION, REGION, AGE, MARRIED/NOT, # OF CHILDREN, REMARK, ACTIONS)
   const columns = React.useMemo<OperationalColumn<WorkspaceApplicantRow>[]>(() => {
     return [
       {
@@ -245,9 +332,14 @@ export function CVWorkspace({
         sortable: true,
         cell: (row) => (
           <div className="flex flex-col">
-            <span className="font-bold text-xs text-slate-900 dark:text-white uppercase tracking-tight">
+            <Link
+              href={`/applicants/${encodeURIComponent(row.applicantId)}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-bold text-xs text-slate-900 dark:text-white uppercase tracking-tight hover:text-emerald-700 dark:hover:text-emerald-400 transition"
+              title="Open Candidate Profile"
+            >
               {row.fullName}
-            </span>
+            </Link>
             <span className="font-mono text-[10px] text-slate-400">
               {row.applicantId}
             </span>
@@ -384,46 +476,99 @@ export function CVWorkspace({
       {
         id: "actions",
         header: "ACTIONS",
-        width: "130px",
+        width: "165px",
         align: "center",
         sortable: false,
         cell: (row) => {
           const isDownloading = isDownloadingPdf === row.applicantId;
+          const isGenerating =
+            generatingId === row.applicantId ||
+            (generateCvMutation.isPending && generateCvMutation.variables === row.applicantId);
+          const hasCv = isCvGenerated(row);
+          const isUnfit = (row.medicalStatus || "").toUpperCase().trim() === "UNFIT";
+          const app = row.applicant as any;
+          const isDraft = String(app?.status || app?.applicant_state || "").trim() === "Draft";
 
+          // If CV is not yet generated, display the "Generate CV" button (like on applicant detail)
+          if (!hasCv) {
+            return (
+              <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isGenerating || isUnfit}
+                  onClick={(e) => handleGenerateCv(row, e)}
+                  className={cn(
+                    "h-7 px-2.5 text-[11px] font-bold gap-1 transition shadow-2xs cursor-pointer",
+                    isUnfit
+                      ? "bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                      : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+                  )}
+                  title={
+                    isUnfit
+                      ? "Candidate is medically UNFIT -- a CV cannot be generated"
+                      : isDraft
+                      ? "Candidate is in Draft -- complete registration before generating CV"
+                      : "Generate bilateral recruitment CV"
+                  }
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin text-white" />
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-3 w-3" />
+                      <span>Generate CV</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            );
+          }
+
+          // Once CV is generated, display the Eye icon button (triggering View CV like on applicant detail)
+          // and the PDF CV download button
           return (
-            <div className="flex items-center justify-center gap-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedRow(row);
-                  setIsDrawerOpen(true);
-                }}
-                className="h-7 px-2 text-[11px] text-slate-600 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white"
-                title="View candidate dossier"
+            <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              {/* Eye icon button triggering View CV */}
+              <Link
+                href={`/applicants/${encodeURIComponent(row.applicantId)}/cv`}
+                className="inline-flex items-center justify-center gap-1 h-7 px-2 rounded-md text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-300 border border-slate-200 dark:border-[#2a2a35] transition shadow-2xs"
+                title="View CV"
               >
-                View
-              </Button>
+                <Eye className="h-3.5 w-3.5 text-slate-600 dark:text-zinc-400" />
+                <span>View CV</span>
+              </Link>
+
+              {/* Download Official CV PDF Button */}
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={isDownloading}
                 onClick={(e) => handleDownloadCvPdf(row, e)}
-                className="h-7 px-2 text-[11px] text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                title="Download CV PDF"
+                className="h-7 px-2 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                title="Download Official CV PDF"
               >
                 <FileDown className={cn("h-3 w-3 mr-1", isDownloading && "animate-spin")} />
-                CV
+                <span>PDF</span>
               </Button>
             </div>
           );
         },
       },
     ];
-  }, [isDownloadingPdf, updateMutation]);
+  }, [
+    isDownloadingPdf,
+    generatingId,
+    generateCvMutation.isPending,
+    generateCvMutation.variables,
+    isCvGenerated,
+    canGenerateCv,
+    updateMutation,
+  ]);
 
   // Extra filter controls passed to OperationalTable header
   const extraHeaderFilters = (
@@ -493,7 +638,7 @@ export function CVWorkspace({
   return (
     <div className="space-y-4">
       {/* ------------------------------------------------------------- */}
-      {/* CV Operational Table                                          */}
+      {/* CV Operational Table (without slide drawer popup)              */}
       {/* ------------------------------------------------------------- */}
       <OperationalTable
         title="Candidate CV Database"
@@ -501,159 +646,12 @@ export function CVWorkspace({
         columns={columns}
         data={filteredData}
         isLoading={isLoading}
-        selectedRowId={selectedRow?.applicantId}
-        onRowClick={(row) => {
-          setSelectedRow(row);
-          setIsDrawerOpen(true);
-        }}
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
         availableCorridors={["All", "Saudi Arabia", "Kuwait"]}
         extraHeaderActions={extraHeaderFilters}
       />
-
-      {/* ------------------------------------------------------------- */}
-      {/* Candidate Dossier Detail Drawer                               */}
-      {/* ------------------------------------------------------------- */}
-      {selectedRow && (
-        <OperationalDrawer
-          isOpen={isDrawerOpen}
-          onClose={() => {
-            setIsDrawerOpen(false);
-            setSelectedRow(null);
-          }}
-          title="Candidate Profile & CV Dossier"
-          applicantName={selectedRow.fullName}
-          applicantId={selectedRow.applicantId}
-          passportNumber={selectedRow.passportNumber}
-          statusBadge={
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide",
-                selectedRow.medicalStatus === "FIT"
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                  : selectedRow.medicalStatus === "UNFIT"
-                  ? "bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800"
-                  : "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
-              )}
-            >
-              Medical: {selectedRow.medicalStatus || "PENDING"}
-            </Badge>
-          }
-          leftAction={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isDownloadingPdf === selectedRow.applicantId}
-              onClick={() => handleDownloadCvPdf(selectedRow)}
-              className="text-xs h-8 text-emerald-800 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
-            >
-              <FileDown className="h-3.5 w-3.5 mr-1" />
-              Download CV PDF
-            </Button>
-          }
-        >
-          <div className="space-y-6 text-xs">
-            {/* 1. Identification & Contact */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-emerald-600" />
-                Identity & Contact Information
-              </h4>
-              <div className="grid grid-cols-2 gap-3 p-3 rounded-xl border border-slate-200 dark:border-[#26262e] bg-slate-50/50 dark:bg-[#14141a]">
-                <div>
-                  <span className="text-[11px] text-slate-500">Full Name</span>
-                  <p className="font-bold text-slate-900 dark:text-white mt-0.5">{selectedRow.fullName}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Contact Phone</span>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white mt-0.5">
-                    {selectedRow.phone || selectedRow.contact || "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Passport Number</span>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white mt-0.5">
-                    {selectedRow.passportNumber || "—"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Labour ID</span>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white mt-0.5">
-                    {selectedRow.laborId || "—"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Biological & Demographic Details */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <Heart className="h-3.5 w-3.5 text-rose-500" />
-                Biological & Personal Profile
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl border border-slate-200 dark:border-[#26262e] bg-slate-50/50 dark:bg-[#14141a]">
-                <div>
-                  <span className="text-[11px] text-slate-500">Age</span>
-                  <p className="font-mono font-bold text-slate-900 dark:text-white mt-0.5">{selectedRow.age ?? "—"}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Religion</span>
-                  <p className="font-semibold text-slate-900 dark:text-white mt-0.5 capitalize">{selectedRow.religion || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Region</span>
-                  <p className="font-semibold text-slate-900 dark:text-white mt-0.5">{selectedRow.region || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Marital Status</span>
-                  <p className="font-semibold text-slate-900 dark:text-white mt-0.5 capitalize">{selectedRow.maritalStatus || "—"}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Children Count</span>
-                  <p className="font-mono font-bold text-slate-900 dark:text-white mt-0.5">{selectedRow.children ?? 0}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Destination</span>
-                  <p className="font-semibold text-slate-900 dark:text-white mt-0.5">{selectedRow.destinationCountry}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Target Role</span>
-                  <p className="font-semibold text-slate-900 dark:text-white mt-0.5">{selectedRow.jobApplied || "Housemaid"}</p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-slate-500">Medical Status</span>
-                  <p className="font-bold text-slate-900 dark:text-white mt-0.5">{selectedRow.medicalStatus || "Pending"}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Operational Remarks */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                Operational Remark
-              </Label>
-              <Input
-                defaultValue={selectedRow.remark || ""}
-                placeholder="Enter candidate note or remark..."
-                onBlur={(e) => {
-                  const val = e.target.value.trim();
-                  if (val !== (selectedRow.remark || "")) {
-                    handleSaveRemark(selectedRow, val);
-                  }
-                }}
-                className="h-9 text-xs"
-              />
-              <p className="text-[11px] text-slate-400">
-                Changes blur-save automatically into the applicant&apos;s authoritative profile.
-              </p>
-            </div>
-          </div>
-        </OperationalDrawer>
-      )}
     </div>
   );
 }

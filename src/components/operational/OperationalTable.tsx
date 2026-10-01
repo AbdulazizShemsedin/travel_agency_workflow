@@ -54,7 +54,7 @@ interface OperationalTableProps<T extends Record<string, any> = any> {
   data: T[];
   isLoading?: boolean;
   selectedRowId?: string | null;
-  onRowClick: (row: T) => void;
+  onRowClick?: (row: T) => void;
   onRefresh?: () => void;
   corridorFilter?: string;
   onCorridorChange?: (corridor: string) => void;
@@ -706,9 +706,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
                 return (
                   <tr
                     key={row.id}
-                    onClick={() => onRowClick(row.original)}
+                    onClick={() => onRowClick?.(row.original)}
                     className={cn(
-                      "group cursor-pointer transition-colors duration-100 hover:bg-emerald-50/60 dark:hover:bg-[#1a2e26]/30",
+                      "group transition-colors duration-100 hover:bg-emerald-50/60 dark:hover:bg-[#1a2e26]/30",
+                      onRowClick ? "cursor-pointer" : "cursor-default",
                       isSelected
                         ? "bg-emerald-50/90 dark:bg-[#183428]/50 ring-1 ring-inset ring-emerald-500 font-medium"
                         : "even:bg-slate-50/30 dark:even:bg-[#141419]/40"

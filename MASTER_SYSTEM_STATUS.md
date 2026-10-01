@@ -428,3 +428,15 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Built universal normalization in employees.ts (normalizeAndDeduplicateRoles) and employees/page.tsx (displayRoles, handleOpenEditRoles) so any user holding legacy administrative roles automatically displays and saves as 'Admin'.
   - Migrated live backend user tutu@gmail.com via authenticated Frappe RPC to remove Manager and System Manager and assign 'Admin' as their sole administrative role.
 - **Verification**: Clean TypeScript compilation (npx tsc --noEmit, 0 errors), live backend employee roster verification confirming admin@example.com and tutu@gmail.com both hold ['Admin'], and live API data mapping for candidate CV table (55 live applicants).
+
+### 11. Candidate CV Table Actions: Generate & View CV Buttons with Slide Drawer Decommissioning (2026-10-01)
+- **Slide Drawer Popup Safely Decommissioned**:
+  - Removed `OperationalDrawer` entirely from `src/components/operational/workspaces/CVWorkspace.tsx`.
+  - Updated `src/components/operational/OperationalTable.tsx` to make `onRowClick` optional; when omitted, table rows render with `cursor-default` and row clicking does not trigger any slide drawer popups.
+- **Dynamic ACTIONS Column**:
+  - **Candidates Without Generated CV**: Renders a prominent green `"Generate CV"` button invoking backend RPC `agency_tracking.cv_api.generate_cv` via `generateCvV2` with live spinner state, permission gating (`can("generateCv")`), and medical fitness validation (`UNFIT` gating).
+  - **Candidates With Generated CV**: Renders the Eye icon button (`"View CV"`) linking directly to the applicant's official CV preview dossier (`/applicants/[id]/cv`), alongside the official `"PDF"` CV download button (`renderCvPdfV2`).
+- **Hook Rules & Build Stability**:
+  - Hoisted state declarations in `src/app/applicants/[id]/cv/page.tsx` before early returns, strictly adhering to React Rules of Hooks.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and successful production build (`npm run build`, 25/25 routes compiled).
+

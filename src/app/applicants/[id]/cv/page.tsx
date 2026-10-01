@@ -102,6 +102,10 @@ export default function CandidateCvPreviewPage() {
   const [portraitImg, setPortraitImg] = React.useState(portraitSrc);
   const [fullBodyImg, setFullBodyImg] = React.useState(fullBodySrc);
   const [passportScanImg, setPassportScanImg] = React.useState(passportScanSrc);
+  const [isDownloadingPdf, setIsDownloadingPdf] = React.useState(false);
+  const [isDownloadingServerPdf, setIsDownloadingServerPdf] = React.useState(false);
+  const cvPage1Ref = React.useRef<HTMLDivElement>(null);
+  const cvPage2Ref = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     setPortraitImg(portraitSrc);
@@ -182,10 +186,6 @@ export default function CandidateCvPreviewPage() {
     window.print();
   };
 
-  const [isDownloadingPdf, setIsDownloadingPdf] = React.useState(false);
-  const cvPage1Ref = React.useRef<HTMLDivElement>(null);
-  const cvPage2Ref = React.useRef<HTMLDivElement>(null);
-
   const handleSavePdf = async () => {
     try {
       setIsDownloadingPdf(true);
@@ -239,7 +239,6 @@ export default function CandidateCvPreviewPage() {
     }
   };
 
-  const [isDownloadingServerPdf, setIsDownloadingServerPdf] = React.useState(false);
   const handleDownloadServerPdf = async () => {
     if (!applicant?.name) return;
     setIsDownloadingServerPdf(true);
