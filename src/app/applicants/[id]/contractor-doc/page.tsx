@@ -43,7 +43,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { getApplicantV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
+import { getApplicantV2, updateApplicantV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import {
   listPlacementsV2,
   uploadContractV2,
@@ -80,6 +80,7 @@ export default function PlacementDocumentCenterPage() {
   const [isContractUploading, setIsContractUploading] = React.useState(false);
   const [contractParseResult, setContractParseResult] = React.useState<V2ParsedContractData | null>(null);
   const [isApprovingContract, setIsApprovingContract] = React.useState(false);
+  const [isContractApproved, setIsContractApproved] = React.useState(false);
 
   // Visa upload state
   const [visaFile, setVisaFile] = React.useState<File | null>(null);
@@ -228,19 +229,57 @@ export default function PlacementDocumentCenterPage() {
 
       // 2. Save and approve the extracted contract fields on the placement
       const payloadToUpdate: Record<string, any> = {};
+      const employerName = contractParseResult?.employer_name || contractParseResult?.sponsor_name;
+      const employerId = contractParseResult?.employer_national_id || contractParseResult?.sponsor_id;
+      const agencyName = contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name;
+      const contractDate = contractParseResult?.contract_signed_date || contractParseResult?.contract_date;
+      const employerAddress = (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address;
+
       if (contractParseResult?.contract_number) payloadToUpdate.contract_number = contractParseResult.contract_number;
       if (contractParseResult?.visa_number) payloadToUpdate.visa_number = contractParseResult.visa_number;
-      if (contractParseResult?.sponsor_name) payloadToUpdate.employer_name = contractParseResult.sponsor_name;
-      if (contractParseResult?.sponsor_id) payloadToUpdate.employer_national_id = contractParseResult.sponsor_id;
-      if (contractParseResult?.contractor_name) payloadToUpdate.saudi_agency_name = contractParseResult.contractor_name;
-      if (contractParseResult?.contract_date) payloadToUpdate.contract_signed_date = contractParseResult.contract_date;
+      if (employerName) payloadToUpdate.employer_name = employerName;
+      if (employerId) payloadToUpdate.employer_national_id = employerId;
+      if (agencyName) payloadToUpdate.saudi_agency_name = agencyName;
+      if (contractDate) payloadToUpdate.contract_signed_date = contractDate;
+      if (employerAddress) payloadToUpdate.employer_address = employerAddress;
 
       if (Object.keys(payloadToUpdate).length > 0) {
         await updatePlacementParsedFieldsV2(activePlacement.name, payloadToUpdate);
       }
 
-      toast.success("Contract Data Approved Successfully!", {
-        description: `Extracted contract details for placement ${activePlacement.name} have been verified and saved.`,
+      // 3. Synchronize extracted sponsor & visa details directly to the Applicant document
+      const applicantUpdatePayload: Record<string, any> = {};
+      const visaNum = contractParseResult?.visa_number || activePlacement.visa_number;
+      const sponsorName = employerName || activePlacement.employer_name;
+      const sponsorId = employerId || activePlacement.employer_national_id;
+      const contractNum = contractParseResult?.contract_number || activePlacement.contract_number;
+      const agency = agencyName || activePlacement.saudi_agency_name;
+      const sponsorPhone = (contractParseResult as any)?.sponsor_phone || (contractParseResult as any)?.employer_phone || (activePlacement as any)?.employer_phone;
+      const sponsorAddress = employerAddress || (activePlacement as any)?.employer_address;
+      const sponsorArabic = (contractParseResult as any)?.sponsor_arabic || (contractParseResult as any)?.employer_arabic_name || (activePlacement as any)?.sponsor_arabic;
+      const sponsorEmail = (contractParseResult as any)?.sponsor_email || (contractParseResult as any)?.employer_email || (activePlacement as any)?.employer_email;
+
+      if (visaNum) applicantUpdatePayload.visa_number = visaNum;
+      if (sponsorName) applicantUpdatePayload.sponsor_name = sponsorName;
+      if (sponsorId) applicantUpdatePayload.sponsor_id = sponsorId;
+      if (contractNum) applicantUpdatePayload.contract_number = contractNum;
+      if (agency) applicantUpdatePayload.agent = agency;
+      if (sponsorPhone) applicantUpdatePayload.sponsor_phone = sponsorPhone;
+      if (sponsorAddress) applicantUpdatePayload.sponsor_address = sponsorAddress;
+      if (sponsorArabic) applicantUpdatePayload.sponsor_arabic = sponsorArabic;
+      if (sponsorEmail) applicantUpdatePayload.sponsor_email = sponsorEmail;
+
+      if (Object.keys(applicantUpdatePayload).length > 0 && applicantId) {
+        try {
+          await updateApplicantV2(applicantId, applicantUpdatePayload);
+        } catch (applicantErr) {
+          console.warn("[handleApproveContractData] Failed to update applicant fields:", applicantErr);
+        }
+      }
+
+      setIsContractApproved(true);
+      toast.success("Contract Approved Successfully!", {
+        description: `Contract details saved. Redirecting to candidate profile...`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
@@ -249,8 +288,12 @@ export default function PlacementDocumentCenterPage() {
       queryClient.invalidateQueries({ queryKey: ["applicant", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["applicant-placements", applicantId] });
       queryClient.invalidateQueries({ queryKey: ["clearance_queue_workspace"] });
+
+      setTimeout(() => {
+        router.push(`/applicants/${encodeURIComponent(applicantId)}`);
+      }, 1200);
     } catch (err: any) {
-      toast.error("Failed to Approve Contract Data", {
+      toast.error("Failed to Approve Contract", {
         description: err?.message || "Failed to save and approve extracted contract details.",
       });
     } finally {
@@ -683,19 +726,7 @@ export default function PlacementDocumentCenterPage() {
                     ) : (
                       <FileCheck2 className="h-3.5 w-3.5 mr-1.5" />
                     )}
-                    Upload & Attach
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!contractFile || isContractUploading}
-                    onClick={() => handleUploadContract(true)}
-                    className="text-xs h-9"
-                    title="Extract info without attaching to placement"
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-1" />
-                    Extract Info
+                    Extract contract info
                   </Button>
                 </div>
               </CardContent>
@@ -832,29 +863,48 @@ export default function PlacementDocumentCenterPage() {
                             </p>
                           </div>
                         )}
-                        <Button
-                          type="button"
-                          disabled={isApprovingContract || !Boolean(activePlacement.contract_file || activePlacement.contract_number)}
-                          onClick={handleApproveContractData}
-                          className={cn(
-                            "w-full font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2",
-                            Boolean(activePlacement.contract_file || activePlacement.contract_number)
-                              ? "bg-emerald-800 hover:bg-emerald-900 text-white"
-                              : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
-                          )}
-                        >
-                          {isApprovingContract ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Approving Extracted Contract Data...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="h-4 w-4" />
-                              Approve Extracted Contract Data
-                            </>
-                          )}
-                        </Button>
+                        {isContractApproved ? (
+                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-4 text-xs text-emerald-900 dark:text-emerald-300 space-y-2 animate-in fade-in">
+                            <div className="flex items-center gap-2 font-bold text-sm text-emerald-800 dark:text-emerald-300">
+                              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                              <span>Contract Approved Successfully!</span>
+                            </div>
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                              Extracted details have been saved to the placement and candidate profile. Returning to candidate profile...
+                            </p>
+                            <div className="pt-1">
+                              <Link href={`/applicants/${encodeURIComponent(applicantId)}`}>
+                                <Button size="sm" variant="outline" className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100">
+                                  Return to Candidate Dossier Now
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            disabled={isApprovingContract || !Boolean(activePlacement.contract_file || activePlacement.contract_number)}
+                            onClick={handleApproveContractData}
+                            className={cn(
+                              "w-full font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2",
+                              Boolean(activePlacement.contract_file || activePlacement.contract_number)
+                                ? "bg-emerald-800 hover:bg-emerald-900 text-white cursor-pointer"
+                                : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
+                            )}
+                          >
+                            {isApprovingContract ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Approving Contract...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                Approve Contract
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </>
                     ) : activePlacement.status === "Processing" ? (
                       <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 p-3 text-xs text-blue-900 dark:text-blue-300 flex items-center justify-between">

@@ -124,6 +124,14 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   const [isUploadingFullBody, setIsUploadingFullBody] = React.useState(false);
   const [isScanningOCR, setIsScanningOCR] = React.useState(false);
   const [ocrSuccessData, setOcrSuccessData] = React.useState<any | null>(null);
+  const isOcrCancelledRef = React.useRef(false);
+
+  const handleCancelPassportScan = () => {
+    isOcrCancelledRef.current = true;
+    setIsScanningOCR(false);
+    toast.dismiss("passport-scan-loading");
+    toast.info("Passport extraction cancelled.");
+  };
 
   // Cropper Modal State
   const [cropModalState, setCropModalState] = React.useState<{
@@ -260,6 +268,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
     const toastId = "passport-scan-loading";
     try {
+      isOcrCancelledRef.current = false;
       setIsScanningOCR(true);
       toast.loading("Reading passport photo with AI OCR scanner...", { id: toastId });
 
@@ -267,6 +276,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       let uploadedUrl = "";
       try {
         const uploadRes = await uploadFileV2(file, true);
+        if (isOcrCancelledRef.current) return;
         const fileUrl = uploadRes?.file_url || "";
         if (fileUrl) {
           uploadedUrl = fileUrl;
@@ -278,6 +288,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         console.warn("File upload notice:", e);
       }
 
+      if (isOcrCancelledRef.current) return;
+
       // 2. Dispatch file_url to backend OCR engine with a 35s non-blocking timeout guard
       // Accommodates deep-learning / visual zone place_of_birth extraction without premature cutoff
       let extractedData: any = null;
@@ -286,6 +298,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 35000));
           const ocrPromise = parsePassportFileV2(uploadedUrl).catch(() => null);
           const ocrRes = await Promise.race([ocrPromise, timeoutPromise]);
+          if (isOcrCancelledRef.current) return;
           if (ocrRes && (ocrRes.passport_number || ocrRes.first_name || ocrRes.last_name || ocrRes.date_of_birth || ocrRes.passport_expiry || ocrRes.passport_expiry_date)) {
             extractedData = ocrRes;
           }
@@ -293,6 +306,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           console.warn("Backend OCR async timeout/error, switching to client optical OCR:", backendErr);
         }
       }
+
+      if (isOcrCancelledRef.current) return;
 
       // 3. If backend didn't return complete data (or timed out on non-passport/wallpaper), run optical OCR
       const hasDob = Boolean(extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date);
@@ -303,6 +318,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       if (!extractedData || !hasDob || !hasExpiry || !hasPassportNumber || !hasName) {
         try {
           const clientOcr = await performOpticalPassportOCR(file);
+          if (isOcrCancelledRef.current) return;
           if (clientOcr) {
             extractedData = {
               ...(clientOcr || {}),
@@ -327,6 +343,8 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         }
       }
 
+      if (isOcrCancelledRef.current) return;
+
       // 4. Send background job completion notification
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
         try {
@@ -346,8 +364,10 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
         toast.info("Passport scan attached. You can review or enter registration fields.", { id: toastId });
       }
     } catch (err: any) {
-      console.warn("Passport scan processing notice:", err);
-      toast.error("Could not read the passport photo clearly. Please enter the details manually.", { id: toastId });
+      if (!isOcrCancelledRef.current) {
+        console.warn("Passport scan processing notice:", err);
+        toast.error("Could not read the passport photo clearly. Please enter the details manually.", { id: toastId });
+      }
     } finally {
       setIsScanningOCR(false);
     }
@@ -533,6 +553,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
               value={passportScanPreview}
               isLoading={isScanningOCR}
               loadingText="Reading passport & extracting candidate details..."
+              onCancel={handleCancelPassportScan}
               error={errors.passport_scan?.message}
               disabled={locked}
               onFileSelect={(file) => {

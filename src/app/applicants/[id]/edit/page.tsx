@@ -40,6 +40,23 @@ export default function EditApplicantPage() {
     return placements.find((p: any) => p.status !== "Cancelled") || null;
   }, [placements]);
 
+  const enrichedApplicant = React.useMemo(() => {
+    if (!applicant) return applicant;
+    return {
+      ...applicant,
+      visa_number: applicant.visa_number || activePlacement?.visa_number || (activePlacement as any)?.visa_reference_number || "",
+      sponsor_name: (applicant as any).sponsor_name || activePlacement?.employer_name || (activePlacement as any)?.sponsor_name || "",
+      sponsor_id: (applicant as any).sponsor_id || activePlacement?.employer_national_id || (activePlacement as any)?.sponsor_civil_id || "",
+      sponsor_phone: (applicant as any).sponsor_phone || (activePlacement as any)?.employer_phone || (activePlacement as any)?.sponsor_phone || "",
+      sponsor_address: (applicant as any).sponsor_address || (activePlacement as any)?.employer_address || (activePlacement as any)?.sponsor_address || "",
+      sponsor_arabic: (applicant as any).sponsor_arabic || (activePlacement as any)?.sponsor_arabic || (activePlacement as any)?.employer_arabic_name || "",
+      sponsor_email: (applicant as any).sponsor_email || (activePlacement as any)?.employer_email || (activePlacement as any)?.sponsor_email || "",
+      agent: (applicant as any).agent || activePlacement?.saudi_agency_name || (activePlacement as any)?.kuwait_agency_name || "",
+      contract_number: (applicant as any).contract_number || activePlacement?.contract_number || "",
+      active_placement: activePlacement,
+    };
+  }, [applicant, activePlacement]);
+
   const isIdentityLocked = React.useMemo(() => {
     return activePlacement ? IDENTITY_LOCK_STATUSES.has(activePlacement.status) : false;
   }, [activePlacement]);
@@ -73,6 +90,12 @@ export default function EditApplicantPage() {
     <div className="space-y-6 pb-12">
       {/* Breadcrumb & Header */}
       <div className="space-y-1">
+        <Link
+          href={`/applicants/${encodeURIComponent(applicantId)}`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Applicant Details
+        </Link>
         <nav className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
           <Link href="/applicants" className="hover:text-emerald-800 dark:hover:text-emerald-400 transition">
             Applicants
@@ -145,7 +168,7 @@ export default function EditApplicantPage() {
       {/* Multi-step Registration Workflow Form pre-filled with existing data */}
       <ApplicantRegistrationForm
         existingApplicantId={applicant.name}
-        initialData={applicant as any}
+        initialData={enrichedApplicant as any}
         lockedIdentityFields={isIdentityLocked}
         onSuccessRedirect={(id) => router.push(`/applicants/${encodeURIComponent(id)}`)}
       />

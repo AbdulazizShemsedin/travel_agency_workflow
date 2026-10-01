@@ -108,28 +108,10 @@ export const CORRIDOR_ROLE_DEFINITIONS: RoleAssignmentConfig[] = [
     description: "Supervises staff-to-partner agency communication threads and foreign contractor inquiries.",
   },
   {
-    roleName: "Manager",
-    category: "Operations & Registry",
-    label: "Operations Team Lead",
-    description: "Oversees general clearance progress, handles workflow overrides, and inspects daily reports.",
-  },
-  {
     roleName: "Admin",
     category: "Operations & Registry",
     label: "Agency Administrator",
     description: "Executive agency administrator overseeing candidate pipelines and operational compliance.",
-  },
-  {
-    roleName: "System Manager",
-    category: "Operations & Registry",
-    label: "System & User Manager",
-    description: "Configures staff roles, user accounts, and system-wide operational parameters.",
-  },
-  {
-    roleName: "Administrator",
-    category: "Operations & Registry",
-    label: "Root Administrator",
-    description: "Root system administrator with complete override and administrative authority.",
   },
 ];
 

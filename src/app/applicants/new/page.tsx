@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ShieldAlert } from "lucide-react";
+import { ChevronRight, ShieldAlert, ArrowLeft } from "lucide-react";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export default function NewApplicantPage() {
         </p>
         <Link href="/applicants">
           <Button variant="outline" size="sm">
-            Return to Applicants
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> Return to Applicants
           </Button>
         </Link>
       </div>
@@ -42,6 +42,12 @@ export default function NewApplicantPage() {
     <div className="space-y-6 pb-12">
       {/* Breadcrumb & Header matching Figma Page 4 */}
       <div className="space-y-1">
+        <Link
+          href="/applicants"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Applicants
+        </Link>
         <nav className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
           <Link href="/applicants" className="hover:text-emerald-800 transition">
             Applicants

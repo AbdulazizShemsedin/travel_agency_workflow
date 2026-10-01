@@ -2,7 +2,7 @@ import * as React from "react";
 
 export interface OperationalColumn<T = any> {
   id: string;
-  header: string;
+  header: string | React.ReactNode;
   accessorKey?: keyof T;
   width?: string;
   align?: "left" | "center" | "right";
@@ -54,7 +54,7 @@ export interface V2ClearanceQueueRow {
   [key: string]: any;
 }
 
-export type OperationalStreamType = "lms" | "injaz" | "wakala" | "embassy" | "departure";
+export type OperationalStreamType = "cv" | "lms" | "injaz" | "wakala" | "embassy" | "departure";
 
 export interface WorkspaceApplicantRow {
   applicantId: string;
@@ -94,6 +94,11 @@ export interface WorkspaceApplicantRow {
   appointmentDate?: string;
   contact?: string;
   remark?: string;
+  religion?: string;
+  region?: string;
+  age?: number | string;
+  maritalStatus?: string;
+  children?: number | string;
   wakalaStatus?: string;
   wakalaAmount?: number;
   wakalaPaidDate?: string;

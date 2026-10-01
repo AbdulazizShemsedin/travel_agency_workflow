@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Film,
   FileUp,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export interface PremiumDropzoneProps {
   onCrop?: () => void;
   isLoading?: boolean;
   loadingText?: string;
+  onCancel?: () => void;
   label?: string;
   description?: string;
   enablePaste?: boolean;
@@ -65,6 +67,7 @@ export function PremiumDropzone({
   onCrop,
   isLoading = false,
   loadingText,
+  onCancel,
   label,
   description,
   enablePaste = true,
@@ -469,7 +472,7 @@ export function PremiumDropzone({
 
         {/* LOADING OVERLAY */}
         {isLoading && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/80 dark:bg-[#121217]/85 backdrop-blur-xs p-4 text-center">
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/85 dark:bg-[#121217]/90 backdrop-blur-xs p-4 text-center animate-in fade-in duration-200">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 ring-2 ring-emerald-500/40 animate-pulse">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
@@ -479,6 +482,21 @@ export function PremiumDropzone({
             <div className="mt-2 h-1 w-32 overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800">
               <div className="h-full w-full bg-emerald-600 rounded-full animate-pulse" />
             </div>
+            {onCancel && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onCancel();
+                }}
+                className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/80 transition-colors shadow-xs cursor-pointer"
+                title="Cancel passport extraction"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel Extraction
+              </button>
+            )}
           </div>
         )}
 

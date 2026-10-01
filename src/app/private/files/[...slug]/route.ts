@@ -19,10 +19,7 @@ function getFrappeConfig(req: NextRequest) {
   }
   if (authHeader) {
     headers["Authorization"] = authHeader;
-  } else if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
-    headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
   }
-
   return {
     url: url.replace(/\/$/, ""),
     headers,
@@ -54,22 +51,12 @@ export async function GET(
   const encodedPath = slug.map(encodeURIComponent).join("/");
   const config = getFrappeConfig(req);
 
-  const systemHeaders: Record<string, string> = { Accept: "*/*" };
-  if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
-    systemHeaders["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
-  }
-
   // Candidates for URLs to attempt (authoritative download_file RPC with raw & encoded paths, then direct URLs)
   const attempts = [
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`, headers: systemHeaders },
     { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`, headers: config.headers },
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`, headers: systemHeaders },
     { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`, headers: config.headers },
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${encodedPath}`)}`, headers: systemHeaders },
-    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${encodedPath}`)}`, headers: systemHeaders },
+    { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${encodedPath}`)}`, headers: config.headers },
     { url: `${config.url}/private/files/${encodedPath}`, headers: config.headers },
-    { url: `${config.url}/private/files/${encodedPath}`, headers: systemHeaders },
-    { url: `${config.url}/files/${encodedPath}`, headers: systemHeaders },
     { url: `${config.url}/files/${encodedPath}`, headers: config.headers },
   ];
 
@@ -90,9 +77,20 @@ export async function GET(
             "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
             "Accept-Ranges": "bytes",
           };
-          const contentDisposition = res.headers.get("content-disposition");
-          if (contentDisposition) {
-            responseHeaders["Content-Disposition"] = contentDisposition;
+          const isViewableInline =
+            contentType.includes("pdf") ||
+            contentType.startsWith("image/") ||
+            contentType.startsWith("text/");
+          const urlObj = new URL(req.url);
+          const forceDownload = urlObj.searchParams.get("download") === "1";
+
+          if (isViewableInline && !forceDownload) {
+            responseHeaders["Content-Disposition"] = "inline";
+          } else {
+            const contentDisposition = res.headers.get("content-disposition");
+            if (contentDisposition) {
+              responseHeaders["Content-Disposition"] = contentDisposition;
+            }
           }
 
           const response = new NextResponse(buffer, {

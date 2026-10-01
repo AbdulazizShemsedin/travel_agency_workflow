@@ -56,6 +56,9 @@ export async function logoutV2(): Promise<void> {
     await requestV2("/api/method/logout", {
       method: "POST",
     });
+  } catch (err: any) {
+    // If the server session is already expired or rejected with 400/401, local session is purged regardless
+    console.warn("[V2 Auth] Logout notice (session cleared):", err?.message || err);
   } finally {
     clearCsrfToken();
   }

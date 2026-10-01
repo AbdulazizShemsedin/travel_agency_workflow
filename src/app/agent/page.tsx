@@ -167,6 +167,7 @@ export default function AgentDiscoveryPage() {
       religion,
     ],
     queryFn: () => listPortalCandidatesV2(),
+    retry: false,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -595,9 +596,9 @@ export default function AgentDiscoveryPage() {
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
                 <div className="overflow-x-auto relative">
                   <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
-                    <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+                    <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
-                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                        <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                           Candidate
                         </th>
                         <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -609,9 +610,9 @@ export default function AgentDiscoveryPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                       {visibleCandidates.map((candidate) => (
-                        <tr key={candidate.name} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                        <tr key={candidate.name} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
                           {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile, compact width) */}
-                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                             <div className="flex items-center gap-1.5 sm:gap-3">
                               {candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo ? (
                                 <img

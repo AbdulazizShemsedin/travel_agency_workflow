@@ -78,7 +78,7 @@ type MediaTabType = "photo" | "full_size" | "passport" | "video";
 
 const PASSPORT_TYPE_OPTIONS = ["Normal", "Diplomatic", "Special", "Service"] as const;
 const VISA_TYPE_OPTIONS = ["Work", "Visit", "Tourist", "Business", "Other"] as const;
-const LANGUAGE_PROFICIENCY_OPTIONS = ["Select..", "None", "Poor", "Fair", "Basic", "Good", "Fluent"] as const;
+const LANGUAGE_PROFICIENCY_OPTIONS = ["Select..", "None", "Basic", "Good", "Fluent"] as const;
 const QUALIFICATION_OPTIONS = [
   "PRIMARY LEVEL",
   "SECONDARY LEVEL",
@@ -176,6 +176,19 @@ export function ApplicantRegistrationForm({
   const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
   const [mrzInputText, setMrzInputText] = React.useState("");
   const [ocrSuccessData, setOcrSuccessData] = React.useState<ParsedPassportMRZ | null>(null);
+  const isOcrCancelledRef = React.useRef(false);
+  const activeOcrToastIdRef = React.useRef<string | number | null>(null);
+  const [isSponsorAddrReadOnly, setIsSponsorAddrReadOnly] = React.useState(true);
+
+  const handleCancelPassportScan = () => {
+    isOcrCancelledRef.current = true;
+    setIsScanningOCR(false);
+    if (activeOcrToastIdRef.current) {
+      toast.dismiss(activeOcrToastIdRef.current);
+      activeOcrToastIdRef.current = null;
+    }
+    toast.info("Passport extraction cancelled.");
+  };
 
   // Collapsible Accordions state (as in video)
   const [isRelativeOpen, setIsRelativeOpen] = React.useState<boolean>(false);
@@ -252,12 +265,12 @@ export function ApplicantRegistrationForm({
       registration_date: (initialData as any)?.registration_date || new Date().toISOString().slice(0, 10),
 
       // Sponsor & Visa
-      visa_number: (initialData as any)?.visa_number || "",
-      sponsor_name: (initialData as any)?.sponsor_name || "",
-      sponsor_id: (initialData as any)?.sponsor_id || "",
-      sponsor_phone: (initialData as any)?.sponsor_phone || "",
-      sponsor_address: (initialData as any)?.sponsor_address || "",
-      agent: (initialData as any)?.agent || (initialData as any)?.contractor_name || "",
+      visa_number: (initialData as any)?.visa_number || (initialData as any)?.placement?.visa_number || (initialData as any)?.active_placement?.visa_number || (initialData as any)?.visa_reference_number || "",
+      sponsor_name: (initialData as any)?.sponsor_name || (initialData as any)?.employer_name || (initialData as any)?.placement?.employer_name || (initialData as any)?.active_placement?.employer_name || "",
+      sponsor_id: (initialData as any)?.sponsor_id || (initialData as any)?.employer_national_id || (initialData as any)?.sponsor_civil_id || (initialData as any)?.placement?.employer_national_id || (initialData as any)?.active_placement?.employer_national_id || "",
+      sponsor_phone: (initialData as any)?.sponsor_phone || (initialData as any)?.employer_phone || (initialData as any)?.placement?.employer_phone || (initialData as any)?.active_placement?.employer_phone || "",
+      sponsor_address: (initialData as any)?.sponsor_address || (initialData as any)?.employer_address || (initialData as any)?.placement?.employer_address || (initialData as any)?.active_placement?.employer_address || "",
+      agent: (initialData as any)?.agent || (initialData as any)?.saudi_agency_name || (initialData as any)?.kuwait_agency_name || (initialData as any)?.contractor_name || (initialData as any)?.placement?.saudi_agency_name || "",
       national_id: initialData?.national_id || "",
       sponsor_arabic: (initialData as any)?.sponsor_arabic || "",
       email: initialData?.email || "",
@@ -299,12 +312,23 @@ export function ApplicantRegistrationForm({
       relative_id_card: (initialData as any)?.relative_id_card ?? false,
 
       // Skills & Experience
-      english_level: initialData?.english_level || "Poor",
-      arabic_level: initialData?.arabic_level || "Fair",
+      english_level:
+        initialData?.english_level && ["None", "Basic", "Good", "Fluent"].includes(initialData.english_level)
+          ? initialData.english_level
+          : initialData?.english_level === "Poor" || initialData?.english_level === "Fair"
+          ? "Basic"
+          : "",
+      arabic_level:
+        initialData?.arabic_level && ["None", "Basic", "Good", "Fluent"].includes(initialData.arabic_level)
+          ? initialData.arabic_level
+          : initialData?.arabic_level === "Poor" || initialData?.arabic_level === "Fair"
+          ? "Basic"
+          : "",
       experience_country: initialData?.experience_country || "None / First Time",
       works_in: (initialData as any)?.works_in || "",
       height: initialData?.height || "",
       weight: initialData?.weight || "",
+      complexion: (initialData as any)?.complexion || "FAIR",
       reference_no: (initialData as any)?.reference_no || "",
       remarks: initialData?.remarks || "",
       skill_cleaning: initialData?.skill_cleaning !== undefined ? (Number(initialData.skill_cleaning) ? 1 : 0) : 1,
@@ -449,12 +473,15 @@ export function ApplicantRegistrationForm({
   // Main Passport Auto-Scan Handler
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
+    isOcrCancelledRef.current = false;
     setIsScanningOCR(true);
     const toastId = toast.loading("Uploading and analyzing passport scan...");
+    activeOcrToastIdRef.current = toastId;
 
     try {
       // 1. Upload scan file
       const uploadRes = await uploadFileV2(file, false, "Applicant", draftApplicantId || undefined);
+      if (isOcrCancelledRef.current) return;
       const fileUrl = (uploadRes as any)?.message?.file_url || (uploadRes as any)?.file_url;
       if (fileUrl) {
         setValue("passport_scan", fileUrl);
@@ -470,11 +497,14 @@ export function ApplicantRegistrationForm({
         console.warn("Client OCR fallback:", ocrErr);
       }
 
+      if (isOcrCancelledRef.current) return;
+
       // If client OCR didn't catch MRZ, try backend parser endpoint
       if (!parsedData || !parsedData.passport_number) {
         try {
           if (fileUrl) {
             const serverParsed = await parsePassportFileV2(fileUrl);
+            if (isOcrCancelledRef.current) return;
             if (serverParsed && (serverParsed.passport_number || serverParsed.first_name)) {
               parsedData = {
                 passport_number: serverParsed.passport_number || "",
@@ -497,6 +527,7 @@ export function ApplicantRegistrationForm({
         }
       }
 
+      if (isOcrCancelledRef.current) return;
       toast.dismiss(toastId);
 
       if (parsedData && (parsedData.passport_number || parsedData.first_name || parsedData.date_of_birth)) {
@@ -508,11 +539,14 @@ export function ApplicantRegistrationForm({
       }
     } catch (err: any) {
       toast.dismiss(toastId);
-      toast.error("Passport scanning error", {
-        description: formatCleanErrorMessage(err),
-      });
+      if (!isOcrCancelledRef.current) {
+        toast.error("Passport scanning error", {
+          description: formatCleanErrorMessage(err),
+        });
+      }
     } finally {
       setIsScanningOCR(false);
+      activeOcrToastIdRef.current = null;
     }
   };
 
@@ -760,6 +794,7 @@ export function ApplicantRegistrationForm({
   const passportValue = watch("passport_scan");
   const videoValue = watch("video_url");
   const currentApplicantType = watch("applicant_type") || "Standard";
+  const isMuayena = currentApplicantType === "Muayena";
   const currentDestCountry = watch("destination_country") || "Saudi Arabia";
 
   // Determine current preview file based on selected media tab
@@ -921,8 +956,8 @@ export function ApplicantRegistrationForm({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Passport Quick-Scan & Auto-Fill
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                    Passport Quick-Scan & Auto-Fill <span className="text-rose-500 font-bold ml-0.5">*</span>
                   </h3>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
                     <ScanLine className="h-3 w-3" /> Auto-Fill Enabled
@@ -962,6 +997,7 @@ export function ApplicantRegistrationForm({
               value={watch("passport_scan")}
               isLoading={isScanningOCR}
               loadingText="Scanning passport & running OCR extraction..."
+              onCancel={handleCancelPassportScan}
               onFileSelect={handlePassportAutoScan}
               onRemove={() => {
                 setValue("passport_scan", "");
@@ -1035,7 +1071,7 @@ export function ApplicantRegistrationForm({
               }`}
             >
               <Camera className={`h-3.5 w-3.5 ${activeMediaTab === "photo" ? "text-emerald-200" : "text-slate-500"}`} />
-              <span>Photo</span>
+              <span>Photo <span className="text-rose-500 font-bold ml-0.5">*</span></span>
               {activeMediaTab === "photo" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
@@ -1056,7 +1092,7 @@ export function ApplicantRegistrationForm({
               }`}
             >
               <User className={`h-3.5 w-3.5 ${activeMediaTab === "full_size" ? "text-emerald-200" : "text-slate-500"}`} />
-              <span>Full Size</span>
+              <span>Full Size <span className="text-slate-400 font-normal text-[10px] ml-1">(Optional)</span></span>
               {activeMediaTab === "full_size" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
@@ -1077,7 +1113,7 @@ export function ApplicantRegistrationForm({
               }`}
             >
               <FileText className={`h-3.5 w-3.5 ${activeMediaTab === "passport" ? "text-emerald-200" : "text-slate-500"}`} />
-              <span>Passport</span>
+              <span>Passport <span className="text-rose-500 font-bold ml-0.5">*</span></span>
               {activeMediaTab === "passport" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
@@ -1098,7 +1134,7 @@ export function ApplicantRegistrationForm({
               }`}
             >
               <Video className={`h-3.5 w-3.5 ${activeMediaTab === "video" ? "text-emerald-200" : "text-slate-500"}`} />
-              <span>Video Interview</span>
+              <span>Video Interview <span className="text-slate-400 font-normal text-[10px] ml-1">(Optional)</span></span>
               {activeMediaTab === "video" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
@@ -1115,10 +1151,10 @@ export function ApplicantRegistrationForm({
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-600 dark:text-zinc-400">Active Option:</span>
             <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-900 dark:bg-emerald-700 text-white px-2.5 py-1 text-xs font-bold uppercase tracking-wider shadow-xs">
-              {activeMediaTab === "photo" && <><Camera className="h-3.5 w-3.5 text-emerald-200" /> Photo (Passport Size)</>}
-              {activeMediaTab === "full_size" && <><User className="h-3.5 w-3.5 text-emerald-200" /> Full Size Photo</>}
-              {activeMediaTab === "passport" && <><FileText className="h-3.5 w-3.5 text-emerald-200" /> Passport Scan</>}
-              {activeMediaTab === "video" && <><Video className="h-3.5 w-3.5 text-emerald-200" /> Video Interview</>}
+              {activeMediaTab === "photo" && <><Camera className="h-3.5 w-3.5 text-emerald-200" /> Photo (Passport Size) *</>}
+              {activeMediaTab === "full_size" && <><User className="h-3.5 w-3.5 text-emerald-200" /> Full Size Photo (Optional)</>}
+              {activeMediaTab === "passport" && <><FileText className="h-3.5 w-3.5 text-emerald-200" /> Passport Scan *</>}
+              {activeMediaTab === "video" && <><Video className="h-3.5 w-3.5 text-emerald-200" /> Video Interview (Optional)</>}
             </span>
           </div>
           <div className="text-[11px] font-medium">
@@ -1210,7 +1246,7 @@ export function ApplicantRegistrationForm({
             {/* Row 1: Application No. | Date */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Application No.
+                Application No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. APP-00102"
@@ -1221,7 +1257,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Date
+                Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 type="date"
@@ -1234,7 +1270,7 @@ export function ApplicantRegistrationForm({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
-                  Full Name <Info className="h-3 w-3 text-slate-400" />
+                  Full Name <span className="text-rose-500 font-bold ml-0.5">*</span> <Info className="h-3 w-3 text-slate-400" />
                 </Label>
                 {errors.full_name && (
                   <span className="text-[11px] text-rose-600 font-medium">
@@ -1255,7 +1291,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5 flex flex-col justify-center">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 mb-2">
-                Status
+                Status <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
                 <input
@@ -1271,7 +1307,7 @@ export function ApplicantRegistrationForm({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
-                  Passport No. <Info className="h-3 w-3 text-slate-400" />
+                  Passport No. <span className="text-rose-500 font-bold ml-0.5">*</span> <Info className="h-3 w-3 text-slate-400" />
                 </Label>
                 {(passportConflict || errors.passport_number) && (
                   <span className="text-[11px] text-rose-600 font-medium">
@@ -1292,7 +1328,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Passport Type
+                Passport Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <select
                 {...register("passport_type")}
@@ -1309,7 +1345,7 @@ export function ApplicantRegistrationForm({
             {/* Row 4: Date of Birth | Place of Birth */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Date of Birth
+                Date of Birth <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 type="date"
@@ -1321,7 +1357,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Place of Birth
+                Place of Birth <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. ARSI"
@@ -1333,7 +1369,7 @@ export function ApplicantRegistrationForm({
             {/* Row 5: Date of Issue | Date of Expiry */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Date of Issue
+                Date of Issue <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 type="date"
@@ -1344,7 +1380,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Date of Expiry
+                Date of Expiry <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 type="date"
@@ -1354,10 +1390,10 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            {/* Row 6: Place of Issue | Place of Birth */}
+            {/* Row 6: Place of Issue | Phone No. */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Place of Issue
+                Place of Issue <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 placeholder="e.g. ADDIS ABABA"
@@ -1367,22 +1403,8 @@ export function ApplicantRegistrationForm({
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Place of Birth
-                </Label>
-                <span className="text-[10px] text-slate-400 font-normal">Optional</span>
-              </div>
-              <Input
-                placeholder="e.g. ADDIS ABABA, OROMIA"
-                {...register("place_of_birth")}
-                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
-              />
-            </div>
-
-            <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Phone No.
+                Phone No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. +251911223344"
@@ -1394,7 +1416,7 @@ export function ApplicantRegistrationForm({
             {/* Row 7: Religion | Marital Status */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Religion
+                Religion {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
               </Label>
               <select
                 {...register("religion")}
@@ -1410,7 +1432,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Marital Status
+                Marital Status {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
               </Label>
               <select
                 {...register("marital_status")}
@@ -1427,7 +1449,7 @@ export function ApplicantRegistrationForm({
             {/* Row 8: Gender | Occupation */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Gender
+                Gender <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <select
                 {...register("gender")}
@@ -1444,7 +1466,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Occupation
+                Occupation {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
               </Label>
               <select
                 {...register("job_applied")}
@@ -1461,7 +1483,7 @@ export function ApplicantRegistrationForm({
             {/* Row 9: Qualification | City */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Qualification
+                Qualification {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
               </Label>
               <select
                 {...register("qualification")}
@@ -1477,11 +1499,12 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                City
+                City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. Addis Ababa"
                 {...register("city")}
+                onFocus={() => setIsSponsorAddrReadOnly(true)}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
             </div>
@@ -1501,10 +1524,13 @@ export function ApplicantRegistrationForm({
             {/* Visa Number | Sponsor Name */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Visa Number
+                Visa Number <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Enter visa number"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("visa_number")}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
@@ -1512,10 +1538,13 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Sponsor Name
+                Sponsor Name <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Enter sponsor name"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("sponsor_name")}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
@@ -1524,10 +1553,13 @@ export function ApplicantRegistrationForm({
             {/* Sponsor ID | Sponsor Phone */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Sponsor ID
+                Sponsor ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. 1029384756"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("sponsor_id")}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
@@ -1535,10 +1567,13 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Sponsor Phone
+                Sponsor Phone <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. +966..."
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("sponsor_phone")}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
@@ -1547,10 +1582,17 @@ export function ApplicantRegistrationForm({
             {/* Sponsor Address | Agent */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Sponsor Address
+                Sponsor Address <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
+                id="sponsor_address_field"
                 placeholder="e.g. JEDDAH"
+                readOnly={isSponsorAddrReadOnly}
+                onFocus={() => setIsSponsorAddrReadOnly(false)}
+                onMouseDown={() => setIsSponsorAddrReadOnly(false)}
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("sponsor_address")}
                 className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
@@ -1558,7 +1600,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Agent
+                Agent <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <select
                 {...register("agent")}
@@ -1586,7 +1628,7 @@ export function ApplicantRegistrationForm({
             {/* National ID | Sponsor Arabic */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                National ID
+                National ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Fayda / FAN National ID"
@@ -1597,10 +1639,13 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Sponsor Arabic
+                Sponsor Arabic <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="اسم الكفيل"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("sponsor_arabic")}
                 dir="rtl"
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
@@ -1610,7 +1655,7 @@ export function ApplicantRegistrationForm({
             {/* Email | Visa Type */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Email
+                Email <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 type="email"
@@ -1622,7 +1667,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Visa Type
+                Visa Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <select
                 {...register("visa_type")}
@@ -1660,7 +1705,7 @@ export function ApplicantRegistrationForm({
           <div className="p-6 border-t border-slate-200 dark:border-[#26262d] grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Name
+                Relative Name <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Relative / Next of kin name"
@@ -1671,7 +1716,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Address Region
+                Address Region <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. Oromia / Addis Ababa"
@@ -1682,7 +1727,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Phone
+                Relative Phone <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. +251..."
@@ -1693,7 +1738,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Kinship
+                Relative Kinship <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <select
                 {...register("relative_kinship")}
@@ -1709,18 +1754,21 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                City
+                City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
+                id="applicant_city_field"
+                autoComplete="address-level2"
                 placeholder="e.g. Adama"
                 {...register("city")}
+                onFocus={() => setIsSponsorAddrReadOnly(true)}
                 className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Subcity/Zone
+                Subcity/Zone <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. Arsi Zone"
@@ -1731,7 +1779,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Woreda
+                Relative Woreda <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Woreda number/name"
@@ -1742,7 +1790,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative House #
+                Relative House # <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="House number"
@@ -1753,7 +1801,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Gender
+                Relative Gender <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <select
                 {...register("relative_gender")}
@@ -1766,7 +1814,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                R-Birth Date
+                R-Birth Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 type="date"
@@ -1800,7 +1848,7 @@ export function ApplicantRegistrationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Region
+                  Region <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="e.g. Oromia"
@@ -1811,7 +1859,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Subcity
+                  Subcity <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Subcity"
@@ -1822,7 +1870,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Woreda
+                  Woreda <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Woreda"
@@ -1833,7 +1881,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  House No.
+                  House No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="House No"
@@ -1844,7 +1892,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  File No.
+                  File No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="File #"
@@ -1855,7 +1903,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Contract #
+                  Contract # <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Contract #"
@@ -1866,7 +1914,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Wakala #
+                  Wakala # <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Wakala #"
@@ -1877,7 +1925,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Sticker Visa #
+                  Sticker Visa # <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Sticker Visa #"
@@ -1888,7 +1936,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Signed On
+                  Signed On <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   type="date"
@@ -1899,7 +1947,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Nationality
+                  Nationality <span className="text-rose-500 font-bold ml-0.5">*</span>
                 </Label>
                 <select
                   {...register("nationality")}
@@ -1915,7 +1963,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Biometric Id
+                  Biometric Id <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Biometric ID"
@@ -1926,7 +1974,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Labor ID
+                  Labor ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Ministry Labor ID"
@@ -1937,7 +1985,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Contact Person(2nd)
+                  Contact Person(2nd) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Secondary contact name"
@@ -1948,7 +1996,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Contact Phone(2nd)
+                  Contact Phone(2nd) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Secondary contact phone"
@@ -1966,7 +2014,7 @@ export function ApplicantRegistrationForm({
                   {...register("photos_2")}
                   className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
                 />
-                <span>Photos (2)</span>
+                <span>Photos (2) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
@@ -1975,7 +2023,7 @@ export function ApplicantRegistrationForm({
                   {...register("is_filed")}
                   className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
                 />
-                <span>IsIDFiled</span>
+                <span>IsIDFiled <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
@@ -1984,7 +2032,7 @@ export function ApplicantRegistrationForm({
                   {...register("relative_id_card")}
                   className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
                 />
-                <span>Relative ID Card</span>
+                <span>Relative ID Card <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
               </label>
             </div>
           </div>
@@ -2013,7 +2061,7 @@ export function ApplicantRegistrationForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  English
+                  English <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <select
                   {...register("english_level")}
@@ -2029,7 +2077,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Arabic
+                  Arabic <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <select
                   {...register("arabic_level")}
@@ -2045,7 +2093,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Experience Abroad
+                  Experience Abroad <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <select
                   {...register("experience_country")}
@@ -2061,7 +2109,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Salary (SAR / Monthly)
+                  Salary (SAR / Monthly) {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
                 </Label>
                 <Input
                   type="number"
@@ -2073,7 +2121,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Works In
+                  Works In <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Specific sector or position"
@@ -2084,7 +2132,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Children
+                  Children <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   type="number"
@@ -2096,7 +2144,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Height
+                  Height <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="e.g. 165 cm"
@@ -2107,7 +2155,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Weight
+                  Weight <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="e.g. 60 kg"
@@ -2118,7 +2166,22 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Reference No
+                  Skin Color <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                <select
+                  {...register("complexion")}
+                  defaultValue="FAIR"
+                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
+                >
+                  <option value="FAIR">Fair</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="DARK">Dark</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Reference No <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Reference number"
@@ -2127,9 +2190,9 @@ export function ApplicantRegistrationForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 md:col-span-2">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Remark
+                  Remark <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Candidate remarks"
@@ -2142,7 +2205,7 @@ export function ApplicantRegistrationForm({
             {/* Skills Checkboxes: 4 columns x 2 rows (Matching Video Grid) */}
             <div className="pt-4 border-t border-slate-100 dark:border-[#26262d] space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                Skills Checklist
+                Skills Checklist <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-[#1a1a24]">
@@ -2240,7 +2303,7 @@ export function ApplicantRegistrationForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-              Medical Fitness Result
+              Medical Fitness Result <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
             </Label>
             <select
               {...register("medical_status")}
@@ -2255,7 +2318,7 @@ export function ApplicantRegistrationForm({
 
           <div className="space-y-1">
             <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-              Medical Expiry Date
+              Medical Expiry Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
             </Label>
             <Input
               type="date"

@@ -29,7 +29,7 @@ export async function logoutUser(): Promise<void> {
   try {
     await logoutV2();
   } catch (err) {
-    console.error("Logout request error:", err);
+    console.warn("[Auth] Logout request notice:", err);
   } finally {
     clearCsrfToken();
   }

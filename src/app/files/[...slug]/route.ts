@@ -20,16 +20,9 @@ function getFrappeConfig(req: NextRequest) {
     userSessionHeaders["Authorization"] = authHeader;
   }
 
-  // System-level API key headers (used as primary auth for private file access)
-  const systemHeaders: Record<string, string> = { Accept: "*/*" };
-  if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
-    systemHeaders["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
-  }
-
   return {
     url: url.replace(/\/$/, ""),
     userSessionHeaders,
-    systemHeaders,
   };
 }
 
@@ -58,76 +51,33 @@ export async function GET(
   const encodedPath = slug.map(encodeURIComponent).join("/");
   const config = getFrappeConfig(req);
 
-  const { systemHeaders, userSessionHeaders, url } = config;
+  const { userSessionHeaders, url } = config;
 
-  /**
-   * Attempt order — prioritised so that the system API token (which has server-side
-   * access to all private files) is always tried before the user's browser session.
-   * This fixes the 403 that occurs when the backend checks file ownership against the
-   * session cookie and rejects a request for a file owned by another user/system account.
-   *
-   * Strategy:
-   *   1. download_file RPC + system token           (primary — works for all private files)
-   *   2. download_file RPC + user session           (fallback — works if user owns the file)
-   *   3. /private/files/ direct + system token      (fallback for non-RPC accessible files)
-   *   4. /private/files/ direct + user session      (fallback)
-   *   5. /files/ direct + system token              (public files with system token)
-   *   6. /files/ direct + user session              (public files with user session)
-   */
   const attempts = [
-    // 1. download_file RPC – /files/ path – system token (PRIMARY for private files)
-    {
-      url: `${url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`,
-      headers: systemHeaders,
-      label: "download_file /files/ system",
-    },
-    // 2. download_file RPC – /files/ path – user session
     {
       url: `${url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${rawPath}`)}`,
       headers: userSessionHeaders,
-      label: "download_file /files/ session",
+      label: "download_file /files/",
     },
-    // 3. download_file RPC – /private/files/ path – system token
-    {
-      url: `${url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`,
-      headers: systemHeaders,
-      label: "download_file /private/files/ system",
-    },
-    // 4. download_file RPC – /private/files/ path – user session
     {
       url: `${url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`,
       headers: userSessionHeaders,
-      label: "download_file /private/files/ session",
+      label: "download_file /private/files/",
     },
-    // 5. download_file RPC – URL-encoded /files/ path – system token
     {
       url: `${url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/files/${encodedPath}`)}`,
-      headers: systemHeaders,
-      label: "download_file encoded /files/ system",
-    },
-    // 6. Direct /private/files/ – system token
-    {
-      url: `${url}/private/files/${encodedPath}`,
-      headers: systemHeaders,
-      label: "direct /private/files/ system",
-    },
-    // 7. Direct /private/files/ – user session
-    {
-      url: `${url}/private/files/${encodedPath}`,
       headers: userSessionHeaders,
-      label: "direct /private/files/ session",
+      label: "download_file encoded /files/",
     },
-    // 8. Direct /files/ – system token
-    {
-      url: `${url}/files/${encodedPath}`,
-      headers: systemHeaders,
-      label: "direct /files/ system",
-    },
-    // 9. Direct /files/ – user session
     {
       url: `${url}/files/${encodedPath}`,
       headers: userSessionHeaders,
-      label: "direct /files/ session",
+      label: "direct /files/",
+    },
+    {
+      url: `${url}/private/files/${encodedPath}`,
+      headers: userSessionHeaders,
+      label: "direct /private/files/",
     },
   ];
 
@@ -148,9 +98,20 @@ export async function GET(
             "Cache-Control": "private, max-age=3600, stale-while-revalidate=86400",
             "Accept-Ranges": "bytes",
           };
-          const contentDisposition = res.headers.get("content-disposition");
-          if (contentDisposition) {
-            responseHeaders["Content-Disposition"] = contentDisposition;
+          const isViewableInline =
+            contentType.includes("pdf") ||
+            contentType.startsWith("image/") ||
+            contentType.startsWith("text/");
+          const urlObj = new URL(req.url);
+          const forceDownload = urlObj.searchParams.get("download") === "1";
+
+          if (isViewableInline && !forceDownload) {
+            responseHeaders["Content-Disposition"] = "inline";
+          } else {
+            const contentDisposition = res.headers.get("content-disposition");
+            if (contentDisposition) {
+              responseHeaders["Content-Disposition"] = contentDisposition;
+            }
           }
 
           const response = new NextResponse(buffer, {

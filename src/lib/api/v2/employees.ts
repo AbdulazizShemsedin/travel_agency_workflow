@@ -52,6 +52,23 @@ export interface ResetEmployeePasswordPayload {
  * Accessible to any member of INTERNAL_STAFF_ROLES for staff assignment pickers,
  * chat participant dropdowns, staff directories, and clearance officer assignments.
  */
+function normalizeAndDeduplicateRoles(rawRoles: unknown[]): string[] {
+  if (!Array.isArray(rawRoles)) return [];
+  const set = new Set<string>();
+  for (const item of rawRoles) {
+    const r = typeof item === "string" ? item : (item as any)?.role;
+    if (typeof r === "string" && r.trim()) {
+      const lower = r.trim().toLowerCase();
+      if (lower === "administrator" || lower === "system manager" || lower === "manager") {
+        set.add("Admin");
+      } else {
+        set.add(r.trim());
+      }
+    }
+  }
+  return Array.from(set);
+}
+
 export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
   const res = await requestV2<{ message?: any[] } | any[]>(
     "/api/method/agency_tracking.employee_api.list_employee_roster",
@@ -69,7 +86,7 @@ export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
     enabled: typeof u.enabled === "number" ? u.enabled : u.enabled ? 1 : 0,
     user_type: "System User",
     creation: u.creation || "",
-    roles: Array.isArray(u.roles) ? u.roles.map((r: any) => typeof r === "string" ? r : r?.role).filter(Boolean) : [],
+    roles: normalizeAndDeduplicateRoles(u.roles),
   }));
 }
 
@@ -229,15 +246,16 @@ export async function updateEmployeeRolesApiV2(
   email: string,
   roles: string[]
 ): Promise<string[]> {
+  const normalizedRoles = normalizeAndDeduplicateRoles(roles);
   const result = await requestV2<any>(
     "/api/method/agency_tracking.employee_api.update_employee_roles",
     {
       method: "POST",
-      body: { email, roles },
+      body: { email, roles: normalizedRoles },
     }
   );
   const list = Array.isArray(result) ? result : result?.roles;
-  return Array.isArray(list) ? list.map(String) : [];
+  return Array.isArray(list) ? normalizeAndDeduplicateRoles(list) : [];
 }
 
 /**

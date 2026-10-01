@@ -6,7 +6,6 @@
 
 export const V2_CUSTOM_ROLES = [
   "Registrar",
-  "Manager",
   "Admin",
   "Clearance Officer",
   "Ticketer",

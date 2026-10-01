@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   DollarSign,
@@ -15,13 +16,14 @@ import {
   Building2,
   ExternalLink,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import {
   getOwedCommissionsV2,
   V2OwedCommissionItem,
 } from "@/lib/api/v2";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
-import { listPlacementsV2 } from "@/lib/api/v2/placements";
+import { listPlacementsV2, listMyPlacementsV2 } from "@/lib/api/v2/placements";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,21 +51,28 @@ export default function AgentCommissionPage() {
     isLoading: isListLoading,
     refetch: refetchList,
     isRefetching: isSummaryRefetching,
+    error: commissionError,
   } = useQuery<V2OwedCommissionItem[]>({
     queryKey: ["unpaid-commission-candidates", effectiveContractor],
     queryFn: () => getOwedCommissionsV2(effectiveContractor || undefined),
+    enabled: Boolean(effectiveContractor),
+    retry: false,
   });
 
-  // Fetch Applicants & Placements to resolve real full names and passports
+  // Fetch Applicants (internal staff only) & Placements to resolve real full names and passports
+  const isInternal = Boolean(authUser?.is_internal_staff);
   const { data: applicants = [] } = useQuery({
     queryKey: ["applicants_for_agent_commission"],
     queryFn: () => listApplicantsV2(),
     staleTime: 60000,
+    enabled: isInternal,
   });
 
   const { data: placements = [] } = useQuery({
-    queryKey: ["placements_for_agent_commission"],
-    queryFn: () => listPlacementsV2(),
+    queryKey: ["placements_for_agent_commission", isInternal, effectiveContractor],
+    queryFn: () => (isInternal ? listPlacementsV2() : listMyPlacementsV2(effectiveContractor || undefined)),
+    enabled: Boolean(isInternal || effectiveContractor),
+    retry: false,
     staleTime: 60000,
   });
 
@@ -81,10 +90,14 @@ export default function AgentCommissionPage() {
   }, [applicants]);
 
   const placementMap = React.useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { applicant?: string; full_name?: string; passport_number?: string }>();
     for (const p of placements) {
-      if (p.name && p.applicant) {
-        map.set(String(p.name).toLowerCase().trim(), String(p.applicant).toLowerCase().trim());
+      if (p.name) {
+        map.set(String(p.name).toLowerCase().trim(), {
+          applicant: p.applicant ? String(p.applicant).toLowerCase().trim() : undefined,
+          full_name: (p as any).applicant_name || (p as any).candidate_name || undefined,
+          passport_number: (p as any).passport_number || undefined,
+        });
       }
     }
     return map;
@@ -110,9 +123,11 @@ export default function AgentCommissionPage() {
           break;
         }
         if (placementMap.has(lower)) {
-          const appId = placementMap.get(lower)!;
-          if (applicantMap.has(appId)) {
-            const found = applicantMap.get(appId)!;
+          const pInfo = placementMap.get(lower)!;
+          if (pInfo.full_name && !name) name = pInfo.full_name;
+          if (pInfo.passport_number && !passport) passport = pInfo.passport_number;
+          if (pInfo.applicant && applicantMap.has(pInfo.applicant)) {
+            const found = applicantMap.get(pInfo.applicant)!;
             if (!name) name = found.full_name;
             if (!passport && found.passport_number) passport = found.passport_number;
             break;
@@ -175,6 +190,16 @@ export default function AgentCommissionPage() {
       onContractorChange={setActiveContractor}
     >
       <div className="space-y-6 pb-16">
+        {/* Back Link */}
+        <div>
+          <Link
+            href="/agent"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Candidate Directory
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -312,6 +337,16 @@ export default function AgentCommissionPage() {
               <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
               <span className="ml-2 text-xs text-slate-500">Loading commission records...</span>
             </div>
+          ) : commissionError ? (
+            <div className="p-16 text-center text-xs text-slate-400 space-y-2">
+              <Receipt className="h-8 w-8 text-amber-500/80 mx-auto mb-1" />
+              <p className="font-semibold text-slate-700 dark:text-zinc-200">
+                Commission Statements Administered by Headquarters
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
+                Commission billing reconciliations and settlement schedules are managed directly by the internal Finance Desk. For immediate statement breakdowns or inquiries, please contact your agency liaison via the Messages tab.
+              </p>
+            </div>
           ) : candidateList.length === 0 ? (
             <div className="p-16 text-center text-xs text-slate-400 space-y-1.5">
               <Receipt className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-1" />
@@ -325,9 +360,9 @@ export default function AgentCommissionPage() {
           ) : (
             <div className="overflow-x-auto relative">
               <table className="w-full text-left text-xs min-w-[740px] border-separate border-spacing-0">
-                <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+                <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#16161b] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate Name
                     </th>
                     <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport Number</th>
@@ -340,9 +375,9 @@ export default function AgentCommissionPage() {
                   {candidateList.map((cand, idx) => {
                     const { name: candidateName, passport: candidatePassport } = resolveCandidate(cand);
                     return (
-                      <tr key={cand.name || idx} className="group hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                      <tr key={cand.name || idx} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
                         {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
                           {candidateName}
                         </td>
                         <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">

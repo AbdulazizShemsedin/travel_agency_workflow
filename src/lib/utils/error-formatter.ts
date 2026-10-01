@@ -472,11 +472,11 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   }
 
   // Language Levels
-  if (/Value 'Fair' not in allowed values/i.test(text) || (/english_level/i.test(text) && /not in allowed values/i.test(text))) {
-    return "English level must be: None, Basic, Good, or Fluent.";
-  }
-  if (/arabic_level/i.test(text) && /not in allowed values/i.test(text)) {
+  if (/Arabic Level cannot be/i.test(text) || (/arabic_level/i.test(text) && (/not in allowed values/i.test(text) || /cannot be/i.test(text)))) {
     return "Arabic level must be: None, Basic, Good, or Fluent.";
+  }
+  if (/English Level cannot be/i.test(text) || /Value 'Fair' not in allowed values/i.test(text) || (/english_level/i.test(text) && (/not in allowed values/i.test(text) || /cannot be/i.test(text)))) {
+    return "English level must be: None, Basic, Good, or Fluent.";
   }
 
   // General "not in allowed values"

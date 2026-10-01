@@ -46,6 +46,39 @@ import {
 } from "@/lib/pdf/injazDocumentGenerator";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
+import { cn } from "@/lib/utils";
+
+function TableHeaderCheckbox({
+  allSelected,
+  someSelected,
+  onToggleAll,
+}: {
+  allSelected: boolean;
+  someSelected: boolean;
+  onToggleAll: () => void;
+}) {
+  const ref = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (ref.current) {
+      ref.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
+
+  return (
+    <div className="flex items-center justify-center p-0.5">
+      <input
+        ref={ref}
+        type="checkbox"
+        className="h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
+        checked={allSelected}
+        onChange={onToggleAll}
+        onClick={(e) => e.stopPropagation()}
+        title={allSelected ? "Deselect all candidates" : "Select all candidates"}
+      />
+    </div>
+  );
+}
 
 interface InjazWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -266,17 +299,70 @@ export function InjazWorkspace({
 
   const [isExportingTaeshir, setIsExportingTaeshir] = React.useState(false);
 
+  // Candidate selection for targeted exports
+  const [selectedApplicantIds, setSelectedApplicantIds] = React.useState<Set<string>>(new Set());
+
+  // Clean up selected IDs if data changes or rows are removed
+  React.useEffect(() => {
+    if (selectedApplicantIds.size === 0) return;
+    const validIds = new Set(
+      data.map((r) => r.applicantId || (r.applicant as any)?.name).filter(Boolean)
+    );
+    setSelectedApplicantIds((prev) => {
+      let hasOrphan = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          hasOrphan = true;
+        }
+      }
+      return hasOrphan ? next : prev;
+    });
+  }, [data]);
+
+  const validCandidateIds = React.useMemo(() => {
+    return data
+      .map((r) => r.applicantId || (r.applicant as any)?.name)
+      .filter(Boolean) as string[];
+  }, [data]);
+
+  const allSelected =
+    validCandidateIds.length > 0 &&
+    validCandidateIds.every((id) => selectedApplicantIds.has(id));
+
+  const someSelected =
+    validCandidateIds.length > 0 &&
+    validCandidateIds.some((id) => selectedApplicantIds.has(id));
+
+  const handleToggleSelectAll = React.useCallback(() => {
+    if (allSelected) {
+      setSelectedApplicantIds(new Set());
+    } else {
+      setSelectedApplicantIds(new Set(validCandidateIds));
+    }
+  }, [allSelected, validCandidateIds]);
+
   const handleExportTaeshir = async () => {
     try {
       setIsExportingTaeshir(true);
-      const applicantIds = data
-        .map((r) => r.applicantId || (r.applicant as any)?.name)
-        .filter(Boolean);
+      const selectedIds = Array.from(selectedApplicantIds);
+      const isSelective = selectedIds.length > 0;
+
+      const applicantIds = isSelective ? selectedIds : validCandidateIds;
+
       if (applicantIds.length === 0) {
         toast.error("No candidates in the workspace to export.");
         return;
       }
-      toast.info(`Exporting Taeshir schedule for ${applicantIds.length} applicants...`);
+
+      toast.info(
+        isSelective
+          ? `Exporting Taeshir schedule for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}...`
+          : `Exporting Taeshir schedule for all ${applicantIds.length} candidate${applicantIds.length > 1 ? "s" : ""}...`
+      );
+
       const blob = await exportGroupScheduleBioXlsV2(applicantIds);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -287,7 +373,11 @@ export function InjazWorkspace({
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success("Export for Taeshir (.xls) downloaded successfully!");
+      toast.success(
+        isSelective
+          ? `Export for Taeshir (.xls) downloaded successfully for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}!`
+          : "Export for Taeshir (.xls) downloaded successfully!"
+      );
     } catch (err: any) {
       toast.error(err?.message || "Failed to export Taeshir (.xls) file.");
     } finally {
@@ -396,6 +486,45 @@ export function InjazWorkspace({
 
   // Columns definition with Direct Excel-like In-Cell Editing
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
+    {
+      id: "select",
+      header: (
+        <TableHeaderCheckbox
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onToggleAll={handleToggleSelectAll}
+        />
+      ),
+      width: "38px",
+      align: "center",
+      sortable: false,
+      cell: (row) => {
+        const id = row.applicantId || (row.applicant as any)?.name;
+        const isChecked = Boolean(id && selectedApplicantIds.has(id));
+        return (
+          <div
+            className="flex items-center justify-center p-1 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!id) return;
+              setSelectedApplicantIds((prev) => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            }}
+          >
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-700 cursor-pointer pointer-events-none"
+              checked={isChecked}
+              readOnly
+            />
+          </div>
+        );
+      },
+    },
     {
       id: "edit",
       header: "EDIT",
@@ -680,18 +809,46 @@ export function InjazWorkspace({
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
         extraHeaderActions={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleExportTaeshir}
-            disabled={isExportingTaeshir}
-            className="h-8 gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
-            title="Export for Taeshir (.xls)"
-          >
-            <FileDown className="h-3.5 w-3.5" />
-            <span>{isExportingTaeshir ? "Exporting..." : "Export for Taeshir (.xls)"}</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedApplicantIds.size > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedApplicantIds(new Set())}
+                className="h-8 px-2 text-xs text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                Clear ({selectedApplicantIds.size})
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportTaeshir}
+              disabled={isExportingTaeshir}
+              className={cn(
+                "h-8 gap-1.5 text-xs font-semibold border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-all",
+                selectedApplicantIds.size > 0
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-500/50"
+                  : "text-emerald-800 dark:text-emerald-300"
+              )}
+              title={
+                selectedApplicantIds.size > 0
+                  ? `Export ${selectedApplicantIds.size} selected candidate${selectedApplicantIds.size > 1 ? "s" : ""} for Taeshir (.xls)`
+                  : "Export all for Taeshir (.xls)"
+              }
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              <span>
+                {isExportingTaeshir
+                  ? "Exporting..."
+                  : selectedApplicantIds.size > 0
+                  ? `Export for Taeshir (${selectedApplicantIds.size})`
+                  : "Export for Taeshir (.xls)"}
+              </span>
+            </Button>
+          </div>
         }
       />
 

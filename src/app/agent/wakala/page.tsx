@@ -26,6 +26,7 @@ import {
   User,
   MessageCircle,
   Radio,
+  ArrowLeft,
 } from "lucide-react";
 import {
   listMyWakalaRequestsV2,
@@ -102,6 +103,8 @@ export default function AgentWakalaRequestsPage() {
   } = useQuery<V2WakalaRequestItem[]>({
     queryKey: ["agency-wakala-requests", effectiveContractor],
     queryFn: () => listMyWakalaRequestsV2(effectiveContractor || undefined),
+    enabled: Boolean(isForeignAgency || effectiveContractor),
+    retry: false,
     staleTime: 15000,
   });
 
@@ -210,6 +213,16 @@ export default function AgentWakalaRequestsPage() {
       onContractorChange={setActiveContractor}
     >
       <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-6">
+        {/* Back Link */}
+        <div>
+          <Link
+            href="/agent"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Candidate Directory
+          </Link>
+        </div>
+
         {/* Header Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-[#222227] pb-4">
           <div>
@@ -381,9 +394,9 @@ export default function AgentWakalaRequestsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto relative">
               <table className="w-full text-xs text-left min-w-[760px] border-separate border-spacing-0">
-                <thead className="text-[11px] text-slate-500 dark:text-zinc-400 bg-slate-50/95 dark:bg-[#171720] uppercase font-semibold">
+                <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-200 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#171720] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-300 dark:border-[#202028] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate
                     </th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Step ID</th>
@@ -411,9 +424,9 @@ export default function AgentWakalaRequestsPage() {
                     </tr>
                   ) : filteredRequests.length > 0 ? (
                     filteredRequests.map((req) => (
-                      <tr key={req.clearance_step_name} className="group hover:bg-slate-50 dark:hover:bg-[#15151c]">
+                      <tr key={req.clearance_step_name} className="group hover:bg-slate-100/90 dark:hover:bg-[#15151c]">
                         {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-100 dark:border-[#202028] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#15151c] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-300 dark:border-[#202028] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                           <div className="font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs truncate">
                             {req.full_name || req.applicant_name || "Candidate"}
                           </div>

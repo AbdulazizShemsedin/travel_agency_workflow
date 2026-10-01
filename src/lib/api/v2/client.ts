@@ -115,8 +115,8 @@ export async function requestV2<T = any>(
   // Attach CSRF token on POST requests if not logging in/out or fetching CSRF token
   if (
     method === "POST" &&
-    !endpoint.endsWith("/login") &&
-    !endpoint.endsWith("/logout") &&
+    !endpoint.endsWith("login") &&
+    !endpoint.endsWith("logout") &&
     !endpoint.includes("get_csrf_token")
   ) {
     const csrfToken = await getCachedOrFetchCsrfToken();
@@ -222,8 +222,8 @@ export async function requestV2<T = any>(
     (jsonResponse?.exc_type === "CSRFTokenError" ||
       (response.status === 400 && String(jsonResponse?._server_messages || "").includes("Invalid Request"))) &&
     !(options as any)._isRetry &&
-    !endpoint.endsWith("/login") &&
-    !endpoint.endsWith("/logout") &&
+    !endpoint.endsWith("login") &&
+    !endpoint.endsWith("logout") &&
     !endpoint.includes("get_csrf_token")
   ) {
     console.warn(`[V2 Client] CSRF token mismatch on ${endpoint}. Refreshing token and retrying...`);

@@ -108,12 +108,12 @@ export function OperationalTable<T extends Record<string, any> = any>({
     return inputColumns.map((col) => {
       const isRemainingCol =
         col.id.toLowerCase().includes("remaining") ||
-        col.header.toLowerCase().includes("remaining") ||
+        (typeof col.header === "string" && col.header.toLowerCase().includes("remaining")) ||
         col.accessorKey === "medicalRemaining";
 
       return {
         id: col.id,
-        header: col.header,
+        header: typeof col.header === "string" ? col.header : (() => col.header as any),
         accessorKey: col.accessorKey as string,
         enableSorting: col.sortable !== false,
         size: col.width ? parseInt(col.width, 10) : undefined,
@@ -341,7 +341,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
     const remCol = tableColumns.find(
       (c) =>
         c.id?.toLowerCase().includes("remaining") ||
-        (c.header as string)?.toLowerCase().includes("remaining")
+        (typeof c.header === "string" && c.header.toLowerCase().includes("remaining"))
     );
     if (remCol && remCol.id) {
       setSorting([{ id: remCol.id, desc: false }]);
@@ -416,7 +416,12 @@ export function OperationalTable<T extends Record<string, any> = any>({
               <div className="max-h-60 overflow-y-auto space-y-1 p-1">
                 {allColumns.map((column) => {
                   const isVisible = column.getIsVisible();
-                  const headerTitle = String(column.columnDef.header || column.id);
+                  const headerTitle =
+                    typeof column.columnDef.header === "string"
+                      ? column.columnDef.header
+                      : column.id === "select"
+                      ? "Select"
+                      : column.id;
 
                   return (
                     <label
@@ -572,10 +577,14 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   const isSorted = header.column.getIsSorted();
                   const align = (header.column.columnDef.meta as any)?.align || "left";
                   const width = (header.column.columnDef.meta as any)?.width;
-                  const isFirstCol = colIdx === 0;
-                  const isSecondCol = colIdx === 1;
-                  const isThirdCol = colIdx === 2;
+                  const isNameCol =
+                    header.column.id === "name" ||
+                    header.column.id === "candidate" ||
+                    (typeof header.column.columnDef.header === "string" &&
+                      (header.column.columnDef.header.toUpperCase() === "NAME" ||
+                        header.column.columnDef.header.toUpperCase() === "CANDIDATE"));
                   const isLastCol = colIdx === headerGroup.headers.length - 1;
+                  const isFirstCol = colIdx === 0;
                   const isActionCol = (header.column.columnDef.meta as any)?.isActionCol;
                   const isReadOnly = (header.column.columnDef.meta as any)?.isReadOnly;
 
@@ -586,17 +595,16 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       style={{
                         width,
                         minWidth: width,
-                        ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                        ...(isSecondCol ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                        ...(isThirdCol ? { left: "96px" } : {}),
+                        ...(isNameCol ? { left: 0 } : {}),
                         ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
                         "py-2 px-2.5 select-none border-r border-slate-300 dark:border-[#272730]",
-                        isFirstCol && "sticky left-0 z-30 bg-slate-100 dark:bg-[#181820]",
-                        isSecondCol && "sticky z-30 bg-slate-100 dark:bg-[#181820]",
-                        isThirdCol && "sticky z-30 bg-slate-100 dark:bg-[#181820] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]",
-                        isActionCol && isLastCol && "sticky right-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
+                        isNameCol &&
+                          "sticky left-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                        isActionCol &&
+                          isLastCol &&
+                          "sticky right-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -646,22 +654,24 @@ export function OperationalTable<T extends Record<string, any> = any>({
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {visibleColumns.map((col, idx) => {
+                    const isNameCol =
+                      col.id === "name" ||
+                      col.id === "candidate" ||
+                      (typeof col.columnDef.header === "string" &&
+                        (col.columnDef.header.toUpperCase() === "NAME" ||
+                          col.columnDef.header.toUpperCase() === "CANDIDATE"));
                     const isLastCol = idx === visibleColumns.length - 1;
                     const isActionCol = (col.columnDef.meta as any)?.isActionCol;
                     return (
                       <td
                         key={idx}
                         style={{
-                          ...(idx === 0 ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                          ...(idx === 1 ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                          ...(idx === 2 ? { left: "96px" } : {}),
+                          ...(isNameCol ? { left: 0 } : {}),
                           ...(isActionCol && isLastCol ? { right: 0 } : {}),
                         }}
                         className={cn(
                           "py-3 px-3",
-                          idx === 0 && "sticky left-0 z-10 bg-white dark:bg-[#121216]",
-                          idx === 1 && "sticky z-10 bg-white dark:bg-[#121216]",
-                          idx === 2 && "sticky z-10 bg-white dark:bg-[#121216] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]",
+                          isNameCol && "sticky left-0 z-10 bg-white dark:bg-[#121216] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                           isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121216] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
                         )}
                       >
@@ -706,12 +716,15 @@ export function OperationalTable<T extends Record<string, any> = any>({
                   >
                     {row.getVisibleCells().map((cell, colIdx) => {
                       const align = (cell.column.columnDef.meta as any)?.align || "left";
-                      const isFirstCol = colIdx === 0;
-                      const isSecondCol = colIdx === 1;
-                      const isThirdCol = colIdx === 2;
+                      const isNameCol =
+                        cell.column.id === "name" ||
+                        cell.column.id === "candidate" ||
+                        (typeof cell.column.columnDef.header === "string" &&
+                          (cell.column.columnDef.header.toUpperCase() === "NAME" ||
+                            cell.column.columnDef.header.toUpperCase() === "CANDIDATE"));
                       const isLastCol = colIdx === row.getVisibleCells().length - 1;
                       const isActionCol = (cell.column.columnDef.meta as any)?.isActionCol;
-                      const isStickyCol = isFirstCol || isSecondCol || isThirdCol || (isActionCol && isLastCol);
+                      const isStickyCol = isNameCol || (isActionCol && isLastCol);
 
                       const isReadOnly = (cell.column.columnDef.meta as any)?.isReadOnly;
 
@@ -721,21 +734,18 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           style={{
                             width: (cell.column.columnDef.meta as any)?.width,
                             minWidth: (cell.column.columnDef.meta as any)?.width,
-                            ...(isFirstCol ? { left: 0, width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                            ...(isSecondCol ? { left: "48px", width: "48px", minWidth: "48px", maxWidth: "48px" } : {}),
-                            ...(isThirdCol ? { left: "96px" } : {}),
+                            ...(isNameCol ? { left: 0 } : {}),
                             ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
                             "py-1.5 px-2.5 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
                             isStickyCol && "sticky z-20",
-                            isFirstCol && "left-0",
-                            isThirdCol && "shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]",
+                            isNameCol && "left-0 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                             isActionCol && isLastCol && "right-0 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
-                            isStickyCol && (
+                            isNameCol && (
                               isSelected
                                 ? "!bg-emerald-100 dark:!bg-[#183428]"
-                                : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-emerald-50 dark:group-hover:!bg-[#1a2c24]"
+                                : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
                             ),
                             isReadOnly && !isStickyCol && "bg-slate-50/90 dark:bg-[#141419] text-slate-700 dark:text-zinc-300 cursor-default select-text",
                             isReadOnly && isStickyCol && "text-slate-700 dark:text-zinc-300 cursor-default select-text",

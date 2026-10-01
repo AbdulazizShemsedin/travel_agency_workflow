@@ -26,7 +26,7 @@ interface Step2EducationExperienceProps {
 }
 
 const LANGUAGE_OPTIONS = ["None", "Basic", "Good", "Fluent"];
-const COMPLEXION_OPTIONS = ["", "FAIR", "MEDIUM", "DARK"];
+const COMPLEXION_OPTIONS = ["FAIR", "MEDIUM", "DARK"];
 
 export function Step2EducationExperience({
   form,
@@ -659,7 +659,7 @@ export function Step2EducationExperience({
               >
                 {COMPLEXION_OPTIONS.map((c) => (
                   <option key={c} value={c}>
-                    {c === "" ? "Select skin color" : c === "FAIR" ? "Fair (Default)" : c === "MEDIUM" ? "Medium" : c === "DARK" ? "Dark" : c}
+                    {c === "FAIR" ? "Fair (Default)" : c === "MEDIUM" ? "Medium" : "Dark"}
                   </option>
                 ))}
               </Select>

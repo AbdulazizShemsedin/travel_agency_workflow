@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -21,13 +22,15 @@ import {
   Filter,
   ArrowUpDown,
   SlidersHorizontal,
+  ArrowLeft,
 } from "lucide-react";
 import {
   listUnresolvedComplaintsV2,
   createComplaintV2,
   uploadFileV2,
-  listPlacementsV2,
+  listMyPlacementsV2,
   listApplicantsV2,
+  listPortalCandidatesV2,
   V2ComplaintItem,
 } from "@/lib/api/v2";
 import {
@@ -80,15 +83,25 @@ export default function AgentComplaintsPage() {
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
   const [formError, setFormError] = React.useState<string | null>(null);
 
+  const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
   // Fetch all placements for searchable dropdown
   const { data: allAvailableCandidates = [] } = useQuery({
     queryKey: ["all-agency-placements", effectiveContractor],
-    queryFn: () => listPlacementsV2(),
+    queryFn: () => listMyPlacementsV2(effectiveContractor || undefined),
+    enabled: Boolean(isAgencyUser || effectiveContractor),
+    retry: false,
   });
 
   const { data: applicants = [] } = useQuery({
     queryKey: ["all-agency-applicants-for-complaints"],
     queryFn: () => listApplicantsV2(),
+    enabled: Boolean(authUser?.is_internal_staff),
+  });
+
+  const { data: portalCandidates = [] } = useQuery({
+    queryKey: ["portal-candidates-complaints"],
+    queryFn: () => listPortalCandidatesV2(),
+    retry: false,
   });
 
   // Reset candidate selection if active contractor changes
@@ -100,6 +113,42 @@ export default function AgentComplaintsPage() {
     }));
   }, [effectiveContractor]);
 
+  // Only candidates that appear on the Foreign Agency applicant marketplace section (/agent)
+  const marketplaceCandidates = React.useMemo(() => {
+    return (portalCandidates as any[])
+      .filter((c) => Boolean(c && c.name))
+      .filter((c) => c.medical_status !== "UNFIT")
+      .map((c) => {
+        const displayName =
+          c.full_name ||
+          [c.first_name, c.middle_name, c.last_name].filter(Boolean).join(" ") ||
+          c.applicant_name ||
+          c.name;
+        const passport = c.passport_number || "";
+        const destination = c.destination_country || "";
+        const job = c.target_job || c.job_applied || "";
+
+        // Link placement record if this marketplace applicant has one under this contractor
+        const matchedPlacement = (allAvailableCandidates as any[]).find(
+          (p) =>
+            (p.applicant === c.name || p.name === c.name) &&
+            (!effectiveContractor || p.contractor === effectiveContractor)
+        );
+
+        return {
+          id: c.name,
+          name: c.name,
+          applicant: c.name,
+          placement_name: matchedPlacement?.name || c.name,
+          full_name: displayName,
+          passport_number: passport,
+          destination_country: destination,
+          target_job: job,
+          status: matchedPlacement?.status || "Marketplace Applicant",
+        };
+      });
+  }, [portalCandidates, allAvailableCandidates, effectiveContractor]);
+
   // Strictly filter candidates placed with THIS Foreign Agency
   const agencyPlacements = React.useMemo(() => {
     if (!effectiveContractor) return [];
@@ -107,10 +156,11 @@ export default function AgentComplaintsPage() {
       .filter((c) => c.contractor === effectiveContractor)
       .map((c) => {
         const a = (applicants as any[]).find((app) => app.name === c.applicant);
-        const displayName = a?.full_name || a?.first_name || c.full_name || c.applicant_name || c.applicant;
-        const passport = a?.passport_number || c.passport_number || "";
+        const pc = (portalCandidates as any[]).find((p) => p.name === c.applicant);
+        const displayName = a?.full_name || a?.first_name || pc?.full_name || c.full_name || c.applicant_name || c.applicant;
+        const passport = a?.passport_number || pc?.passport_number || c.passport_number || "";
         const status = c.status || a?.applicant_state || "Placed";
-        const destination = c.destination_country || a?.destination_country || "";
+        const destination = c.destination_country || a?.destination_country || pc?.destination_country || "";
         return {
           ...c,
           full_name: displayName,
@@ -119,31 +169,137 @@ export default function AgentComplaintsPage() {
           destination_country: destination,
         };
       });
-  }, [allAvailableCandidates, applicants, effectiveContractor]);
+  }, [allAvailableCandidates, applicants, portalCandidates, effectiveContractor]);
 
-  // Dynamic filter by first name, last name, full name, or ID
+  const getAgentComplaintDetails = React.useCallback(
+    (c: any) => {
+      const placement = (allAvailableCandidates as any[]).find(
+        (p) => p.name === c.placement || p.applicant === c.applicant
+      );
+      const applicant = (applicants as any[]).find(
+        (a) => a.name === c.applicant || (placement && a.name === placement.applicant)
+      );
+      const candidateId = c.applicant || placement?.applicant;
+      const portalCandidate = (portalCandidates as any[]).find(
+        (pc) => pc.name === candidateId
+      );
+
+      const candidateName =
+        c.full_name ||
+        c.applicant_name ||
+        applicant?.full_name ||
+        placement?.full_name ||
+        placement?.applicant_name ||
+        portalCandidate?.full_name ||
+        applicant?.first_name ||
+        c.applicant ||
+        "Candidate";
+
+      const passportNumber =
+        c.passport_number ||
+        placement?.passport_number ||
+        applicant?.passport_number ||
+        portalCandidate?.passport_number ||
+        "";
+
+      const contactName =
+        applicant?.emergency_contact_name ||
+        applicant?.relative_name ||
+        applicant?.contact_person_name ||
+        applicant?.contact_person_2nd ||
+        portalCandidate?.emergency_contact_name ||
+        c.contact_person ||
+        c.contact_person_name ||
+        "";
+
+      const contactPhone =
+        applicant?.emergency_contact_phone ||
+        applicant?.relative_phone ||
+        applicant?.contact_person_phone ||
+        applicant?.contact_phone_2nd ||
+        applicant?.phone ||
+        portalCandidate?.phone ||
+        c.contact_person_phone ||
+        "";
+
+      const contactRelation =
+        applicant?.relative_kinship ||
+        applicant?.emergency_contact_relation ||
+        "";
+
+      const sponsorName =
+        placement?.employer_name ||
+        placement?.sponsor_name ||
+        applicant?.sponsor_name ||
+        applicant?.current_employer ||
+        portalCandidate?.current_employer ||
+        c.sponsor_name ||
+        c.employer_name ||
+        "";
+
+      const sponsorId =
+        placement?.employer_national_id ||
+        placement?.sponsor_civil_id ||
+        applicant?.sponsor_id ||
+        c.sponsor_id ||
+        "";
+
+      const sponsorAddress =
+        placement?.employer_address ||
+        applicant?.sponsor_address ||
+        c.sponsor_address ||
+        "";
+
+      const visaNumber =
+        placement?.visa_number ||
+        applicant?.visa_number ||
+        c.visa_number ||
+        "";
+
+      return {
+        candidateName,
+        applicantId: applicant?.name || placement?.applicant || c.applicant || "",
+        placementId: placement?.name || c.placement || "",
+        passportNumber,
+        contactName,
+        contactPhone,
+        contactRelation,
+        sponsorName,
+        sponsorId,
+        sponsorAddress,
+        visaNumber,
+      };
+    },
+    [allAvailableCandidates, applicants, portalCandidates]
+  );
+
+  // Dynamic filter by candidate name, passport, destination, job, or ID
   const filteredCandidateOptions = React.useMemo(() => {
-    if (!candidateSearchQuery.trim()) return agencyPlacements;
+    if (!candidateSearchQuery.trim()) return marketplaceCandidates;
     const q = candidateSearchQuery.toLowerCase().trim();
-    return agencyPlacements.filter((c) => {
-      const fullName = (c.full_name || c.applicant_name || "").toLowerCase();
+    return marketplaceCandidates.filter((c) => {
+      const fullName = (c.full_name || "").toLowerCase();
       const parts = fullName.split(" ").filter(Boolean);
       const firstName = parts[0] || "";
       const lastName = parts[parts.length - 1] || "";
       const middleName = parts.length > 2 ? parts.slice(1, -1).join(" ") : "";
       const pass = (c.passport_number || "").toLowerCase();
+      const dest = (c.destination_country || "").toLowerCase();
+      const job = (c.target_job || "").toLowerCase();
 
       return (
         c.name.toLowerCase().includes(q) ||
-        (c.applicant && c.applicant.toLowerCase().includes(q)) ||
+        (c.placement_name && c.placement_name.toLowerCase().includes(q)) ||
         fullName.includes(q) ||
         firstName.includes(q) ||
         lastName.includes(q) ||
         middleName.includes(q) ||
-        pass.includes(q)
+        pass.includes(q) ||
+        dest.includes(q) ||
+        job.includes(q)
       );
     });
-  }, [agencyPlacements, candidateSearchQuery]);
+  }, [marketplaceCandidates, candidateSearchQuery]);
 
   // Query Complaints
   const {
@@ -191,16 +347,17 @@ export default function AgentComplaintsPage() {
   // Submit Mutation
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const placementTarget = data.applicant_search;
-      const matched = agencyPlacements.find(
-        (c) => c.name === placementTarget || c.applicant === placementTarget
+      const targetIdentifier = data.applicant_search;
+      const matched = marketplaceCandidates.find(
+        (c) => c.name === targetIdentifier || c.placement_name === targetIdentifier || c.applicant === targetIdentifier
       );
+      const target = matched?.placement_name || targetIdentifier;
       return await createComplaintV2(
-        placementTarget,
+        target,
         `[${data.complaint_category} - ${data.severity}] ${data.complaint_details}`,
         "Working Abroad",
         {
-          applicant: matched?.applicant,
+          applicant: matched?.applicant || matched?.name,
           applicant_name: matched?.full_name || data.full_name,
         }
       );
@@ -224,7 +381,7 @@ export default function AgentComplaintsPage() {
     onError: (err: any) => {
       setFormError(
         err?.message ||
-        `Placement "${formData.applicant_search}" could not be validated. Complaints can only be filed for active placements.`
+        `Applicant "${formData.applicant_search}" could not be validated. Complaints can only be filed for active candidates.`
       );
     },
   });
@@ -268,6 +425,16 @@ export default function AgentComplaintsPage() {
       onContractorChange={setActiveContractor}
     >
       <div className="space-y-6 pb-16">
+        {/* Back Link */}
+        <div>
+          <Link
+            href="/agent"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Candidate Directory
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -414,60 +581,154 @@ export default function AgentComplaintsPage() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100 dark:divide-[#202026]">
-              {filteredAndSortedComplaints.map((c) => (
-                <div
-                  key={c.name}
-                  className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-[#16161c]/70 transition"
-                >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono font-bold text-xs text-slate-900 dark:text-white bg-slate-100 dark:bg-[#202026] px-2 py-0.5 rounded-md">
-                        {c.display_no ? `#${c.display_no}` : c.name}
-                      </span>
-                      {getSeverityBadge(c.severity)}
-                      <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                        {c.complaint_category}
-                      </span>
-                      {c.days_unresolved !== undefined && c.days_unresolved > 0 && (
-                        <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">
-                          ⏱ {c.days_unresolved}d unresolved
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-slate-600 dark:text-zinc-300">
-                      {c.complaint_details}
-                    </p>
-
-                    <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400 dark:text-zinc-500 pt-1">
-                      <span>Candidate: <strong className="text-slate-700 dark:text-zinc-300">{c.full_name || c.applicant}</strong></span>
-                      {c.passport_number && <span>Passport: <strong className="text-slate-700 dark:text-zinc-300">{c.passport_number}</strong></span>}
-                      <span>Logged: {c.creation?.split(" ")[0]}</span>
-                      {c.outcome && <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Outcome: {c.outcome}</span>}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {c.attachment && (
-                      <a
-                        href={c.attachment}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-[#26262f] px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c22]"
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        Attachment
-                      </a>
-                    )}
-                    {c.status === "Resolved" && (
-                      <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        ✓ {c.status}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto relative">
+              <table className="w-full text-left text-xs min-w-[1000px] border-separate border-spacing-0">
+                <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
+                  <tr>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Candidate</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] min-w-[200px]">Category & Details</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Severity</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">SLA / Age</th>
+                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-[#202026]">
+                  {filteredAndSortedComplaints.map((c) => {
+                    const details = getAgentComplaintDetails(c);
+                    return (
+                      <tr key={c.name} className="hover:bg-slate-50/70 dark:hover:bg-[#16161c]/70 transition">
+                        <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          {c.display_no ? `#${c.display_no}` : c.name}
+                        </td>
+                        <td className="px-4 py-3.5 min-w-[150px] border-b border-slate-100 dark:border-[#202026]">
+                          <div className="font-semibold text-slate-900 dark:text-white">
+                            {details.candidateName}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {details.placementId || details.applicantId || ""}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          {details.passportNumber ? (
+                            <span className="font-mono font-bold text-xs text-slate-800 dark:text-zinc-200 bg-slate-100 dark:bg-[#1f1f26] px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-[#2b2b36]">
+                              {details.passportNumber}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 min-w-[150px] border-b border-slate-100 dark:border-[#202026]">
+                          {details.contactName || details.contactPhone ? (
+                            <div className="space-y-0.5">
+                              <div className="font-semibold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                                <span>{details.contactName || "Contact"}</span>
+                                {details.contactRelation && (
+                                  <span className="text-[10px] text-slate-400 font-normal">
+                                    ({details.contactRelation})
+                                  </span>
+                                )}
+                              </div>
+                              {details.contactPhone && (
+                                <div className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
+                                  {details.contactPhone}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 min-w-[170px] border-b border-slate-100 dark:border-[#202026]">
+                          {details.sponsorName || details.sponsorId || details.visaNumber ? (
+                            <div className="space-y-0.5">
+                              <div className="font-semibold text-slate-900 dark:text-white text-xs">
+                                {details.sponsorName || "Sponsor"}
+                              </div>
+                              {(details.sponsorId || details.visaNumber) && (
+                                <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+                                  {details.sponsorId && <span>ID: {details.sponsorId}</span>}
+                                  {details.sponsorId && details.visaNumber && <span className="mx-1">•</span>}
+                                  {details.visaNumber && <span>Visa: {details.visaNumber}</span>}
+                                </div>
+                              )}
+                              {details.sponsorAddress && (
+                                <div className="text-[10px] text-slate-400 truncate max-w-[180px]" title={details.sponsorAddress}>
+                                  {details.sponsorAddress}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              c.status === "New"
+                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                                : c.status === "Unresolved"
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                : c.status === "Resolved"
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                            }`}
+                          >
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 max-w-xs border-b border-slate-100 dark:border-[#202026]">
+                          <div className="font-semibold text-slate-800 dark:text-zinc-200">
+                            {c.complaint_category || c.worker_status_at_complaint || "Complaint"}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                            {c.complaint_details || c.description}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          {getSeverityBadge(c.severity)}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          <div className="space-y-0.5">
+                            <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
+                              {c.creation ? c.creation.split(" ")[0] : "Recent"}
+                            </span>
+                            {c.days_unresolved !== undefined && c.days_unresolved > 0 && (
+                              <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-semibold">
+                                ⏱ {c.days_unresolved}d unresolved
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                          <div className="flex items-center justify-end gap-2">
+                            {c.attachment && (
+                              <a
+                                href={c.attachment}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-[#26262f] px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c22]"
+                              >
+                                <Paperclip className="h-3 w-3" />
+                                File
+                              </a>
+                            )}
+                            {c.status === "Resolved" && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                ✓ Resolved
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -580,9 +841,9 @@ export default function AgentComplaintsPage() {
                           <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-[#202028] rounded-lg">
                             {filteredCandidateOptions.length === 0 ? (
                               <div className="p-4 text-center text-[11px] text-slate-400">
-                                {agencyPlacements.length === 0
-                                  ? `No candidates are currently placed with ${effectiveContractor || "this agency"}.`
-                                  : `No agency candidates match "${candidateSearchQuery}"`}
+                                {marketplaceCandidates.length === 0
+                                  ? "No applicants currently available in your applicant marketplace."
+                                  : `No marketplace applicants match "${candidateSearchQuery}"`}
                               </div>
                             ) : (
                               filteredCandidateOptions.map((cand) => (
@@ -592,7 +853,7 @@ export default function AgentComplaintsPage() {
                                   onClick={() => {
                                     setFormData((prev) => ({
                                       ...prev,
-                                      applicant_search: cand.name,
+                                      applicant_search: cand.placement_name || cand.name,
                                       full_name: cand.full_name,
                                     }));
                                     setIsCandidateDropdownOpen(false);
@@ -610,7 +871,7 @@ export default function AgentComplaintsPage() {
                                         {cand.full_name}
                                       </p>
                                       <p className="text-[10px] text-slate-400 font-mono">
-                                        {cand.applicant ? `${cand.applicant} • ` : ""}{cand.name} {cand.passport_number ? `• ${cand.passport_number}` : ""} {cand.status ? `(${cand.status})` : ""}
+                                        {cand.name} {cand.passport_number ? `• ${cand.passport_number}` : ""} {cand.destination_country ? `• ${cand.destination_country}` : ""} {cand.target_job ? `(${cand.target_job})` : ""}
                                       </p>
                                     </div>
                                   </div>

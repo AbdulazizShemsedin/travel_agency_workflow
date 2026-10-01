@@ -184,18 +184,99 @@ export default function AdminComplaintsPage() {
     });
   }, [placements, applicants, submitForm.contractor]);
 
-  const getApplicantDisplayName = React.useCallback((c: any) => {
-    if (c.full_name) return c.full_name;
-    const placement = (placements as any[]).find((p) => p.name === c.placement);
-    if (placement) {
-      const applicant = (applicants as any[]).find((a) => a.name === placement.applicant);
-      if (applicant) return applicant.full_name || applicant.first_name || applicant.name;
-      if (placement.full_name || placement.applicant_name) return placement.full_name || placement.applicant_name;
-      if (placement.applicant) return placement.applicant;
-    }
-    const directApplicant = (applicants as any[]).find((a) => a.name === c.applicant || a.name === c.placement);
-    if (directApplicant) return directApplicant.full_name || directApplicant.first_name || directApplicant.name;
-    return c.applicant || "Applicant";
+  const getComplaintDetails = React.useCallback((c: any) => {
+    const placement = (placements as any[]).find((p) => p.name === c.placement || p.applicant === c.applicant);
+    const applicant = (applicants as any[]).find((a) => a.name === c.applicant || (placement && a.name === placement.applicant));
+
+    const candidateName =
+      c.full_name ||
+      c.applicant_name ||
+      applicant?.full_name ||
+      placement?.full_name ||
+      placement?.applicant_name ||
+      applicant?.first_name ||
+      c.applicant ||
+      "Applicant";
+
+    const applicantId = applicant?.name || placement?.applicant || c.applicant || "";
+    const placementId = placement?.name || c.placement || "";
+
+    const passportNumber =
+      c.passport_number ||
+      placement?.passport_number ||
+      applicant?.passport_number ||
+      "";
+
+    const contactName =
+      applicant?.emergency_contact_name ||
+      applicant?.relative_name ||
+      applicant?.contact_person_name ||
+      applicant?.contact_person_2nd ||
+      c.contact_person ||
+      c.contact_person_name ||
+      "";
+
+    const contactPhone =
+      applicant?.emergency_contact_phone ||
+      applicant?.relative_phone ||
+      applicant?.contact_person_phone ||
+      applicant?.contact_phone_2nd ||
+      applicant?.phone ||
+      c.contact_person_phone ||
+      "";
+
+    const contactRelation =
+      applicant?.relative_kinship ||
+      applicant?.emergency_contact_relation ||
+      "";
+
+    const sponsorName =
+      placement?.employer_name ||
+      placement?.sponsor_name ||
+      applicant?.sponsor_name ||
+      applicant?.current_employer ||
+      c.sponsor_name ||
+      c.employer_name ||
+      "";
+
+    const sponsorId =
+      placement?.employer_national_id ||
+      placement?.sponsor_civil_id ||
+      applicant?.sponsor_id ||
+      c.sponsor_id ||
+      "";
+
+    const sponsorPhone =
+      applicant?.sponsor_phone ||
+      c.sponsor_phone ||
+      "";
+
+    const sponsorAddress =
+      placement?.employer_address ||
+      applicant?.sponsor_address ||
+      c.sponsor_address ||
+      "";
+
+    const visaNumber =
+      placement?.visa_number ||
+      applicant?.visa_number ||
+      c.visa_number ||
+      "";
+
+    return {
+      candidateName,
+      applicantId,
+      placementId,
+      passportNumber,
+      contactName,
+      contactPhone,
+      contactRelation,
+      sponsorName,
+      sponsorId,
+      sponsorPhone,
+      sponsorAddress,
+      visaNumber,
+    };
   }, [placements, applicants]);
 
   const availableReplacements = (applicants as any[]).filter((a) => a.applicant_state === "Registered" || a.applicant_state === "CV Generated");
@@ -479,45 +560,106 @@ export default function AdminComplaintsPage() {
             No complaints found matching your active filters.
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
-              <tr>
-                <th className="px-4 py-3.5">Ticket #</th>
-                <th className="px-4 py-3.5">Partner Agency</th>
-                <th className="px-4 py-3.5">Applicant / Passport</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5">Category & Details</th>
-                <th className="px-4 py-3.5">Severity</th>
-                <th className="px-4 py-3.5">{activeTab === "resolved" ? "Resolution" : "SLA / Age"}</th>
-                <th className="px-4 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-              {filteredAndSortedComplaints.map((c) => (
-                <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">
-                    {c.display_no ? `#${c.display_no}` : c.name}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-slate-800 dark:text-zinc-200">{c.contractor}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-semibold text-slate-900 dark:text-white">{getApplicantDisplayName(c)}</div>
-                    <span className="text-[10px] text-slate-400 font-mono">{c.placement || c.applicant || ""}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        c.status === "New"
-                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
-                          : c.status === "Unresolved"
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                          : c.status === "Resolved"
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                      }`}
-                    >
-                      {c.status}
-                    </span>
-                  </td>
+          <div className="overflow-x-auto relative">
+            <table className="w-full text-left text-xs min-w-[1100px] border-separate border-spacing-0">
+              <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+                <tr>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Partner Agency</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Candidate</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] min-w-[200px]">Category & Details</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Severity</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">{activeTab === "resolved" ? "Resolution" : "SLA / Age"}</th>
+                  <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
+                {filteredAndSortedComplaints.map((c) => {
+                  const details = getComplaintDetails(c);
+                  return (
+                    <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
+                        {c.display_no ? `#${c.display_no}` : c.name}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 dark:text-zinc-200 whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
+                        {c.contractor}
+                      </td>
+                      <td className="px-4 py-3 min-w-[150px] border-b border-slate-100 dark:border-[#222227]">
+                        <div className="font-semibold text-slate-900 dark:text-white">{details.candidateName}</div>
+                        <span className="text-[10px] text-slate-400 font-mono">{details.placementId || details.applicantId || ""}</span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
+                        {details.passportNumber ? (
+                          <span className="font-mono font-bold text-xs text-slate-800 dark:text-zinc-200 bg-slate-100 dark:bg-[#1f1f26] px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-[#2b2b36]">
+                            {details.passportNumber}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 min-w-[160px] border-b border-slate-100 dark:border-[#222227]">
+                        {details.contactName || details.contactPhone ? (
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
+                              <span>{details.contactName || "Contact"}</span>
+                              {details.contactRelation && (
+                                <span className="text-[10px] text-slate-400 font-normal">
+                                  ({details.contactRelation})
+                                </span>
+                              )}
+                            </div>
+                            {details.contactPhone && (
+                              <div className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
+                                {details.contactPhone}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 min-w-[180px] border-b border-slate-100 dark:border-[#222227]">
+                        {details.sponsorName || details.sponsorId || details.visaNumber ? (
+                          <div className="space-y-0.5">
+                            <div className="font-semibold text-slate-900 dark:text-white text-xs">
+                              {details.sponsorName || "Sponsor"}
+                            </div>
+                            {(details.sponsorId || details.visaNumber) && (
+                              <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+                                {details.sponsorId && <span>ID: {details.sponsorId}</span>}
+                                {details.sponsorId && details.visaNumber && <span className="mx-1">•</span>}
+                                {details.visaNumber && <span>Visa: {details.visaNumber}</span>}
+                              </div>
+                            )}
+                            {details.sponsorAddress && (
+                              <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={details.sponsorAddress}>
+                                {details.sponsorAddress}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            c.status === "New"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                              : c.status === "Unresolved"
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                              : c.status === "Resolved"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                          }`}
+                        >
+                          {c.status}
+                        </span>
+                      </td>
                   <td className="px-4 py-3 max-w-xs">
                     <div className="font-semibold text-slate-800 dark:text-zinc-200">{c.complaint_category || c.worker_status_at_complaint || "Complaint"}</div>
                     <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{c.description || c.complaint_details}</p>
@@ -578,9 +720,11 @@ export default function AdminComplaintsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              );
+            })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

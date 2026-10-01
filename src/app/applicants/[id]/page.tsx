@@ -22,6 +22,7 @@ import {
   UserCheck,
   UploadCloud,
   FileCheck2,
+  FileSpreadsheet,
   FileUp,
   Plane,
   Fingerprint,
@@ -323,6 +324,8 @@ export default function ApplicantDetailPage() {
     (applicant as any)?.contract_file ||
     (applicant as any)?.contract_number
   );
+  const contractFileUrl = activePlacement?.contract_file || (applicant as any)?.contract_file || "";
+  const [isContractViewerOpen, setIsContractViewerOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (activePlacement?.medical_selected_status === "FIT" || activePlacement?.medical_selected_status === "UNFIT") {
@@ -986,6 +989,18 @@ export default function ApplicantDetailPage() {
             Send to Extension
           </Button>
 
+          {/* View Form: Easy to access & prominent */}
+          <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
+            <Button
+              size="sm"
+              className="text-xs font-bold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs hover:shadow transition-all flex items-center"
+              title="View and edit applicant registration form"
+            >
+              <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+              View Form
+            </Button>
+          </Link>
+
           {/* View CV Button: Visible for any applicant with CV generated */}
           {Boolean(
             applicant.cv_attachment ||
@@ -1006,11 +1021,12 @@ export default function ApplicantDetailPage() {
             </Link>
           )}
 
+          {/* Contract Document button: accessible for Muayena or applicants with placement */}
           {(isMuayenaApplicant || Boolean(activePlacement || applicant.active_placement)) && (
             <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
               <Button variant="outline" size="sm" className="text-xs border-amber-300 text-amber-900 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300">
                 <FileText className="mr-1.5 h-3.5 w-3.5" />
-                Contract Document (PDF)
+                Contract Document
               </Button>
             </Link>
           )}
@@ -1029,13 +1045,6 @@ export default function ApplicantDetailPage() {
               Muayena Intake
             </Button>
           )}
-
-          <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
-            <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-              <Edit className="mr-1.5 h-3.5 w-3.5" />
-              Edit Profile
-            </Button>
-          </Link>
 
           {canSetBan && (
             <Button
@@ -1208,7 +1217,7 @@ export default function ApplicantDetailPage() {
               </Button>
               <Link href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}>
                 <Button variant="outline" size="sm" className="text-xs border-slate-300 dark:border-[#26262d]">
-                  <Edit className="mr-1.5 h-3.5 w-3.5" /> Edit Registration Form
+                  <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" /> View Form
                 </Button>
               </Link>
             </div>
@@ -1351,29 +1360,43 @@ export default function ApplicantDetailPage() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
-                <Button
-                  variant={hasUploadedContract ? "outline" : "default"}
-                  size="sm"
-                  className={
-                    hasUploadedContract
-                      ? "text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/60 dark:bg-emerald-950/30"
-                      : "text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
-                  }
-                >
-                  {hasUploadedContract ? (
-                    <>
-                      <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      Contract Attached
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="mr-1.5 h-3.5 w-3.5" />
-                      Upload Contract (Required)
-                    </>
-                  )}
-                </Button>
-              </Link>
+              {hasUploadedContract ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsContractViewerOpen(true)}
+                    className="text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/60 dark:bg-emerald-950/30 font-semibold"
+                    title="View attached employment contract in Document Viewer"
+                  >
+                    <FileCheck2 className="mr-1.5 h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Contract Attached
+                  </Button>
+                  <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 font-semibold"
+                      title="Open contract document extraction page"
+                    >
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
+                      Extract Contract Info
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+                  <Button
+                    size="sm"
+                    className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
+                  >
+                    <UploadCloud className="mr-1.5 h-3.5 w-3.5" />
+                    Upload Contract (Required)
+                  </Button>
+                </Link>
+              )}
               {(() => {
                 const today = new Date().toISOString().split("T")[0];
                 const isCoveredByReg =
@@ -1465,14 +1488,6 @@ export default function ApplicantDetailPage() {
               >
                 <DollarSign className="mr-1.5 h-3.5 w-3.5" /> Record Commission Early
               </Button>
-              {can("manageUsers") && (
-                <Button
-                  onClick={() => setIsAssignModalOpen(true)}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold shadow-xs"
-                >
-                  <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Edit Staff
-                </Button>
-              )}
             </div>
           </div>
         )}
@@ -1578,12 +1593,12 @@ export default function ApplicantDetailPage() {
                   Wakala is currently <strong>Pending</strong>. For Saudi Arabia, the foreign partner agency must pay the Wakala fee before Embassy visa stamping can proceed.
                 </p>
                 <p className="text-amber-700 dark:text-amber-400 text-[11px]">
-                  Managers can review payment status or record Wakala in the Clearance List.
+                  Managers can review payment status or record Wakala in the Embassy Workspace.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
-                  <Link href="/applicants?tab=clearance">
+                  <Link href="/applicants?tab=embassy">
                     <Button size="sm" variant="outline" className="text-xs border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">
-                      Open Clearance List
+                      Open Embassy Workspace
                     </Button>
                   </Link>
                   <Button
@@ -2666,6 +2681,59 @@ export default function ApplicantDetailPage() {
               className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs"
             >
               {restartMutation.isPending ? "Restarting..." : `Restart to ${restartTargetStatus}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Contract Document Viewer Modal */}
+      <Dialog open={isContractViewerOpen} onOpenChange={setIsContractViewerOpen}>
+        <DialogContent className="max-w-4xl max-h-[92vh] bg-white dark:bg-[#121216] border border-slate-200 dark:border-[#222227] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="pb-3 border-b border-slate-200 dark:border-[#222227]">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+                <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                Employment Contract — Document Viewer
+              </DialogTitle>
+              {contractFileUrl && (
+                <span className="text-[11px] font-mono text-slate-500 max-w-[200px] truncate">
+                  {contractFileUrl}
+                </span>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Official signed bilateral contract document attached to candidate placement.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-[500px] w-full bg-slate-100 dark:bg-[#0c0c0e] rounded-xl overflow-hidden flex items-center justify-center my-2 border border-slate-200 dark:border-[#26262d]">
+            {contractFileUrl ? (
+              <iframe
+                src={contractFileUrl}
+                title="Employment Contract Document Viewer"
+                className="w-full h-[65vh] rounded-lg border-0"
+              />
+            ) : (
+              <div className="text-center p-8 text-xs text-slate-400 space-y-2">
+                <FileText className="h-10 w-10 text-slate-300 dark:text-zinc-700 mx-auto" />
+                <p className="font-semibold text-slate-600 dark:text-zinc-300">
+                  No contract document file found for this placement
+                </p>
+                <p className="text-[11px]">
+                  Upload a signed contract via the Contract Document center.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-slate-200 dark:border-[#222227] flex flex-row items-center justify-between sm:justify-between">
+            <Link href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}>
+              <Button variant="outline" size="sm" className="text-xs">
+                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                Open Full Contract Center
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" onClick={() => setIsContractViewerOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

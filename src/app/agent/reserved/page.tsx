@@ -15,9 +15,10 @@ import {
   FileText,
   Eye,
   ExternalLink,
+  ArrowLeft,
 } from "lucide-react";
 import {
-  listPlacementsV2,
+  listMyPlacementsV2,
   V2PlacementRecord,
 } from "@/lib/api/v2";
 import { getCandidatePhotoUrl } from "@/lib/api/v2/portal";
@@ -38,7 +39,10 @@ function CandidatePhotoAvatar({
   photoUrl?: string;
 }) {
   const [hasError, setHasError] = React.useState(false);
-  const src = !hasError && (photoUrl || getCandidatePhotoUrl(applicantId, "photograph"));
+  const hasPhoto = Boolean(photoUrl && photoUrl.trim() !== "");
+  const src = !hasError && hasPhoto
+    ? (photoUrl!.startsWith("http") || photoUrl!.startsWith("/") ? photoUrl! : getCandidatePhotoUrl(applicantId, "photograph"))
+    : "";
 
   if (!src || hasError) {
     return (
@@ -60,6 +64,7 @@ function CandidatePhotoAvatar({
 
 export default function MyReservedCandidatesPage() {
   const { authUser, agencyContext } = useAuth();
+  const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
 
   const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
   const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
@@ -83,7 +88,9 @@ export default function MyReservedCandidatesPage() {
     isRefetching,
   } = useQuery({
     queryKey: ["agency-reserved-candidates", effectiveContractor],
-    queryFn: () => listPlacementsV2(),
+    queryFn: () => listMyPlacementsV2(effectiveContractor || undefined),
+    enabled: Boolean(isAgencyUser || effectiveContractor),
+    retry: false,
   });
 
   const filteredCandidates = React.useMemo(() => {
@@ -108,6 +115,16 @@ export default function MyReservedCandidatesPage() {
       onContractorChange={setActiveContractor}
     >
       <div className="space-y-6 pb-16">
+        {/* Back Link */}
+        <div>
+          <Link
+            href="/agent"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Candidate Directory
+          </Link>
+        </div>
+
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -199,9 +216,9 @@ export default function MyReservedCandidatesPage() {
           ) : (
             <div className="overflow-x-auto relative">
               <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
-                <thead className="bg-slate-50/95 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+                <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[130px] min-w-[130px] max-w-[140px] sm:w-auto sm:min-w-[240px] sm:max-w-[280px] border-b border-r border-slate-200 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)]">
+                    <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[130px] min-w-[130px] max-w-[140px] sm:w-auto sm:min-w-[240px] sm:max-w-[280px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate
                     </th>
                     <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -225,11 +242,11 @@ export default function MyReservedCandidatesPage() {
                       <tr
                         key={c.name}
                         onClick={() => setSelectedCandidateForDetail(candidateForModal)}
-                        className="group hover:bg-emerald-50/40 dark:hover:bg-[#16161c]/80 transition cursor-pointer"
+                        className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition cursor-pointer"
                         title="Click to view full candidate details"
                       >
                         {/* Candidate Identity - STICKY FIRST COLUMN */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-emerald-50/40 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[130px] min-w-[130px] max-w-[140px] sm:w-auto sm:min-w-[240px] sm:max-w-[280px] border-b border-r border-slate-100 dark:border-[#222227] shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] dark:shadow-[3px_0_6px_-2px_rgba(0,0,0,0.4)] transition-colors">
+                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[130px] min-w-[130px] max-w-[140px] sm:w-auto sm:min-w-[240px] sm:max-w-[280px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                           <div className="flex items-center gap-2 sm:gap-3">
                             <CandidatePhotoAvatar
                               applicantId={c.applicant || c.name}

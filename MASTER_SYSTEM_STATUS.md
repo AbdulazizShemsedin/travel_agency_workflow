@@ -33,8 +33,77 @@
 - **Invoice Status Simplification**: Displayed only paid status states (`Paid`, `Partly Paid`, `Unpaid`) on commission batches; eliminated Draft/Sent states and send actions.
 - **Taeshir Export (.xls) & E-Number Labeling**: Sourced legacy `.xls` format via `exportGroupScheduleBioXlsV2` with `Content-Type: application/vnd.ms-excel`, populated "E-number (Injaz Application No.)" from `injaz_application_id`, and added "Agency Email" to settings.
 - **Pagination with Total Count**: Added TypeScript function overloads supporting `with_total=1` across all 7 primary listing endpoints (`list_applicants`, `list_placements`, `list_contractors`, `list_transactions`, `list_complaints`, `list_portal_candidates`, `list_my_placements`).
-- **Portal Medical & CV Gating**: Hidden UNFIT candidates from the foreign agency portal; displayed "FIT" badge only when `medical_status === "FIT"`; disabled CV generation for medically UNFIT applicants.
-- **Country Ban Exception Requests**: Implemented `removeCountryBanV2` (`lifted`, `lift_reason`), `requestCountryBanExceptionV2`, `listCountryBanRequestsV2`, and `decideCountryBanRequestV2` with dedicated `CountryBanRequestsWorkspace` queue.
+## 11. Frappe API Key & Secret Removal • Native Session-Cookie RBAC Architecture (2026-09-25)
+- **Eliminated Hardcoded Admin Tokens**: Completely purged all hardcoded Administrator API keys (`666ded6cd73c588`, `5277b76d58709f8`, `29450e91ee38267`, `c78515ef82f928a`) and environment variables `FRAPPE_API_KEY` and `FRAPPE_API_SECRET`.
+- **Backend Complaint Resolution**: The backend warning *"the api key is for admin but it is used by other roles too"* was triggered because proxy route handlers intercepted 403s on non-admin users and retried with admin API keys. All fake 403 elevation bypasses in `src/app/api/method/[...slug]/route.ts` have been removed.
+- **Native Session-Cookie RBAC**: All frontend requests forward the user's authentic session cookie (`sid`) and CSRF token (`X-Frappe-CSRF-Token`). Frappe natively isolates DocTypes and endpoints according to the caller's actual role.
+- **Public & Private File Streamers**: `/files/*` and `/private/files/*` now stream using transparent user session cookies without system token injection.
+- **Foreign Agency Integration Fixes**:
+  - Fixed `listMyPlacementsV2` endpoint target from nonexistent `agency_tracking.placement_api.list_my_placements` to live `agency_tracking.portal_api.list_my_placements`.
+  - Updated `/agent/reserved`, `/agent/complaints`, and `/agent/commission` to call `listMyPlacementsV2()` instead of internal staff `listPlacementsV2()`.
+  - Gated internal-only `listApplicantsV2()` calls to `Boolean(authUser?.is_internal_staff)`.
+- **Language Options Backend Conformance**: Resolved 417 `Arabic Level cannot be "Fair"` by aligning `LANGUAGE_PROFICIENCY_OPTIONS` in `ApplicantRegistrationForm.tsx` to `["Select..", "None", "Basic", "Good", "Fluent"]`, removing hardcoded "Poor"/"Fair" defaults, and adding sanitization in `normalizeApplicantFields` (`src/lib/api/v2/applicants.ts`).
+- **Runtime Verification**: Clean TypeScript check (`npx tsc --noEmit`, 0 errors), automated integration audit suite (`scratch/test_no_api_key_auth.mjs`, 25/25 tests passed), and live applicant creation (`scratch/test_language_level_fix.mjs`, 200 OK).
+
+## 12. Decommissioning of Clearance Grid & Clearance List UI Workspaces (2026-09-25)
+- **UI Workspace Safely Decommissioned**: Both the "Clearance Grid" (`grid`) and "Clearance List" (`clearance`) workspace tabs and components (`ClearanceGridWorkspace`, `V2ClearanceQueueWorkspace`) were removed from `src/components/operational/RoleWorkspaceContainer.tsx`.
+- **Zero Backend or API Mutation**: Backend RPC endpoints (`agency_tracking.clearance_grid.*`, `agency_tracking.clearance_api.*`) and API library functions (`src/lib/api/v2/clearance_grid.ts`, `src/lib/api/v2/clearance.ts`) were kept 100% intact, preventing any regression or disruption to backend operations or type contracts.
+- **Applicant Detail Notice Rerouted**: Updated the Saudi Wakala notice card link on `/applicants/[id]` from `/applicants?tab=clearance` to `/applicants?tab=embassy` ("Open Embassy Workspace") where Wakala payments and Embassy stamping are handled.
+- **Verification**: Verified clean TypeScript compilation (`npx tsc --noEmit`, 0 errors).
+
+## 13. Registration UX, Easy-Injaz Layout, Document Viewer & Contract Flow (2026-09-25)
+- **Mid-Extraction Cancellation**: Added `onCancel` support in `PremiumDropzone.tsx`, displaying an accessible "Cancel Extraction" button with an `X` icon during scans. Wired up cancellation refs (`isOcrCancelledRef`) in `ApplicantRegistrationForm.tsx` and `Step1PersonalInfo.tsx` to immediately halt background file uploads/OCR processing and dismiss pending loading toasts.
+- **Duplicate Place of Birth Removal**: Removed duplicate `Place of Birth` field from Row 6 in Section 3 of `ApplicantRegistrationForm.tsx`, cleanly pairing `Place of Issue` with candidate `Phone No.`.
+- **Easy-Injaz Field Structure & Layout Maintained**: Preserved the exact field positions matching the easy-injaz layout: Section 4 Row 9 pairs `Qualification` & `City`; Section 5 pairs `Visa Number` & `Sponsor Name`, `Sponsor ID` & `Sponsor Phone`, `Sponsor Address` & `Agent`, `National ID` & `Sponsor Arabic`, and `Email` & `Visa Type`.
+- **Sponsor Address Autofill Shield**: Protected `sponsor_address` against browser City autofill pollution via `readOnly` state until focused (`isSponsorAddrReadOnly`), resetting to protected when any `City` input is focused, combined with `autoComplete="off"`, `data-lpignore="true"`, and `data-form-type="other"`.
+- **Contract Upload Button Rename**: Renamed the upload/extraction button in `/applicants/[id]/contractor-doc` to **"Extract contract info"**.
+- **Contract Approval Workflow & Automatic Redirect**:
+  - Renamed the approval button in `/applicants/[id]/contractor-doc` to "Approve Contract".
+  - Hid the button upon successful approval and replaced it with a confirmation banner.
+  - Implemented dual-persistence: updates both the `Placement` document (`updatePlacementParsedFieldsV2`) and synchronizes extracted fields directly to the `Applicant` document (`updateApplicantV2`).
+  - Added automatic client-side redirect back to the applicant profile (`/applicants/[id]`) post-approval.
+- **Contract Data Propagation to Registration Form**: Enriched `initialData` on `/applicants/[id]/edit` with placement-level fallbacks and configured `ApplicantRegistrationForm.tsx` to automatically display extracted `visa_number`, `sponsor_name`, `sponsor_id`, `sponsor_phone`, and `contract_number`.
+- **Contract Attached Document Viewer & Duplicate Button Removal**:
+  - When a contract is attached/extracted (`hasUploadedContract`), the duplicate "Contract Document (PDF)" button in the top action bar is cleanly removed.
+  - Clicking "Contract Attached" opens the contract document inside a high-res embedded `Employment Contract — Document Viewer` modal right on the applicant profile page.
+  - Configured `/files/*` and `/private/files/*` streaming routes to serve `Content-Disposition: inline` for PDFs and viewable files by default (unless `?download=1`), eliminating unwanted automatic browser file downloads.
+- **Prominent "View Form" Navigation**: Renamed "Edit Profile" / "Edit Registration Form" to "View Form" with a prominent emerald `FileSpreadsheet` button pinned as the primary action on the applicant profile header action bar and draft status banner.
+- **Skin Color (`complexion`) Conformance**: Added backend-sanctioned `complexion` select field (`["", "FAIR", "MEDIUM", "DARK"]`) in Section 8 (Physical Attributes) right before Section 9 (Medical Fitness) with normalization in `normalizeApplicantFields`.
+- **Verification**: Verified clean TypeScript compilation (`npx tsc --noEmit`, 0 errors).
+
+## 14. Multi-Candidate Checkbox Selection & Targeted Taeshir Excel Export (2026-09-30)
+- **Multi-Selection Checkbox Column**: Added a selection column at index 0 of `InjazWorkspace` (`src/components/operational/workspaces/InjazWorkspace.tsx`), enabling operational staff to select any number of candidate records for export.
+- **Header Checkbox with Indeterminate State**: Added `TableHeaderCheckbox` component supporting select-all, deselect-all, and tri-state indeterminate visual state when a partial subset of candidates is selected.
+- **Targeted Excel (.xls) Export**: Updated `handleExportTaeshir` to send selected candidate IDs to backend RPC `agency_tracking.report_api.export_group_schedule_bio_xlsx`. If no candidates are selected, it transparently defaults to exporting the entire workspace.
+- **Dynamic Action Bar UX**: Added live selected count badges (`Export for Taeshir (X)`) and an explicit "Clear (X)" button to clear selections quickly.
+- **Zero Backend Mutation**: Reused existing backend endpoint `agency_tracking.report_api.export_group_schedule_bio_xlsx` which natively takes `{ applicants: string[] }`. Live tested with single and multi-candidate subsets returning HTTP 200 and binary Excel streams.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and automated live API verification.
+
+## 15. Applicant Registration Form: Mandatory & Optional Visual Indicators and Default Fair Complexion (2026-09-30)
+- **Default Skin Color (`complexion`)**: Set the default skin color to `"FAIR"` (Fair) across both `ApplicantRegistrationForm.tsx` and `Step2EducationExperience.tsx`, completely removing the `"Select skin color..."` placeholder option and keeping strictly `FAIR`, `MEDIUM`, and `DARK`.
+- **Backend-Grounded Mandatory vs Optional Field Labeling**:
+  - Implemented explicit visual indicators for mandatory fields (`<span className="text-rose-500 font-bold ml-0.5">*</span>`) and optional fields (`<span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>`) strictly conforming to backend field floors (`applicant.py::validate_field_floor()` and `src/Assets/01-applicant-contract.md`).
+  - **Universal Mandatory Fields**: `Full Name *`, `Passport No. *`, `Date of Birth *`, `Date of Expiry *`, `Place of Issue *`, `Gender *`, `Nationality *`, and intake media attachments `Photo *` and `Passport *`.
+  - **Dynamic Track-Gated Fields**: `Religion`, `Marital Status`, `Occupation` (target job), `Qualification` (education), and `Salary` dynamically display mandatory `*` when in Standard track and `(Optional)` when in Muayena track (`!isMuayena ? * : (Optional)`), strictly reflecting the backend's conditional field floor rules.
+  - **Intake Optional Fields**: Explicitly labeled `(Optional)` across Core Details (`Application No.`, `Date`, `Status / Active ?`, `Passport Type`, `Place of Birth`, `Phone No.`, `City`), Media (`Full Size (Optional)`, `Video Interview (Optional)`), Section 5 (Sponsor & Visa Information - all 10 fields), Section 6 (Relative Information - all 10 fields), Section 7 (Other Information - all fields except Nationality), Section 8 (Skills, Experience, Physical Attributes - English, Arabic, Experience Abroad, Works In, Children, Height, Weight, Skin Color, Ref No, Remark), and Section 9 (Medical Fitness Result, Medical Expiry Date).
+- **Zero Mock / Zero Backend Mutation**: No mock data or fake fallbacks introduced. The form state continues to send normalized, valid payloads to backend RPCs `agency_tracking.applicant_api.register_applicant` and `agency_tracking.applicant_api.update_applicant`.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and live authenticated runtime check on `/applicants/new`.
+
+## 16. Complaints Desk Table Fields: Contact Person, Passport & Sponsor Details for Admin & Foreign Agent (2026-09-30)
+- **Dedicated Table Fields Grounded in Relational Backend Data**:
+  - Implemented first-class table columns across both the Admin Complaints Desk (`src/app/complaints/page.tsx`) and Foreign Agent Complaints Desk (`src/app/agent/complaints/page.tsx`):
+    1. **Candidate**: Displays candidate full name, accompanied by placement ID / applicant ID badge.
+    2. **Passport**: Monospace badge showing candidate passport number (`placement.passport_number` || `applicant.passport_number` || `portalCandidate.passport_number`).
+    3. **Contact Person**: Emergency contact name (`emergency_contact_name` || `relative_name` || `contact_person_name`), kinship/relationship if specified, and emergency contact phone number (`emergency_contact_phone` || `relative_phone` || `phone`).
+    4. **Sponsor Details**: Employer/sponsor name (`employer_name` || `sponsor_name` || `current_employer`), civil/national ID (`employer_national_id` || `sponsor_civil_id` || `sponsor_id`), visa number (`visa_number`), and employer address (`employer_address` || `sponsor_address`).
+- **Responsive Table Layout**:
+  - Encapsulated the tables in accessible horizontal-scrolling containers (`<div className="overflow-x-auto relative">`) with `border-separate border-spacing-0` and responsive minimum widths (`min-w-[1100px]` on Admin, `min-w-[1000px]` on Foreign Agent) matching the styling of the Foreign Agent Commission billing schedule.
+  - Replaced the Foreign Agent vertical card list with an identical, high-density structured table view.
+- **Zero Mock / Zero Backend Mutation**:
+  - Fully joined in-memory using live backend queries (`listPlacementsV2`, `listApplicantsV2`, `listMyPlacementsV2`, and `listPortalCandidatesV2`), without modifying backend RPC schemas or storing mock fallbacks.
+- **Verification**:
+  - Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors).
+  - Live runtime HTTP checks confirmed `/complaints` and `/agent/complaints` return HTTP 200 OK.
 
 ---
 
@@ -63,7 +132,7 @@
 | 11 | **Applicant Registration Fee Logging** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Auto-submits to finance on Save Changes and candidate intake; multi-entry logging on candidate profile. |
 | 12 | **Official CV PDF Generation & Attachment** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Dummy fallbacks eliminated; Ref No. empty by default; honest demographic & skills mapping; honest 417 ValidationError handling for render_cv_pdf; strict role gating enforced for Registrar & Admin. |
 | 13 | **Passport MRZ Parsing** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified parse_passport_file returns 200 without lifecycle mutation side-effects. |
-| 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_contract_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
+| 14 | **Contract Parsing (Saudi & Kuwait)** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **COMPLETE** | Live verified parse_contract_file with real Saudi Musaned contract PDF returning 10 fields; audited parser schema, verified employer field propagation to Placement & Applicant, and added contract document viewer modal. |
 | 15 | **Kuwait eVisa Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Connected parse_visa_file to Placement Document Center with real preview and field extraction (TODO-P1-02). |
 | 16 | **Saudi Injaz Paper Parsing** | YES | YES | YES | `UNVERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Injaz OCR inspector integrated into V2ClearanceQueueWorkspace drawer calling parse_injaz_file (TODO-P2-04). |
 | 17 | **Foreign Agency Candidate Catalog** | YES | YES | YES | `RUNTIME VERIFIED` | YES | YES | YES | YES | **IMPLEMENTED** | Verified no demo fallback on catalog query error; photo resolution via proxy fallback. |
@@ -336,8 +405,26 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - `src/app/applicants/[id]/cv/page.tsx`: Updated candidate state banner directing `Draft` candidates to complete registration before CV generation (avoiding 417 `Applicant must be Registered before a CV can be generated`), and providing a clear "Generate Official CV Now" action for `Registered` candidates.
 - **Verification**: Verified clean TypeScript compilation (`npx tsc --noEmit`), proxy runtime tests, and live browser confirmation of button removal and stage ribbon consistency.
 
+### 9. Foreign Agency Complaints Desk Marketplace Candidate Scoping (2026-09-30)
+- **Strict Marketplace Candidate Scoping**: Updated the "File Agency Complaint" modal candidate dropdown on `/agent/complaints` (`src/app/agent/complaints/page.tsx`) to strictly source candidates from the agent's applicant marketplace section (`/agent`), queried via `listPortalCandidatesV2()`.
+- **Eliminated General Agency Applicants**: Completely eliminated un-scoped agency applicants (`listApplicantsV2()`, containing all 55 general agency applicants) from the complaint candidate dropdown, ensuring foreign agents only see their available marketplace candidates.
+- **Marketplace Alignment & Candidate Details**: Filtered candidate pool by `medical_status !== "UNFIT"`, mirroring `/agent` (`AgentDiscoveryPage`). Displayed candidate full name, candidate ID (`name`), passport number, destination country, and target job in search options.
+- **Placement Reference Resolution**: Cross-referenced `allAvailableCandidates` to route complaints smoothly to `createComplaintV2` with active placement references where available.
+- **Verification**: Verified clean TypeScript check (`npx tsc --noEmit`), runtime verification against live Frappe Railway backend confirming 3 marketplace candidates are listed vs 55 agency applicants.
 
-
-
-
-
+### 10. Dedicated Candidate CV Workspace & Administrative Role Consolidation (2026-09-30)
+- **Dedicated Candidate CV Workspace**:
+  - Built CVWorkspace.tsx displaying the exact 12 columns from client reference spreadsheet (NO, CONTACT, NAME, PASSPORT, LABOUR ID, MEDICAL, RELIGION, REGION, AGE, MARRIED/NOT, # OF CHILDREN, REMARK), with column MUSANAD strictly excluded as requested.
+  - Added dedicated cv stream to OperationalStreamType and fetchOperationalWorkspaceDataV2 in src/lib/api/v2/operational.ts, mapping candidate phone/emergency contact, uppercase full name, passport, labor ID, medical status badge (FIT, UNFIT, PENDING), religion, region/town/city, computed age, marital status, children count, and remarks.
+  - Enabled direct in-cell typing and blur-saving for REMARK via ExcelTextInput persisting live to Applicant.remarks via updateApplicantV2.
+  - Added multi-attribute filtering (Corridor, Medical Status, Religion, Marital Status), search bar, and full TanStack column-header click sorting across all 12 columns.
+  - Added CSV/Excel export button (Export CSV) producing a spreadsheet matching the client's reference columns.
+  - Integrated candidate dossier detail drawer (OperationalDrawer) with bio-data, identity, biological profile, remarks, and 1-click official CV PDF download (renderCvPdfV2).
+- **Strict Role-Gating for CV Section**:
+  - Gated the cv tab in RoleWorkspaceContainer.tsx to isAdmin or any user holding a cv role (hasRoleKeyword(["cv"])). Users without this role cannot see or access the section.
+- **Administrative Role Consolidation & Normalization**:
+  - Consolidated all administrative roles into a single role: 'Admin'.
+  - Removed Administrator, System Manager, and Manager from V2_CANONICAL_ROLES, V2_CUSTOM_ROLES, ACTION_ROLE_MAP, CORRIDOR_ROLE_DEFINITIONS, and CANONICAL_V2_ROLES.
+  - Built universal normalization in employees.ts (normalizeAndDeduplicateRoles) and employees/page.tsx (displayRoles, handleOpenEditRoles) so any user holding legacy administrative roles automatically displays and saves as 'Admin'.
+  - Migrated live backend user tutu@gmail.com via authenticated Frappe RPC to remove Manager and System Manager and assign 'Admin' as their sole administrative role.
+- **Verification**: Clean TypeScript compilation (npx tsc --noEmit, 0 errors), live backend employee roster verification confirming admin@example.com and tutu@gmail.com both hold ['Admin'], and live API data mapping for candidate CV table (55 live applicants).

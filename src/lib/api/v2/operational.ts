@@ -18,6 +18,15 @@ import { listPlacementsV2, V2PlacementRecord } from "./placements";
 import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
 import type { WorkspaceApplicantRow, OperationalStreamType } from "@/types/workspace";
 
+function calculateAge(dobStr?: string): number | string {
+  if (!dobStr) return "—";
+  const dob = new Date(dobStr);
+  if (isNaN(dob.getTime())) return "—";
+  const diff = Date.now() - dob.getTime();
+  const ageDate = new Date(diff);
+  return Math.abs(ageDate.getUTCFullYear() - 1970);
+}
+
 export async function fetchOperationalWorkspaceDataV2(
   streamType: OperationalStreamType,
   corridorFilter: string = "All"
@@ -169,7 +178,10 @@ export async function fetchOperationalWorkspaceDataV2(
       // and the contract/visa documents are uploaded against it. Applicants still in
       // the intake pool (no Placement, no uploaded documents) are not yet on any of
       // these stages and must never appear in the sheets.
-      // ---------------------------------------------------------------------
+      if (streamType === "cv" && (applicant.status === "Cancelled" || applicant.applicant_state === "Cancelled")) {
+        continue;
+      }
+
       if (["lms", "injaz", "wakala", "embassy", "departure"].includes(streamType) && !plc) {
         continue;
       }
@@ -383,9 +395,10 @@ export async function fetchOperationalWorkspaceDataV2(
           injazStep?.due_date ||
           "—",
         contact:
-          lmsStep?.assigned_officer ||
           applicant.phone ||
           applicant.phone_number ||
+          applicant.emergency_contact_phone ||
+          lmsStep?.assigned_officer ||
           "—",
         remark:
           applicant.remarks ||
@@ -394,6 +407,11 @@ export async function fetchOperationalWorkspaceDataV2(
           embassyStep?.rejection_remark ||
           embassyStep?.notes ||
           "",
+        religion: applicant.religion || "—",
+        region: applicant.region || applicant.city || applicant.leaving_town || applicant.place_of_birth || "—",
+        age: applicant.age ?? (applicant.date_of_birth ? calculateAge(applicant.date_of_birth) : "—"),
+        maritalStatus: applicant.marital_status || "Single",
+        children: typeof applicant.children === "number" ? applicant.children : 0,
         wakalaStatus,
         wakalaAmount,
         wakalaPaidDate,

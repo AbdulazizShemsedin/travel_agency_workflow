@@ -185,6 +185,30 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   if (!result.marital_status) result.marital_status = "Single";
   if (!result.visa_type) result.visa_type = "Work";
 
+  // 2.2 Language Levels (Frappe Select options: "", "None", "Basic", "Good", "Fluent")
+  const normalizeLanguageLevel = (val: any): string => {
+    if (val === undefined || val === null) return "";
+    const str = String(val).trim();
+    if (!str || str.toLowerCase() === "select..") return "";
+    const lower = str.toLowerCase();
+    if (lower === "none") return "None";
+    if (lower === "basic") return "Basic";
+    if (lower === "good") return "Good";
+    if (lower === "fluent") return "Fluent";
+    // Sanitize non-standard options like "Poor", "Fair", "Intermediate", "Medium", "Advanced"
+    if (lower === "poor" || lower === "fair") return "Basic";
+    if (lower === "intermediate" || lower === "medium") return "Good";
+    if (lower === "advanced") return "Fluent";
+    return "";
+  };
+
+  if (result.arabic_level !== undefined) {
+    result.arabic_level = normalizeLanguageLevel(result.arabic_level);
+  }
+  if (result.english_level !== undefined) {
+    result.english_level = normalizeLanguageLevel(result.english_level);
+  }
+
   // 3. Salary Amount & Monthly Salary (Experienced = 1200 SAR, First Timer = 1000 SAR)
   const expCountry = String(result.experience_country || "").trim().toLowerCase();
   const isExperiencedApplicant = Boolean(
@@ -317,6 +341,14 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.emergency_relationship = relationship;
     result.contact_person_relation = relationship;
     result.relationship = relationship;
+  }
+
+  // 11. Complexion (Skin Color)
+  if (result.complexion) {
+    const compUpper = String(result.complexion).trim().toUpperCase();
+    if (["FAIR", "MEDIUM", "DARK"].includes(compUpper)) {
+      result.complexion = compUpper;
+    }
   }
 
   return result as T;

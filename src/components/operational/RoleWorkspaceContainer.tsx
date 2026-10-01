@@ -10,20 +10,19 @@ import {
   Plane,
   Plus,
   ShieldCheck,
-  FileSpreadsheet,
   ShieldAlert,
+  FileSpreadsheet,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
+import { CVWorkspace } from "./workspaces/CVWorkspace";
 import { LMISWorkspace } from "./workspaces/LMISWorkspace";
 import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
 import { DepartureWorkspace } from "./workspaces/DepartureWorkspace";
-import { V2ClearanceQueueWorkspace } from "./V2ClearanceQueueWorkspace";
-import { ClearanceGridWorkspace } from "./ClearanceGridWorkspace";
 import { CountryBanRequestsWorkspace } from "./workspaces/CountryBanRequestsWorkspace";
 import { ApplicantTable } from "@/components/applicant/ApplicantTable";
 import { Button } from "@/components/ui/button";
@@ -58,12 +57,11 @@ export function RoleWorkspaceContainer() {
 
   const allTabsConfig = [
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
-    { id: "grid", label: "Clearance Grid", icon: FileSpreadsheet, desc: "Excel-Style Matrix" },
+    { id: "cv", label: "CV", icon: FileSpreadsheet, desc: "Candidate Profiles & Bio" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
     { id: "departure", label: "Ticket & Departure", icon: Plane, desc: "Flight & Departure" },
-    { id: "clearance", label: "Clearance List", icon: ShieldCheck, desc: "Step Pipeline" },
     { id: "ban_requests", label: "Ban Requests", icon: ShieldAlert, desc: "Exception Approval Queue" },
   ];
 
@@ -88,9 +86,10 @@ export function RoleWorkspaceContainer() {
     const allowed: string[] = ["directory"]; // All internal staff can access the Applicant List directory
     let prefTab = "directory";
 
-    // 0. Clearance Grid: Accessible to clearance officers & admins
-    if (hasRoleKeyword(["lms", "lmis", "taeshir", "teshir", "te'shir", "injaz", "telesign", "embassy", "clearance"])) {
-      allowed.push("grid");
+    // 0. CV Candidate Table: strictly restricted to user with "cv" role or Admin
+    if (hasRoleKeyword(["cv"])) {
+      allowed.push("cv");
+      if (prefTab === "directory") prefTab = "cv";
     }
 
     // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
@@ -121,9 +120,6 @@ export function RoleWorkspaceContainer() {
     if (hasRoleKeyword(["registrar", "complaint", "manager", "admin", "system manager"])) {
       allowed.push("ban_requests");
     }
-
-    // 5. Clearance List (Step Pipeline): strictly restricted to Admin (Administrator, System Manager, Admin, Manager)
-    // Non-admin roles are never granted access to the Clearance list table.
 
     const filteredTabs = allTabsConfig.filter((tab) => allowed.includes(tab.id));
     return {
@@ -167,7 +163,7 @@ export function RoleWorkspaceContainer() {
   });
 
   // Fetch live workspace data for active operational stream
-  const isOperationalTab = activeTab !== "directory" && activeTab !== "clearance" && activeTab !== "grid";
+  const isOperationalTab = activeTab === "cv" || activeTab === "lms" || activeTab === "injaz" || activeTab === "embassy" || activeTab === "departure";
   const isTabAllowed = availableTabs.some((t) => t.id === activeTab);
   const streamType = (isOperationalTab ? activeTab : "lms") as OperationalStreamType;
 
@@ -185,10 +181,10 @@ export function RoleWorkspaceContainer() {
 
   // Workspace Titles & Descriptions for header
   const getHeaderInfo = () => {
-    if (activeTab === "grid") {
+    if (activeTab === "cv") {
       return {
-        title: "Clearance Grid",
-        subtitle: "Excel-style spreadsheet for batch clearance step management.",
+        title: "Candidate CV Database",
+        subtitle: "Master candidate profiles, biological details, medical verification, and remarks.",
       };
     }
     if (activeTab === "lms") {
@@ -215,10 +211,10 @@ export function RoleWorkspaceContainer() {
         subtitle: "Flight bookings and departures.",
       };
     }
-    if (activeTab === "clearance") {
+    if (activeTab === "ban_requests") {
       return {
-        title: "Clearance List",
-        subtitle: "Clearance pipeline tracking.",
+        title: "Country Ban Requests",
+        subtitle: "Review and approve country ban exception requests.",
       };
     }
     return {
@@ -291,6 +287,16 @@ export function RoleWorkspaceContainer() {
       <div>
         {activeTab === "directory" && isTabAllowed && <ApplicantTable />}
 
+        {activeTab === "cv" && isTabAllowed && (
+          <CVWorkspace
+            data={workspaceData}
+            isLoading={isLoading || isRefetching}
+            onRefresh={refetch}
+            corridorFilter={corridorFilter}
+            onCorridorChange={setCorridorFilter}
+          />
+        )}
+
         {activeTab === "lms" && isTabAllowed && (
           <LMISWorkspace
             data={workspaceData}
@@ -334,10 +340,6 @@ export function RoleWorkspaceContainer() {
             onCorridorChange={setCorridorFilter}
           />
         )}
-
-        {activeTab === "grid" && isTabAllowed && <ClearanceGridWorkspace />}
-
-        {activeTab === "clearance" && isTabAllowed && <V2ClearanceQueueWorkspace />}
 
         {activeTab === "ban_requests" && isTabAllowed && (
           <CountryBanRequestsWorkspace onRefresh={refetch} />

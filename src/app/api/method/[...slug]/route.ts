@@ -15,13 +15,15 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   const authHeader = req.headers.get("authorization");
   const csrfToken = req.headers.get("x-frappe-csrf-token");
 
+  const isAuthOrCsrf =
+    methodPath === "login" ||
+    methodPath === "logout" ||
+    methodPath.endsWith("/login") ||
+    methodPath.endsWith("/logout") ||
+    methodPath.includes("get_csrf_token");
+
   // Forward CSRF token for state-changing operations (never on auth or token retrieval)
-  if (
-    csrfToken &&
-    !methodPath.endsWith("/login") &&
-    !methodPath.endsWith("/logout") &&
-    !methodPath.includes("get_csrf_token")
-  ) {
+  if (csrfToken && !isAuthOrCsrf) {
     headers["X-Frappe-CSRF-Token"] = csrfToken;
   }
 
@@ -31,27 +33,6 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   }
   if (authHeader) {
     headers["Authorization"] = authHeader;
-  } else if (process.env.FRAPPE_API_KEY && process.env.FRAPPE_API_SECRET) {
-    // Do not add API key Authorization for auth or guest bootstrap endpoints; rely on session cookies.
-    const isAuthEndpoint =
-      methodPath === "login" ||
-      methodPath === "logout" ||
-      methodPath.endsWith("/login") ||
-      methodPath.endsWith("/logout") ||
-      methodPath.includes("get_current_user") ||
-      methodPath.includes("get_csrf_token") ||
-      methodPath.includes("get_logged_user");
-    if (!isAuthEndpoint) {
-      const hasValidUserSession = Boolean(
-        cookie &&
-        cookie.includes("sid=") &&
-        !cookie.includes("sid=Guest") &&
-        !cookie.includes("sid=;")
-      );
-      if (!hasValidUserSession) {
-        headers["Authorization"] = `token ${process.env.FRAPPE_API_KEY}:${process.env.FRAPPE_API_SECRET}`;
-      }
-    }
   }
 
   return {
@@ -158,29 +139,19 @@ function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | 
 
 async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
   try {
-    const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
+    const whoRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.auth_api.get_current_user`, {
       method: "POST",
       headers: forwardHeaders,
       body: "{}",
     });
     const whoData = await whoRes.json().catch(() => ({}));
-    const loggedUser = (whoData.message || "").toLowerCase().trim();
+    const userMsg = whoData.message || {};
+    const loggedUser = (userMsg.user || "").toLowerCase().trim();
     if (!loggedUser || loggedUser === "guest") return false;
     if (loggedUser === "administrator") return true;
 
-    // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
-    const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      },
-      body: JSON.stringify({ doctype: "User", name: whoData.message }),
-    });
-    const userDoc = await userDocRes.json().catch(() => ({}));
-    const userRoles: string[] = (userDoc.message?.roles || []).map((r: any) =>
-      String(r.role || "").toLowerCase().trim()
+    const userRoles: string[] = (userMsg.roles || []).map((r: any) =>
+      String(r || "").toLowerCase().trim()
     );
     const allowed = ["administrator", "system manager", "admin"];
     return allowed.some((ar) => userRoles.includes(ar));
@@ -191,29 +162,19 @@ async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, stri
 
 async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
   try {
-    const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
+    const whoRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.auth_api.get_current_user`, {
       method: "POST",
       headers: forwardHeaders,
       body: "{}",
     });
     const whoData = await whoRes.json().catch(() => ({}));
-    const loggedUser = (whoData.message || "").toLowerCase().trim();
+    const userMsg = whoData.message || {};
+    const loggedUser = (userMsg.user || "").toLowerCase().trim();
     if (!loggedUser || loggedUser === "guest") return false;
     if (loggedUser === "administrator") return true;
 
-    // Check user roles via system token
-    const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
-    const userDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      },
-      body: JSON.stringify({ doctype: "User", name: whoData.message }),
-    });
-    const userDoc = await userDocRes.json().catch(() => ({}));
-    const userRoles: string[] = (userDoc.message?.roles || []).map((r: any) =>
-      String(r.role || "").toLowerCase().trim()
+    const userRoles: string[] = (userMsg.roles || []).map((r: any) =>
+      String(r || "").toLowerCase().trim()
     );
     const allowed = [
       "administrator",
@@ -231,19 +192,18 @@ async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: R
     if (userRoles.some((ar) => allowed.includes(ar))) {
       return true;
     }
-    // Permissive fallback if user is authenticated staff/manager
-    if (loggedUser && loggedUser !== "guest" && userRoles.length === 0) {
+    if (userMsg.is_internal_staff) {
       return true;
     }
     return false;
   } catch {
-    return true;
+    return false;
   }
 }
 
 let cachedAllThreads: { data: any[]; timestamp: number } | null = null;
 
-async function getAllThreadsCached(config: any, elevatedHeaders: Record<string, string>): Promise<any[]> {
+async function getAllThreadsCached(config: any, forwardHeaders: Record<string, string>): Promise<any[]> {
   const now = Date.now();
   if (cachedAllThreads && now - cachedAllThreads.timestamp < 10000) {
     return cachedAllThreads.data;
@@ -251,7 +211,7 @@ async function getAllThreadsCached(config: any, elevatedHeaders: Record<string, 
   try {
     const allRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.chat_api.list_all_threads`, {
       method: "POST",
-      headers: elevatedHeaders,
+      headers: forwardHeaders,
       body: "{}",
     });
     const allData = await allRes.json().catch(() => ({}));
@@ -335,12 +295,6 @@ export async function POST(
         );
       }
 
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-      const elevatedHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      };
-
       try {
         const parsedBody = JSON.parse(bodyText || "{}");
         const contractorName = parsedBody.name || parsedBody.contractor_name;
@@ -354,7 +308,7 @@ export async function POST(
         // 2. Fetch existing Contractor record to verify existence & resolve linked User
         const getConRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
           method: "POST",
-          headers: elevatedHeaders,
+          headers: forwardHeaders,
           body: JSON.stringify({
             doctype: "Contractor",
             name: contractorName,
@@ -405,7 +359,7 @@ export async function POST(
             try {
               const renameRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.rename_doc`, {
                 method: "POST",
-                headers: elevatedHeaders,
+                headers: forwardHeaders,
                 body: JSON.stringify({
                   doctype: "Contractor",
                   old_name: contractorName,
@@ -427,7 +381,7 @@ export async function POST(
         if (Object.keys(contractorUpdates).length > 0) {
           await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
             method: "POST",
-            headers: elevatedHeaders,
+            headers: forwardHeaders,
             body: JSON.stringify({
               doctype: "Contractor",
               name: finalContractorName,
@@ -452,7 +406,7 @@ export async function POST(
           if (Object.keys(userUpdates).length > 0) {
             await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
               method: "POST",
-              headers: elevatedHeaders,
+              headers: forwardHeaders,
               body: JSON.stringify({
                 doctype: "User",
                 name: linkedUser,
@@ -484,44 +438,7 @@ export async function POST(
     const postMaxRetries = isHeavyCvOrPdf ? 0 : 2;
     const postTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
 
-    let effectiveBodyText = bodyText || "{}";
-    if (methodPath === "login" || methodPath.endsWith("/login")) {
-      try {
-        const parsed = JSON.parse(effectiveBodyText);
-        if (parsed.usr && typeof parsed.usr === "string" && !parsed.usr.includes("@")) {
-          const lowerUsr = parsed.usr.trim().toLowerCase();
-          if (lowerUsr !== "administrator" && lowerUsr !== "guest") {
-            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
-            const lookupRes = await fetchWithRetry(
-              `${config.url}/api/method/frappe.client.get_list`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: systemAuthHeader,
-                },
-                body: JSON.stringify({
-                  doctype: "User",
-                  filters: [["username", "=", parsed.usr.trim()]],
-                  fields: ["name", "email"],
-                  limit_page_length: 1,
-                }),
-              },
-              1,
-              5000
-            ).catch(() => null);
-            if (lookupRes && lookupRes.ok) {
-              const lookupData = await lookupRes.json().catch(() => ({}));
-              const resolvedEmail = lookupData.message?.[0]?.name || lookupData.message?.[0]?.email;
-              if (resolvedEmail) {
-                parsed.usr = resolvedEmail;
-                effectiveBodyText = JSON.stringify(parsed);
-              }
-            }
-          }
-        }
-      } catch {}
-    }
+    const effectiveBodyText = bodyText || "{}";
 
     const res = await fetchWithRetry(
       `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
@@ -536,29 +453,8 @@ export async function POST(
 
     // Special handler for get_thread_messages: enrich with thread participants presence & read receipts
     if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
-      let effectiveRes = res;
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "666ded6cd73c588"}:${process.env.FRAPPE_API_SECRET || "5277b76d58709f8"}`;
-
-      if (!res.ok) {
-        const isSupervisor = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
-        if (isSupervisor) {
-          const elevatedHeaders: Record<string, string> = {
-            ...forwardHeaders,
-            Authorization: systemAuthHeader,
-          };
-          delete elevatedHeaders["cookie"];
-          delete elevatedHeaders["Cookie"];
-
-          effectiveRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-            method: "POST",
-            headers: elevatedHeaders,
-            body: bodyText || "{}",
-          });
-        }
-      }
-
-      if (effectiveRes.ok) {
-        const rawData = await effectiveRes.json().catch(() => ({ message: [] }));
+      if (res.ok) {
+        const rawData = await res.json().catch(() => ({ message: [] }));
         const messagesList: any[] = Array.isArray(rawData.message)
           ? rawData.message
           : Array.isArray(rawData)
@@ -572,10 +468,7 @@ export async function POST(
           if (targetThreadName) {
             const threadDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: systemAuthHeader,
-              },
+              headers: forwardHeaders,
               body: JSON.stringify({ doctype: "Chat Thread", name: targetThreadName }),
             });
             if (threadDocRes.ok) {
@@ -591,162 +484,8 @@ export async function POST(
         }
 
         const response = NextResponse.json({ message: messagesList, participants }, { status: 200 });
-        forwardSetCookieHeaders(effectiveRes, response);
+        forwardSetCookieHeaders(res, response);
         return response;
-      }
-    }
-
-    // Elevated Retry for whitelisted internal queries blocked by Frappe role restrictions
-    // (e.g. list_contractors & commission rate management for staff)
-    if (res.status === 403) {
-      if (
-        methodPath === "agency_tracking.contractor_api.list_contractors" ||
-        methodPath === "agency_tracking.contractor_api.get_commission_rates" ||
-        methodPath === "agency_tracking.contractor_api.set_commission_rates"
-      ) {
-        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-        const elevatedHeaders: Record<string, string> = {
-          ...forwardHeaders,
-          Authorization: systemAuthHeader,
-        };
-        delete elevatedHeaders["cookie"];
-        delete elevatedHeaders["Cookie"];
-
-        const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: bodyText || "{}",
-        });
-
-        if (retryRes.ok) {
-          const retryData = await retryRes.json().catch(() => ({ message: [] }));
-          const response = NextResponse.json(retryData, { status: 200 });
-          forwardSetCookieHeaders(res, response);
-          return response;
-        }
-      } else if (methodPath === "agency_tracking.placement_api.list_placements") {
-        const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-        const elevatedHeaders: Record<string, string> = {
-          ...forwardHeaders,
-          Authorization: systemAuthHeader,
-        };
-        delete elevatedHeaders["cookie"];
-        delete elevatedHeaders["Cookie"];
-
-        let reqBody = bodyText || "{}";
-        try {
-          const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
-            method: "POST",
-            headers: forwardHeaders,
-            body: "{}",
-          });
-          const whoData = await whoRes.json().catch(() => ({}));
-          const loggedUser = (whoData.message || "").toLowerCase().trim();
-
-          if (loggedUser && loggedUser !== "administrator" && loggedUser !== "guest") {
-            const conListRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.contractor_api.list_contractors`, {
-              method: "POST",
-              headers: elevatedHeaders,
-              body: "{}",
-            });
-            const conData = await conListRes.json().catch(() => ({}));
-            const contractors: any[] = conData.message || conData.contractors || (Array.isArray(conData) ? conData : []);
-            const matchedCon = contractors.find((c: any) => (c.user || "").toLowerCase().trim() === loggedUser);
-
-            if (matchedCon) {
-              const parsedBody = JSON.parse(reqBody);
-              parsedBody.filters = { ...(parsedBody.filters || {}), contractor: matchedCon.name };
-              reqBody = JSON.stringify(parsedBody);
-            }
-          }
-        } catch {}
-
-        const retryRes = await fetchWithRetry(`${config.url}/api/method/${methodPath}${req.nextUrl.search}`, {
-          method: "POST",
-          headers: elevatedHeaders,
-          body: reqBody,
-        });
-
-        if (retryRes.ok) {
-          const retryData = await retryRes.json().catch(() => ({ message: [] }));
-          const response = NextResponse.json(retryData, { status: 200 });
-          forwardSetCookieHeaders(res, response);
-          return response;
-        }
-      } else if (methodPath === "agency_tracking.chat_api.send_message") {
-        // Elevate message sending if caller is Admin, Communication Manager, or authorized thread member
-        try {
-          const whoRes = await fetchWithRetry(`${config.url}/api/method/frappe.auth.get_logged_user`, {
-            method: "POST",
-            headers: forwardHeaders,
-            body: "{}",
-          });
-          const whoData = await whoRes.json().catch(() => ({}));
-          const loggedUser = (whoData.message || "").toLowerCase().trim();
-
-          if (loggedUser && loggedUser !== "guest") {
-            const isAuthorized = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
-            const parsedBody = JSON.parse(bodyText || "{}");
-            const threadName = parsedBody.thread_name;
-
-            const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-            const elevatedHeaders: Record<string, string> = {
-              "Content-Type": "application/json",
-              Authorization: systemAuthHeader,
-            };
-
-            // Check if thread exists or user is owner
-            let canSend = isAuthorized;
-            if (!canSend && threadName) {
-              const threadRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                method: "POST",
-                headers: elevatedHeaders,
-                body: JSON.stringify({ doctype: "Chat Thread", name: threadName }),
-              });
-              const threadDoc = await threadRes.json().catch(() => ({}));
-              const owner = (threadDoc.message?.owner || "").toLowerCase().trim();
-              if (owner === loggedUser) canSend = true;
-            }
-
-            if (canSend && threadName) {
-              const insertRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.insert`, {
-                method: "POST",
-                headers: elevatedHeaders,
-                body: JSON.stringify({
-                  doc: {
-                    doctype: "Chat Message",
-                    thread: threadName,
-                    sender: whoData.message,
-                    message: parsedBody.message || "",
-                    mentioned_applicant: parsedBody.mentioned_applicant || null,
-                    attachment: parsedBody.attachment || null,
-                  },
-                }),
-              });
-
-              if (insertRes.ok) {
-                const inserted = await insertRes.json();
-                const nowStr = new Date().toISOString().replace("T", " ").replace("Z", "").slice(0, 19);
-                await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
-                  method: "POST",
-                  headers: elevatedHeaders,
-                  body: JSON.stringify({
-                    doctype: "Chat Thread",
-                    name: threadName,
-                    fieldname: "last_message_at",
-                    value: nowStr,
-                  }),
-                }).catch(() => {});
-
-                const response = NextResponse.json(inserted, { status: 200 });
-                forwardSetCookieHeaders(res, response);
-                return response;
-              }
-            }
-          }
-        } catch (err: any) {
-          console.error("[PROXY ERROR send_message elevation]", err);
-        }
       }
     }
 
@@ -777,12 +516,6 @@ export async function POST(
 
     // Post-query enrichment for contractor user details and portal candidate skills
     if (res.ok && data) {
-      const systemAuthHeader = `token ${process.env.FRAPPE_API_KEY || "29450e91ee38267"}:${process.env.FRAPPE_API_SECRET || "c78515ef82f928a"}`;
-      const elevatedHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: systemAuthHeader,
-      };
-
       if (methodPath === "agency_tracking.contractor_api.list_contractors") {
         const list: any[] = Array.isArray(data.message) ? data.message : Array.isArray(data) ? data : [];
         if (list.length > 0) {
@@ -792,7 +525,7 @@ export async function POST(
               try {
                 const uRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
                   method: "POST",
-                  headers: elevatedHeaders,
+                  headers: forwardHeaders,
                   body: JSON.stringify({ doctype: "User", name: c.user }),
                 });
                 const uData = await uRes.json().catch(() => ({}));
@@ -823,7 +556,7 @@ export async function POST(
 
         if (rawThreads.length > 0) {
           try {
-            const allThreads = await getAllThreadsCached(config, elevatedHeaders);
+            const allThreads = await getAllThreadsCached(config, forwardHeaders);
             if (allThreads.length > 0) {
               const detailsMap = new Map<string, any>();
               allThreads.forEach((t) => {
@@ -852,7 +585,7 @@ export async function POST(
         const rawList = Array.isArray(data?.message) ? data.message : Array.isArray(data) ? data : [];
         if (!res.ok || rawList.length === 0 || data?.exc_type === "PermissionError") {
           try {
-            const allThreads = await getAllThreadsCached(config, elevatedHeaders);
+            const allThreads = await getAllThreadsCached(config, forwardHeaders);
             data.message = allThreads;
             data.exc_type = undefined;
             data.exception = undefined;
@@ -877,11 +610,40 @@ export async function POST(
         String(data?._error_message || "").includes("No permission")
       );
       if (!isExpectedAuthChallenge && !isPermissionError) {
-        console.error("[PROXY ERROR POST]", methodPath, res.status, data);
+        const cleanMsg =
+          data?._server_messages
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(data._server_messages);
+                  return JSON.parse(parsed[0])?.message || data.exception;
+                } catch {
+                  return data?.exception;
+                }
+              })()
+            : data?.exception || data?.message || data?._error_message || "Backend Error";
+        console.error(`[PROXY ERROR POST] ${methodPath} ${res.status}:`, cleanMsg);
       } else if (isPermissionError) {
         console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
+    // For logout requests, if backend returns non-ok (e.g. 400 CSRFTokenError or expired session),
+    // guarantee clean 200 response with cleared session cookies so client logout is always successful
+    const isLogoutMethod = methodPath === "logout" || methodPath.endsWith("/logout");
+    if (isLogoutMethod && !res.ok) {
+      const logoutResponse = NextResponse.json(
+        { message: "Logged out", home_page: "/login", full_name: "Guest" },
+        { status: 200 }
+      );
+      const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
+      ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
+        logoutResponse.headers.append(
+          "set-cookie",
+          `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax`
+        );
+      });
+      return logoutResponse;
+    }
+
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);
     return response;
@@ -972,6 +734,40 @@ export async function GET(
         console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
+    // For logout requests, if backend returns non-ok, guarantee clean 200 response with cleared session cookies
+    const isLogoutMethod = methodPath === "logout" || methodPath.endsWith("/logout");
+    if (isLogoutMethod && !res.ok) {
+      const logoutResponse = NextResponse.json(
+        { message: "Logged out", home_page: "/login", full_name: "Guest" },
+        { status: 200 }
+      );
+      const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
+      ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
+        logoutResponse.headers.append(
+          "set-cookie",
+          `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax`
+        );
+      });
+      return logoutResponse;
+    }
+
+    // If photo is not found on backend (404), return a 1x1 transparent GIF with 200 OK
+    // so browser <img> tags render cleanly without broken image icons or terminal 404 noise
+    const isPhotoNotFound = res.status === 404 && methodPath.includes("get_candidate_photo");
+    if (isPhotoNotFound) {
+      const transparentGif = Buffer.from(
+        "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+        "base64"
+      );
+      return new NextResponse(transparentGif, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/gif",
+          "Cache-Control": "public, max-age=3600",
+        },
+      });
+    }
+
     const response = NextResponse.json(data, { status: res.status });
     forwardSetCookieHeaders(res, response);
     return response;

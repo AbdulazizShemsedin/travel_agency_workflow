@@ -73,32 +73,11 @@ export interface CanonicalRoleDefinition {
 export const CANONICAL_V2_ROLES: CanonicalRoleDefinition[] = [
   // 1. Core & Admin
   {
-    name: "Administrator",
-    category: "Core & Admin",
-    description: "Root system administrator with complete write and override authority across all operational modules.",
-    permissionsSummary: "Full CRUD on all records; financial approval queue; country-ban override; clearance step reassignment.",
-    accessSurface: ["All Modules", "System Administration", "System Settings"],
-  },
-  {
-    name: "System Manager",
-    category: "Core & Admin",
-    description: "Core administrative role managing agency operations, staff role grants, and operational parameters.",
-    permissionsSummary: "Complete operational management; staff user provisioning; role assignment; financial approvals.",
-    accessSurface: ["All Modules", "User Management", "Audit Logs"],
-  },
-  {
     name: "Admin",
     category: "Core & Admin",
-    description: "Executive agency administrator overseeing candidate pipelines, financial health, and cross-corridor status.",
-    permissionsSummary: "Full read/write on Applicants, Placements, Clearance Steps, Reports, and Approval Queues.",
-    accessSurface: ["Applicants", "Placements", "Reports", "Approvals", "Finance"],
-  },
-  {
-    name: "Manager",
-    category: "Core & Admin",
-    description: "Operational team lead managing day-to-day clearance execution, step assignments, and workflow overrides.",
-    permissionsSummary: "Full read/write on Applicants & Placements; clearance step reassignment; country-ban override; daily work reports.",
-    accessSurface: ["Applicants", "Placements", "Clearance Steps", "Daily Reports"],
+    description: "Executive agency administrator overseeing candidate pipelines, staff accounts, financial health, and cross-corridor status.",
+    permissionsSummary: "Full read/write on Applicants, Placements, Clearance Steps, Reports, Staff Accounts, Approvals, and Finance.",
+    accessSurface: ["Applicants", "Placements", "Reports", "Approvals", "Finance", "Staff Management"],
   },
 
   // 2. Intake & Registry
@@ -446,7 +425,16 @@ export default function EmployeesPage() {
 
   const handleOpenEditRoles = (emp: V2EmployeeRecord) => {
     setSelectedForRoles(emp);
-    setEditingRoles(emp.roles.filter((r) => r !== "Desk User"));
+    const normalized = emp.roles
+      .map((r) => {
+        const lower = r.trim().toLowerCase();
+        if (lower === "administrator" || lower === "system manager" || lower === "manager") {
+          return "Admin";
+        }
+        return r;
+      })
+      .filter((r) => r !== "Desk User");
+    setEditingRoles(Array.from(new Set(normalized)));
   };
 
   const handleOpenResetPassword = (emp: V2EmployeeRecord) => {
@@ -640,7 +628,7 @@ export default function EmployeesPage() {
           <Shield className="h-4 w-4" />
           <span>Roles & Permissions</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
-            17 Roles
+            {CANONICAL_V2_ROLES.length} Roles
           </Badge>
         </button>
       </div>
@@ -781,7 +769,19 @@ export default function EmployeesPage() {
                     .join("")
                     .toUpperCase();
 
-                  const displayRoles = emp.roles.filter((r) => r !== "Desk User");
+                  const displayRoles = Array.from(
+                    new Set(
+                      emp.roles
+                        .map((r) => {
+                          const lower = r.trim().toLowerCase();
+                          if (lower === "administrator" || lower === "system manager" || lower === "manager") {
+                            return "Admin";
+                          }
+                          return r;
+                        })
+                        .filter((r) => r !== "Desk User")
+                    )
+                  );
 
                   return (
                     <tr
@@ -823,7 +823,7 @@ export default function EmployeesPage() {
                           {displayRoles.length > 0 ? (
                             <>
                               {(expandedRoleEmpIds[emp.name] ? displayRoles : displayRoles.slice(0, 3)).map((role) => {
-                                const isCore = ["Administrator", "System Manager", "Admin", "Manager"].includes(role);
+                                const isCore = role === "Admin";
                                 const isPipeline = ["Clearance Officer", "Saudi LMIS", "Saudi Taeshir", "Saudi Embassy", "Kuwait LMIS", "Kuwait Telesign", "Kuwait Embassy"].includes(role);
                                 const isFinance = ["Finance Manager", "Complaint Manager", "Communication Manager", "Ticketer"].includes(role);
 

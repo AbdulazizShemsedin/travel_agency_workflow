@@ -681,13 +681,13 @@ export function ApplicantTable() {
             Total: 16 columns
           */}
           <table className="w-full min-w-[1700px] text-left text-xs border-collapse">
-            <thead className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
+            <thead className="border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[11px]">
               <tr>
                 {/* Col 1: Checkbox only — no header text */}
-                <th className="px-3 py-3.5 w-8 bg-slate-50/70 dark:bg-slate-800/60">
+                <th className="px-2.5 py-2 w-8 bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
+                    className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
                     checked={
                       paginatedApplicants.length > 0 &&
                       paginatedApplicants.every((a) => selectedRows.has(a.name))
@@ -697,51 +697,51 @@ export function ApplicantTable() {
                 </th>
 
                 {/* Col 2: Row number */}
-                <th className="px-2 py-3.5 w-10 text-center bg-slate-50/70 dark:bg-slate-800/60">No</th>
+                <th className="px-2 py-2 w-10 text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
 
-                {/* Col 3: Name — STICKY */}
-                <th className="px-4 py-3.5 sticky left-0 z-20 bg-slate-50/70 dark:bg-slate-800/60 shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
+                {/* Col 3: Name — STICKY LEFT-0 & 100% OPAQUE */}
+                <th className="px-3 py-2 sticky left-0 z-20 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
                   Full Name
                 </th>
 
                 {/* Col 4: Passport */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Passport No.</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Passport No.</th>
 
                 {/* Col 5: Stage Status */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Stage Status</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Stage Status</th>
 
                 {/* Col 6: Contract Date */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Contract Date</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Contract Date</th>
 
                 {/* Col 7: Contract No */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Contract No.</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Contract No.</th>
 
                 {/* Col 8: Medical Status */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Medical Status</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Medical Status</th>
 
                 {/* Col 9: Exam Date */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Exam Date</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Exam Date</th>
 
                 {/* Col 10: Exam Remaining */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Exam Remaining</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Exam Remaining</th>
 
                 {/* Col 11: Te'shir */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Te&apos;shir</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Te&apos;shir</th>
 
                 {/* Col 12: Injaz */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Injaz</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Injaz</th>
 
                 {/* Col 13: Wokala Status */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Wokala Status</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Wokala Status</th>
 
                 {/* Col 14: Embassy */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Embassy</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Embassy</th>
 
                 {/* Col 15: Embassy Expire Date */}
-                <th className="px-4 py-3.5 whitespace-nowrap">Embassy Expire Date</th>
+                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Embassy Expire Date</th>
 
                 {/* Col 16: Actions */}
-                <th className="px-4 py-3.5 text-right whitespace-nowrap">Actions</th>
+                <th className="px-3 py-2 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
@@ -815,14 +815,15 @@ export function ApplicantTable() {
                     <tr
                       key={applicant.name}
                       onClick={() => handleRowClick(applicant.name)}
-                      className={`cursor-pointer hover:bg-slate-50/90 dark:hover:bg-slate-800/70 transition-colors ${
-                        isSelected ? "bg-emerald-50/40 dark:bg-emerald-950/20" : ""
-                      }`}
+                      className={cn(
+                        "group cursor-pointer transition-colors border-b border-slate-100 dark:border-[#1e1e26] hover:bg-slate-50 dark:hover:bg-[#16161c]",
+                        isSelected ? "bg-emerald-50 dark:bg-[#183428]" : "even:bg-slate-50/40 dark:even:bg-[#131317]"
+                      )}
                       title="Click to view applicant details"
                     >
                       {/* Col 1: Checkbox — separate from No, stops row-click propagation */}
                       <td
-                        className="px-3 py-3 text-center"
+                        className="px-2.5 py-2.5 text-center border-r border-slate-100 dark:border-[#1e1e26]"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
@@ -834,24 +835,31 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 2: Row number */}
-                      <td className="px-2 py-3 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-[11px]">
+                      <td className="px-2 py-2.5 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-[11px] border-r border-slate-100 dark:border-[#1e1e26]">
                         {rowOffset + idx + 1}
                       </td>
 
-                      {/* Col 3: Name — STICKY */}
-                      <td className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-[#0f172a] shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950 text-[11px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      {/* Col 3: Name — STICKY LEFT-0 & 100% OPAQUE */}
+                      <td
+                        className={cn(
+                          "px-3 py-2.5 sticky left-0 z-10 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
+                          isSelected
+                            ? "!bg-emerald-100 dark:!bg-[#183428]"
+                            : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                             {applicant.first_name?.[0] || "A"}
                           </div>
-                          <div className="min-w-0">
-                            <span className="font-medium text-slate-900 dark:text-slate-100 block uppercase truncate max-w-[160px]">
+                          <div className="min-w-0 flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[170px]">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
                             {applicant.phone_number ? (
-                              <span className="text-[11px] text-slate-400 block">
-                                {applicant.phone_number}
+                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                ({applicant.phone_number})
                               </span>
                             ) : null}
                           </div>
@@ -859,19 +867,19 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 4: Passport No */}
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {applicant.passport_number || "—"}
                       </td>
 
                       {/* Col 5: Stage Status */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={badge.className}>
+                      <td className="px-3 py-2.5 whitespace-nowrap border-r border-slate-100 dark:border-[#1e1e26]">
+                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-2 text-[10px]", badge.className)}>
                           {stage}
                         </Badge>
                       </td>
 
                       {/* Contract Date */}
-                      <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractDate ? (
                           <span className="font-semibold text-slate-800 dark:text-zinc-200">
                             {new Date(contractDate).toLocaleDateString("en-GB", {
@@ -886,7 +894,7 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Contract No */}
-                      <td className="px-4 py-3 font-mono whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractNo ? (
                           <span className="font-semibold text-emerald-900 dark:text-emerald-400">
                             {contractNo}
@@ -897,14 +905,14 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Medical Status */}
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-3 py-2.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         <span className={medicalClass}>
                           {medicalStatus || "—"}
                         </span>
                       </td>
 
                       {/* Exam Date */}
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {examDate
                           ? new Date(examDate).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -915,11 +923,11 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Exam Remaining */}
-                      <td className="px-4 py-3 font-mono whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {examExpiry ? (
                           <span
                             className={cn(
-                              "text-[11px] font-semibold",
+                              "text-[10px] font-semibold",
                               new Date(examExpiry) > new Date()
                                 ? "text-emerald-700 dark:text-emerald-400"
                                 : "text-rose-600 dark:text-rose-400"
@@ -933,27 +941,27 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Te'shir */}
-                      <td className={cn("px-4 py-3 whitespace-nowrap text-[11px]", stepStatusClass(teshirStatus))}>
+                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
                         {stepStatusLabel(teshirStatus)}
                       </td>
 
                       {/* Injaz */}
-                      <td className={cn("px-4 py-3 whitespace-nowrap text-[11px]", stepStatusClass(injazStatus))}>
+                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
                         {stepStatusLabel(injazStatus)}
                       </td>
 
                       {/* Wokala Status */}
-                      <td className={cn("px-4 py-3 whitespace-nowrap text-[11px]", stepStatusClass(wakalaStatus))}>
+                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
                         {stepStatusLabel(wakalaStatus)}
                       </td>
 
                       {/* Embassy */}
-                      <td className={cn("px-4 py-3 whitespace-nowrap text-[11px]", stepStatusClass(embassyStatus))}>
+                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
                         {stepStatusLabel(embassyStatus)}
                       </td>
 
                       {/* Embassy Expire Date */}
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[11px]">
+                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]">
                         {embassyExpiry
                           ? new Date(embassyExpiry).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -965,14 +973,14 @@ export function ApplicantTable() {
 
                       {/* Actions */}
                       <td
-                        className="px-4 py-2.5 text-right"
+                        className="px-3 py-2 text-right whitespace-nowrap"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        <div className="flex items-center justify-end gap-1 flex-nowrap">
                           {/* View Detail */}
                           <Link
                             href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-slate-200 dark:hover:bg-[#252530] border border-slate-200 dark:border-[#2a2a35] transition"
+                            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-slate-200 dark:hover:bg-[#252530] border border-slate-200 dark:border-[#2a2a35] transition"
                             title="View Applicant Details"
                           >
                             <Eye className="h-3 w-3 text-slate-500" />
@@ -995,8 +1003,8 @@ export function ApplicantTable() {
                               }}
                               className={
                                 applicant.medical_status === "UNFIT"
-                                  ? "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
-                                  : "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                  ? "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                                  : "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               }
                               title={applicant.medical_status === "UNFIT" ? "Medically UNFIT -- cannot generate CV" : "Generate bilateral recruitment CV"}
                             >
@@ -1013,7 +1021,7 @@ export function ApplicantTable() {
                           {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage)) && (
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"
                               title="View CV"
                             >
                               <FileText className="h-3 w-3 text-purple-600 dark:text-purple-400" />
@@ -1026,7 +1034,7 @@ export function ApplicantTable() {
                             <button
                               type="button"
                               onClick={(e) => handleSingleAssign(applicant, e)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Assign Staff"
                             >
                               <UserCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
@@ -1038,11 +1046,11 @@ export function ApplicantTable() {
                           {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && !hasContract && (
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-orange-950 dark:text-orange-200 bg-orange-100 hover:bg-orange-200 dark:bg-orange-950/80 dark:hover:bg-orange-900 border border-orange-300 dark:border-orange-700 transition shadow-2xs"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-orange-950 dark:text-orange-200 bg-orange-100 hover:bg-orange-200 dark:bg-orange-950/80 dark:hover:bg-orange-900 border border-orange-300 dark:border-orange-700 transition shadow-2xs"
                               title="Extract Contract Document"
                             >
                               <FileText className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-                              <span>Extract Contract Doc</span>
+                              <span>Extract Doc</span>
                             </Link>
                           )}
 
@@ -1050,7 +1058,7 @@ export function ApplicantTable() {
                           {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && hasContract && (
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
                               title="View Contract Document"
                             >
                               <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
@@ -1075,7 +1083,7 @@ export function ApplicantTable() {
                                 setIsMedicalModalOpen(true);
                               }}
                               className={cn(
-                                "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border transition cursor-pointer shadow-2xs",
+                                "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold border transition cursor-pointer shadow-2xs",
                                 medicalStatus === "FIT"
                                   ? "text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border-emerald-300 dark:border-emerald-700"
                                   : "text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
@@ -1096,7 +1104,7 @@ export function ApplicantTable() {
                                 e.stopPropagation();
                                 advanceToProcessingMutation.mutate((applicant as any)._activePlacementName);
                               }}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Advance this placement to Processing stage"
                             >
                               {advanceToProcessingMutation.isPending ? (

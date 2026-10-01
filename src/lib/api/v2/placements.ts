@@ -400,8 +400,24 @@ export async function updatePlacementParsedFieldsV2(
 
 /**
  * Lists Placements scoped to the current foreign agency portal user.
- * Authoritative Backend Endpoint: placement_api.list_my_placements
+ * Accepts optional contractorName for internal staff viewing a specific agency's placements.
+ * Authoritative Backend Endpoint: portal_api.list_my_placements
  */
+export async function listMyPlacementsV2(
+  contractorName?: string
+): Promise<V2PlacementRecord[]>;
+export async function listMyPlacementsV2(
+  contractorName: string | undefined,
+  limitStart: number | undefined,
+  limitPageLength: number | undefined,
+  withTotal: 1
+): Promise<{ data: V2PlacementRecord[]; total_count: number }>;
+export async function listMyPlacementsV2(
+  contractorName?: string,
+  limitStart?: number,
+  limitPageLength?: number,
+  withTotal?: 0
+): Promise<V2PlacementRecord[]>;
 export async function listMyPlacementsV2(
   limitStart?: number,
   limitPageLength?: number,
@@ -413,20 +429,41 @@ export async function listMyPlacementsV2(
   withTotal: 1
 ): Promise<{ data: V2PlacementRecord[]; total_count: number }>;
 export async function listMyPlacementsV2(
-  limitStart: number = 0,
-  limitPageLength?: number,
-  withTotal: number = 0
+  arg1?: string | number,
+  arg2?: number,
+  arg3?: number,
+  arg4?: number
 ): Promise<V2PlacementRecord[] | { data: V2PlacementRecord[]; total_count: number }> {
+  let contractorName: string | undefined;
+  let limitStart = 0;
+  let limitPageLength: number | undefined;
+  let withTotal = 0;
+
+  if (typeof arg1 === "string") {
+    contractorName = arg1;
+    if (typeof arg2 === "number") limitStart = arg2;
+    if (typeof arg3 === "number") limitPageLength = arg3;
+    if (typeof arg4 === "number") withTotal = arg4;
+  } else if (typeof arg1 === "number") {
+    limitStart = arg1;
+    if (typeof arg2 === "number") limitPageLength = arg2;
+    if (typeof arg3 === "number") withTotal = arg3;
+  }
+
   const body: Record<string, any> = {};
+  if (contractorName && contractorName.trim()) {
+    body.contractor_name = contractorName.trim();
+    body.contractor = contractorName.trim();
+  }
   if (limitStart > 0) body.limit_start = limitStart;
   if (limitPageLength !== undefined) body.limit_page_length = limitPageLength;
   if (withTotal) body.with_total = withTotal;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.placement_api.list_my_placements",
+    "/api/method/agency_tracking.portal_api.list_my_placements",
     {
       method: "POST",
-      body,
+      body: Object.keys(body).length > 0 ? body : undefined,
     }
   );
 
