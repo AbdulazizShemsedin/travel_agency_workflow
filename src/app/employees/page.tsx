@@ -454,7 +454,7 @@ export default function EmployeesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-6">
       {/* ------------------------------------------------------------- */}
       {/* Page Header                                                   */}
       {/* ------------------------------------------------------------- */}
@@ -505,7 +505,7 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Current Active Session & Security Notice                      */}
       {/* ------------------------------------------------------------- */}
-      <div className="p-4 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
+      <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-800 dark:text-emerald-400 font-bold text-sm">
@@ -638,7 +638,7 @@ export default function EmployeesPage() {
       {/* Tab 1: Staff Directory View                                   */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "directory" && (
-        <div className="space-y-6">
+        <div className="space-y-3.5">
           {/* Search & Filter Toolbar */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs">
         <div className="flex items-center gap-2.5 flex-1 flex-wrap">
@@ -749,16 +749,16 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/75 dark:bg-[#17171e] text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
-                  <th className="py-3 px-4">Staff Member</th>
-                  <th className="py-3 px-4">Contact</th>
-                  <th className="py-3 px-4">Security Roles</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Created Date</th>
-                  {isManagerOrAdmin && <th className="py-3 px-4 text-right">Actions</th>}
+          <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
+            <table className="w-full text-left border-collapse text-xs min-w-[760px] xl:min-w-0">
+              <thead className="sticky top-0 z-20">
+                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Staff Member</th>
+                  <th className="py-2.5 px-3">Contact</th>
+                  <th className="py-2.5 px-3">Security Roles</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Created Date</th>
+                  {isManagerOrAdmin && <th className="py-2.5 px-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">
@@ -790,7 +790,7 @@ export default function EmployeesPage() {
                       className="hover:bg-slate-50/60 dark:hover:bg-[#16161d] transition-colors"
                     >
                       {/* Staff Member */}
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-[#1c1c26] border border-slate-200 dark:border-[#282835] flex items-center justify-center font-bold text-slate-700 dark:text-zinc-300 text-xs shrink-0">
                             {initials}
@@ -807,7 +807,7 @@ export default function EmployeesPage() {
                       </td>
 
                       {/* Contact */}
-                      <td className="py-3 px-4 text-slate-600 dark:text-zinc-300">
+                      <td className="py-2 px-3 text-slate-600 dark:text-zinc-300">
                         {emp.phone || emp.mobile_no ? (
                           <div className="flex items-center gap-1 font-mono text-[11px]">
                             <Phone className="h-3 w-3 text-slate-400" />
@@ -819,7 +819,7 @@ export default function EmployeesPage() {
                       </td>
 
                       {/* Security Roles */}
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <div className="flex items-center gap-1 flex-wrap max-w-md">
                           {displayRoles.length > 0 ? (
                             <>
@@ -866,7 +866,7 @@ export default function EmployeesPage() {
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         {emp.enabled === 1 ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -881,13 +881,13 @@ export default function EmployeesPage() {
                       </td>
 
                       {/* Created Date */}
-                      <td className="py-3 px-4 text-slate-500 dark:text-zinc-400 text-[11px] font-mono">
+                      <td className="py-2 px-3 text-slate-500 dark:text-zinc-400 text-[11px] font-mono">
                         {emp.creation ? emp.creation.split(" ")[0] : "—"}
                       </td>
 
                       {/* Actions */}
                       {isManagerOrAdmin && (
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2 px-3 text-right">
                           <div className="inline-flex items-center gap-1">
                             <Button
                               type="button"

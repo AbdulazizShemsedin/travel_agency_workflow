@@ -29,10 +29,29 @@ export interface V2CurrentUserResponse {
  * Standard Frappe session-cookie login.
  */
 export async function loginV2(usr: string, pwd: string): Promise<V2LoginResponse> {
-  const result = await requestV2<V2LoginResponse>("/api/method/login", {
-    method: "POST",
-    body: { usr, pwd },
-  });
+  let result: V2LoginResponse;
+  try {
+    result = await requestV2<V2LoginResponse>("/api/method/login", {
+      method: "POST",
+      body: { usr, pwd },
+    });
+  } catch (err: any) {
+    const isTimestampMismatch =
+      err?.status === 417 ||
+      String(err?.message || "").includes("Document has been modified") ||
+      err?.excType === "TimestampMismatchError";
+
+    if (isTimestampMismatch) {
+      console.warn("[V2 Auth] TimestampMismatchError on login. Retrying once after 600ms...");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      result = await requestV2<V2LoginResponse>("/api/method/login", {
+        method: "POST",
+        body: { usr, pwd },
+      });
+    } else {
+      throw err;
+    }
+  }
 
   // Automatically purge guest CSRF token and fetch fresh session token upon successful login
   try {

@@ -31,7 +31,7 @@ const RoleWorkspaceContainer = dynamic(
 
 export default function ApplicantsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <React.Suspense fallback={<div className="h-64 flex items-center justify-center text-xs text-slate-400">Loading applicants workspace...</div>}>
         <RoleWorkspaceContainer />
       </React.Suspense>

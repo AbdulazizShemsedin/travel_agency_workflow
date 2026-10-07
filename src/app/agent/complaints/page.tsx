@@ -424,7 +424,7 @@ export default function AgentComplaintsPage() {
       activeContractor={activeContractor}
       onContractorChange={setActiveContractor}
     >
-      <div className="space-y-6 pb-16">
+      <div className="space-y-4 pb-6">
         {/* Back Link */}
         <div>
           <Link
@@ -581,20 +581,20 @@ export default function AgentComplaintsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-left text-xs min-w-[1000px] border-separate border-spacing-0">
-                <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
+            <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
+              <table className="w-full text-left text-xs min-w-[960px] xl:min-w-0 border-separate border-spacing-0">
+                <thead className="sticky top-0 z-20 bg-slate-100/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Candidate</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] min-w-[200px]">Category & Details</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Severity</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">SLA / Age</th>
-                    <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Candidate</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] min-w-[180px]">Category & Details</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Severity</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">SLA / Age</th>
+                    <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#202026]">
@@ -602,10 +602,10 @@ export default function AgentComplaintsPage() {
                     const details = getAgentComplaintDetails(c);
                     return (
                       <tr key={c.name} className="hover:bg-slate-50/70 dark:hover:bg-[#16161c]/70 transition">
-                        <td className="px-4 py-3.5 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           {c.display_no ? `#${c.display_no}` : c.name}
                         </td>
-                        <td className="px-4 py-3.5 min-w-[150px] border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 min-w-[140px] border-b border-slate-100 dark:border-[#202026]">
                           <div className="font-semibold text-slate-900 dark:text-white">
                             {details.candidateName}
                           </div>
@@ -613,7 +613,7 @@ export default function AgentComplaintsPage() {
                             {details.placementId || details.applicantId || ""}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           {details.passportNumber ? (
                             <span className="font-mono font-bold text-xs text-slate-800 dark:text-zinc-200 bg-slate-100 dark:bg-[#1f1f26] px-2 py-0.5 rounded-md border border-slate-200/60 dark:border-[#2b2b36]">
                               {details.passportNumber}
@@ -622,7 +622,7 @@ export default function AgentComplaintsPage() {
                             <span className="text-slate-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 min-w-[150px] border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 min-w-[140px] border-b border-slate-100 dark:border-[#202026]">
                           {details.contactName || details.contactPhone ? (
                             <div className="space-y-0.5">
                               <div className="font-semibold text-slate-900 dark:text-white text-xs flex items-center gap-1.5">
@@ -643,7 +643,7 @@ export default function AgentComplaintsPage() {
                             <span className="text-slate-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 min-w-[170px] border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 min-w-[150px] border-b border-slate-100 dark:border-[#202026]">
                           {details.sponsorName || details.sponsorId || details.visaNumber ? (
                             <div className="space-y-0.5">
                               <div className="font-semibold text-slate-900 dark:text-white text-xs">
@@ -657,7 +657,7 @@ export default function AgentComplaintsPage() {
                                 </div>
                               )}
                               {details.sponsorAddress && (
-                                <div className="text-[10px] text-slate-400 truncate max-w-[180px]" title={details.sponsorAddress}>
+                                <div className="text-[10px] text-slate-400 truncate max-w-[160px]" title={details.sponsorAddress}>
                                   {details.sponsorAddress}
                                 </div>
                               )}
@@ -666,7 +666,7 @@ export default function AgentComplaintsPage() {
                             <span className="text-slate-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               c.status === "New"
@@ -681,7 +681,7 @@ export default function AgentComplaintsPage() {
                             {c.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 max-w-xs border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 max-w-xs border-b border-slate-100 dark:border-[#202026]">
                           <div className="font-semibold text-slate-800 dark:text-zinc-200">
                             {c.complaint_category || c.worker_status_at_complaint || "Complaint"}
                           </div>
@@ -689,10 +689,10 @@ export default function AgentComplaintsPage() {
                             {c.complaint_details || c.description}
                           </p>
                         </td>
-                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           {getSeverityBadge(c.severity)}
                         </td>
-                        <td className="px-4 py-3.5 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           <div className="space-y-0.5">
                             <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
                               {c.creation ? c.creation.split(" ")[0] : "Recent"}
@@ -704,7 +704,7 @@ export default function AgentComplaintsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 text-right whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
+                        <td className="px-2.5 py-2 lg:px-3 lg:py-2 text-right whitespace-nowrap border-b border-slate-100 dark:border-[#202026]">
                           <div className="flex items-center justify-end gap-2">
                             {c.attachment && (
                               <a

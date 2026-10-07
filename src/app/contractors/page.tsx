@@ -324,7 +324,7 @@ export default function ContractorsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -408,17 +408,17 @@ export default function ContractorsPage() {
             <span className="ml-2 text-xs text-slate-500">Loading agencies...</span>
           </div>
         ) : (
-          <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
-            <table className="w-full min-w-[750px] text-left text-xs">
-              <thead className="border-b border-slate-100 dark:border-[#222227] bg-slate-50/70 dark:bg-[#16161b] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+          <div className="w-full max-w-full min-w-0 overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
+            <table className="w-full min-w-[750px] xl:min-w-0 text-left text-xs">
+              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                 <tr>
-                  <th className="px-4 py-3.5">Agency ID</th>
-                  <th className="px-4 py-3.5">Agency Name</th>
-                  <th className="px-4 py-3.5">Country</th>
-                  <th className="px-4 py-3.5">User Account</th>
-                  <th className="px-4 py-3.5">Phone & Contact</th>
-                  <th className="px-4 py-3.5 text-center">Status</th>
-                  <th className="px-4 py-3.5 text-right">Actions</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Agency ID</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Agency Name</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Country</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">User Account</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Phone & Contact</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5 text-center">Status</th>
+                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
@@ -427,8 +427,8 @@ export default function ContractorsPage() {
                   const portalUser = c.user || c.user_email || c.email;
                   return (
                     <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
-                      <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-zinc-200">{c.name}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 font-mono font-bold text-slate-800 dark:text-zinc-200">{c.name}</td>
+                      <td className="px-3 py-2 lg:px-4 lg:py-2">
                         <div className="font-semibold text-slate-900 dark:text-white">
                           {c.contractor_name || c.company_name || c.name}
                         </div>
@@ -438,24 +438,24 @@ export default function ContractorsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-zinc-300">{c.country || "Saudi Arabia"}</td>
-                      <td className="px-4 py-3 font-mono">
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 text-slate-600 dark:text-zinc-300">{c.country || "Saudi Arabia"}</td>
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 font-mono">
                         {portalUser ? (
                           <span className="text-slate-800 dark:text-zinc-300">{portalUser}</span>
                         ) : (
                           <span className="text-amber-600 dark:text-amber-400 italic">No User Linked</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-zinc-300">
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 text-slate-600 dark:text-zinc-300">
                         <div>{c.contact_person || "Operations Desk"}</div>
                         <div className="text-[10px] font-mono text-slate-400">
                           {c.whatsapp || c.whatsapp_phone || c.phone || "No Phone"}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 text-center">
                         <Badge variant="success">Active</Badge>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-2 lg:px-4 lg:py-2 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
                             type="button"

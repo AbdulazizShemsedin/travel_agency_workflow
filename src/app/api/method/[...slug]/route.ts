@@ -435,12 +435,13 @@ export async function POST(
     const isHeavyCvOrPdf =
       methodPath === "agency_tracking.cv_api.generate_cv" ||
       methodPath === "agency_tracking.cv_api.render_cv_pdf";
-    const postMaxRetries = isHeavyCvOrPdf ? 0 : 2;
-    const postTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
+    const isLoginMethod = methodPath === "login" || methodPath.endsWith("/login");
+    const postMaxRetries = isHeavyCvOrPdf || isLoginMethod ? 0 : 2;
+    const postTimeoutMs = isHeavyCvOrPdf ? 180000 : isLoginMethod ? 90000 : 45000;
 
     const effectiveBodyText = bodyText || "{}";
 
-    const res = await fetchWithRetry(
+    let res = await fetchWithRetry(
       `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
       {
         method: "POST",
@@ -450,6 +451,23 @@ export async function POST(
       postMaxRetries,
       postTimeoutMs
     );
+
+    // If login returned 417 (TimestampMismatchError: User document was modified concurrently),
+    // wait briefly for the concurrent transaction to commit, then retry once with the latest document state.
+    if (isLoginMethod && res.status === 417) {
+      console.warn("[PROXY LOGIN] Received 417 TimestampMismatchError on login. Retrying once after 600ms...");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      res = await fetchWithRetry(
+        `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
+        {
+          method: "POST",
+          headers: forwardHeaders,
+          body: effectiveBodyText,
+        },
+        0,
+        45000
+      );
+    }
 
     // Special handler for get_thread_messages: enrich with thread participants presence & read receipts
     if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
@@ -598,7 +616,7 @@ export async function POST(
     }
 
     if (!res.ok) {
-      const isExpectedAuthChallenge = res.status === 401 && (
+      const isExpectedAuthChallenge = (res.status === 401 || (res.status === 417 && isLoginMethod)) && (
         methodPath.includes("login") ||
         methodPath.includes("logout") ||
         methodPath.includes("get_current_user") ||

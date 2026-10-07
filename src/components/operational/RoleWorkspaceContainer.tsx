@@ -226,13 +226,13 @@ export function RoleWorkspaceContainer() {
   const headerInfo = getHeaderInfo();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3.5">
       {/* ------------------------------------------------------------- */}
       {/* Top Header Bar                                                */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             {headerInfo.title}
           </h1>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
@@ -243,8 +243,8 @@ export function RoleWorkspaceContainer() {
         <div className="flex items-center gap-2">
           {canRegister && (
             <Link href="/applicants/new">
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-9">
-                <Plus className="mr-1.5 h-4 w-4" />
+              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-8.5 px-3">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
                 New Applicant
               </Button>
             </Link>
@@ -256,7 +256,7 @@ export function RoleWorkspaceContainer() {
       {/* Operational Workspace Navigation Tabs                         */}
       {/* ------------------------------------------------------------- */}
       {availableTabs.length > 1 && (
-        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
+        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1 overflow-x-auto pb-0.5 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
           {availableTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -268,13 +268,13 @@ export function RoleWorkspaceContainer() {
                 data-tour={`applicants-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
                   isActive
                     ? "border-emerald-700 dark:border-emerald-500 text-emerald-950 dark:text-emerald-400 bg-emerald-50/50 dark:bg-[#13241d]/50"
                     : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-[#181820]"
                 )}
               >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-emerald-700 dark:text-emerald-400" : "text-slate-400")} />
+                <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-emerald-700 dark:text-emerald-400" : "text-slate-400")} />
                 <span>{tab.label}</span>
               </button>
             );

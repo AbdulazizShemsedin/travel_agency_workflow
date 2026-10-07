@@ -392,11 +392,11 @@ export default function AgentWakalaRequestsPage() {
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-xs text-left min-w-[760px] border-separate border-spacing-0">
+            <div className="overflow-x-auto xl:overflow-x-clip relative">
+              <table className="w-full text-xs text-left min-w-[760px] xl:min-w-0 border-separate border-spacing-0">
                 <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#171720] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-300 dark:border-[#202028] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
+                    <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#171720] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate
                     </th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Step ID</th>
@@ -425,8 +425,8 @@ export default function AgentWakalaRequestsPage() {
                   ) : filteredRequests.length > 0 ? (
                     filteredRequests.map((req) => (
                       <tr key={req.clearance_step_name} className="group hover:bg-slate-100/90 dark:hover:bg-[#15151c]">
-                        {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#15151c] py-2 px-2 sm:py-2.5 sm:px-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[220px] border-b border-r border-slate-300 dark:border-[#202028] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
+                        {/* Candidate Identity - Sticky on Desktop only */}
+                        <td className="md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#15151c] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                           <div className="font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs truncate">
                             {req.full_name || req.applicant_name || "Candidate"}
                           </div>

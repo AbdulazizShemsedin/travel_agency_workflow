@@ -592,13 +592,13 @@ export default function AgentDiscoveryPage() {
                 ))}
               </div>
             ) : (
-              /* Mobile-Optimized Candidate Table with STICKY FIRST COLUMN */
+              /* Candidate Table */
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
-                <div className="overflow-x-auto relative">
-                  <table className="w-full text-left text-xs min-w-[780px] border-separate border-spacing-0">
+                <div className="overflow-x-auto xl:overflow-x-clip relative">
+                  <table className="w-full text-left text-xs min-w-[780px] xl:min-w-0 border-separate border-spacing-0">
                     <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
-                        <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#16161b] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
+                        <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                           Candidate
                         </th>
                         <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -611,8 +611,8 @@ export default function AgentDiscoveryPage() {
                     <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                       {visibleCandidates.map((candidate) => (
                         <tr key={candidate.name} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
-                          {/* Candidate Identity - STICKY FIRST COLUMN (Unscrollable on mobile, compact width) */}
-                          <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-4 sm:py-3.5 w-[115px] min-w-[115px] max-w-[120px] sm:w-auto sm:min-w-[220px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
+                          {/* Candidate Identity - Sticky on Desktop only */}
+                          <td className="md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                             <div className="flex items-center gap-1.5 sm:gap-3">
                               {candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo ? (
                                 <img

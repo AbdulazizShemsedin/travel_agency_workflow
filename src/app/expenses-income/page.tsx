@@ -557,7 +557,7 @@ export default function ExpensesIncomePage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-6">
       {/* ------------------------------------------------------------- */}
       {/* Header & Main Actions                                         */}
       {/* ------------------------------------------------------------- */}
@@ -824,20 +824,20 @@ export default function ExpensesIncomePage() {
               </CardHeader>
 
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
+                <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
+                  <table className="w-full text-xs text-left border-collapse min-w-[850px] xl:min-w-0">
+                    <thead className="sticky top-0 z-20 text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
-                        <th className="sticky left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2.5 px-3 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
-                        <th className="py-2.5 px-3">Type</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Applicant</th>
-                        <th className="py-2.5 px-3">Candidate / Placement</th>
-                        <th className="py-2.5 px-3">Stage Status</th>
-                        <th className="py-2.5 px-3">Description</th>
-                        <th className="py-2.5 px-3">Logged By</th>
-                        <th className="py-2.5 px-3">Logged At</th>
-                        <th className="py-2.5 px-3 text-right">Approval Actions</th>
+                        <th className="md:sticky md:left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2.5 md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
+                        <th className="py-2 px-2.5">Type</th>
+                        <th className="py-2 px-2.5">Amount</th>
+                        <th className="py-2 px-2.5">Applicant</th>
+                        <th className="py-2 px-2.5">Candidate / Placement</th>
+                        <th className="py-2 px-2.5">Stage Status</th>
+                        <th className="py-2 px-2.5">Description</th>
+                        <th className="py-2 px-2.5">Logged By</th>
+                        <th className="py-2 px-2.5">Logged At</th>
+                        <th className="py-2 px-2.5 text-right">Approval Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -856,10 +856,10 @@ export default function ExpensesIncomePage() {
 
                           return (
                             <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] group">
-                              <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
+                              <td className="md:sticky md:left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-white md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
                                 {tx.name}
                               </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
+                              <td className="py-2 px-2.5 whitespace-nowrap">
                                 <Badge
                                   variant="outline"
                                   className={cn(

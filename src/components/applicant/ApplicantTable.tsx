@@ -672,7 +672,7 @@ export function ApplicantTable() {
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto touch-pan-x">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto xl:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name (sticky) | Passport | Stage Status | Contract Date | Contract No |
@@ -680,11 +680,11 @@ export function ApplicantTable() {
             Embassy | Embassy Expire Date | Actions
             Total: 16 columns
           */}
-          <table className="w-full min-w-[1700px] text-left text-xs border-collapse">
-            <thead className="border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[11px]">
+          <table className="w-full min-w-[960px] xl:min-w-0 text-left text-xs border-collapse">
+            <thead className="sticky top-0 z-30 border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[10px] xl:text-[11px] leading-tight">
               <tr>
                 {/* Col 1: Checkbox only — no header text */}
-                <th className="px-2.5 py-2 w-8 bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
+                <th className="px-2 py-1.5 w-7 bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
@@ -697,51 +697,51 @@ export function ApplicantTable() {
                 </th>
 
                 {/* Col 2: Row number */}
-                <th className="px-2 py-2 w-10 text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
+                <th className="px-1.5 py-1.5 w-9 text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
 
-                {/* Col 3: Name — STICKY LEFT-0 & 100% OPAQUE */}
-                <th className="px-3 py-2 sticky left-0 z-20 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
+                {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
+                <th className="px-2 py-1.5 md:sticky md:left-0 md:z-30 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
                   Full Name
                 </th>
 
                 {/* Col 4: Passport */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Passport No.</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Passport No.</th>
 
                 {/* Col 5: Stage Status */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Stage Status</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Stage Status</th>
 
                 {/* Col 6: Contract Date */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Contract Date</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Contract Date</th>
 
                 {/* Col 7: Contract No */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Contract No.</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Contract No.</th>
 
                 {/* Col 8: Medical Status */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Medical Status</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Medical Status</th>
 
                 {/* Col 9: Exam Date */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Exam Date</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Exam Date</th>
 
                 {/* Col 10: Exam Remaining */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Exam Remaining</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Exam Remaining</th>
 
                 {/* Col 11: Te'shir */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Te&apos;shir</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Te&apos;shir</th>
 
                 {/* Col 12: Injaz */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Injaz</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Injaz</th>
 
                 {/* Col 13: Wokala Status */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Wokala Status</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Wokala Status</th>
 
                 {/* Col 14: Embassy */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Embassy</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Embassy</th>
 
                 {/* Col 15: Embassy Expire Date */}
-                <th className="px-3 py-2 whitespace-nowrap border-r border-slate-200 dark:border-[#272730]">Embassy Expire Date</th>
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Embassy Exp. Date</th>
 
                 {/* Col 16: Actions */}
-                <th className="px-3 py-2 text-right whitespace-nowrap">Actions</th>
+                <th className="px-2 py-1.5 text-right whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
@@ -839,10 +839,10 @@ export function ApplicantTable() {
                         {rowOffset + idx + 1}
                       </td>
 
-                      {/* Col 3: Name — STICKY LEFT-0 & 100% OPAQUE */}
+                      {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
                       <td
                         className={cn(
-                          "px-3 py-2.5 sticky left-0 z-10 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
+                          "px-2 py-1.5 md:sticky md:left-0 md:z-10 md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
                           isSelected
                             ? "!bg-emerald-100 dark:!bg-[#183428]"
                             : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
@@ -853,7 +853,7 @@ export function ApplicantTable() {
                             {applicant.first_name?.[0] || "A"}
                           </div>
                           <div className="min-w-0 flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[170px]">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[130px] xl:max-w-[150px]">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
@@ -867,19 +867,19 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 4: Passport No */}
-                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {applicant.passport_number || "—"}
                       </td>
 
                       {/* Col 5: Stage Status */}
-                      <td className="px-3 py-2.5 whitespace-nowrap border-r border-slate-100 dark:border-[#1e1e26]">
-                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-2 text-[10px]", badge.className)}>
+                      <td className="px-2 py-1.5 whitespace-nowrap border-r border-slate-100 dark:border-[#1e1e26]">
+                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-1.5 text-[10px]", badge.className)}>
                           {stage}
                         </Badge>
                       </td>
 
                       {/* Contract Date */}
-                      <td className="px-3 py-2.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractDate ? (
                           <span className="font-semibold text-slate-800 dark:text-zinc-200">
                             {new Date(contractDate).toLocaleDateString("en-GB", {
@@ -894,7 +894,7 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Contract No */}
-                      <td className="px-3 py-2.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractNo ? (
                           <span className="font-semibold text-emerald-900 dark:text-emerald-400">
                             {contractNo}
@@ -905,14 +905,14 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Medical Status */}
-                      <td className="px-3 py-2.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         <span className={medicalClass}>
                           {medicalStatus || "—"}
                         </span>
                       </td>
 
                       {/* Exam Date */}
-                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {examDate
                           ? new Date(examDate).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -923,7 +923,7 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Exam Remaining */}
-                      <td className="px-3 py-2.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
                         {examExpiry ? (
                           <span
                             className={cn(
@@ -941,27 +941,27 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Te'shir */}
-                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
+                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
                         {stepStatusLabel(teshirStatus)}
                       </td>
 
                       {/* Injaz */}
-                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
+                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
                         {stepStatusLabel(injazStatus)}
                       </td>
 
                       {/* Wokala Status */}
-                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
+                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
                         {stepStatusLabel(wakalaStatus)}
                       </td>
 
                       {/* Embassy */}
-                      <td className={cn("px-3 py-2.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
+                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
                         {stepStatusLabel(embassyStatus)}
                       </td>
 
                       {/* Embassy Expire Date */}
-                      <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]">
                         {embassyExpiry
                           ? new Date(embassyExpiry).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -973,7 +973,7 @@ export function ApplicantTable() {
 
                       {/* Actions */}
                       <td
-                        className="px-3 py-2 text-right whitespace-nowrap"
+                        className="px-2 py-1.5 text-right whitespace-nowrap"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1 flex-nowrap">

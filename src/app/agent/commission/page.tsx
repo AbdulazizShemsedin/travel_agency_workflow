@@ -358,11 +358,11 @@ export default function AgentCommissionPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-left text-xs min-w-[740px] border-separate border-spacing-0">
+            <div className="overflow-x-auto xl:overflow-x-clip relative">
+              <table className="w-full text-left text-xs min-w-[740px] xl:min-w-0 border-separate border-spacing-0">
                 <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-100 dark:bg-[#16161b] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
+                    <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate Name
                     </th>
                     <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport Number</th>
@@ -376,8 +376,8 @@ export default function AgentCommissionPage() {
                     const { name: candidateName, passport: candidatePassport } = resolveCandidate(cand);
                     return (
                       <tr key={cand.name || idx} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
-                        {/* Candidate Name - STICKY FIRST COLUMN (Unscrollable on mobile) */}
-                        <td className="sticky left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-2 py-2 sm:px-5 sm:py-3.5 w-[110px] min-w-[110px] max-w-[115px] sm:w-auto sm:min-w-[180px] sm:max-w-[260px] border-b border-r border-slate-300 dark:border-[#222227] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
+                        {/* Candidate Name - Sticky on Desktop only */}
+                        <td className="md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
                           {candidateName}
                         </td>
                         <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">

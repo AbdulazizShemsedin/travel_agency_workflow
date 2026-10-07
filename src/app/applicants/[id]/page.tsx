@@ -876,9 +876,9 @@ export default function ApplicantDetailPage() {
     Boolean(applicant.musaned_reference_no && applicant.musaned_reference_no.trim() !== "");
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-4 pb-8">
       {/* Top Breadcrumb & Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-[#222227] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-[#222227] pb-3">
         <div>
           <Link
             href="/applicants"
@@ -1142,8 +1142,8 @@ export default function ApplicantDetailPage() {
       )}
 
       {/* Canonical 9-Stage Stepper Ribbon */}
-      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 shadow-xs overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[760px] gap-2">
+      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3 sm:p-3.5 shadow-xs overflow-x-auto">
+        <div className="flex items-center justify-between min-w-[760px] xl:min-w-0 gap-2">
           {CANONICAL_STAGES.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;

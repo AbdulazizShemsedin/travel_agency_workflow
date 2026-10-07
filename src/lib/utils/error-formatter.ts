@@ -527,6 +527,9 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   if (/HTTP 409|status code 409/i.test(text)) {
     return "This record was updated by someone else. Please refresh and try again.";
   }
+  if (/Document has been modified after you have opened it|TimestampMismatchError/i.test(text)) {
+    return "This record or session was updated concurrently. Please refresh the page or try signing in again.";
+  }
   if (/HTTP 417|status code 417/i.test(text)) {
     return "Please check the entered information and try again.";
   }

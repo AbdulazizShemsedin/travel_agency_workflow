@@ -434,19 +434,19 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 pb-6">
       {/* Top Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:white">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:white">
             Dashboard
           </h1>
         </div>
         {canRegister && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link href="/applicants/new">
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs">
-                <PlusCircle className="mr-1.5 h-4 w-4" />
+              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs h-8.5 px-3">
+                <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
                 Add Applicant
               </Button>
             </Link>
@@ -455,26 +455,26 @@ export default function DashboardPage() {
       </div>
 
       {/* 1. Top Stat Metric Cards (Clickable redirection) */}
-      <div data-tour="dashboard-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="dashboard-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card
           onClick={() => router.push("/applicants")}
           role="button"
           tabIndex={0}
           className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
             <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
               Total Applicants
             </CardDescription>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
-              <Users className="h-4.5 w-4.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
+              <Users className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3">
             {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
                 {totalCount.toLocaleString()}
               </div>
             )}
@@ -487,19 +487,19 @@ export default function DashboardPage() {
           tabIndex={0}
           className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 select-none group"
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
             <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
               In Progress
             </CardDescription>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors">
-              <Clock className="h-4.5 w-4.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors">
+              <Clock className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3">
             {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
                 {inProgressCount.toLocaleString()}
               </div>
             )}
@@ -512,19 +512,19 @@ export default function DashboardPage() {
           tabIndex={0}
           className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
             <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-              Completed (but not departed)
+              Completed (not departed)
             </CardDescription>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
-              <CheckCircle2 className="h-4.5 w-4.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
+              <CheckCircle2 className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3">
             {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
                 {completedCount.toLocaleString()}
               </div>
             )}
@@ -537,19 +537,19 @@ export default function DashboardPage() {
           tabIndex={0}
           className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-200 select-none group"
         >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
             <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
               Departed
             </CardDescription>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors">
-              <Plane className="h-4.5 w-4.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors">
+              <Plane className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3">
             {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
+              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
                 {departedCount.toLocaleString()}
               </div>
             )}
@@ -559,45 +559,45 @@ export default function DashboardPage() {
 
       {/* 2. Pipeline Overview Section */}
       <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs overflow-hidden">
-        <CardHeader className="border-b border-slate-100 dark:border-[#222227] pb-4">
+        <CardHeader className="border-b border-slate-100 dark:border-[#222227] pt-3 pb-2.5 px-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
+              <CardTitle className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
                 Pipeline Overview
               </CardTitle>
             </div>
             <Link href="/applicants">
-              <Button variant="outline" size="sm" className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b]">
+              <Button variant="outline" size="sm" className="h-7.5 text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b]">
                 View All Applicants <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Button>
             </Link>
           </div>
         </CardHeader>
 
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`relative rounded-xl border p-4 sm:p-5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer flex flex-col justify-between min-h-[185px] h-[185px] ${stage.color}`}
+                className={`relative rounded-xl border p-3 sm:p-3.5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer flex flex-col justify-between min-h-[135px] sm:min-h-[140px] ${stage.color}`}
               >
                 <div>
                   <div className="flex items-start justify-between">
                     <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-semibold ${stage.accent}`}>
                       {stage.step}
                     </span>
-                    <span className="font-mono text-xl font-bold text-slate-800 dark:text-zinc-200 leading-none">
+                    <span className="font-mono text-lg sm:text-xl font-bold text-slate-800 dark:text-zinc-200 leading-none">
                       {stage.count}
                     </span>
                   </div>
 
-                  <h4 className="mt-2 text-sm font-semibold leading-snug text-slate-800 dark:text-zinc-200">
+                  <h4 className="mt-1.5 text-xs sm:text-sm font-semibold leading-snug text-slate-800 dark:text-zinc-200">
                     {stage.badge}
                   </h4>
-                  <p className="mt-0.5 text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
+                  <p className="mt-0.5 text-[11px] sm:text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
                     {stage.title}
                   </p>
                 </div>
@@ -614,9 +614,9 @@ export default function DashboardPage() {
                               router.push(sub.link);
                             }
                           }}
-                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-md border text-center transition-all hover:scale-[1.02] cursor-pointer ${sub.color}`}
+                          className={`flex items-center justify-between px-2 py-1 rounded-md border text-center transition-all hover:scale-[1.02] cursor-pointer ${sub.color}`}
                         >
-                          <span className="text-[11px] font-semibold leading-tight">{sub.name}</span>
+                          <span className="text-[10px] sm:text-[11px] font-semibold leading-tight">{sub.name}</span>
                           <span className="font-mono font-bold text-xs">{sub.count}</span>
                         </div>
                       ))}
@@ -628,7 +628,7 @@ export default function DashboardPage() {
                       Candidates
                     </span>
                     <span className="text-xs font-medium text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                      View <ArrowRight className="h-3.5 w-3.5" />
+                      View <ArrowRight className="h-3 w-3" />
                     </span>
                   </div>
                 )}
@@ -639,13 +639,13 @@ export default function DashboardPage() {
       </Card>
 
       {/* 3. Expiry Alerts & Pending Tasks */}
-      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Expiry Alerts */}
-        <div className="lg:col-span-6 space-y-4">
+        <div className="lg:col-span-6 space-y-3">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
+            <CardHeader className="flex flex-row items-center justify-between pt-3 pb-2.5 px-4 border-b border-slate-100 dark:border-[#222227]">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                   Document Expiry Warnings
                 </CardTitle>
               </div>
@@ -653,12 +653,12 @@ export default function DashboardPage() {
                 View All
               </Link>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
+            <CardContent className="pt-3 pb-3 px-4 space-y-2.5">
               {realAlerts.length > 0 ? (
                 realAlerts.map((alert) => (
                   <div
                     key={alert.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
+                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-2.5 sm:p-3 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -715,7 +715,7 @@ export default function DashboardPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 text-xs font-semibold border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215]"
+                        className="h-7.5 text-xs font-semibold border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215]"
                       >
                         View Profile
                       </Button>
@@ -732,11 +732,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Column: Pending Operational Tasks */}
-        <div className="lg:col-span-6 space-y-4">
+        <div className="lg:col-span-6 space-y-3">
           <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 dark:border-[#222227]">
+            <CardHeader className="flex flex-row items-center justify-between pt-3 pb-2.5 px-4 border-b border-slate-100 dark:border-[#222227]">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                   Action Items & Tasks
                 </CardTitle>
               </div>
@@ -744,12 +744,12 @@ export default function DashboardPage() {
                 View All
               </Link>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
+            <CardContent className="pt-3 pb-3 px-4 space-y-2.5">
               {operationalTasks.length > 0 ? (
                 operationalTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3.5 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
+                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-2.5 sm:p-3 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -770,7 +770,7 @@ export default function DashboardPage() {
                     <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
                       <Button
                         size="sm"
-                        className="h-8 text-xs font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+                        className="h-7.5 text-xs font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
                       >
                         Open
                       </Button>

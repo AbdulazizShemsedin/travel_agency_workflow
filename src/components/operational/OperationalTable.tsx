@@ -353,9 +353,9 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Table Action Bar                                              */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-3 p-4 border-b border-slate-100 dark:border-[#222227] sm:flex-row sm:items-center sm:justify-between bg-slate-50/50 dark:bg-[#15151a]">
+      <div className="flex flex-col gap-2.5 p-2.5 sm:px-4 sm:py-2.5 border-b border-slate-100 dark:border-[#222227] sm:flex-row sm:items-center sm:justify-between bg-slate-50/50 dark:bg-[#15151a]">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
             {title}
           </h2>
           {subtitle && (
@@ -566,10 +566,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative w-full max-w-full min-w-0 overflow-x-auto min-h-[360px] touch-pan-x">
-        <table className="w-full min-w-[720px] text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
+      <div className="relative w-full max-w-full min-w-0 overflow-x-auto xl:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <table className="w-full min-w-[720px] xl:min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-10 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
+          <thead className="sticky top-0 z-30 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
@@ -594,17 +594,17 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       scope="col"
                       style={{
                         width,
-                        minWidth: width,
+                        maxWidth: width,
                         ...(isNameCol ? { left: 0 } : {}),
                         ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
-                        "py-2 px-2.5 select-none border-r border-slate-300 dark:border-[#272730]",
+                        "py-1.5 px-2 select-none border-r border-slate-300 dark:border-[#272730] leading-tight",
                         isNameCol &&
-                          "sticky left-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                          "md:sticky md:left-0 md:z-30 bg-slate-100 dark:bg-[#181820] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                         isActionCol &&
                           isLastCol &&
-                          "sticky right-0 z-30 bg-slate-100 dark:bg-[#181820] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
+                          "md:sticky md:right-0 md:z-30 bg-slate-100 dark:bg-[#181820] md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -613,21 +613,21 @@ export function OperationalTable<T extends Record<string, any> = any>({
                     >
                       <div
                         className={cn(
-                          "inline-flex items-center gap-1",
-                          align === "center" && "justify-center",
-                          align === "right" && "justify-end"
+                          "inline-flex items-center gap-1 text-[10px] xl:text-[11px] leading-tight whitespace-normal break-words",
+                          align === "center" && "justify-center text-center",
+                          align === "right" && "justify-end text-right"
                         )}
                       >
                         {header.isPlaceholder
                           ? null
                           : flexRender(header.column.columnDef.header, header.getContext())}
                         {isReadOnly && !isFirstCol && !isActionCol && (
-                          <span title="Read-only field" className="inline-flex opacity-60 hover:opacity-100">
+                          <span title="Read-only field" className="inline-flex opacity-60 hover:opacity-100 shrink-0">
                             <Lock className="h-2.5 w-2.5 text-slate-400 dark:text-zinc-500 shrink-0" />
                           </span>
                         )}
                         {canSort && (
-                          <span className="text-slate-400">
+                          <span className="text-slate-400 shrink-0">
                             {isSorted ? (
                               isSorted === "asc" ? (
                                 <ArrowUp className="h-3 w-3 text-emerald-600 font-bold" />
@@ -670,9 +670,9 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           ...(isActionCol && isLastCol ? { right: 0 } : {}),
                         }}
                         className={cn(
-                          "py-3 px-3",
-                          isNameCol && "sticky left-0 z-10 bg-white dark:bg-[#121216] shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                          isActionCol && isLastCol && "sticky right-0 z-10 bg-white dark:bg-[#121216] shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
+                          "py-2 px-2.5",
+                          isNameCol && "md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                          isActionCol && isLastCol && "md:sticky md:right-0 md:z-10 bg-white dark:bg-[#121216] md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
                         )}
                       >
                         <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
@@ -734,15 +734,15 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           key={cell.id}
                           style={{
                             width: (cell.column.columnDef.meta as any)?.width,
-                            minWidth: (cell.column.columnDef.meta as any)?.width,
+                            maxWidth: (cell.column.columnDef.meta as any)?.width,
                             ...(isNameCol ? { left: 0 } : {}),
                             ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
-                            "py-1.5 px-2.5 whitespace-nowrap text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
-                            isStickyCol && "sticky z-20",
-                            isNameCol && "left-0 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                            isActionCol && isLastCol && "right-0 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
+                            "py-1.5 px-2 text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
+                            isStickyCol && "md:sticky md:z-20",
+                            isNameCol && "md:left-0 md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                            isActionCol && isLastCol && "md:right-0 md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
                             isNameCol && (
                               isSelected
                                 ? "!bg-emerald-100 dark:!bg-[#183428]"
