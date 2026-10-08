@@ -6,31 +6,20 @@ import { useQuery } from "@tanstack/react-query";
 import {
   DollarSign,
   Receipt,
-  FileSpreadsheet,
-  FileText,
-  Download,
   Users,
-  CheckCircle2,
   RefreshCw,
-  Clock,
-  Building2,
-  ExternalLink,
   Loader2,
   ArrowLeft,
+  Briefcase,
 } from "lucide-react";
 import {
-  getOwedCommissionsV2,
-  V2OwedCommissionItem,
-} from "@/lib/api/v2";
-import { listApplicantsV2 } from "@/lib/api/v2/applicants";
-import { listPlacementsV2, listMyPlacementsV2 } from "@/lib/api/v2/placements";
+  getMyOwedCommissionsV2,
+  V2MyOwedCommissionItem,
+} from "@/lib/api/v2/portal";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { LoadError } from "@/components/ui/LoadError";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { exportCommissionsXlsxV2 } from "@/lib/api/v2/reports";
-import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
-import { toast } from "sonner";
 
 export default function AgentCommissionPage() {
   const { authUser, agencyContext } = useAuth();
@@ -43,146 +32,27 @@ export default function AgentCommissionPage() {
     }
   }, [defaultContractor, activeContractor]);
 
-  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
-
-  // Fetch owed commissions list from V2
+  // Fetch portal owed commissions from V2 portal API (no staff-only endpoints)
   const {
     data: candidateList = [],
     isLoading: isListLoading,
     refetch: refetchList,
     isRefetching: isSummaryRefetching,
     error: commissionError,
-  } = useQuery<V2OwedCommissionItem[]>({
-    queryKey: ["unpaid-commission-candidates", effectiveContractor],
-    queryFn: () => getOwedCommissionsV2(effectiveContractor || undefined),
-    enabled: Boolean(effectiveContractor),
+  } = useQuery<V2MyOwedCommissionItem[]>({
+    queryKey: ["agent-my-owed-commissions"],
+    queryFn: () => getMyOwedCommissionsV2(),
     retry: false,
   });
 
-  // Fetch Applicants (internal staff only) & Placements to resolve real full names and passports
-  const isInternal = Boolean(authUser?.is_internal_staff);
-  const { data: applicants = [] } = useQuery({
-    queryKey: ["applicants_for_agent_commission"],
-    queryFn: () => listApplicantsV2(),
-    staleTime: 60000,
-    enabled: isInternal,
-  });
+  const totalOutstanding = React.useMemo(() => {
+    return candidateList.reduce(
+      (acc, curr) => acc + (Number(curr.amount_original) || 0),
+      0
+    );
+  }, [candidateList]);
 
-  const { data: placements = [] } = useQuery({
-    queryKey: ["placements_for_agent_commission", isInternal, effectiveContractor],
-    queryFn: () => (isInternal ? listPlacementsV2() : listMyPlacementsV2(effectiveContractor || undefined)),
-    enabled: Boolean(isInternal || effectiveContractor),
-    retry: false,
-    staleTime: 60000,
-  });
-
-  const applicantMap = React.useMemo(() => {
-    const map = new Map<string, { full_name: string; passport_number?: string }>();
-    for (const a of applicants) {
-      const name = a.full_name || [a.first_name, a.last_name].filter(Boolean).join(" ") || a.name;
-      const val = { full_name: name, passport_number: a.passport_number || undefined };
-      map.set(String(a.name).toLowerCase().trim(), val);
-      if (a.passport_number) {
-        map.set(String(a.passport_number).toLowerCase().trim(), val);
-      }
-    }
-    return map;
-  }, [applicants]);
-
-  const placementMap = React.useMemo(() => {
-    const map = new Map<string, { applicant?: string; full_name?: string; passport_number?: string }>();
-    for (const p of placements) {
-      if (p.name) {
-        map.set(String(p.name).toLowerCase().trim(), {
-          applicant: p.applicant ? String(p.applicant).toLowerCase().trim() : undefined,
-          full_name: (p as any).applicant_name || (p as any).candidate_name || undefined,
-          passport_number: (p as any).passport_number || undefined,
-        });
-      }
-    }
-    return map;
-  }, [placements]);
-
-  const resolveCandidate = React.useCallback(
-    (cand: any) => {
-      let name =
-        cand.full_name && cand.full_name !== "Applicant" && cand.full_name !== "Candidate"
-          ? cand.full_name
-          : cand.applicant_name && cand.applicant_name !== "Applicant" && cand.applicant_name !== "Candidate"
-          ? cand.applicant_name
-          : "";
-      let passport = cand.passport_number || "";
-
-      const keysToTry = [cand.applicant, cand.placement, cand.transaction, cand.transaction_name, cand.name].filter(Boolean);
-      for (const k of keysToTry) {
-        const lower = String(k).toLowerCase().trim();
-        if (applicantMap.has(lower)) {
-          const found = applicantMap.get(lower)!;
-          if (!name) name = found.full_name;
-          if (!passport && found.passport_number) passport = found.passport_number;
-          break;
-        }
-        if (placementMap.has(lower)) {
-          const pInfo = placementMap.get(lower)!;
-          if (pInfo.full_name && !name) name = pInfo.full_name;
-          if (pInfo.passport_number && !passport) passport = pInfo.passport_number;
-          if (pInfo.applicant && applicantMap.has(pInfo.applicant)) {
-            const found = applicantMap.get(pInfo.applicant)!;
-            if (!name) name = found.full_name;
-            if (!passport && found.passport_number) passport = found.passport_number;
-            break;
-          }
-        }
-      }
-
-      if (!name) {
-        const fallback = cand.applicant || cand.name;
-        name = fallback && !/^([A-Z]{3,4}-\d+|Applicant|Candidate)$/i.test(fallback) ? fallback : cand.name;
-      }
-
-      return { name, passport };
-    },
-    [applicantMap, placementMap]
-  );
-
-  const totalOutstanding = candidateList.reduce(
-    (acc, curr) => acc + (Number(curr.commission_amount || curr.amount) || 0),
-    0
-  );
-
-  const summary = {
-    total_departed: candidateList.length,
-    agreed_rate: Number(candidateList[0]?.amount || candidateList[0]?.commission_amount) || 0,
-    total_outstanding: totalOutstanding,
-    currency: candidateList[0]?.currency || "SAR",
-  };
-
-  const handleRefreshAll = () => {
-    refetchList();
-  };
-
-  const [isExportingSpreadsheet, setIsExportingSpreadsheet] = React.useState(false);
-
-  const handleExportExcel = async () => {
-    setIsExportingSpreadsheet(true);
-    try {
-      const blob = await exportCommissionsXlsxV2(effectiveContractor || undefined);
-      const fallback = `Statements_${effectiveContractor || "Agency"}`;
-      const res = await downloadBackendSpreadsheet(blob, fallback);
-      toast.success("Spreadsheet Downloaded", {
-        description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
-      });
-    } catch (err: any) {
-      toast.error("Export Failed", {
-        description: err?.message || "Failed to download accounting statement.",
-      });
-    } finally {
-      setIsExportingSpreadsheet(false);
-    }
-  };
-
-  const pdfExportUrl =
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx";
+  const currency = candidateList[0]?.currency_original || "SAR";
 
   return (
     <AgentLayout
@@ -208,11 +78,11 @@ export default function AgentCommissionPage() {
                 Commission Billing & Statements
               </h2>
               <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2.5 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                Placement Accounts
+                Owed Commissions
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-              Commission accounts and billing statements.
+              Commissions accrued and awaiting official batch invoice generation.
             </p>
           </div>
 
@@ -221,7 +91,7 @@ export default function AgentCommissionPage() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleRefreshAll}
+              onClick={() => refetchList()}
               disabled={isSummaryRefetching}
               className="text-xs rounded-xl border-slate-200 dark:border-[#26262f]"
             >
@@ -236,33 +106,37 @@ export default function AgentCommissionPage() {
           <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-                Departed Candidates
+                Owed Candidates
               </p>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                 <Users className="h-4 w-4" />
               </div>
             </div>
             <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
-              {summary.total_departed || candidateList.length}
+              {commissionError ? "—" : isListLoading ? "..." : candidateList.length}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Deployment completed & confirmed
+              Placements awaiting invoice inclusion
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs">
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-                Agreed Rate / Placement
+                Average Rate / Candidate
               </p>
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">
                 <DollarSign className="h-4 w-4" />
               </div>
             </div>
             <p className="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">
-              {summary.agreed_rate > 0
-                ? `${summary.agreed_rate.toLocaleString()} ${summary.currency}`
-                : "Per Corridor"}
+              {commissionError
+                ? "—"
+                : isListLoading
+                ? "..."
+                : candidateList.length > 0
+                ? `${Math.round(totalOutstanding / candidateList.length).toLocaleString()} ${currency}`
+                : "—"}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
               Contractor agreement rate
@@ -279,45 +153,15 @@ export default function AgentCommissionPage() {
               </div>
             </div>
             <p className="text-2xl font-extrabold text-emerald-950 dark:text-emerald-200 mt-2">
-              {summary.total_outstanding.toLocaleString()} {summary.currency}
+              {commissionError
+                ? "—"
+                : isListLoading
+                ? "..."
+                : `${totalOutstanding.toLocaleString()} ${currency}`}
             </p>
             <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400 mt-1">
-              Ready for billing reconciliation
+              Pending batch invoice creation
             </p>
-          </div>
-        </div>
-
-        {/* Export Statement Download Section */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Official Accounting Statements
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Export billing reports in Excel or PDF.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              disabled={isExportingSpreadsheet}
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs px-4 py-2.5 shadow-xs transition h-auto cursor-pointer"
-              title="Export statement spreadsheet (Excel / CSV)"
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              {isExportingSpreadsheet ? "Exporting..." : "Export Excel / CSV"}
-            </Button>
-            <a
-              href={pdfExportUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-[#26262f] bg-slate-50 dark:bg-[#18181f] text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#202028] font-semibold text-xs px-4 py-2.5 transition"
-            >
-              <FileText className="h-4 w-4" />
-              Download PDF Invoice
-            </a>
           </div>
         </div>
 
@@ -325,10 +169,10 @@ export default function AgentCommissionPage() {
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
           <div className="border-b border-slate-100 dark:border-[#222227] px-5 py-4 bg-slate-50/70 dark:bg-[#16161b] flex items-center justify-between">
             <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-              Departed Candidate Billing Schedule
+              Owed Commission Schedule
             </h4>
             <span className="text-xs text-slate-500">
-              {candidateList.length} Record(s)
+              {commissionError ? "—" : `${candidateList.length} Record(s)`}
             </span>
           </div>
 
@@ -338,66 +182,65 @@ export default function AgentCommissionPage() {
               <span className="ml-2 text-xs text-slate-500">Loading commission records...</span>
             </div>
           ) : commissionError ? (
-            <div className="p-16 text-center text-xs text-slate-400 space-y-2">
-              <Receipt className="h-8 w-8 text-amber-500/80 mx-auto mb-1" />
-              <p className="font-semibold text-slate-700 dark:text-zinc-200">
-                Commission Statements Administered by Headquarters
-              </p>
-              <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
-                Commission billing reconciliations and settlement schedules are managed directly by the internal Finance Desk. For immediate statement breakdowns or inquiries, please contact your agency liaison via the Messages tab.
-              </p>
+            <div className="p-8">
+              <LoadError
+                title="Failed to load commission statements"
+                error={commissionError}
+                onRetry={() => refetchList()}
+              />
             </div>
           ) : candidateList.length === 0 ? (
             <div className="p-16 text-center text-xs text-slate-400 space-y-1.5">
               <Receipt className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-1" />
               <p className="font-semibold text-slate-600 dark:text-zinc-300">
-                No unpaid departed candidates found for this billing cycle.
+                No owed commissions awaiting invoice.
               </p>
               <p className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-md mx-auto leading-relaxed">
-                Commissions accrue automatically upon candidate departure. Reconciled placements are bundled into official batch statements by headquarters finance.
+                Commissions accrue as candidates progress through the corridor. Uninvoiced items are listed here in your agency&apos;s billing currency.
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto xl:overflow-x-clip relative">
-              <table className="w-full text-left text-xs min-w-[740px] xl:min-w-0 border-separate border-spacing-0">
+            <div className="overflow-x-auto md:overflow-x-clip relative">
+              <table className="w-full text-left text-xs min-w-[700px] md:min-w-0 border-separate border-spacing-0">
                 <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
                     <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate Name
                     </th>
                     <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport Number</th>
-                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Departure Date</th>
-                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Destination & Sponsor</th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Target Job</th>
+                    <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Accrued On</th>
                     <th className="px-5 py-3.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Commission Fee</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                   {candidateList.map((cand, idx) => {
-                    const { name: candidateName, passport: candidatePassport } = resolveCandidate(cand);
+                    const candidateName = cand.full_name || "—";
+                    const candidatePassport = cand.passport_number || "—";
+                    const candidateJob = cand.target_job || "Housemaid";
+                    const accruedDate = cand.creation ? new Date(cand.creation).toLocaleDateString() : "—";
+                    const amountFormatted = Number(cand.amount_original || 0).toLocaleString();
+                    const currencyCode = cand.currency_original || currency;
+
                     return (
-                      <tr key={cand.name || idx} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
-                        {/* Candidate Name - Sticky on Desktop only */}
+                      <tr key={cand.placement || idx} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
                         <td className="md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs transition-colors truncate">
                           {candidateName}
                         </td>
                         <td className="px-5 py-3.5 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                          {candidatePassport || "—"}
-                        </td>
-                        <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                          {cand.departure_date || cand.accrual_date || "—"}
+                          {candidatePassport}
                         </td>
                         <td className="px-5 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                          <p className="font-semibold text-slate-800 dark:text-zinc-200">
-                            {cand.destination_country || "—"}
-                          </p>
-                          {cand.sponsor_name && (
-                            <p className="text-[10px] text-slate-400">
-                              {cand.sponsor_name}
-                            </p>
-                          )}
+                          <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-zinc-300">
+                            <Briefcase className="h-3.5 w-3.5 text-slate-400" />
+                            {candidateJob}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          {accruedDate}
                         </td>
                         <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-800 dark:text-emerald-300 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
-                          {(Number(cand.amount || cand.commission_amount || cand.rate) || 0).toLocaleString()} {cand.currency || "SAR"}
+                          {amountFormatted} {currencyCode}
                         </td>
                       </tr>
                     );

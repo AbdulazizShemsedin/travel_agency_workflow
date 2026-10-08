@@ -434,18 +434,18 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="w-full flex flex-col gap-3 sm:gap-3.5 md:h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] md:max-h-[calc(100vh-5.5rem)] lg:max-h-[calc(100vh-6rem)] min-h-0">
       {/* Top Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 dark:border-[#222227] pb-3">
+      <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#222227] pb-2 shrink-0">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:white">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
             Dashboard
           </h1>
         </div>
         {canRegister && (
           <div className="flex items-center gap-2">
             <Link href="/applicants/new">
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs h-8.5 px-3">
+              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs h-8 px-3 rounded-lg transition-colors">
                 <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
                 Add Applicant
               </Button>
@@ -455,402 +455,327 @@ export default function DashboardPage() {
       </div>
 
       {/* 1. Top Stat Metric Cards (Clickable redirection) */}
-      <div data-tour="dashboard-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div data-tour="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5 shrink-0">
         <Card
           onClick={() => router.push("/applicants")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-3 sm:p-3.5 flex flex-col justify-between"
         >
-          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
-            <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Total Applicants
-            </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
+            </span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
               <Users className="h-4 w-4" />
             </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
-                {totalCount.toLocaleString()}
-              </div>
+              totalCount.toLocaleString()
             )}
-          </CardContent>
+          </div>
         </Card>
 
         <Card
           onClick={() => router.push("/applicants?status=In Progress")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200 select-none group"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all select-none group p-3 sm:p-3.5 flex flex-col justify-between"
         >
-          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
-            <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate">
               In Progress
-            </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors">
+            </span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
               <Clock className="h-4 w-4" />
             </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
-                {inProgressCount.toLocaleString()}
-              </div>
+              inProgressCount.toLocaleString()
             )}
-          </CardContent>
+          </div>
         </Card>
 
         <Card
           onClick={() => router.push("/applicants?status=Completed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 select-none group"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-3 sm:p-3.5 flex flex-col justify-between"
         >
-          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
-            <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-              Completed (not departed)
-            </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+              Completed
+            </span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
               <CheckCircle2 className="h-4 w-4" />
             </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
-                {completedCount.toLocaleString()}
-              </div>
+              completedCount.toLocaleString()
             )}
-          </CardContent>
+          </div>
         </Card>
 
         <Card
           onClick={() => router.push("/applicants?status=Departed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs cursor-pointer hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-200 select-none group"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-purple-300 dark:hover:border-purple-700 transition-all select-none group p-3 sm:p-3.5 flex flex-col justify-between"
         >
-          <CardHeader className="flex flex-row items-center justify-between pt-3 pb-1 px-4">
-            <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors truncate">
               Departed
-            </CardDescription>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors">
+            </span>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 group-hover:scale-105 transition-transform">
               <Plane className="h-4 w-4" />
             </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight">
-                {departedCount.toLocaleString()}
-              </div>
+              departedCount.toLocaleString()
             )}
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* 2. Pipeline Overview Section */}
-      <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs overflow-hidden">
-        <CardHeader className="border-b border-slate-100 dark:border-[#222227] pt-3 pb-2.5 px-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <CardTitle className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                Pipeline Overview
-              </CardTitle>
-            </div>
-            <Link href="/applicants">
-              <Button variant="outline" size="sm" className="h-7.5 text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#16161b]">
-                View All Applicants <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
+      {/* 2. Pipeline Overview Section (Single Compact Row on Desktop) */}
+      <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl overflow-hidden shrink-0">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] py-2 px-3.5 bg-slate-50/50 dark:bg-[#141418]">
+          <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+            Pipeline Overview
+          </span>
+          <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline flex items-center gap-1">
+            View All Directory <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
 
-        <CardContent className="p-3 sm:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-2.5 sm:p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`relative rounded-xl border p-3 sm:p-3.5 transition-all duration-200 hover:shadow-md hover:scale-[1.01] cursor-pointer flex flex-col justify-between min-h-[135px] sm:min-h-[140px] ${stage.color}`}
+                className={`rounded-lg border p-2.5 transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between h-[92px] sm:h-[96px] select-none group ${stage.color}`}
               >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-semibold ${stage.accent}`}>
-                      {stage.step}
-                    </span>
-                    <span className="font-mono text-lg sm:text-xl font-bold text-slate-800 dark:text-zinc-200 leading-none">
-                      {stage.count}
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <span className={`flex h-4.5 w-4.5 items-center justify-center rounded-full text-white text-[10px] font-bold ${stage.accent}`}>
+                    {stage.step}
+                  </span>
+                  <span className="font-mono text-base font-bold text-slate-900 dark:text-zinc-100 leading-none">
+                    {stage.count}
+                  </span>
+                </div>
 
-                  <h4 className="mt-1.5 text-xs sm:text-sm font-semibold leading-snug text-slate-800 dark:text-zinc-200">
+                <div className="my-auto py-0.5">
+                  <h4 className="text-xs font-bold leading-tight text-slate-800 dark:text-zinc-200 truncate">
                     {stage.badge}
                   </h4>
-                  <p className="mt-0.5 text-[11px] sm:text-xs font-medium leading-snug text-slate-500 dark:text-zinc-400">
+                  <p className="text-[10px] font-medium text-slate-500 dark:text-zinc-400 truncate">
                     {stage.title}
                   </p>
                 </div>
 
                 {stage.isParent && stage.subBranches ? (
-                  <div className="mt-auto border-t border-emerald-200/60 dark:border-emerald-800/60 pt-2">
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {stage.subBranches.map((sub: any) => (
-                        <div
-                          key={sub.name}
-                          onClick={(e) => {
-                            if (sub.link) {
-                              e.stopPropagation();
-                              router.push(sub.link);
-                            }
-                          }}
-                          className={`flex items-center justify-between px-2 py-1 rounded-md border text-center transition-all hover:scale-[1.02] cursor-pointer ${sub.color}`}
-                        >
-                          <span className="text-[10px] sm:text-[11px] font-semibold leading-tight">{sub.name}</span>
-                          <span className="font-mono font-bold text-xs">{sub.count}</span>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="grid grid-cols-2 gap-1 pt-1 border-t border-emerald-200/80 dark:border-emerald-800/80">
+                    {stage.subBranches.map((sub: any) => (
+                      <div
+                        key={sub.name}
+                        onClick={(e) => {
+                          if (sub.link) {
+                            e.stopPropagation();
+                            router.push(sub.link);
+                          }
+                        }}
+                        className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[9px] font-semibold border ${sub.color}`}
+                      >
+                        <span>{sub.name}</span>
+                        <span className="font-mono font-bold">{sub.count}</span>
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <div className="mt-auto flex items-center justify-between border-t border-slate-200/60 dark:border-zinc-800/60 pt-2">
-                    <span className="text-xs font-normal text-slate-500 dark:text-zinc-400">
-                      Candidates
-                    </span>
-                    <span className="text-xs font-medium text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                      View <ArrowRight className="h-3 w-3" />
-                    </span>
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-zinc-800/60 text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                    <span>Candidates</span>
+                    <ArrowRight className="h-3 w-3 text-emerald-700 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </CardContent>
+        </div>
       </Card>
 
-      {/* 3. Expiry Alerts & Pending Tasks */}
-      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Column: Expiry Alerts */}
-        <div className="lg:col-span-6 space-y-3">
-          <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-            <CardHeader className="flex flex-row items-center justify-between pt-3 pb-2.5 px-4 border-b border-slate-100 dark:border-[#222227]">
-              <div>
-                <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                  Document Expiry Warnings
-                </CardTitle>
-              </div>
-              <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-                View All
-              </Link>
-            </CardHeader>
-            <CardContent className="pt-3 pb-3 px-4 space-y-2.5">
-              {realAlerts.length > 0 ? (
-                realAlerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-2.5 sm:p-3 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                          alert.severity === "URGENT"
-                            ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                            : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-                        }`}>
-                          {alert.severity}
-                        </span>
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {alert.message}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500 dark:text-zinc-400">
-                        <span>
-                          Candidate: <strong className="text-slate-800 dark:text-zinc-200">{alert.name}</strong>
-                        </span>
-                        {alert.passportNumber ? (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Passport: <strong className="font-mono text-slate-700 dark:text-zinc-300">{alert.passportNumber}</strong>
-                            </span>
-                          </>
-                        ) : null}
-                        {alert.destination ? (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Corridor: <strong className="text-emerald-700 dark:text-emerald-400">{alert.destination}</strong>
-                            </span>
-                          </>
-                        ) : null}
-                        {alert.phone ? (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Phone: <span className="text-slate-700 dark:text-zinc-300">{alert.phone}</span>
-                            </span>
-                          </>
-                        ) : null}
-                        {alert.expiryDate ? (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Expiry: <span className="font-mono text-rose-600 dark:text-rose-400 font-semibold">{alert.expiryDate}</span>
-                            </span>
-                          </>
-                        ) : null}
-                      </div>
-                    </div>
-                    <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7.5 text-xs font-semibold border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#121215]"
-                      >
-                        View Profile
-                      </Button>
-                    </Link>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
-                  All candidate passports and medical checks are currently valid.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Pending Operational Tasks */}
-        <div className="lg:col-span-6 space-y-3">
-          <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-            <CardHeader className="flex flex-row items-center justify-between pt-3 pb-2.5 px-4 border-b border-slate-100 dark:border-[#222227]">
-              <div>
-                <CardTitle className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                  Action Items & Tasks
-                </CardTitle>
-              </div>
-              <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-                View All
-              </Link>
-            </CardHeader>
-            <CardContent className="pt-3 pb-3 px-4 space-y-2.5">
-              {operationalTasks.length > 0 ? (
-                operationalTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200/80 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-2.5 sm:p-3 text-xs transition-colors hover:bg-slate-50 dark:hover:bg-[#1a1a22]"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.5 font-bold text-[10px] text-emerald-900 dark:text-emerald-300">
-                          {task.badge}
-                        </span>
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {task.title}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        Candidate: <strong className="text-slate-800 dark:text-zinc-200">{task.candidate}</strong>
-                        {task.details && (
-                          <span> • {task.details}</span>
-                        )}
-                      </p>
-                    </div>
-                    <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
-                      <Button
-                        size="sm"
-                        className="h-7.5 text-xs font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
-                      >
-                        Open
-                      </Button>
-                    </Link>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 text-center text-xs text-slate-500 dark:text-zinc-400 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d]">
-                  No pending action items. All applicants are up to date.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* 4. Live Recent Applicants Stream */}
-      <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
-        <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#222227]">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
-              Recent Applicants
-            </CardTitle>
-            <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-              View All Directory →
+      {/* 3. Three-Column Bottom Grid: Expiry Alerts, Action Items, & Recent Applicants */}
+      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-3.5 flex-1 min-h-0">
+        {/* Panel 1: Document Expiry Warnings */}
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+              Document Expiry Warnings
+            </span>
+            <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+              View All
             </Link>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-slate-100 dark:divide-[#222227]">
+          <CardContent className="p-2.5 sm:p-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
+            {realAlerts.length > 0 ? (
+              realAlerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 sm:p-2.5 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22]"
+                >
+                  <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+                        alert.severity === "URGENT"
+                          ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                          : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+                      }`}>
+                        {alert.severity}
+                      </span>
+                      <span className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                        {alert.message}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                      <span>{alert.name}</span>
+                      {alert.passportNumber ? <span className="font-mono"> • {alert.passportNumber}</span> : null}
+                      {alert.expiryDate ? <span className="font-mono text-rose-600 dark:text-rose-400"> • {alert.expiryDate}</span> : null}
+                    </div>
+                  </div>
+                  <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6.5 text-[11px] px-2.5 font-semibold border-slate-300 dark:border-[#26262d] hover:bg-white dark:hover:bg-[#1f1f26]"
+                    >
+                      View
+                    </Button>
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <div className="h-full min-h-[140px] flex flex-col items-center justify-center p-4 text-center rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] text-xs text-slate-400 dark:text-zinc-500">
+                <CheckCircle2 className="h-6 w-6 text-emerald-500/70 mb-1.5" />
+                <span>All candidate documents valid.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Panel 2: Action Items & Tasks */}
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+              Action Items &amp; Tasks
+            </span>
+            <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+              View All
+            </Link>
+          </div>
+          <CardContent className="p-2.5 sm:p-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
+            {operationalTasks.length > 0 ? (
+              operationalTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 sm:p-2.5 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22]"
+                >
+                  <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded bg-emerald-100 dark:bg-emerald-950 px-1.5 py-0.5 font-bold text-[9px] text-emerald-900 dark:text-emerald-300">
+                        {task.badge}
+                      </span>
+                      <span className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                        {task.title}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                      <span>{task.candidate}</span>
+                      {task.details && <span> • {task.details}</span>}
+                    </p>
+                  </div>
+                  <Link href={`/applicants/${encodeURIComponent(task.applicantId)}`}>
+                    <Button
+                      size="sm"
+                      className="h-6.5 text-[11px] px-2.5 font-semibold bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white"
+                    >
+                      Open
+                    </Button>
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <div className="h-full min-h-[140px] flex flex-col items-center justify-center p-4 text-center rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] text-xs text-slate-400 dark:text-zinc-500">
+                <Check className="h-6 w-6 text-emerald-500/70 mb-1.5" />
+                <span>No pending action items.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Panel 3: Live Recent Applicants Stream */}
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+              Recent Applicants
+            </span>
+            <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+              Directory →
+            </Link>
+          </div>
+          <CardContent className="p-2.5 sm:p-3 space-y-2 flex-1 min-h-0 overflow-y-auto">
             {applicants.length > 0 ? (
-              applicants.slice(0, 5).map((applicant) => (
+              applicants.slice(0, 7).map((applicant) => (
                 <Link
                   key={applicant.name}
                   href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                  className="flex items-center justify-between p-4 hover:bg-slate-50/80 dark:hover:bg-[#16161b] transition cursor-pointer text-xs"
+                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 sm:p-2.5 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22] cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 dark:bg-[#1c1c22] font-bold text-slate-700 dark:text-zinc-300">
-                      {applicant.first_name?.[0]}
-                      {applicant.last_name?.[0]}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 font-bold text-[11px] text-emerald-900 dark:text-emerald-300 uppercase border border-emerald-200/60 dark:border-emerald-800/60">
+                      {applicant.first_name?.[0] || "A"}
                     </div>
-                    <div>
-                      <h5 className="font-bold text-slate-900 dark:text-white">
-                        {applicant.full_name || `${applicant.first_name} ${applicant.last_name}`}
-                      </h5>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 flex flex-wrap items-center gap-x-2">
-                        <span>
-                          Passport: <strong className="font-mono font-medium text-slate-700 dark:text-zinc-300">{applicant.passport_number || "Pending"}</strong>
-                        </span>
-                        <span>•</span>
-                        <span>
-                          Destination: <strong className="text-emerald-700 dark:text-emerald-400">{applicant.destination_country || "Unassigned"}</strong>
-                        </span>
-                        {applicant.target_job || applicant.job_applied ? (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Job: <span className="text-slate-700 dark:text-zinc-300">{applicant.target_job || applicant.job_applied}</span>
-                            </span>
-                          </>
-                        ) : null}
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                        {applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || applicant.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
+                        <span className="font-mono">{applicant.passport_number || "No Passport"}</span>
+                        {applicant.destination_country && <span> • {applicant.destination_country}</span>}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <Badge variant="default">{applicant.applicant_state}</Badge>
-                    <ChevronRight className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge variant="default" className="text-[10px] py-0.5 px-2 font-medium">
+                      {applicant.applicant_state || applicant.status || "Draft"}
+                    </Badge>
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                 </Link>
               ))
             ) : (
-              <div className="p-8 text-center text-xs text-slate-400 dark:text-zinc-500">
-                No applicants registered yet.
+              <div className="h-full min-h-[140px] flex flex-col items-center justify-center p-4 text-center rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] text-xs text-slate-400 dark:text-zinc-500">
+                <Users className="h-6 w-6 text-slate-400 mb-1.5" />
+                <span>No applicants registered yet.</span>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

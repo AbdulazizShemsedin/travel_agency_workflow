@@ -21,9 +21,18 @@ import {
   Compass,
   HelpCircle,
   Keyboard,
+  LogOut,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { DemoRoleSwitcher } from "@/components/demo/DemoRoleSwitcher";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useTour } from "@/components/tour/TourProvider";
 import { PermissionAction, isPureForeignAgency, normalizeRoleDisplay, isAdminUser } from "@/lib/auth/permissions";
@@ -62,8 +71,12 @@ export function AppSidebar({
   onToggleCollapse,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const { user, authUser, can, roles } = useAuth();
-  const { openTourSelectModal } = useTour();
+  const { user, authUser, can, roles, logout } = useAuth();
+  const { openTourSelectModal, startPresentation, startOnboarding, openShortcutsModal } = useTour();
+
+  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   // Check if current user is an external Foreign Agency partner
   const isForeignAgency = isPureForeignAgency(authUser);
@@ -72,7 +85,7 @@ export function AppSidebar({
   const isAdmin = Boolean(
     isAdminUser(authUser) ||
     user === "Administrator" ||
-    (authUser?.email && (authUser.email.toLowerCase().startsWith("admin") || authUser.email.toLowerCase() === "administrator")) ||
+    (authUser?.email && authUser.email.toLowerCase() === "administrator") ||
     (roles || []).some((r: any) => {
       const s = String(r?.role || r?.name || r).toLowerCase().trim();
       return s === "administrator" || s === "system manager" || s === "admin";
@@ -211,24 +224,6 @@ export function AppSidebar({
 
         {/* Bottom Section */}
         <div className="border-t border-slate-100 dark:border-[#222227] p-3 space-y-2">
-          {/* Guided Tour & Demo Trigger */}
-          <button
-            type="button"
-            onClick={() => {
-              onCloseMobile?.();
-              openTourSelectModal();
-            }}
-            data-tour="sidebar-tour-button"
-            title={!showLabels ? "Tour & Presentation (Alt+T)" : undefined}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer group",
-              !showLabels ? "justify-center px-2" : ""
-            )}
-          >
-            <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 group-hover:rotate-12 transition-transform" />
-            {showLabels && <span>Tour & Demo</span>}
-          </button>
-
           {canAccessAgentPortal && (
             <Link
               href="/agent"
@@ -249,47 +244,179 @@ export function AppSidebar({
             </Link>
           )}
 
-
-
-          {/* User Card */}
+          {/* User Card Popover Trigger */}
           {user ? (
-            <div
-              data-tour="sidebar-user-card"
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-[#222227] bg-slate-50/80 dark:bg-[#141418] p-2",
-                !showLabels ? "justify-center p-1.5" : ""
-              )}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
-                {(authUser?.full_name || user).slice(0, 2)}
-              </div>
-              {showLabels && (
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
-                    {authUser?.full_name || user}
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-0.5">
+            <Popover open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  data-tour="sidebar-user-card"
+                  className={cn(
+                    "w-full flex items-center gap-2.5 rounded-lg border border-slate-200 dark:border-[#222227] bg-slate-50/90 dark:bg-[#141418] hover:bg-slate-100 dark:hover:bg-[#1c1c22] p-2 text-left transition cursor-pointer group shadow-2xs",
+                    !showLabels ? "justify-center p-1.5" : ""
+                  )}
+                  title={!showLabels ? (authUser?.full_name || user) : "Account settings and tour"}
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
+                    {(authUser?.full_name || user).slice(0, 2)}
+                  </div>
+                  {showLabels && (
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                        {authUser?.full_name || user}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="truncate text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+                          {authUser?.email || user}
+                        </span>
+                        <ChevronUp className="h-3 w-3 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-zinc-300 transition-transform" />
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                side="top"
+                align={isCollapsed ? "center" : "start"}
+                sideOffset={10}
+                className="w-64 p-2 shadow-2xl border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#121215] z-50"
+              >
+                {/* User Details */}
+                <div className="px-2 py-2 border-b border-slate-100 dark:border-[#222227] mb-1">
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 uppercase">
+                      {(authUser?.full_name || user).slice(0, 2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                        {authUser?.full_name || user}
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate font-mono">
+                        {authUser?.email || user}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
                     {(() => {
-                      // Deduplicate roles after normalization (e.g. System Manager + Admin both map to "Admin")
                       const seen = new Set<string>();
-                      return roles.slice(0, 3).reduce<React.ReactElement[]>((acc, r) => {
+                      return roles.reduce<React.ReactElement[]>((acc, r) => {
                         const display = normalizeRoleDisplay(r);
                         if (!seen.has(display)) {
                           seen.add(display);
                           acc.push(
-                            <span key={r} className="truncate text-[9px] font-medium text-emerald-800 dark:text-emerald-400">
+                            <span
+                              key={r}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60"
+                            >
                               {display}
                             </span>
                           );
                         }
                         return acc;
-                      }, []).slice(0, 2);
+                      }, []).slice(0, 3);
                     })()}
                   </div>
                 </div>
-              )}
-            </div>
+
+                {/* Demo Role Switcher inside popover (visible when demo mode active) */}
+                <div className="px-1 py-1">
+                  <DemoRoleSwitcher />
+                </div>
+
+                {/* Interactive Tour & Demo actions */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    openTourSelectModal();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-md transition font-semibold cursor-pointer"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Interactive Tour &amp; Demo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    startPresentation();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Presentation Mode</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    startOnboarding();
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
+                >
+                  <Compass className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Onboarding Tour</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    openShortcutsModal();
+                  }}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Keyboard className="h-3.5 w-3.5 text-slate-400" />
+                    <span>Keyboard Shortcuts</span>
+                  </div>
+                  <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">
+                    ?
+                  </kbd>
+                </button>
+
+                <div className="h-px bg-slate-100 dark:bg-[#222227] my-1" />
+
+                {/* Sign Out Action */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setIsLogoutConfirmOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition font-semibold cursor-pointer"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Log Out</span>
+                </button>
+              </PopoverContent>
+            </Popover>
           ) : null}
+
+          {/* Logout Confirmation Modal */}
+          <ConfirmationModal
+            isOpen={isLogoutConfirmOpen}
+            onClose={() => setIsLogoutConfirmOpen(false)}
+            onConfirm={async () => {
+              try {
+                setIsLoggingOut(true);
+                await logout();
+              } finally {
+                setIsLoggingOut(false);
+                setIsLogoutConfirmOpen(false);
+              }
+            }}
+            title="Log Out of System?"
+            description="Any unsaved progress will be lost."
+            confirmLabel="Log Out"
+            cancelLabel="Stay Signed In"
+            variant="danger"
+            icon={LogOut}
+            isLoading={isLoggingOut}
+          />
         </div>
       </aside>
     </>

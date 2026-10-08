@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function getFrappeConfig(req: NextRequest) {
-  const url =
-    process.env.FRAPPE_BASE_URL ||
-    process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://agencytracking-production-2a06.up.railway.app";
+  const url = process.env.FRAPPE_BASE_URL;
+  if (!url) {
+    return null;
+  }
 
   const headers: Record<string, string> = {
     Accept: "*/*",
@@ -23,6 +23,7 @@ function getFrappeConfig(req: NextRequest) {
   return {
     url: url.replace(/\/$/, ""),
     headers,
+    isAuthenticated: Boolean(cookie || authHeader),
   };
 }
 
@@ -51,6 +52,18 @@ export async function GET(
   const encodedPath = slug.map(encodeURIComponent).join("/");
   const config = getFrappeConfig(req);
 
+  if (!config) {
+    return NextResponse.json(
+      { message: "Backend address not configured" },
+      { status: 503 }
+    );
+  }
+
+  // Private files require an authenticated session before calling backend
+  if (!config.isAuthenticated) {
+    return new NextResponse("Unauthorized", { status: 401 });
+  }
+
   // Candidates for URLs to attempt (authoritative download_file RPC with raw & encoded paths, then direct URLs)
   const attempts = [
     { url: `${config.url}/api/method/frappe.core.doctype.file.file.download_file?file_url=${encodeURIComponent(`/private/files/${rawPath}`)}`, headers: config.headers },
@@ -74,7 +87,7 @@ export async function GET(
 
           const responseHeaders: Record<string, string> = {
             "Content-Type": contentType,
-            "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+            "Cache-Control": "private, no-store",
             "Accept-Ranges": "bytes",
           };
           const isViewableInline =
@@ -97,8 +110,7 @@ export async function GET(
             status: 200,
             headers: responseHeaders,
           });
-          const setCookie = res.headers.get("set-cookie");
-          if (setCookie) response.headers.set("set-cookie", setCookie);
+          // Do not pass backend Set-Cookie on from private file response
           return response;
         }
         lastRes = res;

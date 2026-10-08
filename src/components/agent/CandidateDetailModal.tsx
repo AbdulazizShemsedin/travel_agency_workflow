@@ -119,9 +119,7 @@ export function CandidateDetailModal({
     { label: "Babysitting & Child Care", isVerified: checkSkill(["skill_baby_sitting", "skill_babysitting", "baby_sitting", "babysitting", "skill_children_care", "children_care"], "Babysitting") },
     { label: "Washing & Laundry", isVerified: checkSkill(["skill_washing", "washing", "laundry"], "Washing") },
     { label: "Ironing", isVerified: checkSkill(["skill_ironing", "ironing"], "Ironing") },
-    { label: "Elderly Care", isVerified: checkSkill(["skill_elderly_care", "elderly_care", "elderly"], "Elderly Care") },
     { label: "Sewing", isVerified: checkSkill(["skill_sewing", "sewing"], "Sewing") },
-    { label: "Driving", isVerified: checkSkill(["skill_driving", "driving"], "Driving") },
   ];
 
   const ageDisplay = (() => {

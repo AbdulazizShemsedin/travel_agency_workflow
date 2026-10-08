@@ -2,11 +2,19 @@
  * Application Environment Configuration
  * 
  * Strict Production Policy:
- * - Real Backend Only (https://agencytracking-production-2a06.up.railway.app)
+ * - Real Backend Only (Configured via FRAPPE_BASE_URL)
  * - NO Demo Mode
  * - NO Mock Business Data
  * - NO V1 Fallbacks
  */
+
+export function getFrappeBaseUrl(): string {
+  const url = process.env.FRAPPE_BASE_URL;
+  if (!url) {
+    throw new Error("Backend address not configured: FRAPPE_BASE_URL is missing.");
+  }
+  return url.replace(/\/$/, "");
+}
 
 export function isDemoMode(): boolean {
   // In production branch, demo mode is strictly prohibited

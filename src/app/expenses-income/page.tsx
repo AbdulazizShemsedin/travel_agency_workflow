@@ -63,6 +63,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PremiumDropzone } from "@/components/ui/PremiumDropzone";
+import { LoadError } from "@/components/ui/LoadError";
+import { useBirrConversion } from "@/components/finance/useBirrConversion";
+import { CurrencyTotals } from "@/components/finance/CurrencyTotals";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { shortRef } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
 type ActiveTab = "ledger" | "approval_queue" | "reconciliation";
@@ -74,6 +79,9 @@ export default function ExpensesIncomePage() {
   const isFinanceManagerOrAdmin = userRoles.some((r) =>
     ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
   );
+
+  // Birr conversion switch (false on this system)
+  const { isBirrConversionEnabled } = useBirrConversion();
 
   // Active View Tab
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("ledger");
@@ -102,6 +110,7 @@ export default function ExpensesIncomePage() {
 
   // Reconciliation State
   const [statementFile, setStatementFile] = React.useState<File | null>(null);
+  const [statementCurrency, setStatementCurrency] = React.useState<V2SupportedCurrency>("ETB");
   const [isUploadingStatement, setIsUploadingStatement] = React.useState<boolean>(false);
   const [reconciliationResult, setReconciliationResult] = React.useState<{
     message?: string;
@@ -143,6 +152,7 @@ export default function ExpensesIncomePage() {
   const {
     data: rawSummary,
     isLoading: isLedgerLoading,
+    error: ledgerError,
     refetch: refetchLedger,
   } = useQuery({
     queryKey: ["v2_financial_overview_expenses_income"],
@@ -154,6 +164,7 @@ export default function ExpensesIncomePage() {
   const {
     data: pendingQueue = [],
     isLoading: isQueueLoading,
+    error: queueError,
     refetch: refetchQueue,
   } = useQuery<V2PendingApprovalItem[]>({
     queryKey: ["v2_pending_approval_queue"],
@@ -234,6 +245,39 @@ export default function ExpensesIncomePage() {
   const totalIncome = summary?.totals_birr?.income ?? 0;
   const totalExpense = summary?.totals_birr?.expense ?? 0;
   const netBalance = totalIncome - totalExpense;
+
+  const incomeTotals = React.useMemo(() => {
+    if (isBirrConversionEnabled) return null;
+    const res: Record<string, number> = {};
+    if (summary?.by_currency) {
+      for (const [curr, val] of Object.entries(summary.by_currency as Record<string, any>)) {
+        if (val?.income) res[curr] = val.income;
+      }
+    }
+    return res;
+  }, [summary, isBirrConversionEnabled]);
+
+  const expenseTotals = React.useMemo(() => {
+    if (isBirrConversionEnabled) return null;
+    const res: Record<string, number> = {};
+    if (summary?.by_currency) {
+      for (const [curr, val] of Object.entries(summary.by_currency as Record<string, any>)) {
+        if (val?.expense) res[curr] = val.expense;
+      }
+    }
+    return res;
+  }, [summary, isBirrConversionEnabled]);
+
+  const netTotals = React.useMemo(() => {
+    if (isBirrConversionEnabled) return null;
+    const res: Record<string, number> = {};
+    if (summary?.by_currency) {
+      for (const [curr, val] of Object.entries(summary.by_currency as Record<string, any>)) {
+        if (val?.net !== undefined) res[curr] = val.net;
+      }
+    }
+    return res;
+  }, [summary, isBirrConversionEnabled]);
 
   // Handle Export Transactions to Excel (.xlsx)
   const handleExportTransactions = async () => {
@@ -399,7 +443,7 @@ export default function ExpensesIncomePage() {
       }
 
       // 2. Invoke reconciliation endpoint
-      const reconRes = await uploadBankStatementV2(fileUrl);
+      const reconRes = await uploadBankStatementV2(fileUrl, statementCurrency);
       setReconciliationResult(reconRes);
       toast.success("Bank Statement Processed", {
         description: `Reconciliation complete: ${reconRes.matched ?? 0} lines matched, ${reconRes.unmatched ?? 0} lines unmatched.`,
@@ -611,17 +655,19 @@ export default function ExpensesIncomePage() {
             Export to Excel
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFxModalOpen(true)}
-            className="text-xs h-8 border-slate-300 dark:border-[#2a2a35]"
-            title="View active exchange rates"
-          >
-            <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
-            Exchange Rates
-          </Button>
+          {isBirrConversionEnabled && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFxModalOpen(true)}
+              className="text-xs h-8 border-slate-300 dark:border-[#2a2a35]"
+              title="View active exchange rates"
+            >
+              <TrendingUp className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+              Exchange Rates
+            </Button>
+          )}
 
           <Button
             type="button"
@@ -690,8 +736,16 @@ export default function ExpensesIncomePage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "ledger" && (
         <div data-tour="finance-ledger-table" className="space-y-6">
-          {/* Awaiting FX Rate Callout Banner */}
-          {summary?.awaiting_fx && summary.awaiting_fx.count > 0 && (
+          {ledgerError && (
+            <LoadError
+              error={ledgerError}
+              resourceName="Financial Overview"
+              onRetry={() => refetchLedger()}
+            />
+          )}
+
+          {/* Awaiting FX Rate Callout Banner (Shown only when Birr conversion is active) */}
+          {isBirrConversionEnabled && summary?.awaiting_fx && summary.awaiting_fx.count > 0 && (
             <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -726,9 +780,13 @@ export default function ExpensesIncomePage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-                  ETB {totalIncome.toLocaleString()}
-                </div>
+                {isBirrConversionEnabled ? (
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
+                    ETB {totalIncome.toLocaleString()}
+                  </div>
+                ) : (
+                  <CurrencyTotals totals={incomeTotals || {}} className="text-xl" />
+                )}
                 <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400 font-medium">
                   Verified candidate fees & incoming settlements
                 </p>
@@ -745,9 +803,13 @@ export default function ExpensesIncomePage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-                  ETB {totalExpense.toLocaleString()}
-                </div>
+                {isBirrConversionEnabled ? (
+                  <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
+                    ETB {totalExpense.toLocaleString()}
+                  </div>
+                ) : (
+                  <CurrencyTotals totals={expenseTotals || {}} className="text-xl" />
+                )}
                 <p className="mt-1 text-xs text-rose-600 dark:text-rose-400 font-medium">
                   Approved medical, visa, ticket, and logistics disbursements
                 </p>
@@ -764,9 +826,13 @@ export default function ExpensesIncomePage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-200 font-mono">
-                  ETB {netBalance.toLocaleString()}
-                </div>
+                {isBirrConversionEnabled ? (
+                  <div className="text-2xl font-bold text-emerald-950 dark:text-emerald-200 font-mono">
+                    ETB {netBalance.toLocaleString()}
+                  </div>
+                ) : (
+                  <CurrencyTotals totals={netTotals || {}} className="text-xl" />
+                )}
                 <p className="mt-1 flex items-center text-xs text-emerald-800 dark:text-emerald-400 font-medium">
                   Current operational cash flow balance
                 </p>
@@ -794,6 +860,14 @@ export default function ExpensesIncomePage() {
       {/* ------------------------------------------------------------- */}
       {activeTab === "approval_queue" && (
         <div className="space-y-4">
+          {queueError && (
+            <LoadError
+              error={queueError}
+              resourceName="Pending Approval Queue"
+              onRetry={() => refetchQueue()}
+            />
+          )}
+
           {!isFinanceManagerOrAdmin ? (
             <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
               <div className="flex items-center gap-2">
@@ -824,8 +898,8 @@ export default function ExpensesIncomePage() {
               </CardHeader>
 
               <CardContent className="p-0">
-                <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
-                  <table className="w-full text-xs text-left border-collapse min-w-[850px] xl:min-w-0">
+                <div className="overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
+                  <table className="w-full text-xs text-left border-collapse min-w-[850px] md:min-w-0">
                     <thead className="sticky top-0 z-20 text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
                         <th className="md:sticky md:left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2.5 md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
@@ -852,12 +926,14 @@ export default function ExpensesIncomePage() {
                         pendingQueue.map((tx) => {
                           const staffName = resolveStaffName(tx.logged_by || tx.owner);
                           const { applicantId, applicantName, stageStatus } = resolveApplicantInfo(tx);
-                          const formattedAmount = `${(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} ${tx.currency || "ETB"}`;
+                          const originalAmount = tx.amount_original ?? tx.amount_birr ?? tx.amount ?? 0;
+                          const originalCurrency = tx.currency_original ?? tx.currency ?? "ETB";
+                          const formattedAmount = `${Number(originalAmount).toLocaleString()} ${originalCurrency}`;
 
                           return (
                             <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] group">
                               <td className="md:sticky md:left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-white md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
-                                {tx.name}
+                                {shortRef(tx.name)}
                               </td>
                               <td className="py-2 px-2.5 whitespace-nowrap">
                                 <Badge
@@ -874,7 +950,7 @@ export default function ExpensesIncomePage() {
                               </td>
                               <td className="py-2.5 px-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
                                 <div>{formattedAmount}</div>
-                                {tx.awaiting_fx_rate === 1 && (
+                                {isBirrConversionEnabled && tx.awaiting_fx_rate === 1 && (
                                   <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
                                     Awaiting FX Rate
                                   </Badge>
@@ -886,12 +962,12 @@ export default function ExpensesIncomePage() {
                                 </div>
                                 {applicantId !== "—" && (
                                   <div className="text-[10px] font-mono text-slate-400">
-                                    {applicantId}
+                                    {shortRef(applicantId)}
                                   </div>
                                 )}
                               </td>
                               <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">
-                                {tx.placement || applicantId || "General"}
+                                {shortRef(tx.placement) || shortRef(applicantId) || "General"}
                               </td>
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <Badge
@@ -953,6 +1029,34 @@ export default function ExpensesIncomePage() {
                                     <Ban className="h-3.5 w-3.5 mr-1" />
                                     Reject
                                   </Button>
+
+                                  {isFinanceManagerOrAdmin && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setVoidingTxName(tx.name);
+                                        setVoidReason("");
+                                      }}
+                                      className="h-7 text-xs border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-zinc-700 dark:text-zinc-300 px-2"
+                                      title="Void transaction with audit remark"
+                                    >
+                                      <AlertOctagon className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                                      Void
+                                    </Button>
+                                  )}
+
+                                  <UndoLastStepButton
+                                    doctype="Applicant Transaction"
+                                    name={tx.name}
+                                    onSuccess={() => {
+                                      refetchQueue();
+                                      refetchLedger();
+                                    }}
+                                    size="sm"
+                                    className="h-7 text-xs px-2"
+                                  />
                                 </div>
                               </td>
                             </tr>
@@ -1023,6 +1127,28 @@ export default function ExpensesIncomePage() {
                         onFileSelect={(file) => setStatementFile(file)}
                         onRemove={() => setStatementFile(null)}
                       />
+
+                      <div className="space-y-1">
+                        <Label htmlFor="statement_account_currency" className="text-xs font-semibold">
+                          Account Currency <span className="text-rose-500">*</span>
+                        </Label>
+                        <select
+                          id="statement_account_currency"
+                          value={statementCurrency}
+                          onChange={(e) => setStatementCurrency(e.target.value as V2SupportedCurrency)}
+                          className="w-full sm:w-48 h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
+                        >
+                          <option value="ETB">ETB (Ethiopian Birr)</option>
+                          <option value="USD">USD (US Dollar)</option>
+                          <option value="SAR">SAR (Saudi Riyal)</option>
+                          <option value="AED">AED (UAE Dirham)</option>
+                          <option value="KWD">KWD (Kuwaiti Dinar)</option>
+                          <option value="QAR">QAR (Qatari Riyal)</option>
+                        </select>
+                        <p className="text-[10px] text-slate-400">
+                          Account currency used for line reconciliation
+                        </p>
+                      </div>
 
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -1105,16 +1231,22 @@ export default function ExpensesIncomePage() {
 
                       <div className="space-y-1">
                         <Label htmlFor="batch_id" className="text-xs font-semibold">
-                          Target Commission Batch ID <span className="text-rose-500">*</span>
+                          Target Commission Batch <span className="text-rose-500">*</span>
                         </Label>
-                        <Input
+                        <select
                           id="batch_id"
-                          placeholder="e.g. CBR-00007"
                           value={manualBatchName}
                           onChange={(e) => setManualBatchName(e.target.value)}
                           required
-                          className="h-8 text-xs font-mono"
-                        />
+                          className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono"
+                        >
+                          <option value="">-- Select Target Batch --</option>
+                          {availableBatches.map((b) => (
+                            <option key={b.name} value={b.name}>
+                              {b.name} • {b.contractor_name || b.contractor} ({b.creation ? new Date(b.creation).toLocaleDateString() : ""}) - {Number(b.total_amount_original ?? b.total_amount ?? 0).toLocaleString()} {b.currency} [{b.status}]
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <p className="text-[10px] text-slate-400 leading-relaxed">
@@ -1155,45 +1287,25 @@ export default function ExpensesIncomePage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {availableBatches.length > 0 && (
-                        <select
-                          value={selectedBatchId}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSelectedBatchId(val);
-                            if (val) handleLoadBatch(val);
-                          }}
-                          className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono max-w-xs"
-                        >
-                          <option value="">-- Select Active Batch --</option>
-                          {availableBatches.map((b) => (
-                            <option key={b.name} value={b.name}>
-                              {b.name} • {b.contractor_name || b.contractor} ({b.status})
-                            </option>
-                          ))}
-                        </select>
+                      <select
+                        value={selectedBatchId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedBatchId(val);
+                          if (val) handleLoadBatch(val);
+                        }}
+                        className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono min-w-[260px] max-w-md"
+                      >
+                        <option value="">-- Select Active Batch --</option>
+                        {availableBatches.map((b) => (
+                          <option key={b.name} value={b.name}>
+                            {b.name} • {b.contractor_name || b.contractor} ({b.creation ? new Date(b.creation).toLocaleDateString() : ""}) - {Number(b.total_amount_original ?? b.total_amount ?? 0).toLocaleString()} {b.currency} [{b.status}]
+                          </option>
+                        ))}
+                      </select>
+                      {isLoadingBatch && (
+                        <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
                       )}
-                      <div className="flex items-center gap-1">
-                        <Input
-                          placeholder="Batch ID (CBR-00007)"
-                          value={selectedBatchId}
-                          onChange={(e) => setSelectedBatchId(e.target.value)}
-                          className="h-8 w-40 text-xs font-mono"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleLoadBatch(selectedBatchId)}
-                          disabled={!selectedBatchId.trim() || isLoadingBatch}
-                          className="h-8 text-xs font-semibold px-2.5"
-                        >
-                          {isLoadingBatch ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : null}
-                          Load Batch
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -1300,13 +1412,13 @@ export default function ExpensesIncomePage() {
                                           {it.applicant_name || it.full_name || it.applicant || "Applicant"}
                                         </div>
                                         <div className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
-                                          {it.applicant} • Placement: {it.placement || "N/A"}
+                                          {shortRef(it.applicant)} • Placement: {shortRef(it.placement) || "N/A"}
                                         </div>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-3">
                                       <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">
-                                        {Number(it.amount).toLocaleString()} {it.currency || loadedBatch.currency}
+                                        {Number(it.amount_original ?? it.amount ?? 0).toLocaleString()} {it.currency_original ?? it.currency ?? loadedBatch.currency}
                                       </span>
                                       <Badge
                                         variant="outline"
@@ -1770,15 +1882,17 @@ export default function ExpensesIncomePage() {
       )}
 
       {/* FX Rate Management Modal */}
-      <FxRateModal
-        isOpen={isFxModalOpen}
-        onClose={() => setIsFxModalOpen(false)}
-        canMutate={isFinanceManagerOrAdmin}
-        onSuccess={() => {
-          refetchLedger();
-          refetchQueue();
-        }}
-      />
+      {isBirrConversionEnabled && (
+        <FxRateModal
+          isOpen={isFxModalOpen}
+          onClose={() => setIsFxModalOpen(false)}
+          canMutate={isFinanceManagerOrAdmin}
+          onSuccess={() => {
+            refetchLedger();
+            refetchQueue();
+          }}
+        />
+      )}
     </div>
   );
 }

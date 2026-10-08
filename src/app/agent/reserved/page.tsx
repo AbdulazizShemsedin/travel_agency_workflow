@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { CandidateDetailModal } from "@/components/agent/CandidateDetailModal";
+import { LoadError } from "@/components/ui/LoadError";
 
 function CandidatePhotoAvatar({
   applicantId,
@@ -133,7 +134,7 @@ export default function MyReservedCandidatesPage() {
                 Selected Applicants
               </h2>
               <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/80 px-2.5 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                {filteredCandidates.length} Selected Candidate{filteredCandidates.length === 1 ? "" : "s"}
+                {isError ? "—" : filteredCandidates.length} Selected Candidate{filteredCandidates.length === 1 ? "" : "s"}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
@@ -190,11 +191,12 @@ export default function MyReservedCandidatesPage() {
               </span>
             </div>
           ) : isError ? (
-            <div className="flex flex-col items-center justify-center p-12 text-center text-rose-600">
-              <p className="text-xs font-semibold">{(error as Error)?.message || "Failed to load selected applicants."}</p>
-              <Button onClick={() => refetch()} size="sm" variant="outline" className="mt-3 text-xs">
-                Retry
-              </Button>
+            <div className="p-8">
+              <LoadError
+                title="Could not load selected applicants"
+                error={error}
+                onRetry={() => refetch()}
+              />
             </div>
           ) : filteredCandidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-16 text-center">
@@ -214,8 +216,8 @@ export default function MyReservedCandidatesPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto xl:overflow-x-clip relative">
-              <table className="w-full text-left text-xs min-w-[780px] xl:min-w-0 border-separate border-spacing-0">
+            <div className="overflow-x-auto md:overflow-x-clip relative">
+              <table className="w-full text-left text-xs min-w-[780px] md:min-w-0 border-separate border-spacing-0">
                 <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
                     <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">

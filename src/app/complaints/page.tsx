@@ -45,15 +45,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { LoadError } from "@/components/ui/LoadError";
+import { shortRef } from "@/lib/utils/display-id";
 
 export default function AdminComplaintsPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = React.useState<"new" | "unresolved" | "all" | "resolved">("new");
   const [statusFilter, setStatusFilter] = React.useState("All Statuses");
   const [contractorFilter, setContractorFilter] = React.useState("All Agencies");
-  const [categoryFilter, setCategoryFilter] = React.useState("All Categories");
-  const [severityFilter, setSeverityFilter] = React.useState("All Severities");
-  const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest" | "severity" | "sla">("oldest");
+  const [sortOrder, setSortOrder] = React.useState<"newest" | "oldest">("newest");
 
   const { data: contractors = [] } = useQuery({
     queryKey: ["contractors_v2"],
@@ -95,7 +96,7 @@ export default function AdminComplaintsPage() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   // Authoritative query based on active tab and status filter
-  const { data: complaints = [], isLoading, refetch, isRefetching } = useQuery({
+  const { data: complaints = [], isLoading, error: complaintsError, refetch, isRefetching } = useQuery({
     queryKey: ["admin-complaints-v2", activeTab, statusFilter, contractorFilter],
     queryFn: async () => {
       if (activeTab === "new") {
@@ -119,16 +120,6 @@ export default function AdminComplaintsPage() {
       list = list.filter((c) => c.contractor === contractorFilter);
     }
 
-    // Filter by Category
-    if (categoryFilter !== "All Categories") {
-      list = list.filter((c) => c.complaint_category === categoryFilter || c.category === categoryFilter);
-    }
-
-    // Filter by Severity
-    if (severityFilter !== "All Severities") {
-      list = list.filter((c) => c.severity === severityFilter);
-    }
-
     // Sort Order
     list.sort((a, b) => {
       if (sortOrder === "newest") {
@@ -145,7 +136,7 @@ export default function AdminComplaintsPage() {
     });
 
     return list;
-  }, [complaints, contractorFilter, categoryFilter, severityFilter, sortOrder]);
+  }, [complaints, contractorFilter, sortOrder]);
 
   const { data: applicants = [] } = useQuery({
     queryKey: ["applicants-v2-complaints"],
@@ -498,50 +489,16 @@ export default function AdminComplaintsPage() {
               </select>
             </div>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
-              >
-                <option value="All Categories">All Categories</option>
-                {COMPLAINT_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Severity Filter */}
-            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
-              <select
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
-              >
-                <option value="All Severities">All Severities</option>
-                {COMPLAINT_SEVERITIES.map((sev) => (
-                  <option key={sev} value={sev}>
-                    {sev}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Sort Order */}
             <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-[#18181e] px-2.5 py-1 rounded-xl border border-slate-200/80 dark:border-[#26262f]">
               <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
               <select
                 value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as any)}
+                onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}
                 className="bg-transparent text-xs font-medium text-slate-700 dark:text-zinc-300 focus:outline-hidden"
               >
                 <option value="newest">Most Recent First</option>
                 <option value="oldest">Oldest First</option>
-                <option value="severity">Severity: Highest First</option>
-                <option value="sla">Longest Unresolved SLA</option>
               </select>
             </div>
           </div>
@@ -555,13 +512,21 @@ export default function AdminComplaintsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
             <span className="ml-2 text-xs text-slate-500">Loading complaints...</span>
           </div>
+        ) : complaintsError ? (
+          <div className="p-8">
+            <LoadError
+              title="Failed to load complaints"
+              error={complaintsError}
+              onRetry={() => refetch()}
+            />
+          </div>
         ) : filteredAndSortedComplaints.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400">
             No complaints found matching your active filters.
           </div>
         ) : (
-          <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
-            <table className="w-full text-left text-xs min-w-[960px] xl:min-w-0 border-separate border-spacing-0">
+          <div className="overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
+            <table className="w-full text-left text-xs min-w-[960px] md:min-w-0 border-separate border-spacing-0">
               <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                 <tr>
                   <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
@@ -571,9 +536,8 @@ export default function AdminComplaintsPage() {
                   <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
                   <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
                   <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] min-w-[180px]">Category & Details</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Severity</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">{activeTab === "resolved" ? "Resolution" : "SLA / Age"}</th>
+                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] min-w-[200px]">Complaint Details</th>
+                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">{activeTab === "resolved" ? "Resolution" : "Date"}</th>
                   <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
@@ -583,14 +547,13 @@ export default function AdminComplaintsPage() {
                   return (
                     <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
                       <td className="px-2.5 py-2 lg:px-3 lg:py-2 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
-                        {c.display_no ? `#${c.display_no}` : c.name}
+                        {c.display_no ? `#${c.display_no}` : shortRef(c.name)}
                       </td>
                       <td className="px-2.5 py-2 lg:px-3 lg:py-2 font-semibold text-slate-800 dark:text-zinc-200 whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
                         {c.contractor}
                       </td>
                       <td className="px-2.5 py-2 lg:px-3 lg:py-2 min-w-[140px] border-b border-slate-100 dark:border-[#222227]">
                         <div className="font-semibold text-slate-900 dark:text-white">{details.candidateName}</div>
-                        <span className="text-[10px] text-slate-400 font-mono">{details.placementId || details.applicantId || ""}</span>
                       </td>
                       <td className="px-2.5 py-2 lg:px-3 lg:py-2 whitespace-nowrap border-b border-slate-100 dark:border-[#222227]">
                         {details.passportNumber ? (
@@ -660,68 +623,68 @@ export default function AdminComplaintsPage() {
                           {c.status}
                         </span>
                       </td>
-                  <td className="px-2.5 py-2 lg:px-3 lg:py-2 max-w-xs">
-                    <div className="font-semibold text-slate-800 dark:text-zinc-200">{c.complaint_category || c.worker_status_at_complaint || "Complaint"}</div>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">{c.description || c.complaint_details}</p>
-                  </td>
-                  <td className="px-2.5 py-2 lg:px-3 lg:py-2">{getSeverityBadge(c.severity || "Normal")}</td>
-                  <td className="px-2.5 py-2 lg:px-3 lg:py-2">
-                    {c.status === "Resolved" || c.status === "Dismissed" ? (
-                      <div className="space-y-0.5">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          ✓ {c.resolution_notes ? "Resolved with notes" : c.status}
-                        </span>
-                        {c.resolved_on && (
-                          <div className="text-[10px] font-mono text-slate-400">
-                            {c.resolved_on} {c.resolved_by ? `by ${c.resolved_by}` : ""}
+                      <td className="px-2.5 py-2 lg:px-3 lg:py-2 max-w-xs border-b border-slate-100 dark:border-[#222227]">
+                        <p className="text-xs text-slate-700 dark:text-zinc-300 line-clamp-2">{c.description || c.complaint_details || "—"}</p>
+                      </td>
+                      <td className="px-2.5 py-2 lg:px-3 lg:py-2 border-b border-slate-100 dark:border-[#222227]">
+                        {c.status === "Resolved" || c.status === "Dismissed" ? (
+                          <div className="space-y-0.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              ✓ {c.resolution_notes ? "Resolved with notes" : c.status}
+                            </span>
+                            {c.resolved_on && (
+                              <div className="text-[10px] font-mono text-slate-400">
+                                {c.resolved_on} {c.resolved_by ? `by ${c.resolved_by}` : ""}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
+                              {c.creation ? c.creation.split(" ")[0] : "Recent"}
+                            </span>
                           </div>
                         )}
-                      </div>
-                    ) : (
-                      <div className="space-y-0.5">
-                        <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
-                          {c.creation ? c.creation.split(" ")[0] : "Recent"}
-                        </span>
-                        {c.days_unresolved !== undefined && c.days_unresolved > 0 && (
-                          <div className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-semibold">
-                            ⏱ {c.days_unresolved}d unresolved
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2.5 py-2 lg:px-3 lg:py-2 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {c.status === "New" && (
-                        <Button
-                          size="sm"
-                          onClick={() => acknowledgeMutation.mutate(c.name)}
-                          disabled={acknowledgeMutation.isPending}
-                          className="h-7 text-[11px] bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
-                        >
-                          {acknowledgeMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            "Acknowledge"
+                      </td>
+                      <td className="px-2.5 py-2 lg:px-3 lg:py-2 text-right border-b border-slate-100 dark:border-[#222227]">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {c.status === "New" && (
+                            <Button
+                              size="sm"
+                              onClick={() => acknowledgeMutation.mutate(c.name)}
+                              disabled={acknowledgeMutation.isPending}
+                              className="h-7 text-[11px] bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
+                            >
+                              {acknowledgeMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Acknowledge"
+                              )}
+                            </Button>
                           )}
-                        </Button>
-                      )}
-                      {c.status !== "Resolved" && c.status !== "Dismissed" ? (
-                        <Button
-                          size="sm"
-                          onClick={() => setSelectedComplaintForResolve(c)}
-                          className="h-7 text-[11px] bg-emerald-800 hover:bg-emerald-900 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
-                        >
-                          Resolve
-                        </Button>
-                      ) : (
-                        <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">✓ Closed</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                          {c.status !== "Resolved" && c.status !== "Dismissed" ? (
+                            <Button
+                              size="sm"
+                              onClick={() => setSelectedComplaintForResolve(c)}
+                              className="h-7 text-[11px] bg-emerald-800 hover:bg-emerald-900 text-white font-semibold rounded-lg shadow-xs cursor-pointer"
+                            >
+                              Resolve
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">✓ Closed</span>
+                          )}
+                          <UndoLastStepButton
+                            doctype="Complaint"
+                            name={c.name}
+                            label="Undo"
+                            size="sm"
+                            onSuccess={() => refetch()}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -735,7 +698,7 @@ export default function AdminComplaintsPage() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#202026]">
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Resolve Complaint {selectedComplaintForResolve.display_no ? `#${selectedComplaintForResolve.display_no}` : selectedComplaintForResolve.name}
+                  Resolve Complaint #{selectedComplaintForResolve.display_no || shortRef(selectedComplaintForResolve.name)}
                 </h3>
                 <p className="text-xs text-slate-500">Agency: {selectedComplaintForResolve.contractor}</p>
               </div>

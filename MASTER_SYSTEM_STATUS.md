@@ -107,6 +107,53 @@
 
 ---
 
+## 17. Follow-Up Module Conversion to Two-Level Operational Excel-Like Workspace & Backend Handoff Finalization (2026-10-08)
+- **Resolved Remaining Backend Handoff Notes**:
+  - Integrated `MedicalWorkspace` (`activeTab === "medical"`) rendering in `RoleWorkspaceContainer.tsx` with role permissions (`Medical Officer`, Admin/Manager).
+  - Fixed syntax in `src/app/api/method/[...slug]/route.ts` (removed orphaned catch block).
+  - Completed `injazPayment` ternary expression in `src/lib/api/v2/operational.ts`.
+  - Added `resourceName?: string` support to `src/components/ui/LoadError.tsx` to resolve TypeScript compilation errors in `expenses-income/page.tsx`.
+- **Follow-Up Module Level 1: Compact Main Follow-up Table (`/applicants?tab=follow_up`)**:
+  - Removed **Agency Name** and **Sponsor Name** columns from the main Follow-up Table to prevent clutter and horizontal bloating, moving them into the Level 2 Applicant Follow-up Workspace.
+  - Preserved approved column order (12 columns + NO index):
+    1. **NO** (Index)
+    2. **NAME** (Candidate full name with initials pill)
+    3. **DESTINATION COUNTRY** (Saudi Arabia, Kuwait, etc.)
+    4. **STAGE STATUS** (Authoritative lifecycle stage matching `resolveApplicantStage`)
+    5. **DURATION** (Contract elapsed duration in days)
+    6. **COC STATUS** (Ministry COC status)
+    7. **LMIS STATUS** (Excel-like inline `ExcelSelect` dropdown with `LMIS_WORKING_STATUSES` for LMIS officers / Admins; opens compact rejection reasons dialog when `REJECTED` is selected; read-only lock for unauthorized roles)
+    8. **TE'SHIR APPT. DATE** (Excel-like inline `ExcelDateInput` updating biometric appointment via `setTaeshirAppointmentV2` for Taeshir officers / Admins; read-only font-mono for unauthorized roles)
+    9. **TE'SHIR STATUS** (Taeshir clearance step status badge)
+    10. **WAKALA STATUS** (Wakala fee authorization status badge)
+    11. **EMBASSY / VISA STATUS** (Embassy visa stamping status badge)
+    12. **MEDICAL 2 STATUS** (Inline select for Medical Officer / Admin when candidate is at `Ticketed` stage via `recordPredepartureMedicalResultV2`; read-only badge otherwise)
+    13. **DEPARTURE STATUS** (Flight departure status badge)
+  - Zero desktop horizontal scroll (`md:overflow-x-clip`), with full touch horizontal scrolling permitted on mobile (`< md`) without sticky first columns.
+- **Follow-Up Module Level 2: Dedicated Applicant Follow-up Workspace (`ApplicantFollowUpWorkspace.tsx`)**:
+  - Clicking any applicant row opens a dedicated operational workspace (full-height slide-over drawer) grouping detailed fields and actions by workflow stage:
+    1. **Applicant Summary**: Candidate identity, Passport number, Destination country, Foreign Agency name, Sponsor / Employer name, Sponsor ID, Target job, Contact phone, Contract days, Visa number, Labor ID, and later-stage milestone snapshot.
+    2. **LMIS Stage**: Working LMIS status, Labor ID, COC status, completion / issue date, rejection reasons, and Kuwait Police Ashara sub-checks (appointment, reference, payment, status). Authorized actions: Update working status (with reasons validation on reject), Start step, Complete step.
+    3. **Taeshir Stage**: Injaz Application ID (E-number), Appointment date & time, Injaz payment status, amount, and receipt number. Authorized actions: Set Appointment & Injaz ID, Reschedule Appointment, Download Injaz PDF form.
+    4. **Embassy / Wakala Stage**: Wakala fee status, amount, paid date, visa number, and embassy step status. Authorized actions: Record Wakala fee, Submit to Embassy, Stamp Visa (records visa number and issue/expiry dates).
+    5. **Medical 2 Stage**: Registration medical result & expiry, Stage 1 selected medical result & expiry, Pre-departure Medical 2 result (~72h before flight). Authorized actions: Record FIT / UNFIT via `recordPredepartureMedicalResultV2`.
+    6. **Ticket / Departure Stage**: Ticket number, airline carrier, flight date, flight time, and departure status. Authorized actions: Book / Record Ticket (`recordTicketDetailsV2`), Reschedule Flight (`recordRescheduleV2`), Confirm Departure (`advancePlacementV2` -> "Departed").
+  - Role-based security: each stage checks user permissions (`Saudi LMIS`, `Saudi Taeshir`, `Saudi Embassy`, `Medical Officer`, `Ticketer`, or Administrator / Manager). Unauthorized users see clean read-only fields with explanatory tooltips.
+  - Immediate state reflection: live mutations invalidate queries and refresh the parent table immediately.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock persistence or fake database fallbacks.
+
+- **Applicant Detail Page Overhaul (`/applicants/[id]/page.tsx`)**:
+  - Removed all external action buttons from the applicant detail page.
+  - Redesigned page to render the pre-filled registration form plus the stage status bar:
+    1. Header: Big format Name, Destination country, and Phone number.
+    2. Top area: Canonical 9-stage stepper ribbon (`Draft` ➔ `Registered` ➔ `CV Generated` ➔ `Selected` ➔ `Processing` ➔ `Stamped` ➔ `Ticketed` ➔ `Departed`).
+    3. Body: `ApplicantRegistrationForm` pre-filled with all applicant data (`enrichedApplicant`).
+- **LMIS Edit Restrictions**:
+  - Prevented LMIS from editing national ID, emergency contact name, or emergency phone across `LMISWorkspace.tsx`, `LmisFastPathModal.tsx`, and `updateApplicantForLmisV2` in `applicants.ts`.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) across all workspace files.
+
+---
+
 ## 1. System-Wide Conformance Summary
 
 | Total Capabilities Tracked | Complete | Implemented (Need Verification) | Partial (Need UI / Integration) | Backend Blocked | Not Started | Provisional |
@@ -471,4 +518,32 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
 - **Zero Mock Data & Zero Data Mutation**:
   - The tour system strictly highlights and explains real elements without creating fake demo records or mutating backend data.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors) and successful production build (`npm run build`, 25/25 routes compiled).
+
+### 13. Dashboard Alignment, Spacing, Density & Multi-Viewport Layout Fix (2026-10-08)
+- **Dashboard Visual Rhythm & Alignment Repair (`src/app/dashboard/page.tsx`)**:
+  - **Grid & Content Boundaries**: Standardized top header, 4 KPI cards, Pipeline Overview, and 3 bottom information panels to a shared visual grid with consistent margins and `gap-3 sm:gap-3.5`.
+  - **Height & Vertical Rhythm**: Replaced conflicting `justify-between space-y-2` and rigid `h-[calc(100vh-4.25rem)]` with exact viewport interior sizing (`md:h-[calc(100vh-5.5rem)] lg:h-[calc(100vh-6rem)] md:max-h-[calc(100vh-5.5rem)] lg:max-h-[calc(100vh-6rem)] min-h-0`), eliminating the 28px overflow caused by navbar and main container padding mismatch.
+  - **KPI Cards**: Balanced all 4 cards (`Total Applicants`, `In Progress`, `Completed`, `Departed`) with identical heights, unified padding (`p-3 sm:p-3.5`), aligned top icon badges (`h-7 w-7 rounded-lg`), uppercase category labels, and mono metric numbers.
+  - **Pipeline Overview**: Expanded hardcoded `h-[82px]` to `h-[92px] sm:h-[96px]` with consistent internal anatomy (circular step pill + count at top, badge + stage title at center, candidates arrow / parallel stream buttons at bottom). Elevated the Parallel Streams (LMIS & INJAZ) sub-stream buttons with readable typography and clean spacing.
+  - **Bottom Three Panels**: Unified Document Expiry Warnings, Action Items & Tasks, and Recent Applicants with identical card styling, header heights, body padding (`p-2.5 sm:p-3`), row card borders, and independent `overflow-y-auto` scroll containers with clean empty states.
+  - **Content & Order Preservation**: 100% preserved all client-approved titles, buttons, stages, alerts, operational tasks, recent applicants, and business logic.
+- **System-Wide Multi-Viewport Desktop Resizing Repair**:
+  - **Root Cause Elimination**: Identified that previous rules used `xl:overflow-x-clip` and `min-w-[...] xl:min-w-0`. Because `xl:` is 1280px in Tailwind, browser resizing below 1280px (e.g. 1024px, 1100px, 1200px) failed to apply the zero-scroll constraints, triggering sudden page-level and section-level horizontal scrolling.
+  - **Non-Mobile Desktop Normalization (768px - 2560px+)**: Normalized table containers to `md:overflow-x-clip` and `md:min-w-0 w-full` across all workspaces and listing screens:
+    - `src/components/operational/OperationalTable.tsx`
+    - `src/components/applicant/ApplicantTable.tsx`
+    - `src/components/operational/workspaces/CountryBanRequestsWorkspace.tsx`
+    - `src/app/employees/page.tsx`
+    - `src/app/contractors/page.tsx`
+    - `src/app/expenses-income/page.tsx`
+    - `src/app/complaints/page.tsx`
+    - `src/app/applicants/[id]/page.tsx`
+    - `src/app/agent/complaints/page.tsx`
+    - `src/app/agent/page.tsx`
+    - `src/app/agent/commission/page.tsx`
+    - `src/app/agent/wakala/page.tsx`
+    - `src/app/agent/reserved/page.tsx`
+  - **Mobile Table Invariance**: Preserved the mobile exception: `< md` (mobile), tables allow horizontal touch scrolling (`overflow-x-auto min-w-[...]`), all columns scroll together, and the first Applicant Name column is not sticky.
+- **Verification**: Zero mock data added. Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors).
+
 

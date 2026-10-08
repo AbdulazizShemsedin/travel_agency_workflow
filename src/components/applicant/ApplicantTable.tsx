@@ -15,10 +15,20 @@ import {
   Loader2,
   HeartPulse,
   Clock,
+  CheckCircle2,
+  Ticket,
+  RotateCcw,
+  FileSpreadsheet,
+  MoreVertical,
+  Send,
+  Ban,
 } from "lucide-react";
-import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2 } from "@/lib/api/v2";
+import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
+import { cancelApplicantV2, restartApplicantV2 } from "@/lib/api/v2/applicants";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { generateCvV2 } from "@/lib/api/v2/cv";
 import { recordSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
+import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +39,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -184,6 +199,12 @@ export function ApplicantTable() {
   const [med1Date, setMed1Date] = React.useState("");
   const [med1Expiry, setMed1Expiry] = React.useState("");
 
+  // ── Ticketing & Departure Modal State ──────────────────────────────────────
+  const [isTicketingModalOpen, setIsTicketingModalOpen] = React.useState(false);
+  const [ticketingTargetPlacement, setTicketingTargetPlacement] = React.useState<any>(null);
+  const [ticketingTargetApplicantName, setTicketingTargetApplicantName] = React.useState<string>("");
+  const [ticketingInitialTab, setTicketingInitialTab] = React.useState<"ticket" | "reschedule" | "medical2">("ticket");
+
   // Sync stage filter if URL parameter changes
   React.useEffect(() => {
     if (urlFilter) {
@@ -244,6 +265,29 @@ export function ApplicantTable() {
     },
   });
 
+  // Inline Register Applicant mutation (Draft -> Registered)
+  const [registeringApplicant, setRegisteringApplicant] = React.useState<string | null>(null);
+  const registerApplicantMutation = useMutation({
+    mutationFn: async (applicantName: string) => {
+      setRegisteringApplicant(applicantName);
+      return registerApplicantV2(applicantName);
+    },
+    onSuccess: (data, applicantName) => {
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      toast.success("Applicant Registered Successfully", {
+        description: data?.message || `${applicantName} has been transitioned to Registered.`,
+      });
+      setRegisteringApplicant(null);
+    },
+    onError: (err: Error) => {
+      toast.error("Registration Failed", {
+        description: err.message || "Could not register applicant.",
+      });
+      setRegisteringApplicant(null);
+    },
+  });
+
   // Inline Medical Screening mutation — records medical result on the active placement
   const recordMedicalMutation = useMutation({
     mutationFn: async () => {
@@ -286,6 +330,45 @@ export function ApplicantTable() {
     onError: (err: Error) => {
       toast.error("Advance to Processing Failed", { description: err.message });
     },
+  });
+
+  // Cancel Applicant modal & mutation
+  const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
+  const [cancelTargetApplicant, setCancelTargetApplicant] = React.useState<any | null>(null);
+  const [cancelRemarks, setCancelRemarks] = React.useState("");
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!cancelTargetApplicant) throw new Error("No applicant selected");
+      return cancelApplicantV2(cancelTargetApplicant.name, cancelRemarks || "Administrative cancellation");
+    },
+    onSuccess: (data) => {
+      setIsCancelModalOpen(false);
+      setCancelRemarks("");
+      setCancelTargetApplicant(null);
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      toast.warning(data?.message || "Applicant process cancelled.");
+    },
+    onError: (err: Error) => toast.error("Cancellation failed", { description: err.message }),
+  });
+
+  // Restart Applicant modal & mutation
+  const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
+  const [restartTargetApplicant, setRestartTargetApplicant] = React.useState<any | null>(null);
+  const [restartTargetStatus, setRestartTargetStatus] = React.useState<"Draft" | "Registered">("Draft");
+  const restartMutation = useMutation({
+    mutationFn: async () => {
+      if (!restartTargetApplicant) throw new Error("No applicant selected");
+      return restartApplicantV2(restartTargetApplicant.name, restartTargetStatus);
+    },
+    onSuccess: (data) => {
+      setIsRestartModalOpen(false);
+      setRestartTargetApplicant(null);
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus}.`);
+    },
+    onError: (err: Error) => toast.error("Restart failed", { description: err.message }),
   });
 
   // Build per-placement clearance step map:
@@ -672,7 +755,7 @@ export function ApplicantTable() {
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto xl:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto md:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name (sticky) | Passport | Stage Status | Contract Date | Contract No |
@@ -680,7 +763,7 @@ export function ApplicantTable() {
             Embassy | Embassy Expire Date | Actions
             Total: 16 columns
           */}
-          <table className="w-full min-w-[960px] xl:min-w-0 text-left text-xs border-collapse">
+          <table className="w-full min-w-[960px] md:min-w-0 text-left text-xs border-collapse">
             <thead className="sticky top-0 z-30 border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[10px] xl:text-[11px] leading-tight">
               <tr>
                 {/* Col 1: Checkbox only — no header text */}
@@ -852,16 +935,11 @@ export function ApplicantTable() {
                           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                             {applicant.first_name?.[0] || "A"}
                           </div>
-                          <div className="min-w-0 flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[130px] xl:max-w-[150px]">
+                          <div className="min-w-0 flex items-center">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[180px]">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
-                            {applicant.phone_number ? (
-                              <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                                ({applicant.phone_number})
-                              </span>
-                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -977,15 +1055,23 @@ export function ApplicantTable() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1 flex-nowrap">
-                          {/* View Detail */}
-                          <Link
-                            href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                            className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-[#1a1a22] hover:bg-slate-200 dark:hover:bg-[#252530] border border-slate-200 dark:border-[#2a2a35] transition"
-                            title="View Applicant Details"
-                          >
-                            <Eye className="h-3 w-3 text-slate-500" />
-                            <span>View</span>
-                          </Link>
+                          {/* Stage: Draft — Register Applicant */}
+                          {stage === "Draft" && (
+                            <button
+                              type="button"
+                              disabled={registerApplicantMutation.isPending && registeringApplicant === applicant.name}
+                              onClick={() => registerApplicantMutation.mutate(applicant.name)}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              title="Register this applicant"
+                            >
+                              {registerApplicantMutation.isPending && registeringApplicant === applicant.name ? (
+                                <Loader2 className="h-3 w-3 animate-spin text-emerald-700" />
+                              ) : (
+                                <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              )}
+                              <span>Register</span>
+                            </button>
+                          )}
 
                           {/* Generate CV — shown for Registered stage while CV not yet generated */}
                           {stage === "Registered" && !cvGeneratedSet.has(applicant.name) && can("generateCv") && (
@@ -1017,55 +1103,6 @@ export function ApplicantTable() {
                             </button>
                           )}
 
-                          {/* View CV — shown once CV has been generated (stage past Registered, or optimistic after generation) */}
-                          {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage)) && (
-                            <Link
-                              href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-purple-800 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition"
-                              title="View CV"
-                            >
-                              <FileText className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                              <span>View CV</span>
-                            </Link>
-                          )}
-
-                          {/* Assign Processing Employee — Selected stage */}
-                          {stage === "Selected" && can("manageUsers") && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleSingleAssign(applicant, e)}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
-                              title="Assign Staff"
-                            >
-                              <UserCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
-                              <span>Assign</span>
-                            </button>
-                          )}
-
-                          {/* Extract Contract Doc — Selected stage, no contract yet */}
-                          {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && !hasContract && (
-                            <Link
-                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-orange-950 dark:text-orange-200 bg-orange-100 hover:bg-orange-200 dark:bg-orange-950/80 dark:hover:bg-orange-900 border border-orange-300 dark:border-orange-700 transition shadow-2xs"
-                              title="Extract Contract Document"
-                            >
-                              <FileText className="h-3 w-3 text-orange-600 dark:text-orange-400" />
-                              <span>Extract Doc</span>
-                            </Link>
-                          )}
-
-                          {/* Contract Doc — has contract uploaded */}
-                          {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && hasContract && (
-                            <Link
-                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition"
-                              title="View Contract Document"
-                            >
-                              <FileText className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                              <span>Contract Doc</span>
-                            </Link>
-                          )}
-
                           {/* Record Medical — Selected stage, opens inline modal */}
                           {stage === "Selected" && (applicant as any)._activePlacementName && (
                             <button
@@ -1074,7 +1111,6 @@ export function ApplicantTable() {
                                 e.stopPropagation();
                                 setMedicalTargetPlacementName((applicant as any)._activePlacementName);
                                 setMedicalTargetApplicantName(applicant.full_name || applicant.name);
-                                // Pre-fill from existing data if available
                                 setMed1Status(
                                   (medicalStatus === "FIT" || medicalStatus === "UNFIT") ? medicalStatus : "FIT"
                                 );
@@ -1115,6 +1151,182 @@ export function ApplicantTable() {
                               <span>Processing</span>
                             </button>
                           )}
+
+                          {/* Stage 7: Stamped — Book Flight Ticket */}
+                          {stage === "Stamped" && (applicant as any)._activePlacementName && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const plc = (applicant as any)._activePlacementName
+                                  ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                  : null;
+                                setTicketingTargetPlacement(plc || null);
+                                setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                setTicketingInitialTab("ticket");
+                                setIsTicketingModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
+                              title="Book Flight Ticket"
+                            >
+                              <Ticket className="h-3 w-3 text-teal-700 dark:text-teal-400" />
+                              <span>Book Ticket</span>
+                            </button>
+                          )}
+
+                          {/* Stage 8: Ticketed — Medical 2 & Depart */}
+                          {stage === "Ticketed" && (applicant as any)._activePlacementName && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const plc = (applicant as any)._activePlacementName
+                                  ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                  : null;
+                                setTicketingTargetPlacement(plc || null);
+                                setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                setTicketingInitialTab("medical2");
+                                setIsTicketingModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-purple-950 dark:text-purple-200 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 border border-purple-300 dark:border-purple-700 transition cursor-pointer shadow-2xs"
+                              title="Verify Pre-Departure Medical 2 and finalize departure"
+                            >
+                              <HeartPulse className="h-3 w-3 text-purple-700 dark:text-purple-400" />
+                              <span>Depart</span>
+                            </button>
+                          )}
+
+                          {/* Three Vertical Dots Action Menu */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center justify-center h-6 w-6 rounded text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#252530] border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer"
+                                title="More actions"
+                              >
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              align="end"
+                              className="w-48 p-1.5 shadow-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#16161c] rounded-lg z-50"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex flex-col gap-0.5 text-xs">
+                                {/* View CV */}
+                                {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage) || applicant.cv_attachment || applicant.cv_file) && (
+                                  <Link
+                                    href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 transition"
+                                  >
+                                    <FileText className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                    <span>View CV</span>
+                                  </Link>
+                                )}
+
+                                {/* View Contract / Contract Doc */}
+                                {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && (
+                                  <Link
+                                    href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950/40 dark:hover:text-amber-300 transition"
+                                  >
+                                    <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                    <span>{hasContract ? "View Contract" : "Contract Doc"}</span>
+                                  </Link>
+                                )}
+
+                                {/* Assign Staff */}
+                                {can("manageUsers") && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSingleAssign(applicant, e);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition"
+                                  >
+                                    <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Assign Staff</span>
+                                  </button>
+                                )}
+
+                                {/* Reschedule Flight */}
+                                {stage === "Ticketed" && (applicant as any)._activePlacementName && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const plc = (applicant as any)._activePlacementName
+                                        ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                        : null;
+                                      setTicketingTargetPlacement(plc || null);
+                                      setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                      setTicketingInitialTab("reschedule");
+                                      setIsTicketingModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-zinc-800 transition"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-zinc-400" />
+                                    <span>Reschedule Flight</span>
+                                  </button>
+                                )}
+
+                                {/* Send to Extension */}
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res = await sendApplicantToExtension(applicant as any);
+                                      if (res.success) {
+                                        toast.success(`Candidate ${applicant.name} sent to extension!`);
+                                      } else {
+                                        toast.error(res.error || "Extension communication failed.");
+                                      }
+                                    } catch (err: any) {
+                                      toast.error(err?.message || "Failed to communicate with extension.");
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300 transition"
+                                >
+                                  <Send className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  <span>Send to Extension</span>
+                                </button>
+
+                                <div className="h-px bg-slate-100 dark:bg-[#252530] my-1" />
+
+                                {/* Cancel Process / Restore Applicant */}
+                                {applicant.applicant_state === "Cancelled" || stage === "Cancelled" ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRestartTargetApplicant(applicant);
+                                      setRestartTargetStatus("Draft");
+                                      setIsRestartModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Restore Applicant</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCancelTargetApplicant(applicant);
+                                      setCancelRemarks("");
+                                      setIsCancelModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                                  >
+                                    <Ban className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                    <span>Cancel Process</span>
+                                  </button>
+                                )}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </td>
                     </tr>
@@ -1307,6 +1519,136 @@ export function ApplicantTable() {
                 <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Saving...</>
               ) : (
                 <><HeartPulse className="h-3.5 w-3.5 mr-1.5" />Save Result</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ticketing & Departure Modal */}
+      <TicketingDepartureModal
+        isOpen={isTicketingModalOpen}
+        onClose={() => setIsTicketingModalOpen(false)}
+        placement={ticketingTargetPlacement}
+        applicantName={ticketingTargetApplicantName}
+        initialTab={ticketingInitialTab}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["applicants"] });
+          queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+        }}
+      />
+
+      {/* Cancel Process Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={(open) => { if (!open) setIsCancelModalOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <Ban className="h-4 w-4" />
+              Cancel Applicant Process
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Are you sure you want to cancel the recruitment process for <strong>{cancelTargetApplicant?.full_name || cancelTargetApplicant?.name}</strong>?
+              This will freeze active placements and linked clearance steps.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Cancellation Reason
+            </label>
+            <textarea
+              value={cancelRemarks}
+              onChange={(e) => setCancelRemarks(e.target.value)}
+              placeholder="Enter cancellation reason (e.g. Applicant requested withdrawal, Medically unfit, etc.)"
+              className="w-full h-20 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#1a1a22] text-xs p-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCancelModalOpen(false)}
+              disabled={cancelMutation.isPending}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={cancelMutation.isPending}
+              onClick={() => cancelMutation.mutate()}
+            >
+              {cancelMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Cancelling...</>
+              ) : (
+                <><Ban className="h-3.5 w-3.5 mr-1.5" />Confirm Cancel</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restart / Restore Applicant Modal */}
+      <Dialog open={isRestartModalOpen} onOpenChange={(open) => { if (!open) setIsRestartModalOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+              <RotateCcw className="h-4 w-4" />
+              Restore Cancelled Applicant
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Restart recruitment process for <strong>{restartTargetApplicant?.full_name || restartTargetApplicant?.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Target Restart Status
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRestartTargetStatus("Draft")}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  restartTargetStatus === "Draft"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
+                )}
+              >
+                Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => setRestartTargetStatus("Registered")}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  restartTargetStatus === "Registered"
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
+                )}
+              >
+                Registered
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRestartModalOpen(false)}
+              disabled={restartMutation.isPending}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={restartMutation.isPending}
+              onClick={() => restartMutation.mutate()}
+            >
+              {restartMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restoring...</>
+              ) : (
+                <><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Confirm Restore</>
               )}
             </Button>
           </div>

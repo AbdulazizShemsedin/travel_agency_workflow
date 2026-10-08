@@ -79,7 +79,6 @@ export async function fetchCurrentUserContext(): Promise<AuthUser | null> {
     const usernameLower = (user.user || "").toLowerCase().trim();
     const hasInternalStaffRole =
       usernameLower === "administrator" ||
-      usernameLower.startsWith("admin") ||
       rawRoles.some((r) => {
         const norm = (typeof r === "string" ? r : "").toLowerCase().trim();
         return internalStaffRoles.includes(norm);

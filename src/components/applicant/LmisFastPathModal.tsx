@@ -88,11 +88,7 @@ export function LmisFastPathModal({
     mutationFn: async () => {
       const payload: V2LmisUpdatePayload = {
         applicant_name: applicantId,
-        national_id: nationalId.trim() || undefined,
         labor_id: laborId.trim() || undefined,
-        emergency_contact_name: emergencyName.trim() || undefined,
-        emergency_contact_phone: emergencyPhone.trim() || undefined,
-        emergency_contact_address: emergencyAddress.trim() || undefined,
       };
 
       return await updateApplicantForLmisV2(payload);
@@ -180,16 +176,16 @@ export function LmisFastPathModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {/* National ID */}
               <div className="space-y-1">
-                <Label htmlFor="national_id" className="text-xs font-semibold flex items-center gap-1.5">
+                <Label htmlFor="national_id" className="text-xs font-semibold flex items-center gap-1.5 text-slate-500">
                   <IdCard className="h-3 w-3 text-slate-400" />
-                  National ID
+                  National ID (Read-only)
                 </Label>
                 <Input
                   id="national_id"
+                  disabled
                   placeholder="Ethiopian National ID (Fayda)"
                   value={nationalId}
-                  onChange={(e) => setNationalId(e.target.value)}
-                  className="h-8 text-xs font-mono"
+                  className="h-8 text-xs font-mono bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                 />
               </div>
 
@@ -213,8 +209,8 @@ export function LmisFastPathModal({
 
             {/* Emergency Contact Section */}
             <div className="pt-2 border-t border-slate-100 dark:border-[#222227] space-y-3">
-              <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 block">
-                Emergency Contact Details
+              <span className="text-xs font-bold text-slate-500 block">
+                Emergency Contact Details (Read-only)
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
@@ -223,10 +219,10 @@ export function LmisFastPathModal({
                   </Label>
                   <Input
                     id="emergency_name"
+                    disabled
                     placeholder="Next of kin"
                     value={emergencyName}
-                    onChange={(e) => setEmergencyName(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-8 text-xs bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                   />
                 </div>
 
@@ -236,10 +232,10 @@ export function LmisFastPathModal({
                   </Label>
                   <Input
                     id="emergency_phone"
+                    disabled
                     placeholder="+251..."
                     value={emergencyPhone}
-                    onChange={(e) => setEmergencyPhone(e.target.value)}
-                    className="h-8 text-xs font-mono"
+                    className="h-8 text-xs font-mono bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                   />
                 </div>
 
@@ -249,10 +245,10 @@ export function LmisFastPathModal({
                   </Label>
                   <Input
                     id="emergency_address"
+                    disabled
                     placeholder="City / Woreda"
                     value={emergencyAddress}
-                    onChange={(e) => setEmergencyAddress(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-8 text-xs bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                   />
                 </div>
               </div>

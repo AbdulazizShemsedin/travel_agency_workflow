@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function getFrappeConfig(req: NextRequest, methodPath = "") {
-  const url =
-    process.env.FRAPPE_BASE_URL ||
-    process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://agencytracking-production-2a06.up.railway.app";
+  const url = process.env.FRAPPE_BASE_URL;
+  if (!url) {
+    return null;
+  }
 
   const clientAccept = req.headers.get("accept");
   const headers: Record<string, string> = {
@@ -17,12 +17,10 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
 
   const isAuthOrCsrf =
     methodPath === "login" ||
-    methodPath === "logout" ||
     methodPath.endsWith("/login") ||
-    methodPath.endsWith("/logout") ||
     methodPath.includes("get_csrf_token");
 
-  // Forward CSRF token for state-changing operations (never on auth or token retrieval)
+  // Forward CSRF token for state-changing operations including logout (never on login or token retrieval)
   if (csrfToken && !isAuthOrCsrf) {
     headers["X-Frappe-CSRF-Token"] = csrfToken;
   }
@@ -67,7 +65,7 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2, ti
 async function parseJsonOrFriendlyMessage(res: Response) {
   if (res.status === 413) {
     return {
-      message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the video before uploading (recommended under 30MB).",
+      message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the file before uploading (recommended under 20MB).",
       error: "Request Entity Too Large",
       status_code: 413,
     };
@@ -94,7 +92,7 @@ async function parseJsonOrFriendlyMessage(res: Response) {
         rawText.includes("The file is too large")
       ) {
         return {
-          message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the video before uploading (recommended under 30MB).",
+          message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the file before uploading (recommended under 20MB).",
           error: "Request Entity Too Large",
           status_code: 413,
         };
@@ -115,13 +113,28 @@ async function parseJsonOrFriendlyMessage(res: Response) {
   }
 }
 
-function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | Response) {
+function forwardSetCookieHeaders(req: NextRequest, sourceRes: Response, targetRes: NextResponse | Response) {
+  const isHttps =
+    req.headers.get("x-forwarded-proto") === "https" ||
+    req.nextUrl.protocol === "https:";
+
   const sanitizeCookie = (cookie: string) => {
-    // Remove explicit domain, secure, and samesite attributes to allow cookie on proxy domain (localhost)
-    return cookie
-      .replace(/;\s*Domain=[^;]+/gi, "")
-      .replace(/;\s*Secure/gi, "")
-      .replace(/;\s*SameSite=[^;]+/gi, "");
+    // Keep removing Domain; keep SameSite (use Lax when backend sent none); add Secure when browser is on HTTPS
+    let cleaned = cookie.replace(/;\s*Domain=[^;]+/gi, "");
+
+    if (!/;\s*SameSite=/i.test(cleaned)) {
+      cleaned += "; SameSite=Lax";
+    }
+
+    if (isHttps) {
+      if (!/;\s*Secure/i.test(cleaned)) {
+        cleaned += "; Secure";
+      }
+    } else {
+      cleaned = cleaned.replace(/;\s*Secure/gi, "");
+    }
+
+    return cleaned;
   };
 
   if (typeof (sourceRes.headers as any).getSetCookie === "function") {
@@ -137,99 +150,6 @@ function forwardSetCookieHeaders(sourceRes: Response, targetRes: NextResponse | 
   }
 }
 
-async function checkIsAdminOnly(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
-  try {
-    const whoRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.auth_api.get_current_user`, {
-      method: "POST",
-      headers: forwardHeaders,
-      body: "{}",
-    });
-    const whoData = await whoRes.json().catch(() => ({}));
-    const userMsg = whoData.message || {};
-    const loggedUser = (userMsg.user || "").toLowerCase().trim();
-    if (!loggedUser || loggedUser === "guest") return false;
-    if (loggedUser === "administrator") return true;
-
-    const userRoles: string[] = (userMsg.roles || []).map((r: any) =>
-      String(r || "").toLowerCase().trim()
-    );
-    const allowed = ["administrator", "system manager", "admin"];
-    return allowed.some((ar) => userRoles.includes(ar));
-  } catch {
-    return false;
-  }
-}
-
-async function checkIsAdminOrCommunicationManager(config: any, forwardHeaders: Record<string, string>): Promise<boolean> {
-  try {
-    const whoRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.auth_api.get_current_user`, {
-      method: "POST",
-      headers: forwardHeaders,
-      body: "{}",
-    });
-    const whoData = await whoRes.json().catch(() => ({}));
-    const userMsg = whoData.message || {};
-    const loggedUser = (userMsg.user || "").toLowerCase().trim();
-    if (!loggedUser || loggedUser === "guest") return false;
-    if (loggedUser === "administrator") return true;
-
-    const userRoles: string[] = (userMsg.roles || []).map((r: any) =>
-      String(r || "").toLowerCase().trim()
-    );
-    const allowed = [
-      "administrator",
-      "system manager",
-      "admin",
-      "manager",
-      "general manager",
-      "operations manager",
-      "finance manager",
-      "registrar",
-      "communication manager",
-      "contractor manager",
-      "staff",
-    ];
-    if (userRoles.some((ar) => allowed.includes(ar))) {
-      return true;
-    }
-    if (userMsg.is_internal_staff) {
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-let cachedAllThreads: { data: any[]; timestamp: number } | null = null;
-
-async function getAllThreadsCached(config: any, forwardHeaders: Record<string, string>): Promise<any[]> {
-  const now = Date.now();
-  if (cachedAllThreads && now - cachedAllThreads.timestamp < 10000) {
-    return cachedAllThreads.data;
-  }
-  try {
-    const allRes = await fetchWithRetry(`${config.url}/api/method/agency_tracking.chat_api.list_all_threads`, {
-      method: "POST",
-      headers: forwardHeaders,
-      body: "{}",
-    });
-    const allData = await allRes.json().catch(() => ({}));
-    const allList: any[] = Array.isArray(allData.message)
-      ? allData.message
-      : Array.isArray(allData.threads)
-      ? allData.threads
-      : [];
-    if (allList.length > 0) {
-      cachedAllThreads = { data: allList, timestamp: now };
-    }
-    return allList;
-  } catch (err) {
-    console.warn("[PROXY getAllThreadsCached] failed:", err);
-    return cachedAllThreads?.data || [];
-  }
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
@@ -237,14 +157,11 @@ export async function POST(
   const { slug } = await params;
   const methodPath = slug.join("/");
   const config = getFrappeConfig(req, methodPath);
-
-  // Invalidate chat threads cache on thread mutations
-  if (
-    methodPath.includes("create_internal_thread") ||
-    methodPath.includes("create_agency_thread") ||
-    methodPath.includes("add_participant")
-  ) {
-    cachedAllThreads = null;
+  if (!config) {
+    return NextResponse.json(
+      { message: "Backend address not configured" },
+      { status: 503 }
+    );
   }
 
   try {
@@ -266,7 +183,7 @@ export async function POST(
 
       const data = await parseJsonOrFriendlyMessage(res);
       const response = NextResponse.json(data, { status: res.status });
-      forwardSetCookieHeaders(res, response);
+      forwardSetCookieHeaders(req, res, response);
       return response;
     }
 
@@ -282,155 +199,6 @@ export async function POST(
       ...config.headers,
       "Content-Type": "application/json",
     };
-
-
-    // Dedicated Whitelisted Endpoint: Update Contractor Agency and linked Foreign Agency User
-    if (methodPath === "agency_tracking.contractor_api.update_contractor") {
-      // 1. Explicit RBAC Check: Admin, Manager, Communication Manager, Finance Manager, Registrar
-      const isAuthorized = await checkIsAdminOrCommunicationManager(config, forwardHeaders);
-      if (!isAuthorized) {
-        return NextResponse.json(
-          { message: "You do not have permission to update contractor agency details." },
-          { status: 403 }
-        );
-      }
-
-      try {
-        const parsedBody = JSON.parse(bodyText || "{}");
-        const contractorName = parsedBody.name || parsedBody.contractor_name;
-        if (!contractorName) {
-          return NextResponse.json(
-            { message: "Contractor name is required for updates." },
-            { status: 400 }
-          );
-        }
-
-        // 2. Fetch existing Contractor record to verify existence & resolve linked User
-        const getConRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-          method: "POST",
-          headers: forwardHeaders,
-          body: JSON.stringify({
-            doctype: "Contractor",
-            name: contractorName,
-          }),
-        });
-        const getConData = await getConRes.json().catch(() => ({}));
-        if (!getConRes.ok || !getConData.message) {
-          return NextResponse.json(
-            { message: "Contractor record could not be found." },
-            { status: 404 }
-          );
-        }
-
-        const existingCon = getConData.message;
-        const conKeys = new Set(Object.keys(existingCon));
-
-        // 3. Update Contractor fields (country, communication_manager, etc.)
-        const contractorUpdates: Record<string, any> = {};
-        if (parsedBody.country && parsedBody.country !== existingCon.country) {
-          contractorUpdates.country = parsedBody.country;
-        }
-        if (parsedBody.communication_manager !== undefined && (conKeys.has("communication_manager") || !conKeys.size)) {
-          contractorUpdates.communication_manager = parsedBody.communication_manager || "";
-        }
-        if (parsedBody.contact_person !== undefined && conKeys.has("contact_person")) {
-          contractorUpdates.contact_person = parsedBody.contact_person;
-        }
-        if (parsedBody.phone !== undefined && conKeys.has("phone")) {
-          contractorUpdates.phone = parsedBody.phone;
-        }
-        if (parsedBody.whatsapp !== undefined && conKeys.has("whatsapp")) {
-          contractorUpdates.whatsapp = parsedBody.whatsapp;
-        }
-        if (parsedBody.email !== undefined && conKeys.has("email")) {
-          contractorUpdates.email = parsedBody.email;
-        }
-        if (parsedBody.notes !== undefined && conKeys.has("notes")) {
-          contractorUpdates.notes = parsedBody.notes;
-        }
-        if (parsedBody.company_name && conKeys.has("company_name")) {
-          contractorUpdates.company_name = parsedBody.company_name;
-        }
-
-        // Rename contractor doc if contractor_name was renamed
-        let finalContractorName = contractorName;
-        if (parsedBody.contractor_name && parsedBody.contractor_name !== existingCon.contractor_name) {
-          if (existingCon.name === existingCon.contractor_name) {
-            try {
-              const renameRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.rename_doc`, {
-                method: "POST",
-                headers: forwardHeaders,
-                body: JSON.stringify({
-                  doctype: "Contractor",
-                  old_name: contractorName,
-                  new_name: parsedBody.contractor_name,
-                }),
-              });
-              if (renameRes.ok) {
-                finalContractorName = parsedBody.contractor_name;
-              }
-            } catch (renameErr) {
-              console.warn("[PROXY update_contractor] rename_doc fallback to set_value:", renameErr);
-              contractorUpdates.contractor_name = parsedBody.contractor_name;
-            }
-          } else if (conKeys.has("contractor_name")) {
-            contractorUpdates.contractor_name = parsedBody.contractor_name;
-          }
-        }
-
-        if (Object.keys(contractorUpdates).length > 0) {
-          await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
-            method: "POST",
-            headers: forwardHeaders,
-            body: JSON.stringify({
-              doctype: "Contractor",
-              name: finalContractorName,
-              fieldname: contractorUpdates,
-            }),
-          });
-        }
-
-        // 4. Update linked Foreign Agency User if contact person, phone, or whatsapp provided
-        // RBAC & Tenant Isolation Safety: NEVER mutate root "Administrator" or non-agency users
-        const linkedUser = existingCon.user;
-        const isSystemAccount = !linkedUser ||
-          linkedUser.toLowerCase() === "administrator" ||
-          linkedUser.toLowerCase() === "guest";
-
-        if (linkedUser && !isSystemAccount) {
-          const userUpdates: Record<string, any> = {};
-          if (parsedBody.contact_person) userUpdates.first_name = parsedBody.contact_person;
-          if (parsedBody.phone !== undefined) userUpdates.phone = parsedBody.phone;
-          if (parsedBody.whatsapp !== undefined) userUpdates.mobile_no = parsedBody.whatsapp;
-
-          if (Object.keys(userUpdates).length > 0) {
-            await fetchWithRetry(`${config.url}/api/method/frappe.client.set_value`, {
-              method: "POST",
-              headers: forwardHeaders,
-              body: JSON.stringify({
-                doctype: "User",
-                name: linkedUser,
-                fieldname: userUpdates,
-              }),
-            });
-          }
-        }
-
-        return NextResponse.json({
-          message: {
-            success: true,
-            name: finalContractorName,
-            contractor_name: parsedBody.contractor_name || existingCon.contractor_name,
-          },
-        }, { status: 200 });
-      } catch (err: any) {
-        console.error("[PROXY ERROR update_contractor]", err);
-        return NextResponse.json(
-          { message: "Failed to update contractor agency details." },
-          { status: 500 }
-        );
-      }
-    }
 
     const isHeavyCvOrPdf =
       methodPath === "agency_tracking.cv_api.generate_cv" ||
@@ -484,17 +252,23 @@ export async function POST(
           const parsed = JSON.parse(bodyText || "{}");
           const targetThreadName = parsed.thread_name;
           if (targetThreadName) {
-            const threadDocRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-              method: "POST",
-              headers: forwardHeaders,
-              body: JSON.stringify({ doctype: "Chat Thread", name: targetThreadName }),
-            });
+            const threadDocRes = await fetchWithRetry(
+              `${config.url}/api/method/agency_tracking.chat_api.get_thread_participants`,
+              {
+                method: "POST",
+                headers: forwardHeaders,
+                body: JSON.stringify({ thread_name: targetThreadName }),
+              }
+            );
             if (threadDocRes.ok) {
-              const threadDoc = await threadDocRes.json().catch(() => ({}));
-              participants = (threadDoc.message?.participants || []).map((p: any) => ({
-                user: p.user,
-                last_read_at: p.last_read_at || null,
-              }));
+              const partData = await threadDocRes.json().catch(() => ({}));
+              participants = Array.isArray(partData.message)
+                ? partData.message
+                : Array.isArray(partData.participants)
+                ? partData.participants
+                : Array.isArray(partData)
+                ? partData
+                : [];
             }
           }
         } catch (err) {
@@ -502,7 +276,7 @@ export async function POST(
         }
 
         const response = NextResponse.json({ message: messagesList, participants }, { status: 200 });
-        forwardSetCookieHeaders(res, response);
+        forwardSetCookieHeaders(req, res, response);
         return response;
       }
     }
@@ -526,13 +300,13 @@ export async function POST(
       if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
       headers.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
       const binaryResponse = new Response(buffer, { status: res.status, headers });
-      forwardSetCookieHeaders(res, binaryResponse);
+      forwardSetCookieHeaders(req, res, binaryResponse);
       return binaryResponse;
     }
 
     const data = await parseJsonOrFriendlyMessage(res);
 
-    // Post-query enrichment for contractor user details and portal candidate skills
+    // Post-query enrichment for contractor user details
     if (res.ok && data) {
       if (methodPath === "agency_tracking.contractor_api.list_contractors") {
         const list: any[] = Array.isArray(data.message) ? data.message : Array.isArray(data) ? data : [];
@@ -562,55 +336,6 @@ export async function POST(
           );
           if (Array.isArray(data.message)) data.message = enriched;
           else if (Array.isArray(data)) (data as any) = enriched;
-        }
-      } else if (methodPath === "agency_tracking.chat_api.list_threads") {
-        const rawThreads: any[] = Array.isArray(data.message)
-          ? data.message
-          : Array.isArray(data.threads)
-          ? data.threads
-          : Array.isArray(data)
-          ? data
-          : [];
-
-        if (rawThreads.length > 0) {
-          try {
-            const allThreads = await getAllThreadsCached(config, forwardHeaders);
-            if (allThreads.length > 0) {
-              const detailsMap = new Map<string, any>();
-              allThreads.forEach((t) => {
-                if (t.name) detailsMap.set(t.name, t);
-              });
-
-              const enriched = rawThreads.map((t) => {
-                const fullThread = detailsMap.get(t.name);
-                return {
-                  ...t,
-                  participants: fullThread?.participants || t.participants || [],
-                  contractor: fullThread?.contractor || t.contractor || null,
-                  creation: fullThread?.creation || t.creation,
-                };
-              });
-
-              if (Array.isArray(data.message)) data.message = enriched;
-              else if (Array.isArray(data.threads)) data.threads = enriched;
-              else if (Array.isArray(data)) (data as any) = enriched;
-            }
-          } catch (enrichErr) {
-            console.warn("[PROXY list_threads] could not enrich participants:", enrichErr);
-          }
-        }
-      } else if (methodPath === "agency_tracking.chat_api.list_all_threads") {
-        const rawList = Array.isArray(data?.message) ? data.message : Array.isArray(data) ? data : [];
-        if (!res.ok || rawList.length === 0 || data?.exc_type === "PermissionError") {
-          try {
-            const allThreads = await getAllThreadsCached(config, forwardHeaders);
-            data.message = allThreads;
-            data.exc_type = undefined;
-            data.exception = undefined;
-            const response = NextResponse.json({ message: allThreads }, { status: 200 });
-            forwardSetCookieHeaders(res, response);
-            return response;
-          } catch {}
         }
       }
     }
@@ -644,26 +369,36 @@ export async function POST(
         console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
-    // For logout requests, if backend returns non-ok (e.g. 400 CSRFTokenError or expired session),
-    // guarantee clean 200 response with cleared session cookies so client logout is always successful
+
+    // For logout requests: forward backend response and clear cookies only after backend invalidates session
     const isLogoutMethod = methodPath === "logout" || methodPath.endsWith("/logout");
-    if (isLogoutMethod && !res.ok) {
-      const logoutResponse = NextResponse.json(
-        { message: "Logged out", home_page: "/login", full_name: "Guest" },
-        { status: 200 }
-      );
-      const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
-      ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
-        logoutResponse.headers.append(
-          "set-cookie",
-          `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax`
+    if (isLogoutMethod) {
+      if (res.ok) {
+        const logoutResponse = NextResponse.json(
+          data || { message: "Logged out", home_page: "/login", full_name: "Guest" },
+          { status: 200 }
         );
-      });
-      return logoutResponse;
+        forwardSetCookieHeaders(req, res, logoutResponse);
+        const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
+        const isHttps =
+          req.headers.get("x-forwarded-proto") === "https" ||
+          req.nextUrl.protocol === "https:";
+        const sec = isHttps ? "; Secure" : "";
+        ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
+          logoutResponse.headers.append(
+            "set-cookie",
+            `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax${sec}`
+          );
+        });
+        return logoutResponse;
+      }
+      const errorResponse = NextResponse.json(data, { status: res.status });
+      forwardSetCookieHeaders(req, res, errorResponse);
+      return errorResponse;
     }
 
     const response = NextResponse.json(data, { status: res.status });
-    forwardSetCookieHeaders(res, response);
+    forwardSetCookieHeaders(req, res, response);
     return response;
   } catch (err: any) {
     console.error("[PROXY CATCH POST]", methodPath, err);
@@ -683,6 +418,7 @@ export async function POST(
   }
 }
 
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
@@ -690,6 +426,12 @@ export async function GET(
   const { slug } = await params;
   const methodPath = slug.join("/");
   const config = getFrappeConfig(req, methodPath);
+  if (!config) {
+    return NextResponse.json(
+      { message: "Backend address not configured" },
+      { status: 503 }
+    );
+  }
 
   try {
     const isHeavyCvOrPdf =
@@ -728,7 +470,7 @@ export async function GET(
       if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
       headers.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
       const binaryResponse = new Response(buffer, { status: res.status, headers });
-      forwardSetCookieHeaders(res, binaryResponse);
+      forwardSetCookieHeaders(req, res, binaryResponse);
       return binaryResponse;
     }
 
@@ -752,21 +494,31 @@ export async function GET(
         console.warn(`[PROXY 403 FORBIDDEN] ${methodPath}:`, data?._error_message || "Permission Denied");
       }
     }
-    // For logout requests, if backend returns non-ok, guarantee clean 200 response with cleared session cookies
+    // For logout requests, forward backend response and clear cookies only after backend invalidates session
     const isLogoutMethod = methodPath === "logout" || methodPath.endsWith("/logout");
-    if (isLogoutMethod && !res.ok) {
-      const logoutResponse = NextResponse.json(
-        { message: "Logged out", home_page: "/login", full_name: "Guest" },
-        { status: 200 }
-      );
-      const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
-      ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
-        logoutResponse.headers.append(
-          "set-cookie",
-          `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax`
+    if (isLogoutMethod) {
+      if (res.ok) {
+        const logoutResponse = NextResponse.json(
+          data || { message: "Logged out", home_page: "/login", full_name: "Guest" },
+          { status: 200 }
         );
-      });
-      return logoutResponse;
+        forwardSetCookieHeaders(req, res, logoutResponse);
+        const expiredDate = "Thu, 01 Jan 1970 00:00:00 GMT";
+        const isHttps =
+          req.headers.get("x-forwarded-proto") === "https" ||
+          req.nextUrl.protocol === "https:";
+        const sec = isHttps ? "; Secure" : "";
+        ["sid", "system_user", "full_name", "user_id", "user_image"].forEach((cookieName) => {
+          logoutResponse.headers.append(
+            "set-cookie",
+            `${cookieName}=; Path=/; Expires=${expiredDate}; Max-Age=0; HttpOnly; SameSite=Lax${sec}`
+          );
+        });
+        return logoutResponse;
+      }
+      const errorResponse = NextResponse.json(data, { status: res.status });
+      forwardSetCookieHeaders(req, res, errorResponse);
+      return errorResponse;
     }
 
     // If photo is not found on backend (404), return a 1x1 transparent GIF with 200 OK
@@ -787,7 +539,7 @@ export async function GET(
     }
 
     const response = NextResponse.json(data, { status: res.status });
-    forwardSetCookieHeaders(res, response);
+    forwardSetCookieHeaders(req, res, response);
     return response;
   } catch (err: any) {
     console.error("[PROXY CATCH GET]", methodPath, err);

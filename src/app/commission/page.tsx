@@ -85,6 +85,9 @@ import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { requestV2 } from "@/lib/api/v2/client";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 import { FxRateModal } from "@/components/finance/FxRateModal";
+import { useBirrConversion } from "@/components/finance/useBirrConversion";
+import { CurrencyTotals } from "@/components/finance/CurrencyTotals";
+import { shortRef } from "@/lib/utils/display-id";
 import { Coins, TrendingUp } from "lucide-react";
 
 type CommissionTab =
@@ -102,6 +105,9 @@ export default function AdminCommissionPage() {
   const isAdminUser = userRoles.some((r) =>
     ["Administrator", "System Manager", "Admin"].includes(r)
   );
+
+  // Birr conversion switch (false on this system)
+  const { isBirrConversionEnabled } = useBirrConversion();
 
   // Active Tab
   const [activeTab, setActiveTab] = React.useState<CommissionTab>("owed");
@@ -125,18 +131,8 @@ export default function AdminCommissionPage() {
   const [activeBatch, setActiveBatch] = React.useState<V2CommissionBatch | null>(null);
   const [isLoadingBatchDetail, setIsLoadingBatchDetail] = React.useState<boolean>(false);
 
-  // Four-eyes settlement guard: a batch over 100,000 ETB created by the current (non-Admin)
-  // user needs an Admin to approve settlement.
-  const batchOwnerLower = (activeBatch?.owner || "").toLowerCase().trim();
-  const selfCreatedBatch =
-    !!batchOwnerLower &&
-    !!currentUserName &&
-    batchOwnerLower === currentUserName.toLowerCase().trim();
-  const needsSecondApprover =
-    !!activeBatch &&
-    (Number(activeBatch.total_amount_birr ?? 0) || 0) > 100000 &&
-    selfCreatedBatch &&
-    !isAdminUser;
+  // Removed per client decision: over 100,000 ETB admin requirement
+  const needsSecondApprover = false;
 
   // Batch List Filter (Tab 2)
   const [batchStatusFilter, setBatchStatusFilter] = React.useState<string>("All");
@@ -163,6 +159,7 @@ export default function AdminCommissionPage() {
   const [isWriteOffModalOpen, setIsWriteOffModalOpen] = React.useState<boolean>(false);
   const [writeOffAmountInput, setWriteOffAmountInput] = React.useState<string>("");
   const [writeOffReasonInput, setWriteOffReasonInput] = React.useState<string>("");
+  const [writeOffDateInput, setWriteOffDateInput] = React.useState<string>(new Date().toISOString().split("T")[0]);
   const [isSubmittingWriteOff, setIsSubmittingWriteOff] = React.useState<boolean>(false);
 
   // Releasing Unpaid Items State
@@ -869,10 +866,16 @@ export default function AdminCommissionPage() {
 
     setIsSubmittingWriteOff(true);
     try {
-      await writeOffBatchV2(batchName, amount, writeOffReasonInput.trim());
+      await writeOffBatchV2(
+        batchName,
+        amount,
+        writeOffReasonInput.trim(),
+        writeOffDateInput || undefined
+      );
       setIsWriteOffModalOpen(false);
       setWriteOffAmountInput("");
       setWriteOffReasonInput("");
+      setWriteOffDateInput(new Date().toISOString().split("T")[0]);
       toast.success("Batch Written Off", {
         description: `Wrote off ${amount.toLocaleString()} ${activeBatch?.currency || "ETB"} for batch ${batchName}. Shortfall booked to Expense Applicant Transaction.`,
       });
@@ -1045,7 +1048,7 @@ export default function AdminCommissionPage() {
             Refresh
           </Button>
 
-          {isFinanceManagerOrAdmin && (
+          {isFinanceManagerOrAdmin && isBirrConversionEnabled && (
             <Button
               type="button"
               variant="outline"
@@ -1406,23 +1409,25 @@ export default function AdminCommissionPage() {
                               </button>
                             </td>
                             <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                              {txId}
+                              {txId ? `#${shortRef(txId)}` : "—"}
                             </td>
                             <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
                               {getCandidateName(item)}
                             </td>
                             <td className="py-2.5 px-3">{item.contractor_name || item.contractor}</td>
-                            <td className="py-2.5 px-3">{item.destination_country || selectedCountry}</td>
+                            <td className="py-2.5 px-3">{item.destination_country || selectedCountry || "—"}</td>
                             <td className="py-2.5 px-3 text-slate-500">
                               {item.departure_date
                                 ? new Date(item.departure_date).toLocaleDateString()
+                                : item.creation
+                                ? new Date(item.creation).toLocaleDateString()
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
                               {(
-                                Number(item.commission_amount || item.amount) || 0
+                                Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0
                               ).toLocaleString()}{" "}
-                              {item.currency || "SAR"}
+                              {item.currency_original || item.currency || "SAR"}
                             </td>
                             <td className="py-2.5 px-3">
                               <Badge
@@ -2953,10 +2958,12 @@ export default function AdminCommissionPage() {
       )}
 
       {/* FX Rates Live Management Modal */}
-      <FxRateModal
-        isOpen={isFxModalOpen}
-        onClose={() => setIsFxModalOpen(false)}
-      />
+      {isBirrConversionEnabled && (
+        <FxRateModal
+          isOpen={isFxModalOpen}
+          onClose={() => setIsFxModalOpen(false)}
+        />
+      )}
 
       {/* Write-Off Confirmation Modal */}
       <Dialog open={isWriteOffModalOpen} onOpenChange={setIsWriteOffModalOpen}>
@@ -2967,7 +2974,7 @@ export default function AdminCommissionPage() {
               Confirm Commission Batch Write-Off
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
-              Record an agreed discount on batch <strong>{activeBatch?.name || selectedBatchName}</strong> (or discharge uncollectible partner debt). Books an Expense Applicant Transaction for the shortfall. Amount is in the batch's currency.
+              Record an agreed discount on batch <strong>{activeBatch?.name || selectedBatchName}</strong> (or discharge uncollectible partner debt). Books an Expense Applicant Transaction for the shortfall. Amount is in the batch&apos;s currency.
             </DialogDescription>
           </DialogHeader>
 
@@ -2981,6 +2988,17 @@ export default function AdminCommissionPage() {
                 placeholder="Enter write off amount"
                 value={writeOffAmountInput}
                 onChange={(e) => setWriteOffAmountInput(e.target.value)}
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Write-Off Date *</Label>
+              <Input
+                type="date"
+                max={new Date().toISOString().split("T")[0]}
+                value={writeOffDateInput}
+                onChange={(e) => setWriteOffDateInput(e.target.value)}
                 className="h-8 text-xs font-mono"
               />
             </div>

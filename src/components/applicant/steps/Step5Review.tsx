@@ -339,7 +339,6 @@ export function Step5Review({
                   { label: "Children Care", val: values.skill_children_care },
                   { label: "Arabic Cooking", val: values.skill_arabic_cooking },
                   { label: "Sewing", val: values.skill_sewing },
-                  { label: "Elderly Care", val: values.skill_elderly_care },
                 ].filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true).length > 0 ? (
                   [
                     { label: "Cooking", val: values.skill_cooking },
@@ -350,7 +349,6 @@ export function Step5Review({
                     { label: "Children Care", val: values.skill_children_care },
                     { label: "Arabic Cooking", val: values.skill_arabic_cooking },
                     { label: "Sewing", val: values.skill_sewing },
-                    { label: "Elderly Care", val: values.skill_elderly_care },
                   ]
                     .filter(s => s.val === 1 || s.val === "1" || s.val === "YES" || s.val === true)
                     .map(s => (

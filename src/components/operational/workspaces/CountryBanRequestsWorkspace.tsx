@@ -44,7 +44,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
 
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (emailOrName === "administrator") return true;
     if (can("manageUsers")) return true;
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
@@ -185,7 +185,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
       </div>
 
       {/* Requests Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto shadow-xs">
         {isLoading ? (
           <div className="py-20 text-center">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-800 dark:text-emerald-400 mb-2" />
@@ -196,7 +196,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
             No country ban exception requests found for <strong>{statusFilter}</strong>.
           </div>
         ) : (
-          <table className="w-full text-xs text-left border-collapse min-w-[850px] xl:min-w-0">
+          <table className="w-full text-xs text-left border-collapse min-w-[850px] md:min-w-0">
             <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100/95 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#222228] text-slate-700 dark:text-zinc-300 font-semibold uppercase text-[11px] tracking-wider select-none">
                 <th className="py-2.5 px-3 whitespace-nowrap">Applicant</th>

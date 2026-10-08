@@ -1,11 +1,17 @@
 const https = require('https');
 
+const API_TOKEN = process.env.FRAPPE_API_TOKEN;
+if (!API_TOKEN) {
+  console.error("Missing FRAPPE_API_TOKEN environment variable.");
+  process.exit(1);
+}
+
 function callApi(endpoint, body) {
   return new Promise((resolve, reject) => {
     const req = https.request(`https://agencytracking-production.up.railway.app/api/method/${endpoint}`, {
       method: 'POST',
       headers: {
-        'Authorization': 'token 4b650f0d4cc82df:b20da7f87521048',
+        'Authorization': API_TOKEN.startsWith('token ') ? API_TOKEN : `token ${API_TOKEN}`,
         'Content-Type': 'application/json'
       }
     }, (res) => {

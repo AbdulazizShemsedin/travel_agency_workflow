@@ -46,7 +46,7 @@ const ADMIN_OVERRIDE_ROLES = new Set([
 export function hasV2Role(user: V2AuthUser | null | undefined, targetRole: V2CustomRole | string): boolean {
   if (!user || !Array.isArray(user.roles)) return false;
   const usernameLower = (user.user || "").toLowerCase().trim();
-  if (usernameLower === "administrator" || usernameLower.startsWith("admin")) {
+  if (usernameLower === "administrator") {
     return true;
   }
   const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
@@ -62,7 +62,7 @@ export function hasV2Role(user: V2AuthUser | null | undefined, targetRole: V2Cus
 export function hasAnyV2Role(user: V2AuthUser | null | undefined, targetRoles: (V2CustomRole | string)[]): boolean {
   if (!user || !Array.isArray(user.roles)) return false;
   const usernameLower = (user.user || "").toLowerCase().trim();
-  if (usernameLower === "administrator" || usernameLower.startsWith("admin")) {
+  if (usernameLower === "administrator") {
     return true;
   }
   const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());

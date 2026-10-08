@@ -45,6 +45,9 @@ import {
   reassignClearanceStepV2,
   recordPoliceAsharaV2,
   reopenClearanceStepV2,
+  setLmisStatusV2,
+  LMIS_WORKING_STATUSES,
+  LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
@@ -114,9 +117,8 @@ export function LMISWorkspace({
   const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);
 
   // Form State for Edit Modal
-  const [modalStatus, setModalStatus] = React.useState<
-    "Pending" | "In Progress" | "Issued" | "Rejected"
-  >("Pending");
+  const [modalStatus, setModalStatus] = React.useState<string>("Pending");
+  const [modalRejectionReasons, setModalRejectionReasons] = React.useState<string[]>([]);
   const [modalRejectionRemark, setModalRejectionRemark] = React.useState("");
   const [modalIssuedOn, setModalIssuedOn] = React.useState("");
   const [modalLaborRefNo, setModalLaborRefNo] = React.useState("");
@@ -125,6 +127,12 @@ export function LMISWorkspace({
   const [modalEmergencyPhone, setModalEmergencyPhone] = React.useState("");
   const [modalCocStatus, setModalCocStatus] = React.useState("Not Started");
   const [modalEmployee, setModalEmployee] = React.useState("");
+
+  // Rejection Modal State (for in-cell or column selection of REJECTED)
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = React.useState(false);
+  const [rejectionRow, setRejectionRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  const [selectedRejectionReasons, setSelectedRejectionReasons] = React.useState<string[]>([]);
+  const [isSavingRejection, setIsSavingRejection] = React.useState(false);
 
   // Kuwait Police Ashara fields
   const [policeAsharaDate, setPoliceAsharaDate] = React.useState("");
@@ -143,16 +151,22 @@ export function LMISWorkspace({
     if (!editingRow) return;
 
     const lms = (editingRow.lms as any) || {};
-    const st = lms?.status;
-    if (st === "Issued" || st === "Approved" || st === "Completed" || st === "Complete") {
-      setModalStatus("Issued");
-    } else if (st === "Rejected") {
-      setModalStatus("Rejected");
-    } else if (st === "In Progress") {
-      setModalStatus("In Progress");
+    const st = editingRow.lmisStatus || lms?.lmis_status || lms?.status;
+    if (st === "Issued" || st === "Approved" || st === "Completed" || st === "Complete" || st === "ISSUED") {
+      setModalStatus("ISSUED");
+    } else if (st === "Rejected" || st === "REJECTED") {
+      setModalStatus("REJECTED");
+    } else if (LMIS_WORKING_STATUSES.includes(st as any)) {
+      setModalStatus(st);
     } else {
       setModalStatus("Pending");
     }
+
+    const reasons = (editingRow.lmisRejectionReasons || lms?.lmis_rejection_reasons || "")
+      .split(/[\n,]/)
+      .map((r: string) => r.trim())
+      .filter((r: string) => LMIS_REJECTION_REASONS.includes(r as any));
+    setModalRejectionReasons(reasons);
 
     setModalRejectionRemark(lms?.rejection_remark || "");
     setModalIssuedOn(
@@ -217,20 +231,30 @@ export function LMISWorkspace({
 
   // In-cell quick update helper: LMIS clearance step status
   const handleUpdateStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    if (row.lmisStatus === "ISSUED") {
+      toast.error("An issued step cannot be relabelled.");
+      return;
+    }
     const stepName = row.clearanceStepName || row.lms?.name;
     if (!stepName) {
       toast.error("No active LMIS clearance step found for candidate.");
       throw new Error("No active LMIS clearance step found");
     }
 
+    if (newStatus === "REJECTED") {
+      // Open rejection reasons modal
+      const existingReasons = (row.lmisRejectionReasons || (row.lms as any)?.lmis_rejection_reasons || "")
+        .split(/[\n,]/)
+        .map((r: string) => r.trim())
+        .filter((r: string) => LMIS_REJECTION_REASONS.includes(r as any));
+      setSelectedRejectionReasons(existingReasons);
+      setRejectionRow(row);
+      setIsRejectionModalOpen(true);
+      return;
+    }
+
     try {
-      if (newStatus === "Issued") {
-        await completeClearanceStepV2(stepName, row.laborId || undefined);
-      } else if (newStatus === "Rejected") {
-        await rejectClearanceStepV2(stepName, "Rejected in LMIS clearance");
-      } else if (newStatus === "In Progress") {
-        await startClearanceStepV2(stepName);
-      }
+      await setLmisStatusV2(stepName, newStatus, undefined, row.laborId || undefined);
       toast.success(`LMIS status updated to ${newStatus}`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
@@ -240,6 +264,39 @@ export function LMISWorkspace({
     } catch (err: any) {
       toast.error(err?.message || "Failed to update clearance status");
       throw err;
+    }
+  };
+
+  const handleConfirmRejection = async () => {
+    if (!rejectionRow) return;
+    if (selectedRejectionReasons.length === 0) {
+      toast.error("Please select at least one rejection reason.");
+      return;
+    }
+    const stepName = rejectionRow.clearanceStepName || rejectionRow.lms?.name;
+    if (!stepName) return;
+
+    try {
+      setIsSavingRejection(true);
+      await setLmisStatusV2(
+        stepName,
+        "REJECTED",
+        selectedRejectionReasons,
+        rejectionRow.laborId || undefined
+      );
+      toast.success("LMIS status updated to REJECTED with specified reasons");
+      setIsRejectionModalOpen(false);
+      setRejectionRow(null);
+      setSelectedRejectionReasons([]);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+      ]);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to record rejection reasons");
+    } finally {
+      setIsSavingRejection(false);
     }
   };
 
@@ -297,9 +354,6 @@ export function LMISWorkspace({
       await updateApplicantForLmisV2({
         applicant_name: editingRow.applicantId,
         labor_id: safeLabor,
-        national_id: modalNationalId.trim() || undefined,
-        emergency_contact_name: modalEmergencyName.trim() || undefined,
-        emergency_contact_phone: modalEmergencyPhone.trim() || undefined,
         coc_status: cleanCoc,
       });
 
@@ -317,38 +371,53 @@ export function LMISWorkspace({
 
       // 3. Step status update
       if (stepName && !isRowDeparted) {
-        if (isStepTerminal) {
+        if (editingRow.lmisStatus === "ISSUED") {
+          // Terminal Issued step: data corrections only
           await completeClearanceStepV2(
             stepName,
             safeLabor,
             undefined,
             modalIssuedOn || undefined
           );
-          if (
-            isAdmin &&
-            modalEmployee &&
-            modalEmployee !== (editingRow.lms?.assigned_officer || editingRow.lms?.employee)
-          ) {
-            try {
-              await reassignClearanceStepV2(stepName, modalEmployee);
-            } catch (err: any) {
-              console.warn("reassignClearanceStepV2 warning:", err);
-            }
+        } else if (modalStatus === "REJECTED") {
+          if (modalRejectionReasons.length === 0) {
+            throw new Error("At least one rejection reason is required when LMIS status is REJECTED.");
           }
-        } else if (modalStatus === "Issued") {
-          await completeClearanceStepV2(
+          await setLmisStatusV2(
             stepName,
+            "REJECTED",
+            modalRejectionReasons,
             safeLabor,
-            undefined,
             modalIssuedOn || undefined
           );
-        } else if (modalStatus === "Rejected") {
-          if (!modalRejectionRemark.trim()) {
-            throw new Error("A rejection reason is required to reject LMIS clearance.");
+        } else if (modalStatus === "ISSUED") {
+          await setLmisStatusV2(
+            stepName,
+            "ISSUED",
+            undefined,
+            safeLabor,
+            modalIssuedOn || undefined
+          );
+        } else if (modalStatus && modalStatus !== "Pending") {
+          await setLmisStatusV2(
+            stepName,
+            modalStatus,
+            undefined,
+            safeLabor,
+            modalIssuedOn || undefined
+          );
+        }
+
+        if (
+          isAdmin &&
+          modalEmployee &&
+          modalEmployee !== (editingRow.lms?.assigned_officer || editingRow.lms?.employee)
+        ) {
+          try {
+            await reassignClearanceStepV2(stepName, modalEmployee);
+          } catch (err: any) {
+            console.warn("reassignClearanceStepV2 warning:", err);
           }
-          await rejectClearanceStepV2(stepName, modalRejectionRemark.trim());
-        } else if (modalStatus === "In Progress" && stepStatus === "Pending") {
-          await startClearanceStepV2(stepName);
         }
       }
     },
@@ -475,14 +544,11 @@ export function LMISWorkspace({
       header: "NATIONAL ID",
       accessorKey: "nationalId",
       width: "135px",
-      editable: true,
+      isReadOnly: true,
       cell: (row) => (
-        <ExcelTextInput
-          value={row.nationalId || (row.applicant as any)?.national_id}
-          disabled={!canEdit}
-          placeholder="National ID"
-          onSave={(val) => handleUpdateApplicantField(row.applicantId, { national_id: val })}
-        />
+        <span className="font-mono text-xs text-slate-700 dark:text-zinc-300">
+          {row.nationalId || (row.applicant as any)?.national_id || "—"}
+        </span>
       ),
     },
     {
@@ -490,17 +556,11 @@ export function LMISWorkspace({
       header: "EMERGENCY CONTACT",
       accessorKey: "emergencyContactName",
       width: "150px",
-      editable: true,
+      isReadOnly: true,
       cell: (row) => (
-        <ExcelTextInput
-          value={row.emergencyContactName || (row.applicant as any)?.emergency_contact_name}
-          disabled={!canEdit}
-          uppercase
-          placeholder="Contact Name"
-          onSave={(val) =>
-            handleUpdateApplicantField(row.applicantId, { emergency_contact_name: val })
-          }
-        />
+        <span className="text-xs text-slate-700 dark:text-zinc-300 truncate block">
+          {row.emergencyContactName || (row.applicant as any)?.emergency_contact_name || "—"}
+        </span>
       ),
     },
     {
@@ -508,16 +568,11 @@ export function LMISWorkspace({
       header: "EMERGENCY PHONE",
       accessorKey: "emergencyContactPhone",
       width: "135px",
-      editable: true,
+      isReadOnly: true,
       cell: (row) => (
-        <ExcelTextInput
-          value={row.emergencyContactPhone || (row.applicant as any)?.emergency_contact_phone}
-          disabled={!canEdit}
-          placeholder="Phone Number"
-          onSave={(val) =>
-            handleUpdateApplicantField(row.applicantId, { emergency_contact_phone: val })
-          }
-        />
+        <span className="font-mono text-xs text-slate-700 dark:text-zinc-300">
+          {row.emergencyContactPhone || (row.applicant as any)?.emergency_contact_phone || "—"}
+        </span>
       ),
     },
     {
@@ -617,38 +672,91 @@ export function LMISWorkspace({
       id: "status",
       header: "STATUS",
       accessorKey: "lmisStatus",
-      width: "125px",
+      width: "170px",
       align: "center",
       editable: true,
-      cell: (row) => (
-        <ExcelSelect
-          value={row.lmisStatus || "Pending"}
-          disabled={!canEdit}
-          options={[
-            {
-              value: "Pending",
-              label: "Pending",
-              badgeClass: "bg-amber-500 text-white font-semibold text-[10px]",
-            },
-            {
-              value: "In Progress",
-              label: "In Progress",
-              badgeClass: "bg-blue-600 text-white font-semibold text-[10px]",
-            },
-            {
-              value: "Issued",
-              label: "Issued",
-              badgeClass: "bg-emerald-600 text-white font-semibold text-[10px]",
-            },
-            {
-              value: "Rejected",
-              label: "Rejected",
-              badgeClass: "bg-rose-600 text-white font-semibold text-[10px]",
-            },
-          ]}
-          onSave={(val) => handleUpdateStatus(row, val)}
-        />
-      ),
+      cell: (row) => {
+        const isIssued = (row.lmisStatus || "").toUpperCase() === "ISSUED";
+        const isPending = !row.lmisStatus || row.lmisStatus === "Pending";
+        const options = [
+          ...(isPending || !LMIS_WORKING_STATUSES.includes(row.lmisStatus as any)
+            ? [
+                {
+                  value: "Pending",
+                  label: "Pending",
+                  badgeClass: "bg-amber-500 text-white font-semibold text-[10px]",
+                },
+              ]
+            : []),
+          ...LMIS_WORKING_STATUSES.map((st) => ({
+            value: st,
+            label: st,
+            badgeClass:
+              st === "ISSUED"
+                ? "bg-emerald-600 text-white font-semibold text-[10px]"
+                : st === "REJECTED"
+                ? "bg-rose-600 text-white font-semibold text-[10px]"
+                : "bg-slate-700 text-white font-semibold text-[10px]",
+          })),
+        ];
+
+        return (
+          <ExcelSelect
+            value={row.lmisStatus || "Pending"}
+            disabled={!canEdit || isIssued}
+            options={options}
+            onSave={(val) => handleUpdateStatus(row, val)}
+          />
+        );
+      },
+    },
+    {
+      id: "rejectionReasons",
+      header: "REJECTED FOR",
+      accessorKey: "lmisRejectionReasons",
+      width: "160px",
+      cell: (row) => {
+        const isRejected = (row.lmisStatus || "").toUpperCase() === "REJECTED";
+        if (!isRejected) {
+          return <span className="text-slate-400 text-xs">—</span>;
+        }
+        const reasons = (row.lmisRejectionReasons || (row.lms as any)?.lmis_rejection_reasons || "")
+          .split(/[\n,]/)
+          .map((r: string) => r.trim())
+          .filter(Boolean);
+
+        return (
+          <div
+            className={cn(
+              "flex flex-wrap gap-1 items-center",
+              canEdit && "cursor-pointer group"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!canEdit) return;
+              setSelectedRejectionReasons(reasons);
+              setRejectionRow(row);
+              setIsRejectionModalOpen(true);
+            }}
+            title={canEdit ? "Click to edit rejection reasons" : undefined}
+          >
+            {reasons.length > 0 ? (
+              reasons.map((r: string, i: number) => (
+                <Badge
+                  key={i}
+                  className="bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300 border-rose-300 text-[10px] font-semibold py-0 px-1.5"
+                >
+                  {r}
+                </Badge>
+              ))
+            ) : (
+              <Badge className="bg-rose-50 text-rose-700 border-dashed border-rose-300 text-[10px] hover:bg-rose-100">
+                + Select reasons
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "issueDate",
@@ -795,32 +903,32 @@ export function LMISWorkspace({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">National ID</Label>
+                <Label className="text-xs font-semibold text-slate-500">National ID (Read-only)</Label>
                 <Input
-                  value={modalNationalId}
-                  onChange={(e) => setModalNationalId(e.target.value)}
+                  value={modalNationalId || "—"}
+                  disabled
                   placeholder="e.g. ET1293847"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">Emergency Contact Name</Label>
+                <Label className="text-xs font-semibold text-slate-500">Emergency Contact Name (Read-only)</Label>
                 <Input
-                  value={modalEmergencyName}
-                  onChange={(e) => setModalEmergencyName(e.target.value.toUpperCase())}
+                  value={modalEmergencyName || "—"}
+                  disabled
                   placeholder="Contact Name"
-                  className="h-8 text-xs uppercase"
+                  className="h-8 text-xs bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed uppercase"
                 />
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">Emergency Contact Phone</Label>
+                <Label className="text-xs font-semibold text-slate-500">Emergency Contact Phone (Read-only)</Label>
                 <Input
-                  value={modalEmergencyPhone}
-                  onChange={(e) => setModalEmergencyPhone(e.target.value)}
+                  value={modalEmergencyPhone || "—"}
+                  disabled
                   placeholder="+251..."
-                  className="h-8 text-xs"
+                  className="h-8 text-xs bg-slate-50 dark:bg-zinc-900 text-slate-500 cursor-not-allowed"
                 />
               </div>
 
@@ -838,17 +946,25 @@ export function LMISWorkspace({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">LMIS Status</Label>
+                <Label className="text-xs font-semibold">LMIS Working Status</Label>
                 <select
                   value={modalStatus}
-                  onChange={(e) => setModalStatus(e.target.value as any)}
+                  onChange={(e) => setModalStatus(e.target.value)}
+                  disabled={editingRow?.lmisStatus === "ISSUED"}
                   className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-bold"
                 >
                   <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Issued">Issued (Approved)</option>
-                  <option value="Rejected">Rejected</option>
+                  {LMIS_WORKING_STATUSES.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
                 </select>
+                {editingRow?.lmisStatus === "ISSUED" && (
+                  <p className="text-[10px] text-amber-600 mt-0.5">
+                    An issued step cannot be relabelled.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1 sm:col-span-2">
@@ -861,17 +977,45 @@ export function LMISWorkspace({
                 />
               </div>
 
-              {modalStatus === "Rejected" && (
+              {modalStatus === "REJECTED" && (
                 <div className="space-y-1 sm:col-span-2">
                   <Label className="text-xs font-semibold text-rose-700">
-                    Rejection Reason *
+                    Rejection Reasons * (Select one or more)
                   </Label>
-                  <Input
-                    value={modalRejectionRemark}
-                    onChange={(e) => setModalRejectionRemark(e.target.value)}
-                    placeholder="Provide reason for rejection..."
-                    className="h-8 text-xs border-rose-300 focus:ring-rose-500"
-                  />
+                  <div className="grid grid-cols-2 gap-1.5 p-2 rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20">
+                    {LMIS_REJECTION_REASONS.map((reason) => {
+                      const checked = modalRejectionReasons.includes(reason);
+                      return (
+                        <label
+                          key={reason}
+                          className="flex items-center gap-2 text-xs cursor-pointer select-none py-0.5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setModalRejectionReasons((prev) =>
+                                prev.includes(reason)
+                                  ? prev.filter((r) => r !== reason)
+                                  : [...prev, reason]
+                              );
+                            }}
+                            className="rounded text-rose-600 focus:ring-rose-500 h-3.5 w-3.5"
+                          />
+                          <span
+                            className={cn(
+                              "text-[11px]",
+                              checked
+                                ? "font-bold text-rose-800 dark:text-rose-300"
+                                : "text-slate-700 dark:text-zinc-300"
+                            )}
+                          >
+                            {reason}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -1000,6 +1144,101 @@ export function LMISWorkspace({
               className="h-8 text-xs bg-amber-700 hover:bg-amber-800 text-white"
             >
               {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* LMIS Rejection Reasons Modal */}
+      <Dialog
+        open={isRejectionModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsRejectionModalOpen(false);
+            setRejectionRow(null);
+            setSelectedRejectionReasons([]);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-[#121217] border border-slate-200 dark:border-[#222228]">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                  LMIS Rejection Reasons
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Select non-compliance reasons for <strong className="uppercase">{rejectionRow?.fullName}</strong>.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3 py-3 text-xs">
+            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Reasons for Rejection * (Select one or more)
+            </Label>
+            <div className="space-y-1.5 border rounded-xl p-3 bg-slate-50 dark:bg-[#15151c] border-slate-200 dark:border-[#26262e]">
+              {LMIS_REJECTION_REASONS.map((reason) => {
+                const checked = selectedRejectionReasons.includes(reason);
+                return (
+                  <label
+                    key={reason}
+                    className="flex items-center gap-2.5 text-xs cursor-pointer select-none py-1.5 px-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedRejectionReasons((prev) =>
+                          prev.includes(reason)
+                            ? prev.filter((r) => r !== reason)
+                            : [...prev, reason]
+                        );
+                      }}
+                      className="rounded text-rose-600 focus:ring-rose-500 h-4 w-4 border-slate-300 dark:border-zinc-700"
+                    />
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        checked
+                          ? "text-rose-700 dark:text-rose-300 font-semibold"
+                          : "text-slate-700 dark:text-zinc-300"
+                      )}
+                    >
+                      {reason}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsRejectionModalOpen(false);
+                setRejectionRow(null);
+                setSelectedRejectionReasons([]);
+              }}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSavingRejection || selectedRejectionReasons.length === 0}
+              onClick={handleConfirmRejection}
+              className="h-8 text-xs font-semibold bg-rose-700 hover:bg-rose-800 text-white shadow-xs"
+            >
+              {isSavingRejection ? "Saving..." : "Confirm Rejection"}
             </Button>
           </DialogFooter>
         </DialogContent>

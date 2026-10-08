@@ -64,7 +64,7 @@ export function extractRoleName(r: unknown): string {
 export function hasRole(user: AuthUser | null | undefined, targetRole: string): boolean {
   if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
-  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (emailOrName === "administrator") return true;
   if (!Array.isArray(user.roles)) return false;
   const normalizedTarget = targetRole.trim().toLowerCase();
   return user.roles.some((r) => {
@@ -84,7 +84,7 @@ export function hasRole(user: AuthUser | null | undefined, targetRole: string): 
 export function hasAnyRole(user: AuthUser | null | undefined, targetRoles: string[]): boolean {
   if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
-  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (emailOrName === "administrator") return true;
   if (!Array.isArray(user.roles)) return false;
   return targetRoles.some((role) => hasRole(user, role));
 }
@@ -117,7 +117,7 @@ export function hasExactRole(user: AuthUser | null | undefined, targetRole: stri
 export function isAdminUser(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
-  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (emailOrName === "administrator") return true;
   if (!Array.isArray(user.roles)) return false;
   return user.roles.some((r) => {
     const norm = extractRoleName(r);
@@ -131,7 +131,7 @@ export function isAdminUser(user: AuthUser | null | undefined): boolean {
 export function isPureForeignAgency(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
-  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return false;
+  if (emailOrName === "administrator") return false;
   if (user.is_internal_staff === true) return false;
 
   const internalRoles = [
@@ -184,6 +184,8 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Kuwait LMIS",
     "Kuwait Telesign",
     "Kuwait Embassy",
+    "CV",
+    "Medical Officer",
   ],
   viewApplicants: [
     "Admin",
@@ -200,6 +202,8 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "Kuwait LMIS",
     "Kuwait Telesign",
     "Kuwait Embassy",
+    "CV",
+    "Medical Officer",
   ],
   registerApplicant: [
     "Admin",
@@ -208,6 +212,7 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
   generateCv: [
     "Admin",
     "Registrar",
+    "CV",
   ],
   manageClearances: [
     "Admin",
@@ -234,6 +239,7 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
   viewReports: [
     "Admin",
     "Finance Manager",
+    "Manager",
   ],
   manageContractors: [
     "Admin",
@@ -314,7 +320,7 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
 export function can(user: AuthUser | null | undefined, action: PermissionAction): boolean {
   if (!user) return false;
   const emailOrName = (user.email || user.full_name || "").toLowerCase().trim();
-  if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+  if (emailOrName === "administrator") return true;
   const allowedRoles = ACTION_ROLE_MAP[action];
   if (!allowedRoles) return false;
   return hasAnyRole(user, allowedRoles);

@@ -183,7 +183,6 @@ export function CandidateCard({
           if (c.skill_cleaning) topSkills.push("Cleaning");
           if (c.skill_baby_sitting || c.skill_babysitting || c.skill_children_care) topSkills.push("Babysitting");
           if (c.skill_washing || c.skill_ironing) topSkills.push("Laundry");
-          if (c.skill_elderly_care) topSkills.push("Elderly Care");
           if (c.skill_sewing) topSkills.push("Sewing");
           if (topSkills.length === 0) {
             if (c.arabic_level && c.arabic_level.toLowerCase() !== "none") topSkills.push(`Arabic: ${c.arabic_level}`);

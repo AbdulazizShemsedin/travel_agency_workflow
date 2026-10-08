@@ -656,7 +656,8 @@ export async function settleBatchV2(
 export async function writeOffBatchV2(
   batchName: string,
   writeOffAmount: number,
-  writeOffReason: string
+  writeOffReason: string,
+  writeOffDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.finance_api.write_off_batch",
@@ -666,9 +667,36 @@ export async function writeOffBatchV2(
         batch_name: batchName,
         write_off_amount: writeOffAmount,
         write_off_reason: writeOffReason,
+        ...(writeOffDate ? { write_off_date: writeOffDate } : {}),
       },
     }
   );
+}
+
+export interface V2MoneySettings {
+  birr_conversion: boolean;
+  [key: string]: any;
+}
+
+/**
+ * Fetches the system-wide money configuration (whether Birr conversion is enabled).
+ * Endpoint: POST /api/method/agency_tracking.finance_api.get_money_settings
+ */
+export async function getMoneySettingsV2(): Promise<V2MoneySettings> {
+  try {
+    const res = await requestV2<V2MoneySettings | { message?: V2MoneySettings }>(
+      "/api/method/agency_tracking.finance_api.get_money_settings",
+      { method: "POST" }
+    );
+    const data = res && "birr_conversion" in res ? res : (res as any)?.message;
+    return {
+      birr_conversion: Boolean(data?.birr_conversion),
+      ...data,
+    };
+  } catch (err) {
+    console.warn("[finance_api.get_money_settings] failed or unavailable, defaulting to false:", err);
+    return { birr_conversion: false };
+  }
 }
 
 /**
@@ -731,13 +759,17 @@ export async function triggerEarlyCommissionAccrualV2(
  * Uploads a bank statement CSV for automatic line-to-batch matching.
  */
 export async function uploadBankStatementV2(
-  fileUrl: string
+  fileUrl: string,
+  currency?: string
 ): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
   return await requestV2(
     "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
     {
       method: "POST",
-      body: { file_url: fileUrl },
+      body: {
+        file_url: fileUrl,
+        ...(currency ? { currency } : {}),
+      },
     }
   );
 }

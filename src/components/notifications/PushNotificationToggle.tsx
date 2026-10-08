@@ -113,7 +113,7 @@ export function PushNotificationToggle() {
   // Check if caller is System Manager or Administrator
   const isSystemManagerOrAdmin = React.useMemo(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (emailOrName === "administrator") return true;
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
       const norm = String(r).trim().toLowerCase();

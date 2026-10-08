@@ -44,6 +44,8 @@ export interface V2ClearanceStepItem {
   appointment_date?: string | null;
   injaz_outcome?: string | null;
   rejection_remark?: string;
+  lmis_status?: string | null;
+  lmis_rejection_reasons?: string | string[] | null;
   step_name?: string;
   applicant?: string;
   applicant_name?: string;
@@ -598,3 +600,75 @@ export async function listMyTodosV2(
   return Array.isArray(res?.message) ? res.message : Array.isArray(res) ? (res as any) : [];
 }
 
+export const LMIS_WORKING_STATUSES = [
+  "NO FILE & NO COC",
+  "NO FILE & TAKEN",
+  "NO FILE & PULLED",
+  "NO FILE & MEDICAL NOT ONLINE",
+  "HAVE FILE & TAKEN",
+  "HAVE FILE & PULLED",
+  "HAVE FILE & MEDICAL NOT ONLINE",
+  "HAVE FILE & NO COC",
+  "PULLED",
+  "INSURANCE",
+  "PAYMENT",
+  "PAYMENT SUBMITTED",
+  "PAYMENT VERIFIED",
+  "REJECTED",
+  "CHECKED",
+  "ISSUED",
+  "VERIFIED",
+  "MOLS PENDING",
+  "PARTNER PENDING",
+  "COC NOT ONLINE",
+  "TAKEN",
+] as const;
+
+export type V2LmisWorkingStatus = (typeof LMIS_WORKING_STATUSES)[number];
+
+export const LMIS_REJECTION_REASONS = [
+  "Employment contract",
+  "Passport",
+  "Working visa",
+  "Emergency contact",
+  "Insurance",
+  "Original ID",
+] as const;
+
+export type V2LmisRejectionReason = (typeof LMIS_REJECTION_REASONS)[number];
+
+/**
+ * Sets the working LMIS status on an LMIS clearance step.
+ * Authoritative Backend Endpoint: clearance_api.set_lmis_status
+ * 20 office working statuses, plus "REJECTED" (21st status, added 2026-10-08).
+ * "ISSUED" completes the step.
+ * If lmis_status === "REJECTED", rejection_reasons must contain one or more of:
+ * ["Employment contract", "Passport", "Working visa", "Emergency contact", "Insurance", "Original ID"].
+ */
+export async function setLmisStatusV2(
+  clearanceStepName: string,
+  lmisStatus: string,
+  rejectionReasons?: string[] | string,
+  referenceNo?: string,
+  dateCompleted?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  const body: Record<string, any> = {
+    clearance_step_name: clearanceStepName,
+    lmis_status: lmisStatus,
+  };
+  if (rejectionReasons) {
+    body.rejection_reasons = Array.isArray(rejectionReasons)
+      ? rejectionReasons
+      : rejectionReasons.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (referenceNo) body.reference_no = referenceNo;
+  if (dateCompleted) body.date_completed = dateCompleted;
+
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.set_lmis_status",
+    {
+      method: "POST",
+      body,
+    }
+  );
+}

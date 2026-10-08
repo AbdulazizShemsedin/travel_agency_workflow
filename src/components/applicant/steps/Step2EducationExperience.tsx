@@ -130,21 +130,6 @@ export function Step2EducationExperience({
     watch("skill_sewing") === "yes" ||
     watch("skill_sewing") === true
   );
-  const isElderlyCare = Boolean(
-    watch("skill_elderly_care") === 1 ||
-    watch("skill_elderly_care") === "1" ||
-    watch("skill_elderly_care") === "YES" ||
-    watch("skill_elderly_care") === "yes" ||
-    watch("skill_elderly_care") === true
-  );
-  const isDriving = Boolean(
-    watch("skill_driving") === 1 ||
-    watch("skill_driving") === "1" ||
-    watch("skill_driving") === "YES" ||
-    watch("skill_driving") === "yes" ||
-    watch("skill_driving") === true
-  );
-
   const isAllSkills =
     isCooking &&
     isCleaning &&
@@ -153,9 +138,7 @@ export function Step2EducationExperience({
     isBabySitting &&
     isChildrenCare &&
     isArabicCooking &&
-    isSewing &&
-    isElderlyCare &&
-    isDriving;
+    isSewing;
 
   const handleToggleAllSkills = (checked: boolean) => {
     const val = checked ? 1 : 0;
@@ -167,9 +150,6 @@ export function Step2EducationExperience({
     setValue("skill_baby_sitting", val, { shouldDirty: true });
     setValue("skill_baby_care" as any, val, { shouldDirty: true });
     setValue("skill_children_care", val, { shouldDirty: true });
-    setValue("skill_elder_care" as any, val, { shouldDirty: true });
-    setValue("skill_elderly_care", val, { shouldDirty: true });
-    setValue("skill_driving", val, { shouldDirty: true });
     setValue("skill_sewing", val, { shouldDirty: true });
   };
 
@@ -307,25 +287,6 @@ export function Step2EducationExperience({
               {isWashing && <span className="text-[10px] text-emerald-700 font-bold">✓</span>}
             </label>
 
-            {/* Driving */}
-            <label
-              className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                isDriving
-                  ? "border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/40 dark:border-emerald-700"
-                  : "border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={isDriving}
-                  onChange={(e) => setValue("skill_driving", e.target.checked ? 1 : 0, { shouldDirty: true })}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-800"
-                />
-                <span className="font-semibold text-xs text-slate-800 dark:text-zinc-200">Driving</span>
-              </div>
-              {isDriving && <span className="text-[10px] text-emerald-700 font-bold">✓</span>}
-            </label>
 
             {/* Cooking */}
             <label
@@ -447,25 +408,6 @@ export function Step2EducationExperience({
               {isSewing && <span className="text-[10px] text-emerald-700 font-bold">✓</span>}
             </label>
 
-            {/* Elderly Care */}
-            <label
-              className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                isElderlyCare
-                  ? "border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/40 dark:border-emerald-700"
-                  : "border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={isElderlyCare}
-                  onChange={(e) => setValue("skill_elderly_care", e.target.checked ? 1 : 0, { shouldDirty: true })}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-800"
-                />
-                <span className="font-semibold text-xs text-slate-800 dark:text-zinc-200">Elderly Care</span>
-              </div>
-              {isElderlyCare && <span className="text-[10px] text-emerald-700 font-bold">✓</span>}
-            </label>
           </div>
         </CardContent>
       </Card>

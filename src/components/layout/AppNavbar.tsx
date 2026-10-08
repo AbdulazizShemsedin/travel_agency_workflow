@@ -2,18 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, LogOut, Globe2, Sparkles, Compass, Keyboard } from "lucide-react";
+import { Menu, Sun, Moon, PanelLeftClose, PanelLeftOpen, Globe2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { useAuth } from "@/components/providers/AuthProvider";
-import { useTour } from "@/components/tour/TourProvider";
 import { PushNotificationToggle } from "@/components/notifications/PushNotificationToggle";
-import { DemoRoleSwitcher } from "@/components/demo/DemoRoleSwitcher";
-import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 
 interface AppNavbarProps {
   isSidebarCollapsed?: boolean;
@@ -27,9 +18,6 @@ export function AppNavbar({
   onMobileMenuToggle,
 }: AppNavbarProps) {
   const [isDarkMode, setIsDarkMode] = React.useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
-  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = React.useState(false);
-  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     const saved = localStorage.getItem("theme");
@@ -54,9 +42,6 @@ export function AppNavbar({
       setIsDarkMode(true);
     }
   };
-
-  const { user, logout } = useAuth();
-  const { openTourSelectModal, startPresentation, startOnboarding, openShortcutsModal } = useTour();
 
   return (
     <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0c0c0e]/95 backdrop-blur-md px-4 transition-colors shadow-2xs">
@@ -102,24 +87,8 @@ export function AppNavbar({
         )}
       </div>
 
-      {/* Right Actions: Demo Switcher & Dark Mode & Notifications & User */}
+      {/* Right Actions: Dark Mode & Notifications */}
       <div className="flex items-center gap-2">
-        {/* Demo Mode Role Persona Switcher */}
-        <DemoRoleSwitcher />
-
-        {/* Guided Tour & Client Demo Trigger */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={openTourSelectModal}
-          className="h-9 px-2.5 rounded-lg border-emerald-300 dark:border-emerald-800/80 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 gap-1.5 text-xs font-semibold cursor-pointer shadow-2xs transition"
-          title="Interactive System Tour & Client Presentation (Alt + T)"
-          data-tour="navbar-tour-trigger"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span className="hidden sm:inline">Tour & Demo</span>
-        </Button>
-
         {/* Dark Mode Switcher */}
         <Button
           variant="outline"
@@ -137,101 +106,6 @@ export function AppNavbar({
 
         {/* Unified Push & Notifications Button */}
         <PushNotificationToggle />
-
-        {/* User Account Popover or Login Button */}
-        {user && (
-          <Popover open={isUserMenuOpen} onOpenChange={setIsUserMenuOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-2 h-9 px-2.5 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50 dark:bg-[#141418] text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1c1c22] transition cursor-pointer text-xs font-semibold"
-              >
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white uppercase">
-                  {user.slice(0, 2)}
-                </div>
-                <span className="hidden sm:inline truncate max-w-[130px]">{user}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-2 shadow-xl border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#121215]">
-              <div className="px-2 py-1.5 border-b border-slate-100 dark:border-[#222227] mb-1">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Signed In As</p>
-                <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{user}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  startPresentation();
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-800 dark:hover:text-emerald-300 rounded-md transition font-medium cursor-pointer"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>Presentation Mode</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  startOnboarding();
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
-              >
-                <Compass className="h-3.5 w-3.5 text-slate-400" />
-                <span>Onboarding Tour</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  openShortcutsModal();
-                }}
-                className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <Keyboard className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Shortcuts</span>
-                </div>
-                <kbd className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700">
-                  ?
-                </kbd>
-              </button>
-              <div className="h-px bg-slate-100 dark:bg-[#222227] my-1" />
-              <button
-                type="button"
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  setIsLogoutConfirmOpen(true);
-                }}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition font-medium cursor-pointer"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Sign Out</span>
-              </button>
-            </PopoverContent>
-          </Popover>
-        )}
-
-        {/* Logout Confirmation Modal */}
-        <ConfirmationModal
-          isOpen={isLogoutConfirmOpen}
-          onClose={() => setIsLogoutConfirmOpen(false)}
-          onConfirm={async () => {
-            try {
-              setIsLoggingOut(true);
-              await logout();
-            } finally {
-              setIsLoggingOut(false);
-              setIsLogoutConfirmOpen(false);
-            }
-          }}
-          title="Log Out of System?"
-          description="Any unsaved progress will be lost."
-          confirmLabel="Log Out"
-          cancelLabel="Stay Signed In"
-          variant="danger"
-          icon={LogOut}
-          isLoading={isLoggingOut}
-        />
       </div>
     </header>
   );

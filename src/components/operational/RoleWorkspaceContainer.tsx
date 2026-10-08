@@ -12,13 +12,17 @@ import {
   ShieldCheck,
   ShieldAlert,
   FileSpreadsheet,
+  ClipboardList,
+  HeartPulse,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
+import { FollowUpWorkspace } from "./workspaces/FollowUpWorkspace";
 import { CVWorkspace } from "./workspaces/CVWorkspace";
+import { MedicalWorkspace } from "./workspaces/MedicalWorkspace";
 import { LMISWorkspace } from "./workspaces/LMISWorkspace";
 import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
@@ -35,7 +39,7 @@ export function RoleWorkspaceContainer() {
   // Determine if user has administrator or manager privileges
   const isAdmin = React.useMemo<boolean>(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (emailOrName === "administrator") return true;
     // Use the authoritative permission check (covers System Manager, Administrator, Admin, Manager, Agency Admin)
     if (can("manageUsers")) return true;
     if (!Array.isArray(roles)) return false;
@@ -57,7 +61,9 @@ export function RoleWorkspaceContainer() {
 
   const allTabsConfig = [
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
+    { id: "follow_up", label: "Follow-up", icon: ClipboardList, desc: "Milestones & Progress" },
     { id: "cv", label: "CV", icon: FileSpreadsheet, desc: "Candidate Profiles & Bio" },
+    { id: "medical", label: "Medical Examination", icon: HeartPulse, desc: "Stage 1 & Pre-departure Medicals" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
@@ -83,13 +89,19 @@ export function RoleWorkspaceContainer() {
     if (hasRoleKeyword(["saudi"])) prefCorridor = "Saudi Arabia";
     if (hasRoleKeyword(["kuwait"])) prefCorridor = "Kuwait";
 
-    const allowed: string[] = ["directory"]; // All internal staff can access the Applicant List directory
+    const allowed: string[] = ["directory", "follow_up"]; // All internal staff can access the Applicant List directory & Follow-up
     let prefTab = "directory";
 
     // 0. CV Candidate Table: strictly restricted to user with "cv" role or Admin
     if (hasRoleKeyword(["cv"])) {
       allowed.push("cv");
       if (prefTab === "directory") prefTab = "cv";
+    }
+
+    // 0b. Medical Examination: accessible to Medical Officer role or Admin
+    if (hasRoleKeyword(["medical"])) {
+      allowed.push("medical");
+      prefTab = "medical";
     }
 
     // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
@@ -163,7 +175,7 @@ export function RoleWorkspaceContainer() {
   });
 
   // Fetch live workspace data for active operational stream
-  const isOperationalTab = activeTab === "cv" || activeTab === "lms" || activeTab === "injaz" || activeTab === "embassy" || activeTab === "departure";
+  const isOperationalTab = activeTab === "follow_up" || activeTab === "cv" || activeTab === "lms" || activeTab === "injaz" || activeTab === "embassy" || activeTab === "departure";
   const isTabAllowed = availableTabs.some((t) => t.id === activeTab);
   const streamType = (isOperationalTab ? activeTab : "lms") as OperationalStreamType;
 
@@ -181,10 +193,22 @@ export function RoleWorkspaceContainer() {
 
   // Workspace Titles & Descriptions for header
   const getHeaderInfo = () => {
+    if (activeTab === "follow_up") {
+      return {
+        title: "Follow-up Tracking",
+        subtitle: "Candidate lifecycle progress, clearances, and departure milestones.",
+      };
+    }
     if (activeTab === "cv") {
       return {
         title: "Candidate CV Database",
         subtitle: "Master candidate profiles, biological details, medical verification, and remarks.",
+      };
+    }
+    if (activeTab === "medical") {
+      return {
+        title: "Medical Examination Tracking",
+        subtitle: "Post-selection clearance (Medical 1) and pre-departure verification (Medical 2).",
       };
     }
     if (activeTab === "lms") {
@@ -288,6 +312,19 @@ export function RoleWorkspaceContainer() {
       <div>
         {activeTab === "directory" && isTabAllowed && <ApplicantTable />}
 
+        {activeTab === "follow_up" && isTabAllowed && (
+          <div data-tour="followup-workspace-table">
+            <FollowUpWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+              employees={employees}
+            />
+          </div>
+        )}
+
         {activeTab === "cv" && isTabAllowed && (
           <CVWorkspace
             data={workspaceData}
@@ -296,6 +333,15 @@ export function RoleWorkspaceContainer() {
             corridorFilter={corridorFilter}
             onCorridorChange={setCorridorFilter}
           />
+        )}
+
+        {activeTab === "medical" && isTabAllowed && (
+          <div data-tour="medical-workspace-table">
+            <MedicalWorkspace
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "lms" && isTabAllowed && (

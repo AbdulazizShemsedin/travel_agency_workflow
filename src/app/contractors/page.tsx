@@ -48,7 +48,7 @@ export default function ContractorsPage() {
   const isAdmin = Boolean(
     isAdminUser(authUser) ||
     user === "Administrator" ||
-    (authUser?.email && (authUser.email.toLowerCase().startsWith("admin") || authUser.email.toLowerCase() === "administrator")) ||
+    (authUser?.email && authUser.email.toLowerCase() === "administrator") ||
     (roles || []).some((r: any) => {
       const s = String(r?.role || r?.name || r).toLowerCase().trim();
       return s === "administrator" || s === "system manager" || s === "admin";
@@ -408,8 +408,8 @@ export default function ContractorsPage() {
             <span className="ml-2 text-xs text-slate-500">Loading agencies...</span>
           </div>
         ) : (
-          <div className="w-full max-w-full min-w-0 overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
-            <table className="w-full min-w-[750px] xl:min-w-0 text-left text-xs">
+          <div className="w-full max-w-full min-w-0 overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
+            <table className="w-full min-w-[750px] md:min-w-0 text-left text-xs">
               <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                 <tr>
                   <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Agency ID</th>

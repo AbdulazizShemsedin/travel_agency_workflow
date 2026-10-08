@@ -23,11 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
   selectCandidateV2,
-  advancePlacementV2,
   listContractorsV2,
   V2PortalCandidate,
   ApiV2Error,
 } from "@/lib/api/v2";
+import { reverseLastStepV2 } from "@/lib/api/v2/undo";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { CandidateCard } from "@/components/agent/CandidateCard";
@@ -150,9 +150,13 @@ export default function AgentDiscoveryPage() {
   // Excluded candidates in this session (e.g. selected or 409 conflict)
   const [locallyRemovedIds, setLocallyRemovedIds] = React.useState<string[]>([]);
 
-  // Fetch Available Candidate Pool from V2 API
+  // Pagination State
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const pageSize = 50;
+
+  // Fetch Available Candidate Pool from V2 API with pagination
   const {
-    data: candidates = [],
+    data: candidateQueryResult,
     isLoading,
     isError,
     error,
@@ -162,15 +166,31 @@ export default function AgentDiscoveryPage() {
     queryKey: [
       "portal-available-candidates",
       effectiveContractor,
-      destinationCountry,
-      jobApplied,
-      religion,
+      currentPage,
+      pageSize,
     ],
-    queryFn: () => listPortalCandidatesV2(),
+    queryFn: () => listPortalCandidatesV2((currentPage - 1) * pageSize, pageSize, 1),
     retry: false,
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  const candidates = React.useMemo(() => {
+    if (candidateQueryResult && typeof candidateQueryResult === "object" && "data" in candidateQueryResult) {
+      return (candidateQueryResult as any).data;
+    }
+    if (Array.isArray(candidateQueryResult)) {
+      return candidateQueryResult;
+    }
+    return [];
+  }, [candidateQueryResult]);
+
+  const totalCount = React.useMemo(() => {
+    if (candidateQueryResult && typeof candidateQueryResult === "object" && "total_count" in candidateQueryResult) {
+      return Number((candidateQueryResult as any).total_count) || 0;
+    }
+    return candidates.length;
+  }, [candidateQueryResult, candidates]);
 
   // Filter candidates client-side by search keyword and exclude locally removed
   const visibleCandidates = React.useMemo(() => {
@@ -251,7 +271,7 @@ export default function AgentDiscoveryPage() {
       }
 
       setSuccessToast(
-        `✓ Applicant ${candidate.full_name} (${candidate.name}) reserved successfully. State advanced to Selected.`
+        `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved successfully. State advanced to Selected.`
       );
       setTimeout(() => setSuccessToast(null), 6000);
 
@@ -264,7 +284,7 @@ export default function AgentDiscoveryPage() {
       setUndoState({
         candidate,
         placementName,
-        message: `Applicant ${candidate.full_name} (${candidate.name}) reserved. Click Undo within 7 seconds to reverse.`,
+        message: `Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved. Click Undo within 7 seconds to reverse.`,
       });
       undoTimeoutRef.current = setTimeout(() => {
         setUndoState(null);
@@ -284,7 +304,7 @@ export default function AgentDiscoveryPage() {
           setSelectedCandidateForDetail(null);
         }
         setConflictToast(
-          `Candidate ${candidate.full_name} (${candidate.name}) is no longer available in the candidate pool.`
+          `Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} is no longer available in the candidate pool.`
         );
         setTimeout(() => setConflictToast(null), 6000);
       } else {
@@ -308,13 +328,13 @@ export default function AgentDiscoveryPage() {
     }
   };
 
-  // Undo mutation: cancels the just-created Placement (Selected -> Cancelled) via the sanctioned backend RPC
+  // Undo mutation: reverses the last step (Selected -> unselect) via reversal.reverse_last_step
   const undoMutation = useMutation({
     mutationFn: async (placementName: string) => {
       if (!placementName) {
         throw new ApiV2Error("Unable to undo: no placement identifier returned from the backend.", 400);
       }
-      return await advancePlacementV2(placementName, "Cancelled");
+      return await reverseLastStepV2("Placement", placementName, "Selected", "Agency unselected candidate");
     },
     onSuccess: (res, placementName) => {
       if (undoTimeoutRef.current) {
@@ -329,7 +349,7 @@ export default function AgentDiscoveryPage() {
         setSelectedTodayCount((prev) => Math.max(0, prev - 1));
       }
       setSuccessToast(
-        `↩ Undo successful. Applicant ${candidate?.full_name || ""} (${candidate?.name || placementName}) returned to the available pool.`
+        `↩ Undo successful. Candidate ${candidate?.full_name || ""} returned to the available pool.`
       );
       setTimeout(() => setSuccessToast(null), 6000);
       queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
@@ -594,8 +614,8 @@ export default function AgentDiscoveryPage() {
             ) : (
               /* Candidate Table */
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
-                <div className="overflow-x-auto xl:overflow-x-clip relative">
-                  <table className="w-full text-left text-xs min-w-[780px] xl:min-w-0 border-separate border-spacing-0">
+                <div className="overflow-x-auto md:overflow-x-clip relative">
+                  <table className="w-full text-left text-xs min-w-[780px] md:min-w-0 border-separate border-spacing-0">
                     <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
                         <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
@@ -626,10 +646,12 @@ export default function AgentDiscoveryPage() {
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <p className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate leading-tight">{candidate.full_name || candidate.name}</p>
-                                <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate leading-tight mt-0.5">
-                                  {candidate.passport_number || candidate.name}
-                                </p>
+                                <p className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate leading-tight">{candidate.full_name || "Candidate"}</p>
+                                {candidate.passport_number && (
+                                  <p className="text-[9px] sm:text-[10px] text-slate-400 font-mono truncate leading-tight mt-0.5">
+                                    Passport: {candidate.passport_number}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -719,6 +741,40 @@ export default function AgentDiscoveryPage() {
                 </div>
               </div>
             )}
+
+            {/* Pagination Controls */}
+            {totalCount > pageSize && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200 dark:border-[#222228]">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Showing <strong className="text-slate-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</strong> to{" "}
+                  <strong className="text-slate-900 dark:text-white">{Math.min(currentPage * pageSize, totalCount)}</strong> of{" "}
+                  <strong className="text-slate-900 dark:text-white">{totalCount}</strong> candidates
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1 || isRefetching}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="text-xs h-8 rounded-xl border-slate-200 dark:border-[#26262f]"
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-medium">
+                    Page {currentPage} of {Math.ceil(totalCount / pageSize) || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage * pageSize >= totalCount || isRefetching}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                    className="text-xs h-8 rounded-xl border-slate-200 dark:border-[#26262f]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -768,9 +824,11 @@ export default function AgentDiscoveryPage() {
                   <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
                     {candidatePendingConfirm.full_name}
                   </p>
-                  <p className="text-[11px] font-mono text-slate-400 truncate">
-                    {candidatePendingConfirm.name}
-                  </p>
+                  {candidatePendingConfirm.passport_number && (
+                    <p className="text-[11px] font-mono text-slate-400 truncate">
+                      Passport: {candidatePendingConfirm.passport_number}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">

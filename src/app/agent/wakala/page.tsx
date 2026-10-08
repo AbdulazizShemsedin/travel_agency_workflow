@@ -392,8 +392,8 @@ export default function AgentWakalaRequestsPage() {
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto xl:overflow-x-clip relative">
-              <table className="w-full text-xs text-left min-w-[760px] xl:min-w-0 border-separate border-spacing-0">
+            <div className="overflow-x-auto md:overflow-x-clip relative">
+              <table className="w-full text-xs text-left min-w-[760px] md:min-w-0 border-separate border-spacing-0">
                 <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
                     <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#171720] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">

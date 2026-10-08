@@ -1,4 +1,10 @@
-const BASE_URL = "https://applicantprocessing-production.up.railway.app";
+const API_TOKEN = process.env.FRAPPE_API_TOKEN;
+if (!API_TOKEN) {
+  console.error("Missing FRAPPE_API_TOKEN environment variable.");
+  process.exit(1);
+}
+const AUTH_HEADER = API_TOKEN.startsWith("token ") ? API_TOKEN : `token ${API_TOKEN}`;
+const BASE_URL = process.env.FRAPPE_BASE_URL || "https://applicantprocessing-production.up.railway.app";
 
 async function testPhase1() {
   console.log("=== PHASE 1 INTEGRATION & SECURITY VERIFICATION ===");
@@ -27,7 +33,7 @@ async function testPhase1() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "token a7b1bb5c2468fcf:abe2dc090ca1d39",
+        "Authorization": AUTH_HEADER,
       },
       body: JSON.stringify({}),
     });
@@ -49,7 +55,7 @@ async function testPhase1() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "token a7b1bb5c2468fcf:abe2dc090ca1d39",
+        "Authorization": AUTH_HEADER,
       },
       body: JSON.stringify({ limit: 10 }),
     });

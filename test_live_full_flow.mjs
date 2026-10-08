@@ -1,7 +1,12 @@
 // Comprehensive Live Frappe E2E Full Workflow Test
-const BASE_URL = "https://applicantprocessing-production.up.railway.app";
+const API_TOKEN = process.env.FRAPPE_API_TOKEN;
+if (!API_TOKEN) {
+  console.error("Missing FRAPPE_API_TOKEN environment variable.");
+  process.exit(1);
+}
+const BASE_URL = process.env.FRAPPE_BASE_URL || "https://applicantprocessing-production.up.railway.app";
 const HEADERS = {
-  "Authorization": "token a7b1bb5c2468fcf:00337e0b45c9cda",
+  "Authorization": API_TOKEN.startsWith("token ") ? API_TOKEN : `token ${API_TOKEN}`,
   "Content-Type": "application/json",
   "Accept": "application/json"
 };

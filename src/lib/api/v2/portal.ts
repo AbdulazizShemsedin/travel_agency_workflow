@@ -234,3 +234,61 @@ export function getCandidatePhotoUrl(
     applicantName
   )}&kind=${kind}`;
 }
+
+export interface V2MyOwedCommissionItem {
+  placement: string;
+  full_name: string;
+  passport_number: string;
+  target_job?: string;
+  amount_original: number;
+  currency_original: string;
+  creation: string;
+}
+
+export interface V2MyComplaintItem {
+  name: string;
+  display_no?: number;
+  placement: string;
+  applicant: string;
+  full_name: string;
+  passport_number: string;
+  target_job?: string;
+  status: string;
+  creation: string;
+  description?: string;
+  resolution_notes?: string;
+  [key: string]: any;
+}
+
+/**
+ * Lists commissions owed to the current agency that are not yet on an invoice.
+ * POST /api/method/agency_tracking.portal_api.get_my_owed_commissions
+ */
+export async function getMyOwedCommissionsV2(): Promise<V2MyOwedCommissionItem[]> {
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.portal_api.get_my_owed_commissions",
+    { method: "POST" }
+  );
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.data)) return result.data;
+  if (result && Array.isArray(result.message)) return result.message;
+  return [];
+}
+
+/**
+ * Lists complaints filed by or associated with the current agency.
+ * POST /api/method/agency_tracking.portal_api.list_my_complaints
+ */
+export async function listMyComplaintsV2(status?: string): Promise<V2MyComplaintItem[]> {
+  const body: Record<string, any> = {};
+  if (status) body.status = status;
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.portal_api.list_my_complaints",
+    { method: "POST", body: Object.keys(body).length > 0 ? body : undefined }
+  );
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.data)) return result.data;
+  if (result && Array.isArray(result.message)) return result.message;
+  return [];
+}
+

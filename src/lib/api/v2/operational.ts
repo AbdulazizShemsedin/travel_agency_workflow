@@ -27,6 +27,18 @@ function calculateAge(dobStr?: string): number | string {
   return Math.abs(ageDate.getUTCFullYear() - 1970);
 }
 
+export function resolveApplicantStage(app: any, plc: any): string {
+  const ownStatus = String(app?.status || app?.applicant_state || "Draft");
+  if (ownStatus === "Cancelled") return "Cancelled";
+  if (plc && plc.status) {
+    if (String(plc.status) === "Cancelled") return "Cancelled";
+    if (["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
+      return String(plc.status);
+    }
+  }
+  return ownStatus;
+}
+
 export async function fetchOperationalWorkspaceDataV2(
   streamType: OperationalStreamType,
   corridorFilter: string = "All"
@@ -292,8 +304,17 @@ export async function fetchOperationalWorkspaceDataV2(
         injazStep?.status === "Issued"
           ? "PAID"
           : "UNPAID";
-
-      const lmisStatus = lmsStep?.status || (plc ? "In Progress" : "Pending");
+      const lmisStatus =
+        lmsStep?.lmis_status ||
+        (lmsStep?.status === "Issued" || lmsStep?.status === "Complete" || lmsStep?.status === "Completed"
+          ? "ISSUED"
+          : lmsStep?.status === "Rejected"
+          ? "REJECTED"
+          : lmsStep?.status || (plc ? "In Progress" : "Pending"));
+      const lmisRejectionReasons =
+        lmsStep?.lmis_rejection_reasons ||
+        (lmsStep as any)?.rejection_reasons ||
+        "";
       const wakalaStatus =
         (embassyStep as any)?.wakala_status ||
         (plc as any)?.wakala_status ||
@@ -418,7 +439,24 @@ export async function fetchOperationalWorkspaceDataV2(
         embassyStatus,
         telephone: applicant.phone || applicant.phone_number || "—",
         company: plc?.contractor_name || plc?.contractor || "—",
+        agencyName: plc?.contractor_name || plc?.contractor || plc?.saudi_agency_name || (plc as any)?.kuwait_agency_name || (applicant as any).agent || "—",
+        stageStatus: resolveApplicantStage(applicant, plc),
+        contractDays: (() => {
+          const cDate = plc?.contract_issue_date || plc?.contract_date || plc?.contract_signed_date || (applicant as any).contract_issue_date || (applicant as any).contract_date;
+          if (!cDate) return "—";
+          const diff = Math.max(0, Math.floor((Date.now() - new Date(cDate).getTime()) / (1000 * 60 * 60 * 24)));
+          return isNaN(diff) ? "—" : `${diff} days`;
+        })(),
+        teshirStatus: injazStep?.status || "—",
+        medical2Status: (plc as any)?.medical_2_status || (applicant as any).medical_2_status || (plc?.status === "Departed" || plc?.status === "Ticketed" ? "FIT" : "—"),
+        departureStatus: plc?.status === "Departed" ? "Departed" : plc?.status === "Ticketed" ? "Ticketed" : (ticketStatus || "—"),
         lmisStatus,
+        lmisRejectionReasons:
+          typeof lmisRejectionReasons === "string"
+            ? lmisRejectionReasons
+            : Array.isArray(lmisRejectionReasons)
+            ? lmisRejectionReasons.join(", ")
+            : "",
         issueDate: lmsStep?.date_completed || (lmsStep?.creation ? lmsStep.creation.split(" ")[0] : undefined),
         ticketStatus,
         ticketNumber,

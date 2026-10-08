@@ -54,7 +54,7 @@ export interface V2ClearanceQueueRow {
   [key: string]: any;
 }
 
-export type OperationalStreamType = "cv" | "lms" | "injaz" | "wakala" | "embassy" | "departure";
+export type OperationalStreamType = "cv" | "lms" | "injaz" | "wakala" | "embassy" | "departure" | "follow_up";
 
 export interface WorkspaceApplicantRow {
   applicantId: string;
@@ -86,12 +86,18 @@ export interface WorkspaceApplicantRow {
   cocStatus?: string;
   contractDate?: string;
   duration?: number;
+  contractDays?: string;
+  agencyName?: string;
+  stageStatus?: string;
+  medical2Status?: string;
+  departureStatus?: string;
   medicalRemaining?: string;
   medicalRemainingDays?: number;
   examRemainingDays?: number;
   injazPayment?: string;
   injazApplicationId?: string;
   appointmentDate?: string;
+  teshirStatus?: string;
   contact?: string;
   remark?: string;
   religion?: string;
@@ -106,6 +112,7 @@ export interface WorkspaceApplicantRow {
   telephone?: string;
   company?: string;
   lmisStatus?: string;
+  lmisRejectionReasons?: string;
   issueDate?: string;
   ticketStatus?: string;
   ticketNumber?: string;

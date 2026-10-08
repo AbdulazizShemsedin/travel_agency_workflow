@@ -318,7 +318,7 @@ export default function CandidateCvPreviewPage() {
             </Badge>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Candidate Ref: <strong className="font-mono text-slate-800 dark:text-zinc-200">{applicant.name}</strong> • Destination:{" "}
+            <strong>{fullName}</strong> ({passportNumber}) • Destination:{" "}
             <strong>{destination}</strong>
           </p>
         </div>

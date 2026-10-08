@@ -95,6 +95,20 @@ export const CANONICAL_V2_ROLES: CanonicalRoleDefinition[] = [
     permissionsSummary: "Read/write placement records; verify contract details; upload official visa documents.",
     accessSurface: ["Contract Ingestion", "Placement Verification", "Visa Records"],
   },
+  {
+    name: "CV",
+    category: "Intake & Registry",
+    description: "Specialist who prepares candidate CVs, updating key bio fields and generating printable CV records.",
+    permissionsSummary: "Update applicant bio fields for CV preparation and generate candidate CV documents.",
+    accessSurface: ["CV Preparation Workspace", "Applicant Records (CV Fields)"],
+  },
+  {
+    name: "Medical Officer",
+    category: "Clearance Pipeline",
+    description: "Dedicated medical officer conducting medical evaluations and recording FIT/UNFIT determinations.",
+    permissionsSummary: "Record selected and pre-departure medical examination results (FIT / UNFIT).",
+    accessSurface: ["Medical Clearance Workspace", "Medical Results Recording"],
+  },
 
   // 3. Clearance Pipeline
   {
@@ -257,7 +271,7 @@ export default function EmployeesPage() {
   // Check admin privileges
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator" || emailOrName.startsWith("admin")) return true;
+    if (emailOrName === "administrator") return true;
     if (!Array.isArray(roles)) return false;
     return roles.some((r) => {
       const norm = String(r).trim().toLowerCase();
@@ -749,8 +763,8 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto xl:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
-            <table className="w-full text-left border-collapse text-xs min-w-[760px] xl:min-w-0">
+          <div className="overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
+            <table className="w-full text-left border-collapse text-xs min-w-[760px] md:min-w-0">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Staff Member</th>

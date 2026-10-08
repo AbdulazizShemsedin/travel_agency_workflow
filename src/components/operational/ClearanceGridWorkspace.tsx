@@ -562,13 +562,79 @@ export function ClearanceGridWorkspace({
                         );
                       }
 
-                      // Editable Status Select
-                      if (fieldKey === "status" && col.options && col.options.length > 0) {
+                      // MultiSelect (e.g. lmis_rejection_reasons)
+                      if (
+                        colType === "multiselect" ||
+                        colType.includes("multiselect") ||
+                        fieldKey === "lmis_rejection_reasons"
+                      ) {
+                        const availableOptions =
+                          col.options && col.options.length > 0
+                            ? col.options
+                            : [
+                                "Employment contract",
+                                "Passport",
+                                "Working visa",
+                                "Emergency contact",
+                                "Insurance",
+                                "Original ID",
+                              ];
+
+                        const currentList: string[] = Array.isArray(currentValue)
+                          ? currentValue
+                          : typeof currentValue === "string"
+                          ? currentValue.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+                          : [];
+
                         return (
                           <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
-                            <div className="relative">
+                            <div className="relative group min-w-[130px]">
+                              <select
+                                multiple
+                                value={currentList}
+                                onChange={(e) => {
+                                  const selected = Array.from(
+                                    e.target.selectedOptions,
+                                    (opt) => opt.value
+                                  );
+                                  handleCellChange(row.name, fieldKey, selected);
+                                }}
+                                className={cn(
+                                  "h-10 w-full text-[10px] rounded border px-1 py-0.5 bg-white dark:bg-[#121217] font-medium leading-tight",
+                                  isStaged
+                                    ? "border-emerald-600 ring-1 ring-emerald-500/20"
+                                    : "border-slate-200 dark:border-[#2a2a35]",
+                                  cellError && "border-rose-500 ring-1 ring-rose-500/30"
+                                )}
+                              >
+                                {availableOptions.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                              {cellError && (
+                                <span className="text-[10px] text-rose-600 font-medium block mt-0.5">
+                                  {cellError}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      // Any Column with Options (including status, lmis_status, coc_status)
+                      if (col.options && col.options.length > 0) {
+                        const isLockedLmis =
+                          fieldKey === "lmis_status" &&
+                          (row.status === "Issued" || row.lmis_status === "ISSUED");
+
+                        return (
+                          <td key={fieldKey || col.label} className="py-1 px-2 whitespace-nowrap">
+                            <div className="relative min-w-[120px]">
                               <select
                                 value={currentValue || ""}
+                                disabled={isLockedLmis}
                                 onChange={(e) =>
                                   handleCellChange(row.name, fieldKey, e.target.value)
                                 }
@@ -577,17 +643,18 @@ export function ClearanceGridWorkspace({
                                   isStaged
                                     ? "border-emerald-600 ring-1 ring-emerald-500/20"
                                     : "border-slate-200 dark:border-[#2a2a35]",
-                                  cellError && "border-rose-500 ring-1 ring-rose-500/30"
+                                  cellError && "border-rose-500 ring-1 ring-rose-500/30",
+                                  isLockedLmis && "opacity-60 cursor-not-allowed bg-slate-50 dark:bg-zinc-900"
                                 )}
                               >
-                                <option value={row.status}>{row.status} (Current)</option>
-                                {col.options
-                                  .filter((opt) => opt !== row.status)
-                                  .map((opt) => (
-                                    <option key={opt} value={opt}>
-                                      {opt}
-                                    </option>
-                                  ))}
+                                {currentValue && !col.options.includes(currentValue) && (
+                                  <option value={currentValue}>{currentValue} (Current)</option>
+                                )}
+                                {col.options.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
                               </select>
                               {cellError && (
                                 <span className="text-[10px] text-rose-600 font-medium block mt-0.5">

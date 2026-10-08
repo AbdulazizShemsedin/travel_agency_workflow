@@ -17,10 +17,11 @@ import { OperationalTable } from "../OperationalTable";
 import { ExcelTextInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { updateApplicantV2 } from "@/lib/api/v2/applicants";
+import { updateApplicantForCvV2 } from "@/lib/api/v2/applicants";
 import { generateCvV2, renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { shortRef } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
 interface CVWorkspaceProps {
@@ -52,32 +53,36 @@ export function CVWorkspace({
   const [religionFilter, setReligionFilter] = React.useState<string>("All");
   const [maritalFilter, setMaritalFilter] = React.useState<string>("All");
 
-  // Mutation for updating applicant in-cell (e.g. remarks)
+  // Mutation for updating applicant allowlisted CV fields via applicant_api.update_applicant_for_cv
   const updateMutation = useMutation({
     mutationFn: async ({ applicantId, payload }: { applicantId: string; payload: Record<string, any> }) => {
-      return updateApplicantV2(applicantId, payload);
+      return updateApplicantForCvV2(applicantId, payload);
     },
     onSuccess: () => {
-      toast.success("Applicant updated successfully");
+      toast.success("Candidate CV information updated");
       queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
     },
     onError: (err: any) => {
-      toast.error("Failed to update applicant", {
+      toast.error("Failed to update candidate CV", {
         description: err?.message || "Please check your network connection and permissions.",
       });
     },
   });
 
-  const handleSaveRemark = async (row: WorkspaceApplicantRow, newRemark: string) => {
+  const handleUpdateField = async (applicantId: string, field: string, value: any) => {
     try {
       await updateMutation.mutateAsync({
-        applicantId: row.applicantId,
-        payload: { remarks: newRemark },
+        applicantId,
+        payload: { [field]: value },
       });
     } catch {
       // Handled in mutation onError
     }
+  };
+
+  const handleSaveRemark = async (row: WorkspaceApplicantRow, newRemark: string) => {
+    await handleUpdateField(row.applicantId, "remarks", newRemark);
   };
 
   // Helper to determine if an applicant's official CV has already been compiled

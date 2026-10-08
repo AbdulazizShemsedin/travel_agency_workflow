@@ -527,6 +527,56 @@ export async function updateApplicantV2(
 }
 
 /**
+ * CV Preparation sheet allowlisted field updates.
+ * Backend: applicant_api.update_applicant_for_cv(applicant_name, ...)
+ * Roles: CV, Manager, Admin.
+ * Allowlist: phone, labor_id, religion, region, marital_status, children, years_of_experience, english_level, remarks
+ * Applicant must be Registered or CV Generated.
+ */
+export async function updateApplicantForCvV2(
+  applicantName: string,
+  fields: {
+    phone?: string;
+    labor_id?: string;
+    religion?: string;
+    region?: string;
+    marital_status?: string;
+    children?: number;
+    years_of_experience?: number;
+    english_level?: string;
+    remarks?: string;
+    [key: string]: any;
+  }
+): Promise<{ message?: string; [key: string]: any }> {
+  const allowlist = [
+    "phone",
+    "labor_id",
+    "religion",
+    "region",
+    "marital_status",
+    "children",
+    "years_of_experience",
+    "english_level",
+    "remarks",
+  ];
+  const body: Record<string, any> = {
+    applicant_name: applicantName,
+  };
+  for (const key of allowlist) {
+    if (fields[key] !== undefined) {
+      body[key] = fields[key];
+    }
+  }
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.update_applicant_for_cv",
+    {
+      method: "POST",
+      body,
+    }
+  );
+}
+
+/**
  * LMIS-stage allowlisted field updates (national_id, labor_id, emergency contact, COC).
  * Narrow allowlisted edit surface for candidate at LMIS clearance step.
  */
@@ -552,6 +602,13 @@ export async function updateApplicantForLmisV2(
     ...(payload.coc_status !== undefined ? { coc_status: sanitizedCocStatus } : {}),
     ...(payload.labor_id !== undefined ? { labor_id: sanitizedLaborId } : {}),
   };
+
+  // Enforce LMIS restriction: LMIS cannot edit national ID or emergency contact details
+  delete (cleanPayload as any).national_id;
+  delete (cleanPayload as any).emergency_contact;
+  delete (cleanPayload as any).emergency_contact_name;
+  delete (cleanPayload as any).emergency_contact_phone;
+  delete (cleanPayload as any).emergency_phone;
 
   return requestV2(
     "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
