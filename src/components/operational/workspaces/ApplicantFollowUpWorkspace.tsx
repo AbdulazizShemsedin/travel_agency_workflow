@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X,
+  ArrowLeft,
   User,
   FileCheck2,
   CreditCard,
@@ -76,21 +77,23 @@ import {
 import { downloadInjazDocumentPDF, InjazCandidateData } from "@/lib/pdf/injazDocumentGenerator";
 
 interface ApplicantFollowUpWorkspaceProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
   row: WorkspaceApplicantRow | null;
-  onRefresh: () => void;
+  onRefresh?: () => void;
   employees?: { name: string; full_name?: string; email?: string }[];
+  isFullPage?: boolean;
 }
 
 type StageTabId = "summary" | "lmis" | "taeshir" | "embassy" | "medical" | "departure";
 
 export function ApplicantFollowUpWorkspace({
-  isOpen,
+  isOpen = true,
   onClose,
   row,
   onRefresh,
   employees = [],
+  isFullPage = false,
 }: ApplicantFollowUpWorkspaceProps) {
   const queryClient = useQueryClient();
   const { authUser, roles } = useAuth();
@@ -107,7 +110,7 @@ export function ApplicantFollowUpWorkspace({
   // Handle ESC key to close
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape" && isOpen && onClose) {
         onClose();
       }
     };
@@ -115,9 +118,9 @@ export function ApplicantFollowUpWorkspace({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Lock body scroll when open
+  // Lock body scroll when open (drawer mode only)
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isFullPage) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -125,7 +128,7 @@ export function ApplicantFollowUpWorkspace({
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [isOpen, isFullPage]);
 
   // Role permissions checking
   const authUserV2 = React.useMemo(() => {
@@ -218,10 +221,10 @@ export function ApplicantFollowUpWorkspace({
       queryClient.invalidateQueries({ queryKey: ["v2_clearance_queue"] }),
       queryClient.invalidateQueries({ queryKey: ["applicants"] }),
     ]);
-    onRefresh();
+    onRefresh?.();
   };
 
-  if (!isOpen || !currentRow) return null;
+  if ((!isOpen && !isFullPage) || !currentRow) return null;
 
   const placementName = currentRow.placementName || currentRow.placementId;
   const destinationCountry = currentRow.destinationCountry || "Saudi Arabia";
@@ -233,17 +236,34 @@ export function ApplicantFollowUpWorkspace({
   const embassyStepName = currentRow.embassy?.name;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
-      {/* Dimmed backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity"
-        onClick={onClose}
-      />
+    <div
+      className={cn(
+        isFullPage
+          ? "w-full space-y-4"
+          : "fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200"
+      )}
+    >
+      {!isFullPage && (
+        <div
+          className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity"
+          onClick={onClose}
+        />
+      )}
 
-      {/* Slide-over Drawer Panel */}
-      <div className="fixed inset-y-0 right-0 flex max-w-full pl-6 sm:pl-10">
-        <div className="w-screen max-w-3xl bg-white dark:bg-[#121217] shadow-2xl border-l border-slate-200 dark:border-[#272730] flex flex-col transition-transform duration-300 ease-out animate-in slide-in-from-right">
-          
+      {/* Panel (Drawer on pop-up, Card on full-page) */}
+      <div
+        className={cn(
+          !isFullPage && "fixed inset-y-0 right-0 flex max-w-full pl-6 sm:pl-10"
+        )}
+      >
+        <div
+          className={cn(
+            "bg-white dark:bg-[#121217] flex flex-col",
+            isFullPage
+              ? "w-full rounded-2xl border border-slate-200/80 dark:border-[#272730] shadow-sm overflow-hidden"
+              : "w-screen max-w-3xl shadow-2xl border-l border-slate-200 dark:border-[#272730] transition-transform duration-300 ease-out animate-in slide-in-from-right h-full"
+          )}
+        >
           {/* ------------------------------------------------------------- */}
           {/* HEADER: Candidate Identity & Stage Status                      */}
           {/* ------------------------------------------------------------- */}
@@ -283,15 +303,30 @@ export function ApplicantFollowUpWorkspace({
                 <Badge className="bg-emerald-600 text-white font-bold text-xs uppercase px-2.5 py-0.5 shadow-2xs">
                   {currentRow.stageStatus || "Active"}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onClose}
-                  className="h-8 w-8 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
-                  title="Close Workspace (ESC)"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                {isFullPage ? (
+                  onClose && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onClose}
+                      className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-slate-200 dark:border-[#272730] text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1f1f26] cursor-pointer"
+                      title="Back to Follow-Up Tracking"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      <span>Back to Follow-Up</span>
+                    </Button>
+                  )
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClose}
+                    className="h-8 w-8 rounded-lg text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
+                    title="Close Workspace (ESC)"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1059,14 +1094,23 @@ export function ApplicantFollowUpWorkspace({
             <span className="text-xs text-slate-400">
               Changes save directly to authoritative backend records.
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              className="text-xs h-8 border-slate-300 dark:border-zinc-700"
-            >
-              Done / Return to Table
-            </Button>
+            {onClose && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                className="text-xs h-8 border-slate-300 dark:border-zinc-700 gap-1.5"
+              >
+                {isFullPage ? (
+                  <>
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Return to Follow-Up Tracking</span>
+                  </>
+                ) : (
+                  <span>Done / Return to Table</span>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

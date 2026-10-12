@@ -23,9 +23,11 @@ import {
   Filter,
   Coins,
   ShieldAlert,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -85,7 +87,8 @@ export default function ContractorsPage() {
 
   // Credentials / Password State
   const [agentNewPassword, setAgentNewPassword] = React.useState("");
-  const [showAgentPassword, setShowAgentPassword] = React.useState(false);
+  const [confirmAgentPassword, setConfirmAgentPassword] = React.useState("");
+  const [showAgentPassword, setShowAgentPassword] = React.useState(true);
   const [copiedCredentials, setCopiedCredentials] = React.useState(false);
 
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -235,9 +238,9 @@ export default function ContractorsPage() {
       contractor_name: c.contractor_name || c.company_name || c.name || "",
       country: c.country || "Saudi Arabia",
       contact_person: c.contact_person || "",
-      phone: c.phone || "",
-      whatsapp: c.whatsapp || c.whatsapp_phone || "",
-      email: c.email || c.user_email || "",
+      phone: c.phone || c.telephone || (c as any).phone_number || (c as any).office_phone || "",
+      whatsapp: c.whatsapp || c.whatsapp_phone || (c as any).mobile_no || "",
+      email: c.email || c.user_email || (c as any).user || "",
       communication_manager: c.communication_manager || "",
       notes: c.notes || "",
     });
@@ -246,7 +249,8 @@ export default function ContractorsPage() {
   const handleOpenCredentials = (c: V2ContractorItem) => {
     setCredentialsContractor(c);
     setAgentNewPassword("");
-    setShowAgentPassword(false);
+    setConfirmAgentPassword("");
+    setShowAgentPassword(true);
     setCopiedCredentials(false);
   };
 
@@ -257,6 +261,7 @@ export default function ContractorsPage() {
       pwd += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setAgentNewPassword(pwd);
+    setConfirmAgentPassword(pwd);
     setShowAgentPassword(true);
   };
 
@@ -408,7 +413,7 @@ export default function ContractorsPage() {
             <span className="ml-2 text-xs text-slate-500">Loading agencies...</span>
           </div>
         ) : (
-          <div className="w-full max-w-full min-w-0 overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
+          <div className="w-full max-w-full min-w-0 overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
             <table className="w-full min-w-[750px] md:min-w-0 text-left text-xs">
               <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                 <tr>
@@ -823,12 +828,18 @@ export default function ContractorsPage() {
                   e.preventDefault();
                   const targetUser = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email;
                   if (!targetUser || !agentNewPassword.trim() || resetAgentPasswordMutation.isPending) return;
+                  if (agentNewPassword !== confirmAgentPassword) {
+                    toast.error("Passwords do not match", {
+                      description: "Please ensure the password and confirm password fields match exactly.",
+                    });
+                    return;
+                  }
                   resetAgentPasswordMutation.mutate({
                     userEmail: targetUser,
                     newPassword: agentNewPassword,
                   });
                 }}
-                className="space-y-2.5"
+                className="space-y-3"
               >
                 <div className="flex items-center justify-between">
                   <Label htmlFor="agent_new_pwd" className="text-xs font-semibold">
@@ -837,7 +848,7 @@ export default function ContractorsPage() {
                   <button
                     type="button"
                     onClick={handleGenerateRandomPassword}
-                    className="text-[11px] text-amber-600 hover:text-amber-700 font-medium"
+                    className="text-[11px] text-amber-600 hover:text-amber-700 font-medium cursor-pointer"
                   >
                     Generate Random
                   </button>
@@ -858,14 +869,42 @@ export default function ContractorsPage() {
                   <button
                     type="button"
                     onClick={() => setShowAgentPassword(!showAgentPassword)}
-                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     {showAgentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
 
+                <div className="space-y-1">
+                  <Label htmlFor="agent_confirm_pwd" className="text-xs font-semibold">
+                    Confirm Password
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="agent_confirm_pwd"
+                      name="agent_portal_confirm_pwd"
+                      type={showAgentPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      placeholder="Re-enter password to confirm"
+                      value={confirmAgentPassword}
+                      onChange={(e) => setConfirmAgentPassword(e.target.value)}
+                      className={cn(
+                        "pr-8 font-mono text-xs",
+                        agentNewPassword && confirmAgentPassword && agentNewPassword !== confirmAgentPassword && "border-rose-500 focus-visible:ring-rose-500"
+                      )}
+                    />
+                  </div>
+                  {agentNewPassword && confirmAgentPassword && agentNewPassword !== confirmAgentPassword && (
+                    <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      Passwords do not match
+                    </p>
+                  )}
+                </div>
+
                 <p className="text-[11px] text-slate-400">
-                  Save the password below so the foreign agent can log into their dedicated agency portal.
+                  Password is visible above so you can easily review and share it with the foreign agency representative.
                 </p>
 
                 <div className="flex items-center gap-2 pt-1">
@@ -874,6 +913,8 @@ export default function ContractorsPage() {
                     size="sm"
                     disabled={
                       !agentNewPassword.trim() ||
+                      !confirmAgentPassword.trim() ||
+                      agentNewPassword !== confirmAgentPassword ||
                       !(credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email) ||
                       resetAgentPasswordMutation.isPending
                     }

@@ -82,7 +82,20 @@ async function parseJsonOrFriendlyMessage(res: Response) {
       return { message: fallbackMessage };
     }
     try {
-      return JSON.parse(rawText);
+      const parsed = JSON.parse(rawText);
+      if (
+        res.status === 404 &&
+        (parsed?.message === "Application not found" || (parsed?.status === "error" && parsed?.message === "Application not found"))
+      ) {
+        return {
+          exc_type: "BackendConnectionError",
+          message: "Cannot connect to backend server: Application not found at configured host. Please ensure the backend is deployed and running.",
+          status_code: 502,
+          isBackendNotFound: true,
+          original_error: parsed,
+        };
+      }
+      return parsed;
     } catch {
       // Non-JSON response (e.g. Werkzeug or Nginx HTML error page)
       if (
@@ -95,6 +108,14 @@ async function parseJsonOrFriendlyMessage(res: Response) {
           message: "The uploaded file exceeds the server payload size limit. Please compress or optimize the file before uploading (recommended under 20MB).",
           error: "Request Entity Too Large",
           status_code: 413,
+        };
+      }
+      if (res.status === 404 && rawText.includes("Application not found")) {
+        return {
+          exc_type: "BackendConnectionError",
+          message: "Cannot connect to backend server: Application not found at configured host. Please ensure the backend is deployed and running.",
+          status_code: 502,
+          isBackendNotFound: true,
         };
       }
       const cleanSnippet = rawText
@@ -306,6 +327,13 @@ export async function POST(
 
     const data = await parseJsonOrFriendlyMessage(res);
 
+    if (data?.isBackendNotFound) {
+      console.error(
+        `[PROXY BACKEND OFFLINE] POST ${methodPath} (502): Upstream backend host at '${config.url}' returned 404 'Application not found'. The Railway deployment is offline, paused, or missing.`
+      );
+      return NextResponse.json(data, { status: 502 });
+    }
+
     // Post-query enrichment for contractor user details
     if (res.ok && data) {
       if (methodPath === "agency_tracking.contractor_api.list_contractors") {
@@ -475,6 +503,13 @@ export async function GET(
     }
 
     const data = await parseJsonOrFriendlyMessage(res);
+
+    if (data?.isBackendNotFound) {
+      console.error(
+        `[PROXY BACKEND OFFLINE] GET ${methodPath} (502): Upstream backend host at '${config.url}' returned 404 'Application not found'. The Railway deployment is offline, paused, or missing.`
+      );
+      return NextResponse.json(data, { status: 502 });
+    }
     if (!res.ok) {
       const isExpectedAuthChallenge = res.status === 401 && (
         methodPath.includes("login") ||

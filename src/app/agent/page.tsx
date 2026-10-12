@@ -614,11 +614,11 @@ export default function AgentDiscoveryPage() {
             ) : (
               /* Candidate Table */
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
-                <div className="overflow-x-auto md:overflow-x-clip relative">
-                  <table className="w-full text-left text-xs min-w-[780px] md:min-w-0 border-separate border-spacing-0">
+                <div className="overflow-x-auto lg:overflow-x-clip relative">
+                  <table className="w-full text-left text-xs min-w-[780px] lg:min-w-0 border-separate border-spacing-0">
                     <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
-                        <th className="md:sticky md:left-0 md:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
+                        <th className="lg:sticky lg:left-0 lg:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                           Candidate
                         </th>
                         <th className="px-4 py-3.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Job & Destination</th>
@@ -632,7 +632,7 @@ export default function AgentDiscoveryPage() {
                       {visibleCandidates.map((candidate) => (
                         <tr key={candidate.name} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
                           {/* Candidate Identity - Sticky on Desktop only */}
-                          <td className="md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
+                          <td className="lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                             <div className="flex items-center gap-1.5 sm:gap-3">
                               {candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo ? (
                                 <img

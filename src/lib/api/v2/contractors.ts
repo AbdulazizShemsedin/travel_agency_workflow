@@ -117,7 +117,7 @@ export async function listContractorsV2(
 export async function createContractorV2(
   payload: V2CreateContractorPayload
 ): Promise<{ name?: string; contractor_name?: string; company_name?: string; message?: string; [key: string]: any }> {
-  return requestV2(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.contractor_api.create_contractor",
     {
       method: "POST",
@@ -130,6 +130,48 @@ export async function createContractorV2(
       },
     }
   );
+
+  const contractorName = result?.name || payload.contractor_name || payload.company_name;
+  const userEmail = result?.user || payload.user_email || payload.email;
+
+  // Persist telephone & notes on Contractor and phone & mobile_no on User so phone info appears when editing
+  try {
+    const contractorUpdates: Record<string, any> = {};
+    if (payload.phone) contractorUpdates.telephone = payload.phone;
+    if (payload.telephone) contractorUpdates.telephone = payload.telephone;
+    if (payload.notes) contractorUpdates.notes = payload.notes;
+
+    if (contractorName && Object.keys(contractorUpdates).length > 0) {
+      await requestV2("/api/method/frappe.client.set_value", {
+        method: "POST",
+        body: {
+          doctype: "Contractor",
+          name: contractorName,
+          fieldname: contractorUpdates,
+        },
+      });
+    }
+
+    if (userEmail && (payload.phone || payload.whatsapp || payload.contact_person)) {
+      const userUpdates: Record<string, any> = {};
+      if (payload.phone) userUpdates.phone = payload.phone;
+      if (payload.whatsapp) userUpdates.mobile_no = payload.whatsapp;
+      if (payload.contact_person) userUpdates.first_name = payload.contact_person;
+
+      await requestV2("/api/method/frappe.client.set_value", {
+        method: "POST",
+        body: {
+          doctype: "User",
+          name: userEmail,
+          fieldname: userUpdates,
+        },
+      });
+    }
+  } catch (extraErr) {
+    console.warn("[createContractorV2] Warning updating extra contact info:", extraErr);
+  }
+
+  return result;
 }
 
 /**
@@ -181,6 +223,8 @@ export async function updateContractorV2(
       if (payload.country) fieldUpdates.country = payload.country;
       if (payload.communication_manager !== undefined) fieldUpdates.communication_manager = payload.communication_manager;
       if (payload.notes !== undefined) fieldUpdates.notes = payload.notes;
+      if (payload.phone !== undefined) fieldUpdates.telephone = payload.phone;
+      if (payload.telephone !== undefined) fieldUpdates.telephone = payload.telephone;
 
       if (Object.keys(fieldUpdates).length > 0) {
         await requestV2("/api/method/frappe.client.set_value", {
@@ -194,7 +238,8 @@ export async function updateContractorV2(
       }
 
       // Update linked User if present
-      if (current.user && current.user.toLowerCase() !== "administrator") {
+      const userIdentifier = current.user || current.user_email || payload.user || payload.email;
+      if (userIdentifier && userIdentifier.toLowerCase() !== "administrator") {
         const userUpdates: Record<string, any> = {};
         if (payload.contact_person) userUpdates.first_name = payload.contact_person;
         if (payload.phone !== undefined) userUpdates.phone = payload.phone;
@@ -205,7 +250,7 @@ export async function updateContractorV2(
             method: "POST",
             body: {
               doctype: "User",
-              name: current.user,
+              name: userIdentifier,
               fieldname: userUpdates,
             },
           });

@@ -276,6 +276,10 @@ export async function requestV2<T = any>(
       errorMsg = jsonResponse.message.error || jsonResponse.message.message || jsonResponse.message.detail || "";
     }
 
+    if (errorMsg === "Application not found" || (response.status === 404 && typeof jsonResponse?.message === "string" && jsonResponse.message.includes("Application not found"))) {
+      errorMsg = "Cannot connect to backend server: Application not found at configured host. Please ensure the backend is deployed and running.";
+    }
+
     // 3. Try exception field (strip Python/Frappe exception classes)
     if (!errorMsg && typeof jsonResponse?.exception === "string") {
       const rawExc = jsonResponse.exception.trim();

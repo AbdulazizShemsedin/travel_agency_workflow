@@ -29,7 +29,6 @@ import {
   Check,
   X,
   AlertTriangle,
-  Clock,
   Eye,
   CheckSquare,
   Square,
@@ -60,6 +59,7 @@ interface OperationalTableProps<T extends Record<string, any> = any> {
   onCorridorChange?: (corridor: string) => void;
   availableCorridors?: string[];
   extraHeaderActions?: React.ReactNode;
+  hideStatusFilter?: boolean;
 }
 
 export function OperationalTable<T extends Record<string, any> = any>({
@@ -75,6 +75,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
   onCorridorChange,
   availableCorridors = ["All", "Saudi Arabia", "Kuwait"],
   extraHeaderActions,
+  hideStatusFilter = false,
 }: OperationalTableProps<T>) {
   // State for TanStack Table
   const [globalFilter, setGlobalFilter] = React.useState("");
@@ -241,8 +242,37 @@ export function OperationalTable<T extends Record<string, any> = any>({
       });
     }
 
+    // 3. Default sort: Most urgent (least remaining days first) and most recent on early rows
+    if (sorting.length === 0) {
+      list = [...list].sort((a, b) => {
+        const aDays = a.medicalRemainingDays ??
+          (typeof a.medicalRemaining === "string" && !isNaN(parseInt(a.medicalRemaining, 10)) ? parseInt(a.medicalRemaining, 10) : undefined);
+        const bDays = b.medicalRemainingDays ??
+          (typeof b.medicalRemaining === "string" && !isNaN(parseInt(b.medicalRemaining, 10)) ? parseInt(b.medicalRemaining, 10) : undefined);
+
+        const aHasDays = aDays !== undefined && !isNaN(aDays);
+        const bHasDays = bDays !== undefined && !isNaN(bDays);
+
+        if (aHasDays && bHasDays) {
+          if (aDays >= 0 && bDays >= 0) return aDays - bDays;
+          if (aDays >= 0 && bDays < 0) return -1;
+          if (aDays < 0 && bDays >= 0) return 1;
+          return aDays - bDays;
+        }
+        if (aHasDays && aDays >= 0) return -1;
+        if (bHasDays && bDays >= 0) return 1;
+
+        const aDate = a.contractDate || a.contractIssueDate || a.creation || "";
+        const bDate = b.contractDate || b.contractIssueDate || b.creation || "";
+        if (aDate && bDate) {
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        }
+        return 0;
+      });
+    }
+
     return list;
-  }, [data, selectedStatusFilter, selectedUrgencyFilter]);
+  }, [data, selectedStatusFilter, selectedUrgencyFilter, sorting.length]);
 
   // TanStack Table Instance
   const table = useReactTable({
@@ -334,18 +364,6 @@ export function OperationalTable<T extends Record<string, any> = any>({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
-
-  // Quick action: Sort by most urgent remaining days (ascending order)
-  const handleSortMostUrgent = () => {
-    const remCol = tableColumns.find(
-      (c) =>
-        c.id?.toLowerCase().includes("remaining") ||
-        (typeof c.header === "string" && c.header.toLowerCase().includes("remaining"))
-    );
-    if (remCol && remCol.id) {
-      setSorting([{ id: remCol.id, desc: false }]);
-    }
   };
 
   return (
@@ -443,7 +461,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
           </Popover>
 
           {/* TanStack Status Filter Dropdown */}
-          {availableStatuses.length > 0 && (
+          {availableStatuses.length > 0 && !hideStatusFilter && (
             <div className="min-w-[150px] sm:min-w-[175px]">
               <SimpleSelect
                 value={selectedStatusFilter}
@@ -478,18 +496,6 @@ export function OperationalTable<T extends Record<string, any> = any>({
               aria-label="Filter by Urgency"
             />
           </div>
-
-          {/* Quick Sort by Most Urgent Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSortMostUrgent}
-            className="h-8 px-2.5 text-xs font-semibold gap-1 border-slate-200 dark:border-[#2c2c36] text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1f1f26]"
-            title="Sort by Most Urgent (least remaining days first)"
-          >
-            <Clock className="h-3.5 w-3.5 text-rose-500" />
-            <span className="hidden lg:inline">Most Urgent</span>
-          </Button>
 
           {/* Quick Search */}
           <div className="relative min-w-[180px] sm:min-w-[200px]">
@@ -566,10 +572,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative w-full max-w-full min-w-0 overflow-x-auto md:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
-        <table className="w-full min-w-[720px] md:min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
+      <div className="relative w-full max-w-full min-w-0 overflow-x-auto lg:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <table className="w-full min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-30 text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
+          <thead className="sticky top-0 z-30 text-[10.5px] xl:text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
@@ -594,17 +600,16 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       scope="col"
                       style={{
                         width,
-                        maxWidth: width,
                         ...(isNameCol ? { left: 0 } : {}),
                         ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
-                        "py-1.5 px-2 select-none border-r border-slate-300 dark:border-[#272730] leading-tight",
+                        "py-1 px-1.5 xl:px-2 select-none border-r border-slate-300 dark:border-[#272730] leading-tight",
                         isNameCol &&
-                          "md:sticky md:left-0 md:z-30 bg-slate-100 dark:bg-[#181820] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                          "lg:sticky lg:left-0 lg:z-30 bg-slate-100 dark:bg-[#181820] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                         isActionCol &&
                           isLastCol &&
-                          "md:sticky md:right-0 md:z-30 bg-slate-100 dark:bg-[#181820] md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
+                          "lg:sticky lg:right-0 lg:z-30 bg-slate-100 dark:bg-[#181820] lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -670,9 +675,9 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           ...(isActionCol && isLastCol ? { right: 0 } : {}),
                         }}
                         className={cn(
-                          "py-2 px-2.5",
-                          isNameCol && "md:sticky md:left-0 md:z-10 bg-white dark:bg-[#121216] md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                          isActionCol && isLastCol && "md:sticky md:right-0 md:z-10 bg-white dark:bg-[#121216] md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
+                          "py-1.5 px-2",
+                          isNameCol && "lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                          isActionCol && isLastCol && "lg:sticky lg:right-0 lg:z-10 bg-white dark:bg-[#121216] lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
                         )}
                       >
                         <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
@@ -734,15 +739,14 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           key={cell.id}
                           style={{
                             width: (cell.column.columnDef.meta as any)?.width,
-                            maxWidth: (cell.column.columnDef.meta as any)?.width,
                             ...(isNameCol ? { left: 0 } : {}),
                             ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
-                            "py-1.5 px-2 text-slate-800 dark:text-zinc-200 text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
-                            isStickyCol && "md:sticky md:z-20",
-                            isNameCol && "md:left-0 md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                            isActionCol && isLastCol && "md:right-0 md:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
+                            "py-1 px-1.5 xl:px-2 text-slate-800 dark:text-zinc-200 text-[10.5px] xl:text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
+                            isStickyCol && "lg:sticky lg:z-20",
+                            isNameCol && "lg:left-0 lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
+                            isActionCol && isLastCol && "lg:right-0 lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
                             isNameCol && (
                               isSelected
                                 ? "!bg-emerald-100 dark:!bg-[#183428]"

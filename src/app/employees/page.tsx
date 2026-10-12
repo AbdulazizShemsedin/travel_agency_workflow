@@ -254,7 +254,8 @@ export default function EmployeesPage() {
   const [selectedForPassword, setSelectedForPassword] = React.useState<V2EmployeeRecord | null>(null);
   const [employeeToDeactivate, setEmployeeToDeactivate] = React.useState<V2EmployeeRecord | null>(null);
   const [newPassword, setNewPassword] = React.useState<string>("");
-  const [showNewPassword, setShowNewPassword] = React.useState<boolean>(false);
+  const [confirmNewPassword, setConfirmNewPassword] = React.useState<string>("");
+  const [showNewPassword, setShowNewPassword] = React.useState<boolean>(true);
 
   // Add Employee Form State
   const [addForm, setAddForm] = React.useState({
@@ -263,10 +264,11 @@ export default function EmployeesPage() {
     email: "",
     phone: "",
     password: "",
+    confirmPassword: "",
     roles: [] as string[],
     send_welcome_email: false,
   });
-  const [showAddPassword, setShowAddPassword] = React.useState<boolean>(false);
+  const [showAddPassword, setShowAddPassword] = React.useState<boolean>(true);
 
   // Check admin privileges
   const isManagerOrAdmin = React.useMemo<boolean>(() => {
@@ -348,6 +350,7 @@ export default function EmployeesPage() {
         email: "",
         phone: "",
         password: "",
+        confirmPassword: "",
         roles: [],
         send_welcome_email: false,
       });
@@ -454,7 +457,8 @@ export default function EmployeesPage() {
   const handleOpenResetPassword = (emp: V2EmployeeRecord) => {
     setSelectedForPassword(emp);
     setNewPassword("");
-    setShowNewPassword(false);
+    setConfirmNewPassword("");
+    setShowNewPassword(true);
   };
 
   const handleGenerateRandomPassword = () => {
@@ -463,7 +467,7 @@ export default function EmployeesPage() {
     for (let i = 0; i < 12; i++) {
       pwd += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setAddForm((prev) => ({ ...prev, password: pwd }));
+    setAddForm((prev) => ({ ...prev, password: pwd, confirmPassword: pwd }));
     setShowAddPassword(true);
   };
 
@@ -763,7 +767,7 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
+          <div className="overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
             <table className="w-full text-left border-collapse text-xs min-w-[760px] md:min-w-0">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
@@ -1327,8 +1331,15 @@ export default function EmployeesPage() {
                 toast.error("Please provide an initial password.");
                 return;
               }
+              if (addForm.password !== addForm.confirmPassword) {
+                toast.error("Passwords do not match", {
+                  description: "Initial password and confirm password must match.",
+                });
+                return;
+              }
+              const { confirmPassword: _, ...empPayload } = addForm;
               createMutation.mutate({
-                ...addForm,
+                ...empPayload,
                 email: normalizedEmail,
               });
             }}
@@ -1404,7 +1415,7 @@ export default function EmployeesPage() {
               </div>
             </div>
 
-            {/* Password */}
+            {/* Initial Password */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="add_password" className="text-xs font-semibold">
@@ -1413,7 +1424,7 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={handleGenerateRandomPassword}
-                  className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium cursor-pointer"
                 >
                   <Key className="h-3 w-3" />
                   Generate Strong Password
@@ -1432,11 +1443,38 @@ export default function EmployeesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddPassword(!showAddPassword)}
-                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+
+            {/* Confirm Initial Password */}
+            <div className="space-y-1.5">
+              <Label htmlFor="add_confirm_password" className="text-xs font-semibold">
+                Confirm Password *
+              </Label>
+              <div className="relative">
+                <Input
+                  id="add_confirm_password"
+                  type={showAddPassword ? "text" : "password"}
+                  required
+                  placeholder="Re-enter password to confirm"
+                  value={addForm.confirmPassword}
+                  onChange={(e) => setAddForm({ ...addForm, confirmPassword: e.target.value })}
+                  className={cn(
+                    "h-8.5 text-xs pr-8 font-mono",
+                    addForm.password && addForm.confirmPassword && addForm.password !== addForm.confirmPassword && "border-rose-500 focus-visible:ring-rose-500"
+                  )}
+                />
+              </div>
+              {addForm.password && addForm.confirmPassword && addForm.password !== addForm.confirmPassword && (
+                <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  Passwords do not match
+                </p>
+              )}
             </div>
 
             {/* Roles Picker */}
@@ -1510,7 +1548,13 @@ export default function EmployeesPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={createMutation.isPending || isDuplicateAddEmail}
+                disabled={
+                  createMutation.isPending ||
+                  isDuplicateAddEmail ||
+                  !addForm.password.trim() ||
+                  !addForm.confirmPassword.trim() ||
+                  addForm.password !== addForm.confirmPassword
+                }
                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
               >
                 {createMutation.isPending ? (
@@ -1647,12 +1691,17 @@ export default function EmployeesPage() {
               autoComplete="off"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (newPassword.trim() && !resetPasswordMutation.isPending) {
-                  resetPasswordMutation.mutate({
-                    email: selectedForPassword.email,
-                    newPassword,
+                if (!newPassword.trim() || resetPasswordMutation.isPending) return;
+                if (newPassword !== confirmNewPassword) {
+                  toast.error("Passwords do not match", {
+                    description: "New password and confirm password must match.",
                   });
+                  return;
                 }
+                resetPasswordMutation.mutate({
+                  email: selectedForPassword.email,
+                  newPassword,
+                });
               }}
               className="space-y-3 py-2 text-xs"
             >
@@ -1685,13 +1734,41 @@ export default function EmployeesPage() {
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="reset_confirm_pwd" className="text-xs font-semibold">
+                  Confirm New Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="reset_confirm_pwd"
+                    name="confirm_password_field"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="Re-enter new password"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className={cn(
+                      "h-8.5 text-xs pr-8 font-mono",
+                      newPassword && confirmNewPassword && newPassword !== confirmNewPassword && "border-rose-500 focus-visible:ring-rose-500"
+                    )}
+                  />
+                </div>
+                {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
+                  <p className="text-[11px] text-rose-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    Passwords do not match
+                  </p>
+                )}
                 <p className="text-[11px] text-slate-400">
-                  Password must be at least 8 characters. The employee can immediately authenticate with these new credentials.
+                  Password is visible above so you can easily review and share it with the staff member.
                 </p>
               </div>
             </form>
@@ -1707,13 +1784,24 @@ export default function EmployeesPage() {
               </Button>
               <Button
                 type="button"
-                disabled={!newPassword.trim() || resetPasswordMutation.isPending}
-                onClick={() =>
+                disabled={
+                  !newPassword.trim() ||
+                  !confirmNewPassword.trim() ||
+                  newPassword !== confirmNewPassword ||
+                  resetPasswordMutation.isPending
+                }
+                onClick={() => {
+                  if (newPassword !== confirmNewPassword) {
+                    toast.error("Passwords do not match", {
+                      description: "New password and confirm password must match.",
+                    });
+                    return;
+                  }
                   resetPasswordMutation.mutate({
                     email: selectedForPassword.email,
                     newPassword,
-                  })
-                }
+                  });
+                }}
                 className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold h-9 shadow-xs"
               >
                 {resetPasswordMutation.isPending ? (

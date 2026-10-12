@@ -27,6 +27,7 @@ import {
   Globe2,
   User,
   Check,
+  X,
 } from "lucide-react";
 import {
   BaseApplicantFormValues,
@@ -38,7 +39,18 @@ import {
   RELIGION_OPTIONS,
   MARITAL_STATUS_OPTIONS,
   DESTINATION_COUNTRY_OPTIONS,
+  PHONE_REGEX,
+  PASSPORT_REGEX,
 } from "@/lib/validations/applicant.schema";
+import {
+  parseISO,
+  isValid,
+  isPast,
+  isFuture,
+  startOfDay,
+  differenceInYears,
+  addMonths,
+} from "date-fns";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createApplicantV2,
@@ -66,6 +78,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ApplicantRegistrationFormProps {
   initialData?: Partial<BaseApplicantFormValues>;
@@ -218,7 +231,7 @@ export function ApplicantRegistrationForm({
     );
 
   const form = useForm<BaseApplicantFormValues>({
-    mode: "onTouched",
+    mode: "onChange",
     // @ts-expect-error zodResolver type widening across optional schema fields
     resolver: zodResolver(stage1DraftSchema),
     defaultValues: {
@@ -348,6 +361,297 @@ export function ApplicantRegistrationForm({
   });
 
   const { register, watch, setValue, getValues, setError, clearErrors, reset, formState: { errors } } = form;
+
+  // Track highlighted field for auto-scrolling & visual emphasis
+  const [highlightedField, setHighlightedField] = React.useState<string | null>(null);
+
+  // Helper to scroll to and highlight missing or invalid fields
+  const scrollToAndHighlightField = React.useCallback((fieldName: string) => {
+    if (!fieldName) return;
+
+    // Expand accordions if target field is inside them
+    const skillsFields = [
+      "english_level",
+      "arabic_level",
+      "experience_country",
+      "salary_amount",
+      "monthly_salary",
+      "works_in",
+      "complexion",
+      "height",
+      "weight",
+      "reference_no",
+      "remarks",
+    ];
+    const relativeFields = [
+      "relative_name",
+      "relative_phone",
+      "relative_kinship",
+      "r_birth_date",
+      "relative_gender",
+      "address_region",
+      "relative_woreda",
+      "relative_house_no",
+    ];
+    const otherFields = [
+      "region",
+      "sub_region",
+      "woreda",
+      "house_no",
+      "file_no",
+      "contract_number",
+      "wakala_number",
+      "sticker_visa_number",
+      "signed_on",
+      "nationality",
+      "biometric_id",
+      "labor_id",
+      "labour_id",
+      "contact_person_2nd",
+      "contact_phone_2nd",
+    ];
+
+    if (skillsFields.includes(fieldName)) {
+      setIsSkillsOpen(true);
+    } else if (relativeFields.includes(fieldName)) {
+      setIsRelativeOpen(true);
+    } else if (otherFields.includes(fieldName)) {
+      setIsOtherInfoOpen(true);
+    } else if (fieldName === "passport_scan") {
+      setActiveMediaTab("passport");
+    } else if (fieldName === "photograph" || fieldName === "photo_passport" || fieldName === "profile_photo_url") {
+      setActiveMediaTab("photo");
+    } else if (fieldName === "photo_full_body") {
+      setActiveMediaTab("full_size");
+    } else if (fieldName === "video_url") {
+      setActiveMediaTab("video");
+    }
+
+    setHighlightedField(fieldName);
+
+    setTimeout(() => {
+      const selector = `[name="${fieldName}"], #field-${fieldName}, #${fieldName}, [data-field="${fieldName}"]`;
+      const el = document.querySelector(selector) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (typeof el.focus === "function") {
+          el.focus();
+        }
+      }
+    }, 120);
+
+    setTimeout(() => {
+      setHighlightedField((prev) => (prev === fieldName ? null : prev));
+    }, 5000);
+  }, []);
+
+  // Helper to dynamically style inputs and dropdowns on error / highlight
+  const getFieldClass = React.useCallback(
+    (fieldName: string, baseExtra = "") => {
+      const isError = Boolean(errors[fieldName as keyof BaseApplicantFormValues]);
+      const isHighlighted = highlightedField === fieldName;
+      if (isHighlighted) {
+        return cn(
+          baseExtra,
+          "!border-rose-500 !ring-2 !ring-rose-500 shadow-md animate-pulse bg-rose-50/20 dark:bg-rose-950/20"
+        );
+      }
+      if (isError) {
+        return cn(baseExtra, "!border-rose-500 focus-visible:!ring-rose-500 !ring-1 !ring-rose-500/50");
+      }
+      return baseExtra;
+    },
+    [errors, highlightedField]
+  );
+
+  // Helper to render quick clear/unselect button on dropdowns
+  const renderClearBtn = React.useCallback(
+    (fieldName: keyof BaseApplicantFormValues) => {
+      const val = watch(fieldName);
+      if (!val) return null;
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            setValue(fieldName, "" as any, { shouldDirty: true, shouldValidate: true });
+          }}
+          className="text-[10px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition ml-auto flex items-center gap-0.5"
+          title="Unselect"
+        >
+          <X className="h-2.5 w-2.5" />
+          <span>Clear</span>
+        </button>
+      );
+    },
+    [watch, setValue]
+  );
+
+  // Immediate Real-Time Validation: validates fields as the user makes mistakes rather than waiting for Register click
+  const isMuayenaLive = watch("applicant_type") === "Muayena";
+
+  const validateFieldLive = React.useCallback(
+    (fieldName: string, value: any) => {
+      if (fieldName === "phone_number") {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("phone_number", { type: "manual", message: "Primary Phone Number is required for registration" });
+        } else if (val.length < 9) {
+          setError("phone_number", { type: "manual", message: "Phone Number must be at least 9 digits" });
+        } else if (!PHONE_REGEX.test(val)) {
+          setError("phone_number", { type: "manual", message: "Please enter a valid Phone Number (e.g. +251911223344)" });
+        } else {
+          clearErrors("phone_number");
+        }
+      } else if (fieldName === "passport_number") {
+        const val = String(value ?? "").trim().toUpperCase();
+        if (!val) {
+          setError("passport_number", { type: "manual", message: "Passport Number is required for registration" });
+        } else if (val.length < 7 || val.length > 9 || !PASSPORT_REGEX.test(val)) {
+          setError("passport_number", { type: "manual", message: "Passport Number must be 7-9 alphanumeric characters (e.g. EP1234567)" });
+        } else if (!passportConflict) {
+          clearErrors("passport_number");
+        }
+      } else if (fieldName === "city") {
+        const val = String(value ?? "").trim();
+        if (!val || val.length < 2) {
+          setError("city", { type: "manual", message: "City is required (e.g. Addis Ababa)" });
+        } else {
+          clearErrors("city");
+        }
+      } else if (fieldName === "date_of_birth") {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("date_of_birth", { type: "manual", message: "Date of Birth is required for registration" });
+        } else {
+          const parsed = parseISO(val);
+          if (!isValid(parsed) || !isPast(startOfDay(parsed))) {
+            setError("date_of_birth", { type: "manual", message: "Date of Birth cannot be today or in the future" });
+          } else {
+            const age = differenceInYears(new Date(), parsed);
+            if (age < 18) {
+              setError("date_of_birth", { type: "manual", message: "Applicant must be at least 18 years old for work abroad" });
+            } else if (age > 65) {
+              setError("date_of_birth", { type: "manual", message: "Applicant age must be 65 years or younger" });
+            } else {
+              clearErrors("date_of_birth");
+            }
+          }
+        }
+      } else if (fieldName === "passport_expiry") {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("passport_expiry", { type: "manual", message: "Passport Expiry Date is required for registration" });
+        } else {
+          const parsed = parseISO(val);
+          if (!isValid(parsed) || !isFuture(startOfDay(parsed))) {
+            setError("passport_expiry", { type: "manual", message: "Passport Expiry Date must be a future date" });
+          } else if (startOfDay(parsed) < addMonths(startOfDay(new Date()), 6)) {
+            setError("passport_expiry", { type: "manual", message: "Passport must be valid for at least 6 months from today" });
+          } else {
+            clearErrors("passport_expiry");
+          }
+        }
+      } else if (fieldName === "full_name") {
+        const val = String(value ?? "").trim();
+        if (!val || val.length < 2) {
+          setError("full_name", { type: "manual", message: "Full Name is required (at least 2 characters)" });
+        } else if (val.split(/\s+/).filter(Boolean).length < 2) {
+          setError("full_name", { type: "manual", message: "Please enter at least First Name and Father's Name" });
+        } else {
+          clearErrors("full_name");
+        }
+      } else if (fieldName === "job_applied") {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("job_applied", { type: "manual", message: "Job / Position Applied is required for registration" });
+        } else {
+          clearErrors("job_applied");
+        }
+      } else if (fieldName === "english_level" && !isMuayenaLive) {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("english_level", { type: "manual", message: "English Level is required" });
+        } else {
+          clearErrors("english_level");
+        }
+      } else if (fieldName === "arabic_level" && !isMuayenaLive) {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("arabic_level", { type: "manual", message: "Arabic Level is required" });
+        } else {
+          clearErrors("arabic_level");
+        }
+      } else if (fieldName === "place_of_birth" && !isMuayenaLive) {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("place_of_birth", { type: "manual", message: "Place of Birth is required for registration" });
+        } else {
+          clearErrors("place_of_birth");
+        }
+      } else if (fieldName === "qualification" && !isMuayenaLive) {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          setError("qualification", { type: "manual", message: "Qualification is required for registration" });
+        } else {
+          clearErrors("qualification");
+        }
+      } else if (fieldName === "salary_amount" && !isMuayenaLive) {
+        const val = Number(value || 0);
+        if (val <= 0) {
+          setError("salary_amount", { type: "manual", message: "Monthly Salary is required for registration" });
+        } else {
+          clearErrors("salary_amount");
+          clearErrors("monthly_salary" as any);
+        }
+      }
+    },
+    [isMuayenaLive, passportConflict, setError, clearErrors]
+  );
+
+  React.useEffect(() => {
+    const subscription = watch((value, { name, type }) => {
+      if (name && (type === "change" || type === undefined)) {
+        validateFieldLive(name, value[name as keyof BaseApplicantFormValues]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, validateFieldLive]);
+
+  // Experience Abroad -> Salary Auto-Update (1200 if experience abroad, 1000 if none)
+  const watchedExperienceCountry = watch("experience_country");
+  const prevExpCountryRef = React.useRef<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (prevExpCountryRef.current === undefined) {
+      prevExpCountryRef.current = watchedExperienceCountry;
+      return;
+    }
+    if (prevExpCountryRef.current === watchedExperienceCountry) return;
+    prevExpCountryRef.current = watchedExperienceCountry;
+
+    const hasAbroadExperience = Boolean(
+      watchedExperienceCountry &&
+      watchedExperienceCountry.trim() !== "" &&
+      watchedExperienceCountry !== "None / First Time" &&
+      watchedExperienceCountry !== "None"
+    );
+
+    const currentSalary = Number(getValues("salary_amount") || getValues("monthly_salary") || 0);
+
+    if (hasAbroadExperience) {
+      if (currentSalary === 1000 || !currentSalary) {
+        setValue("salary_amount", 1200, { shouldDirty: true, shouldValidate: true });
+        setValue("monthly_salary", "1200", { shouldDirty: true, shouldValidate: true });
+        toast.info("Experience abroad selected: Salary automatically updated to 1200 SAR.", { duration: 3000 });
+      }
+    } else {
+      if (currentSalary === 1200) {
+        setValue("salary_amount", 1000, { shouldDirty: true, shouldValidate: true });
+        setValue("monthly_salary", "1000", { shouldDirty: true, shouldValidate: true });
+        toast.info("No abroad experience: Salary reset to default 1000 SAR.", { duration: 3000 });
+      }
+    }
+  }, [watchedExperienceCountry, setValue, getValues]);
 
   // React to initialData updates
   React.useEffect(() => {
@@ -749,6 +1053,10 @@ export function ApplicantRegistrationForm({
           }
         });
         const firstErr = validation.error.errors[0]?.message || "Please complete all registration requirements.";
+        const firstErrField = validation.error.errors[0]?.path[0] ? String(validation.error.errors[0].path[0]) : "";
+        if (firstErrField) {
+          scrollToAndHighlightField(firstErrField);
+        }
         throw new Error(firstErr);
       }
 
@@ -782,8 +1090,24 @@ export function ApplicantRegistrationForm({
       }
     },
     onError: (err: unknown) => {
+      const errorMsg = formatCleanErrorMessage(err);
+      const errLower = errorMsg.toLowerCase();
+      if (errLower.includes("passport scan")) scrollToAndHighlightField("passport_scan");
+      else if (errLower.includes("photograph") || errLower.includes("photo")) scrollToAndHighlightField("photograph");
+      else if (errLower.includes("phone")) scrollToAndHighlightField("phone_number");
+      else if (errLower.includes("passport number") || errLower.includes("passport")) scrollToAndHighlightField("passport_number");
+      else if (errLower.includes("place of birth")) scrollToAndHighlightField("place_of_birth");
+      else if (errLower.includes("birth")) scrollToAndHighlightField("date_of_birth");
+      else if (errLower.includes("city")) scrollToAndHighlightField("city");
+      else if (errLower.includes("english")) scrollToAndHighlightField("english_level");
+      else if (errLower.includes("arabic")) scrollToAndHighlightField("arabic_level");
+      else if (errLower.includes("salary")) scrollToAndHighlightField("salary_amount");
+      else if (errLower.includes("medical")) scrollToAndHighlightField("medical_expiry_date");
+      else if (errLower.includes("job") || errLower.includes("occupation")) scrollToAndHighlightField("job_applied");
+      else if (errLower.includes("education") || errLower.includes("qualification")) scrollToAndHighlightField("qualification");
+
       toast.error("Registration Requirements Not Met", {
-        description: formatCleanErrorMessage(err),
+        description: errorMsg,
         duration: 7000,
       });
     },
@@ -911,22 +1235,32 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* Destination Corridor & Context */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Globe2 className="h-4 w-4 text-emerald-700" />
-                Destination Country Corridor <span className="text-rose-500">*</span>
-              </Label>
+            <div className="space-y-1.5" id="field-destination_country">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Globe2 className="h-4 w-4 text-emerald-700" />
+                  Destination Country Corridor <span className="text-rose-500">*</span>
+                </Label>
+                {renderClearBtn("destination_country")}
+              </div>
               <select
                 {...register("destination_country")}
                 disabled={lockedIdentityFields}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("destination_country")
+                )}
               >
+                <option value="">Select Destination Country...</option>
                 {DESTINATION_COUNTRY_OPTIONS.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
               </select>
+              {errors.destination_country && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.destination_country.message}</p>
+              )}
               <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-0.5">
                 {currentDestCountry.toLowerCase() === "kuwait"
                   ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
@@ -944,8 +1278,8 @@ export function ApplicantRegistrationForm({
         id="field-passport_scan"
         data-tour="passport-dropzone"
         className={`border-2 border-dashed ${
-          errors.passport_scan
-            ? "border-rose-500 ring-4 ring-rose-500/20 bg-rose-50/40 dark:bg-rose-950/20"
+          errors.passport_scan || highlightedField === "passport_scan"
+            ? "border-rose-500 ring-4 ring-rose-500/30 bg-rose-50/40 dark:bg-rose-950/20 animate-pulse"
             : "border-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/10 dark:border-emerald-500/30"
         } overflow-hidden shadow-xs`}
       >
@@ -1268,7 +1602,7 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* Row 2: Full Name | Active ? */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-full_name">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
                   Full Name <span className="text-rose-500 font-bold ml-0.5">*</span> <Info className="h-3 w-3 text-slate-400" />
@@ -1284,9 +1618,10 @@ export function ApplicantRegistrationForm({
                 value={watch("full_name") || ""}
                 onChange={(e) => handleFullNameChange(e.target.value)}
                 disabled={lockedIdentityFields}
-                className={`text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215] ${
-                  errors.full_name ? "border-rose-500 focus-visible:ring-rose-500" : ""
-                }`}
+                className={cn(
+                  "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("full_name")
+                )}
               />
             </div>
 
@@ -1305,7 +1640,7 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* Row 3: Passport No. | Passport Type */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-passport_number">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
                   Passport No. <span className="text-rose-500 font-bold ml-0.5">*</span> <Info className="h-3 w-3 text-slate-400" />
@@ -1321,20 +1656,28 @@ export function ApplicantRegistrationForm({
                 {...register("passport_number")}
                 onBlur={handlePassportBlur}
                 disabled={lockedIdentityFields}
-                className={`text-xs uppercase font-mono border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215] ${
-                  passportConflict || errors.passport_number ? "border-rose-500 focus-visible:ring-rose-500" : ""
-                }`}
+                className={cn(
+                  "text-xs uppercase font-mono border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("passport_number")
+                )}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Passport Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
+            <div className="space-y-1.5" id="field-passport_type">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Passport Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {renderClearBtn("passport_type")}
+              </div>
               <select
                 {...register("passport_type")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("passport_type")
+                )}
               >
+                <option value="">Select Passport Type...</option>
                 {PASSPORT_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -1344,7 +1687,7 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* Row 4: Date of Birth | Place of Birth */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-date_of_birth">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Date of Birth <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
@@ -1352,34 +1695,49 @@ export function ApplicantRegistrationForm({
                 type="date"
                 {...register("date_of_birth")}
                 disabled={lockedIdentityFields}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("date_of_birth")
+                )}
               />
+              {errors.date_of_birth && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.date_of_birth.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-place_of_birth">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Place of Birth <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                Place of Birth {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
               </Label>
               <Input
                 placeholder="e.g. ARSI"
                 {...register("place_of_birth")}
-                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("place_of_birth")
+                )}
               />
+              {errors.place_of_birth && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.place_of_birth.message}</p>
+              )}
             </div>
 
             {/* Row 5: Date of Issue | Date of Expiry */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-passport_issue_date">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Date of Issue <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 type="date"
                 {...register("passport_issue_date")}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("passport_issue_date")
+                )}
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-passport_expiry">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Date of Expiry <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
@@ -1387,127 +1745,201 @@ export function ApplicantRegistrationForm({
                 type="date"
                 {...register("passport_expiry")}
                 disabled={lockedIdentityFields}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("passport_expiry")
+                )}
               />
+              {errors.passport_expiry && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.passport_expiry.message}</p>
+              )}
             </div>
 
             {/* Row 6: Place of Issue | Phone No. */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-place_of_issue">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Place of Issue <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 placeholder="e.g. ADDIS ABABA"
                 {...register("place_of_issue")}
-                className="text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("place_of_issue")
+                )}
               />
+              {errors.place_of_issue && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.place_of_issue.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-phone_number">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Phone No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                Phone No. <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 placeholder="e.g. +251911223344"
                 {...register("phone_number")}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("phone_number")
+                )}
               />
+              {errors.phone_number && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.phone_number.message}</p>
+              )}
             </div>
 
             {/* Row 7: Religion | Marital Status */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Religion {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
-              </Label>
+            <div className="space-y-1.5" id="field-religion">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Religion {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                </Label>
+                {renderClearBtn("religion")}
+              </div>
               <select
                 {...register("religion")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("religion")
+                )}
               >
+                <option value="">Select Religion...</option>
                 {RELIGION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {errors.religion && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.religion.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Marital Status {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
-              </Label>
+            <div className="space-y-1.5" id="field-marital_status">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Marital Status {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                </Label>
+                {renderClearBtn("marital_status")}
+              </div>
               <select
                 {...register("marital_status")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("marital_status")
+                )}
               >
+                <option value="">Select Marital Status...</option>
                 {MARITAL_STATUS_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {errors.marital_status && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.marital_status.message}</p>
+              )}
             </div>
 
             {/* Row 8: Gender | Occupation */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Gender <span className="text-rose-500 font-bold ml-0.5">*</span>
-              </Label>
+            <div className="space-y-1.5" id="field-gender">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Gender <span className="text-rose-500 font-bold ml-0.5">*</span>
+                </Label>
+                {renderClearBtn("gender")}
+              </div>
               <select
                 {...register("gender")}
                 disabled={lockedIdentityFields}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("gender")
+                )}
               >
+                <option value="">Select Gender...</option>
                 {GENDER_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {errors.gender && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.gender.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Occupation {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
-              </Label>
+            <div className="space-y-1.5" id="field-job_applied">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Occupation {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                </Label>
+                {renderClearBtn("job_applied")}
+              </div>
               <select
                 {...register("job_applied")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase",
+                  getFieldClass("job_applied")
+                )}
               >
+                <option value="">Select Occupation...</option>
                 {OCCUPATION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {errors.job_applied && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.job_applied.message}</p>
+              )}
             </div>
 
             {/* Row 9: Qualification | City */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Qualification {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
-              </Label>
+            <div className="space-y-1.5" id="field-qualification">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Qualification {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                </Label>
+                {renderClearBtn("qualification")}
+              </div>
               <select
                 {...register("qualification")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase",
+                  getFieldClass("qualification")
+                )}
               >
+                <option value="">Select Qualification...</option>
                 {QUALIFICATION_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
               </select>
+              {errors.qualification && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.qualification.message}</p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-city">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                City <span className="text-rose-500 font-bold ml-0.5">*</span>
               </Label>
               <Input
                 placeholder="e.g. Addis Ababa"
                 {...register("city")}
                 onFocus={() => setIsSponsorAddrReadOnly(true)}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("city")
+                )}
               />
+              {errors.city && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.city.message}</p>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1599,13 +2031,19 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Agent <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
+            <div className="space-y-1.5" id="field-agent">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Agent <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {renderClearBtn("agent")}
+              </div>
               <select
                 {...register("agent")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("agent")
+                )}
               >
                 <option value="">Select Foreign Contractor Agent...</option>
                 {contractors.map((c) => {
@@ -1627,18 +2065,21 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* National ID | Sponsor Arabic */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-national_id">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 National ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="Fayda / FAN National ID"
                 {...register("national_id")}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("national_id")
+                )}
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-sponsor_arabic">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Sponsor Arabic <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
@@ -1649,12 +2090,15 @@ export function ApplicantRegistrationForm({
                 data-form-type="other"
                 {...register("sponsor_arabic")}
                 dir="rtl"
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("sponsor_arabic")
+                )}
               />
             </div>
 
             {/* Email | Visa Type */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-email">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Email <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
@@ -1662,18 +2106,28 @@ export function ApplicantRegistrationForm({
                 type="email"
                 placeholder="applicant@example.com"
                 {...register("email")}
-                className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("email")
+                )}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Visa Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
+            <div className="space-y-1.5" id="field-visa_type">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Visa Type <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {renderClearBtn("visa_type")}
+              </div>
               <select
                 {...register("visa_type")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("visa_type")
+                )}
               >
+                <option value="">Select Visa Type...</option>
                 {VISA_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -1737,14 +2191,21 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Kinship <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
+            <div className="space-y-1.5" id="field-relative_kinship">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Relative Kinship <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {renderClearBtn("relative_kinship")}
+              </div>
               <select
                 {...register("relative_kinship")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("relative_kinship")
+                )}
               >
+                <option value="">Select Kinship...</option>
                 {RELATIVE_KINSHIP_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -1753,7 +2214,7 @@ export function ApplicantRegistrationForm({
               </select>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" id="field-relative_city">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
@@ -1800,14 +2261,21 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Relative Gender <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
+            <div className="space-y-1.5" id="field-relative_gender">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Relative Gender <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {renderClearBtn("relative_gender")}
+              </div>
               <select
                 {...register("relative_gender")}
-                className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                className={cn(
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("relative_gender")
+                )}
               >
+                <option value="">Select Gender...</option>
                 <option value="Female">Female</option>
                 <option value="Male">Male</option>
               </select>
@@ -1946,20 +2414,30 @@ export function ApplicantRegistrationForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Nationality <span className="text-rose-500 font-bold ml-0.5">*</span>
-                </Label>
+              <div className="space-y-1.5" id="field-nationality">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Nationality <span className="text-rose-500 font-bold ml-0.5">*</span>
+                  </Label>
+                  {renderClearBtn("nationality")}
+                </div>
                 <select
                   {...register("nationality")}
                   disabled={lockedIdentityFields}
-                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                    getFieldClass("nationality")
+                  )}
                 >
+                  <option value="">Select Nationality...</option>
                   <option value="Ethiopia">Ethiopia</option>
                   <option value="Kenya">Kenya</option>
                   <option value="Uganda">Uganda</option>
                   <option value="Other">Other</option>
                 </select>
+                {errors.nationality && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.nationality.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -2060,47 +2538,74 @@ export function ApplicantRegistrationForm({
         {isSkillsOpen && (
           <div className="p-6 border-t border-slate-200 dark:border-[#26262d] space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  English <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
+              <div className="space-y-1.5" id="field-english_level">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    English {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                  </Label>
+                  {renderClearBtn("english_level")}
+                </div>
                 <select
                   {...register("english_level")}
-                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                    getFieldClass("english_level")
+                  )}
                 >
-                  {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt === "Select.." ? "" : opt}>
+                  <option value="">Select English Level...</option>
+                  {LANGUAGE_PROFICIENCY_OPTIONS.filter((opt) => opt !== "Select..").map((opt) => (
+                    <option key={opt} value={opt}>
                       {opt}
                     </option>
                   ))}
                 </select>
+                {errors.english_level && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.english_level.message}</p>
+                )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Arabic <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
+              <div className="space-y-1.5" id="field-arabic_level">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Arabic {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
+                  </Label>
+                  {renderClearBtn("arabic_level")}
+                </div>
                 <select
                   {...register("arabic_level")}
-                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                    getFieldClass("arabic_level")
+                  )}
                 >
-                  {LANGUAGE_PROFICIENCY_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt === "Select.." ? "" : opt}>
+                  <option value="">Select Arabic Level...</option>
+                  {LANGUAGE_PROFICIENCY_OPTIONS.filter((opt) => opt !== "Select..").map((opt) => (
+                    <option key={opt} value={opt}>
                       {opt}
                     </option>
                   ))}
                 </select>
+                {errors.arabic_level && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.arabic_level.message}</p>
+                )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Experience Abroad <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
+              <div className="space-y-1.5" id="field-experience_country">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Experience Abroad <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  </Label>
+                  {renderClearBtn("experience_country")}
+                </div>
                 <select
                   {...register("experience_country")}
-                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200"
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                    getFieldClass("experience_country")
+                  )}
                 >
-                  {EXPERIENCE_ABROAD_OPTIONS.map((opt) => (
+                  <option value="">None / First Time</option>
+                  {EXPERIENCE_ABROAD_OPTIONS.filter((opt) => opt !== "None / First Time").map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}
                     </option>
@@ -2108,7 +2613,7 @@ export function ApplicantRegistrationForm({
                 </select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" id="field-salary_amount">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                   Salary (SAR / Monthly) {!isMuayena ? <span className="text-rose-500 font-bold ml-0.5">*</span> : <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>}
                 </Label>
@@ -2116,8 +2621,17 @@ export function ApplicantRegistrationForm({
                   type="number"
                   placeholder="1000"
                   {...register("salary_amount")}
-                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                  className={cn(
+                    "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                    getFieldClass("salary_amount"),
+                    getFieldClass("monthly_salary")
+                  )}
                 />
+                {(errors.salary_amount || errors.monthly_salary) && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">
+                    {errors.salary_amount?.message || errors.monthly_salary?.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -2165,15 +2679,22 @@ export function ApplicantRegistrationForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Skin Color <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
+              <div className="space-y-1.5" id="field-complexion">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Skin Color <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  </Label>
+                  {renderClearBtn("complexion")}
+                </div>
                 <select
                   {...register("complexion")}
                   defaultValue="FAIR"
-                  className="select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase"
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase",
+                    getFieldClass("complexion")
+                  )}
                 >
+                  <option value="">Select Skin Color...</option>
                   <option value="FAIR">Fair</option>
                   <option value="MEDIUM">Medium</option>
                   <option value="DARK">Dark</option>
@@ -2302,14 +2823,21 @@ export function ApplicantRegistrationForm({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-              Medical Fitness Result <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-            </Label>
+          <div className="space-y-1" id="field-medical_status">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                Medical Fitness Result <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+              </Label>
+              {renderClearBtn("medical_status")}
+            </div>
             <select
               {...register("medical_status")}
-              className="w-full h-8 rounded border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-2 py-0.5 text-xs text-slate-900 dark:text-zinc-200 font-medium"
+              className={cn(
+                "w-full h-8 rounded border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-2 py-0.5 text-xs text-slate-900 dark:text-zinc-200 font-medium",
+                getFieldClass("medical_status")
+              )}
             >
+              <option value="">Select Medical Status...</option>
               <option value="FIT">FIT</option>
               <option value="Pending">Pending / In Progress</option>
               <option value="Not Done">Not Done / None</option>
@@ -2317,15 +2845,21 @@ export function ApplicantRegistrationForm({
             </select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1" id="field-medical_expiry_date">
             <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
               Medical Expiry Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
             </Label>
             <Input
               type="date"
               {...register("medical_expiry_date")}
-              className="text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+              className={cn(
+                "text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                getFieldClass("medical_expiry_date")
+              )}
             />
+            {errors.medical_expiry_date && (
+              <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.medical_expiry_date.message}</p>
+            )}
           </div>
         </div>
       </div>

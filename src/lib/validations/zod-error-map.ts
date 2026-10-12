@@ -149,6 +149,9 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
       if (/nan|undefined|expected|invalid type|zod/i.test(msg)) {
         return { message: `Please review and enter a valid value for ${label.toLowerCase()}.` };
       }
+      if (/^invalid input\.?$/i.test(msg.trim())) {
+        return { message: `Please provide a valid entry for ${label.toLowerCase()}.` };
+      }
       return { message: msg };
     }
 
@@ -156,6 +159,9 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
       const def = ctx.defaultError;
       if (/nan|expected number|expected string|invalid type/i.test(def)) {
         return { message: `Please enter a valid value for ${label.toLowerCase()}.` };
+      }
+      if (/^invalid input\.?$/i.test(def.trim())) {
+        return { message: `Please provide a valid entry for ${label.toLowerCase()}.` };
       }
       return { message: def };
     }

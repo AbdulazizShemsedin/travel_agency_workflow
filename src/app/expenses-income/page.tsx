@@ -898,11 +898,11 @@ export default function ExpensesIncomePage() {
               </CardHeader>
 
               <CardContent className="p-0">
-                <div className="overflow-x-auto md:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
-                  <table className="w-full text-xs text-left border-collapse min-w-[850px] md:min-w-0">
+                <div className="overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
+                  <table className="w-full text-xs text-left border-collapse min-w-[850px] lg:min-w-0">
                     <thead className="sticky top-0 z-20 text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
-                        <th className="md:sticky md:left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2.5 md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
+                        <th className="lg:sticky lg:left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2.5 lg:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
                         <th className="py-2 px-2.5">Type</th>
                         <th className="py-2 px-2.5">Amount</th>
                         <th className="py-2 px-2.5">Applicant</th>
@@ -932,7 +932,7 @@ export default function ExpensesIncomePage() {
 
                           return (
                             <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] group">
-                              <td className="md:sticky md:left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-white md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
+                              <td className="lg:sticky lg:left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-white lg:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
                                 {shortRef(tx.name)}
                               </td>
                               <td className="py-2 px-2.5 whitespace-nowrap">

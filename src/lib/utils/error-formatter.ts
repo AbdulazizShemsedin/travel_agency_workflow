@@ -405,6 +405,11 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return `The value cannot exceed ${maxNumMatch[1]}.`;
   }
 
+  // 5b. Intercept generic "Invalid input" and provide descriptive user message
+  if (/^invalid input\.?$/i.test(text.trim())) {
+    return "Some required registration details are missing or invalid. Please check the highlighted fields above.";
+  }
+
   // 6. Specific High-Impact Business Rule Mappings
   // Medical Gates
   if (/medical_2_status must be FIT/i.test(text) || /Medical 2 FIT required/i.test(text)) {
@@ -507,10 +512,13 @@ export function formatCleanErrorMessage(rawError: unknown): string {
 
   // 9. Network & Server Errors
   if (
-    /Failed to fetch|NetworkError|BackendConnectionError|ECONNREFUSED|ETIMEDOUT|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|Unable to connect to backend|Application failed to respond/i.test(
+    /Application not found|Failed to fetch|NetworkError|BackendConnectionError|ECONNREFUSED|ETIMEDOUT|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout|Unable to connect to backend|Application failed to respond/i.test(
       text
     )
   ) {
+    if (/Application not found/i.test(text)) {
+      return "Cannot connect to backend server: Application not found at configured host. Please verify the backend service is deployed and running.";
+    }
     return "Cannot connect to server. Please check your internet connection and try again.";
   }
   if (/Unexpected token < in JSON|Server returned non-JSON response|Internal Server Error|500 Internal/i.test(text)) {

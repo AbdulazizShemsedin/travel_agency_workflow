@@ -1,19 +1,20 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Lock,
+  Eye,
   Loader2,
   AlertTriangle,
-  HeartPulse,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
 import { ExcelSelect, ExcelDateInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SimpleSelect } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -24,16 +25,15 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import {
   setLmisStatusV2,
   setTaeshirAppointmentV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
+import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
 import { recordPredepartureMedicalResultV2 } from "@/lib/api/v2/placements";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
-import { ApplicantFollowUpWorkspace } from "./ApplicantFollowUpWorkspace";
 
 interface FollowUpWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -132,50 +132,30 @@ export function FollowUpWorkspace({
   onCorridorChange,
   employees = [],
 }: FollowUpWorkspaceProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser } = useAuth();
 
-  // Selected row for Level 2 dedicated applicant workspace
-  const [selectedApplicantRow, setSelectedApplicantRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  // Stage Status Filter state (replaces generic All Statuses filter)
+  const [stageFilter, setStageFilter] = React.useState<string>("ALL");
 
-  // Role permissions checking
-  const authUserV2 = React.useMemo(() => {
-    return authUser
-      ? {
-          user: authUser.email,
-          full_name: authUser.full_name || authUser.email,
-          roles: Array.isArray(authUser.roles) ? authUser.roles : [],
-        }
-      : null;
-  }, [authUser]);
+  const stageOptions = React.useMemo(() => [
+    { value: "ALL", label: `All Stages (${data.length})` },
+    { value: "Registered", label: "Stage: Registered" },
+    { value: "Selected", label: "Stage: Selected" },
+    { value: "Processing", label: "Stage: Processing" },
+    { value: "Stamped", label: "Stage: Stamped" },
+    { value: "Ticketed", label: "Stage: Ticketed" },
+    { value: "Departed", label: "Stage: Departed" },
+    { value: "Cancelled", label: "Stage: Cancelled" },
+  ], [data.length]);
 
-  const isAdmin = React.useMemo(() => {
-    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
-    if (emailOrName === "administrator") return true;
-    if (!Array.isArray(roles)) return false;
-    return roles.some((r) => {
-      const norm = String(r).trim().toLowerCase();
-      return (
-        norm === "system manager" ||
-        norm === "administrator" ||
-        norm === "manager" ||
-        norm === "agency admin" ||
-        norm === "admin"
-      );
-    });
-  }, [authUser, roles]);
-
-  const hasRoleKeyword = React.useCallback(
-    (keywords: string[]) => {
-      const r = (roles || []).map((x) => String(x).toLowerCase().trim());
-      return r.some((roleName) => keywords.some((k) => roleName.includes(k)));
-    },
-    [roles]
-  );
-
-  const canEditLmis = isAdmin || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS", "Clearance Officer"]) || hasRoleKeyword(["lms", "lmis"]);
-  const canEditTaeshir = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign", "Clearance Officer"]) || hasRoleKeyword(["taeshir", "teshir", "injaz", "telesign"]);
-  const canEditMedical = isAdmin || hasRoleKeyword(["medical"]) || hasAnyV2Role(authUserV2, ["Clearance Officer"]);
+  const filteredData = React.useMemo(() => {
+    if (stageFilter === "ALL") return data;
+    return data.filter(
+      (r) => (r.stageStatus || "").toLowerCase() === stageFilter.toLowerCase()
+    );
+  }, [data, stageFilter]);
 
   // Quick rejection modal state for table inline edit
   const [tableRejectRow, setTableRejectRow] = React.useState<WorkspaceApplicantRow | null>(null);
@@ -197,7 +177,15 @@ export function FollowUpWorkspace({
 
   // 1. LMIS Status Inline Save
   const handleSaveLmisStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
-    const stepName = row.lms?.name || row.clearanceStepName;
+    const stepName =
+      row.lms?.name ||
+      row.clearanceStepName ||
+      (row as any).siblingSteps?.find(
+        (s: any) =>
+          s.step_type?.toLowerCase().includes("lmis") ||
+          s.step_type?.toLowerCase().includes("lms")
+      )?.name;
+
     if (!stepName) {
       toast.error("Could not find active LMIS clearance step for this candidate.");
       return;
@@ -220,7 +208,16 @@ export function FollowUpWorkspace({
 
   // 2. Taeshir Appointment Date Inline Save
   const handleSaveTaeshirDate = async (row: WorkspaceApplicantRow, newDate: string) => {
-    const stepName = row.injaz?.name;
+    const stepName =
+      row.injaz?.name ||
+      (row as any).siblingSteps?.find(
+        (s: any) =>
+          s.step_type?.toLowerCase().includes("taeshir") ||
+          s.step_type?.toLowerCase().includes("injaz") ||
+          s.step_type?.toLowerCase().includes("telesign")
+      )?.name ||
+      row.clearanceStepName;
+
     if (!stepName) {
       toast.error("Could not find active Taeshir clearance step for this candidate.");
       return;
@@ -238,7 +235,7 @@ export function FollowUpWorkspace({
 
   // 3. Medical 2 Status Inline Save
   const handleSaveMedical2Status = async (row: WorkspaceApplicantRow, newStatus: string) => {
-    const placementName = row.placementName || row.placementId;
+    const placementName = row.placementName || row.placementId || row.dsrName;
     if (!placementName) {
       toast.error("Could not find placement record for this candidate.");
       return;
@@ -247,6 +244,25 @@ export function FollowUpWorkspace({
     try {
       await recordPredepartureMedicalResultV2(placementName, newStatus as "FIT" | "UNFIT");
       await handleMutationSuccess(`Pre-departure medical recorded as ${newStatus}`);
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+      throw err;
+    }
+  };
+
+  // 4. COC Status Inline Save
+  const handleSaveCocStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    if (!row.applicantId) {
+      toast.error("Could not find applicant ID for this candidate.");
+      return;
+    }
+
+    try {
+      await updateApplicantForLmisV2({
+        applicant_name: row.applicantId,
+        coc_status: newStatus,
+      });
+      await handleMutationSuccess(`COC status updated to ${newStatus}`);
     } catch (err) {
       toast.error(formatCleanErrorMessage(err));
       throw err;
@@ -267,17 +283,29 @@ export function FollowUpWorkspace({
     }));
   }, []);
 
-  // Columns for Level 1 Table: Preserved exact order, with Agency Name & Sponsor Name removed
+  const cocOptions = React.useMemo(() => [
+    { value: "Issued", label: "Issued", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+    { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
+    { value: "Not Started", label: "Not Started", badgeClass: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300" },
+  ], []);
+
+  const med2Options = React.useMemo(() => [
+    { value: "FIT", label: "FIT", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+    { value: "UNFIT", label: "UNFIT", badgeClass: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300" },
+    { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
+  ], []);
+
+  // Columns for Level 1 Table: Preserved exact approved order, with Agency, Sponsor & Destination removed, plus Action column
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
     {
       id: "no",
       header: "NO",
-      width: "44px",
+      width: "32px",
       align: "center",
       sortable: false,
       isReadOnly: true,
       cell: (_row, index) => (
-        <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-xs">
+        <span className="font-semibold text-slate-500 dark:text-zinc-400 font-mono text-[11px]">
           {index ?? 1}
         </span>
       ),
@@ -286,42 +314,34 @@ export function FollowUpWorkspace({
       id: "name",
       header: "NAME",
       accessorKey: "fullName",
-      width: "160px",
+      width: "125px",
       isReadOnly: true,
       cell: (row) => (
-        <div className="flex items-center gap-2 group cursor-pointer" title="Click row to open detailed workspace">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase group-hover:scale-105 transition-transform">
+        <div
+          className="flex items-center gap-1.5 group cursor-pointer"
+          title={`Click to view detailed workspace for ${row.fullName}`}
+          onClick={() => router.push(`/applicants/${encodeURIComponent(row.applicantId)}/follow-up`)}
+        >
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-[9px] border border-emerald-300/40 uppercase group-hover:scale-105 transition-transform">
             {row.fullName?.substring(0, 2) || "A"}
           </div>
-          <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[130px] group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+          <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[100px] group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors text-[11px]">
             {row.fullName}
           </span>
         </div>
       ),
     },
     {
-      id: "destination",
-      header: "DESTINATION COUNTRY",
-      accessorKey: "destinationCountry",
-      width: "115px",
-      isReadOnly: true,
-      cell: (row) => (
-        <span className="font-medium text-slate-700 dark:text-zinc-300 text-xs">
-          {row.destinationCountry || "—"}
-        </span>
-      ),
-    },
-    {
       id: "stageStatus",
       header: "STAGE STATUS",
       accessorKey: "stageStatus",
-      width: "110px",
+      width: "80px",
       isReadOnly: true,
       cell: (row) => {
         const stage = row.stageStatus || "Draft";
         const cfg = getStageBadgeVariant(stage);
         return (
-          <Badge variant={cfg.variant} className={cn("text-[10px] py-0 px-1.5 font-semibold", cfg.className)}>
+          <Badge variant={cfg.variant} className={cn("text-[9.5px] py-0 px-1 font-semibold", cfg.className)}>
             {stage}
           </Badge>
         );
@@ -331,11 +351,11 @@ export function FollowUpWorkspace({
       id: "duration",
       header: "DURATION",
       accessorKey: "contractDays",
-      width: "85px",
+      width: "55px",
       isReadOnly: true,
       cell: (row) => (
-        <span className="font-mono text-slate-700 dark:text-zinc-300 text-xs">
-          {row.contractDays || (row.duration ? `${row.duration} days` : "—")}
+        <span className="font-mono text-slate-700 dark:text-zinc-300 text-[10.5px]">
+          {row.contractDays || (row.duration ? `${row.duration}d` : "—")}
         </span>
       ),
     },
@@ -343,32 +363,29 @@ export function FollowUpWorkspace({
       id: "cocStatus",
       header: "COC STATUS",
       accessorKey: "cocStatus",
-      width: "95px",
-      isReadOnly: true,
-      cell: (row) => getStatusBadge(row.cocStatus),
+      width: "75px",
+      cell: (row) => {
+        const currentVal = row.cocStatus || "Not Started";
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ExcelSelect
+              value={currentVal}
+              options={cocOptions}
+              onSave={(newVal) => handleSaveCocStatus(row, newVal)}
+              ariaLabel="COC Status"
+              className="text-[10px]"
+            />
+          </div>
+        );
+      },
     },
     {
       id: "lmisStatus",
       header: "LMIS STATUS",
       accessorKey: "lmisStatus",
-      width: "140px",
+      width: "85px",
       cell: (row) => {
         const currentVal = row.lmisStatus || "Pending";
-        const hasStep = Boolean(row.lms?.name || row.clearanceStepName);
-
-        if (!canEditLmis || !hasStep) {
-          return (
-            <div className="flex items-center gap-1">
-              {getStatusBadge(currentVal)}
-              {!canEditLmis && (
-                <span title="Read-only">
-                  <Lock className="h-2.5 w-2.5 text-slate-400/60" />
-                </span>
-              )}
-            </div>
-          );
-        }
-
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
@@ -386,24 +403,9 @@ export function FollowUpWorkspace({
       id: "teshirApptDate",
       header: "TE'SHIR APPT. DATE",
       accessorKey: "appointmentDate",
-      width: "125px",
+      width: "85px",
       cell: (row) => {
         const currentDate = row.appointmentDate && row.appointmentDate !== "—" ? row.appointmentDate : "";
-        const hasStep = Boolean(row.injaz?.name);
-
-        if (!canEditTaeshir || !hasStep) {
-          return (
-            <div className="flex items-center gap-1 font-mono text-slate-700 dark:text-zinc-300 text-[11px]">
-              <span>{currentDate || "—"}</span>
-              {!canEditTaeshir && (
-                <span title="Read-only">
-                  <Lock className="h-2.5 w-2.5 text-slate-400/60" />
-                </span>
-              )}
-            </div>
-          );
-        }
-
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelDateInput
@@ -419,7 +421,7 @@ export function FollowUpWorkspace({
       id: "teshirStatus",
       header: "TE'SHIR STATUS",
       accessorKey: "teshirStatus",
-      width: "105px",
+      width: "70px",
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.teshirStatus),
     },
@@ -427,15 +429,15 @@ export function FollowUpWorkspace({
       id: "wakalaStatus",
       header: "WAKALA STATUS",
       accessorKey: "wakalaStatus",
-      width: "105px",
+      width: "70px",
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.wakalaStatus),
     },
     {
       id: "embassyStatus",
-      header: "EMBASSY / VISA STATUS",
+      header: "EMBASSY / VISA",
       accessorKey: "embassyStatus",
-      width: "130px",
+      width: "80px",
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.embassyStatus),
     },
@@ -443,35 +445,20 @@ export function FollowUpWorkspace({
       id: "medical2Status",
       header: "MEDICAL 2 STATUS",
       accessorKey: "medical2Status",
-      width: "120px",
+      width: "75px",
       cell: (row) => {
-        const currentVal = row.medical2Status || "—";
-        const isTicketedStage = row.stageStatus === "Ticketed";
+        const currentVal = row.medical2Status && row.medical2Status !== "—" ? row.medical2Status : "Pending";
+        const hasPlacement = Boolean(row.placementName || row.placementId || row.dsrName);
 
-        if (!canEditMedical || !isTicketedStage) {
-          return (
-            <div className="flex items-center gap-1">
-              {getStatusBadge(currentVal)}
-              {!canEditMedical && (
-                <span title="Read-only">
-                  <Lock className="h-2.5 w-2.5 text-slate-400/60" />
-                </span>
-              )}
-            </div>
-          );
+        if (!hasPlacement) {
+          return getStatusBadge(row.medical2Status);
         }
-
-        const medOptions = [
-          { value: "FIT", label: "FIT", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300" },
-          { value: "UNFIT", label: "UNFIT", badgeClass: "bg-rose-100 text-rose-800 border-rose-300" },
-          { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300" },
-        ];
 
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
               value={currentVal}
-              options={medOptions}
+              options={med2Options}
               onSave={(newVal) => handleSaveMedical2Status(row, newVal)}
               ariaLabel="Medical 2 Status"
               className="text-[10px]"
@@ -484,11 +471,46 @@ export function FollowUpWorkspace({
       id: "departureStatus",
       header: "DEPARTURE STATUS",
       accessorKey: "departureStatus",
-      width: "120px",
+      width: "75px",
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.departureStatus),
     },
+    {
+      id: "actions",
+      header: "ACTION",
+      width: "38px",
+      align: "center",
+      sortable: false,
+      isReadOnly: true,
+      cell: (row) => (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push(`/applicants/${encodeURIComponent(row.applicantId)}/follow-up`)}
+            className="h-6 w-6 rounded-md text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:text-emerald-200 dark:hover:bg-emerald-950/60 transition cursor-pointer"
+            title={`Open detailed operational workspace for ${row.fullName}`}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
   ];
+
+  // Extra Header Filter: Filter by Stage Status
+  const stageFilterControl = (
+    <div className="min-w-[140px] sm:min-w-[160px]">
+      <SimpleSelect
+        value={stageFilter}
+        onValueChange={setStageFilter}
+        options={stageOptions}
+        triggerClassName="h-8 px-2.5 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] font-semibold whitespace-nowrap"
+        aria-label="Filter by Stage Status"
+      />
+    </div>
+  );
 
   return (
     <>
@@ -497,23 +519,16 @@ export function FollowUpWorkspace({
         title="Follow-up Tracking"
         subtitle="Operational summary workspace for later workflow stages (LMIS, Taeshir, Embassy, Medical 2, Departure)."
         columns={columns}
-        data={data}
+        data={filteredData}
         isLoading={isLoading}
         onRowClick={(row) => {
-          setSelectedApplicantRow(row);
+          router.push(`/applicants/${encodeURIComponent(row.applicantId)}/follow-up`);
         }}
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
-      />
-
-      {/* LEVEL 2: Dedicated Applicant Follow-up Workspace */}
-      <ApplicantFollowUpWorkspace
-        isOpen={Boolean(selectedApplicantRow)}
-        onClose={() => setSelectedApplicantRow(null)}
-        row={selectedApplicantRow}
-        onRefresh={onRefresh}
-        employees={employees}
+        hideStatusFilter={true}
+        extraHeaderActions={stageFilterControl}
       />
 
       {/* Quick In-Table LMIS Rejection Reasons Dialog */}
@@ -568,7 +583,14 @@ export function FollowUpWorkspace({
               disabled={tableRejectReasons.length === 0 || isSubmittingTableReject}
               onClick={async () => {
                 if (!tableRejectRow) return;
-                const stepName = tableRejectRow.lms?.name || tableRejectRow.clearanceStepName;
+                const stepName =
+                  tableRejectRow.lms?.name ||
+                  tableRejectRow.clearanceStepName ||
+                  (tableRejectRow as any).siblingSteps?.find(
+                    (s: any) =>
+                      s.step_type?.toLowerCase().includes("lmis") ||
+                      s.step_type?.toLowerCase().includes("lms")
+                  )?.name;
                 if (!stepName) return;
                 try {
                   setIsSubmittingTableReject(true);

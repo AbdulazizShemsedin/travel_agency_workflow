@@ -191,8 +191,8 @@ export default function ApplicantDetailPage() {
       </div>
 
       {/* Stage Status Bar */}
-      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3 sm:p-4 shadow-xs overflow-x-auto md:overflow-x-clip">
-        <div className="flex items-center justify-between min-w-[700px] md:min-w-0 gap-2">
+      <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3 sm:p-4 shadow-xs overflow-x-auto lg:overflow-x-clip">
+        <div className="flex items-center justify-between min-w-[700px] lg:min-w-0 gap-2">
           {CANONICAL_STAGES.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;

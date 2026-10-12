@@ -486,10 +486,12 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
     medical_expiry_date: z
-      .string({ required_error: "Medical Expiry Date is required for registration" })
-      .min(1, "Medical Expiry Date is required for registration")
+      .string()
+      .trim()
+      .optional()
+      .or(z.literal(""))
       .refine((val) => {
-        if (!val) return false;
+        if (!val || !val.trim()) return true;
         return isValid(parseISO(val));
       }, "Please enter a valid Medical Expiration Date"),
   })

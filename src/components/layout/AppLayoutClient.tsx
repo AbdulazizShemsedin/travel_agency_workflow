@@ -23,6 +23,8 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
     const saved = localStorage.getItem("sidebar_collapsed");
     if (saved === "true") {
       setIsSidebarCollapsed(true);
+    } else if (saved === null && typeof window !== "undefined" && window.innerWidth < 1280) {
+      setIsSidebarCollapsed(true);
     }
   }, []);
 
@@ -96,7 +98,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
       />
       <div
         className={`flex flex-1 min-w-0 w-full max-w-full flex-col transition-all duration-300 ${
-          isSidebarCollapsed ? "md:pl-20" : "md:pl-64"
+          isSidebarCollapsed ? "md:pl-20" : "md:pl-20 xl:pl-64"
         }`}
       >
         <AppNavbar
@@ -104,7 +106,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
           onToggleSidebar={toggleSidebar}
           onMobileMenuToggle={toggleMobileMenu}
         />
-        <main className="flex-1 min-w-0 w-full max-w-full p-3 sm:p-4 lg:p-5 animate-in fade-in duration-150">
+        <main className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-3 lg:p-3.5 xl:p-4 2xl:p-5 animate-in fade-in duration-150">
           {children}
         </main>
       </div>

@@ -131,7 +131,7 @@ export function AppSidebar({
           // Mobile state: always full width (w-64) when opened
           isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
           // Desktop collapsed state
-          isCollapsed ? "md:w-20" : "md:w-64"
+          isCollapsed ? "md:w-20" : "md:w-20 xl:w-64"
         )}
       >
         {/* Brand Header */}

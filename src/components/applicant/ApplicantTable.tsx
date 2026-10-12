@@ -179,6 +179,15 @@ export function ApplicantTable() {
     if (urlFilter) return urlFilter.trim();
     return "All";
   });
+  const urlTrack = searchParams?.get("track") || "";
+  const [selectedTrack, setSelectedTrack] = React.useState<string>(() => {
+    if (urlTrack) {
+      const t = urlTrack.trim().toLowerCase();
+      if (t === "muayena") return "Muayena";
+      if (t === "standard") return "Standard";
+    }
+    return "All";
+  });
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
@@ -534,9 +543,24 @@ export function ApplicantTable() {
         matchesStage = currentStatus === "Ticketed";
       } else if (stageNorm === "deployed" || stageNorm === "departed") {
         matchesStage = currentStatus === "Departed";
+      } else if (stageNorm === "muayena") {
+        const isM =
+          applicant.entry_track === "Muayena" ||
+          applicant.applicant_type === "Muayena" ||
+          Boolean((applicant as any).is_muayena);
+        matchesStage = isM;
       } else {
         matchesStage = currentStatus.toLowerCase() === stageNorm;
       }
+
+      // Track (Standard vs Muayena) Filter
+      const isApplicantMuayena =
+        applicant.entry_track === "Muayena" ||
+        applicant.applicant_type === "Muayena" ||
+        Boolean((applicant as any).is_muayena);
+
+      if (selectedTrack === "Muayena" && !isApplicantMuayena) return false;
+      if (selectedTrack === "Standard" && isApplicantMuayena) return false;
 
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
@@ -549,7 +573,26 @@ export function ApplicantTable() {
 
       return matchesStage && matchesSearch;
     });
-  }, [applicantRows, selectedStage, searchQuery, corridorRestriction]);
+  }, [applicantRows, selectedStage, selectedTrack, searchQuery, corridorRestriction]);
+
+  // Track counts (Standard vs Muayena)
+  const trackCounts = React.useMemo(() => {
+    let standard = 0;
+    let muayena = 0;
+    for (const a of applicantRows) {
+      const isM =
+        a.entry_track === "Muayena" ||
+        a.applicant_type === "Muayena" ||
+        Boolean((a as any).is_muayena);
+      if (isM) muayena++;
+      else standard++;
+    }
+    return {
+      All: applicantRows.length,
+      Muayena: muayena,
+      Standard: standard,
+    };
+  }, [applicantRows]);
 
   // Dynamic live stage count summary for filter dropdown
   const stageCounts = React.useMemo(() => {
@@ -566,6 +609,7 @@ export function ApplicantTable() {
       InProgress: 0,
       Completed: 0,
       Cancelled: 0,
+      Muayena: 0,
     };
 
     for (const a of applicantRows) {
@@ -578,6 +622,13 @@ export function ApplicantTable() {
         (s === "Stamped" || s === "Ticketed" || Boolean((a as any).is_cleared))
       ) {
         counts.Completed++;
+      }
+      if (
+        a.entry_track === "Muayena" ||
+        a.applicant_type === "Muayena" ||
+        Boolean((a as any).is_muayena)
+      ) {
+        counts.Muayena++;
       }
     }
 
@@ -729,7 +780,7 @@ export function ApplicantTable() {
             <SimpleSelect
               value={selectedStage}
               onValueChange={(val) => {
-                setSelectedStage(val);
+                setSelectedStage(val || "All");
                 setCurrentPage(1);
               }}
               options={[
@@ -750,12 +801,30 @@ export function ApplicantTable() {
               aria-label="Filter by Stage"
             />
           </div>
+
+          {/* Muayena / Track Filter */}
+          <div className="w-36 sm:w-44">
+            <SimpleSelect
+              value={selectedTrack}
+              onValueChange={(val) => {
+                setSelectedTrack(val || "All");
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: "All", label: `All Tracks (${trackCounts.All})` },
+                { value: "Muayena", label: `Muayena (${trackCounts.Muayena})` },
+                { value: "Standard", label: `Standard (${trackCounts.Standard})` },
+              ]}
+              triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
+              aria-label="Filter by Track"
+            />
+          </div>
         </div>
       </div>
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto md:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto lg:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name (sticky) | Passport | Stage Status | Contract Date | Contract No |
@@ -783,7 +852,7 @@ export function ApplicantTable() {
                 <th className="px-1.5 py-1.5 w-9 text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
 
                 {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
-                <th className="px-2 py-1.5 md:sticky md:left-0 md:z-30 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
+                <th className="px-2 py-1.5 lg:sticky lg:left-0 lg:z-30 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
                   Full Name
                 </th>
 
@@ -925,7 +994,7 @@ export function ApplicantTable() {
                       {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
                       <td
                         className={cn(
-                          "px-2 py-1.5 md:sticky md:left-0 md:z-10 md:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
+                          "px-2 py-1.5 lg:sticky lg:left-0 lg:z-10 lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
                           isSelected
                             ? "!bg-emerald-100 dark:!bg-[#183428]"
                             : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
@@ -935,11 +1004,18 @@ export function ApplicantTable() {
                           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                             {applicant.first_name?.[0] || "A"}
                           </div>
-                          <div className="min-w-0 flex items-center">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[180px]">
+                          <div className="min-w-0 flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[170px]">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
+                            {(applicant.entry_track === "Muayena" ||
+                              applicant.applicant_type === "Muayena" ||
+                              Boolean((applicant as any).is_muayena)) && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                                Muayena
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>

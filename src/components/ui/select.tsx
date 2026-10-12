@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------------- */
@@ -181,6 +181,7 @@ export interface SimpleSelectProps {
   error?: boolean;
   name?: string;
   "aria-label"?: string;
+  clearable?: boolean;
 }
 
 export function SimpleSelect({
@@ -195,6 +196,7 @@ export function SimpleSelect({
   disabled,
   error,
   "aria-label": ariaLabel,
+  clearable = true,
 }: SimpleSelectProps) {
   const normalizedOptions: SimpleSelectOption[] = React.useMemo(() => {
     return options.map((opt) =>
@@ -202,31 +204,70 @@ export function SimpleSelect({
     );
   }, [options]);
 
+  const handleValueChange = (newVal: string) => {
+    if (newVal === "__clear_select_value__") {
+      onValueChange?.("");
+    } else {
+      onValueChange?.(newVal);
+    }
+  };
+
+  const hasSelectedValue = Boolean(value && value !== "" && value !== "All");
+
   return (
-    <RadixSelect
-      value={value}
-      defaultValue={defaultValue}
-      onValueChange={onValueChange}
-      disabled={disabled}
-    >
-      <SelectTrigger
-        className={cn(triggerClassName, className)}
-        error={error}
-        aria-label={ariaLabel}
+    <div className="relative w-full">
+      <RadixSelect
+        value={value}
+        defaultValue={defaultValue}
+        onValueChange={handleValueChange}
+        disabled={disabled}
       >
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent className={contentClassName}>
-        {normalizedOptions.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            <div className="flex items-center gap-2">
-              {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-              <span>{opt.label}</span>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </RadixSelect>
+        <SelectTrigger
+          className={cn(triggerClassName, className, hasSelectedValue && clearable && "pr-8")}
+          error={error}
+          aria-label={ariaLabel}
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent className={contentClassName}>
+          {clearable && hasSelectedValue && (
+            <SelectItem
+              key="__clear_item__"
+              value="__clear_select_value__"
+              className="text-slate-400 dark:text-zinc-500 italic text-xs py-1.5 border-b border-slate-100 dark:border-zinc-800"
+            >
+              — Clear selection / None —
+            </SelectItem>
+          )}
+          {normalizedOptions.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              <div className="flex items-center gap-2">
+                {opt.icon && <span className="shrink-0">{opt.icon}</span>}
+                <span>{opt.label}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </RadixSelect>
+
+      {/* Quick 1-click unselect button on trigger */}
+      {clearable && hasSelectedValue && !disabled && (
+        <button
+          type="button"
+          tabIndex={0}
+          aria-label="Clear selection"
+          title="Clear selection"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onValueChange?.("");
+          }}
+          className="absolute right-7 top-1/2 -translate-y-1/2 z-10 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   );
 }
 
