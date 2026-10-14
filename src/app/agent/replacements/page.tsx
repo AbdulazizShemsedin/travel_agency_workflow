@@ -187,7 +187,7 @@ export default function AgencyReplacementsPage() {
         ) : isError ? (
           <LoadError
             resourceName="Replacements"
-            message={formatCleanErrorMessage(error) || "Failed to load replacements owed."}
+            error={error}
             onRetry={() => refetch()}
           />
         ) : filteredItems.length === 0 ? (
@@ -271,7 +271,7 @@ export default function AgencyReplacementsPage() {
                         {/* Days Waiting */}
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           <Badge
-                            variant="secondary"
+                            variant="neutral"
                             className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px]"
                           >
                             <Clock className="mr-1 h-3 w-3" />

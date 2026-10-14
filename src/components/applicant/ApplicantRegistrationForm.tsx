@@ -313,8 +313,11 @@ export function ApplicantRegistrationForm({
       biometric_id: (initialData as any)?.biometric_id || "",
       labour_id: initialData?.labour_id || initialData?.labor_id || "",
       labor_id: initialData?.labor_id || initialData?.labour_id || "",
-      contact_person_2nd: (initialData as any)?.contact_person_2nd || "",
-      contact_phone_2nd: (initialData as any)?.contact_phone_2nd || "",
+      contact_person_2nd: (initialData as any)?.contact_person_2nd || (initialData as any)?.second_contact_name || "",
+      contact_phone_2nd: (initialData as any)?.contact_phone_2nd || (initialData as any)?.second_contact_phone || "",
+      second_contact_name: (initialData as any)?.second_contact_name || (initialData as any)?.contact_person_2nd || "",
+      second_contact_phone: (initialData as any)?.second_contact_phone || (initialData as any)?.contact_phone_2nd || "",
+      second_contact_address: (initialData as any)?.second_contact_address || "",
       coc_center: (initialData as any)?.coc_center || "",
       certified_date: (initialData as any)?.certified_date || initialData?.exam_date || "",
       exam_date: initialData?.exam_date || (initialData as any)?.certified_date || "",
@@ -932,6 +935,11 @@ export function ApplicantRegistrationForm({
       emergency_relationship: data.relative_kinship || data.emergency_relationship || "Mother",
       contact_person_name: data.relative_name || data.contact_person_name || "",
       contact_person_phone: data.relative_phone || data.contact_person_phone || "",
+      contact_person_2nd: data.second_contact_name || data.contact_person_2nd || "",
+      contact_phone_2nd: data.second_contact_phone || data.contact_phone_2nd || "",
+      second_contact_name: data.second_contact_name || data.contact_person_2nd || "",
+      second_contact_phone: data.second_contact_phone || data.contact_phone_2nd || "",
+      second_contact_address: data.second_contact_address || "",
       phone: data.phone_number || "",
       passport_issue_place: data.place_of_issue || "ADDIS ABABA",
       passport_expiry_date: data.passport_expiry || "",
@@ -2466,22 +2474,36 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Contact Person(2nd) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  Second Contact Name (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
-                  placeholder="Secondary contact name"
-                  {...register("contact_person_2nd")}
+                  placeholder="Secondary contact / broker name"
+                  {...register("second_contact_name")}
                   className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Contact Phone(2nd) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  Second Contact Phone (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
-                  placeholder="Secondary contact phone"
-                  {...register("contact_phone_2nd")}
+                  placeholder="e.g. +251..."
+                  {...register("second_contact_phone")}
+                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                />
+                {errors.second_contact_phone && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.second_contact_phone.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Second Contact Address (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                <Input
+                  placeholder="Broker / Delala address"
+                  {...register("second_contact_address")}
                   className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
                 />
               </div>

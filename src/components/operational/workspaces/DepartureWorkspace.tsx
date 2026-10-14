@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -492,6 +493,51 @@ export function DepartureWorkspace({
       ),
     },
     {
+      id: "visaDeadline",
+      header: "VISA VALID UNTIL",
+      width: "155px",
+      align: "center",
+      isReadOnly: true,
+      cell: (row) => {
+        const deadline =
+          (row as any)?.visa_deadline ||
+          (row.embassy as any)?.visa_deadline ||
+          (row.departure as any)?.visa_deadline ||
+          "";
+        if (!deadline) return <span className="text-slate-400 font-mono text-xs">—</span>;
+
+        const deadlineDate = new Date(deadline);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        deadlineDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil(
+          (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        return (
+          <div className="flex flex-col items-center">
+            <span className="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-200">
+              {deadline}
+            </span>
+            <span
+              className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5",
+                diffDays < 0
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
+                  : diffDays <= 7
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+              )}
+            >
+              {diffDays < 0
+                ? `${Math.abs(diffDays)}d expired`
+                : `${diffDays}d remaining`}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
       id: "ticketNumber",
       header: "TICKET NUMBER",
       width: "150px",
@@ -754,7 +800,7 @@ export function DepartureWorkspace({
 
           <div className="space-y-4 py-3 text-xs">
             {/* Dossier Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-[#18181f] border border-slate-200 dark:border-[#262632]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-[#18181f] border border-slate-200 dark:border-[#262632]">
               <div>
                 <Label className="text-[11px] text-slate-500 dark:text-zinc-400">Destination</Label>
                 <div className="font-semibold text-slate-800 dark:text-zinc-200 mt-0.5">
@@ -772,6 +818,43 @@ export function DepartureWorkspace({
                 <div className="font-mono font-semibold text-slate-800 dark:text-zinc-200 mt-0.5">
                   {editingRow?.visaNumber || "—"}
                 </div>
+              </div>
+              <div>
+                <Label className="text-[11px] text-slate-500 dark:text-zinc-400">Visa Valid Until</Label>
+                {(() => {
+                  const deadline =
+                    (editingRow as any)?.visa_deadline ||
+                    (editingRow?.embassy as any)?.visa_deadline ||
+                    (editingRow?.departure as any)?.visa_deadline ||
+                    "";
+                  if (!deadline) {
+                    return <div className="font-mono text-slate-400 mt-0.5 text-xs">—</div>;
+                  }
+                  const deadlineDate = new Date(deadline);
+                  const now = new Date();
+                  now.setHours(0, 0, 0, 0);
+                  deadlineDate.setHours(0, 0, 0, 0);
+                  const diffDays = Math.ceil(
+                    (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+                  );
+                  return (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200 text-xs">{deadline}</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                          diffDays < 0
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
+                            : diffDays <= 7
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        )}
+                      >
+                        {diffDays < 0 ? `${Math.abs(diffDays)}d expired` : `${diffDays}d left`}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

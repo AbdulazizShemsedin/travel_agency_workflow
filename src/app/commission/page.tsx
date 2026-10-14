@@ -33,6 +33,7 @@ import {
   ChevronRight,
   Check,
   FolderOpen,
+  RotateCcw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ import {
   getCommissionBatchV2,
   getBatchInvoicePdfV2,
   settleBatchItemsV2,
+  unsettleBatchItemsV2,
   settleBatchV2,
   updateBatchAdvanceV2,
   writeOffBatchV2,
@@ -765,6 +767,29 @@ export default function AdminCommissionPage() {
     }
   };
 
+  // ACTION 5b: Unmark Paid (Undo batch items settlement)
+  const handleUnsettleBatchItems = async (itemNames: string[]) => {
+    if (!itemNames || itemNames.length === 0) return;
+    setIsSettlingItems(true);
+    try {
+      await unsettleBatchItemsV2(itemNames);
+      toast.success("Items Unmarked Paid", {
+        description: `Reopened ${itemNames.length} batch item(s) to unpaid.`,
+      });
+      if (activeBatch?.name) {
+        await loadBatchDetails(activeBatch.name);
+      }
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Failed to Unmark Paid", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsSettlingItems(false);
+    }
+  };
+
   // ACTION 6: Full Batch Settlement
   const handleSettleEntireBatch = async () => {
     if (!activeBatch?.name) return;
@@ -774,24 +799,6 @@ export default function AdminCommissionPage() {
       });
       return;
     }
-
-    // New four-eyes rule: large batches (total_amount_birr > 100,000 ETB) created by the
-    // same current user require a second approver (an Admin). Block locally so the backend
-    // PermissionError isn't hit.
-    const batchBirrTotal = Number(activeBatch.total_amount_birr ?? 0) || 0;
-    const batchOwner = activeBatch.owner || "";
-    const isSelfCreated =
-      batchOwner &&
-      currentUserName &&
-      batchOwner.toLowerCase() === currentUserName.toLowerCase();
-    if (batchBirrTotal > 100000 && isSelfCreated && !isAdminUser) {
-      toast.error("Settlement Requires a Second Approver", {
-        description:
-          "This batch exceeds 100,000 ETB and was created by you. An Admin/System Manager must approve the settlement.",
-      });
-      return;
-    }
-
     setIsSettlingWholeBatch(true);
     try {
       await settleBatchV2(activeBatch.name, settlementReference.trim());
@@ -1968,11 +1975,12 @@ export default function AdminCommissionPage() {
                               <th className="py-2 px-3">Candidate / Applicant</th>
                               <th className="py-2 px-3">Commission Amount</th>
                               <th className="py-2 px-3">Item Status</th>
+                              <th className="py-2 px-3 text-right">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                             {(activeBatch.items || []).length > 0 ? (
-                              activeBatch.items!.map((it: any) => {
+                              activeBatch.items!.map((it: any, idx: number) => {
                                 const isPending = it.status !== "Paid";
                                 const isSelected = selectedItemRowNames.includes(it.name);
                                 return (
@@ -1997,8 +2005,12 @@ export default function AdminCommissionPage() {
                                         </button>
                                       )}
                                     </td>
-                                    <td className="py-2 px-3 font-mono">{it.name || "Row"}</td>
-                                    <td className="py-2 px-3 font-mono text-slate-500">{it.transaction || it.transaction_name}</td>
+                                    <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-400">
+                                      {shortRef(it.name) || `#${idx + 1}`}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono text-slate-500">
+                                      {shortRef(it.transaction || it.transaction_name)}
+                                    </td>
                                     <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
                                       {getCandidateName(it)}
                                     </td>
@@ -2016,12 +2028,41 @@ export default function AdminCommissionPage() {
                                         {it.status || "Pending"}
                                       </Badge>
                                     </td>
+                                    <td className="py-2 px-3 text-right">
+                                      {it.status === "Paid" ? (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={isSettlingItems}
+                                          onClick={() => handleUnsettleBatchItems([it.name])}
+                                          className="h-6 px-2 text-[11px] text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                          title="Unmark as Paid (reopen item)"
+                                        >
+                                          <RotateCcw className="h-3 w-3 mr-1" />
+                                          Unmark Paid
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={isSettlingItems}
+                                          onClick={() => handleSettleBatchItems([it.name])}
+                                          className="h-6 px-2 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                          title="Mark this item as Paid"
+                                        >
+                                          <Check className="h-3 w-3 mr-1" />
+                                          Mark Paid
+                                        </Button>
+                                      )}
+                                    </td>
                                   </tr>
                                 );
                               })
                             ) : (
                               <tr>
-                                <td colSpan={6} className="py-8 text-center text-slate-400">
+                                <td colSpan={7} className="py-8 text-center text-slate-400">
                                   Batch items list awaiting records.
                                 </td>
                               </tr>
@@ -2171,7 +2212,7 @@ export default function AdminCommissionPage() {
                           <Button
                             type="button"
                             size="sm"
-                            disabled={!settlementReference.trim() || isSettlingWholeBatch || needsSecondApprover}
+                            disabled={!settlementReference.trim() || isSettlingWholeBatch}
                             onClick={() => setIsSettleBatchConfirmOpen(true)}
                             className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs"
                           >
@@ -2182,12 +2223,6 @@ export default function AdminCommissionPage() {
                             )}
                             Mark Entire Batch as Settled
                           </Button>
-                          {needsSecondApprover && (
-                            <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                              This batch exceeds 100,000 ETB and was created by you. An Admin must approve the settlement.
-                            </p>
-                          )}
                         </div>
                       )}
                     </CardContent>
@@ -2392,7 +2427,7 @@ export default function AdminCommissionPage() {
                                     {woDate ? new Date(woDate).toLocaleDateString() : "Recorded"}
                                     {woTxn && (
                                       <span className="ml-2 font-mono text-[10px] text-slate-400 font-semibold">
-                                        ({woTxn})
+                                        ({shortRef(woTxn)})
                                       </span>
                                     )}
                                   </span>

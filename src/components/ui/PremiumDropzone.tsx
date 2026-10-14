@@ -150,15 +150,17 @@ export function PremiumDropzone({
     (file: File) => {
       setDragError(null);
 
-      // Check file size (unlimited for video uploads or when maxSizeMB <= 0 / Infinity)
+      // Check file size (200MB for video, 20MB for everything else unless explicitly specified)
       const isVideo = variant === "video";
-      const hasSizeLimit = !isVideo && maxSizeMB !== undefined && maxSizeMB > 0 && isFinite(maxSizeMB);
-      if (hasSizeLimit) {
-        const maxBytes = maxSizeMB * 1024 * 1024;
-        if (file.size > maxBytes) {
-          setDragError(`File exceeds ${maxSizeMB}MB limit`);
-          return;
-        }
+      const effectiveMaxSizeMB = isVideo
+        ? 200
+        : maxSizeMB !== undefined && maxSizeMB > 0 && isFinite(maxSizeMB)
+        ? maxSizeMB
+        : 20;
+      const maxBytes = effectiveMaxSizeMB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setDragError(`File exceeds ${effectiveMaxSizeMB}MB limit`);
+        return;
       }
 
       // Check file type
@@ -360,20 +362,20 @@ export function PremiumDropzone({
     if (description) return description;
     switch (variant) {
       case "passport":
-        return "JPG, PNG, or PDF";
+        return "JPG, PNG, or PDF (up to 20MB)";
       case "portrait":
-        return "Standard 35x45mm ID photo";
+        return "Standard 35x45mm ID photo (up to 20MB)";
       case "full_body":
-        return "Full-length standing photo";
+        return "Full-length standing photo (up to 20MB)";
       case "video":
-        return "MP4, WebM, or MOV video";
+        return "MP4, WebM, or MOV video (up to 200MB)";
       case "spreadsheet":
-        return "CSV with date, reference & amount";
+        return "CSV with date, reference & amount (up to 20MB)";
       case "compact":
-        return "PDF or image";
+        return "PDF or image (up to 20MB)";
       case "document":
       default:
-        return "PDF, PNG, JPG or WebP";
+        return "PDF, PNG, JPG or WebP (up to 20MB)";
     }
   }, [description, variant]);
 

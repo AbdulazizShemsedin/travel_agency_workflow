@@ -158,7 +158,7 @@ export default function DeletedMessagesAuditPage() {
       ) : isError ? (
         <LoadError
           resourceName="Deleted Messages"
-          message={formatCleanErrorMessage(error) || "Failed to load deleted messages."}
+          error={error}
           onRetry={() => refetch()}
         />
       ) : filteredItems.length === 0 ? (
@@ -208,7 +208,7 @@ export default function DeletedMessagesAuditPage() {
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <Badge
-                          variant="secondary"
+                          variant="neutral"
                           className={
                             row.thread_type === "Agency"
                               ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[10px]"

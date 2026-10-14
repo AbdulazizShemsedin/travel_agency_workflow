@@ -575,6 +575,17 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
         path: ["medical_status"],
       });
     }
+
+    const secPhone = (data as any).second_contact_phone || (data as any).contact_phone_2nd;
+    if (secPhone && String(secPhone).trim()) {
+      if (!PHONE_REGEX.test(String(secPhone).trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Please enter a valid Phone Number for second contact (e.g. +251911223344)",
+          path: ["second_contact_phone"],
+        });
+      }
+    }
   });
 
 export type BaseApplicantFormValues = z.infer<typeof baseApplicantSchema>;

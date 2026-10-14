@@ -200,6 +200,7 @@ export default function AdminComplaintsPage() {
       applicant?.emergency_contact_name ||
       applicant?.relative_name ||
       applicant?.contact_person_name ||
+      applicant?.second_contact_name ||
       applicant?.contact_person_2nd ||
       c.contact_person ||
       c.contact_person_name ||
@@ -209,6 +210,7 @@ export default function AdminComplaintsPage() {
       applicant?.emergency_contact_phone ||
       applicant?.relative_phone ||
       applicant?.contact_person_phone ||
+      applicant?.second_contact_phone ||
       applicant?.contact_phone_2nd ||
       applicant?.phone ||
       c.contact_person_phone ||

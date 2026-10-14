@@ -815,6 +815,27 @@ export async function manuallyMatchLineV2(
 }
 
 /**
+ * Unmatches a matched bank statement line (undo matching).
+ * Authoritative Backend Endpoint: reconciliation_api.unmatch_line (New 2026-10-12)
+ * Roles: Finance Manager, Admin
+ */
+export async function unmatchLineV2(
+  statementLineName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return await requestV2(
+    "/api/method/agency_tracking.reconciliation_api.unmatch_line",
+    {
+      method: "POST",
+      body: {
+        statement_line_name: statementLineName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
  * Updates or clears the requested advance amount on a Commission Batch Request.
  * Authoritative Backend Endpoint: finance_api.update_batch_advance (New 2026-09-12)
  * RBAC: Finance Manager / Admin / System Manager.
@@ -878,27 +899,6 @@ export async function fetchFxRatesNowV2(): Promise<V2FetchFxRatesNowResponse> {
     }
     throw err;
   }
-}
-
-/**
- * Unmatches a matched statement line.
- * Authoritative Backend Endpoint: reconciliation_api.unmatch_line (New 2026-10-12)
- * Roles: Finance Manager, Admin
- */
-export async function unmatchLineV2(
-  statementLineName: string,
-  reason?: string
-): Promise<{ message?: string; reopened_items?: number; [key: string]: any }> {
-  return await requestV2(
-    "/api/method/agency_tracking.reconciliation_api.unmatch_line",
-    {
-      method: "POST",
-      body: {
-        statement_line_name: statementLineName,
-        ...(reason ? { reason } : {}),
-      },
-    }
-  );
 }
 
 /**

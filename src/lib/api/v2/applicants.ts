@@ -343,6 +343,21 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.relationship = relationship;
   }
 
+  // 10.1 Second Contact Person (Broker / Delala)
+  const secondContactName = result.second_contact_name || result.contact_person_2nd;
+  if (secondContactName) {
+    result.second_contact_name = String(secondContactName).trim();
+    result.contact_person_2nd = String(secondContactName).trim();
+  }
+  const secondContactPhone = result.second_contact_phone || result.contact_phone_2nd;
+  if (secondContactPhone) {
+    result.second_contact_phone = String(secondContactPhone).trim();
+    result.contact_phone_2nd = String(secondContactPhone).trim();
+  }
+  if (result.second_contact_address) {
+    result.second_contact_address = String(result.second_contact_address).trim();
+  }
+
   // 11. Complexion (Skin Color)
   if (result.complexion) {
     const compUpper = String(result.complexion).trim().toUpperCase();

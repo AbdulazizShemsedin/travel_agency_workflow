@@ -546,4 +546,58 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - **Mobile Table Invariance**: Preserved the mobile exception: `< md` (mobile), tables allow horizontal touch scrolling (`overflow-x-auto min-w-[...]`), all columns scroll together, and the first Applicant Name column is not sticky.
 - **Verification**: Zero mock data added. Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors).
 
+### 14. Commission-Currency-Invoicing Full Handoff Implementation (2026-10-14)
+- **N1: LMIS Working Statuses & Contract Terms**:
+  - Implemented 23 working statuses with dedicated modal for `OTHER` (mandatory free text) and `REJECTED` (multi-reason checkboxes).
+  - Single consolidated Status column on LMIS grids with optional "Who took the file" assignee.
+- **N2: Taeshir Follow-Up & Injaz Printed Status**:
+  - Wired `set_taeshir_status` (`INFORMED`, `RECEIVED`, `READY TO EMBASSY`).
+  - Added `Printed` payment status alongside `Paid` and `Unpaid` for Injaz.
+- **N3: Embassy Submission Date & Visa Expiry Warning**:
+  - Enabled correctable `date_submitted` anytime before stamping.
+  - Sourced visa issue date and computed dynamic 90-day validity deadline badge.
+  - Enforced state machine constraint: step rejection is restricted strictly to Embassy clearance.
+- **N4 & N9: Ticketing, Flight Outcomes & Reschedule Undo**:
+  - Sourced flight departure time.
+  - Wired `undo_reschedule` returning placement flight date to previous scheduled date.
+  - Added "Record Flight Outcome" for departed candidates: `Local return` (transfers candidate to talent pool with zero commission) and `International return` (initiates replacement guarantee).
+  - Wired `undo_flight_outcome` and `clear_predeparture_medical_result`.
+- **N5: Foreign Agency Replacements & Zero-Commission Exchange Flow**:
+  - Built dedicated `/agent/replacements` page calling `portal_api.list_replacements_owed`.
+  - Added "Exchange Candidate" modal with zero commission fee flag, and Waive / Put-Back actions calling `waive_replacement_owed`.
+- **N6: Complaint Outcomes Alignment**:
+  - Aligned complaint resolution statuses strictly to canonical `Resolved`, `Escalated`, and `Dismissed`.
+- **N7: Returned Worker Send-Again & Broker / Delala Second Contact**:
+  - Added "Send Again" button in applicant table for departed workers returned internationally.
+  - Wired `second_contact_name`, `second_contact_phone`, and `second_contact_address` across registration form, detail view, schema validation, and complaints.
+- **N8: LMIS Contract Fields on Placement**:
+  - Added contract fields (`contract_signed_date`, `contract_city`, `sponsor_phone`, `sponsor_second_phone`) to placement and LMIS workspace.
+- **N9: Universal Undo Operations**:
+  - Bank statement line unmatch calling `reconciliation_api.unmatch_line`.
+  - Commission batch item "Unmark Paid" calling `finance_api.unsettle_batch_items`.
+  - Ban decision undo calling `applicant_api.undo_country_ban_decision`.
+- **N10: Staff Management Delete / Erase Flow**:
+  - Built deletion confirmation dialog: erases account permanently if no historical activity exists, or cleanly deactivates if historical records exist.
+- **N11: Foreign Agency Country Filtering for Muayina & Contractor Validation**:
+  - Filtered contractor selector in Muayina intake modal strictly by applicant's destination country.
+  - Enforced mandatory agency name and email on contractor creation.
+- **N12, N16, N17: Settings Overhaul**:
+  - Restricted `/settings` to Admin and Finance Manager.
+  - Replaced ad-hoc storage with `finance_api.get_company_settings` and `update_company_settings`.
+  - Added company logo and official stamp uploads via `set_company_image`.
+  - Added system time zone selector via `get_time_zone` and `set_time_zone`.
+- **N13: Upload Limits & Guidance**:
+  - Enforced 200MB limit for video and 20MB limit for other media in `PremiumDropzone` with explicit hint labels.
+- **N14: Finance Manager / Admin Immediate Approval**:
+  - Automatically marked transactions created by Finance Manager or Admin as approved and reflected immediately in financial totals.
+- **N15: Read-Only Role Permissions Matrix Page**:
+  - Created `/permissions` page backed by `get_permission_table`, grouped by functional area with internal RPCs filtered out.
+- **N18: Chat Message Deletion & Admin Audit**:
+  - Built in-place deletion replacing message content with grey indicator line *"This message was deleted"*.
+  - Sourced sender-only deletion with confirmation, and admin audit log at `/chat/deleted`.
+- **N19: Authoritative Detail Reads**:
+  - Switched clearance step inspection to `agency_tracking.clearance_api.get_clearance_step` and contractor inspection to `agency_tracking.contractor_api.get_contractor`.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
+
+
 

@@ -34,6 +34,7 @@ import {
   CheckSquare,
   Square,
   Users,
+  RotateCcw,
 } from "lucide-react";
 import {
   logStageExpenseV2,
@@ -43,12 +44,14 @@ import {
   voidTransactionV2,
   uploadBankStatementV2,
   manuallyMatchLineV2,
+  unmatchLineV2,
   listCommissionBatchesV2,
   getCommissionBatchV2,
   settleBatchItemsV2,
   V2CommissionBatch,
   V2SupportedCurrency,
 } from "@/lib/api/v2/finance";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { getFinancialOverviewV2, getPendingApprovalQueueV2, exportTransactionsXlsxV2, V2PendingApprovalItem } from "@/lib/api/v2/reports";
 import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
@@ -326,8 +329,11 @@ export default function ExpensesIncomePage() {
       }
     },
     onSuccess: (res) => {
-      toast.success("Transaction Logged Successfully", {
-        description: `Logged transaction ${res?.name || ""} in Pending status for approval.`,
+      const isApproved = (res as any)?.status === "Approved" || isFinanceManagerOrAdmin;
+      toast.success(isApproved ? "Transaction Recorded & Approved" : "Transaction Logged Successfully", {
+        description: isApproved
+          ? "Approved immediately and applied to ledger totals."
+          : `Logged transaction in Pending status for approval.`,
       });
       queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
       queryClient.invalidateQueries({ queryKey: ["v2_pending_approval_queue"] });
@@ -483,6 +489,33 @@ export default function ExpensesIncomePage() {
       });
     } finally {
       setIsManualMatching(false);
+    }
+  };
+
+  // ACTION: Unmatch Bank Statement Line (Undo Match)
+  const [isUnmatching, setIsUnmatching] = React.useState<boolean>(false);
+  const handleUnmatchLine = async (lineName?: string) => {
+    const targetLine = (lineName || manualLineName).trim();
+    if (!targetLine) {
+      toast.error("Statement Line Identifier required to unmatch.");
+      return;
+    }
+
+    setIsUnmatching(true);
+    try {
+      const res = await unmatchLineV2(targetLine);
+      toast.success("Line Unmatched Successfully", {
+        description: res.message || `Statement line ${targetLine} unmatched from batch.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_pending_approval_queue"] });
+      setManualLineName("");
+    } catch (err: any) {
+      toast.error("Unmatch Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsUnmatching(false);
     }
   };
 
@@ -1253,19 +1286,37 @@ export default function ExpensesIncomePage() {
                         Matches statement line directly to target batch.
                       </p>
 
-                      <Button
-                        type="submit"
-                        size="sm"
-                        disabled={!manualLineName.trim() || !manualBatchName.trim() || isManualMatching}
-                        className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 text-white font-semibold text-xs h-8 shadow-xs"
-                      >
-                        {isManualMatching ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                        ) : (
-                          <Link2 className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Confirm Manual Match
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={!manualLineName.trim() || !manualBatchName.trim() || isManualMatching || isUnmatching}
+                          className="flex-1 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 text-white font-semibold text-xs h-8 shadow-xs"
+                        >
+                          {isManualMatching ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <Link2 className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Confirm Manual Match
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!manualLineName.trim() || isManualMatching || isUnmatching}
+                          onClick={() => handleUnmatchLine()}
+                          className="h-8 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                          title="Undo match for this statement line"
+                        >
+                          {isUnmatching ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Unmatch Line
+                        </Button>
+                      </div>
                     </form>
                   </CardContent>
                 </Card>
@@ -1595,7 +1646,11 @@ export default function ExpensesIncomePage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">Log Income / Expense</h3>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">Submits in Pending status for approval</p>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    {isFinanceManagerOrAdmin
+                      ? "Approved immediately and applied to ledger totals"
+                      : "Submits in Pending status for approval"}
+                  </p>
                 </div>
               </div>
               <button

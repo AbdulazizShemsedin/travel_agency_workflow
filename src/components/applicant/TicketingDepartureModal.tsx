@@ -38,6 +38,7 @@ import {
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
+import { cn } from "@/lib/utils";
 
 interface TicketingDepartureModalProps {
   isOpen: boolean;
@@ -86,6 +87,19 @@ export function TicketingDepartureModal({
   const [isUnfitConfirmOpen, setIsUnfitConfirmOpen] = React.useState(false);
 
   if (!placement) return null;
+
+  const visaDeadline = (placement as any)?.visa_deadline || (placement as any)?.visa_valid_until;
+  const visaDeadlineInfo = React.useMemo(() => {
+    if (!visaDeadline) return null;
+    const deadlineDate = new Date(visaDeadline);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    deadlineDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil(
+      (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return { deadline: visaDeadline, diffDays };
+  }, [visaDeadline]);
 
   // 1. Record Ticket Details
   const handleRecordTicket = async (e: React.FormEvent) => {
@@ -327,6 +341,27 @@ export function TicketingDepartureModal({
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
             Candidate: <strong>{applicantName}</strong> • Current Placement Stage: <strong>{placement.status}</strong>
           </DialogDescription>
+          {visaDeadlineInfo && (
+            <div className="flex items-center gap-2 mt-1 text-[11px] font-medium">
+              <span className="text-slate-500">Visa Valid Until:</span>
+              <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">{visaDeadlineInfo.deadline}</span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] px-1.5 py-0",
+                  visaDeadlineInfo.diffDays < 0
+                    ? "border-rose-300 text-rose-700 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400"
+                    : visaDeadlineInfo.diffDays <= 7
+                    ? "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300"
+                    : "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300"
+                )}
+              >
+                {visaDeadlineInfo.diffDays < 0
+                  ? `${Math.abs(visaDeadlineInfo.diffDays)}d expired`
+                  : `${visaDeadlineInfo.diffDays}d remaining`}
+              </Badge>
+            </div>
+          )}
         </DialogHeader>
 
         {/* Tab Selection */}
@@ -767,7 +802,7 @@ export function TicketingDepartureModal({
               </Button>
             </div>
           </div>
-        )}    )}
+        )}
       </DialogContent>
     </Dialog>
 

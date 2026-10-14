@@ -163,7 +163,7 @@ export default function PermissionsPage() {
       ) : isError ? (
         <LoadError
           resourceName="Permissions Table"
-          message={formatCleanErrorMessage(error) || "Failed to load permission matrix."}
+          error={error}
           onRetry={() => refetch()}
         />
       ) : groupedPermissions.size === 0 ? (
@@ -189,7 +189,7 @@ export default function PermissionsPage() {
                     <Layers className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                     {area}
                   </CardTitle>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge variant="neutral" className="text-[10px]">
                     {items.length} {items.length === 1 ? "action" : "actions"}
                   </Badge>
                 </div>

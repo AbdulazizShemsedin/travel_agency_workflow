@@ -268,29 +268,18 @@ export async function rejectEmbassyStepV2(
 }
 
 /**
- * Rejects any Clearance Step.
- * If stepType is "Embassy", delegates to agency_tracking.clearance_api.reject_embassy_step.
- * Otherwise, updates status to "Rejected" and saves rejection_remark via frappe.client.set_value.
+ * Rejects an Embassy Clearance Step.
+ * Per backend state machine rules, only Embassy steps can be rejected (via reject_embassy_step).
  */
 export async function rejectClearanceStepV2(
   clearanceStepName: string,
   rejectionRemark: string,
   stepType?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (stepType === "Embassy") {
-    return rejectEmbassyStepV2(clearanceStepName, rejectionRemark);
+  if (stepType && stepType !== "Embassy") {
+    throw new Error("Only Embassy clearance steps can be rejected.");
   }
-  return requestV2("/api/method/frappe.client.set_value", {
-    method: "POST",
-    body: {
-      doctype: "Clearance Step",
-      name: clearanceStepName,
-      fieldname: {
-        status: "Rejected",
-        rejection_remark: rejectionRemark,
-      },
-    },
-  });
+  return rejectEmbassyStepV2(clearanceStepName, rejectionRemark);
 }
 
 
