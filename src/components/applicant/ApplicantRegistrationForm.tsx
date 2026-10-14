@@ -1102,7 +1102,9 @@ export function ApplicantRegistrationForm({
       else if (errLower.includes("english")) scrollToAndHighlightField("english_level");
       else if (errLower.includes("arabic")) scrollToAndHighlightField("arabic_level");
       else if (errLower.includes("salary")) scrollToAndHighlightField("salary_amount");
-      else if (errLower.includes("medical")) scrollToAndHighlightField("medical_expiry_date");
+      else if (errLower.includes("medical expiry") || errLower.includes("medical expiration")) scrollToAndHighlightField("medical_expiry_date");
+      else if (errLower.includes("medical")) scrollToAndHighlightField("medical_status");
+      else if (errLower.includes("national id")) scrollToAndHighlightField("national_id");
       else if (errLower.includes("job") || errLower.includes("occupation")) scrollToAndHighlightField("job_applied");
       else if (errLower.includes("education") || errLower.includes("qualification")) scrollToAndHighlightField("qualification");
 

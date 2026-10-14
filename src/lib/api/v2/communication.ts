@@ -36,6 +36,8 @@ export interface V2ChatMessage {
   mentioned_placement?: string;
   creation?: string;
   is_read?: boolean;
+  deleted?: number;
+  deleted_on?: string;
   [key: string]: any;
 }
 
@@ -189,4 +191,62 @@ export async function addParticipantV2(
       },
     }
   );
+}
+
+/**
+ * Deletes a chat message previously sent by the current user.
+ * Authoritative Backend Endpoint: chat_api.delete_message (New 2026-10-12)
+ * Restricted to the sender only.
+ */
+export async function deleteMessageV2(messageName: string): Promise<any> {
+  return await requestV2(
+    "/api/method/agency_tracking.chat_api.delete_message",
+    {
+      method: "POST",
+      body: { message_name: messageName },
+    }
+  );
+}
+
+export interface V2DeletedMessageRecord {
+  thread?: string;
+  thread_type?: string;
+  contractor?: string;
+  sender: string;
+  sender_name?: string;
+  message?: string;
+  attachment?: string;
+  creation?: string;
+  deleted_by?: string;
+  deleted_by_name?: string;
+  deleted_on?: string;
+  [key: string]: any;
+}
+
+/**
+ * Lists audit log of deleted chat messages (Admin only).
+ * Authoritative Backend Endpoint: chat_api.list_deleted_messages (New 2026-10-12)
+ */
+export async function listDeletedMessagesV2(params?: {
+  threadName?: string;
+  limitStart?: number;
+  limitPageLength?: number;
+}): Promise<V2DeletedMessageRecord[]> {
+  const body: Record<string, any> = {};
+  if (params?.threadName) body.thread_name = params.threadName;
+  if (params?.limitStart !== undefined) body.limit_start = params.limitStart;
+  if (params?.limitPageLength) body.limit_page_length = params.limitPageLength;
+
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.chat_api.list_deleted_messages",
+    {
+      method: "POST",
+      body: Object.keys(body).length > 0 ? body : undefined,
+    }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.message)) return result.message;
+  if (result && Array.isArray(result.data)) return result.data;
+  return [];
 }

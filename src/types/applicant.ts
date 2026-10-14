@@ -283,9 +283,10 @@ export interface Applicant {
   medical_remarks?: string;
   education_remarks?: string;
 
-  // Financial & Registration Fees
-  fee_required?: boolean;
-  registration_fee_amount?: number;
+  // Second Contact Person (Delala / Broker)
+  second_contact_name?: string;
+  second_contact_phone?: string;
+  second_contact_address?: string;
 
   // Musaned Pre-Registration (Saudi Corridor Requirement)
   is_uploaded_to_musaned?: number | boolean;
@@ -492,7 +493,6 @@ export const COMPLAINT_STATUSES = [
   "Open",
   "Under Investigation",
   "Resolved",
-  "Returned / Free Replacement Required",
   "Escalated to MoL / Embassy",
   "Dismissed / Closed",
 ] as const;
@@ -501,7 +501,6 @@ export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[number] | string;
 
 export const COMPLAINT_OUTCOMES = [
   "Resolved",
-  "Returned / Free Replacement Required",
   "Escalated",
   "Dismissed",
 ] as const;

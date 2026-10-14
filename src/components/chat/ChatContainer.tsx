@@ -30,12 +30,14 @@ import {
   ShieldCheck,
   Eye,
   Filter,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +52,7 @@ import {
   listAllThreadsForOversightV2,
   getThreadMessagesV2,
   sendMessageV2,
+  deleteMessageV2,
   createInternalThreadV2,
   createAgencyThreadV2,
   addParticipantV2,
@@ -1201,6 +1204,25 @@ export function ChatContainer() {
     },
   });
 
+  // Message deletion state and mutation (N18)
+  const [messageToDelete, setMessageToDelete] = React.useState<string | null>(null);
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (msgName: string) => {
+      return await deleteMessageV2(msgName);
+    },
+    onSuccess: () => {
+      setMessageToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["chat_messages", selectedThread?.name] });
+      toast.success("Message deleted");
+    },
+    onError: (err: any) => {
+      toast.error("Failed to delete message", {
+        description: err?.message || "Only the sender can delete their own message.",
+      });
+    },
+  });
+
   // File selection handler
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1308,6 +1330,19 @@ export function ChatContainer() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link href="/chat/deleted">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs border-slate-200 dark:border-[#272730] text-slate-600 dark:text-zinc-300 hover:text-rose-600"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5 text-rose-500" />
+                Deleted Messages
+              </Button>
+            </Link>
+          )}
           <Button
             type="button"
             size="sm"
@@ -1762,11 +1797,32 @@ export function ChatContainer() {
                         })
                       : "";
 
+                    // If message was deleted (N18)
+                    if (msg.deleted) {
+                      return (
+                        <div
+                          key={msg.name}
+                          className={cn(
+                            "flex flex-col my-1 max-w-[88%] sm:max-w-[75%]",
+                            isOutgoing ? "ml-auto items-end" : "mr-auto items-start"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-[#1a1a24] text-slate-400 dark:text-zinc-500 italic text-[11px] border border-dashed border-slate-200 dark:border-[#2b2b38]">
+                            <Trash2 className="h-3 w-3 shrink-0 text-slate-400" />
+                            <span>This message was deleted</span>
+                            <span className="not-italic text-[10px] text-slate-400 dark:text-zinc-600 ml-2">
+                              {formattedTime}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={msg.name}
                         className={cn(
-                          "flex flex-col max-w-[88%] sm:max-w-[75%]",
+                          "group relative flex flex-col max-w-[88%] sm:max-w-[75%]",
                           isOutgoing ? "ml-auto items-end" : "mr-auto items-start"
                         )}
                       >
@@ -1781,6 +1837,17 @@ export function ChatContainer() {
                           <span className="text-slate-400">
                             • {formattedTime}
                           </span>
+                          {/* Delete button for sender's own message (N18) */}
+                          {isOutgoing && (
+                            <button
+                              type="button"
+                              onClick={() => setMessageToDelete(msg.name)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-rose-600 text-slate-400"
+                              title="Delete message"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
 
                         {/* WhatsApp Message bubble */}
@@ -2406,6 +2473,23 @@ export function ChatContainer() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Modal for Message Deletion (N18) */}
+      <ConfirmationModal
+        isOpen={Boolean(messageToDelete)}
+        onClose={() => setMessageToDelete(null)}
+        onConfirm={() => {
+          if (messageToDelete) {
+            deleteMessageMutation.mutate(messageToDelete);
+          }
+        }}
+        title="Delete Message?"
+        description="Are you sure you want to delete this message? It will be replaced with 'This message was deleted' for all participants in this conversation."
+        confirmLabel="Delete Message"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={deleteMessageMutation.isPending}
+      />
     </div>
   );
 }

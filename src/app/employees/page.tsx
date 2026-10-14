@@ -25,11 +25,13 @@ import {
   X,
   UserCheck,
   UserX,
+  Trash2,
   SlidersHorizontal,
   Save,
   AlertCircle,
   Check,
   Undo2,
+  Copy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,8 @@ import {
   updateEmployeeRolesV2,
   resetEmployeePasswordV2,
   toggleEmployeeStatusV2,
+  deleteEmployeeV2,
+  getUserPasswordV2,
   V2EmployeeRecord,
   CORRIDOR_ROLE_DEFINITIONS,
   RoleAssignmentConfig,
@@ -253,9 +257,12 @@ export default function EmployeesPage() {
   const [editingRoles, setEditingRoles] = React.useState<string[]>([]);
   const [selectedForPassword, setSelectedForPassword] = React.useState<V2EmployeeRecord | null>(null);
   const [employeeToDeactivate, setEmployeeToDeactivate] = React.useState<V2EmployeeRecord | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = React.useState<V2EmployeeRecord | null>(null);
   const [newPassword, setNewPassword] = React.useState<string>("");
   const [confirmNewPassword, setConfirmNewPassword] = React.useState<string>("");
   const [showNewPassword, setShowNewPassword] = React.useState<boolean>(true);
+  const [currentStaffPassword, setCurrentStaffPassword] = React.useState<string | null>(null);
+  const [isLoadingStaffPassword, setIsLoadingStaffPassword] = React.useState<boolean>(false);
 
   // Add Employee Form State
   const [addForm, setAddForm] = React.useState({
@@ -388,8 +395,10 @@ export default function EmployeesPage() {
     mutationFn: (payload: { email: string; newPassword: string }) =>
       resetEmployeePasswordV2(payload.email, payload.newPassword),
     onSuccess: (_, variables) => {
+      setCurrentStaffPassword(variables.newPassword);
       setSelectedForPassword(null);
       setNewPassword("");
+      setConfirmNewPassword("");
       toast.success("Password reset successfully!", {
         description: `New credentials active for ${variables.email}.`,
       });
@@ -416,6 +425,29 @@ export default function EmployeesPage() {
     },
     onError: (err: any) => {
       toast.error("Failed to update status", {
+        description: formatCleanErrorMessage(err) || err.message || "Please try again.",
+      });
+    },
+  });
+
+  // Mutation 5: Delete Employee (erases if no history, otherwise deactivates)
+  const deleteMutation = useMutation({
+    mutationFn: (email: string) => deleteEmployeeV2(email),
+    onSuccess: (res: any, email) => {
+      queryClient.invalidateQueries({ queryKey: ["v2_employees_directory"] });
+      setEmployeeToDelete(null);
+      if (res?.erased === 1) {
+        toast.success("Employee account erased permanently", {
+          description: `Account ${email} had no recorded workflow history and has been permanently removed.`,
+        });
+      } else {
+        toast.info(res?.message || "Account disabled (has history)", {
+          description: `Account ${email} has recorded workflow activity and cannot be erased. It has been deactivated instead.`,
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast.error("Failed to delete employee account", {
         description: formatCleanErrorMessage(err) || err.message || "Please try again.",
       });
     },
@@ -454,11 +486,28 @@ export default function EmployeesPage() {
     setEditingRoles(Array.from(new Set(normalized)));
   };
 
-  const handleOpenResetPassword = (emp: V2EmployeeRecord) => {
+  const handleOpenResetPassword = async (emp: V2EmployeeRecord) => {
     setSelectedForPassword(emp);
     setNewPassword("");
     setConfirmNewPassword("");
     setShowNewPassword(true);
+    setCurrentStaffPassword(null);
+
+    if (emp.email) {
+      setIsLoadingStaffPassword(true);
+      try {
+        const recorded = await getUserPasswordV2(emp.email);
+        if (recorded) {
+          setCurrentStaffPassword(recorded);
+          setNewPassword(recorded);
+          setConfirmNewPassword(recorded);
+        }
+      } catch (err) {
+        console.warn("[handleOpenResetPassword] Could not fetch recorded password:", err);
+      } finally {
+        setIsLoadingStaffPassword(false);
+      }
+    }
   };
 
   const handleGenerateRandomPassword = () => {
@@ -965,6 +1014,19 @@ export default function EmployeesPage() {
                                   Enable
                                 </>
                               )}
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEmployeeToDelete(emp)}
+                              disabled={deleteMutation.isPending}
+                              className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                              title="Delete Employee Account"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Delete
                             </Button>
                           </div>
                         </td>
@@ -1687,6 +1749,35 @@ export default function EmployeesPage() {
               </div>
             </DialogHeader>
 
+            <div className="rounded-lg border border-slate-200 dark:border-[#24242e] bg-slate-50/70 dark:bg-[#131317] p-3 space-y-1 font-mono">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Current Account Password</span>
+              {isLoadingStaffPassword ? (
+                <span className="text-xs text-slate-400 flex items-center gap-1 font-sans">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Fetching recorded password...
+                </span>
+              ) : currentStaffPassword ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-800 dark:text-amber-300 font-bold text-xs select-all">
+                    {currentStaffPassword}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentStaffPassword);
+                      toast.success("Password copied to clipboard!");
+                    }}
+                    className="text-[10px] font-sans text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer flex items-center gap-0.5"
+                  >
+                    <Copy className="h-3 w-3" /> Copy
+                  </button>
+                </div>
+              ) : (
+                <span className="text-[11px] text-slate-400 font-sans italic">
+                  Not recorded yet — set a password below to store and view it
+                </span>
+              )}
+            </div>
+
             <form
               autoComplete="off"
               onSubmit={(e) => {
@@ -1851,6 +1942,37 @@ export default function EmployeesPage() {
         variant="danger"
         icon={UserX}
         isLoading={toggleStatusMutation.isPending}
+      />
+
+      <ConfirmationModal
+        isOpen={Boolean(employeeToDelete)}
+        onClose={() => setEmployeeToDelete(null)}
+        onConfirm={async () => {
+          if (!employeeToDelete) return;
+          try {
+            await deleteMutation.mutateAsync(employeeToDelete.email);
+          } catch {
+            // Handled by mutation onError toast
+          }
+        }}
+        title="Delete Staff Account?"
+        description={
+          employeeToDelete ? (
+            <span>
+              Are you sure you want to delete{" "}
+              <strong>{employeeToDelete.full_name || employeeToDelete.email}</strong>?
+              If this account has no historical workflow records, it will be <strong>permanently erased</strong>.
+              If it has recorded operational history, it will be deactivated with an audit record retained.
+            </span>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        variant="danger"
+        icon={Trash2}
+        isLoading={deleteMutation.isPending}
       />
 
       {/* ------------------------------------------------------------- */}

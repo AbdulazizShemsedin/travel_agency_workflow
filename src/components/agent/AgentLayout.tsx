@@ -99,6 +99,7 @@ export function AgentLayout({
   const navItems = [
     { label: "Available Applicants", href: "/agent", icon: Users },
     { label: "Selected Applicants", href: "/agent/reserved", icon: CheckCircle2 },
+    { label: "Replacements", href: "/agent/replacements", icon: ShoppingBag },
     { label: "Wakala", href: "/agent/wakala", icon: ShieldCheck },
     { label: "Commissions", href: "/agent/commission", icon: Receipt },
     { label: "Complaints", href: "/agent/complaints", icon: AlertCircle },

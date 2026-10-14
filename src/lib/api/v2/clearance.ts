@@ -181,7 +181,8 @@ export async function reassignClearanceStepV2(
  */
 export async function submitEmbassyStepV2(
   clearanceStepName: string,
-  overrideReason?: string
+  overrideReason?: string,
+  dateSubmitted?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.clearance_api.submit_embassy_step",
@@ -190,6 +191,7 @@ export async function submitEmbassyStepV2(
       body: {
         clearance_step_name: clearanceStepName,
         ...(overrideReason ? { override_reason: overrideReason } : {}),
+        ...(dateSubmitted ? { date_submitted: dateSubmitted } : {}),
       },
     }
   );
@@ -424,20 +426,29 @@ export async function rescheduleTaeshirAppointmentV2(
  */
 export async function recordInjazPaymentV2(
   clearanceStepName: string,
-  amount?: number,
+  paymentStatusOrAmount?: "Paid" | "Unpaid" | "Printed" | number,
   currency?: string,
   receiptNumber?: string,
   paidDate?: string,
-  paymentStatus: "Paid" | "Unpaid" = "Paid"
+  paymentStatus: "Paid" | "Unpaid" | "Printed" = "Paid"
 ): Promise<{ message?: string; [key: string]: any }> {
+  let effectivePaymentStatus: "Paid" | "Unpaid" | "Printed" = paymentStatus;
+  let effectiveAmount: number | undefined;
+
+  if (typeof paymentStatusOrAmount === "string") {
+    effectivePaymentStatus = paymentStatusOrAmount;
+  } else if (typeof paymentStatusOrAmount === "number") {
+    effectiveAmount = paymentStatusOrAmount;
+  }
+
   return requestV2(
     "/api/method/agency_tracking.clearance_api.record_injaz_payment",
     {
       method: "POST",
       body: {
         clearance_step_name: clearanceStepName,
-        payment_status: paymentStatus,
-        ...(typeof amount === "number" ? { amount } : {}),
+        payment_status: effectivePaymentStatus,
+        ...(typeof effectiveAmount === "number" ? { amount: effectiveAmount } : {}),
         ...(currency ? { currency } : {}),
         ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
         ...(paidDate ? { paid_date: paidDate } : {}),
@@ -557,19 +568,20 @@ export async function updateKuwaitPoliceAsharaV2(
 }
 
 /**
- * Fetches the full Clearance Step document from the backend via frappe.client.get.
+ * Fetches the full Clearance Step document via authoritative clearance_api.get_clearance_step.
  * Provides all sub-flow fields (injaz, wakala, police_ashara, payment details, notes).
+ * Authoritative Backend Endpoint: clearance_api.get_clearance_step (New 2026-10-12)
  */
 export async function getClearanceStepDocV2(
   clearanceStepName: string
 ): Promise<V2ClearanceStepItem | null> {
   try {
     const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
-      "/api/method/frappe.client.get",
+      "/api/method/agency_tracking.clearance_api.get_clearance_step",
       {
         method: "POST",
         body: {
-          doctype: "Clearance Step",
+          clearance_step_name: clearanceStepName,
           name: clearanceStepName,
         },
       }
@@ -581,6 +593,8 @@ export async function getClearanceStepDocV2(
     return null;
   }
 }
+
+export const getClearanceStepV2 = getClearanceStepDocV2;
 
 /**
  * Fetches the calling user's To-Do queue with human-readable task descriptions.
@@ -601,6 +615,7 @@ export async function listMyTodosV2(
 }
 
 export const LMIS_WORKING_STATUSES = [
+  "IN PROGRESS",
   "NO FILE & NO COC",
   "NO FILE & TAKEN",
   "NO FILE & PULLED",
@@ -622,6 +637,7 @@ export const LMIS_WORKING_STATUSES = [
   "PARTNER PENDING",
   "COC NOT ONLINE",
   "TAKEN",
+  "OTHER",
 ] as const;
 
 export type V2LmisWorkingStatus = (typeof LMIS_WORKING_STATUSES)[number];
@@ -640,17 +656,21 @@ export type V2LmisRejectionReason = (typeof LMIS_REJECTION_REASONS)[number];
 /**
  * Sets the working LMIS status on an LMIS clearance step.
  * Authoritative Backend Endpoint: clearance_api.set_lmis_status
- * 20 office working statuses, plus "REJECTED" (21st status, added 2026-10-08).
+ * 23 office working statuses (with IN PROGRESS first, REJECTED, and OTHER last).
  * "ISSUED" completes the step.
- * If lmis_status === "REJECTED", rejection_reasons must contain one or more of:
- * ["Employment contract", "Passport", "Working visa", "Emergency contact", "Insurance", "Original ID"].
+ * If lmis_status === "REJECTED", rejection_reasons must contain one or more valid reasons.
+ * If lmis_status === "OTHER", other_status is free text up to 140 characters.
+ * For taken statuses, taken_by_agency and taken_by_phone are optional.
  */
 export async function setLmisStatusV2(
   clearanceStepName: string,
   lmisStatus: string,
   rejectionReasons?: string[] | string,
   referenceNo?: string,
-  dateCompleted?: string
+  dateCompleted?: string,
+  otherStatus?: string,
+  takenByAgency?: string,
+  takenByPhone?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   const body: Record<string, any> = {
     clearance_step_name: clearanceStepName,
@@ -663,12 +683,75 @@ export async function setLmisStatusV2(
   }
   if (referenceNo) body.reference_no = referenceNo;
   if (dateCompleted) body.date_completed = dateCompleted;
+  if (otherStatus) body.other_status = otherStatus;
+  if (takenByAgency !== undefined) body.taken_by_agency = takenByAgency;
+  if (takenByPhone !== undefined) body.taken_by_phone = takenByPhone;
 
   return requestV2(
     "/api/method/agency_tracking.clearance_api.set_lmis_status",
     {
       method: "POST",
       body,
+    }
+  );
+}
+
+/**
+ * Sets Tesheer follow-up status (INFORMED, RECEIVED, READY TO EMBASSY).
+ * Authoritative Backend Endpoint: clearance_api.set_taeshir_status (New 2026-10-11)
+ */
+export async function setTaeshirStatusV2(
+  clearanceStepName: string,
+  taeshirStatus: "INFORMED" | "RECEIVED" | "READY TO EMBASSY" | string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.set_taeshir_status",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        taeshir_status: taeshirStatus,
+      },
+    }
+  );
+}
+
+/**
+ * Sets visa issue date on an Embassy clearance step (both Saudi and Kuwait).
+ * Authoritative Backend Endpoint: clearance_api.set_visa_issue_date (New 2026-10-11)
+ */
+export async function setVisaIssueDateV2(
+  clearanceStepName: string,
+  visaIssueDate: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.set_visa_issue_date",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        visa_issue_date: visaIssueDate,
+      },
+    }
+  );
+}
+
+/**
+ * Undoes Injaz forfeit and restart on a Taeshir step.
+ * Authoritative Backend Endpoint: clearance_api.undo_forfeit_injaz (New 2026-10-12)
+ */
+export async function undoForfeitInjazV2(
+  clearanceStepName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.undo_forfeit_injaz",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        ...(reason ? { reason } : {}),
+      },
     }
   );
 }

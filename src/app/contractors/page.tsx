@@ -35,6 +35,7 @@ import {
   createContractorV2,
   updateContractorV2,
   resetEmployeePasswordV2,
+  getUserPasswordV2,
   V2ContractorItem,
 } from "@/lib/api/v2";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +90,8 @@ export default function ContractorsPage() {
   const [agentNewPassword, setAgentNewPassword] = React.useState("");
   const [confirmAgentPassword, setConfirmAgentPassword] = React.useState("");
   const [showAgentPassword, setShowAgentPassword] = React.useState(true);
+  const [currentAgentPassword, setCurrentAgentPassword] = React.useState<string | null>(null);
+  const [isLoadingAgentPassword, setIsLoadingAgentPassword] = React.useState(false);
   const [copiedCredentials, setCopiedCredentials] = React.useState(false);
 
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -222,7 +225,8 @@ export default function ContractorsPage() {
   const resetAgentPasswordMutation = useMutation({
     mutationFn: (payload: { userEmail: string; newPassword: string }) =>
       resetEmployeePasswordV2(payload.userEmail, payload.newPassword),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      setCurrentAgentPassword(variables.newPassword);
       toast.success("Agent portal password updated successfully!");
     },
     onError: (err: any) => {
@@ -246,12 +250,30 @@ export default function ContractorsPage() {
     });
   };
 
-  const handleOpenCredentials = (c: V2ContractorItem) => {
+  const handleOpenCredentials = async (c: V2ContractorItem) => {
     setCredentialsContractor(c);
     setAgentNewPassword("");
     setConfirmAgentPassword("");
     setShowAgentPassword(true);
     setCopiedCredentials(false);
+    setCurrentAgentPassword(null);
+
+    const targetUser = c.user || c.user_email || c.email;
+    if (targetUser) {
+      setIsLoadingAgentPassword(true);
+      try {
+        const recorded = await getUserPasswordV2(targetUser);
+        if (recorded) {
+          setCurrentAgentPassword(recorded);
+          setAgentNewPassword(recorded);
+          setConfirmAgentPassword(recorded);
+        }
+      } catch (err) {
+        console.warn("[handleOpenCredentials] Could not load recorded password:", err);
+      } finally {
+        setIsLoadingAgentPassword(false);
+      }
+    }
   };
 
   const handleGenerateRandomPassword = () => {
@@ -269,7 +291,8 @@ export default function ContractorsPage() {
     if (!credentialsContractor) return;
     const loginUser = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email || "";
     const portalUrl = typeof window !== "undefined" ? `${window.location.origin}/login` : "Portal Login";
-    const text = `Foreign Agent Portal Credentials:\nAgency: ${credentialsContractor.contractor_name || credentialsContractor.name}\nURL: ${portalUrl}\nUsername: ${loginUser}\nPassword: ${agentNewPassword || "(Unchanged)"}`;
+    const activePwd = agentNewPassword || currentAgentPassword || "(No password set)";
+    const text = `Foreign Agent Portal Credentials:\nAgency: ${credentialsContractor.contractor_name || credentialsContractor.name}\nURL: ${portalUrl}\nUsername: ${loginUser}\nPassword: ${activePwd}`;
     navigator.clipboard.writeText(text);
     setCopiedCredentials(true);
     toast.success("Credentials copied to clipboard!");
@@ -278,16 +301,34 @@ export default function ContractorsPage() {
 
   const handleSubmitAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.company_name.trim()) return;
+    if (!formData.company_name.trim()) {
+      toast.error("Agency Name Required", {
+        description: "Foreign contractor agency name is strictly required.",
+      });
+      return;
+    }
+    if (!formData.email.trim()) {
+      toast.error("Portal Email Required", {
+        description: "User login email is strictly required to create the linked agency portal account.",
+      });
+      return;
+    }
+    if (!formData.country.trim()) {
+      toast.error("Operating Country Required", {
+        description: "Operating destination country (e.g. Saudi Arabia, Kuwait) is strictly required.",
+      });
+      return;
+    }
+
     addContractorMutation.mutate({
-      company_name: formData.company_name,
-      country: formData.country,
-      contact_person: formData.contact_person,
-      phone: formData.phone,
-      whatsapp: formData.whatsapp || formData.phone,
-      email: formData.email,
+      company_name: formData.company_name.trim(),
+      country: formData.country.trim(),
+      contact_person: formData.contact_person.trim(),
+      phone: formData.phone.trim(),
+      whatsapp: (formData.whatsapp || formData.phone).trim(),
+      email: formData.email.trim(),
       active_status: 1,
-      notes: formData.notes,
+      notes: formData.notes.trim(),
     });
   };
 
@@ -819,6 +860,34 @@ export default function ContractorsPage() {
                   <span className="text-emerald-700 dark:text-emerald-400 font-bold text-xs">
                     {credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email || "No Linked User"}
                   </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Current Password</span>
+                  {isLoadingAgentPassword ? (
+                    <span className="text-xs text-slate-400 flex items-center gap-1 font-sans">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Fetching password...
+                    </span>
+                  ) : currentAgentPassword ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-800 dark:text-amber-300 font-bold text-xs select-all">
+                        {currentAgentPassword}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(currentAgentPassword);
+                          toast.success("Password copied!");
+                        }}
+                        className="text-[10px] font-sans text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer flex items-center gap-0.5"
+                      >
+                        <Copy className="h-2.5 w-2.5" /> Copy
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-sans italic">
+                      Not yet recorded — set a password below to store it
+                    </span>
+                  )}
                 </div>
               </div>
 

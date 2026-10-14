@@ -13,7 +13,6 @@ import { requestV2 } from "./client";
 
 export type V2ComplaintResolutionStatus =
   | "Resolved"
-  | "Returned - Free Replacement Required"
   | "Escalated"
   | "Dismissed";
 
@@ -25,7 +24,7 @@ export interface V2ComplaintRecord {
   full_name?: string;
   contractor?: string;
   contractor_name?: string;
-  status: "New" | "Unresolved" | "Resolved" | "Returned - Free Replacement Required" | "Escalated" | "Dismissed" | string;
+  status: "New" | "Unresolved" | "Resolved" | "Escalated" | "Dismissed" | string;
   description: string;
   worker_status_at_complaint: string;
   days_unresolved?: number;

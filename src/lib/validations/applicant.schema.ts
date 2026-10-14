@@ -157,7 +157,10 @@ export const baseApplicantSchema = z.object({
   exam_date: z.string().optional().or(z.literal("")),
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   medical_issue_date: z.string().optional().or(z.literal("")),
-  medical_expiry_date: z.string().optional().or(z.literal("")),
+  medical_expiry_date: z
+    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
+    .optional()
+    .or(z.literal("")),
 
   // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
   target_job: z.string().trim().optional().or(z.literal("")).default("HOUSE WORKER"),
@@ -181,21 +184,10 @@ export const baseApplicantSchema = z.object({
   video_url: z.string().optional().or(z.literal("")),
   intro_video: z.string().optional().or(z.literal("")),
 
-  // Fees & Registration (Applicant Fee)
-  fee_required: optionalBoolean,
-  registration_fee_amount: optionalNumber(
-    z.number({ invalid_type_error: "Please enter a valid registration fee amount" }).min(0, "Registration fee cannot be negative")
-  ),
-  fee_type: z.enum(["Registration Fee", "Processing Fee", "Visa Fee", "Other"]).default("Registration Fee"),
-  fee_amount: optionalNumber(
-    z.number({ invalid_type_error: "Please enter a valid fee amount" }).min(0, "Fee amount cannot be negative")
-  ),
-  fee_direction: z.enum(["Income", "Expense"]).default("Income"),
-  fee_payment_date: z.string().optional().or(z.literal("")),
-  fee_expiry_date: z.string().optional().or(z.literal("")),
-  fee_status: z.enum(["Pending", "Paid", "Expired", "Refunded"]).default("Pending"),
-  fee_transaction: z.string().optional().or(z.literal("")),
-  fee_notes: z.string().optional().or(z.literal("")),
+  // Second Contact Person (Delala / Broker)
+  second_contact_name: z.string().trim().optional().or(z.literal("")),
+  second_contact_phone: z.string().trim().optional().or(z.literal("")),
+  second_contact_address: z.string().trim().optional().or(z.literal("")),
 
   // Physical & CV Attributes
   monthly_salary: z.string().trim().default("1000"),
@@ -486,8 +478,7 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
     medical_expiry_date: z
-      .string()
-      .trim()
+      .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
       .optional()
       .or(z.literal(""))
       .refine((val) => {

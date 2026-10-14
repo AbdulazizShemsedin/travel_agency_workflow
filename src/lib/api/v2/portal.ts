@@ -171,10 +171,11 @@ export async function getCandidateDetailV2(applicantName: string): Promise<any> 
 
 /**
  * Selects a candidate (creates an atomic, row-locked Placement).
+ * replacement_for: placement ID of the returned worker if this selection is a replacement.
  */
 export async function selectCandidateV2(
   applicantName: string,
-  freeReplacementForComplaint?: string,
+  replacementFor?: string,
   contractorName?: string
 ): Promise<V2SelectCandidateResponse> {
   const body: Record<string, any> = {
@@ -184,8 +185,8 @@ export async function selectCandidateV2(
     body.contractor_name = contractorName;
     body.contractor = contractorName;
   }
-  if (freeReplacementForComplaint) {
-    body.free_replacement_for_complaint = freeReplacementForComplaint;
+  if (replacementFor) {
+    body.replacement_for = replacementFor;
   }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.portal_api.select_candidate",
@@ -285,6 +286,42 @@ export async function listMyComplaintsV2(status?: string): Promise<V2MyComplaint
   const result = await requestV2<any>(
     "/api/method/agency_tracking.portal_api.list_my_complaints",
     { method: "POST", body: Object.keys(body).length > 0 ? body : undefined }
+  );
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.data)) return result.data;
+  if (result && Array.isArray(result.message)) return result.message;
+  return [];
+}
+
+export interface V2ReplacementOwedItem {
+  name: string; // placement ID
+  full_name: string;
+  passport_number: string;
+  target_job?: string;
+  employer_name?: string;
+  sponsor_name?: string;
+  departed_on?: string;
+  flight_outcome_date?: string;
+  flight_outcome_reason?: string;
+  days_waiting?: number;
+  contractor?: string;
+  contractor_name?: string;
+  [key: string]: any;
+}
+
+/**
+ * Lists candidates who returned and are owed replacements without new commission.
+ * POST /api/method/agency_tracking.portal_api.list_replacements_owed (New 2026-10-12)
+ */
+export async function listReplacementsOwedV2(contractorName?: string): Promise<V2ReplacementOwedItem[]> {
+  const body: Record<string, any> = {};
+  if (contractorName) body.contractor_name = contractorName;
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.portal_api.list_replacements_owed",
+    {
+      method: "POST",
+      body: Object.keys(body).length > 0 ? body : undefined,
+    }
   );
   if (Array.isArray(result)) return result;
   if (result && Array.isArray(result.data)) return result.data;

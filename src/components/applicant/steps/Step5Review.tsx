@@ -458,47 +458,6 @@ export function Step5Review({
             </div>
           </CardContent>
         </Card>
-
-        {/* Section 6: Financial & Application Settings */}
-        <Card className="border-slate-200/80">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-800" />
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Financials & Settings
-              </CardTitle>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onNavigateToStep(1)}
-              className="h-7 text-xs text-emerald-800 hover:bg-emerald-50 hover:text-emerald-900"
-            >
-              <Edit2 className="mr-1 h-3 w-3" /> Edit
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs">
-            <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">Fee Required:</span>
-              <span className="font-medium text-slate-900">
-                {values.fee_required ? "Yes" : "No"}
-              </span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-500">Initial Registration Fee:</span>
-              <span className="font-semibold text-slate-900">
-                ${(values.registration_fee_amount || 0).toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-slate-500">Estimated Balance:</span>
-              <span className="font-semibold text-emerald-800">
-                ${(values.registration_fee_amount || 0).toFixed(2)}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

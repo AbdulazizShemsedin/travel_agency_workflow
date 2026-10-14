@@ -666,14 +666,18 @@ export function ClearanceGridWorkspace({
                         );
                       }
 
-                      // Injaz / Wakala / Police Ashara Status Select
+                      // Injaz / Wakala / Police Ashara / Taeshir Status Select
                       if (
-                        ["injaz_payment_status", "wakala_status", "police_ashara_status"].includes(
+                        ["injaz_payment_status", "wakala_status", "police_ashara_status", "taeshir_status"].includes(
                           fieldKey
                         )
                       ) {
                         const options =
-                          fieldKey === "injaz_payment_status" || fieldKey === "wakala_status"
+                          fieldKey === "injaz_payment_status"
+                            ? ["Unpaid", "Printed", "Paid"]
+                            : fieldKey === "taeshir_status"
+                            ? ["INFORMED", "RECEIVED", "READY TO EMBASSY"]
+                            : fieldKey === "wakala_status"
                             ? ["Pending", "Paid"]
                             : ["Pending", "Scheduled", "Completed", "Failed"];
 

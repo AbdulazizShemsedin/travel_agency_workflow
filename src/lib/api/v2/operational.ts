@@ -162,11 +162,7 @@ export async function fetchOperationalWorkspaceDataV2(
         injazStep?.status === "Issued" ||
         injazStep?.status === "Approved";
 
-      const isInjazPaid =
-        (injazStep?.payment_status || "").toLowerCase().includes("paid") ||
-        (injazStep as any)?.injaz_payment_status === "Paid" ||
-        injazStep?.status === "Completed" ||
-        injazStep?.status === "Issued";
+      const isInjazPaid = (injazStep as any)?.injaz_payment_status === "Paid";
 
       const isTeshirFullyCompleted = Boolean(injazStep && isTeshirStepFinished && (!isSaudi || isInjazPaid));
 
@@ -298,11 +294,12 @@ export async function fetchOperationalWorkspaceDataV2(
         }
       }
 
+      const rawInjazPayment = String((injazStep as any)?.injaz_payment_status || "").trim();
       const injazPayment =
-        (injazStep?.payment_status || "").toLowerCase().includes("paid") ||
-        injazStep?.status === "Completed" ||
-        injazStep?.status === "Issued"
+        rawInjazPayment.toLowerCase() === "paid"
           ? "PAID"
+          : rawInjazPayment.toLowerCase() === "printed"
+          ? "PRINTED"
           : "UNPAID";
       const lmisStatus =
         lmsStep?.lmis_status ||

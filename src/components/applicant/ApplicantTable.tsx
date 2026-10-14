@@ -22,6 +22,7 @@ import {
   MoreVertical,
   Send,
   Ban,
+  Building2,
 } from "lucide-react";
 import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
 import { cancelApplicantV2, restartApplicantV2 } from "@/lib/api/v2/applicants";
@@ -29,6 +30,7 @@ import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { generateCvV2 } from "@/lib/api/v2/cv";
 import { recordSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
 import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
+import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -213,6 +215,18 @@ export function ApplicantTable() {
   const [ticketingTargetPlacement, setTicketingTargetPlacement] = React.useState<any>(null);
   const [ticketingTargetApplicantName, setTicketingTargetApplicantName] = React.useState<string>("");
   const [ticketingInitialTab, setTicketingInitialTab] = React.useState<"ticket" | "reschedule" | "medical2">("ticket");
+
+  // ── Muayena Placement Modal State ─────────────────────────────────────────
+  const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
+  const [muayenaTargetApplicant, setMuayenaTargetApplicant] = React.useState<any | null>(null);
+
+  const canCreateMuayena = React.useMemo(() => {
+    if (!authUser?.roles) return false;
+    const roleNames = authUser.roles.map(extractRoleName);
+    return roleNames.some((r) =>
+      ["admin", "manager", "system manager", "administrator", "registrar", "contract parser"].includes(r)
+    );
+  }, [authUser]);
 
   // Sync stage filter if URL parameter changes
   React.useEffect(() => {
@@ -488,6 +502,9 @@ export function ApplicantTable() {
       copy.status = derivedStage;
       copy.applicant_state = derivedStage;
       copy.is_cleared = clearedPlacementNames.has(plc.name);
+      copy.flight_outcome = plc.flight_outcome || (applicant as any).flight_outcome;
+      copy.flight_outcome_date = plc.flight_outcome_date || (applicant as any).flight_outcome_date;
+      copy.replacement_owed = plc.replacement_owed ?? (applicant as any).replacement_owed;
       // Store the active placement name so we can look up clearance steps per row
       copy._activePlacementName = plc.name;
       return copy;
@@ -1149,6 +1166,28 @@ export function ApplicantTable() {
                             </button>
                           )}
 
+                          {/* Muayena Track — Create Muayena Placement */}
+                          {Boolean(
+                            (applicant.entry_track === "Muayena" || applicant.applicant_type === "Muayena" || Boolean((applicant as any).is_muayena)) &&
+                            !(applicant as any)._activePlacementName &&
+                            canCreateMuayena &&
+                            (stage === "Draft" || stage === "Registered")
+                          ) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMuayenaTargetApplicant(applicant);
+                                setIsMuayenaModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              title="Create Muayena Placement directly with foreign agency"
+                            >
+                              <Building2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <span>Muayena</span>
+                            </button>
+                          )}
+
                           {/* Generate CV — shown for Registered stage while CV not yet generated */}
                           {stage === "Registered" && !cvGeneratedSet.has(applicant.name) && can("generateCv") && (
                             <button
@@ -1270,6 +1309,24 @@ export function ApplicantTable() {
                             </button>
                           )}
 
+                          {/* Stage: Departed with International return — Send Again */}
+                          {stage === "Departed" && (applicant as any).flight_outcome === "International return" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRestartTargetApplicant(applicant);
+                                setRestartTargetStatus("Draft");
+                                setIsRestartModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              title="Candidate returned from abroad — restart process to send again"
+                            >
+                              <RotateCcw className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <span>Send Again</span>
+                            </button>
+                          )}
+
                           {/* Three Vertical Dots Action Menu */}
                           <Popover>
                             <PopoverTrigger asChild>
@@ -1322,6 +1379,26 @@ export function ApplicantTable() {
                                   >
                                     <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                     <span>Assign Staff</span>
+                                  </button>
+                                )}
+
+                                {/* Create Muayena Placement */}
+                                {Boolean(
+                                  (applicant.entry_track === "Muayena" || applicant.applicant_type === "Muayena" || Boolean((applicant as any).is_muayena)) &&
+                                  !(applicant as any)._activePlacementName &&
+                                  canCreateMuayena
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMuayenaTargetApplicant(applicant);
+                                      setIsMuayenaModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                                  >
+                                    <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Create Muayena Placement</span>
                                   </button>
                                 )}
 
@@ -1384,6 +1461,20 @@ export function ApplicantTable() {
                                   >
                                     <RotateCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                     <span>Restore Applicant</span>
+                                  </button>
+                                ) : stage === "Departed" && (applicant as any).flight_outcome === "International return" ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setRestartTargetApplicant(applicant);
+                                      setRestartTargetStatus("Draft");
+                                      setIsRestartModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Send Again (Restart)</span>
                                   </button>
                                 ) : (
                                   <button
@@ -1730,6 +1821,28 @@ export function ApplicantTable() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Muayena Placement Modal */}
+      {isMuayenaModalOpen && muayenaTargetApplicant && (
+        <MuayenaPlacementModal
+          isOpen={isMuayenaModalOpen}
+          onClose={() => {
+            setIsMuayenaModalOpen(false);
+            setMuayenaTargetApplicant(null);
+          }}
+          applicantId={muayenaTargetApplicant.name}
+          applicantName={
+            muayenaTargetApplicant.full_name ||
+            [muayenaTargetApplicant.first_name, muayenaTargetApplicant.middle_name, muayenaTargetApplicant.last_name].filter(Boolean).join(" ") ||
+            muayenaTargetApplicant.name
+          }
+          destinationCountry={muayenaTargetApplicant.destination_country}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["applicants"] });
+            queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+          }}
+        />
+      )}
     </div>
   );
 }

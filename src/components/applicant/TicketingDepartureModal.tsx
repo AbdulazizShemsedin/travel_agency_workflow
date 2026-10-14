@@ -31,6 +31,10 @@ import {
   recordRescheduleV2,
   recordPredepartureMedicalResultV2,
   advancePlacementV2,
+  recordFlightOutcomeV2,
+  undoFlightOutcomeV2,
+  undoRescheduleV2,
+  clearPredepartureMedicalResultV2,
   V2PlacementRecord,
 } from "@/lib/api/v2/placements";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
@@ -62,14 +66,19 @@ export function TicketingDepartureModal({
   // Ticketing Form State
   const [ticketNumber, setTicketNumber] = React.useState(placement?.ticket_number || "");
   const [flightDate, setFlightDate] = React.useState(placement?.flight_date || "");
-  const [flightTime, setFlightTime] = React.useState("");
+  const [flightTime, setFlightTime] = React.useState((placement as any)?.flight_time || "");
   const [ticketCost, setTicketCost] = React.useState<string>(placement?.ticket_cost ? String(placement.ticket_cost) : "");
 
   // Reschedule Form State
   const [rescheduleDate, setRescheduleDate] = React.useState("");
+  const [rescheduleTime, setRescheduleTime] = React.useState("");
   const [rescheduleCause, setRescheduleCause] = React.useState<"Internal" | "Airport">("Internal");
   const [rescheduleCost, setRescheduleCost] = React.useState("");
   const [newTicketNumber, setNewTicketNumber] = React.useState("");
+
+  // Flight Outcome State
+  const [outcomeDate, setOutcomeDate] = React.useState(new Date().toISOString().split("T")[0]);
+  const [outcomeReason, setOutcomeReason] = React.useState("");
 
   // Medical 2 State
   const [medical2Status, setMedical2Status] = React.useState<"FIT" | "UNFIT">("FIT");
@@ -89,13 +98,18 @@ export function TicketingDepartureModal({
     setIsSubmitting(true);
     try {
       const parsedCost = ticketCost ? parseFloat(ticketCost) : undefined;
-      const fullFlightDate = flightDate ? (flightTime ? `${flightDate} ${flightTime}` : flightDate) : "";
-      const res = await recordTicketDetailsV2(placement.name, ticketNumber.trim(), fullFlightDate, parsedCost);
+      const res = await recordTicketDetailsV2(
+        placement.name,
+        ticketNumber.trim(),
+        flightDate,
+        parsedCost,
+        flightTime ? flightTime.trim() : undefined
+      );
       if (res?.warning) {
         toast.warning("Warning", { description: res.warning });
       }
       toast.success("Ticket Details Recorded", {
-        description: res?.message || `Flight details logged for placement ${placement.name}. Stage moved to Ticketed.`,
+        description: res?.message || `Flight details logged for candidate ${applicantName}. Stage moved to Ticketed.`,
       });
       onSuccess?.();
       setActiveTab("medical2");
@@ -129,10 +143,12 @@ export function TicketingDepartureModal({
         rescheduleDate,
         rescheduleCause,
         parsedCost,
-        rescheduleCause === "Internal" && newTicketNumber.trim() ? newTicketNumber.trim() : undefined
+        rescheduleCause === "Internal" && newTicketNumber.trim() ? newTicketNumber.trim() : undefined,
+        undefined,
+        rescheduleTime ? rescheduleTime.trim() : undefined
       );
       toast.success("Flight Reschedule Recorded", {
-        description: res?.message || `Placement flight rescheduled to ${rescheduleDate}.`,
+        description: res?.message || `Flight rescheduled to ${rescheduleDate}.`,
       });
       onSuccess?.();
       onClose();
@@ -140,6 +156,96 @@ export function TicketingDepartureModal({
       toast.error("Reschedule Failed", {
         description: err?.message || "Failed to record flight reschedule. Please try again.",
       });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Undo Reschedule (N9)
+  const handleUndoReschedule = async () => {
+    setIsSubmitting(true);
+    try {
+      await undoRescheduleV2(placement.name);
+      toast.success("Reschedule Undone", { description: "Flight details restored to earlier flight." });
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      toast.error("Failed to undo reschedule", { description: err?.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Clear Pre-departure Medical 2 Result (N9)
+  const handleClearMedical2 = async () => {
+    setIsSubmitting(true);
+    try {
+      await clearPredepartureMedicalResultV2(placement.name);
+      toast.success("Medical 2 Cleared", { description: "Pre-departure medical screening result reset." });
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      toast.error("Failed to clear medical result", { description: err?.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Record Local Return (N4)
+  const handleRecordLocalReturn = async () => {
+    setIsSubmitting(true);
+    try {
+      await recordFlightOutcomeV2(placement.name, "Local return", undefined, outcomeReason || undefined);
+      toast.success("Local Return Recorded", {
+        description: "Candidate did not board flight. Case remains Ticketed until rescheduled.",
+      });
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      toast.error("Failed to record Local return", { description: err?.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Record International Return (N4)
+  const handleRecordInternationalReturn = async () => {
+    if (!outcomeDate) {
+      toast.error("Return Date Required", { description: "Please enter the date candidate returned." });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await recordFlightOutcomeV2(
+        placement.name,
+        "International return",
+        outcomeDate,
+        outcomeReason || undefined
+      );
+      toast.success("International Return Recorded", {
+        description: res?.replacement_owed
+          ? "Candidate returned within 90 days. A replacement is owed."
+          : "Candidate returned 90 days or more after departure. No replacement owed.",
+      });
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      toast.error("Failed to record International return", { description: err?.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Undo Flight Outcome (N4)
+  const handleUndoFlightOutcome = async () => {
+    setIsSubmitting(true);
+    try {
+      await undoFlightOutcomeV2(placement.name);
+      toast.success("Flight Outcome Undone");
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      toast.error("Failed to undo flight outcome", { description: err?.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -214,8 +320,8 @@ export function TicketingDepartureModal({
                 Ticketing & Departure Workspace
               </DialogTitle>
             </div>
-            <Badge variant="outline" className="text-[10px] font-mono border-indigo-300 text-indigo-800 bg-indigo-50">
-              {placement.name}
+            <Badge variant="outline" className="text-[10px] border-indigo-300 text-indigo-800 bg-indigo-50 dark:bg-indigo-950 dark:text-indigo-300">
+              {placement.status || "Ticketing"}
             </Badge>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
@@ -345,7 +451,7 @@ export function TicketingDepartureModal({
         {/* Tab 2: Reschedule Form */}
         {activeTab === "reschedule" && (
           <form onSubmit={handleRecordReschedule} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">New Flight Date *</Label>
                 <Input
@@ -353,6 +459,15 @@ export function TicketingDepartureModal({
                   required
                   value={rescheduleDate}
                   onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="h-9 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">New Flight Time</Label>
+                <Input
+                  type="time"
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
                   className="h-9 text-xs"
                 />
               </div>
@@ -403,19 +518,33 @@ export function TicketingDepartureModal({
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
-              <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isSubmitting || !rescheduleDate}
-                className="bg-indigo-900 hover:bg-indigo-950 text-white font-semibold text-xs"
-              >
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                Confirm Flight Reschedule
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
+              {Boolean((placement as any)?.is_rescheduled) ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleUndoReschedule}
+                  disabled={isSubmitting}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Undo Reschedule
+                </Button>
+              ) : <div />}
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSubmitting || !rescheduleDate}
+                  className="bg-indigo-900 hover:bg-indigo-950 text-white font-semibold text-xs"
+                >
+                  {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  Confirm Flight Reschedule
+                </Button>
+              </div>
             </div>
           </form>
         )}
@@ -444,31 +573,45 @@ export function TicketingDepartureModal({
               </select>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
-              <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isSubmitting}
-                className={
-                  medical2Status === "FIT"
-                    ? "bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs"
-                    : "bg-rose-700 hover:bg-rose-800 text-white font-semibold text-xs"
-                }
-              >
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                {medical2Status === "FIT" ? "Record Medical 2 FIT" : "Record Medical 2 UNFIT"}
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
+              {Boolean(placement.medical_2_status || (placement as any)?.medical_2_result) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearMedical2}
+                  disabled={isSubmitting}
+                  className="h-8 text-xs text-rose-600 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                >
+                  Clear Medical 2 Result
+                </Button>
+              ) : <div />}
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isSubmitting}
+                  className={
+                    medical2Status === "FIT"
+                      ? "bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs"
+                      : "bg-rose-700 hover:bg-rose-800 text-white font-semibold text-xs"
+                  }
+                >
+                  {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                  {medical2Status === "FIT" ? "Record Medical 2 FIT" : "Record Medical 2 UNFIT"}
+                </Button>
+              </div>
             </div>
           </form>
         )}
 
-        {/* Tab 4: Final Departure Clearance */}
+        {/* Tab 4: Final Departure Clearance & Outcomes */}
         {activeTab === "departure" && (
           <div className="space-y-4 py-2">
-            {placement.status !== "Ticketed" && (
+            {placement.status !== "Ticketed" && placement.status !== "Departed" && (
               <div className="p-3.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
                 <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
@@ -485,38 +628,146 @@ export function TicketingDepartureModal({
               </div>
             )}
 
-            <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 space-y-2 text-xs">
-              <div className="flex items-center gap-2 font-bold text-purple-950 dark:text-purple-300">
-                <Plane className="h-4 w-4 text-purple-700" />
-                Confirm Flight Boarding & Departure
+            {placement.status === "Ticketed" && (
+              <>
+                <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 font-bold text-purple-950 dark:text-purple-300">
+                    <Plane className="h-4 w-4 text-purple-700" />
+                    Confirm Flight Boarding & Departure
+                  </div>
+                  <p className="text-slate-600 dark:text-zinc-400">
+                    Advancing to <strong>Departed</strong> marks the end of the placement clearance pipeline:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-600 dark:text-zinc-400">
+                    <li>Records official departure timestamp.</li>
+                    <li>Anchors the <strong>90-day free-replacement guarantee window</strong> for Foreign Agency complaints.</li>
+                    <li>Finalizes the placement pipeline.</li>
+                  </ul>
+                  <div className="pt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleConfirmDeparture}
+                      disabled={isSubmitting}
+                      className="bg-purple-900 hover:bg-purple-950 text-white font-semibold text-xs h-8"
+                    >
+                      {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plane className="h-3.5 w-3.5 mr-1.5" />}
+                      Confirm Final Departure
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Local Return Outcome Option */}
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-[#222228] bg-slate-50 dark:bg-[#16161c] space-y-2.5">
+                  <div className="font-semibold text-xs text-slate-800 dark:text-zinc-200">
+                    Alternative Outcome: Local Return (Did Not Fly)
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    Worker had a ticket but did not board. Case remains Ticketed until a reschedule is logged.
+                  </p>
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">Reason for Local Return (Optional)</Label>
+                    <Input
+                      value={outcomeReason}
+                      onChange={(e) => setOutcomeReason(e.target.value)}
+                      placeholder="e.g. Passenger no-show at airport"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRecordLocalReturn}
+                    disabled={isSubmitting}
+                    className="h-8 text-xs font-semibold text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+                  >
+                    Record Local Return
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {placement.status === "Departed" && (
+              <div className="space-y-4">
+                <div className="p-3.5 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                      ✓ Placement is Departed
+                    </span>
+                    {(placement as any)?.flight_outcome && (
+                      <Badge className="bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border-rose-300">
+                        {(placement as any).flight_outcome}
+                      </Badge>
+                    )}
+                  </div>
+                  {(placement as any)?.flight_outcome === "International return" && (
+                    <p className="mt-2 text-[11px] text-rose-800 dark:text-rose-300 font-medium">
+                      {(placement as any)?.replacement_owed
+                        ? "A free replacement is owed (returned within 90 days)."
+                        : "No replacement is owed (returned 90 days or more after departure)."}
+                    </p>
+                  )}
+                </div>
+
+                {/* International Return Form if not already recorded */}
+                {!(placement as any)?.flight_outcome ? (
+                  <div className="p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/40 dark:bg-rose-950/20 space-y-3">
+                    <div className="font-semibold text-xs text-rose-950 dark:text-rose-200">
+                      Record International Return (Worker Sent Back)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Return Date *</Label>
+                        <Input
+                          type="date"
+                          value={outcomeDate}
+                          onChange={(e) => setOutcomeDate(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px]">Reason for Return (Optional)</Label>
+                        <Input
+                          value={outcomeReason}
+                          onChange={(e) => setOutcomeReason(e.target.value)}
+                          placeholder="e.g. Contract terminated by sponsor"
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleRecordInternationalReturn}
+                      disabled={isSubmitting || !outcomeDate}
+                      className="h-8 text-xs font-semibold bg-rose-700 hover:bg-rose-800 text-white"
+                    >
+                      Record International Return
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUndoFlightOutcome}
+                    disabled={isSubmitting}
+                    className="h-8 text-xs text-slate-600 dark:text-zinc-300"
+                  >
+                    Undo Flight Outcome
+                  </Button>
+                )}
               </div>
-              <p className="text-slate-600 dark:text-zinc-400">
-                Advancing to <strong>Departed</strong> marks the end of the placement clearance pipeline:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-600 dark:text-zinc-400">
-                <li>Records official departure timestamp.</li>
-                <li>Anchors the <strong>90-day free-replacement guarantee window</strong> for Foreign Agency complaints.</li>
-                <li>Finalizes the placement pipeline.</li>
-              </ul>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#202028]">
               <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleConfirmDeparture}
-                disabled={isSubmitting || placement.status !== "Ticketed"}
-                className="bg-purple-900 hover:bg-purple-950 text-white font-semibold text-xs h-9 disabled:opacity-50"
-              >
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plane className="h-3.5 w-3.5 mr-1.5" />}
-                Confirm Final Departure
+                Close
               </Button>
             </div>
           </div>
-        )}
+        )}    )}
       </DialogContent>
     </Dialog>
 

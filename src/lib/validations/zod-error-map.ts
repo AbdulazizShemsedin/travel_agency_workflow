@@ -29,8 +29,9 @@ const FIELD_LABELS: Record<string, string> = {
   monthly_salary: "Monthly Salary",
   salary_amount: "Monthly Salary Amount",
   salary_currency: "Salary Currency",
-  registration_fee_amount: "Registration Fee Amount",
-  fee_amount: "Fee Amount",
+  second_contact_name: "Second Contact Person (Broker)",
+  second_contact_phone: "Second Contact Phone Number",
+  second_contact_address: "Second Contact Address",
   years_of_experience: "Years of Experience",
   graduation_year: "Graduation Year",
   contact_person_name: "Emergency Contact Name",
@@ -89,6 +90,9 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
       }
 
       if (issue.expected === "string" && (issue.received === "undefined" || issue.received === "null")) {
+        if (fieldName === "medical_expiry_date" || fieldName === "national_id") {
+          return { message: `Please enter a valid ${label.toLowerCase()} or leave blank.` };
+        }
         return { message: `${label} is required. Please fill in this information.` };
       }
 

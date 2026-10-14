@@ -265,17 +265,21 @@ export async function updateContractorV2(
 }
 
 /**
- * Fetches a single Contractor record by name, including child default_commission_rates.
+ * Fetches a single Contractor record by name via authoritative contractor_api.get_contractor.
+ * Authoritative Backend Endpoint: contractor_api.get_contractor (New 2026-10-12)
  */
 export async function getContractorV2(name: string): Promise<V2ContractorRecord | null> {
-  const result = await requestV2<any>("/api/method/frappe.client.get", {
-    method: "POST",
-    body: {
-      doctype: "Contractor",
-      name,
-    },
-  });
-  return result || null;
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.contractor_api.get_contractor",
+    {
+      method: "POST",
+      body: {
+        contractor_name: name,
+        name,
+      },
+    }
+  );
+  return result?.message || result || null;
 }
 
 /**

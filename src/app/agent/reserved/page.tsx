@@ -278,6 +278,16 @@ export default function MyReservedCandidatesPage() {
                             <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
                               ✓ Reserved ({c.status || "Selected"})
                             </Badge>
+                            {c.exchange_for && (
+                              <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[9px] font-medium">
+                                Exchange for {c.exchange_for}
+                              </Badge>
+                            )}
+                            {c.flight_outcome && (
+                              <Badge variant="outline" className="text-[9px] font-medium border-rose-300 dark:border-rose-900 text-rose-700 dark:text-rose-400">
+                                {c.flight_outcome}
+                              </Badge>
+                            )}
                             <span className="text-[10px] text-slate-400">Allocated to {effectiveContractor || "Your Agency"}</span>
                           </div>
                         </td>

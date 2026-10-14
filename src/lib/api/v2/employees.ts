@@ -146,14 +146,58 @@ export async function updateEmployeeRolesV2(
 }
 
 /**
+ * Retrieves the recorded password for a user from their User profile if available.
+ */
+export async function getUserPasswordV2(userEmail: string): Promise<string | null> {
+  try {
+    const res = await requestV2<any>("/api/method/frappe.client.get_value", {
+      method: "POST",
+      body: {
+        doctype: "User",
+        filters: { name: userEmail },
+        fieldname: ["name", "bio"],
+      },
+    });
+    const bio = res?.bio || res?.message?.bio;
+    if (typeof bio === "string" && bio.startsWith("pwd:")) {
+      return bio.slice(4);
+    }
+    return null;
+  } catch (err) {
+    console.warn("[getUserPasswordV2] Could not fetch user password:", err);
+    return null;
+  }
+}
+
+/**
+ * Saves/records the plain password into the User profile (bio field) so administrators
+ * can view and communicate credentials to staff or foreign agents.
+ */
+export async function saveUserPasswordRecordV2(userEmail: string, password: string): Promise<void> {
+  try {
+    await requestV2("/api/method/frappe.client.set_value", {
+      method: "POST",
+      body: {
+        doctype: "User",
+        name: userEmail,
+        fieldname: { bio: `pwd:${password}` },
+      },
+    });
+  } catch (err) {
+    console.warn("[saveUserPasswordRecordV2] Could not save password record:", err);
+  }
+}
+
+/**
  * Resets employee login password.
- * Uses agency_tracking.employee_api.reset_employee_password.
+ * Uses agency_tracking.employee_api.reset_employee_password and persists the password record.
  */
 export async function resetEmployeePasswordV2(
   userEmail: string,
   newPassword: string
 ): Promise<void> {
   await resetEmployeePasswordApiV2(userEmail, newPassword);
+  await saveUserPasswordRecordV2(userEmail, newPassword);
 }
 
 /**
@@ -168,11 +212,11 @@ export async function toggleEmployeeStatusV2(
 }
 
 /**
- * Permanently removes an employee account.
+ * Permanently removes or deactivates an employee account.
  * Uses agency_tracking.employee_api.delete_employee.
  */
-export async function deleteEmployeeV2(userEmail: string): Promise<void> {
-  await deleteEmployeeApiV2(userEmail);
+export async function deleteEmployeeV2(userEmail: string): Promise<DeleteEmployeeResult> {
+  return deleteEmployeeApiV2(userEmail);
 }
 
 /**
@@ -236,6 +280,9 @@ export async function createEmployeeApiV2(payload: {
       },
     }
   );
+  if (payload.password?.trim()) {
+    await saveUserPasswordRecordV2(payload.email.trim().toLowerCase(), payload.password.trim());
+  }
   return result;
 }
 
@@ -290,12 +337,22 @@ export async function toggleEmployeeStatusApiV2(
   );
 }
 
+export interface DeleteEmployeeResult {
+  status: string;
+  erased?: number;
+  enabled?: number;
+  message?: string;
+}
+
 /**
  * Deletes an employee via employee_api.delete_employee.
+ * Returns { status, erased: 1 } if no history and erased,
+ * or { status, erased: 0, enabled: 0, message } if switched off.
  */
-export async function deleteEmployeeApiV2(email: string): Promise<void> {
-  await requestV2(
+export async function deleteEmployeeApiV2(email: string): Promise<DeleteEmployeeResult> {
+  const res = await requestV2<DeleteEmployeeResult>(
     "/api/method/agency_tracking.employee_api.delete_employee",
     { method: "POST", body: { email } }
   );
+  return (res as any)?.message || res;
 }

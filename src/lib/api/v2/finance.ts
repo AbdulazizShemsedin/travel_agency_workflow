@@ -628,6 +628,27 @@ export async function settleBatchItemsV2(
 }
 
 /**
+ * Unmarks specific Commission Batch Items paid (undo settlement).
+ * Authoritative Backend Endpoint: finance_api.unsettle_batch_items (New 2026-10-12)
+ * Roles: Finance Manager, Admin
+ */
+export async function unsettleBatchItemsV2(
+  itemNames: string[],
+  reason?: string
+): Promise<{ message?: any; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.unsettle_batch_items",
+    {
+      method: "POST",
+      body: {
+        item_names: JSON.stringify(itemNames),
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
  * Marks a Commission Batch settled.
  */
 export async function settleBatchV2(
@@ -857,4 +878,126 @@ export async function fetchFxRatesNowV2(): Promise<V2FetchFxRatesNowResponse> {
     }
     throw err;
   }
+}
+
+/**
+ * Unmatches a matched statement line.
+ * Authoritative Backend Endpoint: reconciliation_api.unmatch_line (New 2026-10-12)
+ * Roles: Finance Manager, Admin
+ */
+export async function unmatchLineV2(
+  statementLineName: string,
+  reason?: string
+): Promise<{ message?: string; reopened_items?: number; [key: string]: any }> {
+  return await requestV2(
+    "/api/method/agency_tracking.reconciliation_api.unmatch_line",
+    {
+      method: "POST",
+      body: {
+        statement_line_name: statementLineName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Gets company and bank details through the authoritative endpoint.
+ * Authoritative Backend Endpoint: finance_api.get_company_settings (New 2026-10-12)
+ * Roles: Admin, Finance Manager
+ */
+export async function getCompanySettingsV2(): Promise<any> {
+  const res = await requestV2(
+    "/api/method/agency_tracking.finance_api.get_company_settings",
+    { method: "POST" }
+  );
+  return (res && "message" in res && (res as any).message) ? (res as any).message : res;
+}
+
+/**
+ * Updates company and bank details through the authoritative endpoint.
+ * Authoritative Backend Endpoint: finance_api.update_company_settings (New 2026-10-12)
+ * Roles: Admin, Finance Manager
+ */
+export async function updateCompanySettingsV2(fields: Record<string, any>): Promise<any> {
+  return await requestV2(
+    "/api/method/agency_tracking.finance_api.update_company_settings",
+    {
+      method: "POST",
+      body: fields,
+    }
+  );
+}
+
+/**
+ * Gets the backend configured time zone and current server time.
+ * Authoritative Backend Endpoint: finance_api.get_time_zone (New 2026-10-12)
+ */
+export async function getTimeZoneV2(): Promise<{ time_zone: string; now: string }> {
+  const res = await requestV2(
+    "/api/method/agency_tracking.finance_api.get_time_zone",
+    { method: "POST" }
+  );
+  return (res && "message" in res && (res as any).message) ? (res as any).message : res;
+}
+
+/**
+ * Sets the backend configured time zone (e.g. Africa/Addis_Ababa).
+ * Authoritative Backend Endpoint: finance_api.set_time_zone (New 2026-10-12)
+ * Roles: Admin
+ */
+export async function setTimeZoneV2(timeZone: string): Promise<any> {
+  return await requestV2(
+    "/api/method/agency_tracking.finance_api.set_time_zone",
+    {
+      method: "POST",
+      body: { time_zone: timeZone },
+    }
+  );
+}
+
+/**
+ * Uploads company logo or stamp image via multipart/form-data.
+ * Authoritative Backend Endpoint: finance_api.set_company_image (New 2026-10-12)
+ * Roles: Admin, Finance Manager
+ */
+export async function setCompanyImageV2(
+  file: File,
+  kind: "logo" | "stamp"
+): Promise<any> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("kind", kind);
+
+  return await requestV2(
+    "/api/method/agency_tracking.finance_api.set_company_image",
+    {
+      method: "POST",
+      body: formData,
+      isMultipart: true,
+    }
+  );
+}
+
+export interface V2PermissionTableRow {
+  area: string;
+  action: string;
+  roles: string | string[];
+  endpoint?: string;
+}
+
+/**
+ * Gets the read-only permissions table describing who can do what.
+ * Authoritative Backend Endpoint: api_docs.get_permission_table (New 2026-10-12)
+ * Roles: Admin, Manager
+ */
+export async function getPermissionTableV2(): Promise<V2PermissionTableRow[]> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.api_docs.get_permission_table",
+    { method: "POST" }
+  );
+  const payload = (res && "message" in res && (res as any).message) ? (res as any).message : res;
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  return [];
 }

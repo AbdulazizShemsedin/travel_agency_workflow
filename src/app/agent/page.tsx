@@ -3,6 +3,7 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
   Search,
@@ -18,6 +19,7 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Undo2,
+  Repeat,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -63,6 +65,11 @@ const CandidateDetailModal = dynamic(
 );
 
 export default function AgentDiscoveryPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const replacementFor = searchParams.get("replacement_for");
+  const replacementName = searchParams.get("replacement_name");
+
   const queryClient = useQueryClient();
   const { authUser, agencyContext } = useAuth();
 
@@ -259,7 +266,11 @@ export default function AgentDiscoveryPage() {
           // Ignore
         }
       }
-      return await selectCandidateV2(candidate.name, undefined, targetContractor || undefined);
+      return await selectCandidateV2(
+        candidate.name,
+        replacementFor || undefined,
+        targetContractor || undefined
+      );
     },
     onSuccess: (res, candidate) => {
       setSelectingCandidateId(null);
@@ -270,9 +281,11 @@ export default function AgentDiscoveryPage() {
         setSelectedCandidateForDetail(null);
       }
 
-      setSuccessToast(
-        `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved successfully. State advanced to Selected.`
-      );
+      const successToastMsg = replacementFor
+        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}. State advanced to Selected.`
+        : `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved successfully. State advanced to Selected.`;
+
+      setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
 
       // Set up the 7-second undo window for the foreign agent
@@ -491,6 +504,38 @@ export default function AgentDiscoveryPage() {
                 ✕
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Replacement Mode Indicator */}
+        {replacementFor && (
+          <div className="rounded-2xl border border-amber-300 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 items-center justify-center shrink-0">
+                <Repeat className="h-5 w-5" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-600 text-white font-bold text-[10px]">
+                    Replacement Mode
+                  </Badge>
+                  <span className="text-xs font-bold text-amber-950 dark:text-amber-200">
+                    Exchanging for: {replacementName || "Returned Candidate"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 mt-0.5">
+                  Select any available applicant below to fulfill the owed replacement. No commission will be accrued.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push("/agent")}
+              className="h-8 text-xs font-semibold border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 shrink-0"
+            >
+              Cancel Replacement Mode
+            </Button>
           </div>
         )}
 

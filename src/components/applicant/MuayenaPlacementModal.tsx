@@ -25,6 +25,7 @@ interface MuayenaPlacementModalProps {
   onClose: () => void;
   applicantId: string;
   applicantName: string;
+  destinationCountry?: string;
   onSuccess?: () => void;
 }
 
@@ -33,6 +34,7 @@ export function MuayenaPlacementModal({
   onClose,
   applicantId,
   applicantName,
+  destinationCountry,
   onSuccess,
 }: MuayenaPlacementModalProps) {
   const [contractorName, setContractorName] = React.useState<string>("");
@@ -58,6 +60,16 @@ export function MuayenaPlacementModal({
     enabled: isOpen,
   });
 
+  // Filter contractors strictly by applicant's destination country
+  const filteredContractors = React.useMemo(() => {
+    if (!destinationCountry || !destinationCountry.trim()) return contractors;
+    const destNorm = destinationCountry.trim().toLowerCase();
+    return contractors.filter((c) => {
+      const cCountry = (c.destination_country || c.country || "").trim().toLowerCase();
+      return cCountry === destNorm;
+    });
+  }, [contractors, destinationCountry]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contractorName.trim()) {
@@ -75,7 +87,7 @@ export function MuayenaPlacementModal({
 
       const res = await createMuayenaPlacementV2(applicantId, contractorName.trim(), fileUrl);
       toast.success("Muayena Placement Created", {
-        description: res?.message || `Placement ${res.name || res.placement_name || ""} generated at Selected stage.`,
+        description: res?.message || "Placement generated at Selected stage.",
       });
       onSuccess?.();
       onClose();
@@ -99,21 +111,36 @@ export function MuayenaPlacementModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-            Bind candidate directly to a contractor.
+            Bind candidate directly to an authorized foreign recruitment agency.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="p-3 rounded-lg border border-slate-200 dark:border-[#222228] bg-slate-50/50 dark:bg-[#171720] text-xs space-y-1">
-            <span className="text-slate-500">Candidate:</span>
+          <div className="p-3 rounded-lg border border-slate-200 dark:border-[#222228] bg-slate-50/50 dark:bg-[#171720] text-xs space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Candidate:</span>
+              {destinationCountry && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  {destinationCountry}
+                </span>
+              )}
+            </div>
             <div className="font-bold text-slate-900 dark:text-white">
               {applicantName}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Foreign Agency Contractor *</Label>
-            {contractors.length > 0 ? (
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">Foreign Agency Contractor *</Label>
+              {destinationCountry && (
+                <span className="text-[10px] text-slate-400">
+                  Showing {destinationCountry} agencies only
+                </span>
+              )}
+            </div>
+
+            {filteredContractors.length > 0 ? (
               <select
                 value={contractorName}
                 onChange={(e) => setContractorName(e.target.value)}
@@ -121,18 +148,26 @@ export function MuayenaPlacementModal({
                 className="select-styled flex h-9 w-full rounded-lg border border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] px-3 py-1.5 text-xs text-slate-900 dark:text-zinc-100 shadow-xs"
               >
                 <option value="">Select an international partner...</option>
-                {contractors.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.company_name || c.name} ({c.destination_country || c.country || "International"})
-                  </option>
-                ))}
+                {filteredContractors.map((c) => {
+                  const label = c.company_name || c.contractor_name || c.name;
+                  const countryLabel = c.destination_country || c.country || "International";
+                  return (
+                    <option key={c.name} value={c.name}>
+                      {label} ({countryLabel})
+                    </option>
+                  );
+                })}
               </select>
+            ) : destinationCountry ? (
+              <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300">
+                No foreign agencies registered for <strong>{destinationCountry}</strong>. A Muayena placement requires an agency registered under this destination country.
+              </div>
             ) : (
               <Input
                 required
                 value={contractorName}
                 onChange={(e) => setContractorName(e.target.value)}
-                placeholder="e.g. CON-00001 or Al-Safwa Agency"
+                placeholder="e.g. Al-Safwa Recruitment Agency"
                 className="h-9 text-xs"
               />
             )}

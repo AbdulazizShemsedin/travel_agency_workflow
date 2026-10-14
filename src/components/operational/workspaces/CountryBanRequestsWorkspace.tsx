@@ -14,10 +14,12 @@ import {
   Loader2,
   AlertCircle,
   FileText,
+  RotateCcw,
 } from "lucide-react";
 import {
   listCountryBanRequestsV2,
   decideCountryBanRequestV2,
+  undoCountryBanDecisionV2,
   V2CountryBanRequestItem,
 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -101,6 +103,25 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
     },
     onError: (err: any) => {
       toast.error(err?.message || `Failed to ${decisionType.toLowerCase()} ban request.`);
+    },
+  });
+
+  const undoDecisionMutation = useMutation({
+    mutationFn: async (requestName: string) => {
+      return await undoCountryBanDecisionV2(requestName);
+    },
+    onSuccess: (res) => {
+      toast.success(res?.message || "Ban decision undone successfully. Request is now Pending.");
+      queryClient.invalidateQueries({ queryKey: ["v2_country_ban_requests"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicant"] });
+      refetch();
+      if (onRefresh) onRefresh();
+    },
+    onError: (err: any) => {
+      toast.error("Failed to undo ban decision", {
+        description: err?.message || "Could not undo decision. The one-time pass may already be used.",
+      });
     },
   });
 
@@ -319,6 +340,22 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
                             className="h-7 px-2.5 text-xs font-semibold"
                           >
                             <XCircle className="h-3 w-3 mr-1" /> Reject
+                          </Button>
+                        </div>
+                      ) : (isApproved || isRejected) && isManagerOrAdmin ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {isApproved ? "One-time pass active" : "Rejected"}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => undoDecisionMutation.mutate(req.name)}
+                            disabled={undoDecisionMutation.isPending}
+                            className="h-6 px-2 text-[10px] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                            title="Undo this decision and return request to Pending"
+                          >
+                            <RotateCcw className="h-2.5 w-2.5 mr-1" /> Undo
                           </Button>
                         </div>
                       ) : (

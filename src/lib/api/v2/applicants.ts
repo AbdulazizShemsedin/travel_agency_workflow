@@ -351,6 +351,14 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     }
   }
 
+  // 12. Optional date fields - strip empty string so backend date parser does not fail
+  if (result.medical_expiry_date === "" || result.medical_expiry_date === null) {
+    delete result.medical_expiry_date;
+  }
+  if (result.medical_issue_date === "" || result.medical_issue_date === null) {
+    delete result.medical_issue_date;
+  }
+
   return result as T;
 }
 
@@ -818,26 +826,47 @@ export async function decideCountryBanRequestV2(
 }
 
 /**
- * Manually logs the candidate Registration Fee to the Finance ledger.
+ * Undoes a lifted country ban, making the ban active again.
+ * Authoritative Backend Endpoint: applicant_api.undo_country_ban_lift (New 2026-10-12)
+ * Roles: Manager, Admin
  */
-export async function logApplicantFeeV2(
-  applicantName: string
+export async function undoCountryBanLiftV2(
+  banName: string,
+  reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.applicant_api.log_applicant_fee",
-      {
-        method: "POST",
-        body: { applicant_name: applicantName },
-      }
-    );
-  } catch (err: any) {
-    if (String(err?.message || "").includes("already logged")) {
-      return { message: err.message, status: "Already Logged" };
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.undo_country_ban_lift",
+    {
+      method: "POST",
+      body: {
+        ban_name: banName,
+        ...(reason ? { reason } : {}),
+      },
     }
-    throw err;
-  }
+  );
 }
+
+/**
+ * Undoes a country ban request decision (Approved / Rejected).
+ * Authoritative Backend Endpoint: applicant_api.undo_country_ban_decision (New 2026-10-12)
+ * Roles: Manager, Admin
+ */
+export async function undoCountryBanDecisionV2(
+  requestName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.undo_country_ban_decision",
+    {
+      method: "POST",
+      body: {
+        request_name: requestName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
 
 export interface UniquenessCheckResult {
   isConflict: boolean;

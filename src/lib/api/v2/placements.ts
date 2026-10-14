@@ -285,7 +285,8 @@ export async function recordTicketDetailsV2(
   placementName: string,
   ticketNumber: string,
   flightDate: string,
-  ticketCost?: number
+  ticketCost?: number,
+  flightTime?: string
 ): Promise<{ message?: string; warning?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_ticket_details",
@@ -297,6 +298,7 @@ export async function recordTicketDetailsV2(
         flight_date: flightDate,
         currency: "ETB",
         ...(ticketCost !== undefined ? { ticket_cost: ticketCost } : {}),
+        ...(flightTime !== undefined ? { flight_time: flightTime } : {}),
       },
     }
   );
@@ -314,7 +316,8 @@ export async function recordRescheduleV2(
   rescheduleCause: "Internal" | "Airport",
   rescheduleCost?: number,
   ticketNumber?: string,
-  transaction?: string
+  transaction?: string,
+  flightTime?: string
 ): Promise<{ message?: string; reschedule_transaction?: string; [key: string]: any }> {
   return requestV2(
     "/api/method/agency_tracking.placement_api.record_reschedule",
@@ -328,6 +331,158 @@ export async function recordRescheduleV2(
         ...(rescheduleCause === "Internal" && rescheduleCost !== undefined ? { reschedule_cost: rescheduleCost } : {}),
         ...(ticketNumber ? { ticket_number: ticketNumber } : {}),
         ...(transaction ? { transaction } : {}),
+        ...(flightTime !== undefined ? { flight_time: flightTime } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Updates LMIS employer and contract fields on a Placement.
+ * Authoritative Backend Endpoint: placement_api.update_placement_for_lmis (New 2026-10-11)
+ * Roles: Saudi LMIS, Kuwait LMIS, Manager, Admin
+ */
+export async function updatePlacementForLmisV2(
+  placementName: string,
+  fields: {
+    employer_city?: string;
+    employer_house_number?: string;
+    employer_phone?: string;
+    employer_alt_phone?: string;
+    contract_start_date?: string;
+    contract_end_date?: string;
+  }
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.update_placement_for_lmis",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...fields,
+      },
+    }
+  );
+}
+
+/**
+ * Records flight outcome: "Local return" (at Ticketed) or "International return" (at Departed).
+ * Authoritative Backend Endpoint: placement_api.record_flight_outcome (New 2026-10-12)
+ * Roles: Ticketer, Manager, Admin
+ */
+export async function recordFlightOutcomeV2(
+  placementName: string,
+  outcome: "Local return" | "International return" | string,
+  outcomeDate?: string,
+  reason?: string
+): Promise<{ message?: string; replacement_owed?: number; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.record_flight_outcome",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        outcome,
+        ...(outcomeDate ? { outcome_date: outcomeDate } : {}),
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Undoes a previously recorded flight outcome.
+ * Authoritative Backend Endpoint: placement_api.undo_flight_outcome (New 2026-10-12)
+ */
+export async function undoFlightOutcomeV2(
+  placementName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.undo_flight_outcome",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Clears a pre-departure medical result.
+ * Authoritative Backend Endpoint: placement_api.clear_predeparture_medical_result (New 2026-10-12)
+ */
+export async function clearPredepartureMedicalResultV2(
+  placementName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.clear_predeparture_medical_result",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Undoes a flight reschedule.
+ * Authoritative Backend Endpoint: placement_api.undo_reschedule (New 2026-10-12)
+ */
+export async function undoRescheduleV2(
+  placementName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.undo_reschedule",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Waives replacement owed for a returned worker (Manager / Admin).
+ * Authoritative Backend Endpoint: placement_api.waive_replacement (New 2026-10-12)
+ */
+export async function waiveReplacementV2(
+  placementName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.waive_replacement",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Undoes waiver of replacement.
+ * Authoritative Backend Endpoint: placement_api.undo_waive_replacement (New 2026-10-12)
+ */
+export async function undoWaiveReplacementV2(
+  placementName: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.undo_waive_replacement",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
       },
     }
   );

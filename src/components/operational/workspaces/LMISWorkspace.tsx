@@ -50,6 +50,7 @@ import {
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
+import { updatePlacementForLmisV2 } from "@/lib/api/v2/placements";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
@@ -85,7 +86,6 @@ export function LMISWorkspace({
 
   const isStrictAdmin = Boolean(
     (authUser?.email || "").toLowerCase() === "administrator" ||
-      (authUser?.email || "").toLowerCase() === "admin" ||
       (roles || []).some((r: any) =>
         ["admin", "administrator", "system manager"].includes(
           String(r).trim().toLowerCase()
@@ -127,12 +127,21 @@ export function LMISWorkspace({
   const [modalEmergencyPhone, setModalEmergencyPhone] = React.useState("");
   const [modalCocStatus, setModalCocStatus] = React.useState("Not Started");
   const [modalEmployee, setModalEmployee] = React.useState("");
+  const [modalOtherStatus, setModalOtherStatus] = React.useState("");
+  const [modalTakenByAgency, setModalTakenByAgency] = React.useState("");
+  const [modalTakenByPhone, setModalTakenByPhone] = React.useState("");
 
   // Rejection Modal State (for in-cell or column selection of REJECTED)
   const [isRejectionModalOpen, setIsRejectionModalOpen] = React.useState(false);
   const [rejectionRow, setRejectionRow] = React.useState<WorkspaceApplicantRow | null>(null);
   const [selectedRejectionReasons, setSelectedRejectionReasons] = React.useState<string[]>([]);
   const [isSavingRejection, setIsSavingRejection] = React.useState(false);
+
+  // OTHER Modal State (for in-cell selection of OTHER)
+  const [isOtherModalOpen, setIsOtherModalOpen] = React.useState(false);
+  const [otherRow, setOtherRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  const [otherStatusText, setOtherStatusText] = React.useState("");
+  const [isSavingOther, setIsSavingOther] = React.useState(false);
 
   // Kuwait Police Ashara fields
   const [policeAsharaDate, setPoliceAsharaDate] = React.useState("");
@@ -145,6 +154,14 @@ export function LMISWorkspace({
   const [reopenTargetStatus, setReopenTargetStatus] = React.useState<
     "In Progress" | "Pending"
   >("In Progress");
+
+  // Placement Contract Fields (N8)
+  const [modalEmployerCity, setModalEmployerCity] = React.useState("");
+  const [modalEmployerHouseNo, setModalEmployerHouseNo] = React.useState("00");
+  const [modalEmployerPhone, setModalEmployerPhone] = React.useState("");
+  const [modalEmployerAltPhone, setModalEmployerAltPhone] = React.useState("");
+  const [modalContractStartDate, setModalContractStartDate] = React.useState("");
+  const [modalContractEndDate, setModalContractEndDate] = React.useState("");
 
   // Sync edit modal state when editingRow changes
   React.useEffect(() => {
@@ -191,6 +208,18 @@ export function LMISWorkspace({
       editingRow.cocStatus || (editingRow.applicant as any)?.coc_status || "Not Started"
     );
     setModalEmployee(lms?.assigned_officer || lms?.employee || "");
+    setModalOtherStatus(lms?.lmis_other_status || "");
+    setModalTakenByAgency(lms?.lmis_taken_by_agency || "");
+    setModalTakenByPhone(lms?.lmis_taken_by_phone || "");
+
+    // Populate contract fields
+    const plm = (editingRow.placement as any) || {};
+    setModalEmployerCity(plm?.employer_city || "");
+    setModalEmployerHouseNo(plm?.employer_house_number || "00");
+    setModalEmployerPhone(plm?.employer_phone || "");
+    setModalEmployerAltPhone(plm?.employer_alt_phone || "");
+    setModalContractStartDate(plm?.contract_start_date || new Date().toISOString().split("T")[0]);
+    setModalContractEndDate(plm?.contract_end_date || "");
   }, [editingRow]);
 
   // In-cell quick update helper: Applicant fields (Labor ID, National ID, Emergency Contacts, COC)
@@ -253,6 +282,13 @@ export function LMISWorkspace({
       return;
     }
 
+    if (newStatus === "OTHER") {
+      setOtherRow(row);
+      setOtherStatusText((row.lms as any)?.lmis_other_status || "");
+      setIsOtherModalOpen(true);
+      return;
+    }
+
     try {
       await setLmisStatusV2(stepName, newStatus, undefined, row.laborId || undefined);
       toast.success(`LMIS status updated to ${newStatus}`);
@@ -264,6 +300,41 @@ export function LMISWorkspace({
     } catch (err: any) {
       toast.error(err?.message || "Failed to update clearance status");
       throw err;
+    }
+  };
+
+  const handleConfirmOther = async () => {
+    if (!otherRow) return;
+    if (!otherStatusText.trim()) {
+      toast.error("Please enter a custom status description.");
+      return;
+    }
+    const stepName = otherRow.clearanceStepName || otherRow.lms?.name;
+    if (!stepName) return;
+
+    try {
+      setIsSavingOther(true);
+      await setLmisStatusV2(
+        stepName,
+        "OTHER",
+        undefined,
+        otherRow.laborId || undefined,
+        undefined,
+        otherStatusText.trim().slice(0, 140)
+      );
+      toast.success("LMIS status updated to OTHER");
+      setIsOtherModalOpen(false);
+      setOtherRow(null);
+      setOtherStatusText("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["v2_clearance_steps_queue"] }),
+      ]);
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update status");
+    } finally {
+      setIsSavingOther(false);
     }
   };
 
@@ -357,6 +428,23 @@ export function LMISWorkspace({
         coc_status: cleanCoc,
       });
 
+      // Save placement contract fields if linked placement exists (N8)
+      const placementName = editingRow.placementId || editingRow.dsrName;
+      if (placementName) {
+        try {
+          await updatePlacementForLmisV2(placementName, {
+            employer_city: modalEmployerCity.trim() || undefined,
+            employer_house_number: modalEmployerHouseNo.trim() || undefined,
+            employer_phone: modalEmployerPhone.trim() || undefined,
+            employer_alt_phone: modalEmployerAltPhone.trim() || undefined,
+            contract_start_date: modalContractStartDate || undefined,
+            contract_end_date: modalContractEndDate || undefined,
+          });
+        } catch (e) {
+          console.warn("Could not save placement contract fields:", e);
+        }
+      }
+
       // 2. Kuwait Police Ashara if applicable
       if (isKuwait && stepName) {
         if (policeAsharaStatus === "Failed" && !policeAsharaRemark.trim()) {
@@ -390,13 +478,30 @@ export function LMISWorkspace({
             safeLabor,
             modalIssuedOn || undefined
           );
+        } else if (modalStatus === "OTHER") {
+          if (!modalOtherStatus.trim()) {
+            throw new Error("Status description is required when LMIS status is OTHER.");
+          }
+          await setLmisStatusV2(
+            stepName,
+            "OTHER",
+            undefined,
+            safeLabor,
+            modalIssuedOn || undefined,
+            modalOtherStatus.trim().slice(0, 140),
+            modalTakenByAgency.trim() || undefined,
+            modalTakenByPhone.trim() || undefined
+          );
         } else if (modalStatus === "ISSUED") {
           await setLmisStatusV2(
             stepName,
             "ISSUED",
             undefined,
             safeLabor,
-            modalIssuedOn || undefined
+            modalIssuedOn || undefined,
+            undefined,
+            modalTakenByAgency.trim() || undefined,
+            modalTakenByPhone.trim() || undefined
           );
         } else if (modalStatus && modalStatus !== "Pending") {
           await setLmisStatusV2(
@@ -404,7 +509,10 @@ export function LMISWorkspace({
             modalStatus,
             undefined,
             safeLabor,
-            modalIssuedOn || undefined
+            modalIssuedOn || undefined,
+            undefined,
+            modalTakenByAgency.trim() || undefined,
+            modalTakenByPhone.trim() || undefined
           );
         }
 
@@ -967,6 +1075,107 @@ export function LMISWorkspace({
                 )}
               </div>
 
+              {modalStatus === "OTHER" && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs font-semibold text-violet-700">
+                    Custom Status Description * (up to 140 characters)
+                  </Label>
+                  <Input
+                    maxLength={140}
+                    value={modalOtherStatus}
+                    onChange={(e) => setModalOtherStatus(e.target.value)}
+                    placeholder="Enter custom working status..."
+                    className="h-8 text-xs border-violet-300 focus:border-violet-600"
+                  />
+                </div>
+              )}
+
+              {["NO FILE & TAKEN", "HAVE FILE & TAKEN", "TAKEN"].includes(modalStatus) && (
+                <div className="grid grid-cols-2 gap-2 sm:col-span-2 p-2.5 rounded-lg border border-slate-200 dark:border-[#26262f] bg-slate-50/50 dark:bg-[#15151a]">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Taken By Agency (Optional)</Label>
+                    <Input
+                      value={modalTakenByAgency}
+                      onChange={(e) => setModalTakenByAgency(e.target.value)}
+                      placeholder="Agency name"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Taken By Phone (Optional)</Label>
+                    <Input
+                      value={modalTakenByPhone}
+                      onChange={(e) => setModalTakenByPhone(e.target.value)}
+                      placeholder="Phone number"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Contract Terms & Employer Info (N8) */}
+              <div className="sm:col-span-2 p-3 rounded-xl border border-slate-200 dark:border-[#26262e] bg-slate-50/50 dark:bg-[#15151c] space-y-2.5">
+                <span className="font-bold text-[11px] uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                  LMIS Contract Terms & Employer Info
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Employer City</Label>
+                    <Input
+                      value={modalEmployerCity}
+                      onChange={(e) => setModalEmployerCity(e.target.value)}
+                      placeholder="e.g. Riyadh"
+                      className="h-7 text-xs bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Employer House No.</Label>
+                    <Input
+                      value={modalEmployerHouseNo}
+                      onChange={(e) => setModalEmployerHouseNo(e.target.value)}
+                      placeholder="00"
+                      className="h-7 text-xs font-mono bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Employer Phone</Label>
+                    <Input
+                      value={modalEmployerPhone}
+                      onChange={(e) => setModalEmployerPhone(e.target.value)}
+                      placeholder="+966 5..."
+                      className="h-7 text-xs font-mono bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Employer Alt Phone</Label>
+                    <Input
+                      value={modalEmployerAltPhone}
+                      onChange={(e) => setModalEmployerAltPhone(e.target.value)}
+                      placeholder="Alt phone"
+                      className="h-7 text-xs font-mono bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Contract Begins</Label>
+                    <Input
+                      type="date"
+                      value={modalContractStartDate}
+                      onChange={(e) => setModalContractStartDate(e.target.value)}
+                      className="h-7 text-xs bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] font-semibold">Contract Ends</Label>
+                    <Input
+                      type="date"
+                      value={modalContractEndDate}
+                      onChange={(e) => setModalContractEndDate(e.target.value)}
+                      className="h-7 text-xs bg-white dark:bg-[#101014]"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs font-semibold">Ministry Issued Date</Label>
                 <Input
@@ -1239,6 +1448,68 @@ export function LMISWorkspace({
               className="h-8 text-xs font-semibold bg-rose-700 hover:bg-rose-800 text-white shadow-xs"
             >
               {isSavingRejection ? "Saving..." : "Confirm Rejection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* LMIS OTHER Custom Status Modal */}
+      <Dialog
+        open={isOtherModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsOtherModalOpen(false);
+            setOtherRow(null);
+            setOtherStatusText("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-[#121217] border border-slate-200 dark:border-[#222228]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+              Custom LMIS Status
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+              Enter the office working status for <strong className="uppercase">{otherRow?.fullName}</strong> (up to 140 characters).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-3 text-xs">
+            <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Custom Status Description *
+            </Label>
+            <Input
+              maxLength={140}
+              value={otherStatusText}
+              onChange={(e) => setOtherStatusText(e.target.value)}
+              placeholder="e.g. Waiting for ministry re-submission..."
+              className="h-8 text-xs"
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter className="border-t pt-3 flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setIsOtherModalOpen(false);
+                setOtherRow(null);
+                setOtherStatusText("");
+              }}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSavingOther || !otherStatusText.trim()}
+              onClick={handleConfirmOther}
+              className="h-8 text-xs font-semibold bg-violet-700 hover:bg-violet-800 text-white shadow-xs"
+            >
+              {isSavingOther ? "Saving..." : "Save Status"}
             </Button>
           </DialogFooter>
         </DialogContent>

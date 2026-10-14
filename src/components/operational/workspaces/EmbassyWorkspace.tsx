@@ -44,6 +44,7 @@ import {
   reassignClearanceStepV2,
   reopenClearanceStepV2,
   recordWakalaPaymentV2,
+  setVisaIssueDateV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, updateApplicantV2, getApplicantV2 } from "@/lib/api/v2/applicants";
 import { updatePlacementParsedFieldsV2 } from "@/lib/api/v2/placements";
@@ -82,7 +83,6 @@ export function EmbassyWorkspace({
     : null;
   const isStrictAdmin = Boolean(
     (authUser?.email || "").toLowerCase() === "administrator" ||
-      (authUser?.email || "").toLowerCase() === "admin" ||
       (roles || []).some((r: any) =>
         ["admin", "administrator", "system manager"].includes(
           String(r).trim().toLowerCase()
@@ -111,6 +111,7 @@ export function EmbassyWorkspace({
     "Pending" | "Submitted" | "Approved" | "Rejected"
   >("Pending");
   const [modalSubmissionDate, setModalSubmissionDate] = React.useState("");
+  const [modalVisaIssueDate, setModalVisaIssueDate] = React.useState("");
   const [modalStampNumber, setModalStampNumber] = React.useState("");
   const [modalStampDate, setModalStampDate] = React.useState("");
   const [modalRejectionRemark, setModalRejectionRemark] = React.useState("");
@@ -144,7 +145,8 @@ export function EmbassyWorkspace({
       setModalStatus("Pending");
     }
 
-    setModalSubmissionDate(embassy?.date_started || embassy?.submission_date || "");
+    setModalSubmissionDate((embassy as any)?.date_submitted || embassy?.date_started || embassy?.submission_date || "");
+    setModalVisaIssueDate((embassy as any)?.visa_issue_date || "");
     setModalEmployee(embassy?.assigned_officer || embassy?.employee || "");
     setModalStampNumber(editingRow.visaNumber || (editingRow.applicant as any)?.visa_number || "");
     setModalStampDate(editingRow.appointmentDate || (editingRow.applicant as any)?.stamp_date || "");
@@ -302,7 +304,8 @@ export function EmbassyWorkspace({
             if (isAdmin && confirmUnpaidWakala) {
               await submitEmbassyStepV2(
                 stepName,
-                wakalaOverrideReason.trim() || "Manager manual override for unpaid Wakala"
+                wakalaOverrideReason.trim() || "Manager manual override for unpaid Wakala",
+                modalSubmissionDate || undefined
               );
             } else {
               throw new Error(
@@ -310,7 +313,7 @@ export function EmbassyWorkspace({
               );
             }
           } else {
-            await submitEmbassyStepV2(stepName);
+            await submitEmbassyStepV2(stepName, undefined, modalSubmissionDate || undefined);
           }
         } else if (modalStatus === "Rejected") {
           if (!modalRejectionRemark.trim()) {
@@ -323,6 +326,28 @@ export function EmbassyWorkspace({
           !isEmbassyTerminal(stepStatus)
         ) {
           await startClearanceStepV2(stepName);
+        }
+
+        // Correct submission date if step already submitted/stamped/rejected
+        if (
+          modalSubmissionDate &&
+          (stepStatus === "Submitted" || isEmbassyTerminal(stepStatus)) &&
+          modalStatus !== "Pending"
+        ) {
+          try {
+            await submitEmbassyStepV2(stepName, undefined, modalSubmissionDate);
+          } catch (dErr) {
+            console.warn("Date submitted correction notice:", dErr);
+          }
+        }
+
+        // Save visa issue date if provided
+        if (modalVisaIssueDate) {
+          try {
+            await setVisaIssueDateV2(stepName, modalVisaIssueDate);
+          } catch (vErr) {
+            console.warn("Visa issue date save notice:", vErr);
+          }
         }
 
         // Wakala Status toggle (without fee amount or payment date)
@@ -529,7 +554,11 @@ export function EmbassyWorkspace({
       width: "140px",
       editable: true,
       cell: (row) => {
-        const subDate = row.embassy?.date_started || row.embassy?.submission_date || "";
+        const subDate =
+          (row.embassy as any)?.date_submitted ||
+          row.embassy?.date_started ||
+          row.embassy?.submission_date ||
+          "";
         return (
           <ExcelDateInput
             value={subDate}
@@ -537,12 +566,78 @@ export function EmbassyWorkspace({
             onSave={async (val) => {
               const stepName = row.clearanceStepName || row.embassy?.name;
               if (stepName && val) {
-                await submitEmbassyStepV2(stepName);
+                await submitEmbassyStepV2(stepName, undefined, val);
                 toast.success("Submission date updated");
                 onRefresh();
               }
             }}
           />
+        );
+      },
+    },
+    {
+      id: "visaIssueDate",
+      header: "VISA ISSUED ON",
+      width: "140px",
+      editable: true,
+      cell: (row) => {
+        const issueDate = (row.embassy as any)?.visa_issue_date || "";
+        return (
+          <ExcelDateInput
+            value={issueDate}
+            disabled={!canEdit}
+            onSave={async (val) => {
+              const stepName = row.clearanceStepName || row.embassy?.name;
+              if (stepName) {
+                await setVisaIssueDateV2(stepName, val);
+                toast.success("Visa issue date updated");
+                onRefresh();
+              }
+            }}
+          />
+        );
+      },
+    },
+    {
+      id: "visaDeadline",
+      header: "VISA VALID UNTIL",
+      width: "155px",
+      align: "center",
+      isReadOnly: true,
+      cell: (row) => {
+        const deadline = (row.embassy as any)?.visa_deadline || "";
+        if (!deadline) return <span className="text-slate-400 font-mono text-xs">—</span>;
+
+        const deadlineDate = new Date(deadline);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        deadlineDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil(
+          (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        return (
+          <div className="flex flex-col items-center">
+            <span className="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-200">
+              {deadline}
+            </span>
+            <span
+              className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5",
+                diffDays < 0
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
+                  : diffDays <= 7
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+              )}
+            >
+              {diffDays < 0
+                ? `${Math.abs(diffDays)}d expired`
+                : diffDays === 0
+                ? "Expires today"
+                : `${diffDays}d remaining`}
+            </span>
+          </div>
         );
       },
     },
@@ -988,6 +1083,19 @@ export function EmbassyWorkspace({
                   value={modalStampDate}
                   disabled={!canEdit || modalSaveMutation.isPending}
                   onChange={(e) => setModalStampDate(e.target.value)}
+                  className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                />
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                  Visa Issue Date (Issued On)
+                </Label>
+                <Input
+                  type="date"
+                  value={modalVisaIssueDate}
+                  disabled={!canEdit || modalSaveMutation.isPending}
+                  onChange={(e) => setModalVisaIssueDate(e.target.value)}
                   className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
                 />
               </div>

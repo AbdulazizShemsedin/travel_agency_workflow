@@ -76,7 +76,6 @@ export function DepartureWorkspace({
     : null;
   const isStrictAdmin = Boolean(
     (authUser?.email || "").toLowerCase() === "administrator" ||
-      (authUser?.email || "").toLowerCase() === "admin" ||
       (roles || []).some((r: any) =>
         ["admin", "administrator", "system manager"].includes(
           String(r).trim().toLowerCase()

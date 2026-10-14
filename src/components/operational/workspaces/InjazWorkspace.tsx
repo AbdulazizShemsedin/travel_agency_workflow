@@ -36,6 +36,9 @@ import {
   reassignClearanceStepV2,
   reopenClearanceStepV2,
   setTaeshirAppointmentV2,
+  setTaeshirStatusV2,
+  recordInjazPaymentV2,
+  undoForfeitInjazV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, getApplicantV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -142,6 +145,8 @@ export function InjazWorkspace({
   const [modalInjazNumber, setModalInjazNumber] = React.useState("");
   const [modalRemark, setModalRemark] = React.useState("");
   const [modalEmployee, setModalEmployee] = React.useState("");
+  const [modalTaeshirStatus, setModalTaeshirStatus] = React.useState("");
+  const [modalInjazPaymentStatus, setModalInjazPaymentStatus] = React.useState<"Paid" | "Unpaid" | "Printed">("Unpaid");
 
   // Reopen Step Modal state
   const [isReopenModalOpen, setIsReopenModalOpen] = React.useState(false);
@@ -179,6 +184,15 @@ export function InjazWorkspace({
 
     setModalRemark(editingRow.remark || inj?.notes || inj?.rejection_remark || "");
     setModalEmployee(inj?.assigned_officer || inj?.employee || "");
+    setModalTaeshirStatus(inj?.taeshir_status || (editingRow as any)?.taeshir_status || "");
+
+    const rawPayment =
+      inj?.injaz_payment_status ||
+      (editingRow as any)?.injaz_payment_status ||
+      (editingRow.injazPayment === "PAID" ? "Paid" : "Unpaid");
+    setModalInjazPaymentStatus(
+      rawPayment === "Paid" ? "Paid" : rawPayment === "Printed" ? "Printed" : "Unpaid"
+    );
   }, [editingRow]);
 
   // PDF Generator helper
@@ -255,7 +269,7 @@ export function InjazWorkspace({
     try {
       if (newStatus === "Completed") {
         const isPaid =
-          ((row.injaz as any)?.payment_status || (row.injaz as any)?.injaz_payment_status || row.injazPayment || "")
+          ((row.injaz as any)?.injaz_payment_status || (row.injazPayment === "PAID" ? "Paid" : ""))
             .toLowerCase() === "paid";
         if (!isPaid) {
           toast.error("Injaz Payment Required", {
@@ -277,6 +291,43 @@ export function InjazWorkspace({
       onRefresh();
     } catch (err: any) {
       toast.error(err?.message || "Failed to update status");
+      throw err;
+    }
+  };
+
+  const handleUpdateTaeshirStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const stepName = row.clearanceStepName || row.injaz?.name;
+    if (!stepName) {
+      toast.error("No active Te'shir clearance step found.");
+      return;
+    }
+    try {
+      await setTaeshirStatusV2(stepName, newStatus);
+      toast.success(`Taeshir follow-up status updated to ${newStatus}`);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update follow-up status");
+      throw err;
+    }
+  };
+
+  const handleUpdateInjazPayment = async (
+    row: WorkspaceApplicantRow,
+    newPayment: "Paid" | "Unpaid" | "Printed"
+  ) => {
+    const stepName = row.clearanceStepName || row.injaz?.name;
+    if (!stepName) {
+      toast.error("No active Te'shir clearance step found.");
+      return;
+    }
+    try {
+      await recordInjazPaymentV2(stepName, newPayment);
+      toast.success(`Injaz payment status updated to ${newPayment}`);
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update Injaz payment status");
       throw err;
     }
   };
@@ -419,13 +470,22 @@ export function InjazWorkspace({
         }
       }
 
+      // Update Taeshir follow-up status
+      if (modalTaeshirStatus) {
+        await setTaeshirStatusV2(stepName, modalTaeshirStatus);
+      }
+
+      // Update Injaz Payment Status
+      if (modalInjazPaymentStatus) {
+        await recordInjazPaymentV2(stepName, modalInjazPaymentStatus);
+      }
+
       // Step Completion / Progression
       if (modalStatus === "Completed") {
         const isPaid =
-          ((editingRow.injaz as any)?.payment_status ||
-            (editingRow.injaz as any)?.injaz_payment_status ||
-            editingRow.injazPayment ||
-            "")
+          modalInjazPaymentStatus === "Paid" ||
+          ((editingRow.injaz as any)?.injaz_payment_status ||
+            (editingRow.injazPayment === "PAID" ? "Paid" : ""))
             .toLowerCase() === "paid";
         if (
           !isPaid &&
@@ -683,6 +743,87 @@ export function InjazWorkspace({
       },
     },
     {
+      id: "taeshir_status",
+      header: "TAESHIR STATUS",
+      width: "135px",
+      align: "center",
+      editable: true,
+      cell: (row) => {
+        const currentStatus =
+          (row.injaz as any)?.taeshir_status || (row as any)?.taeshir_status || "";
+        return (
+          <ExcelSelect
+            value={currentStatus || "NONE"}
+            disabled={!canEdit}
+            options={[
+              {
+                value: "NONE",
+                label: "None",
+                badgeClass: "bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 text-[10px]",
+              },
+              {
+                value: "INFORMED",
+                label: "INFORMED",
+                badgeClass: "bg-blue-500 text-white font-semibold text-[10px]",
+              },
+              {
+                value: "RECEIVED",
+                label: "RECEIVED",
+                badgeClass: "bg-purple-600 text-white font-semibold text-[10px]",
+              },
+              {
+                value: "READY TO EMBASSY",
+                label: "READY TO EMBASSY",
+                badgeClass: "bg-emerald-600 text-white font-semibold text-[10px]",
+              },
+            ]}
+            onSave={(val) => handleUpdateTaeshirStatus(row, val === "NONE" ? "" : val)}
+          />
+        );
+      },
+    },
+    {
+      id: "injaz_payment",
+      header: "INJAZ PAYMENT",
+      width: "125px",
+      align: "center",
+      editable: true,
+      cell: (row) => {
+        const rawVal =
+          (row.injaz as any)?.injaz_payment_status ||
+          (row as any)?.injaz_payment_status ||
+          (row.injazPayment === "PAID" ? "Paid" : "Unpaid");
+        const currentPayment =
+          rawVal === "Paid" ? "Paid" : rawVal === "Printed" ? "Printed" : "Unpaid";
+        return (
+          <ExcelSelect
+            value={currentPayment}
+            disabled={!canEdit}
+            options={[
+              {
+                value: "Unpaid",
+                label: "Unpaid",
+                badgeClass: "bg-amber-500 text-white font-semibold text-[10px]",
+              },
+              {
+                value: "Printed",
+                label: "Printed",
+                badgeClass: "bg-blue-600 text-white font-semibold text-[10px]",
+              },
+              {
+                value: "Paid",
+                label: "Paid",
+                badgeClass: "bg-emerald-600 text-white font-semibold text-[10px]",
+              },
+            ]}
+            onSave={(val) =>
+              handleUpdateInjazPayment(row, val as "Paid" | "Unpaid" | "Printed")
+            }
+          />
+        );
+      },
+    },
+    {
       id: "status",
       header: "STATUS",
       width: "125px",
@@ -694,7 +835,9 @@ export function InjazWorkspace({
           row.injaz?.status === "Completed" ||
           row.injaz?.status === "Issued";
         const isInjazPaid =
-          ((row.injaz as any)?.payment_status || (row.injaz as any)?.injaz_payment_status || row.injazPayment || "")
+          ((row.injaz as any)?.injaz_payment_status ||
+            (row as any)?.injaz_payment_status ||
+            (row.injazPayment === "PAID" ? "Paid" : ""))
             .toLowerCase() === "paid";
         return (
           <ExcelSelect
@@ -736,11 +879,37 @@ export function InjazWorkspace({
     {
       id: "final_action",
       header: "ACTION",
-      width: "135px",
+      width: "160px",
       align: "center",
       sortable: false,
       cell: (row) => (
         <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Undo Forfeit Button (if current attempt is Unpaid and previous attempt exists) */}
+          {((row.injaz as any)?.is_forfeited || (row.injaz as any)?.attempt_count > 1) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const stepName = row.clearanceStepName || row.injaz?.name;
+                if (!stepName) return;
+                try {
+                  await undoForfeitInjazV2(stepName);
+                  toast.success("Injaz forfeit undone successfully!");
+                  await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+                  onRefresh();
+                } catch (err: any) {
+                  toast.error(err?.message || "Failed to undo Injaz forfeit");
+                }
+              }}
+              className="h-7 px-1.5 text-[10px] text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1"
+              title="Undo Injaz Forfeit and restart"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Undo Forfeit</span>
+            </Button>
+          )}
+
           {/* Injaz PDF Download Button */}
           <Button
             type="button"
@@ -898,10 +1067,9 @@ export function InjazWorkspace({
               <Label className="text-xs font-semibold">Clearance Status</Label>
               {(() => {
                 const isPaid =
-                  ((editingRow?.injaz as any)?.payment_status ||
-                    (editingRow?.injaz as any)?.injaz_payment_status ||
-                    editingRow?.injazPayment ||
-                    "")
+                  modalInjazPaymentStatus === "Paid" ||
+                  ((editingRow?.injaz as any)?.injaz_payment_status ||
+                    (editingRow?.injazPayment === "PAID" ? "Paid" : ""))
                     .toLowerCase() === "paid";
                 const isAlreadyCompleted = ["Complete", "Completed", "Issued"].includes(
                   editingRow?.injaz?.status || ""
@@ -922,6 +1090,33 @@ export function InjazWorkspace({
                   </select>
                 );
               })()}
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Taeshir Follow-up Status</Label>
+              <select
+                value={modalTaeshirStatus}
+                onChange={(e) => setModalTaeshirStatus(e.target.value)}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a]"
+              >
+                <option value="">None</option>
+                <option value="INFORMED">INFORMED</option>
+                <option value="RECEIVED">RECEIVED</option>
+                <option value="READY TO EMBASSY">READY TO EMBASSY</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Injaz Payment Status</Label>
+              <select
+                value={modalInjazPaymentStatus}
+                onChange={(e) => setModalInjazPaymentStatus(e.target.value as any)}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a]"
+              >
+                <option value="Unpaid">Unpaid</option>
+                <option value="Printed">Printed (Does not count as paid)</option>
+                <option value="Paid">Paid</option>
+              </select>
             </div>
 
             <div className="space-y-1">

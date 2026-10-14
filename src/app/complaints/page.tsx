@@ -88,8 +88,6 @@ export default function AdminComplaintsPage() {
   const [resolveForm, setResolveForm] = React.useState({
     outcome: COMPLAINT_OUTCOMES[0] as string,
     resolution_notes: "",
-    replacement_applicant: "",
-    return_date: new Date().toISOString().split("T")[0],
   });
 
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
@@ -270,8 +268,6 @@ export default function AdminComplaintsPage() {
     };
   }, [placements, applicants]);
 
-  const availableReplacements = (applicants as any[]).filter((a) => a.applicant_state === "Registered" || a.applicant_state === "CV Generated");
-
   const submitMutation = useMutation({
     mutationFn: async (data: typeof submitForm) => {
       const matched = agencyCandidates.find(
@@ -326,7 +322,7 @@ export default function AdminComplaintsPage() {
 
   const resolveMutation = useMutation({
     mutationFn: async (data: typeof resolveForm & { complaint_id: string }) => {
-      return await resolveComplaintV2(data.complaint_id, "Resolved", data.resolution_notes);
+      return await resolveComplaintV2(data.complaint_id, (data.outcome as any) || "Resolved", data.resolution_notes);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-complaints-v2"] });
@@ -729,24 +725,6 @@ export default function AdminComplaintsPage() {
                   ))}
                 </select>
               </div>
-
-              {resolveForm.outcome.includes("Replacement") && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Allocate Free Replacement Candidate</Label>
-                  <select
-                    className="w-full h-9 rounded-md border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#18181e] px-2 text-xs"
-                    value={resolveForm.replacement_applicant}
-                    onChange={(e) => setResolveForm({ ...resolveForm, replacement_applicant: e.target.value })}
-                  >
-                    <option value="">-- Select Replacement Applicant --</option>
-                    {availableReplacements.map((a) => (
-                      <option key={a.name} value={a.name}>
-                        {a.full_name || a.first_name} ({a.name}) - {a.job_applied || "Housemaid"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold">Resolution Notes *</Label>

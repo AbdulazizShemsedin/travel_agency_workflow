@@ -41,7 +41,6 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     formState: { errors },
   } = form;
 
-  const feeRequired = watch("fee_required");
   const profilePhotoValue = watch("profile_photo_url") || watch("photo_passport");
   const fullBodyPhotoValue = watch("photo_full_body");
   const passportScanValue = watch("passport_scan");
@@ -862,128 +861,6 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             </CardContent>
           </Card>
 
-          {/* Application Settings Card */}
-          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-slate-900 dark:text-white">
-                Application Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] p-3">
-                <div className="space-y-0.5">
-                  <Label htmlFor="fee_required" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Fee Required
-                  </Label>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Registration fee required for applicant
-                  </p>
-                </div>
-                <Switch
-                  id="fee_required"
-                  checked={feeRequired}
-                  onCheckedChange={(checked) =>
-                    setValue("fee_required", checked, { shouldDirty: true })
-                  }
-                />
-              </div>
-
-            {feeRequired && (
-              <div className="space-y-3 rounded-lg border border-emerald-100 dark:border-emerald-950/60 bg-emerald-50/30 dark:bg-emerald-950/20 p-3">
-                <div className="space-y-1">
-                  <Label htmlFor="fee_type" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Fee Type
-                  </Label>
-                  <Select
-                    id="fee_type"
-                    {...register("fee_type")}
-                  >
-                    <option value="Registration Fee">Registration Fee</option>
-                    <option value="Processing Fee">Processing Fee</option>
-                    <option value="Visa Fee">Visa Fee</option>
-                    <option value="Other">Other</option>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="registration_fee_amount" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                      Amount ($ USD) *
-                    </Label>
-                    <div className="relative">
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
-                        <DollarSign className="h-3.5 w-3.5 text-slate-400" />
-                      </div>
-                      <Input
-                        id="registration_fee_amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        className="pl-7 h-8 text-xs"
-                        {...register("registration_fee_amount", { valueAsNumber: true })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="fee_direction" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                      Direction
-                    </Label>
-                    <Select
-                      id="fee_direction"
-                      {...register("fee_direction")}
-                    >
-                      <option value="Income">Income (Agency Received)</option>
-                      <option value="Expense">Expense (Agency Paid)</option>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="fee_status" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                      Payment Status
-                    </Label>
-                    <Select
-                      id="fee_status"
-                      {...register("fee_status")}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Paid">Paid</option>
-                      <option value="Expired">Expired</option>
-                      <option value="Refunded">Refunded</option>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="fee_payment_date" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                      Payment Date
-                    </Label>
-                    <Input
-                      id="fee_payment_date"
-                      type="date"
-                      className="h-8 text-xs px-2"
-                      {...register("fee_payment_date")}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="fee_notes" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Notes / Receipt Reference
-                  </Label>
-                  <Input
-                    id="fee_notes"
-                    placeholder="e.g. Receipt #REC-88192"
-                    className="h-8 text-xs"
-                    {...register("fee_notes")}
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Right Column: Personal & Contact Information */}

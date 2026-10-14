@@ -23,6 +23,7 @@ import {
   Keyboard,
   LogOut,
   ChevronUp,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ const navItems: NavItemConfig[] = [
   { label: "Complaints", href: "/complaints", icon: AlertCircle, action: "manageComplaints", tourId: "sidebar-nav-complaints" },
   { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports", tourId: "sidebar-nav-reports" },
   { label: "Finance", href: "/expenses-income", icon: Receipt, action: "viewFinance", tourId: "sidebar-nav-finance" },
+  { label: "Permissions", href: "/permissions", icon: ShieldCheck, action: "manageUsers", tourId: "sidebar-nav-permissions" },
 ];
 
 interface AppSidebarProps {

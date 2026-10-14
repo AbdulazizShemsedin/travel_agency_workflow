@@ -118,9 +118,9 @@ const FIELD_NAME_MAP: Record<string, string> = {
   injaz_fee: "Injaz visa fee",
   payment_type: "payment type",
   payment_status: "payment status",
-  payment_row_name: "payment line item",
-  registration_fee_amount: "registration fee amount",
-  fee_amount: "fee amount",
+  second_contact_name: "second contact person",
+  second_contact_phone: "second contact phone",
+  second_contact_address: "second contact address",
 
   // Ticketing & Flight
   ticket_number: "flight ticket number",
