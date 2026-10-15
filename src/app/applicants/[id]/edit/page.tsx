@@ -147,23 +147,6 @@ export default function EditApplicantPage() {
         </div>
       </div>
 
-      {/* Identity Fields Lock Warning */}
-      {isIdentityLocked && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/30 p-3.5 shadow-xs">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white font-bold text-xs">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-amber-950 dark:text-amber-200">
-              Identity Fields Locked
-            </div>
-            <div className="text-[11px] text-amber-800/80 dark:text-amber-400">
-              This applicant has an active placement at <strong>{activePlacement?.status}</strong> status.
-              Identity fields (name, passport, date of birth, gender, nationality, destination) are locked and cannot be changed.
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Multi-step Registration Workflow Form pre-filled with existing data */}
       <ApplicantRegistrationForm

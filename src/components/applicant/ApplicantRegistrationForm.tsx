@@ -135,21 +135,11 @@ const EXPERIENCE_ABROAD_OPTIONS = [
   "Other",
 ] as const;
 
-// Fields locked when an active placement is running
+// Fields locked when an active placement is running (per T18: only destination, track, and applicant_type stay locked; name, passport, DOB, expiry, gender, and nationality can be corrected)
 const IDENTITY_FIELDS = [
-  "full_name",
-  "first_name",
-  "middle_name",
-  "last_name",
-  "passport_number",
-  "passport_expiry_date",
-  "passport_expiry",
-  "date_of_birth",
-  "gender",
   "destination_country",
   "applicant_type",
   "entry_track",
-  "nationality",
 ];
 
 function stripLockedIdentityFields<T extends Record<string, any>>(
@@ -1620,7 +1610,6 @@ export function ApplicantRegistrationForm({
                 placeholder="e.g. ALFIYA KEDIR UMER"
                 value={watch("full_name") || ""}
                 onChange={(e) => handleFullNameChange(e.target.value)}
-                disabled={lockedIdentityFields}
                 className={cn(
                   "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("full_name")
@@ -1658,7 +1647,6 @@ export function ApplicantRegistrationForm({
                 placeholder="e.g. EP00646924"
                 {...register("passport_number")}
                 onBlur={handlePassportBlur}
-                disabled={lockedIdentityFields}
                 className={cn(
                   "text-xs uppercase font-mono border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("passport_number")
@@ -1697,7 +1685,6 @@ export function ApplicantRegistrationForm({
               <Input
                 type="date"
                 {...register("date_of_birth")}
-                disabled={lockedIdentityFields}
                 className={cn(
                   "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("date_of_birth")
@@ -1747,7 +1734,6 @@ export function ApplicantRegistrationForm({
               <Input
                 type="date"
                 {...register("passport_expiry")}
-                disabled={lockedIdentityFields}
                 className={cn(
                   "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("passport_expiry")
@@ -1856,7 +1842,6 @@ export function ApplicantRegistrationForm({
               </div>
               <select
                 {...register("gender")}
-                disabled={lockedIdentityFields}
                 className={cn(
                   "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
                   getFieldClass("gender")
@@ -2426,7 +2411,6 @@ export function ApplicantRegistrationForm({
                 </div>
                 <select
                   {...register("nationality")}
-                  disabled={lockedIdentityFields}
                   className={cn(
                     "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
                     getFieldClass("nationality")

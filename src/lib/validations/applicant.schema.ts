@@ -154,7 +154,11 @@ export const baseApplicantSchema = z.object({
   emergency_contact_phone: z.string().optional().or(z.literal("")),
   emergency_relationship: z.string().optional().or(z.literal("")),
   coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).default(""),
-  exam_date: z.string().optional().or(z.literal("")),
+  exam_date: z
+    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   medical_issue_date: z.string().optional().or(z.literal("")),
   medical_expiry_date: z
@@ -263,7 +267,11 @@ export const baseApplicantSchema = z.object({
   contact_person_2nd: z.string().trim().optional().or(z.literal("")),
   contact_phone_2nd: z.string().trim().optional().or(z.literal("")),
   coc_center: z.string().trim().optional().or(z.literal("")),
-  certified_date: z.string().trim().optional().or(z.literal("")),
+  certified_date: z
+    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
   certificate_no: z.string().trim().optional().or(z.literal("")),
   training_type: z.string().trim().optional().or(z.literal("")),
   photos_2: optionalBoolean,

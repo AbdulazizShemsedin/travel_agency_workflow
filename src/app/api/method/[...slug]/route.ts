@@ -334,40 +334,6 @@ export async function POST(
       return NextResponse.json(data, { status: 502 });
     }
 
-    // Post-query enrichment for contractor user details
-    if (res.ok && data) {
-      if (methodPath === "agency_tracking.contractor_api.list_contractors") {
-        const list: any[] = Array.isArray(data.message) ? data.message : Array.isArray(data) ? data : [];
-        if (list.length > 0) {
-          const enriched = await Promise.all(
-            list.map(async (c) => {
-              if (!c.user) return c;
-              try {
-                const uRes = await fetchWithRetry(`${config.url}/api/method/frappe.client.get`, {
-                  method: "POST",
-                  headers: forwardHeaders,
-                  body: JSON.stringify({ doctype: "User", name: c.user }),
-                });
-                const uData = await uRes.json().catch(() => ({}));
-                const u = uData.message || {};
-                return {
-                  ...c,
-                  contact_person: c.contact_person || u.first_name || "",
-                  phone: c.phone || u.phone || u.mobile_no || "",
-                  whatsapp: c.whatsapp || u.mobile_no || u.phone || "",
-                  email: c.email || u.email || c.user,
-                };
-              } catch {
-                return c;
-              }
-            })
-          );
-          if (Array.isArray(data.message)) data.message = enriched;
-          else if (Array.isArray(data)) (data as any) = enriched;
-        }
-      }
-    }
-
     if (!res.ok) {
       const isExpectedAuthChallenge = (res.status === 401 || (res.status === 417 && isLoginMethod)) && (
         methodPath.includes("login") ||

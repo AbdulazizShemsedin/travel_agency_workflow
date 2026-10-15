@@ -431,6 +431,26 @@ export async function clearPredepartureMedicalResultV2(
 }
 
 /**
+ * Clears a selected-stage medical result while placement is Selected.
+ * Authoritative Backend Endpoint: placement_api.clear_selected_medical_result (New 2026-10-12)
+ */
+export async function clearSelectedMedicalResultV2(
+  placementName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.clear_selected_medical_result",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
  * Undoes a flight reschedule.
  * Authoritative Backend Endpoint: placement_api.undo_reschedule (New 2026-10-12)
  */

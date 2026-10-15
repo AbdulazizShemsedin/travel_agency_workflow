@@ -18,7 +18,14 @@ import {
   Building2,
   Globe,
 } from "lucide-react";
-import { listPlacementsV2, V2PlacementRecord, recordSelectedMedicalResultV2, recordPredepartureMedicalResultV2 } from "@/lib/api/v2/placements";
+import {
+  listPlacementsV2,
+  V2PlacementRecord,
+  recordSelectedMedicalResultV2,
+  recordPredepartureMedicalResultV2,
+  clearSelectedMedicalResultV2,
+  clearPredepartureMedicalResultV2,
+} from "@/lib/api/v2/placements";
 import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import { LoadError } from "@/components/ui/LoadError";
 import { Button } from "@/components/ui/button";
@@ -98,16 +105,16 @@ export function MedicalWorkspace({
     staleTime: 15000,
   });
 
-  // Query: Applicants
+  // Query: Applicants (optional join; Medical Officer may not have read access to list_applicants)
   const {
     data: applicants = [],
     isLoading: isAppLoading,
-    error: appError,
     refetch: refetchApplicants,
   } = useQuery({
     queryKey: ["v2_medical_applicants"],
-    queryFn: () => listApplicantsV2(),
+    queryFn: () => listApplicantsV2().catch(() => []),
     staleTime: 15000,
+    retry: false,
   });
 
   const handleRefreshAll = () => {
@@ -137,7 +144,7 @@ export function MedicalWorkspace({
         "Unknown Candidate"
       ).toUpperCase();
 
-      const passportNumber = app?.passport_number || "—";
+      const passportNumber = app?.passport_number || plc.passport_number || "—";
       const destinationCountry = plc.destination_country || app?.destination_country || "—";
       const agencyName = plc.contractor_name || plc.contractor || (app as any)?.contractor_name || "—";
       const targetJob = plc.target_job || app?.target_job || "Housemaid";
@@ -269,11 +276,49 @@ export function MedicalWorkspace({
     },
   });
 
-  if (plcError || appError) {
+  // Mutation: Clear Medical 1 (Selected Stage)
+  const clearMed1Mutation = useMutation({
+    mutationFn: async (placementName: string) => {
+      await clearSelectedMedicalResultV2(placementName);
+    },
+    onSuccess: async () => {
+      toast.success("Stage 1 medical result cleared");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["v2_medical_placements"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+      ]);
+      handleRefreshAll();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to clear Stage 1 medical result");
+    },
+  });
+
+  // Mutation: Clear Medical 2 (Pre-Departure)
+  const clearMed2Mutation = useMutation({
+    mutationFn: async (placementName: string) => {
+      await clearPredepartureMedicalResultV2(placementName);
+    },
+    onSuccess: async () => {
+      toast.success("Pre-departure medical cleared");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["v2_medical_placements"] }),
+        queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
+        queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+      ]);
+      handleRefreshAll();
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to clear pre-departure medical");
+    },
+  });
+
+  if (plcError) {
     return (
       <LoadError
         title="Failed to Load Medical Examination Records"
-        error={plcError || appError}
+        error={plcError}
         onRetry={handleRefreshAll}
       />
     );
@@ -641,6 +686,24 @@ export function MedicalWorkspace({
                             <XCircle className="h-3 w-3 mr-1" />
                             UNFIT
                           </Button>
+
+                          {row.medicalSelectedStatus && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={clearMed1Mutation.isPending}
+                              onClick={() => {
+                                if (confirm(`Clear Stage 1 medical result for ${row.fullName}?`)) {
+                                  clearMed1Mutation.mutate(row.placementName);
+                                }
+                              }}
+                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                              title="Clear recorded medical result"
+                            >
+                              Clear
+                            </Button>
+                          )}
                         </div>
                       ) : isTicketedStage ? (
                         <div className="flex items-center justify-center gap-1.5">
@@ -670,6 +733,24 @@ export function MedicalWorkspace({
                             <XCircle className="h-3 w-3 mr-1" />
                             UNFIT
                           </Button>
+
+                          {row.medical2Status && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={clearMed2Mutation.isPending}
+                              onClick={() => {
+                                if (confirm(`Clear pre-departure medical for ${row.fullName}?`)) {
+                                  clearMed2Mutation.mutate(row.placementName);
+                                }
+                              }}
+                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                              title="Clear pre-departure medical result"
+                            >
+                              Clear
+                            </Button>
+                          )}
                         </div>
                       ) : (
                         <span className="text-slate-300 text-xs">—</span>
@@ -744,7 +825,7 @@ export function MedicalWorkspace({
               <div className="p-2.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
                 <span className="text-[11px]">
-                  Marking UNFIT will disqualify candidate and notify the agency.
+                  Marking UNFIT holds the placement until a FIT result is recorded or the result is cleared. It does not cancel the applicant.
                 </span>
               </div>
             )}
@@ -809,18 +890,18 @@ export function MedicalWorkspace({
                 className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-bold"
               >
                 <option value="FIT">FIT (Cleared to Board Flight)</option>
-                <option value="UNFIT">UNFIT (Cancel Flight & Cancel Placement)</option>
+                <option value="UNFIT">UNFIT (Holds Placement until FIT or cleared)</option>
               </select>
             </div>
 
             {med2Status === "UNFIT" && (
-              <div className="p-3 rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 space-y-1">
+              <div className="p-3 rounded-xl border border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-                  <span>Permanent Disqualification Warning</span>
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>Placement Hold Notice</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  Marking UNFIT at this stage will automatically trigger backend cancellation of both Applicant and Placement records.
+                  Marking UNFIT holds the placement at Ticketed stage until a FIT result is recorded or the result is cleared. It does not cancel the applicant or placement.
                 </p>
               </div>
             )}

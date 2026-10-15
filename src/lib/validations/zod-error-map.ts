@@ -90,7 +90,7 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
       }
 
       if (issue.expected === "string" && (issue.received === "undefined" || issue.received === "null")) {
-        if (fieldName === "medical_expiry_date" || fieldName === "national_id") {
+        if (fieldName === "medical_expiry_date" || fieldName === "national_id" || fieldName === "exam_date" || fieldName === "certified_date") {
           return { message: `Please enter a valid ${label.toLowerCase()} or leave blank.` };
         }
         return { message: `${label} is required. Please fill in this information.` };
@@ -102,6 +102,10 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
 
       if (issue.expected === "boolean") {
         return { message: `Please select Yes or No for ${label.toLowerCase()}.` };
+      }
+
+      if (fieldName === "exam_date" || fieldName === "certified_date") {
+        return { message: `Please enter a valid date for ${label.toLowerCase()} or leave blank.` };
       }
 
       return { message: `Please provide a valid entry for ${label.toLowerCase()}.` };

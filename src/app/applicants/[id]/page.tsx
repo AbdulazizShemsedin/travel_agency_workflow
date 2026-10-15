@@ -3,13 +3,31 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  RotateCcw,
+  Ban,
+  AlertTriangle,
+} from "lucide-react";
 import { getApplicantV2, listPlacementsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { restartApplicantV2, cancelApplicantV2 } from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const CANONICAL_STAGES = [
@@ -49,17 +67,26 @@ export default function ApplicantDetailPage() {
   const applicantId = typeof rawId === "string" ? decodeURIComponent(rawId) : Array.isArray(rawId) ? decodeURIComponent(rawId[0]) : "";
   const queryClient = useQueryClient();
 
-  const { data: applicant, isLoading, isError } = useQuery<V2ApplicantDetails>({
+  const { data: applicant, isLoading, isError, refetch: refetchApplicant } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
     queryFn: () => getApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 
-  const { data: placements = [] } = useQuery({
+  const { data: placements = [], refetch: refetchPlacements } = useQuery({
     queryKey: ["placements", applicantId],
     queryFn: () => listPlacementsV2([{ applicant: applicantId }]),
     enabled: !!applicantId,
   });
+
+  const refetchAll = React.useCallback(async () => {
+    await Promise.all([
+      refetchApplicant(),
+      refetchPlacements(),
+      queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+      queryClient.invalidateQueries({ queryKey: ["placements"] }),
+    ]);
+  }, [refetchApplicant, refetchPlacements, queryClient]);
 
   const activePlacement = React.useMemo(() => {
     if (!placements || placements.length === 0) return null;
@@ -103,6 +130,45 @@ export default function ApplicantDetailPage() {
 
   const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
 
+  // Restart / Resume Modal State
+  const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
+  const [restartTargetStatus, setRestartTargetStatus] = React.useState<"Draft" | "Registered">("Registered");
+
+  const restartMutation = useMutation({
+    mutationFn: async () => {
+      if (!applicant) throw new Error("No applicant record to restart.");
+      return await restartApplicantV2(applicant.name, restartTargetStatus);
+    },
+    onSuccess: (data) => {
+      setIsRestartModalOpen(false);
+      refetchAll();
+      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus}.`);
+    },
+    onError: (err: any) => {
+      toast.error("Restart failed", { description: err?.message || String(err) });
+    },
+  });
+
+  // Cancel Modal State
+  const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!applicant) throw new Error("No applicant record to cancel.");
+      return await cancelApplicantV2(applicant.name, cancelReason.trim() || "Administrative cancellation");
+    },
+    onSuccess: (data) => {
+      setIsCancelModalOpen(false);
+      setCancelReason("");
+      refetchAll();
+      toast.warning(data?.message || "Applicant process cancelled.");
+    },
+    onError: (err: any) => {
+      toast.error("Cancellation failed", { description: err?.message || String(err) });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -133,6 +199,8 @@ export default function ApplicantDetailPage() {
     [applicant.first_name, applicant.middle_name, applicant.last_name].filter(Boolean).join(" ") ||
     applicant.name;
 
+  const isInternationalReturn = (applicant as any)?.flight_outcome === "International return";
+
   return (
     <div className="space-y-6 pb-12">
       {/* Navigation & Header */}
@@ -144,8 +212,8 @@ export default function ApplicantDetailPage() {
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Applicants List
         </Link>
 
-        {/* Big Name */}
-        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 pt-1">
+        {/* Big Name & Action Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 pt-1">
           <div>
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase">
               {fullName}
@@ -185,7 +253,82 @@ export default function ApplicantDetailPage() {
                   </Badge>
                 </>
               )}
+              {isInternationalReturn && (
+                <>
+                  <span className="text-slate-300 dark:text-zinc-700">•</span>
+                  <Badge variant="outline" className="text-xs uppercase font-bold border-amber-400 text-amber-800 bg-amber-50">
+                    Departed · International return
+                  </Badge>
+                </>
+              )}
             </div>
+          </div>
+
+          {/* Action Column: Resume / Cancel / Undo Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Resume / Restart Button for Cancelled applicant */}
+            {currentStage === "Cancelled" && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsRestartModalOpen(true)}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs shadow-xs gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Resume / Restart Applicant
+              </Button>
+            )}
+
+            {/* Send Again button for International return */}
+            {isInternationalReturn && currentStage !== "Cancelled" && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setRestartTargetStatus("Registered");
+                  setIsRestartModalOpen(true);
+                }}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs shadow-xs gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Send Again (Restart)
+              </Button>
+            )}
+
+            {/* Undo Applicant Step */}
+            <UndoLastStepButton
+              doctype="Applicant"
+              name={applicant.name}
+              label="Undo Applicant Step"
+              onSuccess={refetchAll}
+            />
+
+            {/* Undo Case Step (Placement) */}
+            {activePlacement && (
+              <UndoLastStepButton
+                doctype="Placement"
+                name={activePlacement.name}
+                label="Undo Case Step"
+                onSuccess={refetchAll}
+              />
+            )}
+
+            {/* Cancel Applicant button (when not already cancelled) */}
+            {currentStage !== "Cancelled" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCancelReason("");
+                  setIsCancelModalOpen(true);
+                }}
+                className="border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold gap-1.5"
+              >
+                <Ban className="h-3.5 w-3.5" />
+                Cancel Applicant
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -238,25 +381,7 @@ export default function ApplicantDetailPage() {
         </div>
       </Card>
 
-      {/* Identity Fields Lock Notice if placed */}
-      {isIdentityLocked && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/30 p-3.5 shadow-xs">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-600 text-white font-bold text-xs">
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-amber-950 dark:text-amber-200">
-              Identity Fields Locked
-            </div>
-            <div className="text-[11px] text-amber-800/80 dark:text-amber-400">
-              This applicant has an active placement at <strong>{activePlacement?.status}</strong> status.
-              Identity fields (name, passport, date of birth, gender, nationality, destination) are locked and cannot be changed.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* All Form Fields filled with Applicant Data */}
+      {/* Multi-step Registration Workflow Form pre-filled with existing data */}
       <ApplicantRegistrationForm
         existingApplicantId={applicant.name}
         initialData={enrichedApplicant as any}
@@ -264,8 +389,128 @@ export default function ApplicantDetailPage() {
         onSuccessRedirect={(id) => {
           queryClient.invalidateQueries({ queryKey: ["applicant", id] });
           queryClient.invalidateQueries({ queryKey: ["applicants"] });
+          queryClient.invalidateQueries({ queryKey: ["placements", id] });
         }}
       />
+
+      {/* Restart / Resume Modal */}
+      <Dialog open={isRestartModalOpen} onOpenChange={setIsRestartModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
+              <RotateCcw className="h-4 w-4" />
+              Resume / Restart Applicant
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Restart recruitment process for <strong>{fullName}</strong>.
+              This restores the applicant and allows regenerating CV and re-entering the placement pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Target Restart Status
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRestartTargetStatus("Registered")}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  restartTargetStatus === "Registered"
+                    ? "bg-emerald-700 text-white border-emerald-700"
+                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
+                )}
+              >
+                Registered (Ready for CV)
+              </button>
+              <button
+                type="button"
+                onClick={() => setRestartTargetStatus("Draft")}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  restartTargetStatus === "Draft"
+                    ? "bg-emerald-700 text-white border-emerald-700"
+                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
+                )}
+              >
+                Draft (Editable Intake)
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRestartModalOpen(false)}
+              disabled={restartMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={restartMutation.isPending}
+              onClick={() => restartMutation.mutate()}
+            >
+              {restartMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Resuming...</>
+              ) : (
+                <><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Confirm Resume</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Applicant Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <Ban className="h-4 w-4" />
+              Cancel Applicant Process
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Are you sure you want to cancel recruitment for <strong>{fullName}</strong>?
+              This will freeze the applicant, active placement, and all associated clearance steps.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Cancellation Reason (Required) *
+            </label>
+            <Textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g. Candidate withdrew, failed embassy interview, or administrative hold..."
+              className="w-full h-20 text-xs"
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCancelModalOpen(false)}
+              disabled={cancelMutation.isPending}
+            >
+              Close
+            </Button>
+            <Button
+              size="sm"
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              disabled={cancelMutation.isPending || !cancelReason.trim()}
+              onClick={() => cancelMutation.mutate()}
+            >
+              {cancelMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Cancelling...</>
+              ) : (
+                <><Ban className="h-3.5 w-3.5 mr-1.5" />Confirm Cancel</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

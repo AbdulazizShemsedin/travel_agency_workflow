@@ -29,7 +29,7 @@ import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearance
 import { cancelApplicantV2, restartApplicantV2 } from "@/lib/api/v2/applicants";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { generateCvV2 } from "@/lib/api/v2/cv";
-import { recordSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
+import { recordSelectedMedicalResultV2, clearSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
 import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
 import { Badge } from "@/components/ui/badge";
@@ -345,6 +345,26 @@ export function ApplicantTable() {
     },
     onError: (err: Error) => {
       toast.error("Failed to Record Medical Result", { description: err.message });
+    },
+  });
+
+  // Inline Clear Medical Screening mutation (K3, Z3)
+  const clearMedicalMutation = useMutation({
+    mutationFn: async () => {
+      if (!medicalTargetPlacementName) throw new Error("No active placement found.");
+      await clearSelectedMedicalResultV2(medicalTargetPlacementName);
+    },
+    onSuccess: () => {
+      setIsMedicalModalOpen(false);
+      setMed1Date("");
+      setMed1Expiry("");
+      setMed1Status("FIT");
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      toast.success(`Medical screening cleared for ${medicalTargetApplicantName}.`);
+    },
+    onError: (err: Error) => {
+      toast.error("Failed to Clear Medical Result", { description: err.message });
     },
   });
 
@@ -1693,14 +1713,25 @@ export function ApplicantTable() {
               size="sm"
               className="flex-1 text-xs"
               onClick={() => setIsMedicalModalOpen(false)}
-              disabled={recordMedicalMutation.isPending}
+              disabled={recordMedicalMutation.isPending || clearMedicalMutation.isPending}
             >
               Cancel
             </Button>
+            {med1Date && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                disabled={recordMedicalMutation.isPending || clearMedicalMutation.isPending}
+                onClick={() => clearMedicalMutation.mutate()}
+              >
+                {clearMedicalMutation.isPending ? "Clearing..." : "Clear Result"}
+              </Button>
+            )}
             <Button
               size="sm"
               className="flex-1 text-xs bg-emerald-800 hover:bg-emerald-900 text-white font-semibold"
-              disabled={recordMedicalMutation.isPending || !med1Date}
+              disabled={recordMedicalMutation.isPending || clearMedicalMutation.isPending || !med1Date}
               onClick={() => recordMedicalMutation.mutate()}
             >
               {recordMedicalMutation.isPending ? (
