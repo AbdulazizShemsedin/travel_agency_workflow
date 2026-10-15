@@ -309,3 +309,42 @@ select option, select optgroup {
   }
 }
 
+/* Document sheet print/preview container: maintains crisp white sheet styling regardless of app theme (T9) */
+.paper-light,
+.dark .paper-light,
+.dark .paper-light.bg-white,
+.dark .paper-light .bg-white {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.paper-light *,
+.dark .paper-light * {
+  color-scheme: light;
+}
+
+.dark .paper-light .text-slate-900,
+.dark .paper-light .text-slate-800,
+.dark .paper-light .text-slate-700 {
+  color: #0f172a !important;
+}
+
+.dark .paper-light .text-slate-600,
+.dark .paper-light .text-slate-500 {
+  color: #475569 !important;
+}
+
+.dark .paper-light .border-slate-200,
+.dark .paper-light .border-slate-300 {
+  border-color: #e2e8f0 !important;
+}
+
+.dark .paper-light .bg-slate-50 {
+  background-color: #f8fafc !important;
+}
+
+.dark .paper-light .bg-slate-100 {
+  background-color: #f1f5f9 !important;
+}
+
+

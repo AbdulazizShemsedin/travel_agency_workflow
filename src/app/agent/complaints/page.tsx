@@ -75,7 +75,7 @@ export default function AgentComplaintsPage() {
   const [toastMessage, setToastMessage] = React.useState<string | null>(null);
   const [formError, setFormError] = React.useState<string | null>(null);
 
-  // Fetch complaints via portal API (no staff-only endpoints)
+  // Fetch complaints via portal API (no staff-only endpoints, sends contractor_name in staff preview)
   const {
     data: allComplaints = [],
     isLoading,
@@ -83,8 +83,8 @@ export default function AgentComplaintsPage() {
     refetch,
     isRefetching,
   } = useQuery<V2MyComplaintItem[]>({
-    queryKey: ["agent-my-complaints"],
-    queryFn: () => listMyComplaintsV2(),
+    queryKey: ["agent-my-complaints", effectiveContractor],
+    queryFn: () => listMyComplaintsV2(undefined, effectiveContractor || undefined),
     retry: false,
   });
 

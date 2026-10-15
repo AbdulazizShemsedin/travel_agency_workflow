@@ -16,7 +16,7 @@ import {
   HeartPulse,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
@@ -142,6 +142,7 @@ export function RoleWorkspaceContainer() {
   }, [isAdmin, roles]);
 
   const rolesKey = React.useMemo(() => (roles || []).join(","), [roles]);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const filterParam = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter");
   const tabParam = searchParams?.get("tab");
@@ -153,20 +154,27 @@ export function RoleWorkspaceContainer() {
   });
   const [corridorFilter, setCorridorFilter] = React.useState<string>(defaultCorridor);
 
-  // Sync activeTab when tabParam, filterParam, availableTabs, or persona changes
+  // T17: Effect 1 — Follow address changes (?tab= / ?status=) only when query parameters actually change
   React.useEffect(() => {
     if (tabParam && availableTabs.some((t) => t.id === tabParam)) {
       setActiveTab(tabParam);
-      return;
-    }
-    if (filterParam) {
+    } else if (filterParam) {
       setActiveTab("directory");
-      return;
     }
+  }, [tabParam, filterParam, availableTabs]);
+
+  // T17: Effect 2 — Keep user on an authorized tab if current activeTab becomes unavailable
+  React.useEffect(() => {
     if (!availableTabs.some((t) => t.id === activeTab)) {
       setActiveTab(defaultTab);
     }
-  }, [availableTabs, defaultTab, activeTab, rolesKey, authUser?.email, filterParam, tabParam]);
+  }, [availableTabs, defaultTab, activeTab]);
+
+  // T17: Tab click pushes clean ?tab=<id> into URL, dropping any ?status= or old filters
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    router.replace(`?tab=${encodeURIComponent(tabId)}`, { scroll: false });
+  };
 
   // Fetch employees list for drawers
   const { data: employees = [] } = useQuery({
@@ -290,7 +298,7 @@ export function RoleWorkspaceContainer() {
                 key={tab.id}
                 type="button"
                 data-tour={`applicants-tab-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabClick(tab.id)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
                   isActive

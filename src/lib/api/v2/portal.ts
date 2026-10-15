@@ -280,9 +280,10 @@ export async function getMyOwedCommissionsV2(): Promise<V2MyOwedCommissionItem[]
  * Lists complaints filed by or associated with the current agency.
  * POST /api/method/agency_tracking.portal_api.list_my_complaints
  */
-export async function listMyComplaintsV2(status?: string): Promise<V2MyComplaintItem[]> {
+export async function listMyComplaintsV2(status?: string, contractorName?: string): Promise<V2MyComplaintItem[]> {
   const body: Record<string, any> = {};
   if (status) body.status = status;
+  if (contractorName) body.contractor_name = contractorName;
   const result = await requestV2<any>(
     "/api/method/agency_tracking.portal_api.list_my_complaints",
     { method: "POST", body: Object.keys(body).length > 0 ? body : undefined }
@@ -291,6 +292,30 @@ export async function listMyComplaintsV2(status?: string): Promise<V2MyComplaint
   if (result && Array.isArray(result.data)) return result.data;
   if (result && Array.isArray(result.message)) return result.message;
   return [];
+}
+
+/**
+ * Marks Wakala paid on an Embassy clearance step from the agency portal or staff preview.
+ * POST /api/method/agency_tracking.portal_api.mark_wakala_paid
+ */
+export async function markWakalaPaidV2(
+  clearanceStepName: string,
+  referenceNo?: string,
+  paidDate?: string
+): Promise<any> {
+  const body: Record<string, any> = {
+    clearance_step_name: clearanceStepName,
+  };
+  if (referenceNo) body.reference_no = referenceNo;
+  if (paidDate) body.paid_date = paidDate;
+
+  return await requestV2<any>(
+    "/api/method/agency_tracking.portal_api.mark_wakala_paid",
+    {
+      method: "POST",
+      body,
+    }
+  );
 }
 
 export interface V2ReplacementOwedItem {

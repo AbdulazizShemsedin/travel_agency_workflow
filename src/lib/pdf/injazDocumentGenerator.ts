@@ -317,41 +317,42 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // Field values with fallbacks
+  // Field values: blank when missing, never invented (T10)
   const fullName = (
     data.fullName ||
-    `${data.firstName || ""} ${data.middleName || ""} ${data.lastName || ""}`.trim() ||
-    "CANDIDATE NAME"
+    `${data.firstName || ""} ${data.middleName || ""} ${data.lastName || ""}`.trim()
   ).toUpperCase();
 
-  const passportNo = (data.passportNumber || "EP4892104").toUpperCase();
-  const motherName = (data.motherName || "AYESHA MOHAMMED").toUpperCase();
-  const placeOfBirth = (data.placeOfBirth || "ADDIS ABABA").toUpperCase();
-  const dob = formatDateDDMMYYYY(data.dateOfBirth || "1997-03-12");
-  const nationality = (data.nationality || "ETHIOPIAN").toUpperCase();
-  const prevNationality = (data.nationality || "ETHIOPIAN").toUpperCase();
-  const gender = (data.gender || "FEMALE").toUpperCase();
-  const maritalStatus = (data.maritalStatus || "SINGLE").toUpperCase();
-  const religion = (data.religion || "MUSLIM").toUpperCase();
-  const profession = (data.targetJob || "HOUSEMAID").toUpperCase();
-  const qualification = (data.educationLevel || "SECONDARY SCHOOL").toUpperCase();
-  const homeAddress = `${data.city || "ADDIS ABABA"} - ${data.phone || "251911223344"}`.toUpperCase();
+  const passportNo = (data.passportNumber || "").toUpperCase();
+  const motherName = (data.motherName || "").toUpperCase();
+  const placeOfBirth = (data.placeOfBirth || "").toUpperCase();
+  const dob = data.dateOfBirth ? formatDateDDMMYYYY(data.dateOfBirth) : "";
+  const nationality = (data.nationality || "").toUpperCase();
+  const prevNationality = (data.nationality || "").toUpperCase();
+  const gender = (data.gender || "").toUpperCase();
+  const maritalStatus = (data.maritalStatus || "").toUpperCase();
+  const religion = (data.religion || "").toUpperCase();
+  const profession = (data.targetJob || "").toUpperCase();
+  const qualification = (data.educationLevel || "").toUpperCase();
+  const homeAddress = (data.city || data.phone)
+    ? `${data.city || ""} ${data.phone ? "- " + data.phone : ""}`.trim().toUpperCase()
+    : "";
   const purpose = "WORK";
 
-  const placeOfIssue = (data.placeOfIssue || "ADDIS ABABA").toUpperCase();
-  const issueDate = formatDateDDMMYYYY(data.passportIssueDate || "2024-08-14");
-  const expiryDate = formatDateDDMMYYYY(data.passportExpiry || "2029-08-14");
+  const placeOfIssue = (data.placeOfIssue || "").toUpperCase();
+  const issueDate = data.passportIssueDate ? formatDateDDMMYYYY(data.passportIssueDate) : "";
+  const expiryDate = data.passportExpiry ? formatDateDDMMYYYY(data.passportExpiry) : "";
 
-  const sponsorName = (data.sponsorName || "MOHAMMED ABDULLAH AL-OTAIBI").toUpperCase();
-  const sponsorId = data.sponsorId || "1083920194";
-  const sponsorCity = (data.destinationCity || "RIYADH").toUpperCase();
-  const sponsorPhone = data.sponsorPhone || "966503221802";
+  const sponsorName = (data.sponsorName || "").toUpperCase();
+  const sponsorId = data.sponsorId || "";
+  const sponsorCity = (data.destinationCity || "").toUpperCase();
+  const sponsorPhone = data.sponsorPhone || "";
 
-  const visaNo = data.visaNumber || "1908078445";
-  const injazNo = data.injazNumber || `E${passportNo.replace(/\D/g, "") || "822520861"}`;
-  const paymentNo = data.paymentNo || "99281401";
-  const appDate = formatDateDDMMYYYY(data.appointmentDate || new Date().toISOString().split("T")[0]);
-  const agencyName = "ANWAR SULTAN FOREIGN EMPLOYMENT AGENT";
+  const visaNo = data.visaNumber || "";
+  const injazNo = data.injazNumber || "";
+  const paymentNo = data.paymentNo || "";
+  const appDate = data.appointmentDate ? formatDateDDMMYYYY(data.appointmentDate) : "";
+  const agencyName = (data.contractorName || "").toUpperCase();
 
   const textColor = rgb(0.05, 0.05, 0.05);
 
@@ -364,7 +365,9 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
     height: number
   ) => {
     try {
-      const pattern = encodeCode128(text.replace(/[^\x20-\x7E]/g, ""));
+      const cleanText = text.replace(/[^\x20-\x7E]/g, "");
+      if (!cleanText) return;
+      const pattern = encodeCode128(cleanText);
       if (!pattern || pattern.length < 10) return;
       const barWidth = width / pattern.length;
       for (let i = 0; i < pattern.length; i++) {
@@ -385,13 +388,16 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
 
   // 1. TOP-LEFT SECTION: Barcode (Visa No), Visa No text, Sponsor Name, Applicant Photo
   // 1a. Left Barcode: encodes Visa Number (width: 137, height: 27, y: 747)
-  drawCode128Barcode(visaNo, 35, 747, 137, 27);
-
-  // 1b. Visa Number text positioned immediately BELOW the left barcode (zero overlap)
-  page.drawText(visaNo, { x: 118, y: 735, size: 9, font: fontBold, color: textColor });
+  if (visaNo) {
+    drawCode128Barcode(visaNo, 35, 747, 137, 27);
+    // 1b. Visa Number text positioned immediately BELOW the left barcode (zero overlap)
+    page.drawText(visaNo, { x: 118, y: 735, size: 9, font: fontBold, color: textColor });
+  }
 
   // 1c. Sponsor Name immediately BELOW Visa Number
-  page.drawText(`Sponsor :  ${sponsorName}`, { x: 36, y: 718, size: 8.5, font: fontBold, color: textColor });
+  if (sponsorName) {
+    page.drawText(`Sponsor :  ${sponsorName}`, { x: 36, y: 718, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // 1d. Applicant Photo (sits below Sponsor text and strictly above candidate data table)
   if (data.photoUrl) {
@@ -428,44 +434,66 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
 
   // 2. TOP-RIGHT SECTION: Barcode (E-Number / Injaz No), E-Number text, Embassy & Agency Details
   // 2a. Right Barcode: encodes Injaz Number (width: 137, height: 27, y: 747)
-  drawCode128Barcode(injazNo, 388, 747, 137, 27);
-
-  // 2b. Injaz / E-Number text positioned immediately BELOW the right barcode (zero overlap)
-  page.drawText(injazNo, { x: 428, y: 735, size: 9, font: fontBold, color: textColor });
+  if (injazNo) {
+    drawCode128Barcode(injazNo, 388, 747, 137, 27);
+    // 2b. Injaz / E-Number text positioned immediately BELOW the right barcode (zero overlap)
+    page.drawText(injazNo, { x: 428, y: 735, size: 9, font: fontBold, color: textColor });
+  }
 
   // 2c. Embassy Header Details
   page.drawText("EMBASSY OF SAUDI ARABIA", { x: 400, y: 718, size: 7.5, font: fontRegular, color: textColor });
   page.drawText("CONSULAR SECTION", { x: 418, y: 706, size: 7.5, font: fontRegular, color: textColor });
 
-  // 2d. Agency Details
-  page.drawText(agencyName, { x: 352, y: 660, size: 8, font: fontBold, color: textColor });
-  page.drawText("rawnasultan03@gmail.com", { x: 406, y: 638, size: 8, font: fontRegular, color: textColor });
+  // 2d. Agency Details (only print when provided, no invented email)
+  if (agencyName) {
+    page.drawText(agencyName, { x: 352, y: 660, size: 8, font: fontBold, color: textColor });
+  }
 
   // 3. Section 1: Candidate Personal Data (Left at 125, Right at 400)
   // Line 1 (y: 585.6): Full Name :
-  page.drawText(fullName, { x: 125, y: 585.6, size: 8.5, font: fontBold, color: textColor });
+  if (fullName) {
+    page.drawText(fullName, { x: 125, y: 585.6, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 2 (y: 569.2): Date of Birth (left) | Place of Birth (right)
-  page.drawText(dob, { x: 125, y: 569.2, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(placeOfBirth, { x: 400, y: 569.2, size: 8.5, font: fontBold, color: textColor });
+  if (dob) {
+    page.drawText(dob, { x: 125, y: 569.2, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (placeOfBirth) {
+    page.drawText(placeOfBirth, { x: 400, y: 569.2, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 3 (y: 552.9): Past Nationality (left) | Current Nationality (right)
-  page.drawText(prevNationality, { x: 125, y: 552.9, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(nationality, { x: 400, y: 552.9, size: 8.5, font: fontBold, color: textColor });
+  if (prevNationality) {
+    page.drawText(prevNationality, { x: 125, y: 552.9, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (nationality) {
+    page.drawText(nationality, { x: 400, y: 552.9, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 4 (y: 536.5): Sex / Gender (left) | Marital Status (right)
-  page.drawText(gender, { x: 125, y: 536.5, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(maritalStatus, { x: 400, y: 536.5, size: 8.5, font: fontBold, color: textColor });
+  if (gender) {
+    page.drawText(gender, { x: 125, y: 536.5, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (maritalStatus) {
+    page.drawText(maritalStatus, { x: 400, y: 536.5, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 5 (y: 520.2): Religion (right column)
-  page.drawText(religion, { x: 400, y: 520.2, size: 8.5, font: fontBold, color: textColor });
+  if (religion) {
+    page.drawText(religion, { x: 400, y: 520.2, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 6 (y: 503.8): Qualification / Education (left) | Profession / Target Job (right)
-  page.drawText(qualification, { x: 125, y: 503.8, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(profession, { x: 400, y: 503.8, size: 8.5, font: fontBold, color: textColor });
+  if (qualification) {
+    page.drawText(qualification, { x: 125, y: 503.8, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (profession) {
+    page.drawText(profession, { x: 400, y: 503.8, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 7 (y: 487.5): Home address and telephone No. in Ethiopia
-  if (data.city || data.phone) {
+  if (homeAddress) {
     page.drawText(homeAddress, { x: 175, y: 487.5, size: 7.8, font: fontRegular, color: textColor });
   }
 
@@ -486,37 +514,59 @@ export async function generateInjazDocument(data: InjazCandidateData): Promise<U
   page.drawText("Work", { x: 128, y: 420, size: 8.5, font: fontBold, color: textColor });
 
   // Line 10 (y: 400.9): Place of Issue (left) | Date of Issue (middle) | Passport No (right)
-  page.drawText(placeOfIssue, { x: 88, y: 400.9, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(issueDate, { x: 288, y: 400.9, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(passportNo, { x: 462, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  if (placeOfIssue) {
+    page.drawText(placeOfIssue, { x: 88, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (issueDate) {
+    page.drawText(issueDate, { x: 288, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (passportNo) {
+    page.drawText(passportNo, { x: 462, y: 400.9, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 11 (y: 383.8): Date of Expiry
-  page.drawText(expiryDate, { x: 110, y: 383.8, size: 8.5, font: fontBold, color: textColor });
+  if (expiryDate) {
+    page.drawText(expiryDate, { x: 110, y: 383.8, size: 8.5, font: fontBold, color: textColor });
+  }
 
   // Line 12 (y: 351.3): Duration of stay in the Kingdom : 2 YEARS
   page.drawText("2 YEARS", { x: 155, y: 351.3, size: 8, font: fontRegular, color: textColor });
 
   // Line 13 (y: 331.9): Mode of Payment | Payment No : | Date :
   page.drawText("ELECTRONIC", { x: 115, y: 331.9, size: 8, font: fontRegular, color: textColor });
-  page.drawText(paymentNo, { x: 310, y: 331.9, size: 8.5, font: fontBold, color: textColor });
-  page.drawText(appDate, { x: 460, y: 331.9, size: 8.5, font: fontRegular, color: textColor });
+  if (paymentNo) {
+    page.drawText(paymentNo, { x: 310, y: 331.9, size: 8.5, font: fontBold, color: textColor });
+  }
+  if (appDate) {
+    page.drawText(appDate, { x: 460, y: 331.9, size: 8.5, font: fontRegular, color: textColor });
+  }
 
   // Line 15 (y: 286.2): Destination (left) | Dealer Name (right)
-  page.drawText(`${sponsorCity || "RIYADH"}, SAUDI ARABIA`, { x: 95, y: 286.2, size: 8, font: fontRegular, color: textColor });
-  page.drawText(agencyName, { x: 330, y: 286.2, size: 8, font: fontBold, color: textColor });
+  if (sponsorCity) {
+    page.drawText(`${sponsorCity}, SAUDI ARABIA`, { x: 95, y: 286.2, size: 8, font: fontRegular, color: textColor });
+  }
+  if (agencyName) {
+    page.drawText(agencyName, { x: 330, y: 286.2, size: 8, font: fontBold, color: textColor });
+  }
 
   // Line 17 (y: 217): Name and address of company or individual in the Kingdom:
   const sponsorFullInfo = [
     sponsorName,
-    sponsorCity ? `${sponsorCity}, SAUDI ARABIA` : "SAUDI ARABIA",
+    sponsorCity ? `${sponsorCity}, SAUDI ARABIA` : "",
     sponsorId ? `ID: ${sponsorId}` : "",
     sponsorPhone ? `TEL: ${sponsorPhone}` : "",
   ].filter(Boolean).join("  -  ");
-  page.drawText(sponsorFullInfo, { x: 210, y: 217, size: 7.5, font: fontRegular, color: textColor });
+  if (sponsorFullInfo) {
+    page.drawText(sponsorFullInfo, { x: 210, y: 217, size: 7.5, font: fontRegular, color: textColor });
+  }
 
   // Line 18 (y: 172.5): Date (left) | Name (right)
-  page.drawText(appDate, { x: 48, y: 172.5, size: 8, font: fontRegular, color: textColor });
-  page.drawText(fullName, { x: 312, y: 172.5, size: 8, font: fontBold, color: textColor });
+  if (appDate) {
+    page.drawText(appDate, { x: 48, y: 172.5, size: 8, font: fontRegular, color: textColor });
+  }
+  if (fullName) {
+    page.drawText(fullName, { x: 312, y: 172.5, size: 8, font: fontBold, color: textColor });
+  }
 
   // Line 19 (y: 140): Authorization (Visa No) | Visit / For
   if (visaNo) {

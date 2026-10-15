@@ -1,0 +1,1892 @@
+<USER_REQUEST>
+Frontend notes — commission-currency-invoicing branch
+START HERE — handoff of 2026-10-08 (read this part first; everything below it is the detailed reference)
+0.-1 2026-10-14 — everything changed on the screens (read this first)
+Where the frontend is: clone the PUBLIC copy `https://github.com/H867Zx/travel_agency_frontend` (branch `main`:
+the same code as our private branch `baseline/team-dff25ef-fixes` at `aaeb408`, without `scratch/` and without the old
+history, which held the team's Administrator passwords). Built on the team's `dff25ef`. Items T1-T15 are
+built and checked in a browser on our local site; take the commits or copy the files. Since `aaeb408` the private
+branch has `74f8832` (when `FRAPPE_BASE_URL` is not set, the site talks to the live Railway backend) and `b472be3`
+(a redeploy, no code); it is at `b472be3` and runs on Vercel (`travel-agency-workflow-three.vercel.app`). T16 and
+T17 are in our clone, not committed yet.
+Backend: live on Railway up to `729ff48`. `17d15ea` (advance undo) is committed and waits for a push (it adds
+one hidden field; migrate). `undo_batch_advance` and the two `advance_undo_*` fields were missing from swagger;
+added (2026-10-14, uncommitted). New endpoints today, all in swagger: `portal_api.mark_wakala_paid`,
+`clearance_api.get_injaz_paper`, `finance_api.undo_batch_advance`; new fields in replies: `previous_step_done`
+(every clearance step row), `injaz_previous_outcome` (Te'shir rows), `visa_deadline` (case list), names on
+`list_country_bans` and `list_my_wakala_requests`, `advance_undo_available` / `advance_undo_to` (batch detail);
+new Applicant fields `college_certificate`, `original_id_scan`.
+#	Screen	What changed	Files
+T1	Te'shir / Injaz table	"Missed" (new appointment, reason optional) and "Undo missed"; Undo in the Action column	`InjazWorkspace.tsx`, `api/v2/clearance.ts`
+T2	Every step table (LMIS, Te'shir, Embassy, Ticket & Departure)	Undo in the Action column (`UndoLastStepButton`, ask on click). LMIS: once the LMIS step is back to Pending, Undo takes the case back Processing -> Selected	the four workspaces
+T3	Te'shir and Embassy screens	A worker shows as soon as the step has started or the backend says the step before is done (`previous_step_done`); the screens' own extra rules (Injaz paid, COC) no longer hide a worker	`api/v2/operational.ts`
+T4	Ticket & Departure (Ticketer)	Rows built from the case list when the applicant list is refused (a Ticketer may not read Applicant); VISA VALID UNTIL column	`operational.ts`, `DepartureWorkspace.tsx`, `VisaValidUntil.tsx`
+T5	Embassy table	Wakala is an editable Paid / Pending cell (people with access to the step); VISA VALID UNTIL	`EmbassyWorkspace.tsx`
+T6	Agency portal, Wakala	"Mark paid" (Musaned no. and date optional); worker named; no record-number columns; no fee column; works for the agency and for staff looking at the portal	`app/agent/wakala/page.tsx`, `api/v2/portal.ts`
+T7	Agency portal	No Commissions tab (`/agent/commission` redirects to `/agent`); Complaints load in a staff preview (sends the selected agency)	`AgentLayout.tsx`, `app/agent/complaints/page.tsx`
+T8	Ban Requests	"Bans" tab: Active / Lifted, Lift, Put back, names (no record numbers)	`CountryBanRequestsWorkspace.tsx`, `CountryBansTab.tsx`
+T9	CV page	One "Download CV" (the CV as on screen; `html2canvas-pro`, exact 2.4.5, because html2canvas 1.x throws on lab()/oklch() colours); white in dark mode on screen and in the file (`.paper-light`); table CV buttons open `/applicants/<id>/cv?download=1`	`app/applicants/[id]/cv/page.tsx`, `globals.css`, `package.json`
+T10	Injaz paper	Drawn on the official form with the backend's values (`get_injaz_paper`), at the real paper's places and fonts, blank when missing; photo; Arabic embassy lines; the form's cut lines redrawn; no easyenjaz date / website / e-mail / logo at the foot (removed from `public/visa_form_template_blank.pdf` itself)	`lib/pdf/injazDocumentGenerator.ts`, the template
+T11	Tables	Rows keep their place after an edit (lists come "creation desc", fixed tie-break)	`api/v2/applicants.ts`, `placements.ts`, `operational.ts`, `OperationalTable.tsx`
+T12	Registration form	Optional uploads "College Certificate" and "Original ID"; COC status and exam date; passport scan, certificate and ID uploaded private (the form uploaded everything public)	`ApplicantRegistrationForm.tsx`, `applicant.schema.ts`
+T13	Applicant list	Row menu (⋮) "Edit Profile" -> the registration form, any stage but Cancelled (Admin, Registrar, Manager)	`ApplicantTable.tsx`
+T14	Commissions	Create batch: no country prompt (the agency's own country), real amount and currency; the batch shows its requested advance; "Undo advance change (back to N)"; batch item amounts	`app/commission/page.tsx`, `api/v2/finance.ts`
+T15	Sidebar	"Settings" link (company, logo, stamp) for Finance Manager and Admin	`AppSidebar.tsx`
+T16	Registration form, passport upload	Only the backend reads the passport (`parsePassportFileV2` / the backend OCR). The browser OCR (`performOpticalPassportOCR`) is no longer called: it misread names and dates (BEYENECCBEGONET, 2000-91-17), and once it had any passport number the backend was never asked. Plain message when nothing could be read. Uncommitted	`ApplicantRegistrationForm.tsx`, `steps/Step1PersonalInfo.tsx`
+T17	Step screens' tabs	A tab click goes into the address (`?tab=<id>`, any `?status=` dropped); the address is followed only when it changes. With `?tab=` or `?status=` in the address the tabs looked frozen (the old tab came back at once). Uncommitted	`RoleWorkspaceContainer.tsx`
+Details of each: the section "2026-10-14 (all day) — what changed on the screens" at the bottom of this file.
+0.0 What is new since this handoff (last updated 2026-10-12, end of day; everything here is backend-only, nothing is on a screen)
+State of the backend: all of it is live. Commit `dd33292` on `H867Zx/agency_tracking` (branch
+`feat/commission-currency-invoicing` and `main`), deployed to Railway at
+`https://agencytracking-production-4974.up.railway.app`. 184 endpoints, 24 of them new since this handoff. The API
+description served there (`/api/method/agency_tracking.api_docs.get_swagger_spec`) is the same file as in the
+repository. Tested by 661 automated tests, and the replacement flow also over real HTTP (28 checks).
+Read sections 0 to 5 first if you have not. Then this list: each line is a piece of screen work, with the section
+at the bottom of this file that has the details. Sections older than these were corrected in place where a later
+decision changed them (look for "Changed 2026-10-12").
+#	Screen work	Section (by its heading)
+N1	LMIS: status `OTHER` with free text; `REJECTED` with reasons; `IN PROGRESS`; one status column on the LMIS grids; "who took the file" optional	"LMIS status OTHER", "LMIS status REJECTED", "2026-10-12 (later)"
+N2	Tesheer follow-up status; Injaz payment `Printed`	"Five small fields", "Injaz Printed"
+N3	Embassy: submission date (correctable any time, also on a closed case); visa issue date, visa expiry date and "valid until" for both countries; Reject only on Embassy steps	"Five small fields", "Visa three-month warning", "2026-10-12 (later)"
+N4	Ticket: flight hour. Departure step: the outcome is "Departed" or "Local return"; on a Departed case, "International return" with the return date	"Five small fields", "2026-10-12 (night)" section 1
+N5	Agency portal: Replacements tab -> talent pool -> replace; "Exchange for <name>" on the new case; staff list of replacements owed; remove / put back a line	"2026-10-12 (night)" section 2
+N6	Complaints: the outcome "Returned - Free Replacement Required" is removed	"2026-10-12 (night)" section 2
+N7	Applicant: second contact person; registration fee fields and "Log Fee" removed; "Send again" for a returned worker	"Five small fields", "The registration fee is removed", "2026-10-12 (night)" section 1
+N8	LMIS contract fields on the LMIS grids (contract upload pre-fills city and phones)	"LMIS contract fields"
+N9	Undo buttons: unmark paid, unmatch bank line, clear pre-departure medical, Injaz forfeit, track change, ban lift, ban decision, reschedule; clear selection medical now restores the earlier medical	"Undo for the actions that had none", "2026-10-12 (later)"
+N10	Employees: Delete = erase when no history, else switched off with a message; no restore	"Undo for the actions that had none" (Employees)
+N11	Agencies: name and e-mail required; a Muayena case refused under an agency of another country	"2026-10-12 (later)"
+N12	Settings: company / bank details through two endpoints (Admin, Finance Manager only); time zone (Admin)	"2026-10-12 (later)"
+N13	Uploads: videos up to 200 MB (everything else 20 MB)	"2026-10-12 (later)"
+N14	Finance: a Finance Manager's / Admin's own entry is approved at once; write-off has its own date	"2026-10-12 (night)" section 3, "A write-off has its own date"
+N15	New page: who can do what (read-only table), Admin and Manager	"2026-10-12 (night)" section 4
+N16	Settings page: "Company" card (name, address, phone, e-mail), "Bank details" card, logo and stamp upload tiles	"2026-10-12 (late)" sections 1 to 3
+N17	Settings page: our own agency name (the one printed on invoices) is edited in the "Company" card	"2026-10-12 (late)" section 3
+N18	Chat: "Delete" on your own messages, "This message was deleted" line; Admin page "Deleted messages"	"2026-10-12 (late)" section 4
+N19	Step drawer and agency edit page: read through `get_clearance_step` / `get_contractor`, not the record directly	"2026-10-12 (late) — Two reads"
+N20	Injaz screen: "Missed" and "Undo missed"; Ban Requests screen: "Bans" tab with Lift / Put back; ticketing screen: visa valid until	"2026-10-14 — Missed appointment, bans list, visa days on ticketing"
+New endpoints since 2026-10-11, all in swagger: `clearance_api.set_taeshir_status`, `set_visa_issue_date`,
+`undo_forfeit_injaz`; `placement_api.update_placement_for_lmis`, `clear_predeparture_medical_result`,
+`undo_reschedule`, `record_flight_outcome`, `undo_flight_outcome`, `waive_replacement`, `undo_waive_replacement`;
+`portal_api.list_replacements_owed`; `applicant_api.undo_country_ban_lift`, `undo_country_ban_decision`;
+`finance_api.unsettle_batch_items`, `get_company_settings`, `update_company_settings`, `get_time_zone`,
+`set_time_zone`, `set_company_image`; `reconciliation_api.unmatch_line`; `api_docs.get_permission_table`;
+`chat_api.delete_message`, `list_deleted_messages`; `clearance_api.get_clearance_step`; `contractor_api.get_contractor`.
+Gone: `applicant_api.log_applicant_fee`; the `free_replacement_for_complaint` argument of `select_candidate`.
+Existing answers that carry more than before (so a screen already reading them can show the new things):
+Call	New in the answer
+`list_my_clearance_steps`, `get_clearance_step`, clearance grids	`lmis_status` (23 values), `lmis_rejection_reasons`, `lmis_taken_by_agency`, `lmis_taken_by_phone`, `lmis_other_status`, `taeshir_status`, `date_submitted`, `visa_issue_date`, `visa_expiry_date`, `visa_deadline`, `injaz_payment_status`, `injaz_paid_date`
+`get_placement`, `list_placements`	`flight_time`, `flight_outcome`, `flight_outcome_date`, `flight_outcome_reason`, `replacement_owed`, `replacement_waived`, `replacement_for`, `employer_city`, `employer_house_number`, `employer_phone`, `employer_alt_phone`, `contract_start_date`, `contract_end_date`
+`portal_api.list_my_placements`, `select_candidate`	`flight_time`, `flight_outcome`, `flight_outcome_date`, `replacement_owed`, `replacement_for`, `exchange_for`; `free_replacement_for_complaint` is gone
+`get_applicant`, `list_applicants`	`second_contact_name`, `second_contact_phone`, `second_contact_address`; the nine registration fee fields are gone
+`chat_api.get_thread_messages`	`deleted`, `deleted_on` (a deleted message has empty `message` / `attachment`)
+`log_stage_expense`, `log_stage_income`	`status` is `Approved` at once when a Finance Manager or Admin made the entry
+`list_employees`	unchanged again (the `removed` flag of one morning is gone)
+every endpoint in swagger	`x-roles` in plain words, checked against what each role can really do
+Statuses and choices that changed (update dropdowns and filters):
+LMIS status list: 23 values; `IN PROGRESS` first, `REJECTED` (with reasons) and `OTHER` (with free text) added.
+Injaz payment: `Unpaid`, `Printed`, `Paid`.
+Complaint outcomes: `Resolved`, `Escalated`, `Dismissed`. "Returned - Free Replacement Required" is removed.
+Flight outcome: `Local return`, `International return`.
+Tesheer follow-up: `INFORMED`, `RECEIVED`, `READY TO EMBASSY`.
+New notifications to give a title, an icon and a link: `visa_deadline_warning` (link: the embassy / ticketing
+screen of that worker), `replacement_owed` (link: the Replacements tab).
+0. How to read this
+You build the frontend. Our copy is only a test copy. To test the backend we keep a private clone of
+your repository. It sits on your commit `573a32d` (2026-09-24) and carries 31 commits of our own that were
+never pushed to you. Nothing of ours is in your repository.
+Since then you pushed 6 commits (`58a8fa0` .. `fccbdc7`, 2026-10-01 to 2026-10-07). We compared every item
+below with your `fccbdc7`. Each item says one of:
+STILL NEEDED — not in your code at `fccbdc7`.
+PARTLY — you did part of it; what is left is written out.
+DONE BY YOU — already in your code; nothing to do.
+Our copy and yours no longer merge cleanly (16 files conflict, listed in section 3.9). Do not merge our
+commits. Redo each change in your own code; the commit hash is given so you can read our exact diff if we
+send it to you.
+Backend branch these notes describe: `feat/commission-currency-invoicing`. API description:
+`agency_tracking/public/swagger.json` (184 endpoints since 2026-10-12, every public backend function is in it).
+Each endpoint's roles (`x-roles`) were rewritten on 2026-10-12 into role names plus nine plain phrases and
+checked against what each role can really do; 36 of them were wrong before. Trust them now.
+Rule for every page, from the client: never show a record number (APP-…, PLM-…, CLR-…, TXN-…, CBR-…,
+CMP-…). Show a person as full name + passport number. See 3.1.
+---
+1. Must be done before the frontend is deployed (security)
+Found by testing your proxy (`src/app/api/method/[...slug]/route.ts`) and file routes as an anonymous caller,
+as an agency and as staff.
+#	What	State at your `fccbdc7`	What to do	Our commit
+1.1	Proxy used the system key when the caller had no session	DONE BY YOU (no key left in `src/`)	Nothing. Keep it that way: only the caller's own cookie / Authorization header is ever sent	`5075870`
+1.2	Proxy re-sent refused calls (403) with the system key	DONE BY YOU (no retry left)	Nothing. A 403 from the backend must reach the screen as it is	`a02e65f`
+1.3	`update_contractor` is rebuilt inside the proxy	STILL NEEDED	Your proxy still does its own role check (it lets in Finance Manager, Registrar, "staff"), then `frappe.client.get`, `rename_doc` and `set_value` on the agency and on the agency's User. Remove the whole block. Send the call to `contractor_api.update_contractor` like any other call; the backend decides (Admin / Manager only) and its error is shown. The backend endpoint does not take `contact_person`, `phone`, `whatsapp` for the User; if you need those saved, tell us and we add them on the backend	`e11ce56`
+1.4	Chat in the proxy	STILL NEEDED	(a) `cachedAllThreads` is one list shared by all users of the server: it is filled with one user's threads and then used for the next user, and `list_all_threads` returns that whole list when the caller's own answer is empty or refused. Remove the cache and that fallback. (b) Do not read the `Chat Thread` record with `frappe.client.get` for participants: call the new `chat_api.get_thread_participants(thread_name)` -> `[{user, last_read_at}]` (same access rule as the messages). `list_threads` already returns participants itself	`1842888`
+1.5	Private files	PARTLY	You send only the caller's session: good. Left: (a) `/private/files/*` with no session must answer 401 before calling the backend; (b) the answer is `Cache-Control: public, max-age=3600`: a passport scan must be `private, no-store`; (c) do not pass the backend's `Set-Cookie` on from a file answer (it replaces the user's session)	`f0dfd1d`
+1.6	Any e-mail starting with "admin" is treated as Administrator	STILL NEEDED	15 checks in 10 files (`permissions.ts`, `v2Roles.ts`, `api/auth.ts`, `AppSidebar`, `RoleWorkspaceContainer`, `V2ClearanceQueueWorkspace`, `CountryBanRequestsWorkspace`, `PushNotificationToggle`, `contractors/page`, `employees/page`). An agency that registers `admin@agency.com` gets every screen. Remove the prefix check; the backend already returns role `Admin` for real admins. Keeping the exact match `administrator` is fine	`c2ec38b`
+1.7	Sign Out does not end the session	STILL NEEDED	`client.ts` and the proxy both leave the CSRF token off the logout call, so the backend refuses it (400) and the session stays valid; the proxy then answers "Logged out" anyway and only clears the cookie in the browser. Send the token on logout like on every other POST, forward it in the proxy, and only then clear cookies	`31ae5f5`
+1.8	Session cookie loses `Secure` and `SameSite`	STILL NEEDED	`forwardSetCookieHeaders` strips both. Keep removing `Domain`; keep `SameSite` (use `Lax` when the backend sent none); add `Secure` when the browser is on HTTPS (also behind a TLS proxy: `x-forwarded-proto`). On plain HTTP in local development leave `Secure` off	`197989b`
+1.9	Built-in backend address	STILL NEEDED	4 files fall back to `https://agencytracking-production-2a06.up.railway.app` (the proxy, both file routes, `lib/config/env.ts`). A test frontend with a forgotten setting talks to the live system. Read `FRAPPE_BASE_URL` only; when it is missing answer 503 "Backend address not configured". Deployment: `FRAPPE_BASE_URL` must be set	`197989b`
+1.10	Backend keys written in scripts	STILL NEEDED	8 files hold real key:secret pairs: `test_all_stages.mjs`, `test_cv_generation_backend.mjs`, `test_live_full_flow.mjs`, `test_phase1_verification.mjs`, `test_verify_user_flow.mjs`, `scratch/inspect_fields.js`, `scratch/probe_commission.js`, `scratch/probe_transactions.js`. Read the key from an environment variable (`FRAPPE_API_TOKEN`) and stop when it is missing. The three old pairs stay in the repository history, so they must be regenerated on the backend (we do that; tell us when the scripts are changed)	`975e91f`
+1.11	Agency portal pages call staff-only lists	STILL NEEDED	See section 2. Without it an agency sees "no permission" or an empty list and "0"	`cf71028`
+---
+2. Agency portal: use the portal's own endpoints
+The backend refuses these for an agency: `placement_api.list_placements`, `applicant_api.list_applicants`,
+`complaint_api.list_unresolved_complaints`, `finance_api.get_owed_commissions`. At `fccbdc7`:
+Page	Calls today	Use instead
+`agent/commission/page.tsx`	`getOwedCommissionsV2`, `listApplicantsV2`, `listPlacementsV2`	`portal_api.get_my_owed_commissions()` -> rows `{placement, full_name, passport_number, target_job, amount_original, currency_original, creation}` (not yet on an invoice, the agency's own currency). No second lookup is needed: the row names the worker
+`agent/complaints/page.tsx`	`listApplicantsV2`, `listUnresolvedComplaintsV2`	`portal_api.list_my_complaints(status?)` -> the agency's own complaints, oldest first, each with `full_name`, `passport_number`, `target_job`. "Open" = New + Unresolved; the other tab = the closed ones
+`agent/reserved/page.tsx`	`listMyPlacementsV2` (correct path, DONE BY YOU)	Rows now also carry `full_name`, `passport_number`, `target_job`: drop any applicant lookup
+Agency bell	staff placements list	`portal_api.list_my_placements`; name the worker, never the placement number
+The answer of a portal list is either the rows or `{data: rows}`; unwrap both.
+`agent/page.tsx` Undo button — STILL NEEDED. `undoMutation` still calls `advancePlacementV2(name, "Cancelled")`.
+The backend refuses that for everyone. Call `reversal.reverse_last_step({doctype: "Placement", name, from_status: "Selected"})`:
+it unselects, the candidate is free again. (Our commit `dab8839`.) An agency can unselect only a case it selected
+itself on the portal; a Muayena case (created by staff) is unselected by Contract Parser / Registrar / Manager / Admin.
+Candidate list is capped at 100 — STILL NEEDED, not built by us either. `list_portal_candidates` with no page
+size returns the first 100. Add paging (`limit_start`, `limit_page_length`, `with_total=1`) or "load more".
+---
+3. Every change we made in our test copy, page by page
+All STILL NEEDED in your code unless marked. "Backend" = the endpoint the change relies on.
+3.1 No record numbers anywhere — `b158efc` (+ parts in `9bf7dae`, `96c7095`, `9c42a5f`, `bbb2133`)
+New `src/lib/utils/display-id.ts`:
+`shortRef(id)` — "CBR-00019" -> "#19". For a record with no name of its own (an invoice, a ledger row).
+`stripRecordIds(text)` — removes numbers the backend puts inside text (step titles, ledger descriptions):
+"LMIS Fee -- LMIS Clearance [CLR-00385] for PLM-00169" -> "LMIS Fee -- LMIS Clearance".
+`isRecordId(text)` — true when a name lookup fell back to its key; then show nothing or "Unknown".
+Applied in 20 files: `agent/page`, `agent/wakala`, `applicants/[id]/page`, `[id]/edit`, `[id]/contractor-doc`,
+`expenses-income`, `notifications`, `commission`, `reports`, `MusanedVerificationModal`,
+`TicketingDepartureModal`, `ChatContainer`, `ClearanceGridWorkspace`, `V2ClearanceQueueWorkspace`,
+`CountryBanRequestsWorkspace`, `Departure / Embassy / Injaz / LMIS / Wakala` workspaces, `CandidateDetailModal`.
+Rule when adding a table, toast or badge: never print `.name`, `.placement`, `.applicant` raw.
+Check: search the rendered page text for `[A-Z]{2,4}-\d{3,}`; there must be no match.
+Your new pages (CV workspace, tour, one-screen pages) were written after this and need the same pass.
+CV page header still prints "Candidate Ref: APP-…" at `fccbdc7` (`applicants/[id]/cv/page.tsx`): show full
+name and passport number instead.
+3.2 Roles, menu and tabs
+`2ecc9b9` — one place decides what a role sees. Sidebar links, the landing page after sign-in and the
+workspace tabs were each worked out in their own component and disagreed. Ours: `src/lib/auth/navigation.ts`
+(`NAV_ROUTES`, `visibleNavRoutes`, `canOpenRoute`, `homeRouteFor`) and `src/lib/auth/workspaceTabs.ts`, used by
+`AppSidebar`, `AuthProvider` and `RoleWorkspaceContainer`. Test: `node test_role_matrix.mjs` checks every
+role, every pair and every triple of roles (18,407 checks): a user gets exactly the pages of the roles held.
+You changed `AppSidebar` and `RoleWorkspaceContainer` since; how you organise it is yours, but the rules are:
+a pure Foreign Agency user sees no staff menu, lands on `/agent`, may open `/chat`;
+a user with no usable role lands on `/settings`, never on a page that refuses them;
+Foreign Agencies (`/contractors`) is for the admin roles only.
+`bf8229a` — Manager must not see Commission or Expenses/Income. The backend refuses Manager on almost
+every call those pages make. Finance Manager and Admin only. Manager keeps Reports.
+`3671152` — `CV` role added to the employee role list. At `fccbdc7` the role list in `employees/page.tsx`
+has no "CV": add it (the name is exactly `CV`).
+Medical Officer has no screen — STILL NEEDED, not built by us. See section 5.
+3.3 CV
+`3671152` — CV Preparation sheet. You built your own `CVWorkspace` (PARTLY). Yours saves with
+`updateApplicantV2` (`applicant_api.update_applicant`). The CV role has no general write on an applicant, so
+a CV user is refused. Save with `applicant_api.update_applicant_for_cv(applicant_name, ...)`: roles CV, Manager,
+Admin; fields `phone`, `labor_id`, `religion`, `region`, `marital_status`, `children`,
+`years_of_experience`, `english_level`, `remarks` (anything else is ignored); applicant must be Registered or
+CV Generated. List with `list_applicants` filtered to those two statuses. `generate_cv` accepts the CV role.
+`bbb2133` — the CV page crashed for every role ("Rendered more hooks than during the previous render"):
+four `useState` lines stood after the "loading" and "not found" exits. DONE BY YOU as far as we can read
+(the states are above the exits at `fccbdc7`); please open the page once as Registrar to confirm.
+Backend: the printed CV keeps the "Ref No." row but its value is blank. The CV is two pages.
+3.4 Dashboard and Reports counts — `9bf7dae`
+Counts were taken from the first 100 rows of each list, so every number stopped at 100. Ours asks for the
+largest page (500 rows) and counts those. At `fccbdc7` your dashboard still counts `applicantRows.length`.
+Better than ours: take the number from the backend (`with_total=1` -> `total_count`), which is right above 500 too.
+3.5 Commission (staff) — `96c7095`, `c48d8f9`, `ca95fd2`, `a2b7033`
+Owed table columns were empty: the page read field names the backend does not send. A row of
+`finance_api.get_owed_commissions` is `{name, placement, amount_original, currency_original, creation}`:
+read the amount and currency from `amount_original` / `currency_original`; every row belongs to the agency
+that was asked for.
+Remove the "over 100,000 ETB needs an Admin" rule (client decision). It existed only on this page, the
+backend never had it, and it reads a Birr total that is no longer kept. Still in your code at `fccbdc7`.
+No FX Rates button or window while Birr conversion is off (3.7).
+3.6 Expenses / Income (Finance) — `5972793`, `bda43c9`, `a2b7033`
+No typed record number. The bank-statement match form and the "Load Batch" box asked Finance to type
+"CBR-00007". Both boxes are removed. An invoice is picked from one list shown as agency, date, amount, status.
+Each applicant's amount inside a loaded invoice showed "NaN": read `amount_original`.
+A bank statement upload asks which currency the account is in (required while Birr conversion is off) and
+sends it as `currency`.
+Still open, not fixed by us: the "statement line" is still a typed ID; the Void window has no button that
+opens it.
+3.7 Money screens follow one switch — `a2b7033`
+`finance_api.get_money_settings()` -> `{birr_conversion: bool}`. On this system it is false.
+Ours: hook `src/components/finance/useBirrConversion.ts` (asks once) and component
+`src/components/finance/CurrencyTotals.tsx` (one total per currency; never add two currencies together).
+While false: no Exchange Rates button or window anywhere; no "awaiting FX" badge or banner; no Birr / ETB
+total column; Finance totals, approval queue, Reports totals, cost by country and per-employee figures are per
+currency (cost by country is a small table, one chart axis cannot hold several currencies); the ledger has
+one signed amount column in the row's own currency. While the answer is loading, behave as false.
+The per-employee figure read a key the backend never sent and always showed 0: read
+`net_expense_by_currency`.
+Exact keys: section "2026-10-05 — Birr conversion is a switch" below.
+This replaces the older lines in "START HERE (2026-09-23)" under "Money screens" about the "awaiting FX
+rate" badge and the "not in the Birr totals yet" note: on this system nothing is converted, so neither is shown.
+3.8 A failed request must never look like "nothing" or "0" — `634f067`, `bda43c9`, `ca95fd2`
+New `src/components/ui/LoadError.tsx`: says what could not be loaded, the reason in plain words, "Try again".
+Used on: agency Reserved, Complaints, Commission (counts next to them show a dash); Finance headline totals
+and approval queue; Commission owed list and invoice list; Reports money totals.
+Before, a refused request showed "No complaints found", "0 SAR outstanding", "ETB 0", "nothing pending".
+Not done by us: the remaining staff pages (applicants, employees, agencies, workspaces). Same rule applies.
+3.9 Complaints — `0ec5651`, `74db73c`, `dab8839`
+Staff table columns: worker (name), passport, agency, sponsor, contact person; a "full complaint" view.
+Remove the Category and Severity filters and the two sorts "Severity: Highest First" / "Longest Unresolved
+SLA" on both the staff and the agency page. A complaint has no such fields (the form writes both as text
+at the start of the description), so they never matched a row. Still present at `fccbdc7`. Keep Most Recent /
+Oldest First.
+Show `display_no`, never the record number.
+"Undo last step" in the complaint detail (3.12).
+Files that conflict between our copy and your `fccbdc7` (for your information only): `agent/commission`,
+`agent/complaints`, `agent/reserved`, the proxy route, `applicants/[id]/contractor-doc`, `complaints/page`,
+`dashboard/page`, `expenses-income/page`, both file routes, `AppSidebar`, `RoleWorkspaceContainer`,
+`CVWorkspace`, `lib/api/v2/client.ts`, `lib/api/v2/placements.ts`, `lib/auth/permissions.ts`.
+3.10 Applicant forms — `9c42a5f`
+Driving and Elderly Care skills removed from the registration form (`Step2EducationExperience`,
+`Step5Review`) and the agency's candidate card and detail window. Client decision. The backend fields are
+kept; send nothing for them. Still present at `fccbdc7`.
+3.11 Notifications and push — `77696d7`, `a99ed1a`, `fd94a01`
+None of this is in your code at `fccbdc7`.
+Turn Off and Sign Out call `notification_api.unsubscribe_from_push(endpoint)` first, then
+`PushSubscription.unsubscribe()`. Without it the previous user's notifications keep arriving on a shared computer.
+Test Alert calls `notification_api.send_test_push` and shows the real result (`status`, `error`). It was a
+browser-only pop-up that passed with the server broken.
+`/notifications` page has three parts:
+"Sent to you": `notification_api.get_sent_notifications(page, page_size=50)` -> the user's own pushes of
+the last 30 days; show "Not delivered" when `delivered` is false. `name` is a list key only.
+"Needs attention": `get_live_alerts`; read and dismissed are saved on the server, so they survive a
+reload and are the same on every device.
+"My tasks": unchanged (`list_my_todos`).
+The bell uses the same alert feed and its `unread_count` (every 30 seconds).
+Removed: the list the browser built itself from the first 100 applicants and placements, and the local
+pop-ups it raised.
+An agency sees "Sent to you" only.
+Every push opens `/notifications` (`payload.url`; `public/sw.js` already follows it).
+Open: times show the server's time zone, not the user's.
+3.12 "Undo last step" — `dab8839`
+New `src/lib/api/v2/undo.ts` and `src/components/ui/UndoLastStepButton.tsx`.
+How the button works:
+`reversal.get_undoable_step(doctype, name)` -> `{available, from_status, to_status, blocked}`.
+Show the button only when `available`. When `blocked` has text, show it disabled with that text.
+On press (optional reason): `reversal.reverse_last_step(doctype, name, from_status, reason?)`.
+Always send `from_status` exactly as step 1 returned it; otherwise two presses undo two steps. If the
+record moved meanwhile the backend answers "This record has changed since the page was loaded. Reload and
+try again."
+Then reload the record and its lists; do not patch the row on screen (an undone ledger approval comes back
+as a new Pending row).
+`doctype` is one of `Applicant`, `Placement`, `Complaint`, `Applicant Transaction`, `Clearance Step`.
+Where we put it: applicant page ("Undo case step" for the placement, "Undo applicant step" for the
+applicant); complaint detail; clearance step drawer in `V2ClearanceQueueWorkspace` (where Reopen is not
+shown); agency page (section 2).
+The backend decides who may undo what; never work that out on the screen.
+`requestV2` already unwraps the server's `message`; do not unwrap a second time in an API module.
+Seen and not fixed: after undoing Stamped, the applicant page still shows the "Embassy / Book Flight Ticket"
+stage, because it reads the steps (all still done) and not the case status.
+Not built: Undo on the Finance page for a ledger row (the backend supports it).
+3.13 LMIS status — `4afa154`
+LMIS workspace: the STATUS cell offers the office's working statuses (20, plus `REJECTED`), in this order:
+`NO FILE & NO COC`, `NO FILE & TAKEN`, `NO FILE & PULLED`, `NO FILE & MEDICAL NOT ONLINE`,
+`HAVE FILE & TAKEN`, `HAVE FILE & PULLED`, `HAVE FILE & MEDICAL NOT ONLINE`, `HAVE FILE & NO COC`, `PULLED`,
+`INSURANCE`, `PAYMENT`, `PAYMENT SUBMITTED`, `PAYMENT VERIFIED`, `REJECTED` (added 2026-10-08, see the last
+section of this file), `CHECKED`, `ISSUED`, `VERIFIED`, `MOLS PENDING`, `PARTNER PENDING`, `COC NOT ONLINE`, `TAKEN`.
+`clearance_api.set_lmis_status(clearance_step_name, lmis_status, reference_no?, date_completed?)`.
+`ISSUED` completes the step; every other value only labels a step that is still waiting. A step with no
+status yet shows "Pending". An issued step cannot be relabelled.
+Clearance grid: a column that arrives with its own list of choices (LMIS Status, COC Status) is a dropdown,
+not a text box.
+The list is settled (client decision 2026-10-08): these 20 stay as they are, and `REJECTED` is added.
+Still, read the choices from the grid column where you can.
+3.14 Scripts and settings — `975e91f`, `197989b`
+Covered in 1.9 and 1.10.
+---
+4. Backend changes the frontend must follow
+Short list. "Below" = a full section further down this file.
+Area	Change	Where
+Undo	Two endpoints, five record types, `from_status`	3.12; below "Undo last step (Stage A)" and "(Stage B)"
+Reopen step	`reopen_clearance_step`: `reason` optional; refused under a Stamped case; never jumps to a status the step was not at: use the returned `status`	Below, Stage B
+Cancelled steps	A cancelled clearance step is no longer returned by `list_my_clearance_steps` or the grid	Below, Stage A
+LMIS	`lmis_status`, `set_lmis_status`	3.13
+Money	`get_money_settings`; per-currency report keys; FX endpoints answer 417 while off; `upload_bank_statement` needs `currency`	3.7; below "Birr conversion is a switch"
+Uploads	Checked on the server: kind, real content, 20 MB; refusals are 417 with a plain message, show it as is. Your proxy's own "recommended under 30MB" text for a 413 should say 20 MB	Below "Uploads are checked on the server"
+Portal	`list_my_complaints`, `get_my_owed_commissions`, three new fields on `list_my_placements`	Section 2
+Notifications	`unsubscribe_from_push`, `get_sent_notifications`, text names people	3.11; below "Notifications"
+CV role	`update_applicant_for_cv`	3.3
+New in this handoff (no section below):
+Chat.
+New `chat_api.get_thread_participants(thread_name)` -> `[{user, last_read_at}]`.
+A Communication Manager reads every agency thread and the threads they take part in; no longer the
+private staff-to-staff threads of others. Admin and Manager still read all. `list_all_threads` follows the
+same rule, so it can be shorter for a Communication Manager: show what comes back, do not fill it in.
+An agency's thread always goes to a Communication Manager. When an Admin or Manager opens an agency's
+thread they are not made the agency's counterpart, and creating a thread between an agency and an Admin
+is refused. Existing threads stay readable by whoever is in them.
+Ledger types. "Refund" is no longer a transaction type and `get_financial_overview` has no refund total.
+Remove it from any type filter or total.
+New agency. `contractor_api.create_contractor` with no `country` is refused ("country is required"); it
+used to be filed under Saudi Arabia silently. Make country a required field in the form.
+Embassy step type. `submit_embassy_step` / `stamp_embassy_step` accept the step type `Embassy` only.
+"Saudi Embassy" is the name of a role, not of a step.
+Tasks. A disabled user no longer gets tasks or notifications when a step opens.
+Medical reminder. One more reminder on the day the medical expires ("expires today"); if that day is
+missed it is sent late once. Nothing to build; the text arrives in "Sent to you".
+Unselect. An agency cannot unselect a Muayena case; `get_undoable_step` answers `available: false` for
+it. Nothing to build if you follow 3.12.
+Reports access. Admin, Manager and Finance Manager open the finance reports (stated in swagger now).
+Errors. More endpoints answer a clean 417 with a readable message instead of a 500. Show `message` as is.
+---
+5. Not built anywhere yet (yours to build)
+#	Item	Notes
+5.1	Medical Officer screen	Confirmed by the client. A Medical Officer login has no usable page. Needs: placements waiting for a Selected-stage or pre-departure medical, and the FIT / UNFIT action (`placement_api.record_selected_medical_result`, `record_predeparture_medical_result`). No money fields
+5.2	Undo on the Finance page	Backend ready (`doctype: "Applicant Transaction"`)
+5.3	Agency candidate list paging	Section 2
+5.4	`LoadError` rule on the remaining staff pages	3.8
+5.5	Applicant page stage after an undo	3.12
+5.6	Finance "statement line" is a typed ID; the Void window cannot be opened	3.6
+5.7	Agency Commission page	It calls commissions of cases still at Selected "Departed candidates"; its Excel export calls a staff endpoint an agency is refused on
+5.8	Notification times	Shown in the server's time zone
+5.9	A user with no role	Sees the empty company / bank settings form on `/settings`
+5.10	"Trigger commission" for Finance	On a Departed case with no commission: `finance_api.trigger_early_commission_accrual`
+5.11	Muayena "create placement" for Contract Parser	The backend allows it; the role must see the action
+6. Built in our copy but not checked in a browser
+"Undo last step" inside the clearance step drawer.
+The agency's Undo (unselect) on the agent page.
+The LMIS Status column in the clearance grid.
+Checked in a browser on our test site: push on / off / test, the notifications page and bell, the agency
+portal's three pages, the Finance and Reports pages with the Birr switch off and on, Undo on the applicant page
+(Stamped -> Processing, for real), the LMIS status cell.
+7. Coming next on the backend (not built; do not start screens yet)
+From the client's own system document. We will add a section here as each one is built.
+LMIS contract fields (employer city, phones, house number, contract begin / end); who "took" a file (agency
+name, phone); issued date asked when ISSUED is picked (backend already takes
+`date_completed`); Injaz payment "Printed"; Tesheer follow-up status; expected entry date and issuing country;
+the visa three-month rule with "days remaining"; embassy submission date; flight hour; flight outcomes
+(Exchange / Local return / International return); a manager's master table (one row per worker, all stages);
+a second contact person on the applicant.
+Frontend-only, can be done now from data already returned: medical "days remaining" on the Tesheer and
+embassy screens; contract age in days; picking an agency fills the destination from the agency's country.
+---
+---
+Detailed reference (older notes, newest sections at the bottom)
+START HERE (2026-09-23): what to show, hide and not use, as agreed with the client
+Details for each point are in the sections below. Hidden fields are kept in the backend and the
+API (nothing deleted), so don't build UI for them.
+Hide / don't use (no money logic reads these; every fee amount comes from the corridor fee table):
+Clearance Step: `amount`, `payment_status`, `wakala_amount`, `wakala_paid_date`,
+`police_ashara_amount`, `police_ashara_payment_status`, and the "Other Payments" table
+(`payments` / `record_step_payment`). The amount/currency params on `complete_clearance_step`,
+`record_wakala_payment` and the Police Ashara endpoint can be left out of requests.
+Injaz attempt: `injaz_amount`, `injaz_currency`, `receipt_number`, `receipt_photo`.
+Placement: `medical_2_examination_date` (keep only the Medical 2 result).
+Registration form: remove COC. Keep medical.
+Anything about the income/expense toggle, insurance, LMIS payment, COC exam date or airlines
+(#9/#18) is frontend-only: just remove it from the screens.
+Don't hand-log corridor fees (LMIS, Insurance, Taeshir, Injaz, Wakala, Kuwait LMIS, Police
+Ashara) with `log_stage_expense`/`log_stage_income`; they're recorded automatically.
+Keep and use:
+Injaz attempt `payment_status` (Paid/Unpaid) and `paid_date`: reminders use them, and Taeshir
+can't be completed until the attempt is Paid.
+Clearance Step `wakala_status` (Pending/Paid): Embassy submit/stamp still requires Paid, and the
+weekly Wakala reminders use it. Same idea as Injaz: status yes, amount no.
+Medical on registration (`medical_status` + `medical_expiry_date`): it's what the agency portal
+shows (FIT only), and an unexpired FIT now also covers the after-selection medical.
+Ticket cost: ETB only. Editing the price edits the same ledger row. An Internal reschedule is a
+new paid ticket (own row, cost required); an Airport reschedule costs nothing.
+Money screens:
+Ledger rows now carry `fee_type` (e.g. "LMIS Fee", "Ticket", "Ticket (Internal Reschedule)") and
+`clearance_step`. Rows with `awaiting_fx_rate = 1` should get an "awaiting FX rate" badge.
+`get_financial_overview` / `get_cost_breakdown_report` return `awaiting_fx`. When its count is
+above 0, show a note that those amounts aren't in the Birr totals yet.
+Invoices (#7): no change. "Generate invoice" = download `get_batch_invoice_pdf` again; each
+download is built fresh and lists every write-off recorded so far. Nothing is stored and there
+are no version numbers.
+Invoice status: don't show Draft/Sent and don't build a "send" action. Show paid state only:
+`Settled` = Paid, `Partially Settled` = Partly paid, anything else = Unpaid. Every invoice not
+fully paid now counts as open, so "previous unpaid" on the PDF and `include_unpaid_from_previous`
+include it. "Previous unpaid" only counts invoices created before the one being printed.
+Not being built: #16 (per-agency feature modules) is dropped. #21 (remove Finance approval) is
+waiting on team discussion.
+BEHAVIOR CHANGE (2026-09-30): cancelling, agency Undo, select_candidate response, grid save
+`advance_placement(new_status="Cancelled")` is now refused. Cancel only through
+`applicant_api.cancel_applicant` (the Cancel Applicant button): it needs a reason and freezes the
+applicant, the placement and its clearance steps together. To reuse the applicant afterwards:
+Restart, then Generate CV again.
+Remove the agent-page Undo button (`src/app/agent/page.tsx`, `undoMutation`, which calls
+`advancePlacementV2(name, "Cancelled")`). It never worked for agencies (they were refused
+"Not permitted"), and it can't work now.
+`portal_api.select_candidate` returns only the portal placement fields (the same list as
+`list_my_placements`). The page only reads `name`, which is still there.
+`clearance_grid.save_clearance_grid` refuses users who can't edit any grid with a 403 for the
+whole call, instead of per-row `{"ok": false}`. Staff who can edit are unaffected.
+`placement_api.create_muayena_placement` now works for Contract Parser too (with Registrar,
+Manager, Admin), so show the Muayena "create placement" action to that role. It is refused if the
+applicant has an active country ban on their destination.
+Placement money is hidden from operational staff (every placement read: `get_placement`,
+`list_placements`, the placement returned by the upload/medical/ticket/reschedule/advance calls,
+and `/api/resource/Placement`). `ticket_cost` and `reschedule_cost` are returned only to Finance
+Manager, Manager, Admin and Ticketer. `manual_commission_amount` / `manual_commission_currency`
+are returned only to Finance Manager, Manager and Admin. For everyone else the keys are simply
+absent (not null), so read them as optional. The Ticketer departure/ticket forms keep working.
+Changing an applicant's entry track (`update_applicant` with a new `entry_track`) now really
+sends a Registered / CV Generated applicant back to Draft (it never did before), and it is
+refused while the applicant has an active placement: cancel first (Cancel Applicant). Show the
+error message as-is.
+A destination with no clearance corridor can't be used past Draft: `register_applicant`, and
+`update_applicant` changing `destination_country` on a Registered+ applicant, are refused with a
+message naming the country. Best: in the destination picker, only offer countries that have a
+Corridor Definition (`corridor_engine.get_corridor_steps` refuses the others).
+Agency portal: `passport_scan` is gone from `list_portal_candidates` and
+`get_candidate_detail` (the agency gets it on the CV only). The agent pages don't read it today.
+`advance_placement(new_status="Processing")` can now be refused (placement stays Selected, no
+steps) when the destination's corridor has no mandatory step or a clearance step can't be
+created. Before, it "succeeded" with some steps missing. Show the message as-is.
+REPLACED 2026-10-12: the registration fee is removed (see "2026-10-12 — The registration fee is removed"
+at the bottom). Before that: `fee_status` was ignored by `create_applicant` / `update_applicant` /
+`register_applicant`, and a fee was marked Paid only with the Log Fee button.
+Medical Officer role needs a screen (confirmed by the client 2026-09-30: a dedicated medical
+person records results, alongside Contract Parser, Ticketer, Manager/Admin). A Medical Officer
+login today has no usable page (QA P8-11). They need: the placements awaiting a Selected-stage
+or pre-departure medical, and the record FIT/UNFIT action
+(`placement_api.record_selected_medical_result` / `record_predeparture_medical_result`). They may also read
+placements (no money fields).
+Registrar may cancel an applicant who has a placement (Cancel Applicant, reason required);
+show the button to Registrar for placed applicants too.
+Delete (D-11): only Admin can delete Applicant, Placement, Clearance Step, Contractor,
+Corridor Definition, Complaint or CV Record (Manager no longer can). Don't add delete actions for
+Manager; the app has none today.
+Commission on departure (D-07): with no FX rate yet, the commission is still recorded, with
+`awaiting_fx_rate = 1` and `amount_birr = 0` (show "awaiting FX rate", not 0 Birr); it fills in
+when the rate is recorded, and can't be put on an invoice until then. If it can't be computed at
+all (no commission rate), the case still departs and every Finance Manager gets a ToDo on the
+placement ("Departed with no commission ..."). After fixing the rate, Finance records it with
+`finance_api.trigger_early_commission_accrual`: give Finance that button on Departed placements
+that have no commission.
+`list_portal_candidates` and `list_complaints` are now paged: with no `limit_page_length`
+they return the first 100 rows, not everything. The agent page calls
+`list_portal_candidates` with no page size, so it will show at most 100 candidates: add paging
+(`limit_start` + `with_total=1`) or a "load more".
+BEHAVIOR CHANGE (2026-09-23): the Taeshir (Group Schedule Bio) export now downloads as `.xls`, not `.xlsx`
+`agency_tracking.report_api.export_group_schedule_bio_xlsx` now returns a legacy Excel `.xls`
+file, the same format as the template the client gave us. The endpoint name, request and access
+rules are unchanged. It keeps `_xlsx` in its name so existing calls don't break.
+Filename: `Group_Schedule_Bio_Applicants_{date}.xls`. Content-Type:
+`application/vnd.ms-excel`.
+Action needed: if the download code hard-codes a `.xlsx` filename or checks for the
+`spreadsheetml` MIME type, change it. Best is to use the filename from the
+`Content-Disposition` header. Label the button something like "Export for Taeshir (.xls)".
+The file also includes a hidden `hiddenSheet` (the template's country list). That is expected.
+Column "E.No" is now the applicant's Injaz Application ID, not a row counter. It comes
+from the Taeshir step's active Injaz attempt. It is blank if the applicant has no Taeshir
+appointment / Application ID yet, so export after the Injaz ID is entered.
+"E-number", "E.No", "Injaz Application ID" and "Injaz application number" all mean the same
+thing: the number the Injaz website issues for the applicant's application (e.g.
+`E408153627`). In the API it is `injaz_application_id` on the Taeshir step's Injaz attempt.
+It is set with `set_taeshir_appointment` / `forfeit_injaz_and_restart`, returned by
+`list_my_clearance_steps` and the clearance grid, printed as the right-hand barcode on the Injaz
+PDF, and now written to the Taeshir export's E.No column.
+Action needed: wherever the UI asks for or shows this number, label it
+"E-number (Injaz Application No.)" so staff know it's the same value.
+Column "Email ID" is now the agency's own email on every row, not the applicant's. It comes
+from a new setting, Agency Tracking Settings -> `agency_email` ("Agency Email"), next to
+Agency Phone. The Injaz application PDF prints the same value.
+Action needed: add an "Agency Email" input to the company details / settings page, next to
+phone, stamp and bank info. If it's left empty, the backend uses rawnasultan03@gmail.com (the
+email the Injaz PDF has always used).
+Sample outputs: `docs/sample/taeshir/`.
+NEW (2026-09-23): Excel-like grid for clearance steps (#11), backend ready
+Three endpoints in `agency_tracking.clearance_grid` (see swagger), one grid per step type
+(`LMIS Clearance`, `Kuwait LMIS`, `Taeshir`, `Telesign`, `Embassy`, `Kuwait Embassy`):
+`get_clearance_grid_columns(step_type)`: call once when the grid opens. It gives the columns,
+and `editable: true/false` for the logged-in user. Lock every cell whose column isn't editable.
+The status column's `options` are forward moves only.
+`list_clearance_grid(step_type, status?, search?, limit_start, limit_page_length, with_total=1)`:
+the rows, with applicant name, passport, the current Injaz attempt (Taeshir), and Wakala / Police
+Ashara fields (Embassy / Kuwait LMIS). Steps of departed or cancelled cases are hidden unless
+`include_closed=1`. Keep each row's `modified`: you send it back on save.
+`save_clearance_grid(changes)`: on Save, send only the changed cells:
+`[{name, modified, fields: {status: "Complete", injaz_payment_status: "Paid"}}, ...]`
+Each cell runs the same action as its button, so the same rules apply (Injaz Paid before
+Taeshir Complete, Wakala Paid before Submit/Stamp, Taeshir Complete before Stamp, etc.).
+Paying and completing in the same row works: data cells are applied before the status.
+Setting status to Rejected needs `rejection_remark` in the same row.
+Going back (e.g. Issued -> Pending) is refused. Use the existing Reopen popup
+(`reopen_clearance_step` with a reason). Don't offer earlier statuses in the cell.
+The response has one result per row, in order: `{ok: true, row}` or
+`{ok: false, error, field, conflict?, row}`. Put `error` on the cell named by `field`, and replace the
+row with the returned `row` either way. `conflict: true` = someone else saved that row after
+you loaded it: show "reload" for that row. Other rows still saved.
+A Manager/Admin can pass `override_reason` on a row to Submit/Stamp with Wakala unpaid (same
+rule as the buttons).
+Max 200 rows per save.
+Row edit popup: use the same `save_clearance_grid` with one row.
+BEHAVIOR CHANGE (2026-09-23): corridor fees are recorded per stage, automatically, when each step completes
+What changed: the corridor's known fees (LMIS, Insurance, Taeshir Appointment, Injaz, Wakala,
+Kuwait LMIS, Police Ashara) used to be added to the ticket cost as one ledger entry at ticketing.
+Now each fee is its own auto-approved Expense, recorded the moment its clearance step
+completes (Issued / Complete / Stamped). Ticketing records the ticket cost only.
+Fee settings (Corridor Definition → known fees): each fee row now has a required `step_type`,
+the step whose completion records it (`LMIS Clearance`, `Taeshir`, `Embassy`, `Kuwait LMIS`,
+`Telesign`, `Kuwait Embassy`). It must be one of that corridor's own steps. Existing rows were
+filled in automatically. Each fee can now have its own currency (the old one-currency-per-corridor
+rule is gone). The amount used is whatever is configured when the step completes.
+Injaz: charged per paid attempt. A reschedule never adds a charge. If a paid appointment is
+missed (`forfeit_injaz_and_restart`), that fee is recorded immediately, and the new attempt is
+charged again when Taeshir completes. A missed unpaid appointment records nothing.
+Keep the Injaz paid yes/no on attempts, which is how this tells the two apart.
+Recorded once, at completion, never re-checked: the amount used is the one configured when the
+step completes. A fee that was 0 (or not set up) at that moment is never recorded later, even if
+the amount changes. Ticketing does not re-check stage fees. If a fee's currency has never had an
+exchange rate, it's still recorded in its own currency with `awaiting_fx_rate = 1` and
+`amount_birr = 0`. It converts to Birr automatically the moment a rate for that currency is recorded
+(`set_fx_rate`, the scheduled fetch, or Desk). Suggested UX: show an "awaiting FX rate" badge on
+these ledger rows. `get_financial_overview` and `get_cost_breakdown_report` now return
+`awaiting_fx: {count, by_currency: {"SAR": 300}}`. When `count > 0`, show a note like "2 transactions
+awaiting FX rate (300 SAR) are not in these Birr totals".
+Ledger / `list_transactions`: new fields `fee_type` and `clearance_step` on these rows. Show
+them as "LMIS Fee · LMIS Clearance".
+BEHAVIOR CHANGE (2026-09-23, later): ticket cost, reschedules, Taeshir, hidden fields
+Ticket cost is always ETB. `record_ticket_details` rejects any `currency` other than ETB (417,
+nothing saved). Label the field "Ticket Cost (ETB)" and don't send a currency picker. The cost is
+one ledger row (`fee_type: "Ticket"`). Changing the price later edits that same row. Calling
+again with a new `ticket_cost` updates it; it never adds a second one. If Finance voided or rejected
+the row, it isn't changed and the response has a `warning`. Show it.
+Reschedule (`record_reschedule`): `reschedule_date` is the new flight date, and `flight_date`
+now moves with it.
+`reschedule_cause: "Airport"`: the airline moved it. Nothing is paid; no cost field.
+`reschedule_cause: "Internal"`: we rescheduled, so we buy a new ticket. `reschedule_cost` (ETB)
+is required, and optionally `ticket_number` (the new ticket). Each Internal reschedule is its
+own ledger row (`fee_type: "Ticket (Internal Reschedule)"`, already Approved). Its name comes
+back as `reschedule_transaction`.
+To fix an Internal reschedule's price, call `record_reschedule(placement_name, transaction=<reschedule_transaction>, reschedule_cost=<corrected>)`.
+That same row is edited.
+Taeshir can't be completed until the Injaz attempt is marked Paid (`record_injaz_payment`).
+Otherwise completion returns 417 "Taeshir can't be completed until the Injaz payment is marked
+Paid". Suggested UX: disable "Complete" on Taeshir until the Injaz attempt shows Paid.
+Not used any more; hide them in the UI (the backend still accepts them, but no money logic
+reads them; every fee amount comes from the corridor's fee table):
+Clearance Step: `amount`, `payment_status`, `wakala_amount`, `wakala_paid_date`,
+`police_ashara_amount`, `police_ashara_payment_status`. Also the amount/currency params on
+`complete_clearance_step`, the Wakala/Police Ashara amount params, and the whole "Other Payments"
+table (`payments`, `record_step_payment`). Leave these out of the UI.
+Injaz attempt: `injaz_amount`, `injaz_currency`, `receipt_number`, `receipt_photo`. Keep
+`payment_status` (Paid/Unpaid) and `paid_date`: reminders use them, and Taeshir completion
+requires Paid.
+Medical 2 (pre-departure): show only the result (FIT/UNFIT). Hide `medical_2_examination_date` in forms and tables; it's
+still accepted by `record_predeparture_medical_result` and still returned, just not needed on screen.
+Registration form: remove COC from registration. Keep medical on registration (it's the
+`medical_status` the agency portal shows when FIT).
+A registration FIT that hasn't expired (`medical_expiry_date` today or later) now also counts for
+the after-selection medical. Selected -> Processing passes without a new exam, and
+`record_selected_medical_result` is only needed when the registration medical is missing, not FIT,
+has no expiry date, or has expired. Suggested UX: on a Selected placement, show "Covered by
+registration medical (expires <date>)" instead of asking for a new exam.
+Kuwait works the same way as Saudi: when Kuwait LMIS completes, its fees (Kuwait LMIS Fee, Police
+Ashara Fee) are recorded from the corridor table. No payment status is involved.
+Don't hand-log these fees via `log_stage_expense`/`log_stage_income` any more, or they'd be
+counted twice.
+NEW + BUG FIX (2026-09-23): pagination with total count on every table list endpoint
+Bug this fixes: `list_applicants` and `list_placements` silently returned only the first 100
+rows, with no way to reach the rest (there was no offset, and `limit_page_length=0` still gave 100).
+Any table built on them is missing rows once there are more than 100 records.
+New params, the same on all 7: `list_applicants`, `list_placements`, `list_contractors`,
+`list_transactions`, `list_complaints`, `list_portal_candidates`, `list_my_placements`:
+Param	Meaning
+`limit_start`	offset (rows to skip), default 0
+`limit_page_length`	page size, clamped to 1-500 (UI's 10/50/100 all fine)
+`with_total=1`	response becomes `{ "data": [...], "total_count": 179 }` instead of a bare array
+Without `with_total` the response is unchanged (a bare array), so existing screens keep working.
+Switch tables over one at a time.
+`total_count` respects the same filters and the same permissions as the rows. An agency's total
+counts only candidates/placements it can see.
+"Expand the table" (10 → 50 → 100) = re-request with a bigger `limit_page_length`, or append
+pages with `limit_start`.
+Defaults when no page size is sent: 100 rows, except `list_complaints` and `list_portal_candidates`,
+which still return everything (as before).
+NEW (2026-09-23): medical status on the agency portal (FIT only); UNFIT applicants hidden and can't get a CV
+`list_portal_candidates` and `get_candidate_detail` now include `medical_status`, but only when it
+is `"FIT"`. For Pending/blank the key is absent (not null, not "Pending"). So: show a "FIT"
+badge when `candidate.medical_status === "FIT"`, otherwise show nothing. There's no medical filter
+param, so filter client-side if needed.
+UNFIT applicants never appear in the portal. They're excluded from the list, the detail
+endpoint returns 403 to an agency, and `select_candidate` returns the same generic 417
+`"This candidate is no longer available."` (an agency never sees an UNFIT result).
+`cv_api.generate_cv` refuses a medically UNFIT applicant (417, no override): `"APP-xxxxx is medically UNFIT -- a CV cannot be generated..."`. Suggested UX: disable/hide "Generate CV" when the
+applicant's `medical_status` is UNFIT.
+Post-selection medical tracking (`medical_selected_status`, `medical_2_status` on the agency's own
+placements) is unchanged.
+BEHAVIOR CHANGE (2026-09-23): applicant names are stored in ALL CAPS; full_name is always derived
+`first_name`, `middle_name`, `last_name`, `full_name`, `place_of_birth`, `passport_issue_place` are
+uppercased and whitespace-collapsed by the backend on every save, and existing records were
+converted. Show them as returned; don't title-case them in the UI. A form may keep showing what the
+user typed until save, then show the saved value.
+`full_name` is now always rebuilt from first/middle/last when any part is set, so any `full_name`
+you send alongside the parts is ignored. Edit the parts. Sending only `full_name` (no parts) still
+works.
+City, emergency contact name and current employer are not changed.
+NEW (2026-09-23): "Request override / lift" for a blocked country ban; blocked attempts no longer notify Managers
+Behavior change: a blocked attempt (the 403 "permanently banned from…") no longer notifies
+anyone. Instead the blocked user files a request, and Managers get one notification per request.
+Who can do what now:
+Action	Who
+Set a ban (`set_country_ban`)	Registrar, Complaint Manager, Manager, Admin, System Manager
+Lift a ban directly (`remove_country_ban`)	Manager, Admin, System Manager
+Override directly (`override_ban=1` + `override_reason`)	Manager, Admin, System Manager
+Request an override/lift (`request_country_ban_exception`)	Anyone who can edit the applicant (in practice Registrar)
+Approve/reject a request (`decide_country_ban_request`)	Manager, Admin, System Manager
+New endpoints (all `applicant_api.*`):
+`request_country_ban_exception(applicant_name, request_type, reason, action?, country?)`
+`request_type`: `"Override"` or `"Lift"`.
+`action` (required for Override): `"Register"`, `"Generate CV"`, `"Restart"` or `"Change Destination"`.
+It must match the button that got blocked.
+`country` defaults to the applicant's destination; for `"Change Destination"` pass the country
+the user was trying to set.
+417 if there's no active ban, the same request is already Pending, or an approved override for
+that action hasn't been used yet.
+`list_country_ban_requests(status?, applicant_name?)`: Managers see all, others only their own.
+`decide_country_ban_request(request_name, decision, note?)`: `decision` is `"Approve"` or `"Reject"`.
+How an approved Override works (one-time pass): after approval, the requester just retries the
+same action with no extra params. It goes through once and the request becomes `Used`. The next time
+that action is blocked, a new request is needed. The pass only works for the action it was requested
+for (a Restart pass doesn't unlock Register). An approved Lift removes the ban immediately.
+Suggested UX:
+On the ban 403 for a non-Manager: show a "Request override" / "Request lift" dialog with a reason
+box. Pre-fill `action` from the button that was clicked.
+Managers: a "Ban requests" queue (`list_country_ban_requests(status="Pending")`) with Approve/Reject
+and an optional note. Notification templates: `country_ban_request` (to Managers) and
+`country_ban_request_decided` (to the requester).
+Request statuses: `Pending`, `Approved` (for an Override, "waiting to be used"), `Rejected`, `Used`.
+BREAKING + NEW (2026-09-23): country bans are lifted, not deleted; ban now enforced at register / CV / restart / portal
+Breaking — `applicant_api.remove_country_ban` response changed.
+It used to return `{"deleted": "ACB-00012", "status": "success" | "not_found"}`. It now returns
+`{"lifted": "ACB-00012", "status": "success" | "already_lifted" | "not_found"}`. Anything reading
+`message.deleted` must read `message.lifted`. The ban row is no longer deleted: it stays with
+`active: 0` plus `lifted_by`, `lifted_on`, `lift_reason`.
+New optional param `lift_reason` (string). Please add a reason box to the "Lift ban" action; it's
+stored on the row and shown to Managers in the notification.
+Still Manager/Admin only. A Registrar/Complaint Manager gets a 403, so hide the lift button for them.
+`list_country_bans` now returns only active bans by default. Pass `active_only=0` for full
+history (e.g. a "Ban history" tab). Each row now also has `active`, `lifted_by`, `lifted_on`,
+`lift_reason`.
+`set_country_ban` only refuses (417) if an active ban exists for that applicant + country, so
+re-banning after a lift works.
+New 403 on three staff endpoints when the applicant has an active ban on their `destination_country`:
+`register_applicant`, `cv_api.generate_cv`, `restart_applicant`.
+Message: `"APP-xxxxx is permanently banned from <Country> (see ACB-xxxxx). A Manager or Admin must override this with a written reason to proceed."`
+`register_applicant`, `generate_cv`, `restart_applicant` accept the same override pair
+`update_applicant` already had: `override_ban=1` + `override_reason` (required). Suggested UX: on
+this 403, if the user is Manager/Admin/System Manager, show "Override ban?" with a reason box and resend with the
+two params; otherwise just show the message.
+`select_candidate` (agency portal): a banned applicant never appears in the list, so this only
+fires from a page loaded before the ban was set, or a direct API call. A Foreign Agency gets a
+generic 417 `"This candidate is no longer available."` with no ban details (the ban is an internal
+decision agencies must not see). Suggested UX: show that message and refresh the candidate list.
+No override on this endpoint. Internal staff calling it get the detailed 403 ban message.
+Agency portal: `list_portal_candidates` no longer returns an applicant banned from their
+destination country, so agencies of that country never see them. No frontend change needed.
+`update_applicant` unchanged: it only checks the ban when `destination_country` is changed to
+a banned country. Sending the full form with the existing country is fine, and ordinary edits of a
+banned applicant still save.
+Also fixed: `restart_applicant` (and `update_applicant` when an entry_track change forces a
+regression) now return the correct, bumped `cycle_number`. Before, the response was one behind
+until reload.
+NEW + BEHAVIOR CHANGE (2026-09-21): candidate photos/video/passport scan now come back as
+signed URLs that EXPIRE after 2 hours — don't cache them
+What changed: `Applicant.photograph`, `photo_full_body`, `experience_video`, and
+`passport_scan` used to be plain Frappe file paths (or, briefly and only in-repo, a would-be
+public R2 URL that was never actually live). As of today those fields are stored on Cloudflare
+R2, and — important — the R2 bucket is PRIVATE, not public. Nothing in that bucket is
+reachable by URL alone; every URL the backend hands out is a temporary signed link generated
+fresh by `list_portal_candidates`, `get_candidate_detail`, and `get_candidate_photo`, only after
+those endpoints' own permission checks already passed.
+Why it's private: the storage key pattern is `agency/{applicant_name}/{category}/{filename}`,
+and Applicant names are sequential (`APP-00001`, `APP-00002`, ...) — a public bucket would have
+let anyone script through every candidate's passport scan with zero login. Private + signed URLs
+closes that off entirely.
+The 10-minute -> 2-hour thing: the first cut of this used a 10-minute signed-URL expiry (a
+generic default, not chosen for this use case). That's too short for `experience_video`
+specifically — a candidate video being watched/scrubbed could have its URL expire mid-playback,
+stalling it partway through with no obvious error. Bumped to 2 hours for all four fields
+(`storage_engine.resolve_r2_url`/`resolve_r2_fields`, default `expires_in=7200`) so a normal
+browsing/review session doesn't run into it. It is still a real expiry, not "basically permanent"
+— see Action needed below.
+Action needed:
+Don't cache or persist these URLs across a long session. If a page holds a candidate list
+in state/localStorage/React Query cache for a while (a tab left open, a saved draft, anything
+that outlives ~2 hours), the photo/video URLs in it will go stale and 403. Refetch
+`list_portal_candidates` / `get_candidate_detail` to get fresh URLs rather than reusing old ones
+— don't build any caching layer that assumes these are permanent links.
+If an `<img>`/`<video>` fails to load with what looks like an auth/403 error on data that
+"should" exist, that's the first thing to check — it's very likely just an expired signed URL,
+not a missing file. A refetch-and-retry is the correct handling, not treating it as a real
+error state.
+New endpoint: `agency_tracking.report_api.export_group_schedule_bio_xlsx` — POST with
+`applicants` (array of Applicant names), returns a binary `.xlsx` download matching the Group
+Schedule Bio Applicants template (internal-staff-only, not portal-facing). See swagger.json for
+the full param/response shape.
+Unrelated but worth knowing: max upload size was raised from Frappe's 25MB default to 500MB
+(`System Settings.max_file_size`), specifically so candidate intro videos aren't rejected before
+they even reach the upload handler.
+FIXED (2026-09-19): `list_placements` and `list_portal_candidates` — the N+1 `frappe.client.get` bursts are gone
+Root cause (confirmed by frontend's own investigation): the Next.js proxy (`route.ts`) was
+enriching each of the ~20 items in a `list_placements`/`list_portal_candidates` response by
+firing one `frappe.client.get` per item via `Promise.all`, since those two endpoints didn't
+return everything the UI needed. Both fixed by returning it directly:
+`agency_tracking.placement_api.list_placements` now joins a fixed set of Applicant fields
+onto every row (`full_name`, `passport_number`, `photograph`, `photo_full_body`, `target_job`,
+`nationality`, `gender`, `religion`, `age`, `date_of_birth`) via one batched query, not one per
+placement. `destination_country` is NOT re-added — Placement already has its own copy, always
+equal to the applicant's by validation, so nothing there changes.
+`agency_tracking.portal_api.list_portal_candidates` now returns the SAME field set
+`get_candidate_detail` already did (see below) directly on every row of the list — no more
+narrower "list" tier that needed a follow-up detail call to fill in.
+Action needed: delete the enrichment code in `route.ts` (the `frappe.client.get`-per-item
+loop) for both of these — it's no longer needed, and should stop being called at all now that the
+parent endpoint returns everything.
+PRODUCT DECISION (2026-09-19): the candidate portal (`list_portal_candidates` /
+`get_candidate_detail`) now returns full CV-equivalent data for every candidate, including
+passport number
+Previously the portal intentionally withheld salary, marital status, children, skills, and
+passport data from foreign agencies until a candidate was individually opened (and withheld
+passport data entirely, at every tier). That's been superseded by an explicit decision: since
+an agency already receives all of this on the generated CV PDF once a candidate reaches CV
+Generated, none of it is a new disclosure — so both the list and single-candidate detail calls
+now return the same full set: everything on the CV (salary, marital status, children, physical
+attributes, education/experience, the full 10-skill matrix, passport number, passport issue/
+expiry dates, place of issue, and the passport scan image itself) plus the fields that were
+already there. Still excluded, because none of it is on the CV either: national_id, labor_id,
+phone/alternate_phone, email, home address, emergency contacts.
+Action needed: if your UI was deliberately hiding salary/skills/marital/passport fields on
+the list-view cards to match the old API behavior, that restriction can come off now — the data's
+already in the response either way. No endpoint signature changed, just what's included in the
+response body of both `list_portal_candidates` and `get_candidate_detail` (now identical sets).
+SUPERSEDES the 2026-09-16 entry below: passport OCR is now OCR.space, not PaddleOCR (2026-09-19)
+The "passport OCR now runs on PaddleOCR" entry right below this one is out of date — the engine
+was swapped again after that note was written. Current state: OCR.space is the primary OCR
+engine (PaddleOCR was dropped — memory footprint issues on the deploy target). No API shape
+change either time — `parse_passport_file`/`enqueue_parse_passport_file` still take the same
+params, return the same field shape. If you already did the "Action needed" below (switching
+`parsePassportFileV2` to the async `enqueue_parse_passport_file` + poll pattern), nothing more to
+do — that's still correct today, just needed regardless of which OCR engine is behind it.
+NEW (2026-09-19): `Applicant.place_of_birth` — passport parsing now extracts it
+New field, separate from the existing `city` field it used to fall back to on the CV/Injaz PDFs
+(`cv_api.py`/`clearance_api.py` now prefer `place_of_birth`, falling back to `city` only if it's
+empty — so nothing breaks for applicants entered before this). Passport parsing
+(`parse_passport_file`) fills it in automatically when it can read the printed "Place of Birth"
+line off the passport's visual zone (the MRZ itself has no such field — ICAO 9303). Heads up on
+reliability: live-tested against 2 real passports, this only successfully extracted it on 1 of
+them — OCR quality on the visual zone (as opposed to the MRZ, which is far more robust) means this
+field will sometimes come back empty even on a passport that clearly has a Place of Birth printed
+on it. Treat it as a helpful auto-fill, not a guaranteed one — worth a normal (optional, editable)
+form field on the Applicant screen if you don't have one already, same as any other
+parser-assisted field.
+NEW (2026-09-19): `Complaint.display_no` — show this instead of `CMP-00001`
+Every Complaint now has a `display_no` (plain integer: 1, 2, 3, ...) alongside its existing `name`
+(`CMP-00001`, `CMP-00002`, ...). Action needed: wherever a complaint number is shown to a user
+(list rows, detail headers, notifications), display `"#" + display_no` instead of `name` —
+`name` stays the real identifier for API calls (`complaint_name` params, linking, etc.), it just
+shouldn't be the human-facing label anymore. Already included in the response of
+`list_unresolved_complaints`, `list_new_complaints`, `list_complaints`, `create_complaint`,
+`acknowledge_complaint`, and `resolve_complaint` — no new call needed, just read the new field.
+NEW (2026-09-19): Commission batch write-offs now shown on the invoice PDF + a listing endpoint
+Multiple write-offs per batch already worked on the backend (negotiated discounts, each with its
+own reason) but the printed invoice PDF never showed them or subtracted them from TOTAL — fixed:
+the invoice now lists every write-off (date + reason) and TOTAL correctly comes out lower.
+No frontend call changes needed for the PDF itself (still `get_batch_invoice_pdf`/
+`enqueue_get_batch_invoice_pdf`, same params). If you want to show a batch's write-off history
+somewhere in the UI (not just on the printed PDF), there's now a dedicated endpoint for that:
+`agency_tracking.finance_api.list_batch_write_offs` (param: `batch_name`) — returns each row's
+`amount_original`, `amount_birr`, `reason`, `transaction`, `write_off_date`. (`write_off_batch`
+already returned the full batch including this data too, via `.write_offs` — this is just a
+lighter-weight way to get only that list.)
+NEW (2026-09-19): Ticketing now auto-calculates known corridor fees — stop manually logging LMIS/Taeshir/Embassy costs
+> **SUPERSEDED 2026-09-23:** fees are no longer added at ticketing. Each is recorded when its clearance step completes, and the ticket cost is ETB-only and on its own. See the sections at the top. The rest of this section is history.
+Product decision: LMIS, Insurance, Taeshir Appointment, Injaz, Wakala, Kuwait LMIS, and Police
+Ashara fees are known in advance per corridor (destination country), so staff shouldn't have to
+hand-log each one as a separate income/expense entry while working that clearance step anymore.
+Action needed — stop doing this, if your UI currently does it: do NOT call
+`finance_api.log_stage_expense` / `log_stage_income` with `stage` set to a clearance step type
+(`LMIS Clearance`, `Kuwait LMIS`, `Telesign`, `Taeshir`, `Embassy`, `Kuwait Embassy`) anymore —
+this would now double-count that cost. (This directly affects the generic "log income/expense"
+button asked for in the 2026-09-12 NOTE below — that button is still correct for genuinely ad-hoc
+costs like reschedule fees or general office expenses, just no longer for these six.)
+SUPERSEDED 2026-09-23: fees are now recorded one per fee when each step completes, and
+ticketing logs the ticket cost only (see the 2026-09-23 section at the top). The paragraphs
+below describe the old 09-19 behavior.
+What happens instead (09-19, old): the moment `placement_api.record_ticket_details` is called with a
+`ticket_cost`, the backend sums that corridor's configured known fees + the ticket cost into ONE
+already-Approved Applicant Transaction expense — no Finance review step, since it's a
+system-computed total, not a discretionary entry. This only fires once per placement (correcting
+the ticket number later via a second call won't double-log it).
+`currency` (optional param on `record_ticket_details`) must match the corridor's configured fee
+currency if that corridor has any non-zero fee set — passing a mismatched one now returns a 417
+before anything is saved (safe to retry). Omit it and it'll default to the corridor's fee
+currency automatically, or ETB if the corridor has no fees configured yet.
+Not live yet — no visible behavior change until this is done: the actual fee amounts
+(`Corridor Definition.known_fees`, one row per fee type, set to 0 for whichever a corridor doesn't
+charge) haven't been entered for Saudi Arabia / Kuwait yet. Until they are, this behaves exactly
+like before (just the ticket cost gets logged, nothing added).
+CHANGED (2026-09-16): passport OCR now runs on PaddleOCR, not Tesseract
+No API shape change -- `parse_passport_file`/`enqueue_parse_passport_file` take the same params
+and return the same field shape as before. Purely a backend engine swap, but worth knowing why:
+after several rounds of Tesseract-specific misread bugs (each fixed individually, each a new
+failure mode on a new real passport), switched the primary OCR engine to PaddleOCR -- a modern
+deep-learning OCR that does real text detection (finds where the text actually is) instead of
+needing a guessed crop, and includes its own orientation correction. Verified against both real
+passports on file: it read the full, untouched image correctly in a single pass on both,
+byte-exact against the true MRZ, including the low-resolution one that needed several rounds of
+Tesseract-specific fixes to get right. The whole previous Tesseract/PassportEye pipeline is kept
+intact as an automatic fallback if PaddleOCR isn't available or doesn't produce a usable read --
+this is an addition ahead of it, not a replacement, so it can't regress anything that worked
+before.
+Heads up on deploy: this adds ~1GB to the backend Docker image (PaddleOCR's deep-learning
+dependencies) and the OCR call itself takes several seconds per image (2-20s observed) rather
+than Tesseract's near-instant read -- expect a noticeably longer build/deploy.
+Action needed: `parsePassportFileV2` (`documents.ts`) calls the synchronous
+`parse_passport_file` directly, not the async `enqueue_parse_passport_file` + poll pattern that
+already exists in the backend for exactly this "OCR can be slow" scenario. A 2-20 second
+synchronous call on the passport upload step is going to feel like a hang/freeze in the UI now --
+switch this call to the async endpoint (poll `background_jobs.get_job_status(job)` for the
+result) before this ships to a real user.
+FIXED (2026-09-16): passport OCR — stop pre-cropping to the MRZ before upload
+Action needed: if your passport upload flow crops the image down to just the MRZ strip
+before sending it (a workaround for OCR failing/returning garbage on the full photo), stop
+doing that — upload the full passport photo like any other document. Two problems, one fix:
+The garbage-name bug (`cjjjjjsjadnajdnajdnajsdnj`-type results) is fixed. Root cause: on a
+full, uncropped photo, the OCR could lock onto the wrong region of the image (the photo
+border, a security pattern, other printed text), and since passport names carry no checksum
+at all in the MRZ standard (unlike the passport number/DOB/expiry, which do), garbage from the
+wrong region had nothing checking it before landing in first/last name. Fixed by requiring the
+document number, DOB, and expiry checksums to all agree before a name is trusted at all — if
+they don't, the result now comes back with those fields blank and `needs_passport_review: 1`
+instead of a confident-looking wrong name.
+This is also why cropping was breaking the CV: whatever image you upload for OCR is the
+same one that ends up as the stored passport photo — crop it down to the MRZ strip and that's
+what shows up on the generated CV instead of an actual passport photo. OCR no longer needs the
+pre-crop (see below), so uploading the full photo fixes both problems in one move.
+Why the full photo works reliably now: the backend no longer solely depends on the MRZ
+auto-detector finding the right region. It also corrects photo orientation (sideways/upside-down
+phone photos) and tries several MRZ-band crops itself (the MRZ is always at a fixed position at
+the bottom of a passport's bio page), independent of whether the auto-detector succeeds. Verified
+against synthetic passport photos with decoy text/patterns elsewhere on the page, rotated 90°/180°,
+and tilted up to 15° — all read correctly; a photo with no real MRZ at all correctly returns
+nothing rather than a guess.
+No API shape change — `parse_passport_file`/`enqueue_parse_passport_file` take the same
+`file_url` param and return the same field shape as before.
+UPDATE (same day): a live test surfaced a second, narrower bug in the same area: two given
+names could get glued into one (`"ASNEKECHSTEDESSE"` instead of first="Asnekech"/middle="Tedesse")
+when the OCR misread the single separator character between them as a stray letter. Fixed by
+having the pipeline keep trying its other crop attempts (it already tries several, at different
+effective resolutions) whenever a name looks suspiciously long, instead of stopping at the first
+attempt that got the passport number/DOB/expiry right — a different crop can OCR the exact same
+line's separator more cleanly. If every attempt still comes back with a suspiciously long name,
+it's now returned with `needs_passport_review: 1` instead of looking like a clean, confirmed
+read — worth surfacing that flag in the UI if you don't already (e.g. a small "please verify"
+badge) so staff know to double-check.
+FIXED (2026-09-16): the "LMIS officer" pinged for ticketing follow-up was picked arbitrarily
+No API shape change, purely a backend correctness fix that changes who shows up as
+`allocated_to` on one of the ToDo rows `list_my_todos` returns. When a Placement reaches
+`Stamped`, the officer who handled its LMIS step gets a personal "Book ticket for..." ToDo
+alongside the broadcast to every Ticketer (continuity, so the LMIS person can follow their case
+into ticketing). That officer was previously picked via "whoever has the most recent ToDo
+`creation` timestamp on the LMIS step" — but LMIS steps broadcast an open ToDo to every holder
+of the matching country role, not one exclusive assignee, so with 2+ Saudi/Kuwait LMIS holders
+this could land on an arbitrary one of them, unrelated to who actually did the work. Fixed to use
+`Clearance Step.completed_by` (who actually completed it) instead. Verified live with 8 Saudi
+LMIS holders: the old heuristic would have pinged whichever one happened to load last; the fix
+correctly pings the real completer regardless.
+NEW (2026-09-16): `list_my_todos` — the calling user's To-Do queue, human-readable
+New endpoint: `POST /api/method/agency_tracking.clearance_api.list_my_todos`. Returns the
+current user's own ToDo rows (Clearance Step assignments/broadcasts + Placement
+ticketing/departure tasks) — no ID param, it's always `frappe.session.user`, same pattern as
+the notification feed endpoints.
+`status` (optional, formData) — defaults to `"Open"` (the real open task list). Pass `""` to
+get every status (Open/Closed/Cancelled), e.g. for a "my task history" view.
+Each row: `name`, `reference_type` (`"Clearance Step"` or `"Placement"`), `reference_name`,
+`description`, `status`, `creation`, plus `placement`/`step_type`/`step_status`/`is_mandatory`
+filled in when `reference_type` is `"Clearance Step"` (so you don't have to do a second
+lookup just to build a link or badge).
+`description` is now human-readable — this fixes the same "PLM-00220" / "CLR-00045" problem
+across the board, at the source (`clearance_engine.py`), so it's readable wherever it already
+showed up (Frappe desk ToDo list, this new endpoint, anywhere else that reads ToDo.description),
+not just in this new endpoint's response:
+Clearance Step ToDos: `"{Step Type} — {Applicant full name} [{step ID}]"`, e.g.
+`"Embassy — Fatuma Muhammed Abi [CLR-2026-00045]"` (was: `"Clearance Step CLR-2026-00045"`).
+Broadcast ones (the six country+step roles) append the role: `"... (Saudi Embassy)"`.
+Placement ToDos: `"Book ticket for {Applicant full name} [{placement ID}]"` /
+`"Confirm departure for {Applicant full name} [{placement ID}]"` (was: `"... for Placement PLM-00220"`).
+Status lifecycle, if you're building "is this actually done" UI around it:
+`Open -> Closed`: automatically, when the underlying Clearance Step reaches its terminal
+outcome (`complete_clearance_step` for LMIS/Taeshir/Telesign, `stamp_embassy_step` /
+`reject_embassy_step` for Embassy).
+`Open -> Cancelled`: automatically, only for the exclusive single-officer ToDos (Clearance
+Officer/Ticketer model), when the step is reassigned to someone else — the old ToDo is
+cancelled, a fresh one opened for the new assignee. Broadcast ToDos (the six country+step
+roles) are never cancelled this way; they close only via the terminal-outcome path above.
+UPDATE (same day): Placement-level ToDos now auto-close too — "Book ticket..." closes the
+moment the Placement reaches `Ticketed` (ticket genuinely recorded, since `Stamped -> Ticketed` is gated on `ticket_number` existing), and "Confirm departure..." closes the moment
+it reaches `Departed`. Both verified end-to-end on a seeded Placement (`clearance_engine.py`'s
+`_close_placement_todos`, wired into `notify_departure_due` and a new
+`finance_engine._on_placement_departed` wrapper around `accrue_commission`). A Ticketer's "0
+open tasks" will now actually reach 0 once they're genuinely caught up.
+FIXED (2026-09-16): `stamp_embassy_step` now blocks on unpaid Wakala too — same gate as Submit
+`stamp_embassy_step` (Saudi "Embassy" step_type only — Kuwait Embassy doesn't carry a Wakala fee)
+previously let a step reach `Stamped` regardless of `wakala_status`. It now throws a 417
+`ValidationError` — "Wakala must be Paid before Embassy documents can be Stamped." — under
+the exact same conditions `submit_embassy_step` already enforced for Submit. This closes a real
+gap: a step that got past Submit unpaid (via the Manager override below, or `wakala_status` being
+reverted back to unpaid via `record_wakala_payment` after Submit) could previously still be
+Stamped with no further check.
+Action needed if your Embassy stamping UI doesn't already handle this: whatever
+unpaid-Wakala warning/confirmation you show before Submit, show the same thing before Stamp — a
+step can be Submitted while Wakala is still Pending (Submit doesn't require Taeshir or forbid
+this on its own), so the unpaid state can absolutely still be sitting there by the time someone
+clicks Stamp.
+Override, both endpoints: both `submit_embassy_step` and `stamp_embassy_step` accept an
+optional `override_reason` param. If the acting user holds Manager/Admin/System Manager and
+sends a non-empty `override_reason`, the call proceeds anyway (and the override is written to the
+Process Event / activity log with that reason). Without a role match and reason, it's a hard
+block — there is no way to bypass this from a non-management account. If your Embassy
+submit/stamp UI has a "confirm override" checkbox, make sure it's actually plumbed to send
+`override_reason` in the request body — a checkbox that doesn't populate this param will still
+get rejected by the backend even for a Manager/Admin account.
+Only affects the Saudi corridor's `"Embassy"` step_type; `"Kuwait Embassy"` steps are untouched
+(no Wakala field on that corridor).
+FIXED (2026-09-12): `render_cv_pdf` no longer silently "succeeds" with a fake document
+If a CV render genuinely fails (missing wkhtmltopdf, a bad photo, a template error),
+`render_cv_pdf` previously returned a 200 with a ~60-byte fake PDF stub as if it worked. It
+now correctly returns a 417 ValidationError ("Could not generate the CV PDF. Try again
+shortly or contact support.") instead. If your download flow only checked the HTTP status and
+assumed 200 meant a real file, add error handling for this 417 — it was always possible for the
+render to fail, this just makes the failure honest instead of silent. `generate_cv` (the
+Applicant-lifecycle action) is unaffected in its own success/failure contract — it already
+degraded gracefully on a render failure and still does, just without a fake attachment now.
+NEW (2026-09-12): Excel exports — new endpoint, real formatting, different columns
+If you have (or are building) an "Export to Excel" button anywhere in Finance, read this.
+Root cause of the earlier "the Excel looks wrong" report: the `.xlsx` library was never
+actually installed as a real dependency, so `export_commissions_xlsx` was silently falling back
+to a bare, unformatted CSV every single time — that's why money had no comma formatting and the
+Date column showed `########`. Fixed (real dependency now, real formatting): comma-separated
+money (`#,##0.00`), real date values, a title banner with your actual agency name (pulled from
+Agency Tracking Settings), a colored header row, alternating row shading, frozen header,
+autofilter.
+Column changes on `export_commissions_xlsx` (client-facing, explicit request): no more raw
+internal IDs leading the sheet. New column order:
+`Applicant | Foreign Agency | Type | Original Amount | Currency | ETB Amount | Status | Date | Transaction ID | Placement`
+— applicant's real name and the contractor's real name lead the sheet; `Transaction ID` and
+`Placement` are kept (not removed) but pushed to the last two columns as reference-only fields.
+Same for the Applicant name specifically: it's built from `first_name + middle_name + last_name`
+directly (not the cached `full_name` field, which can go stale if those get edited later) — this
+matters for this app's naming convention where `middle_name`/`last_name` carry the father's/
+grandfather's name.
+`export_transactions_xlsx` — new endpoint
+`export_commissions_xlsx` only ever covered Commission-type transactions. This new one covers
+every transaction type and status (Expense/Income/Commission), matching whatever
+`finance_api.list_transactions` or the Pending Financial Approvals Queue shows.
+Method: `POST /api/method/agency_tracking.report_api.export_transactions_xlsx`
+Auth: Finance Manager/Admin/System Manager.
+Param	Type	Required	Notes
+`status`	string	no	e.g. `"Pending"`, `"Approved"`, `"Rejected"`, `"Voided"`.
+`transaction_type`	string	no	e.g. `"Expense"`, `"Income"`, `"Commission"`.
+`placement`	string	no	
+`applicant`	string	no	
+`from_date` / `to_date`	date	no	
+Response (200): binary `.xlsx` download. Columns: `Applicant | Foreign Agency | Type | Status | Original Amount | Currency | ETB Amount | Description | Logged By | Approved By | Approved On | Rejection Reason | Logged At | Transaction ID | Placement`.
+NEW (2026-09-12): `create_commission_batch` — "include unpaid from previous" option
+New param: `include_unpaid_from_previous` (boolean). When true, on top of whatever this new batch
+would normally include, it also pulls in every still-unpaid item sitting in this contractor's
+other open batches (Sent/Partially Settled) in the same currency, releases them from their old
+batch, and makes them real line items on this new one — trackable per item afterward exactly like
+any other item (`settle_batch_items`, etc.), not just a printed courtesy number.
+Side effect worth knowing: the OLD batch(es) those items came from will have their own
+`total_amount_original` shrink, and — if that was the only thing still unpaid on them — their
+`status` will flip to `"Settled"` automatically. That's correct (nothing's left owed on that
+batch), but it can look surprising in a UI if "Settled" reads as "fully paid in cash" rather than
+"nothing left owed here, some of it moved elsewhere." Worth a distinct label/tooltip if your UI
+shows batch status prominently.
+REMOVED (2026-09-12): `record_batch_advance` — if you call this, stop
+`agency_tracking.finance_api.record_batch_advance` no longer exists. It was never wired to
+anything visible (didn't show on the invoice, didn't affect balance_due/Settled status) — pure
+dead weight, so it's been deleted rather than left as a confusing no-op.
+Advance is, and stays, exactly one thing: `requested_advance_amount`, a param on
+`create_commission_batch`. Pass it when you create the batch — that's the only place it can be
+set — and it becomes a line added into that batch's printed invoice total
+(`Batch Total + requested_advance_amount + previous_unpaid_original`). Nothing else needed, no
+separate "confirm advance received" call, no reference number, no received-date. Just a number at
+creation time, full stop.
+UPDATE: gap closed. New endpoint — `agency_tracking.finance_api.update_batch_advance`:
+Param	Type	Required	Notes
+`batch_name`	string	yes	
+`requested_advance_amount`	number	yes	In the batch's own currency. Pass `0` to clear a previously-set advance.
+Same simple model as `create_commission_batch`'s own param — no reference number, no
+received-date, nothing else. Finance Manager/Admin/System Manager only. 417 on a negative amount
+or an invalid `batch_name`.
+NOTE (2026-09-12): please add a plain "log income / expense" button somewhere in Finance
+Small reminder, not urgent: `agency_tracking.finance_api.log_stage_income` and
+`log_stage_expense` already exist on the backend (params: `amount`, `currency`, `description`,
+`placement`, `applicant`) but as far as I can tell there's no simple, general-purpose button in
+the UI that just logs a one-off income or expense entry outside of a specific existing flow.
+Worth adding one in the Finance area.
+Relevant because of where the Advance/loan discussion is heading: an "Advance" (money the agency
+receives ahead of time, effectively a loan) is very likely going to end up logged the same simple
+way — just another income entry — once that's wired up on the backend, rather than needing its
+own special form. So this one button quietly covers both cases. Nothing to build differently
+today, just flagging it so it's on the radar before Advance/loan tracking lands.
+NEW (2026-09-12): Clearance Step human-error correction toolkit
+Scenario this was built for: an LMIS officer marks a step "Issued" by mistake, notices while the
+case is already on the Embassy stage, and today has no way to fix it. Five changes, all on
+`agency_tracking.clearance_api` unless noted. If your UI has any "mark complete / stamp / reject /
+reassign" action on a Clearance Step, read this whole section before your next release.
+`complete_clearance_step` — new `date_completed` param
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	unchanged
+`reference_no`	string	no	unchanged
+`amount`	number	no	unchanged
+`date_completed`	date (`YYYY-MM-DD`)	no	New. Only applied when passed. Omit it and behavior is unchanged (today's date on a fresh completion, untouched on a correction). Pass it to backdate a correction to the real date.
+New 417 case: calling this on a step whose status isn't `Pending`/`In Progress` (a fresh
+completion) or the step's own terminal status (a correction) now fails with `"A '<status>' clearance step cannot be completed."` — this closes a gap, it was never legal before either, just
+silently unguarded.
+`reopen_clearance_step` — new endpoint
+Reverses a step's own terminal outcome (Issued/Complete/Stamped/Rejected) — not just a wrong
+field on it (that's what the `date_completed`/`reference_no`/`amount` correction path above is
+for). Use this when the determination itself was wrong, e.g. "LMIS should never have been marked
+Issued." Manager/Admin/System Manager only.
+Method: `POST /api/method/agency_tracking.clearance_api.reopen_clearance_step`
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	
+`reason`	string	yes	Written reason, recorded on the audit trail.
+`target_status`	string	no	Defaults to `"In Progress"`. Must be `"Pending"` or `"In Progress"` — also `"Submitted"` for an Embassy/Kuwait Embassy step.
+Response (200): the full updated Clearance Step doc (`{"message": {...}}`).
+403: caller isn't Manager/Admin/System Manager.
+417: missing `reason`, invalid `target_status` for this step_type, or the step is already at
+`target_status`.
+Side effect worth knowing: `date_completed`/`completed_by` are cleared, and (Embassy only)
+`rejection_remark` is cleared if it was Rejected. A fresh ToDo is recreated for whoever
+completed it originally plus every current holder of that step_type's role — if your UI shows a
+"my tasks" queue, this step will reappear there for the relevant officers.
+Important: once a mandatory step is reopened, the parent Placement cannot reach
+"Ticketed" until it's re-completed — `record_ticket_details`/whatever drives your "Ticketed"
+action will start returning a 417 naming the incomplete step if this happens on an
+already-Stamped placement. This is deliberate, not a bug.
+`record_police_ashara` — new endpoint
+Kuwait LMIS's own sub-check (appointment/status/payment/remark) — previously only editable via a
+raw desk-form field with no validation. Mirrors `record_wakala_payment` below.
+Method: `POST /api/method/agency_tracking.clearance_api.record_police_ashara`
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	Must be `step_type == "Kuwait LMIS"`.
+`police_ashara_status`	string	no	`"Pending"` / `"Scheduled"` / `"Completed"` / `"Failed"`.
+`police_ashara_payment_status`	string	no	`"Not Applicable"` / `"Pending"` / `"Paid"`.
+`police_ashara_amount`	number	no	
+`police_ashara_appointment_date`	date	no	
+`police_ashara_remark`	string	no	Required if `police_ashara_status` is `"Failed"` (417 otherwise).
+Response (200): full updated Clearance Step doc.
+403: not permitted (same actionable-step rule as the other clearance actions).
+417: invalid status/payment_status, wrong step_type, or `"Failed"` with no remark.
+`record_other_payment` — new endpoint
+A generic "Other Payments" line-item table on any Clearance Step — for anything not covered by a
+dedicated field (Wakala, Police Ashara, Injaz), e.g. an insurance premium. Supports both adding a
+new row and correcting an existing one.
+Method: `POST /api/method/agency_tracking.clearance_api.record_other_payment`
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	Any step_type.
+`payment_type`	string	yes for a NEW row	Free text, e.g. `"Insurance"`.
+`amount`	number	no	
+`currency`	string	no	`SAR` / `KWD` / `USD` / `ETB` / `AED` / `QAR`.
+`status`	string	no	`"Pending"` / `"Paid"`.
+`remark`	string	no	
+`receipt_url`	string	no	
+`payment_row_name`	string	no	Pass an existing row's `name` (from a previous response's `payments` array) to correct it instead of adding a new one — `payment_type` is not required in that case.
+Response (200): full updated Clearance Step doc, including the `payments` array with each
+row's own `name` — save that if you want to correct the row later.
+417: invalid `currency`/`status`, or a new row without `payment_type`, or an unknown
+`payment_row_name`.
+`record_injaz_payment` — new `payment_status` param
+Param	Type	Required	Notes
+...existing params unchanged...			
+`payment_status`	string	no	New. `"Paid"` (default, unchanged) or `"Unpaid"` to correct a mistaken confirmation — clears `paid_date`, leaves `amount`/`currency`/`receipt_number` untouched.
+Distinct from `forfeit_injaz_and_restart` — that treats the fee as genuinely lost and opens a
+brand new attempt. This is a plain "I clicked Paid by mistake, nothing was actually paid" fix on
+the same attempt.
+`assign_clearance_step` — now has real guards (behavior change, not just an addition)
+Previously this endpoint had no terminal-placement check and no audit log at all — unlike
+`reassign_clearance_step`, which already had both. If your UI calls `assign_clearance_step`
+anywhere (rather than `reassign_clearance_step`), it can now get a new 417 it never got
+before: `"<placement> is already Departed/Cancelled; its clearance steps can no longer be edited."` This was a real permission gap being closed, not a new restriction added arbitrarily —
+if you were relying on this succeeding on a closed-out placement, that was already a bug.
+---
+NEW (2026-09-11): `list_employee_roster` — replace any direct `User` listing call
+If your staff picker (clearance-step assignment dropdown, chat participant labels, etc.) calls
+`frappe.client.get_list` on the `User` doctype directly, or fetches each user one by one with
+`frappe.client.get`, switch it to this. The direct path had no role gate at all — any logged-in
+employee could pull the full staff directory including security roles — and was doing one query
+per user besides.
+Method: `POST /api/method/agency_tracking.employee_api.list_employee_roster` (no params)
+Auth: any `INTERNAL_STAFF_ROLES` member (not just Admin/Manager — e.g. a Ticketer needs this
+to see who holds "Saudi LMIS" to assign a step to them).
+Response (200): `{"message": [{"name", "email", "full_name", "first_name", "last_name", "enabled", "roles": [...]}, ...]}` — enabled System Users only, name/email/roles only (no
+phone/mobile/creation/etc., nothing account-management-shaped).
+403: caller holds no internal staff role.
+NEW (2026-09-11): Clearance Step data corrections now allowed after terminal status
+Product decision: once a Clearance Step reaches its own terminal status (Issued/Complete/
+Stamped/Rejected), its DATA (reference numbers, amounts, rejection remarks, assigned officer)
+stays correctable through the normal actions — the status itself still can't regress this way
+(that needs `reopen_clearance_step` above). Concretely:
+`complete_clearance_step` / `stamp_embassy_step` / `reject_embassy_step` /
+`reassign_clearance_step` no longer throw `"<step> is already <status> (terminal)"` just because
+the step itself is done — only a Departed/Cancelled Placement still hard-blocks everything.
+`stamp_embassy_step` changed from a silent no-op (returned the old doc, never applied a new
+`reference_no`) to actually re-saving the correction when called again on an already-Stamped
+step. If your UI treated a repeat "Stamp" call as a safe no-op, it now genuinely updates the
+reference number.
+New dedicated `wakala_reference_no` field — `record_wakala_payment`'s own `reference_no` param
+now writes there, not the step's shared `reference_no` (which is the Embassy visa/stamp
+number set by `stamp_embassy_step`). If you were displaying or diffing `reference_no` for
+Wakala, switch to `wakala_reference_no`.
+NEW (2026-09-11): Commission Batch status — a real "stuck at Partially Settled forever" bug fixed
+If every remaining item on a "Partially Settled" batch got carried into a later batch (via
+`release_unpaid_items`), the batch used to freeze at `"Partially Settled"` forever with
+`balance_due_original = 0.0`, even though nothing was actually owed. It now correctly reaches
+`"Settled"` in this case. No API shape change — just don't be surprised if a batch your UI showed
+as permanently "Partially Settled" now reports "Settled" the next time it's touched.
+NEW (2026-09-11): Employee role/status changes can now be blocked by an admin-lockout guard
+`update_employee_roles` and `toggle_employee_status` (disable) can now fail with a new 417:
+`"Refusing to remove your own Admin/Manager/System Manager access -- ..."` — caller tried to
+strip their own last admin-capable role.
+`"Refusing: <email> is the last remaining staff-admin account. ..."` — would leave nobody able
+to manage staff.
+If your staff-admin screen doesn't already surface arbitrary 417 messages from these two calls,
+add that now — this is a real, reachable case, not an edge case to ignore.
+Informational: many more endpoints now return a clean 417 instead of a raw 500
+Two backend sweeps (`chat_engine.get_placement_officers`, then 37 more endpoints across
+`applicant_api`/`finance_api`/`placement_api`/`clearance_api`/`passport_parser`/`contract_parser`/
+`background_jobs`/`corridor_engine`/`notification_api`/`cv_api`) now validate required params with
+a proper `frappe.ValidationError` (417, JSON error body) instead of raising a raw Python
+`TypeError` that surfaced as an unhandled 500. Zero behavior change on a correctly-called
+request — only matters if your error handling special-cased a raw 500 from one of these calls;
+it'll now be a 417 with a specific "X is required" message instead.
+
+Two behavior changes on `travel/main` as of commit `c6f88d4`. If you have any UI touching an
+Embassy Clearance Step (Saudi corridor) or the "Submit to Embassy" action, read this before your
+next release.
+`agency_tracking.clearance_api.record_wakala_payment` — new endpoint
+Records the Wakala fee payment on a Saudi-corridor Embassy step only (`step_type == "Embassy"` — Kuwait's own `"Kuwait Embassy"` step_type doesn't carry this fee at all and this
+endpoint will reject it). This is the only whitelisted write path for these fields now — there
+was previously none (a raw desk-form field edit was the only way to change it, with no
+validation and no audit trail).
+Method: `POST /api/method/agency_tracking.clearance_api.record_wakala_payment`
+Auth: session cookie, same as every other endpoint in this app.
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	The Clearance Step name (e.g. `CLR-00027`). Must be `step_type == "Embassy"`.
+`wakala_status`	string	no	`"Pending"` or `"Paid"` — anything else is a 417.
+`wakala_amount`	number	no	Currency amount.
+`paid_date`	date (`YYYY-MM-DD`)	no	Only used when `wakala_status` is set to `"Paid"`; defaults to today if omitted. Ignored if `wakala_status` isn't `"Paid"`.
+Response (200): the full updated Clearance Step doc (`{"message": {...}}`), same shape as
+`submit_embassy_step`/`stamp_embassy_step`.
+403: caller isn't permitted — same rule as submit/stamp/reject (Manager/Admin/System
+Manager, the officer actually assigned to that step, or a `Saudi Embassy` role holder).
+417: wrong step_type (not `"Embassy"`), or an invalid `wakala_status` value.
+Every successful call writes a `Process Event` (audit trail) — visible on the Clearance Step's
+own timeline in the desk.
+`submit_embassy_step` — now blocks on unpaid Wakala (Saudi corridor only)
+No param removed, one added:
+Param	Type	Required	Notes
+`clearance_step_name`	string	yes	unchanged
+`override_reason`	string	no	New. Only takes effect for a Manager/Admin/System Manager caller — anyone else passing this gets the same 417 as if they hadn't.
+New 417 case: if the step is `step_type == "Embassy"` (Saudi corridor) and its
+`wakala_status != "Paid"`, the call now fails with `"Wakala must be Paid before Embassy documents can be Submitted."` — call `record_wakala_payment` first (or have a Manager/Admin retry with
+`override_reason` set). This did not exist before; any UI flow that calls
+`submit_embassy_step` should be ready to show this error and, ideally, surface a "Record Wakala
+Payment" action before letting the user hit Submit on a Saudi Embassy step with an unpaid fee.
+Nothing else about `submit_embassy_step`'s existing behavior (Pending/In Progress -> Submitted,
+already-Submitted idempotency, terminal/Departed/Cancelled guards) changed.
+
+Working notes, not part of the app repo history (kept local like `raw.md`/`chan.md`). Covers
+what changed on top of commit `8f95ddc` (branch `feat/commission-currency-invoicing`) that the
+frontend team should know about. Backend testing status is at the bottom.
+1. Invoice PDF: TOTAL line now diverges from `balance_due_original` — important
+The printed Commission Batch invoice's bottom-line `TOTAL` is now:
+```
+Batch Total + Advance (requested_advance_amount) + Unpaid from previous batches (previous_unpaid_original)
+```
+`previous_unpaid_original` is the sum of `balance_due_original` across the same contractor's
+other open batches (status Sent / Partially Settled) in the same currency — computed fresh at
+PDF-render time, not stored anywhere.
+`balance_due_original` itself is unchanged — it's still just this batch's own total minus
+paid amounts/write-offs. The advance and cross-batch arrears are print-only additions to the
+invoice; they are deliberately never folded into the stored due-amount.
+Consequence: any screen that shows an "amount due" or a batch total sourced from the API
+(`total_amount_original` / `balance_due_original` via `get_commission_batch` or similar) will
+not match the number printed at the bottom of the invoice PDF once a batch has a requested
+advance, or the contractor has other open unpaid batches in the same currency. This is by
+design, not a bug — but expect support tickets ("PDF total doesn't match the app") unless the UI
+either explains the discrepancy or mirrors the same calculation for display.
+2. CV PDF: green "Al Qurashi Recruitment Office" badge removed from header
+Purely visual — the badge block is gone from the CV header entirely (left blank). No field or
+API contract change. Any reference screenshots / QA baselines of generated CVs are now stale.
+3. CV & Injaz PDFs: embedded photos are downsized + recompressed
+Photos (`photo_passport`, `photo_full_body`, `passport_scan`, injaz `photo_src`) are now run
+through a new `embed_image_datauri()` helper that thumbnails anything above a per-field max
+dimension (450–1600px depending on field) and re-encodes it as JPEG — only when a resize
+actually happens; an already-small image passes through untouched. This is a generation-speed
+fix (source photos are routinely multi-MB phone-camera originals). No API shape change, but
+images inside those PDFs may look very slightly softer than before on the largest originals.
+Worth a heads-up if anyone does visual diffing on generated PDFs.
+4. Two endpoints newly documented in swagger (already existed, already worked)
+`get_owed_commissions_by_currency` and `list_transactions` are now in `public/swagger.json`.
+Nothing to change on the frontend side — just now discoverable via `/docs`.
+5. No frontend action needed
+Four N+1 query fixes (`finance_engine.py`, `finance_api.py`, `chat_engine.py`, `chat_api.py`)
+— same response shape, fewer DB round-trips.
+Gunicorn `gthread` worker-class + threads change (`docker/entrypoint.sh`,
+`docker/supervisord.conf`) — pure infra, invisible to the API contract. Should reduce
+"whole site freezes during a PDF/OCR-heavy request" symptoms; does not make any single
+PDF/OCR request itself faster.
+Backend testing status — all PASS, no bugs found
+Tested without a live Frappe/bench instance (local bench venv is broken) using hand-mocked
+`frappe` calls backed by synthetic data, plus real Pillow/jinja2/weasyprint/gunicorn in a
+throwaway venv.
+`embed_image_datauri` — PASS (20/20 checks). Empty/`None`→`None`; `data:`/`http(s)://`
+pass through unchanged; missing file→`None`; small image passes through byte-identical; large
+image resizes to ≤max_dimension preserving aspect ratio and re-encodes to JPEG; RGBA converts
+to RGB before JPEG save; grayscale stays grayscale; corrupt bytes fall back to embedding the
+original bytes/content_type (best-effort path, `log_error` called, no raise); boundary case
+exactly at `max_dimension` is left untouched (`>` not `>=`).
+Invoice TOTAL math — PASS (28/28 checks), via real jinja2 rendering of the actual
+template. TOTAL = Batch Total + Advance + arrears verified across advance-only, arrears-only,
+both, neither, `None` values, and missing context keys (no crash — Jinja Undefined is falsy
+under `or 0`). Confirmed `balance_due_original` is never referenced in this template — the
+advance/arrears total is genuinely print-only, as described above.
+Three N+1 refactors — PASS (8/8 checks). Old vs. new logic produced byte-identical output
+on synthetic data including dangling foreign keys, shared/duplicate keys, and a thread with
+zero participants.
+Injaz barcode/table-layout fix — PASS (14/14 checks). Real barcodes generated (short:
+242px, long: 990px). Walked weasyprint's actual layout box tree and confirmed the wide
+barcode's rendered image box never exceeds its column width — the fix genuinely works, not
+just "doesn't crash."
+Gunicorn config — PASS. Booted real gunicorn 26.2.0 with the exact flag string from
+`supervisord.conf`: `Using worker: gthread`, 4 workers boot, a live HTTP request returns 200.
+swagger.json — PASS. Both files are valid JSON. AST-scanned all 120
+`@frappe.whitelist()` functions across 21 API modules: `public/swagger.json` has full 120/120
+parity (0 missing); root `swagger.json` is missing exactly 15/120, confirming the previously
+recorded "~15 behind" figure.
+NEW (2026-09-30): `CV` role and the CV sheet
+New role `CV` (internal staff): the person who prepares CVs. It reads Applicant, has no general
+write on it, and cannot register, cancel or change passport/destination.
+List the sheet: `applicant_api.list_applicants` with
+`filters = {"status": ["in", ["Registered", "CV Generated"]]}` (Registered = waiting for a CV).
+Edit the sheet's columns: new `applicant_api.update_applicant_for_cv(applicant_name, ...)`.
+Roles: CV, Manager, Admin. Allowlist: `phone`, `labor_id`, `religion`, `region`,
+`marital_status`, `children`, `years_of_experience`, `english_level`, `remarks`; anything else
+is ignored. Applicant must be Registered or CV Generated (417 otherwise).
+Name, passport, age and medical are shown on the sheet but are not editable here.
+Generate: `cv_api.generate_cv` now also accepts the CV role (before: only roles with write
+on Applicant).
+No Musaned column: Musaned stays removed from the system (user decision, 2026-09-30).
+Both are in `public/swagger.json`.
+---
+2026-10-05 — Notifications (audit qa/12)
+Backend, all in `public/swagger.json` where an endpoint changed:
+New `notification_api.unsubscribe_from_push(endpoint)` — removes the caller's own subscription for
+this browser. Call on sign-out and on "Turn Off", before `PushSubscription.unsubscribe()`.
+A browser belongs to the last user who enabled push on it; the server also drops a subscription the
+push service reports gone (404 / 410).
+New `notification_api.get_sent_notifications(page=1, page_size=50)` — "Sent to you": the caller's
+own pushes of the last 30 days, newest first, max 50 a page. Returns
+`{notifications: [{name, title, body, sent_at, delivered}], total_count, page, page_size}`.
+`name` is a list key only, never display it. `delivered=false` = recorded but reached no browser.
+Every push payload carries `url: "/notifications"`; `public/sw.js` already opens `payload.url`.
+Text: a candidate is "Full Name (passport)", staff by full name, in pushes, task (ToDo)
+descriptions and `get_live_alerts`. No record IDs, e-mails or "None".
+Sending is in the background: `notify()` records at once, the worker sends. Only
+`send_test_push` sends inline and returns the real `{status, error}`.
+Backlog: on sign-in / enabling push only notifications under 24 h old are re-sent; older ones
+stay in "Sent to you" as not delivered.
+Reminders: wakala once per step per day (manual button unlimited; WhatsApp skipped until
+configured); a missed medical / Injaz reminder day is sent late once with the true days left.
+Frontend (prod clone, local commits 77696d7, a99ed1a, fd94a01): unsubscribe on Turn Off + sign-out,
+Test button uses `send_test_push`, `/notifications` = Sent to you / Needs attention / My tasks, bell =
+`get_live_alerts` + `unread_count` (30 s), browser-built list and local pop-ups removed.
+2026-10-05 — Agency portal reads its own data (P8-14a)
+New: `portal_api.list_my_complaints(status?)` and `portal_api.get_my_owed_commissions()`, agency-only,
+scoped to the caller's own agency. Rows carry `full_name`, `passport_number`, `target_job`.
+`portal_api.list_my_placements` rows now carry the same three fields.
+The portal's Reserved, Complaints and Commission pages and the agency bell use these; they must
+never call `placement_api.list_placements`, `applicant_api.list_applicants`,
+`complaint_api.list_unresolved_complaints` or `finance_api.get_owed_commissions` (staff only).
+2026-10-05 — Uploads are checked on the server (P8-16)
+`/api/method/upload_file` now runs `agency_tracking.upload_guard.upload_file` first.
+Allowed: JPG, PNG, WEBP, PDF; MP4 / WEBM / MOV for a video; CSV for a bank statement (staff only).
+The content must match the extension. Limit 20 MB (videos: the framework's `max_file_size`).
+A foreign agency's upload is always stored private, whatever `is_private` says.
+Photo slots (photograph, full-body photo, Injaz receipt photo, logo, stamp) take images only;
+document slots (passport scan, contract, visa, receipts, chat attachment) take images or PDF.
+A wrong kind is refused when the record is saved, with "<Field> must be a JPG, PNG, WEBP file."
+Refusals are HTTP 417 with a plain message; show it as is.
+2026-10-05 — Birr conversion is a switch, off on this system (D-30)
+`finance_api.get_money_settings()` -> `{birr_conversion: bool}`. Ask once; every money screen follows it.
+Off (this system): show each amount in its own currency. Hide the Exchange Rates button and
+window, every "awaiting FX" banner, and every Birr / ETB-total column. No screen may add
+amounts of different currencies together.
+Reports (always present): `get_financial_overview.by_currency[currency] = {commission, income, expense, net, outstanding_owed, settled_in_period}`; `get_cost_breakdown_report.by_country[country][currency]`;
+`get_employee_financial_report[].net_expense_by_currency`; `get_pending_approval_queue[]` has
+`amount_original` + `currency_original`. The old `*_birr` keys and `awaiting_fx` are absent when off.
+`get_fx_rate`, `set_fx_rate`, `fetch_fx_rates_now` answer 417 "Exchange rates are switched off on this system." when off.
+`reconciliation_api.upload_bank_statement` needs `currency` when off (one currency per statement);
+a line is matched to an invoice in that currency by the invoice's own total.
+Ledger rows: `fx_rate`, `fx_rate_date`, `amount_birr` are empty / 0 on rows written while off;
+never display them. New read-only flag `fx_rate_old` (only ever set while conversion is on).
+Exports: no "ETB Amount" column when off.
+2026-10-05 — Undo last step (reversible state machine, Stage A)
+`reversal.get_undoable_step(doctype, name)` -> `{available, from_status, to_status, blocked}` (read-only).
+Show an "Undo last step" button only when `available`; when `blocked` is set, disable it and show the text.
+`reversal.reverse_last_step(doctype, name, reason?)` does it. `doctype`: Applicant, Placement, Complaint,
+Applicant Transaction. One step per call. A placement still at Selected is unselected (candidate free again).
+Ledger rows are never set back: undoing an approval voids the row, and the amount comes back as a new
+Pending row (so refresh the list, do not patch the row in place).
+Undoing Ticketed clears the ticket and voids its cost; undoing Departed voids the commission.
+A cancelled clearance step is history: `list_my_clearance_steps` and the grid no longer return it.
+Always send `from_status` (the value `get_undoable_step` returned) with `reverse_last_step`. If the record
+has moved since, the call is refused with "This record has changed since the page was loaded. Reload and
+try again." Without it, two presses go back two steps.
+Undoing Stamped also clears a ticket that was already recorded at Stamped and voids its cost.
+2026-10-05 — Undo of a clearance step; "Reopen step" is now that undo (Stage B)
+`reverse_last_step` / `get_undoable_step` also take `doctype: "Clearance Step"`. Offered to the step's own
+role (or its assigned officer), Manager and Admin. One move back per call: Issued / Complete -> where it
+came from, Stamped / Rejected -> Submitted, Submitted -> In Progress or Pending, In Progress -> Pending.
+Only while the case is in Processing. Under a Stamped / Ticketed case `blocked` says "This case has already
+moved on to Stamped. Undo that step of the case first." (undo on the Placement, then on the step).
+Undoing a finished step voids the fee its completion recorded; finishing it again records a new one. The
+step's task is open again. A rejection's remark is cleared (kept in the history).
+BEHAVIOUR CHANGE `clearance_api.reopen_clearance_step`: same payload, still Manager / Admin only, `reason`
+now optional. It is the undo above, repeated until `target_status`. It no longer works under a Stamped
+case (was allowed; only ticketing was blocked), and it never jumps to a status the step has not been at:
+a step completed straight from Pending returns to Pending even when "In Progress" was asked. Use the
+returned `status`, do not assume the target.
+Every step action (start, complete, submit, stamp, reject) now shows in the step's history as a move.
+2026-10-06 — LMIS status (20 working statuses)
+New field `lmis_status` on LMIS steps (both corridors), returned by `list_my_clearance_steps` and the LMIS grid.
+`clearance_api.set_lmis_status(clearance_step_name, lmis_status, reference_no?, date_completed?)`.
+`ISSUED` completes the step (same as the Issue button); every other value only labels a step that is still
+waiting. An Issued step always reads `ISSUED`; undoing it clears the label. An Issued step cannot be relabelled.
+LMIS grid: new editable column `lmis_status` next to `status`. Changed 2026-10-12: the two LMIS grids
+have ONE status column, `lmis_status` (label "Status"); the list now has 23 values, with `IN PROGRESS` first,
+`REJECTED` and `OTHER`. See "LMIS grid: one status column" in the 2026-10-12 (later) section.
+2026-10-08 — LMIS status REJECTED, with reasons
+`REJECTED` is a 21st LMIS status. It is a label like the others: the step stays open, nothing is blocked,
+nobody is notified. The office fixes the documents and picks another status or `ISSUED`.
+It must say what was rejected. `clearance_api.set_lmis_status(clearance_step_name, lmis_status="REJECTED", rejection_reasons=[...])`, one or more of: `Employment contract`, `Passport`, `Working visa`,
+`Emergency contact`, `Insurance`, `Original ID`. Send a JSON list (or text separated by commas). None, or an
+unknown one, is refused with a 417 and a plain message.
+Screen: when REJECTED is picked, open a multi-select of the six reasons and send both together. To change
+the reasons later, send `REJECTED` again with the new list.
+The step returns `lmis_rejection_reasons`: the chosen reasons as text, one per line, always in the order above
+(`list_my_clearance_steps`, the grid rows, and the answer of `set_lmis_status`). It is empty for every other status.
+The reasons are dropped when the status changes to anything else (the history keeps them).
+LMIS grid: new column `lmis_rejection_reasons` ("Rejected For"), type `MultiSelect`, with the six `options`.
+Saving `lmis_status: "REJECTED"` in a row without that cell is refused for the row (`ok: false`). Saving the
+reasons cell alone on a row that is already REJECTED changes the reasons.
+2026-10-08 — A write-off has its own date
+Client decision: the "expense deducted from the commission collected" in the client's document is a
+write-off. There is no second list. What the agency pays = invoice total, minus write-offs.
+`finance_api.write_off_batch(batch_name, write_off_amount, write_off_reason, write_off_date?)`: new optional
+`write_off_date` (`YYYY-MM-DD`). Left out = today. A future day, or text that is not a date, is refused (417).
+Screen: add a date input to the write-off form, filled with today, not allowing a later day.
+`list_batch_write_offs` already returns `write_off_date` for each row; show it next to the reason and amount.
+The invoice PDF already prints the write-off total as a minus line and lists each write-off with its date and
+reason. Nothing to build there.
+
+2026-10-08 — Screens: no scrolling, quick actions, one sheet for all stages (client request)
+Built in our test copy only (local commits `56d27a0`, `88c5882`); yours to build in your code. No backend change:
+every action below uses endpoints that already exist.
+Rule for every list page: nothing scrolls, up-down or sideways.
+A table shows as many rows as fit between its top and the bottom of the window; the rest are on the next page
+(Previous / Next). It is recalculated when the window is resized. No "show 10 / 25 / 50 / 100" buttons.
+Ours: `src/components/ui/FitPages.tsx` (`useFitPages(rows)` -> `boxRef`, `pageRows`, `pager`).
+No sideways scroll: fixed table layout, columns share the width, long text is cut with "…".
+A table shows the columns needed for daily work; the others are marked `secondary` and are added by the user
+with the "Columns" button (their data is also in the row's edit window).
+Hidden by default — LMIS: National ID, Emergency contact, Emergency phone, Contract date, Duration, Remark.
+Te'shir: Contract & visa, Sponsor, Duration, Remark. Embassy: Destination embassy, Sponsor, Duration, Remark.
+Departure: Sponsor, Remark. Wakala: Contract #, Duration, Partner agency, Contact. CV: Religion, Region, Age,
+Married, Children. Applicant list: Contract no., Exam date, Embassy expire date.
+Done in our copy on: the workspace table (`OperationalTable`, also used by the clearance list), applicant list,
+complaints, employees, agencies, the Finance approval queue, every Reports tab, Commission, notifications, the
+clearance grid, and the agency portal (candidate list view, reserved, complaints, commission, wakala).
+Wrapper for a list inside a branch of a page: `<FitRows rows={...}>{(pageRows) => ...}</FitRows>`; `size={n}`
+for a list with other things under it; `columns={2}` for a two-column card grid.
+Dashboard: its three lists show three rows each. Not done: the agency's candidate card view, the worker's
+own page, registration and other forms, and windows that open over a page (they are long by nature).
+None of this was seen in a browser by us: check widths and row heights on a real screen.
+Quick actions on the workspace table
+Status shortcuts above the table: "All" and the six statuses most rows are in, each with its count; one press filters.
+A checkbox on every row and one for the whole page. With rows ticked, the shortcut strip becomes an action bar:
+the stage's own actions, "Export selected", "Clear". Each ticked row is sent on its own; show how many took the
+change and which were refused, with the server's message.
+On each row: the next step in one press, and Undo (3.12 above; ask the server when pressed, not per row).
+LMIS: Issue (`set_lmis_status` ISSUED). Te'shir: Complete (`complete_clearance_step`). Embassy: Submit, then
+Stamped (`submit_embassy_step`, `stamp_embassy_step`). Departure: Departed (`advance_placement`).
+Reports ledger: Undo on every row that is not Pending (`doctype: "Applicant Transaction"`).
+New tab "All Stages" (Admin and Manager only) — ours: `workspaces/PipelineWorkspace.tsx`.
+One row per worker with a case, one cell per stage, edited in place:
+Cell	Saves with
+LMIS (the 21 statuses)	`clearance_api.set_lmis_status` on the worker's LMIS step
+Appointment, E-number (Saudi)	`clearance_api.set_taeshir_appointment`
+Injaz paid (Saudi)	`clearance_api.record_injaz_payment` with `payment_status`
+Te'shir / Telesign	`start_clearance_step` / `complete_clearance_step`
+Wakala (Saudi)	`clearance_api.record_wakala_payment` on the Embassy step
+Embassy	`start_clearance_step` / `submit_embassy_step` / `stamp_embassy_step` (a rejection needs its remark: Embassy tab)
+Ticket no, Flight date	`placement_api.record_ticket_details`, then `advance_placement` to Ticketed when the case is Stamped
+Case	read-only status; "Departed" button when Ticketed; Undo of the case's last step
+Use each stage's own step (`lms`, `injaz`, `embassy`), never one "current step" for the row.
+The screen sends the change and shows the server's answer. It must not decide itself what is allowed (order of
+stages, Wakala paid before Embassy, Injaz paid before Te'shir is complete): the backend refuses with a plain message.
+A cell with no step for that worker (Kuwait has no Wakala / Injaz payment) shows a dash.
+Rows of a Departed or Cancelled case are read-only.
+REJECTED cannot be picked here or in bulk yet: it needs the reasons window (see "LMIS status REJECTED" above).
+2026-10-08 — A medical recorded for a selection goes with the selection
+Found in testing: a medical entered for a selected worker was still there after the selection was undone.
+Undoing a selection now clears its medical (`reversal.reverse_last_step` on a Selected placement): the case's
+`medical_selected_*` fields are emptied, and the worker's `medical_status`, `medical_issue_date`,
+`medical_expiry_date` too when they are the same exam (same status and exam date). A different exam on the
+worker's record (e.g. from registration) is kept. After the undo, reload the applicant as well as the placements.
+New `placement_api.clear_selected_medical_result(placement_name, reason?)`: takes back a medical entered by
+mistake. Roles: the same that record a medical. Only while the case is Selected; 417 otherwise, and 417 when there
+is nothing to clear. The case stays Selected. Show a "Clear medical result" button next to "Enter Medical" when the
+case is Selected and has a result (ours: `applicants/[id]/page.tsx`, `clearSelectedMedicalResultV2`).
+Why the worker's record is involved: the worker's page saves the medical twice, with `update_applicant` and with
+`record_selected_medical_result`. That stays as it is; the backend now cleans both.
+2026-10-08 — Injaz "paid" is now returned; a paid Wakala no longer blocks undo
+Both found in testing.
+Injaz paid. Marking Injaz Paid was saved, but `list_my_clearance_steps` never returned it, so screens kept
+showing Unpaid and the Te'shir tab refused "Complete" although the server would have accepted it. A Taeshir row
+now carries `injaz_payment_status` (`Paid` / `Unpaid`) and `injaz_paid_date` (same names as the grid).
+Read those. Do not read the step's `payment_status`: it is an unused field (see "Hide / don't use" above) and
+is not the Injaz payment. Your code reads `payment_status` first in `InjazWorkspace` and in
+`lib/api/v2/operational.ts` (`injazPayment`, which also treats "unpaid" as paid because it searches for the
+letters "paid"): change both.
+Undo with a paid Wakala. Undoing Processing back to Selected is no longer refused when a Wakala is paid
+(client decision). `get_undoable_step` no longer answers with that `blocked` text. The paid mark stays on the
+cancelled Embassy step as history; when the case goes to Processing again its new Embassy step starts with Wakala
+not paid, so it has to be marked paid again.
+2026-10-08 — Undoing "Stamped" takes the embassy stamp back with it
+Found in testing: after undoing a case from Stamped to Processing, the embassy step was still Stamped; every step
+was done, so nothing could be done on the case and nothing moved it forward again.
+`reversal.reverse_last_step` on a Placement at Stamped now also takes back, in the same call, the step that
+finished the case (the one finished last, normally the embassy step): one move back (Stamped -> Submitted), its
+fee voided, its task reopened. Finishing it again moves the case to Stamped again.
+Only when every step of the case was done. The other steps are not touched.
+After this undo, reload the case and its steps (the embassy row changes too).
+This replaces the sentence in "Undo of a clearance step" above that said: undo on the Placement, then on the step.
+For the step that finished the case, one press now does both.
+2026-10-11 — Five small fields from the client's document (qa/16 #2, #6, #9, #10, #13)
+Backend only so far; nothing below is on a screen yet.
+Who took the file (LMIS, #2)
+The three taken statuses (`NO FILE & TAKEN`, `HAVE FILE & TAKEN`, `TAKEN`) may say who took the file:
+`clearance_api.set_lmis_status(clearance_step_name, lmis_status, taken_by_agency?, taken_by_phone?)`.
+Changed 2026-10-12 (client): neither value is ever required. Nothing is refused for leaving them out.
+A value that is not sent stays as the step has it, so moving between taken statuses keeps the agency and phone.
+Both are emptied when the status changes to one that is not a taken status (the history keeps them).
+The step returns `lmis_taken_by_agency` and `lmis_taken_by_phone` (`list_my_clearance_steps`, grid rows, the
+answer of `set_lmis_status`).
+LMIS grid: two new editable `Data` columns, `lmis_taken_by_agency` and `lmis_taken_by_phone`. Either cell alone
+can be saved on a row that already has a taken status.
+Screen: when a taken status is picked, offer agency name and phone as optional inputs.
+Tesheer follow-up status (#6)
+New `clearance_api.set_taeshir_status(clearance_step_name, taeshir_status)`, one of `INFORMED`, `RECEIVED`,
+`READY TO EMBASSY`. A label only: it moves nothing, blocks nothing, notifies nobody. It can be set at any step
+status, also after the step is Complete.
+Returned as `taeshir_status` by `list_my_clearance_steps` and the Tesheer grid.
+Tesheer grid: new editable `Select` column `taeshir_status` with the three options.
+Embassy submission date (#9)
+An Embassy step (both countries) returns `date_submitted`: the day its documents went to the embassy.
+`clearance_api.submit_embassy_step(clearance_step_name, date_submitted?)`: left out = today; a future day is
+refused (417). Called again with another date on a step that is Submitted, Stamped or Rejected, it corrects the
+date only (changed 2026-10-12: correctable at any time, also when the case is Departed or Cancelled).
+It is emptied when the submission is undone (step back to Pending / In Progress). It stays through Stamped and
+Rejected.
+Embassy grids: new editable `Date` column `date_submitted`. Send it with `status: "Submitted"` in the same row,
+or alone on a row that is Submitted, Stamped or Rejected (a correction). On a row not yet submitted it is refused.
+Steps submitted before today get the date from the day they were submitted (filled once, on migrate).
+Flight hour (#10)
+The placement returns `flight_time`: text `HH:MM`, or empty.
+`placement_api.record_ticket_details(..., flight_time?)`: optional. Left out = unchanged; sent empty = removed;
+not an hour = 417.
+`placement_api.record_reschedule(..., flight_time?)`: the new flight's hour. Left out = the placement has no
+hour (the old flight's hour is not kept), so the reschedule form should ask for it again.
+Undoing the ticket removes the hour with the rest of the ticket.
+Agencies see `flight_time` of their own workers (`portal_api.list_my_placements`), next to `flight_date`.
+Second contact person, the broker / "Delala" (#13)
+Applicant has `second_contact_name`, `second_contact_phone`, `second_contact_address`. All optional. Sent and
+returned like any other applicant field (`create_applicant`, `update_applicant`, `register_applicant`,
+`get_applicant`). The phone follows the same format rule as `emergency_contact_phone`.
+Not returned to agencies.
+2026-10-11 — Injaz "Printed", visa three-month warning, LMIS contract fields (qa/16 #5, #8, #1)
+Backend only so far.
+Injaz payment "Printed" (#5)
+`clearance_api.record_injaz_payment(clearance_step_name, payment_status="Printed")`. The three values are now
+`Unpaid`, `Printed`, `Paid`.
+Client decision (2026-10-11): Printed does not count as paid. Tesheer still cannot be completed, no paid
+date is kept, and the Injaz reminder still goes out. Only `Paid` changes those.
+Tesheer grid: column `injaz_payment_status` now has the three options. `list_my_clearance_steps` returns the value.
+Visa three-month warning (#8) (rewritten 2026-10-12: both countries, counted from the visa date)
+An Embassy step of either country returns `visa_issue_date` (the visa date on the document) and `visa_deadline`
+(the last day the visa can be used: three months after `visa_issue_date`, or after the day the step was Stamped
+while there is no visa date). `visa_deadline` is empty until the step is Stamped. Both are on
+`list_my_clearance_steps` and on both embassy grids (`visa_issue_date` "Visa Issued On", editable;
+`visa_deadline` "Visa Valid Until", read-only).
+`clearance_api.set_visa_issue_date(clearance_step_name, visa_issue_date?, visa_expiry_date?)`: staff type the
+visa's dates (issue never in the future, expiry never before issue; a date not sent stays, sent empty it is
+taken off). A Kuwait visa upload fills both by itself. Not locked on a Departed or Cancelled case.
+Changed 2026-10-12 (late), from the real Kuwait visa: that visa prints its own Expiry Date (four months
+after issue). When a case has `visa_expiry_date`, that day IS `visa_deadline`. Only without it are the three
+months counted. Both embassy grids have a third column, `visa_expiry_date` ("Visa Expires On", editable).
+Show both dates on the embassy screen; label the worked-out one "Visa valid until".
+Screen: show "N days remaining" from `visa_deadline` on the embassy and ticketing screens.
+Push `visa_deadline_warning` to Admin, Manager and Ticketer (client decision 2026-10-11) 30, 14, 7, 3 and 1
+day(s) before that day and on the day itself, while the case is not Departed / Cancelled. The text names the
+worker ("Full Name (passport)"), the days left and the day. It appears in the sent-notifications history like
+every other push.
+LMIS contract fields (#1)
+New on the placement: `employer_city`, `employer_house_number` (`"00"` on every new case), `employer_phone`,
+`employer_alt_phone`, `contract_start_date`, `contract_end_date`.
+New `placement_api.update_placement_for_lmis(placement_name, ...)` for Saudi LMIS / Kuwait LMIS / Manager / Admin.
+Only those six fields are taken. `contract_start_date` sent without `contract_end_date` sets the end two years
+later. An end before the start is refused (417).
+Both LMIS grids: six new editable columns with the same names.
+The Contract Parser can also set them (`update_placement_parsed_fields`).
+Changed 2026-10-12: a contract upload now fills `employer_city`, `employer_phone` and `employer_alt_phone`
+from the employer's part of the contract, only where the field is still empty. The two dates are filled only
+when a contract names its begin date; the Saudi contract names none, so they stay empty for the LMIS office.
+Screen: the document says the contract begins "today": fill the begin input with today when it is empty and
+let the officer change it. The server does not set a begin date by itself.
+Agencies never see these fields.
+2026-10-12 — LMIS status OTHER, in the office's own words
+Backend only so far; nothing below is on a screen yet.
+`OTHER` is a 22nd LMIS status, last in the list, for a status the list does not have. It is a label like the
+others: the step stays open, nothing is blocked, nobody is notified.
+It must carry the status in words: `clearance_api.set_lmis_status(clearance_step_name, lmis_status="OTHER", other_status="...")`, free text, up to 140 characters. Empty or longer is refused with a 417 and a plain message.
+Screen: when OTHER is picked, open one text box and send both together. Show the words next to (or instead
+of) the word OTHER wherever the LMIS status is shown.
+To change the words later, send `OTHER` again with the new text. `OTHER` sent without `other_status` on a step
+that is already OTHER keeps the words it has.
+The step returns `lmis_other_status` (`list_my_clearance_steps`, the grid rows, and the answer of
+`set_lmis_status`). It is empty for every other status.
+The words are dropped when the status changes to anything else (the history keeps them).
+LMIS grid: new editable `Data` column `lmis_other_status` ("Other Status"), after the two taken-by columns.
+Saving `lmis_status: "OTHER"` in a row without that cell is refused for the row (`ok: false`). Saving the cell
+alone on a row that is already OTHER changes the words.
+2026-10-12 — The registration fee is removed
+From the client: "remove registration fee, any type of income logging should use log income endpoint".
+Gone from the backend: `applicant_api.log_applicant_fee` (calling it now fails: the function does not exist),
+and these applicant fields: `fee_required`, `fee_type`, `fee_direction`, `registration_fee_amount`, `fee_currency`,
+`fee_status`, `fee_payment_date`, `fee_transaction`, `fee_notes`. No applicant answer carries them any more.
+Not broken meanwhile: `create_applicant` / `update_applicant` / `register_applicant` still accept a form that
+sends those fields. They are saved nowhere and write nothing to the ledger.
+Income is logged in one way only: `finance_api.log_stage_income(amount, currency, description, applicant)`
+(or `placement`). It works for a worker with no case yet. The row is Pending until Finance approves it, like
+every other income row. Money received at registration is logged this way, with a description such as
+"Registration fee".
+Screens to change (file names from your `fccbdc7`):
+Registration form, `Step1PersonalInfo.tsx`: remove the whole fee block (the Fee Required switch, amount,
+direction, status, payment date, notes). `Step5Review.tsx`: remove the fee lines. `applicant.schema.ts`,
+`types/applicant.ts`, `zod-error-map.ts`, `error-formatter.ts`: remove the fee fields.
+Applicant page, `app/applicants/[id]/page.tsx`: remove the Log Fee button (`logApplicantFeeV2`) and the row it
+builds from `applicant.registration_fee_amount` / `fee_status` for the money table. The money table shows
+ledger rows only (`list_transactions`). `lib/api/v2/applicants.ts`: remove `logApplicantFeeV2`.
+Where staff need to record money from a worker, use the existing "log income" dialog.
+Fees already logged with the old button stay in the ledger as they are (they are ordinary Income rows).
+2026-10-12 — Undo for the actions that had none
+From the client: "build undo for everything in the table". Backend only so far; nothing below is on a screen yet.
+Every one takes an optional `reason` (kept in the record's history) and answers 417 with a plain message when it
+cannot be done now; show the message as it is. Money is never edited or deleted: rows are voided, marks taken back.
+Action undone	Call	Who	Put the button
+Invoice item marked Paid	`finance_api.unsettle_batch_items(item_names, reason?)`	Finance Manager, Admin	On each Paid item of an invoice ("Unmark paid")
+Bank line matched	`reconciliation_api.unmatch_line(statement_line_name, reason?)`	Finance Manager, Admin	On each matched statement line ("Unmatch")
+Pre-departure medical	`placement_api.clear_predeparture_medical_result(placement_name, reason?)`	Medical Officer, Contract Parser, Ticketer, Manager, Admin	Next to the result, like "Clear medical" at Selected
+Injaz forfeit and restart	`clearance_api.undo_forfeit_injaz(clearance_step_name, reason?)`	The Tesheer role, Manager, Admin	On the Tesheer step, while the new attempt is Unpaid
+Track change	`reversal.reverse_last_step(doctype="Applicant", name, reason?, from_status?)`	Registrar, Manager, Admin	The existing Undo button on the applicant; `get_undoable_step` now offers it
+Ban lifted	`applicant_api.undo_country_ban_lift(ban_name, reason?)`	Manager, Admin	On a lifted ban in the ban list (`list_country_bans(active_only=0)`)
+Ban request decided	`applicant_api.undo_country_ban_decision(request_name, reason?)`	Manager, Admin	On an Approved / Rejected request
+Flight rescheduled	`placement_api.undo_reschedule(placement_name, reason?)`	Ticketer and whoever can edit the case	In the ticket dialog, when `is_rescheduled` is 1
+Employee removed	no undo any more (changed the same day): see "Employees" below		
+Details that change a screen:
+Invoice. After an unmark the invoice reads Partially Settled or Draft again and `settled_on` /
+`settlement_reference` are empty. An item that a bank line paid is refused: unmatch the line instead. An item now
+also carries `bank_statement_line` (the line that paid it, empty when marked by hand).
+Bank line. The answer is the line plus `reopened_items` (how many invoice items went back to unpaid). Reload
+the invoice.
+Pre-departure medical. After Departed: undo the departure first. After an UNFIT closed the case: undo the
+cancel on the applicant first, then clear.
+Track change. Status, track and cycle number come back together. A change made before today cannot be undone
+this way (`blocked` says so): change the track back by hand.
+Ban decision. A request whose one-time pass was already used (`status: "Used"`) is refused. Nobody is
+notified (changed the same day by the client; the requester hears when it is decided again).
+Flight. One step only: the reschedule before the latest cannot be undone afterwards. The cost of an Internal
+reschedule stays in the ledger as Voided.
+Employees (changed the same day by the client). `delete_employee(email)` erases an account that never
+recorded anything (`{status, erased: 1}`); an account with work on record is only switched off
+(`{status, erased: 0, enabled: 0, message}`: show the message). There is no restore endpoint and no `removed`
+flag; a switched-off account is switched on again with `toggle_employee_status`. Button: "Delete", with a
+confirmation.
+Still frontend only, as before: the Undo button on the Finance page for a ledger row (section 5.2).
+
+2026-10-12 (later) — Decisions from the walk through the old QA leftovers
+All from the client's own answers (qa/DECISIONS.md D-37 to D-65). Backend only; nothing below is on a screen yet.
+The earlier sections were corrected in place where these decisions changed them (marked "Changed 2026-10-12").
+Changed from what the earlier sections say
+Employees. `restore_employee` is gone, and so are `list_employees(include_removed)` and the `removed` flag.
+`delete_employee(email)` now answers one of two things:
+`{status, erased: 1}`: the account never recorded anything and is erased for good.
+`{status, erased: 0, enabled: 0, message}`: the account has work on record, so it was only switched off. Show
+`message` as it is. Switch it on again with `toggle_employee_status`.
+Button wording: "Delete". Ask for confirmation: an erased account does not come back.
+Ban request decision undone (`undo_country_ban_decision`): nobody is notified any more.
+"Who took the file" (LMIS). `taken_by_agency` / `taken_by_phone` are never required. Show the two inputs for
+the three taken statuses, do not mark them required.
+LMIS grid: one status column
+`get_clearance_grid_columns` for `LMIS Clearance` and `Kuwait LMIS` lists a single status column: field
+`lmis_status`, label "Status". The plain `status` column is not listed for these two grids.
+The list has one more value, first in the list: `IN PROGRESS`. Picking it starts the step. A step started any
+other way shows `IN PROGRESS` by itself. `ISSUED` still finishes the step.
+A row with an empty `lmis_status` is a step nobody has touched: show "Pending" (unchanged).
+Rows still carry `status`, and a save still accepts it, so an old screen keeps working. Remove the second
+dropdown from the LMIS workspace and the LMIS grid.
+Embassy step
+Rejecting: only an Embassy step can be rejected (`reject_embassy_step`). Remove the Reject button from every other
+step: `rejectClearanceStepV2` (`lib/api/v2/clearance.ts`) writes the status directly and the backend refuses it.
+Submission date: `submit_embassy_step(clearance_step_name, date_submitted)` now also corrects the date on a
+Stamped or Rejected step. On the grid the "Submitted On" cell can be edited on those rows too.
+Neither this date nor the visa date is locked when the case is Departed or Cancelled: keep both editable there.
+Visa dates, both countries: columns `visa_issue_date` ("Visa Issued On", editable), `visa_expiry_date` ("Visa
+Expires On", editable) and `visa_deadline` ("Visa Valid Until", read-only) on both embassy grids; all three are
+also on `list_my_clearance_steps` rows.
+`clearance_api.set_visa_issue_date(clearance_step_name, visa_issue_date?, visa_expiry_date?)` saves typed dates.
+A Kuwait visa upload fills both by itself (the reader was corrected on the client's real visa: it used to swap
+them). "Valid until" is the expiry date when there is one; otherwise three months after the issue date;
+otherwise three months after the Stamped day. The warning goes out for Kuwait cases too.
+Medical at Selected
+"Clear medical" (and undoing a selection) now brings back the medical the worker had before the selection's one
+was written over it. Nothing to send; reload the applicant after the call. Cases recorded before today: the
+worker's medical is left empty, as before.
+Agencies
+`create_contractor`: `contractor_name` and `user_email` are required. The backend no longer makes up a name or
+an address. Mark both inputs required.
+Company and bank settings (Settings page)
+Use `finance_api.get_company_settings()` and `finance_api.update_company_settings(...fields)` instead of reading
+and saving the settings record directly (`lib/api/v2/settings.ts`).
+Admin and Finance Manager only. Everyone else gets 403: hide the form from them (today they see an empty form).
+Contract upload
+`upload_contract` and `parse_contract_file` may now also return `employer_city`, `employer_house_number`,
+`employer_phone`, `employer_alt_phone`, `contract_start_date`, `contract_end_date`, when the contract says them.
+On upload they fill only fields that are still empty; what the LMIS office typed is kept.
+Checked against the sample Saudi contract (`public/contract_sample.pdf` of the frontend): city and both phones are
+read; the contract has no house number. The two dates are filled only when a contract names its begin date; the
+Saudi contract names none, so "Contract Begins" stays empty for the LMIS office (the screen offers today), as
+before. The Kuwait contract was not checked against a real file.
+Not changing (decided): the 14 lists with no paging stay as they are; uploads stay at 20 MB for now.
+Added the same day, after more answers from the client
+Muayena case, agency of the wrong country. `create_muayena_placement` answers 417 when the agency's country is
+not the worker's destination country, for every role. Where staff pick the agency: list only agencies of the
+worker's destination (`list_contractors` rows carry `country`), and show the message as it is if it still comes.
+Videos up to 200 MB. The upload endpoint now refuses a video over 200 MB with a plain message (photos and
+documents stay at 20 MB). Change the size hint next to the video input.
+Time zone. `finance_api.get_time_zone()` returns `{time_zone, now}` for any staff member;
+`finance_api.set_time_zone(time_zone)` (a name like `Africa/Addis_Ababa`) is Admin only. Every time the backend
+returns (notification `sent_at`, history lines) is in that zone: show it as it is, do not convert it to the
+browser's zone. Suggested place: Settings page, one dropdown, Admin only. Times already stored are not moved
+when the zone changes.
+2026-10-12 (night) — Flight outcomes, Replacements, and two client-list items (#21, #14)
+From the client's own answers (qa/DECISIONS.md D-66 to D-78). Backend only; nothing below is on a screen yet.
+1. Flight outcome: the "status of departure" of a case
+One control on the case, for Ticketer, Manager and Admin:
+`placement_api.record_flight_outcome(placement_name, outcome, outcome_date?, reason?)`.
+outcome	Offer it when	What it does
+`Local return`	the case is Ticketed (waiting to depart)	A label: the worker had a ticket and did not fly. Nothing else changes and no money is involved. Staff then record the new flight with the normal reschedule (Internal or Airport), which takes the label off
+`International return`	the case is Departed	The worker was sent back. `outcome_date` (the day they came back) is required. The case stays Departed
+Where to put it (client, 2026-10-12): on the departure step. Where staff confirm a departure, offer the
+outcome instead of a single "Departed" button: "Departed" (the existing move), or "Local return" (this call).
+It is a departure outcome, not a ticket action. "International return" is offered later, on a Departed case.
+A Local return mark goes by itself when the case stops waiting to depart (new flight recorded, departed,
+ticket step undone, cancelled).
+The case then carries `flight_outcome`, `flight_outcome_date`, `flight_outcome_reason`, `replacement_owed`.
+Show the outcome as a badge next to the status ("Departed · International return", "Ticketed · Local return").
+For an International return the answer says `replacement_owed: 1` when the return is less than 90 days after the
+departure (counted to the date entered, not to today). Say it in words: "A replacement is owed" / "No replacement
+is owed (90 days or more after departure)".
+One outcome at a time. To correct one: `placement_api.undo_flight_outcome(placement_name, reason?)`, then record
+it again. Undo is refused once a replacement was chosen (the message says to undo that selection first).
+While a case has an International return, "Undo last step" on the departure is refused with a plain message.
+A returned worker can be sent again: `applicant_api.restart_applicant(applicant_name, target_status)` now also
+works for a worker whose case is Departed with an International return. Show "Send again" on that worker.
+2. Replacements (new tab for the agency; nothing to do with complaints)
+The client's words: "the agency will have a tab, Replacements, under that they will see which applicant they chose
+needs replacement, then they click replace, it should take them to the talent pool, then they choose replacement
+from there".
+The tab: `portal_api.list_replacements_owed()`. Rows: `name` (keep it, do not show it), `full_name`,
+`passport_number`, `target_job`, `employer_name`, `sponsor_name`, `departed_on`, `flight_outcome_date` (returned
+on), `flight_outcome_reason`, `days_waiting`. Show name + passport, sponsor, the two dates and "waiting N days".
+Empty list: "No replacements are owed."
+Replace: the button opens the talent pool carrying that row's `name`. Selecting a candidate there calls
+`portal_api.select_candidate(applicant_name, replacement_for=<that name>)`. The new case has no commission and
+carries `exchange_for` (the returned worker's name): show "Exchange for <name>" on it.
+`list_my_placements` rows carry `exchange_for`, `replacement_for`, `flight_outcome`, `replacement_owed` too.
+A row leaves the tab once it is replaced. If the agency undoes that selection, the row is back.
+A replacement that itself returns within 90 days appears in the tab like any other; it is replaced again, free.
+Staff: the same list for Manager, Admin and Ticketer (all agencies, or `contractor_name` for one) and for a
+Communication Manager (their own agencies). Manager / Admin can replace for an agency: pass `contractor_name` to
+`select_candidate` as they already do for a normal selection.
+Remove a line (the agency does not want a replacement), Manager / Admin only:
+`placement_api.waive_replacement(placement_name, reason)`; put it back with
+`placement_api.undo_waive_replacement(placement_name)`. The commission is not touched.
+New notification `replacement_owed` ("<name (passport)> came back from abroad ... A replacement can be chosen from
+the Replacements list, with no commission.") to the agency, its Communication Manager and Managers. Link it to
+the Replacements tab.
+Complaints: the outcome "Returned - Free Replacement Required" is gone. Remove it from the resolve dialog and
+from any filter; the outcomes are Resolved, Escalated, Dismissed. `select_candidate` refuses the old
+`free_replacement_for_complaint` argument. Remove the "free replacement" picker that listed complaints.
+3. Client list #21: Finance entries count at once
+`log_stage_expense` / `log_stage_income` by a Finance Manager or an Admin come back with `status: "Approved"`.
+Do not show "waiting for approval" after their own entry, and do not expect it in the approval queue. Entries by
+anyone else are Pending as before. A wrong entry of their own is voided (or undone) as today.
+4. Client list #14: who can do what (read-only)
+`api_docs.get_permission_table()` for Admin and Manager: rows of `{area, action, roles, endpoint}`. Show a table
+grouped by `area` with `action` and `roles`; do not show `endpoint`. Nothing can be edited: changing what a role may
+do still needs a developer.
+2026-10-12 (late) — Settings page: bank details, logo and stamp, names; chat: delete a sent message
+The client asked for these four to be built. The backend for all of them is ready.
+1. Bank details (Settings page, Admin and Finance Manager only)
+Read: `finance_api.get_company_settings()`. Save: `finance_api.update_company_settings(...only the fields that changed)`.
+Build a "Bank details" card with these inputs: `bank_name`, `account_name`, `account_number`, `bank_address`,
+`bank_swift_code`, `bank_phone`, `bank_email`. They are what the invoice PDF prints under "Pay to".
+Everyone else gets 403 from the read: do not show the card to them (today they see an empty form).
+Stop reading and saving the settings record directly (`lib/api/v2/settings.ts`, `frappe.client.*`).
+2. Company logo and stamp for the invoice (same page, same two roles)
+One call per picture: `finance_api.set_company_image`, sent as `multipart/form-data` with `kind` = `logo` or
+`stamp` and the picture as a file field named `file`. JPG, PNG or WEBP, up to 20 MB. Do not send JSON.
+The answer is the same object as `get_company_settings`; `logo` / `stamp_image` hold the stored file's address.
+Show each picture as a preview through the private-file route (they are stored private).
+Remove a picture: `update_company_settings(logo="")` or `(stamp_image="")`.
+Build two upload tiles, "Logo" and "Stamp", each with preview, "Replace" and "Remove". Say under them that
+both are printed on every invoice. A refusal (wrong kind of file, too large) comes back as 417 with a plain
+message: show it as it is.
+3. The agency name used on invoices (same page, same two roles)
+This is our own agency's name, not a foreign agency's. It is `agency_name` in the same settings object, next
+to `agency_address`, `agency_phone`, `agency_email`. Read with `get_company_settings`, save with
+`update_company_settings(agency_name=...)`.
+It is what the invoice PDF prints as the issuing agency, and what the Excel exports use in their title.
+Put these four in a "Company" card above the bank card, with the name first. A change shows on the next
+invoice that is opened or downloaded; invoices are built fresh each time, so nothing has to be regenerated.
+Renaming a foreign agency was NOT asked for here; leave the agency edit page as it is.
+4. Chat: delete a message you sent
+`chat_api.delete_message(message_name)`. Only the sender; anyone else gets 403, Admin included. No time limit.
+`chat_api.get_thread_messages` rows now carry `deleted` (0 / 1) and `deleted_on`. A deleted message is still a
+row, with `message`, `attachment` and the mentions empty. Show it in place as a grey line, "This message was
+deleted", with the sender and the time; never hide the row.
+Put "Delete" in the menu of the user's own messages only (compare `sender` with the signed-in user), with a
+confirmation. After the call, replace that row with the answer or reload the thread.
+Admin log: `chat_api.list_deleted_messages(thread_name?, limit_start?, limit_page_length?)`, Admin only,
+newest deletion first. Rows: `thread`, `thread_type`, `contractor` (the agency, for an agency thread), `sender`,
+`message` (what it said), `attachment`, `creation` (sent at), `deleted_by`, `deleted_on`. Build a page "Deleted
+messages" for Admin: a table of who sent it, to which agency or thread, what it said, when it was sent and
+when it was deleted. Show people by name, not by e-mail or record number. No restore.
+2026-10-12 (late) — Two reads to replace direct record reads: one clearance step, one agency
+The client asked for both to be built (they were items #2 and #5 of the "calls that go around the app" list).
+Step drawer: `clearance_api.get_clearance_step(clearance_step_name)` replaces `getClearanceStepDocV2`
+(`lib/api/v2/clearance.ts`, the `frappe.client.get` on Clearance Step). It returns the same row as
+`list_my_clearance_steps` for that step, plus `full_name`, `passport_number` (show these in the drawer's header
+instead of any record number) and `placement_status`. 403 means this user does not have that step in their own
+list: show "You cannot open this step", not an empty drawer.
+Agency edit page: `contractor_api.get_contractor(contractor)` replaces `getContractorV2`
+(`lib/api/v2/contractors.ts`, the `frappe.client.get` on Contractor). It returns `name`, `contractor_name`,
+`country`, `user`, `communication_manager`, `license_no`, `telephone`, `batch_mode`, `batch_threshold` and
+`commission_rates` in one call, so the separate `get_commission_rates` call on that page can go. Registrar and
+Communication Manager can now open an agency (they could list agencies but not open one). Saving stays as it
+is: `update_contractor` and `set_commission_rates`.
+Both are read-only and change nothing about who can do what.
+2026-10-13 — An agency's contact comes from the backend (live since `37b9b43`)
+The agencies page showed "Operations Desk / No Phone" for every agency: the proxy read each agency's `User` record
+with `frappe.client.get`, which every role but a System Manager is refused.
+`contractor_api.list_contractors` and `get_contractor` rows now carry `contact_person` (the name on the agency's
+portal login), `email` (that login), `phone` (the agency's telephone) and `whatsapp`.
+`contractor_api.update_contractor` also accepts `phone` (empty clears it), `contact_person` and `whatsapp`;
+`create_contractor` accepts the same three. Contact person and WhatsApp are kept on the agency's portal login and
+are never written when that login is a staff account.
+A Finance Manager may send `batch_mode` / `batch_threshold` to `update_contractor`, and nothing else.
+So: no `frappe.client.get` / `set_value` / `save` on `Contractor` or `User` anywhere. The proxy's `list_contractors`
+enrichment and the fallbacks in `lib/api/v2/contractors.ts` are removed in our baseline branch.
+Tests: `qa/tests/test_79_agency_contact.py`.
+2026-10-14 — Missed appointment, bans list, visa days on ticketing (built in our baseline branch)
+Injaz screen, one row per worker: "Missed" calls `clearance_api.forfeit_injaz_and_restart` (reason optional
+since `a6d5649`; new appointment date and new E-number optional). A paid attempt is lost and its fee recorded; an unpaid one is
+closed as Missed. "Undo missed" calls `undo_forfeit_injaz`. Offer it only when the row's
+`injaz_previous_outcome` (new on `list_my_clearance_steps`) is `Forfeited` or `Missed`, `injaz_outcome` is
+`Active` and `injaz_payment_status` is `Unpaid`; the backend refuses it otherwise.
+Ban Requests screen, "Bans" tab: `applicant_api.list_country_bans(active_only=0)`, split Active / Lifted.
+Rows now carry `full_name`, `passport_number`, `set_by_name`, `lifted_by_name`: show those, not `applicant` or
+the e-mail fields. Lift = `remove_country_ban`; Put back = `undo_country_ban_lift`. Both Manager / Admin only;
+Registrar and Complaint Manager see the list read-only.
+Ticketing screen, "Visa valid until": `placement_api.list_placements` rows now carry `visa_deadline` (empty
+until the visa is stamped). A Ticketer cannot read the Embassy step, so read it from the case list.
+Tests: `test_67` (previous outcome), `test_71` (ban list names), `test_69` (visa_deadline on the case list).
+2026-10-14 (later) — Ticketer and Te'shir screens show their work
+`list_my_clearance_steps`: every row now has `previous_step_done` (the step before it on the case is done, or there is none). The Te'shir / Telesign / Embassy roles cannot read the step before theirs; the workspace uses this field when that step is not in the list (Te'shir screen: LMIS done; Embassy screen: Te'shir done). Before, open steps never showed for those roles.
+A Ticketer may not read Applicant (`list_applicants` answers 403). The workspace now builds its rows from `list_placements`, which carries the worker's name, passport and photo, when the applicant list is refused. Before, the Ticketer's Ticket & Departure screen was empty.
+Ban list: reasons pass through `stripRecordIds()` (an approved request's lift reason names "CBR-…").
+Commission page, batch popup: owed rows (`get_owed_commissions`) carry `amount_original` / `currency_original` and no country. The popup and "Selected For Batching" card now read those; the batch's country is the picked corridor or the agency's own `country` (no prompt); a selection in two currencies is stopped before the call; `currency` is passed to `create_commission_batch`. Batch item rows read `amount_original` with the batch's `currency`.
+Agency Wakala page (`/agent/wakala`): new `portal_api.mark_wakala_paid(clearance_step_name, reference_no?, paid_date?)` behind a "Mark paid" button (user 2026-10-14: the Embassy officer, anyone with access, and the agency may mark it). `list_my_wakala_requests` rows now carry full_name / passport_number; the page showed record-number columns (Step ID, Placement) and "Candidate" for every name: removed / fixed. (A Wakala fee column was added here, then removed the same day: we do not record a Wakala fee; see "all day" below.)
+
+2026-10-14 (all day) — what changed on the screens
+Our frontend branch `baseline/team-dff25ef-fixes` (H867Zx/travel_agency_workflow), commits `c3084bd` to `aaeb408`, then `74f8832` (backend URL fallback); T16 and T17 uncommitted.
+The table at the top ("0.-1") lists them by screen; this is what a screen must do and why.
+Undo on the step tables (T1, T2). `UndoLastStepButton` with `askOnClick` in each Action column: `Clearance Step`
+for LMIS / Te'shir / Embassy (the row's own step), `Placement` for Ticket & Departure. The dialog says what it would
+take back, or why not (`get_undoable_step`). On LMIS, when the LMIS step is Pending the button targets the case
+(Processing -> Selected). The step undo used to exist only in `V2ClearanceQueueWorkspace`, which no page mounts.
+Who is on a step screen (T3, T4). `list_my_clearance_steps` rows carry `previous_step_done` (true when the step
+before on the case is Complete / Issued / Stamped, or there is none). A row is on a step screen once its step has
+started (status not Pending) or `previous_step_done`; the backend still checks every action. Before, a worker whose
+Stamped was undone vanished from Te'shir and Embassy (the screens wanted Injaz paid and a COC result). The Ticketer
+may not read Applicant: the workspace builds its rows from `list_placements` (which joins full_name, passport,
+photo) when `list_applicants` is refused.
+Wakala (T5, T6). `clearance_api.record_wakala_payment(Pending | Paid)` from the Embassy cell;
+`portal_api.mark_wakala_paid(clearance_step_name, reference_no?, paid_date?)` from the portal (the agency on its own
+case, or staff who may act on the step). We do not record a Wakala fee or amount: no fee on any screen.
+`list_my_wakala_requests` rows: `name` (the step, never shown), `full_name`, `passport_number`, `wakala_status`.
+Agency portal (T7). No Commissions. Every portal read in a staff preview must send `contractor_name` (the
+agency picked in the top bar); `list_my_complaints` now does.
+CV (T9). One button. The server PDF (`cv_api.render_cv_pdf`) is not used by the screen any more.
+`.paper-light` on a page of paper keeps it white in dark mode (the dark repaint rules in `globals.css` skip it).
+Injaz paper (T10). `clearance_api.get_injaz_paper(clearance_step_name | placement_name)` returns the paper's
+values ("" when missing, never invented); the browser draws them. Any step of the case works (the Embassy desk
+cannot read the Te'shir step).
+Rows keep their place (T11). `listApplicantsV2` / `listPlacementsV2` / `listAll*` default to `creation desc`;
+the dashboard keeps its own `modified desc`.
+Registration (T12, T13). New Applicant fields `college_certificate`, `original_id_scan` (Attach; PDF / JPG /
+PNG; never on the agency portal). `coc_status` (Not Started / Pending / Issued) and `exam_date` (sent from the form's
+`certified_date`). Identity documents upload with `is_private=1`; photos and the video unchanged (open question).
+Commissions (T14). Owed rows come as `amount_original` / `currency_original` and carry no country: the country
+of a batch is the picked corridor or the agency's own; two currencies in one selection are stopped before the call;
+`currency` is sent to `create_commission_batch`. A batch's advance is `requested_advance_amount` (0 clears it);
+`finance_api.undo_batch_advance(batch_name)` takes the last change back, repeatable; `get_commission_batch` returns
+`advance_undo_available` and `advance_undo_to`.
+Passport reading (T16). The form uploads the scan, then asks the backend only
+(`parsePassportFileV2` -> `passport_parser.enqueue_parse_passport_file`, the same call as before). Fields the backend could not read stay empty for the
+Registrar; `needs_passport_review` is still honoured. `performOpticalPassportOCR` in `lib/utils/mrzScanner.ts` is
+no longer used by the form (pasting the MRZ text still uses `parseMRZText`).
+Tabs (T17). `RoleWorkspaceContainer`: one effect follows `?tab=` / `?status=` when the address changes; a second
+puts a user back on their default tab when the one in view is not theirs; a click calls `router.replace` with
+`?tab=<id>`.
+Settings (T15). `/settings` (company, bank, logo, stamp) is linked in the sidebar for the roles the backend
+allows (`viewFinance`: Admin, Finance Manager). The logo and stamp print on the invoice.
+
+Also please be surgical (do not touch codes unrelated to the fixes I told you to fix ) and follow the first guidlines while adding these features and do not add anything that is mock data or function.Also I do not want you to automatically test it by opening the browser yourself as I would test it by myself.
+:
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-14T21:17:15+03:00.
+
+The user's current state is as follows:
+Active Document: c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\lib\api\v2\finance.ts (LANGUAGE_TYPESCRIPT)
+Cursor is on line: 1
+Other open documents:
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\lib\api\v2\finance.ts (LANGUAGE_TYPESCRIPT)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\Assets\FRONTEND_SURGICAL_CHANGE_POLICY.md (LANGUAGE_MARKDOWN)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\app\agent\replacements\page.tsx (LANGUAGE_TSX)
+- c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow\src\app\chat\deleted\page.tsx (LANGUAGE_TSX)
+Running terminal commands:
+- npm run dev (in c:\Users\azwis\OneDrive\Desktop\Doc\Pro\Internship\Travel Agency Workflow\Travel Agency Frontend\travel_agency_workflow, running for 3m35s)
+</ADDITIONAL_METADATA>

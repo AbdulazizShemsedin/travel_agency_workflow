@@ -106,7 +106,7 @@ export async function listPlacementsV2(
 export async function listPlacementsV2(
   filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "modified desc",
+  orderBy: string = "creation desc",
   limitStart: number = 0,
   withTotal: number = 0
 ): Promise<V2PlacementRecord[] | { data: V2PlacementRecord[]; total_count: number }> {

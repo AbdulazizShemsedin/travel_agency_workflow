@@ -118,6 +118,8 @@ export interface V2CommissionBatch {
   paid_amount_birr?: number;
   balance_due_original?: number;
   balance_due_birr?: number;
+  advance_undo_available?: boolean;
+  advance_undo_to?: number;
   owner?: string;
   creation?: string;
   [key: string]: any;
@@ -663,6 +665,24 @@ export async function settleBatchV2(
         batch_name: batchName,
         settlement_reference: settlementReference,
       },
+    }
+  );
+}
+
+
+/**
+ * Undoes the last advance change on a Commission Batch.
+ * Endpoint: finance_api.undo_batch_advance
+ * Repeatable; returns the restored advance amount.
+ */
+export async function undoBatchAdvanceV2(
+  batchName: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.undo_batch_advance",
+    {
+      method: "POST",
+      body: { batch_name: batchName },
     }
   );
 }

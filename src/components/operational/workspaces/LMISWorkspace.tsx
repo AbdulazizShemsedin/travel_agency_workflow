@@ -55,6 +55,7 @@ import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 
 interface LMISWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -898,67 +899,85 @@ export function LMISWorkspace({
     {
       id: "final_action",
       header: "ACTION",
-      width: "135px",
+      width: "185px",
       align: "center",
       sortable: false,
-      cell: (row) => (
-        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {/* CV / Dossier PDF Download */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              try {
-                toast.info("Preparing candidate CV PDF...");
-                const blob = await renderCvPdfV2(row.applicantId);
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `CV_${row.passportNumber || row.applicantId}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-                toast.success("CV downloaded successfully!");
-              } catch {
-                window.open(`/applicants/${row.applicantId}/cv`, "_blank");
-              }
-            }}
-            className="h-7 px-2 text-[11px] font-semibold gap-1 text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
-            title="Download Candidate CV / Dossier"
-          >
-            <FileDown className="h-3 w-3" />
-            <span>CV</span>
-          </Button>
+      cell: (row) => {
+        const isStepPending = (!row.lmisStatus || row.lmisStatus === "Pending") && (!(row.lms as any)?.status || (row.lms as any)?.status === "Pending");
+        const placementTarget = row.placementId || (typeof row.placement === "string" ? row.placement : (row.placement as any)?.name) || row.dsrName || "";
+        const stepTarget = row.clearanceStepName || (row.lms as any)?.name || "";
+        const undoDoctype = isStepPending ? "Placement" : "Clearance Step";
+        const undoName = isStepPending ? placementTarget : stepTarget;
 
-          {/* Send to Browser Extension Button */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              try {
-                const res = await sendApplicantToExtension(row.applicant || (row as any));
-                if (res.success) {
-                  toast.success(`${row.fullName} loaded into Extension!`);
-                } else {
-                  toast.info(`Candidate dispatched to Extension (${row.applicantId})`);
+        return (
+          <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {/* Undo LMIS / Placement Step */}
+            {undoName && (
+              <UndoLastStepButton
+                doctype={undoDoctype}
+                name={undoName}
+                askOnClick
+                onSuccess={onRefresh}
+              />
+            )}
+
+            {/* CV / Dossier PDF Download */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  toast.info("Preparing candidate CV PDF...");
+                  const blob = await renderCvPdfV2(row.applicantId);
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `CV_${row.passportNumber || row.applicantId}.pdf`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+                  toast.success("CV downloaded successfully!");
+                } catch {
+                  window.open(`/applicants/${row.applicantId}/cv`, "_blank");
                 }
-              } catch (err: any) {
-                toast.error("Failed to send candidate to extension", {
-                  description: formatCleanErrorMessage(err),
-                });
-              }
-            }}
-            className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
-            title="Load into Chrome Extension for LMIS / Ministry autofill"
-          >
-            <Puzzle className="h-3 w-3 text-indigo-500" />
-            <span>Extension</span>
-          </Button>
-        </div>
-      ),
+              }}
+              className="h-7 px-2 text-[11px] font-semibold gap-1 text-emerald-800 dark:text-emerald-300 border-emerald-400/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+              title="Download Candidate CV / Dossier"
+            >
+              <FileDown className="h-3 w-3" />
+              <span>CV</span>
+            </Button>
+
+            {/* Send to Browser Extension Button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const res = await sendApplicantToExtension(row.applicant || (row as any));
+                  if (res.success) {
+                    toast.success(`${row.fullName} loaded into Extension!`);
+                  } else {
+                    toast.info(`Candidate dispatched to Extension (${row.applicantId})`);
+                  }
+                } catch (err: any) {
+                  toast.error("Failed to send candidate to extension", {
+                    description: formatCleanErrorMessage(err),
+                  });
+                }
+              }}
+              className="h-7 px-2 text-[11px] font-semibold gap-1 text-indigo-700 dark:text-indigo-300 border-indigo-400/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/60"
+              title="Load into Chrome Extension for LMIS / Ministry autofill"
+            >
+              <Puzzle className="h-3 w-3 text-indigo-500" />
+              <span>Extension</span>
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 

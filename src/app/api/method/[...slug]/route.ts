@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function getFrappeConfig(req: NextRequest, methodPath = "") {
-  const url = process.env.FRAPPE_BASE_URL;
-  if (!url) {
-    return null;
-  }
+  const url =
+    process.env.FRAPPE_BASE_URL ||
+    process.env.NEXT_PUBLIC_FRAPPE_URL ||
+    "https://agencytracking-production-4974.up.railway.app";
 
   const clientAccept = req.headers.get("accept");
   const headers: Record<string, string> = {

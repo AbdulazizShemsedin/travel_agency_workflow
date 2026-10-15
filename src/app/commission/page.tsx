@@ -61,6 +61,7 @@ import {
   unsettleBatchItemsV2,
   settleBatchV2,
   updateBatchAdvanceV2,
+  undoBatchAdvanceV2,
   writeOffBatchV2,
   listBatchWriteOffsV2,
   releaseUnpaidItemsV2,
@@ -151,6 +152,7 @@ export default function AdminCommissionPage() {
   const [isAdvanceModalOpen, setIsAdvanceModalOpen] = React.useState<boolean>(false);
   const [advanceAmountInput, setAdvanceAmountInput] = React.useState<string>("");
   const [isSubmittingAdvance, setIsSubmittingAdvance] = React.useState<boolean>(false);
+  const [isUndoingAdvance, setIsUndoingAdvance] = React.useState<boolean>(false);
   const [advanceConfirmStep, setAdvanceConfirmStep] = React.useState<boolean>(false);
 
   // Batch Creation Custom States (Advance & Include Unpaid from Previous)
@@ -654,18 +656,25 @@ export default function AdminCommissionPage() {
       });
       return;
     }
+    const contractorDoc = (contractors || []).find((c) => c.name === selectedContractor);
     const targetCountry =
       selectedCountry ||
+      contractorDoc?.country ||
       filteredOwed.find((item) => selectedTxNames.includes(item.transaction_name || item.name))
         ?.destination_country ||
-      filteredOwed[0]?.destination_country;
+      filteredOwed[0]?.destination_country ||
+      "Saudi Arabia";
 
-    if (!targetCountry) {
-      toast.error("Destination Country Required", {
-        description: "Please specify the destination country for this batch.",
+    // Stop batch creation if multiple different currencies are selected in one batch per T14
+    const selectedItems = filteredOwed.filter((item) => selectedTxNames.includes(item.transaction_name || item.name));
+    const currencies = Array.from(new Set(selectedItems.map((it) => it.currency_original || it.currency).filter(Boolean)));
+    if (currencies.length > 1) {
+      toast.error("Multiple Currencies Selected", {
+        description: `Cannot batch items with mixed currencies (${currencies.join(", ")}). Please select items with the same currency.`,
       });
       return;
     }
+    const batchCurrency = (currencies[0] || undefined) as V2SupportedCurrency | undefined;
 
     setIsCreatingBatch(true);
     try {
@@ -674,7 +683,7 @@ export default function AdminCommissionPage() {
         selectedContractor,
         targetCountry,
         selectedTxNames.length > 0 ? selectedTxNames : undefined,
-        undefined,
+        batchCurrency,
         advNum,
         includeUnpaidPrevious
       );
@@ -852,7 +861,25 @@ export default function AdminCommissionPage() {
     }
   };
 
-
+  // ACTION 7b: Undo Batch Advance Amount (repeatable reversal)
+  const handleUndoAdvance = async () => {
+    if (!activeBatch?.name) return;
+    setIsUndoingAdvance(true);
+    try {
+      const res = await undoBatchAdvanceV2(activeBatch.name);
+      toast.success("Advance Change Undone", {
+        description: res?.message || "Restored previous advance amount successfully.",
+      });
+      refetchBatches();
+      await loadBatchDetails(activeBatch.name);
+    } catch (err: any) {
+      toast.error("Undo Advance Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsUndoingAdvance(false);
+    }
+  };
 
   // ACTION: Write-Off Batch
   const handleWriteOffBatch = async () => {
@@ -2289,6 +2316,24 @@ export default function AdminCommissionPage() {
                                 "Save Requested Advance"
                               )}
                             </Button>
+
+                            {activeBatch.advance_undo_available && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isUndoingAdvance}
+                                onClick={handleUndoAdvance}
+                                className="w-full h-8 border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40 text-xs font-semibold mt-1.5 gap-1.5"
+                              >
+                                {isUndoingAdvance ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                )}
+                                <span>Undo advance change (back to {Number(activeBatch.advance_undo_to || 0).toLocaleString()} {activeBatch.currency || "ETB"})</span>
+                              </Button>
+                            )}
                           </>
                         )}
                       </CardContent>

@@ -6,7 +6,7 @@ import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, CheckCircle2
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { listApplicantsV2, checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
-import { performOpticalPassportOCR, parseMRZText } from "@/lib/utils/mrzScanner";
+import { parseMRZText } from "@/lib/utils/mrzScanner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -308,40 +308,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
       if (isOcrCancelledRef.current) return;
 
-      // 3. If backend didn't return complete data (or timed out on non-passport/wallpaper), run optical OCR
-      const hasDob = Boolean(extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date);
-      const hasExpiry = Boolean(extractedData?.passport_expiry || extractedData?.passport_expiry_date || extractedData?.expiry_date);
-      const hasPassportNumber = Boolean(extractedData?.passport_number);
-      const hasName = Boolean(extractedData?.first_name);
-
-      if (!extractedData || !hasDob || !hasExpiry || !hasPassportNumber || !hasName) {
-        try {
-          const clientOcr = await performOpticalPassportOCR(file);
-          if (isOcrCancelledRef.current) return;
-          if (clientOcr) {
-            extractedData = {
-              ...(clientOcr || {}),
-              ...(extractedData || {}),
-              date_of_birth: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
-              dob: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
-              birth_date: extractedData?.date_of_birth || extractedData?.dob || extractedData?.birth_date || clientOcr.date_of_birth || clientOcr.dob || "",
-              passport_expiry: extractedData?.passport_expiry || extractedData?.passport_expiry_date || clientOcr.passport_expiry || clientOcr.passport_expiry_date || "",
-              passport_expiry_date: extractedData?.passport_expiry || extractedData?.passport_expiry_date || clientOcr.passport_expiry || clientOcr.passport_expiry_date || "",
-              passport_issue_date: extractedData?.passport_issue_date || clientOcr.passport_issue_date || "",
-              passport_number: extractedData?.passport_number || clientOcr.passport_number || "",
-              first_name: extractedData?.first_name || clientOcr.first_name || "",
-              last_name: extractedData?.last_name || clientOcr.last_name || "",
-              middle_name: extractedData?.middle_name || clientOcr.middle_name || "",
-              gender: extractedData?.gender || clientOcr.gender || "Female",
-              nationality: extractedData?.nationality || clientOcr.nationality || "Ethiopia",
-              place_of_issue: extractedData?.place_of_issue || extractedData?.passport_issue_place || clientOcr.place_of_issue || "Addis Ababa",
-            };
-          }
-        } catch (clientErr) {
-          console.warn("Client optical OCR fallback warning:", clientErr);
-        }
-      }
-
+      // 3. Backend OCR only (client optical OCR removed per T16 to prevent misreading)
       if (isOcrCancelledRef.current) return;
 
       // 4. Send background job completion notification

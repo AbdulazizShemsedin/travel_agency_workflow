@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -35,10 +35,12 @@ import { useAuth } from "@/components/providers/AuthProvider";
 export default function CandidateCvPreviewPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { can } = useAuth();
   const canGenerateCv = can("generateCv");
   const applicantId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
+  const autoDownloadTriggered = React.useRef(false);
 
   const { data: applicant, isLoading, refetch } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
@@ -119,6 +121,17 @@ export default function CandidateCvPreviewPage() {
     setPassportScanImg(passportScanSrc);
   }, [passportScanSrc]);
 
+  // T9: Auto-download CV if ?download=1 query parameter is present once applicant loads
+  React.useEffect(() => {
+    if (applicant && searchParams?.get("download") === "1" && !autoDownloadTriggered.current) {
+      autoDownloadTriggered.current = true;
+      const t = setTimeout(() => {
+        void handleSavePdf();
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [applicant, searchParams]);
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -190,8 +203,8 @@ export default function CandidateCvPreviewPage() {
     try {
       setIsDownloadingPdf(true);
 
-      // Dynamically import to avoid SSR issues
-      const html2canvas = (await import("html2canvas")).default;
+      // Dynamically import html2canvas-pro (exact 2.4.5) to avoid SSR issues & support lab/oklch colors per T9
+      const html2canvas = (await import("html2canvas-pro")).default;
       const { jsPDF } = await import("jspdf");
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -358,30 +371,17 @@ export default function CandidateCvPreviewPage() {
           </Button>
 
           <Button
-            onClick={handleDownloadServerPdf}
-            disabled={isDownloadingServerPdf}
-            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-800 text-white text-xs font-bold shadow-xs"
-            title="Download authoritative compiled PDF from server"
-          >
-            {isDownloadingServerPdf ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {isDownloadingServerPdf ? "Rendering PDF..." : "Download Official PDF"}
-          </Button>
-
-          <Button
             onClick={handleSavePdf}
             disabled={isDownloadingPdf}
-            className="bg-blue-900 hover:bg-blue-950 text-white text-xs font-bold shadow-sm"
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-800 text-white text-xs font-bold shadow-xs gap-1.5"
+            title="Download authoritative compiled CV PDF"
           >
             {isDownloadingPdf ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Download className="mr-1.5 h-3.5 w-3.5" />
+              <Download className="h-3.5 w-3.5" />
             )}
-            {isDownloadingPdf ? "Downloading..." : "Client Export"}
+            <span>{isDownloadingPdf ? "Downloading..." : "Download CV"}</span>
           </Button>
         </div>
       </div>
@@ -457,7 +457,7 @@ export default function CandidateCvPreviewPage() {
       {/* ========================================================================= */}
       {/* PAGE 1: OFFICIAL BILATERAL RECRUITMENT CV (EXACT MATCH TO ASNEKECH SAMPLE)*/}
       {/* ========================================================================= */}
-      <div ref={cvPage1Ref} className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-8 font-sans border border-slate-300 print:border-none print:shadow-none print:p-2 print:m-0 print:max-w-none print:page-break-after-always">
+      <div ref={cvPage1Ref} className="paper-light mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-8 font-sans border border-slate-300 print:border-none print:shadow-none print:p-2 print:m-0 print:max-w-none print:page-break-after-always">
         
         {/* TOP HEADER SECTION */}
         <div className="flex items-center justify-between border-b-2 border-black pb-3 mb-3">
@@ -753,7 +753,7 @@ export default function CandidateCvPreviewPage() {
       {/* ========================================================================= */}
       {/* PAGE 2: OFFICIAL ETHIOPIAN PASSPORT SCAN ATTACHMENT                       */}
       {/* ========================================================================= */}
-      <div ref={cvPage2Ref} className="mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-10 font-sans border border-slate-300 print:border-none print:shadow-none print:p-4 print:m-0 print:max-w-none flex flex-col items-center justify-center min-h-[900px]">
+      <div ref={cvPage2Ref} className="paper-light mx-auto max-w-4xl bg-white text-black shadow-2xl p-6 sm:p-10 font-sans border border-slate-300 print:border-none print:shadow-none print:p-4 print:m-0 print:max-w-none flex flex-col items-center justify-center min-h-[900px]">
         
         <div className="w-full text-center pb-3 border-b border-slate-200 mb-6">
           <h3 className="text-sm font-extrabold uppercase tracking-wider text-[#002f6c]">

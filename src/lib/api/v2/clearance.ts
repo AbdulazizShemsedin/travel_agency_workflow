@@ -449,12 +449,13 @@ export async function recordInjazPaymentV2(
 /**
  * Forfeits the current Injaz attempt and opens a brand new attempt with a new application ID.
  * Backend Endpoint: agency_tracking.clearance_api.forfeit_injaz_and_restart
+ * Note (2026-10-14): reason, newAppointmentDate, and newInjazApplicationId are optional.
  */
 export async function forfeitInjazAndRestartV2(
   clearanceStepName: string,
-  reason: string,
-  newAppointmentDate: string,
-  newInjazApplicationId: string
+  reason?: string,
+  newAppointmentDate?: string,
+  newInjazApplicationId?: string
 ): Promise<V2ClearanceStepItem> {
   const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
     "/api/method/agency_tracking.clearance_api.forfeit_injaz_and_restart",
@@ -462,13 +463,33 @@ export async function forfeitInjazAndRestartV2(
       method: "POST",
       body: {
         clearance_step_name: clearanceStepName,
-        reason,
-        new_appointment_date: newAppointmentDate,
-        new_injaz_application_id: newInjazApplicationId,
+        ...(reason ? { reason } : {}),
+        ...(newAppointmentDate ? { new_appointment_date: newAppointmentDate } : {}),
+        ...(newInjazApplicationId ? { new_injaz_application_id: newInjazApplicationId } : {}),
       },
     }
   );
   return (res as any)?.message ?? (res as any);
+}
+
+/**
+ * Returns the official Injaz paper's context and values from the backend.
+ * Authoritative Backend Endpoint: clearance_api.get_injaz_paper (New 2026-10-14)
+ * Takes either clearance_step_name or placement_name.
+ */
+export async function getInjazPaperV2(
+  identifier: string
+): Promise<{ message?: any; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.get_injaz_paper",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: identifier,
+        placement_name: identifier,
+      },
+    }
+  );
 }
 
 /**

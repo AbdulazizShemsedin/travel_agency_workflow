@@ -45,6 +45,7 @@ import {
   reopenClearanceStepV2,
   recordWakalaPaymentV2,
   setVisaIssueDateV2,
+  getInjazPaperV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, updateApplicantV2, getApplicantV2 } from "@/lib/api/v2/applicants";
 import { updatePlacementParsedFieldsV2 } from "@/lib/api/v2/placements";
@@ -53,6 +54,8 @@ import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { downloadInjazDocumentPDF, InjazCandidateData } from "@/lib/pdf/injazDocumentGenerator";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { VisaValidUntil } from "../VisaValidUntil";
 
 interface EmbassyWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -532,19 +535,36 @@ export function EmbassyWorkspace({
       header: "WAKALA STATUS",
       width: "130px",
       align: "center",
-      isReadOnly: true,
+      editable: true,
       cell: (row) => {
         const isPaid = (row.wakalaStatus || "").toLowerCase() === "paid";
+        const isSaudi = (row.destinationCountry || "").toLowerCase().includes("saudi");
+        if (!isSaudi) {
+          return <span className="text-slate-400 font-mono text-xs">—</span>;
+        }
+
         return (
-          <Badge
-            className={`font-semibold text-[10px] ${
+          <ExcelSelect
+            value={isPaid ? "Paid" : "Pending"}
+            options={[
+              { value: "Pending", label: "Pending" },
+              { value: "Paid", label: "Paid" },
+            ]}
+            disabled={!canEdit}
+            onSave={async (val) => {
+              const stepName = row.clearanceStepName || row.embassy?.name;
+              if (stepName) {
+                await recordWakalaPaymentV2(stepName, val as "Paid" | "Pending");
+                toast.success(`Wakala marked ${val} for ${row.fullName}`);
+                onRefresh();
+              }
+            }}
+            className={
               isPaid
-                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                : "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
-            }`}
-          >
-            {isPaid ? "Paid ✓" : "Pending"}
-          </Badge>
+                ? "font-bold text-emerald-700 dark:text-emerald-400"
+                : "font-semibold text-amber-700 dark:text-amber-400"
+            }
+          />
         );
       },
     },
@@ -604,42 +624,9 @@ export function EmbassyWorkspace({
       width: "155px",
       align: "center",
       isReadOnly: true,
-      cell: (row) => {
-        const deadline = (row.embassy as any)?.visa_deadline || "";
-        if (!deadline) return <span className="text-slate-400 font-mono text-xs">—</span>;
-
-        const deadlineDate = new Date(deadline);
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        deadlineDate.setHours(0, 0, 0, 0);
-        const diffDays = Math.ceil(
-          (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-        );
-
-        return (
-          <div className="flex flex-col items-center">
-            <span className="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-200">
-              {deadline}
-            </span>
-            <span
-              className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5",
-                diffDays < 0
-                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400"
-                  : diffDays <= 7
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
-                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-              )}
-            >
-              {diffDays < 0
-                ? `${Math.abs(diffDays)}d expired`
-                : diffDays === 0
-                ? "Expires today"
-                : `${diffDays}d remaining`}
-            </span>
-          </div>
-        );
-      },
+      cell: (row) => (
+        <VisaValidUntil deadline={(row.embassy as any)?.visa_deadline || row.visaDeadline} />
+      ),
     },
     {
       id: "sponsor",
@@ -734,23 +721,52 @@ export function EmbassyWorkspace({
             onClick={async () => {
               try {
                 toast.info("Generating Injaz document...");
+                let paper: any = null;
+                const stepOrPlacement = row.clearanceStepName || (row as any).placementName || row.applicantId;
+                if (stepOrPlacement) {
+                  try {
+                    const res = await getInjazPaperV2(stepOrPlacement);
+                    paper = (res as any)?.message || res;
+                  } catch (paperErr) {
+                    // Fallback to row fields if get_injaz_paper is unavailable
+                  }
+                }
+
                 const injazData: InjazCandidateData = {
-                  fullName: row.fullName,
+                  fullName: paper?.full_name || row.fullName || "",
                   applicantId: row.applicantId,
-                  passportNumber: row.passportNumber,
-                  visaNumber: row.visaNumber || (row.applicant as any)?.visa_number || "",
-                  sponsorName: row.sponsorName || (row.applicant as any)?.sponsor_name || "",
-                  sponsorId: row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+                  passportNumber: paper?.passport_number || row.passportNumber || "",
+                  visaNumber: paper?.visa_number || paper?.visa_no || row.visaNumber || (row.applicant as any)?.visa_number || "",
+                  sponsorName: paper?.sponsor_name || row.sponsorName || (row.applicant as any)?.sponsor_name || "",
+                  sponsorId: paper?.sponsor_id || row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+                  sponsorPhone: paper?.sponsor_phone || (row.applicant as any)?.sponsor_phone || "",
+                  destinationCity: paper?.sponsor_city || paper?.destination_city || (row.applicant as any)?.employer_city || "",
                   injazNumber:
+                    paper?.injaz_number ||
+                    paper?.injaz_no ||
                     (row.injaz as any)?.injaz_application_id ||
                     (row as any).injazApplicationId ||
                     (row.injaz as any)?.reference_no ||
                     (row.injaz as any)?.injaz_number ||
                     "",
-                  targetJob: row.jobApplied || "House worker",
-                  nationality: (row.applicant as any)?.nationality || "Ethiopian",
-                  photoUrl: (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
-                  destinationCountry: row.destinationCountry || "Saudi Arabia",
+                  targetJob: paper?.profession || paper?.target_job || row.jobApplied || "",
+                  nationality: paper?.nationality || (row.applicant as any)?.nationality || "",
+                  photoUrl: paper?.photo || paper?.photo_url || (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
+                  destinationCountry: paper?.destination_country || row.destinationCountry || "",
+                  motherName: paper?.mother_name || (row.applicant as any)?.mother_name || "",
+                  placeOfBirth: paper?.place_of_birth || (row.applicant as any)?.place_of_birth || "",
+                  dateOfBirth: paper?.date_of_birth || (row.applicant as any)?.date_of_birth || "",
+                  placeOfIssue: paper?.place_of_issue || (row.applicant as any)?.place_of_issue || "",
+                  passportIssueDate: paper?.issue_date || paper?.passport_issue_date || (row.applicant as any)?.passport_issue_date || "",
+                  passportExpiry: paper?.expiry_date || paper?.passport_expiry || (row.applicant as any)?.passport_expiry || "",
+                  maritalStatus: paper?.marital_status || (row.applicant as any)?.marital_status || "",
+                  religion: paper?.religion || (row.applicant as any)?.religion || "",
+                  educationLevel: paper?.qualification || paper?.education_level || (row.applicant as any)?.education_level || "",
+                  city: paper?.city || (row.applicant as any)?.city || "",
+                  phone: paper?.phone || (row.applicant as any)?.phone || "",
+                  paymentNo: paper?.payment_no || "",
+                  appointmentDate: paper?.appointment_date || (row.injaz as any)?.appointment_date || (row.appointmentDate !== "—" ? row.appointmentDate : ""),
+                  contractorName: paper?.agency_name || paper?.contractor_name || "",
                 };
 
                 if (!injazData.photoUrl && row.applicantId) {
@@ -808,6 +824,18 @@ export function EmbassyWorkspace({
             <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
           </Button>
+
+          {/* Undo Embassy Step */}
+          {(row.clearanceStepName || row.embassy?.name) && (
+            <UndoLastStepButton
+              doctype="Clearance Step"
+              name={row.clearanceStepName || row.embassy?.name || ""}
+              askOnClick
+              onSuccess={onRefresh}
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+            />
+          )}
         </div>
       ),
     },

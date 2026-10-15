@@ -22,6 +22,8 @@ import {
   undoCountryBanDecisionV2,
   V2CountryBanRequestItem,
 } from "@/lib/api/v2/applicants";
+import { stripRecordIds } from "@/lib/utils/display-id";
+import { CountryBansTab } from "./CountryBansTab";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +65,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
 
   const [statusFilter, setStatusFilter] = React.useState<string>("Pending");
   const [searchQuery, setSearchQuery] = React.useState<string>("");
+  const [workspaceTab, setWorkspaceTab] = React.useState<"requests" | "bans">("requests");
 
   // Decision Dialog state
   const [activeRequest, setActiveRequest] = React.useState<V2CountryBanRequestItem | null>(null);
@@ -171,8 +174,46 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-[#15151c] p-2.5 rounded-xl border border-slate-200 dark:border-[#222228]">
+      {/* Workspace Subtabs: Requests Queue vs Bans */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#222228] px-1">
+        <button
+          type="button"
+          onClick={() => setWorkspaceTab("requests")}
+          className={cn(
+            "px-4 py-2 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-2 border-b-2",
+            workspaceTab === "requests"
+              ? "border-amber-600 text-amber-800 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20"
+              : "border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          )}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          <span>Requests Queue</span>
+          <Badge variant="outline" className="text-[10px] h-4 px-1 border-amber-300 text-amber-700 bg-amber-100/50">
+            {requests.length}
+          </Badge>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWorkspaceTab("bans")}
+          className={cn(
+            "px-4 py-2 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-2 border-b-2",
+            workspaceTab === "bans"
+              ? "border-rose-600 text-rose-800 dark:text-rose-300 bg-rose-50/50 dark:bg-rose-950/20"
+              : "border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          )}
+        >
+          <ShieldAlert className="h-3.5 w-3.5" />
+          <span>Bans (Active / Lifted)</span>
+        </button>
+      </div>
+
+      {workspaceTab === "bans" ? (
+        <CountryBansTab isManagerOrAdmin={isManagerOrAdmin} onRefresh={onRefresh} />
+      ) : (
+        <>
+          {/* Filter and Search Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-[#15151c] p-2.5 rounded-xl border border-slate-200 dark:border-[#222228]">
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2.5" />
@@ -245,8 +286,10 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
                   >
                     {/* Applicant */}
                     <td className="py-2.5 px-3 whitespace-nowrap font-medium text-slate-900 dark:text-zinc-100">
-                      <div className="font-semibold">{req.applicant_name || req.full_name || req.applicant}</div>
-                      <div className="font-mono text-[10px] text-slate-400">{req.applicant}</div>
+                      <div className="font-semibold">{req.full_name || req.applicant_name || "Candidate"}</div>
+                      {req.passport_number && (
+                        <div className="font-mono text-[10px] text-slate-400">{req.passport_number}</div>
+                      )}
                     </td>
 
                     {/* Country */}
@@ -284,7 +327,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
 
                     {/* Reason */}
                     <td className="py-2.5 px-3 max-w-xs truncate text-slate-700 dark:text-zinc-300" title={req.reason}>
-                      {req.reason}
+                      {stripRecordIds(req.reason || "")}
                     </td>
 
                     {/* Status */}
@@ -445,6 +488,8 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

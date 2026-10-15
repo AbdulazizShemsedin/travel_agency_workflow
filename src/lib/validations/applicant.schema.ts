@@ -179,6 +179,8 @@ export const baseApplicantSchema = z.object({
   photo_passport: z.string().optional().or(z.literal("")),
   photo_full_body: z.string().optional().or(z.literal("")),
   passport_scan: z.string().optional().or(z.literal("")),
+  college_certificate: z.string().optional().or(z.literal("")),
+  original_id_scan: z.string().optional().or(z.literal("")),
 
   // Video & Intro Attachments
   video_url: z.string().optional().or(z.literal("")),

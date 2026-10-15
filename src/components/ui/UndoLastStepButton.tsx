@@ -31,16 +31,18 @@ export interface UndoLastStepButtonProps {
   className?: string;
   variant?: "outline" | "ghost" | "default" | "destructive" | "secondary";
   size?: "sm" | "default" | "lg";
+  askOnClick?: boolean;
 }
 
 export function UndoLastStepButton({
   doctype,
   name,
-  label = "Undo Last Step",
+  label = "Undo",
   onSuccess,
   className,
   variant = "outline",
   size = "sm",
+  askOnClick = false,
 }: UndoLastStepButtonProps) {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -53,7 +55,7 @@ export function UndoLastStepButton({
   } = useQuery({
     queryKey: ["undoable_step", doctype, name],
     queryFn: () => getUndoableStepV2(doctype, name),
-    enabled: !!name,
+    enabled: !!name && (!askOnClick || isModalOpen),
     staleTime: 5000,
   });
 
@@ -73,6 +75,7 @@ export function UndoLastStepButton({
       queryClient.invalidateQueries({ queryKey: ["applicant"] });
       queryClient.invalidateQueries({ queryKey: ["placement"] });
       queryClient.invalidateQueries({ queryKey: ["clearance"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["complaint"] });
       queryClient.invalidateQueries({ queryKey: ["agent_portal"] });
       onSuccess?.();
@@ -85,11 +88,11 @@ export function UndoLastStepButton({
     },
   });
 
-  if (isLoading || !undoInfo || !undoInfo.available) {
+  if (!askOnClick && (isLoading || !undoInfo || !undoInfo.available)) {
     return null;
   }
 
-  const isBlocked = Boolean(undoInfo.blocked);
+  const isBlocked = Boolean(undoInfo?.blocked);
 
   return (
     <>
@@ -97,52 +100,71 @@ export function UndoLastStepButton({
         type="button"
         variant={variant}
         size={size}
-        disabled={isBlocked || undoMutation.isPending}
-        title={isBlocked ? undoInfo.blocked : undefined}
-        onClick={() => setIsModalOpen(true)}
+        disabled={(!askOnClick && isBlocked) || undoMutation.isPending}
+        title={isBlocked ? undoInfo?.blocked : label}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsModalOpen(true);
+        }}
         className={cn(
-          "gap-1.5 text-xs font-semibold",
-          isBlocked && "opacity-60 cursor-not-allowed",
+          "gap-1 text-xs font-semibold",
+          !askOnClick && isBlocked && "opacity-60 cursor-not-allowed",
           className
         )}
       >
         {undoMutation.isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="h-3 w-3 animate-spin" />
         ) : (
-          <Undo2 className="h-3.5 w-3.5" />
+          <Undo2 className="h-3 w-3 text-amber-600 dark:text-amber-400" />
         )}
-        {label}
+        <span>{label}</span>
       </Button>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
               <Undo2 className="h-5 w-5 text-amber-600" />
               Confirm Step Reversal
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              This will safely reverse {doctype} from{" "}
-              <strong className="text-slate-800 dark:text-zinc-200">
-                {undoInfo.from_status || "current status"}
-              </strong>{" "}
-              {undoInfo.to_status && (
+              {isLoading ? (
+                <span className="flex items-center gap-1.5 py-1">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Checking step reversal availability...
+                </span>
+              ) : undoInfo?.available ? (
                 <>
-                  back to{" "}
+                  This will safely reverse {doctype} from{" "}
                   <strong className="text-slate-800 dark:text-zinc-200">
-                    {undoInfo.to_status}
-                  </strong>
+                    {undoInfo.from_status || "current status"}
+                  </strong>{" "}
+                  {undoInfo.to_status && (
+                    <>
+                      back to{" "}
+                      <strong className="text-slate-800 dark:text-zinc-200">
+                        {undoInfo.to_status}
+                      </strong>
+                    </>
+                  )}
+                  .
                 </>
+              ) : (
+                <span>No step reversal is currently available for this record.</span>
               )}
-              .
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
-            {isBlocked ? (
+            {isLoading ? (
+              <div className="py-4 text-center text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin mx-auto text-amber-600 mb-2" />
+                Checking reversal status...
+              </div>
+            ) : isBlocked || !undoInfo?.available ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <p>{undoInfo.blocked}</p>
+                <p>{undoInfo?.blocked || "Cannot undo: No previous step available to reverse."}</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -174,7 +196,7 @@ export function UndoLastStepButton({
               type="button"
               variant="destructive"
               size="sm"
-              disabled={isBlocked || undoMutation.isPending}
+              disabled={isLoading || isBlocked || !undoInfo?.available || undoMutation.isPending}
               onClick={() => undoMutation.mutate()}
               className="gap-1.5"
             >

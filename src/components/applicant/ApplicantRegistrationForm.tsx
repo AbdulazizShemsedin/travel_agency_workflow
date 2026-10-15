@@ -62,7 +62,7 @@ import {
 } from "@/lib/api/v2";
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
-import { parseMRZText, performOpticalPassportOCR, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
+import { parseMRZText, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -786,48 +786,36 @@ export function ApplicantRegistrationForm({
     activeOcrToastIdRef.current = toastId;
 
     try {
-      // 1. Upload scan file
-      const uploadRes = await uploadFileV2(file, false, "Applicant", draftApplicantId || undefined);
+      // 1. Upload scan file (private per T12 security requirements)
+      const uploadRes = await uploadFileV2(file, true, "Applicant", draftApplicantId || undefined);
       if (isOcrCancelledRef.current) return;
       const fileUrl = (uploadRes as any)?.message?.file_url || (uploadRes as any)?.file_url;
       if (fileUrl) {
         setValue("passport_scan", fileUrl);
       }
 
-      // 2. Run Optical OCR / Passport Parser
+      // 2. Run Backend Passport Parser (T16: Browser OCR removed to prevent misread names/dates)
       let parsedData: ParsedPassportMRZ | null = null;
 
-      // Try client-side optical OCR first
-      try {
-        parsedData = await performOpticalPassportOCR(file);
-      } catch (ocrErr) {
-        console.warn("Client OCR fallback:", ocrErr);
-      }
-
-      if (isOcrCancelledRef.current) return;
-
-      // If client OCR didn't catch MRZ, try backend parser endpoint
-      if (!parsedData || !parsedData.passport_number) {
+      if (fileUrl) {
         try {
-          if (fileUrl) {
-            const serverParsed = await parsePassportFileV2(fileUrl);
-            if (isOcrCancelledRef.current) return;
-            if (serverParsed && (serverParsed.passport_number || serverParsed.first_name)) {
-              parsedData = {
-                passport_number: serverParsed.passport_number || "",
-                first_name: serverParsed.first_name || "",
-                middle_name: serverParsed.middle_name || "",
-                last_name: serverParsed.last_name || "",
-                nationality: serverParsed.nationality || "Ethiopia",
-                date_of_birth: serverParsed.date_of_birth || serverParsed.dob || "",
-                gender: serverParsed.gender || "Female",
-                passport_expiry: serverParsed.passport_expiry || serverParsed.passport_expiry_date || "",
-                passport_issue_date: serverParsed.passport_issue_date || "",
-                place_of_issue: serverParsed.place_of_issue || "Addis Ababa",
-                place_of_birth: serverParsed.place_of_birth || serverParsed.birth_place || "",
-                needs_passport_review: Boolean(serverParsed.needs_passport_review),
-              };
-            }
+          const serverParsed = await parsePassportFileV2(fileUrl);
+          if (isOcrCancelledRef.current) return;
+          if (serverParsed && (serverParsed.passport_number || serverParsed.first_name)) {
+            parsedData = {
+              passport_number: serverParsed.passport_number || "",
+              first_name: serverParsed.first_name || "",
+              middle_name: serverParsed.middle_name || "",
+              last_name: serverParsed.last_name || "",
+              nationality: serverParsed.nationality || "Ethiopia",
+              date_of_birth: serverParsed.date_of_birth || serverParsed.dob || "",
+              gender: serverParsed.gender || "Female",
+              passport_expiry: serverParsed.passport_expiry || serverParsed.passport_expiry_date || "",
+              passport_issue_date: serverParsed.passport_issue_date || "",
+              place_of_issue: serverParsed.place_of_issue || "Addis Ababa",
+              place_of_birth: serverParsed.place_of_birth || serverParsed.birth_place || "",
+              needs_passport_review: Boolean(serverParsed.needs_passport_review),
+            };
           }
         } catch (serverErr) {
           console.warn("Backend parse endpoint fallback:", serverErr);
@@ -945,6 +933,10 @@ export function ApplicantRegistrationForm({
       passport_expiry_date: data.passport_expiry || "",
       contract_number: data.contract_number || "",
       exam_date: data.certified_date || data.exam_date || "",
+      certified_date: data.certified_date || data.exam_date || "",
+      coc_status: data.coc_status || "",
+      college_certificate: data.college_certificate || "",
+      original_id_scan: data.original_id_scan || "",
     };
 
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
@@ -957,7 +949,8 @@ export function ApplicantRegistrationForm({
 
     setIsUploadingMedia(true);
     try {
-      const res = await uploadFileV2(file, false, "Applicant", draftApplicantId || undefined);
+      const isPrivate = activeMediaTab === "passport";
+      const res = await uploadFileV2(file, isPrivate, "Applicant", draftApplicantId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
 

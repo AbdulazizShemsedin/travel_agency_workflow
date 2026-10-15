@@ -101,7 +101,6 @@ export function AgentLayout({
     { label: "Selected Applicants", href: "/agent/reserved", icon: CheckCircle2 },
     { label: "Replacements", href: "/agent/replacements", icon: ShoppingBag },
     { label: "Wakala", href: "/agent/wakala", icon: ShieldCheck },
-    { label: "Commissions", href: "/agent/commission", icon: Receipt },
     { label: "Complaints", href: "/agent/complaints", icon: AlertCircle },
     { label: "Messages", href: "/agent/chat", icon: MessageSquare },
   ];

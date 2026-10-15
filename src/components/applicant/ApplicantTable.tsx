@@ -23,6 +23,7 @@ import {
   Send,
   Ban,
   Building2,
+  Edit3,
 } from "lucide-react";
 import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
 import { cancelApplicantV2, restartApplicantV2 } from "@/lib/api/v2/applicants";
@@ -174,6 +175,15 @@ export function ApplicantTable() {
     if (isSaudiRole && !isKuwaitRole) return "saudi";
     if (isKuwaitRole && !isSaudiRole) return "kuwait";
     return null;
+  }, [authUser]);
+
+  // T13: Check if current staff can edit profile (Admin, Registrar, Manager)
+  const canEditProfile = React.useMemo(() => {
+    if (!authUser?.roles) return false;
+    const roleNames = authUser.roles.map(extractRoleName).map((s) => s.toLowerCase());
+    return roleNames.some((r) =>
+      ["admin", "system manager", "administrator", "registrar", "manager", "operations manager", "operation manager"].includes(r)
+    );
   }, [authUser]);
 
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -1345,14 +1355,25 @@ export function ApplicantTable() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex flex-col gap-0.5 text-xs">
-                                {/* View CV */}
+                                {/* Edit Profile (T13: Admin, Registrar, Manager on any stage except Cancelled) */}
+                                {canEditProfile && stage !== "Cancelled" && applicant.applicant_state !== "Cancelled" && (
+                                  <Link
+                                    href={`/applicants/${encodeURIComponent(applicant.name)}/edit`}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300 transition"
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                    <span>Edit Profile</span>
+                                  </Link>
+                                )}
+
+                                {/* View CV (T9: table CV buttons open with ?download=1) */}
                                 {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage) || applicant.cv_attachment || applicant.cv_file) && (
                                   <Link
-                                    href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
+                                    href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
                                     className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 transition"
                                   >
                                     <FileText className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                                    <span>View CV</span>
+                                    <span>View / Download CV</span>
                                   </Link>
                                 )}
 

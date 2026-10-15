@@ -10,6 +10,8 @@ import {
   FileDown,
   Edit3,
   Puzzle,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
@@ -39,7 +41,10 @@ import {
   setTaeshirStatusV2,
   recordInjazPaymentV2,
   undoForfeitInjazV2,
+  forfeitInjazAndRestartV2,
+  getInjazPaperV2,
 } from "@/lib/api/v2/clearance";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { updateApplicantForLmisV2, getApplicantV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
@@ -155,6 +160,40 @@ export function InjazWorkspace({
     "In Progress" | "Pending"
   >("In Progress");
 
+  // Missed Appointment Modal state (T1)
+  const [missedRow, setMissedRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  const [missedReason, setMissedReason] = React.useState("");
+  const [missedNewDate, setMissedNewDate] = React.useState("");
+  const [missedNewInjazId, setMissedNewInjazId] = React.useState("");
+  const [isSubmittingMissed, setIsSubmittingMissed] = React.useState(false);
+
+  const handleConfirmMissed = async () => {
+    if (!missedRow) return;
+    const stepName = missedRow.clearanceStepName || missedRow.injaz?.name;
+    if (!stepName) return;
+
+    setIsSubmittingMissed(true);
+    try {
+      await forfeitInjazAndRestartV2(
+        stepName,
+        missedReason.trim() || undefined,
+        missedNewDate.trim() || undefined,
+        missedNewInjazId.trim() || undefined
+      );
+      toast.success(`Appointment marked Missed for ${missedRow.fullName}`);
+      setMissedRow(null);
+      setMissedReason("");
+      setMissedNewDate("");
+      setMissedNewInjazId("");
+      await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to mark appointment missed");
+    } finally {
+      setIsSubmittingMissed(false);
+    }
+  };
+
   // Sync edit modal state when editingRow changes
   React.useEffect(() => {
     if (!editingRow) return;
@@ -195,27 +234,56 @@ export function InjazWorkspace({
     );
   }, [editingRow]);
 
-  // PDF Generator helper
+  // PDF Generator helper using backend get_injaz_paper values (T10)
   const resolveInjazDataWithFreshPhoto = async (
     row: WorkspaceApplicantRow
   ): Promise<InjazCandidateData> => {
+    let paper: any = null;
+    const stepOrPlacement = row.clearanceStepName || row.injaz?.name || (row as any).placementName || row.applicantId;
+    if (stepOrPlacement) {
+      try {
+        const res = await getInjazPaperV2(stepOrPlacement);
+        paper = (res as any)?.message || res;
+      } catch (paperErr) {
+        // Fallback to row fields if get_injaz_paper is unavailable
+      }
+    }
+
     const injazData: InjazCandidateData = {
-      fullName: row.fullName,
+      fullName: paper?.full_name || row.fullName || "",
       applicantId: row.applicantId,
-      passportNumber: row.passportNumber,
-      visaNumber: row.visaNumber || (row.applicant as any)?.visa_number || "",
-      sponsorName: row.sponsorName || (row.applicant as any)?.sponsor_name || "",
-      sponsorId: row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+      passportNumber: paper?.passport_number || row.passportNumber || "",
+      visaNumber: paper?.visa_number || paper?.visa_no || row.visaNumber || (row.applicant as any)?.visa_number || "",
+      sponsorName: paper?.sponsor_name || row.sponsorName || (row.applicant as any)?.sponsor_name || "",
+      sponsorId: paper?.sponsor_id || row.sponsorId || (row.applicant as any)?.sponsor_id || "",
+      sponsorPhone: paper?.sponsor_phone || (row.applicant as any)?.sponsor_phone || "",
+      destinationCity: paper?.sponsor_city || paper?.destination_city || (row.applicant as any)?.employer_city || "",
       injazNumber:
+        paper?.injaz_number ||
+        paper?.injaz_no ||
         (row.injaz as any)?.injaz_application_id ||
         row.injazApplicationId ||
         (row.injaz as any)?.reference_no ||
         (row.injaz as any)?.injaz_number ||
         "",
-      targetJob: row.jobApplied || "House worker",
-      nationality: (row.applicant as any)?.nationality || "Ethiopian",
-      photoUrl: (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
-      destinationCountry: row.destinationCountry || "Saudi Arabia",
+      targetJob: paper?.profession || paper?.target_job || row.jobApplied || "",
+      nationality: paper?.nationality || (row.applicant as any)?.nationality || "",
+      photoUrl: paper?.photo || paper?.photo_url || (row.applicant as any)?.photo_passport || (row.applicant as any)?.photograph || "",
+      destinationCountry: paper?.destination_country || row.destinationCountry || "",
+      motherName: paper?.mother_name || (row.applicant as any)?.mother_name || "",
+      placeOfBirth: paper?.place_of_birth || (row.applicant as any)?.place_of_birth || "",
+      dateOfBirth: paper?.date_of_birth || (row.applicant as any)?.date_of_birth || "",
+      placeOfIssue: paper?.place_of_issue || (row.applicant as any)?.place_of_issue || "",
+      passportIssueDate: paper?.issue_date || paper?.passport_issue_date || (row.applicant as any)?.passport_issue_date || "",
+      passportExpiry: paper?.expiry_date || paper?.passport_expiry || (row.applicant as any)?.passport_expiry || "",
+      maritalStatus: paper?.marital_status || (row.applicant as any)?.marital_status || "",
+      religion: paper?.religion || (row.applicant as any)?.religion || "",
+      educationLevel: paper?.qualification || paper?.education_level || (row.applicant as any)?.education_level || "",
+      city: paper?.city || (row.applicant as any)?.city || "",
+      phone: paper?.phone || (row.applicant as any)?.phone || "",
+      paymentNo: paper?.payment_no || "",
+      appointmentDate: paper?.appointment_date || (row.injaz as any)?.appointment_date || (row.appointmentDate !== "—" ? row.appointmentDate : ""),
+      contractorName: paper?.agency_name || paper?.contractor_name || "",
     };
 
     if (!injazData.photoUrl && row.applicantId) {
@@ -884,30 +952,67 @@ export function InjazWorkspace({
       sortable: false,
       cell: (row) => (
         <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {/* Undo Forfeit Button (if current attempt is Unpaid and previous attempt exists) */}
-          {((row.injaz as any)?.is_forfeited || (row.injaz as any)?.attempt_count > 1) && (
+          {/* Missed Appointment Button (T1) */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMissedRow(row);
+              setMissedReason("");
+              setMissedNewDate("");
+              setMissedNewInjazId("");
+            }}
+            className="h-7 px-1.5 text-[10px] text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 font-semibold"
+            title="Mark appointment as Missed / Forfeited"
+          >
+            <Clock className="h-3 w-3" />
+            <span>Missed</span>
+          </Button>
+
+          {/* Undo Missed Button (T1: only when previous outcome is Forfeited or Missed, outcome is Active and payment is Unpaid) */}
+          {Boolean(
+            ((row.injaz as any)?.injaz_previous_outcome === "Forfeited" ||
+              (row.injaz as any)?.injaz_previous_outcome === "Missed") &&
+            ((row.injaz as any)?.injaz_outcome === "Active" || !(row.injaz as any)?.injaz_outcome) &&
+            ((row.injaz as any)?.injaz_payment_status === "Unpaid" || !(row.injaz as any)?.injaz_payment_status)
+          ) && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={async () => {
+              onClick={async (e) => {
+                e.stopPropagation();
                 const stepName = row.clearanceStepName || row.injaz?.name;
                 if (!stepName) return;
                 try {
                   await undoForfeitInjazV2(stepName);
-                  toast.success("Injaz forfeit undone successfully!");
+                  toast.success("Missed appointment status undone successfully!");
                   await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
                   onRefresh();
                 } catch (err: any) {
-                  toast.error(err?.message || "Failed to undo Injaz forfeit");
+                  toast.error(err?.message || "Failed to undo missed status");
                 }
               }}
-              className="h-7 px-1.5 text-[10px] text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1"
-              title="Undo Injaz Forfeit and restart"
+              className="h-7 px-1.5 text-[10px] text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 gap-1 font-semibold"
+              title="Undo missed appointment status"
             >
               <RotateCcw className="h-3 w-3" />
-              <span>Undo Forfeit</span>
+              <span>Undo Missed</span>
             </Button>
+          )}
+
+          {/* Undo Clearance Step (T2) */}
+          {(row.clearanceStepName || row.injaz?.name) && (
+            <UndoLastStepButton
+              doctype="Clearance Step"
+              name={row.clearanceStepName || row.injaz?.name || ""}
+              askOnClick
+              onSuccess={onRefresh}
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+            />
           )}
 
           {/* Injaz PDF Download Button */}
@@ -1222,6 +1327,90 @@ export function InjazWorkspace({
               className="h-8 text-xs bg-amber-700 hover:bg-amber-800 text-white"
             >
               {reopenMutation.isPending ? "Reopening..." : "Confirm Reopen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Missed Appointment Modal (T1)                                 */}
+      {/* ------------------------------------------------------------- */}
+      <Dialog open={!!missedRow} onOpenChange={(open) => !open && setMissedRow(null)}>
+        <DialogContent className="max-w-md rounded-2xl p-6" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                  Mark Appointment Missed
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Candidate: <strong className="uppercase">{missedRow?.fullName}</strong> ({missedRow?.passportNumber})
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-3 text-xs">
+            <p className="text-slate-600 dark:text-zinc-400 text-xs">
+              This will forfeit or close the current appointment attempt. If paid, the fee is recorded; if unpaid, the attempt is closed as Missed.
+            </p>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Reason (Optional)</Label>
+              <Input
+                placeholder="e.g. Candidate could not travel to appointment"
+                value={missedReason}
+                onChange={(e) => setMissedReason(e.target.value)}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">New Appointment Date (Optional)</Label>
+                <Input
+                  type="date"
+                  value={missedNewDate}
+                  onChange={(e) => setMissedNewDate(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">New E-Number (Optional)</Label>
+                <Input
+                  placeholder="e.g. E408153627"
+                  value={missedNewInjazId}
+                  onChange={(e) => setMissedNewInjazId(e.target.value)}
+                  className="text-xs font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setMissedRow(null)}
+              disabled={isSubmittingMissed}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleConfirmMissed}
+              disabled={isSubmittingMissed}
+              className="font-semibold text-xs gap-1.5"
+            >
+              {isSubmittingMissed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+              <span>Confirm Missed</span>
             </Button>
           </DialogFooter>
         </DialogContent>

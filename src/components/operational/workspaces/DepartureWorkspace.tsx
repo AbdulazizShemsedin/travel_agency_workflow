@@ -47,6 +47,8 @@ import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { VisaValidUntil } from "../VisaValidUntil";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 
 interface DepartureWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -559,6 +561,14 @@ export function DepartureWorkspace({
       },
     },
     {
+      id: "visaDeadline",
+      header: "VISA VALID UNTIL",
+      width: "155px",
+      align: "center",
+      isReadOnly: true,
+      cell: (row) => <VisaValidUntil deadline={row.visaDeadline} />,
+    },
+    {
       id: "flightDate",
       header: "FLIGHT DATE",
       width: "140px",
@@ -746,6 +756,18 @@ export function DepartureWorkspace({
             <Puzzle className="h-3 w-3 text-indigo-500" />
             <span>Extension</span>
           </Button>
+
+          {/* Undo Placement Step */}
+          {(row.placementId || row.dsrName) && (
+            <UndoLastStepButton
+              doctype="Placement"
+              name={row.placementId || row.dsrName || ""}
+              askOnClick
+              onSuccess={onRefresh}
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+            />
+          )}
         </div>
       ),
     },

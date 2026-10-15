@@ -86,11 +86,32 @@ export async function fetchOperationalWorkspaceDataV2(
       }
     }
 
+    // Synthesize applicant records from placements if list_applicants was refused (e.g. for Ticketer role per T4)
+    const effectiveApplicants: V2ApplicantDetails[] =
+      applicants.length > 0
+        ? applicants
+        : placements.map((p) => ({
+            name: p.applicant || p.name,
+            full_name: p.full_name || "Candidate",
+            passport_number: p.passport_number || "",
+            photograph: p.photograph || "",
+            photo_passport: p.photograph || "",
+            photo_full_body: (p as any).photo_full_body || "",
+            target_job: p.target_job || "",
+            destination_country: p.destination_country || "Saudi Arabia",
+            applicant_state: p.status,
+            status: p.status,
+            active_placement: p.name,
+            city: "",
+            country: p.destination_country || "Saudi Arabia",
+            visa_deadline: (p as any).visa_deadline || "",
+          } as any));
+
     const rows: WorkspaceApplicantRow[] = [];
 
     // Process all applicants
-    for (const applicant of applicants) {
-      const applicantKey = applicant.name.toLowerCase().trim();
+    for (const applicant of effectiveApplicants) {
+      const applicantKey = (applicant.name || "").toLowerCase().trim();
       let plc = placementsByApplicant.get(applicantKey);
       if (applicant.active_placement) {
         const preferred = placementsByApplicant.get(
@@ -194,7 +215,14 @@ export async function fetchOperationalWorkspaceDataV2(
         continue;
       }
 
-      if (streamType === "embassy") {
+      if (streamType === "injaz") {
+        if (!injazStep) continue;
+        const hasStarted = injazStep.status !== "Pending";
+        const prevDone = Boolean((injazStep as any).previous_step_done || isLmsIssued);
+        if (!hasStarted && !prevDone) {
+          continue;
+        }
+      } else if (streamType === "embassy") {
         const isAlreadyStampedOrBeyond =
           plc?.status === "Stamped" ||
           plc?.status === "Ticketed" ||
@@ -203,11 +231,13 @@ export async function fetchOperationalWorkspaceDataV2(
           applicant.applicant_state === "Ticketed" ||
           applicant.applicant_state === "Departed";
 
-        // Candidate must have finished Te'shir before entering the Embassy stage
-        if (!isAlreadyStampedOrBeyond && !isTeshirFullyCompleted) {
+        if (!embassyStep && !isAlreadyStampedOrBeyond) {
           continue;
         }
-        if (!embassyStep && !isAlreadyStampedOrBeyond) {
+
+        const hasStarted = (embassyStep && embassyStep.status !== "Pending") || isAlreadyStampedOrBeyond;
+        const prevDone = Boolean((embassyStep as any)?.previous_step_done || isTeshirStepFinished);
+        if (!hasStarted && !prevDone) {
           continue;
         }
       } else if (streamType === "wakala") {
@@ -232,21 +262,6 @@ export async function fetchOperationalWorkspaceDataV2(
           plc?.status === "Stamped";
 
         if (!isAlreadyTicketedOrBeyond && !isReadyForDeparture) {
-          continue;
-        }
-      } else if (streamType === "injaz") {
-        // Te'shir sheet: candidate must have completed LMIS (or already advanced beyond)
-        const isAlreadyPastLms =
-          isTeshirFullyCompleted ||
-          isEmbassyFinished ||
-          plc?.status === "Stamped" ||
-          plc?.status === "Ticketed" ||
-          plc?.status === "Departed";
-
-        if (!isAlreadyPastLms && !isLmsFullyCompleted) {
-          continue;
-        }
-        if (!injazStep && !isAlreadyPastLms) {
           continue;
         }
       } else if (streamType === "lms") {
@@ -462,6 +477,7 @@ export async function fetchOperationalWorkspaceDataV2(
           (plc as any)?.flight_time ||
           (plc?.flight_date?.includes(" ") ? plc.flight_date.split(" ")[1] : "") ||
           "",
+        visaDeadline: (plc as any)?.visa_deadline || (embassyStep as any)?.visa_deadline || "",
 
         // Clearances records
         lms: lmsStep,

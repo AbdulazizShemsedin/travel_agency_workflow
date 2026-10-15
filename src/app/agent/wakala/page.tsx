@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import {
   listMyWakalaRequestsV2,
+  markWakalaPaidV2,
   V2WakalaRequestItem,
 } from "@/lib/api/v2/portal";
 import {
@@ -43,6 +44,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
@@ -92,6 +102,28 @@ export default function AgentWakalaRequestsPage() {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [isSubscribingPush, setIsSubscribingPush] = React.useState<boolean>(false);
 
+  // Mark Wakala Paid Dialog State (T6)
+  const [payingRequest, setPayingRequest] = React.useState<V2WakalaRequestItem | null>(null);
+  const [musanedRefNo, setMusanedRefNo] = React.useState("");
+  const [musanedPaidDate, setMusanedPaidDate] = React.useState("");
+
+  const markPaidMutation = useMutation({
+    mutationFn: async ({ stepName, refNo, paidDate }: { stepName: string; refNo?: string; paidDate?: string }) => {
+      return await markWakalaPaidV2(stepName, refNo, paidDate);
+    },
+    onSuccess: () => {
+      toast.success("Wakala payment marked successfully");
+      queryClient.invalidateQueries({ queryKey: ["agency-wakala-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      setPayingRequest(null);
+      setMusanedRefNo("");
+      setMusanedPaidDate("");
+    },
+    onError: (err: any) => {
+      toast.error(formatCleanErrorMessage(err));
+    },
+  });
+
   // 1. Fetch Real Unpaid Wakala Requests from V2 Portal API
   const {
     data: wakalaRequests = [],
@@ -126,11 +158,9 @@ export default function AgentWakalaRequestsPage() {
       if (!searchTerm.trim()) return true;
       const q = searchTerm.toLowerCase();
       return (
-        (req.clearance_step_name && req.clearance_step_name.toLowerCase().includes(q)) ||
         (req.full_name && req.full_name.toLowerCase().includes(q)) ||
         (req.applicant_name && req.applicant_name.toLowerCase().includes(q)) ||
-        (req.passport_number && req.passport_number.toLowerCase().includes(q)) ||
-        (req.placement_name && req.placement_name.toLowerCase().includes(q))
+        (req.passport_number && req.passport_number.toLowerCase().includes(q))
       );
     });
   }, [wakalaRequests, searchTerm]);
@@ -393,14 +423,12 @@ export default function AgentWakalaRequestsPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto lg:overflow-x-clip relative">
-              <table className="w-full text-xs text-left min-w-[760px] lg:min-w-0 border-separate border-spacing-0">
+              <table className="w-full text-xs text-left min-w-[640px] lg:min-w-0 border-separate border-spacing-0">
                 <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
                     <th className="lg:sticky lg:left-0 lg:z-20 bg-slate-100 dark:bg-[#171720] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">
                       Candidate
                     </th>
-                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Step ID</th>
-                    <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Placement</th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Passport</th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Wakala Status</th>
                     <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028] whitespace-nowrap">Created / Due</th>
@@ -410,14 +438,14 @@ export default function AgentWakalaRequestsPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={5} className="py-8 text-center text-slate-400">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
                         Loading pending Wakala authorization records...
                       </td>
                     </tr>
                   ) : isError ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-rose-500">
+                      <td colSpan={5} className="py-8 text-center text-rose-500">
                         <AlertCircle className="h-5 w-5 mx-auto mb-2 text-rose-600" />
                         Failed to load Wakala records: {formatCleanErrorMessage(error)}
                       </td>
@@ -435,13 +463,7 @@ export default function AgentWakalaRequestsPage() {
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
-                          {req.clearance_step_name}
-                        </td>
                         <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-zinc-300 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
-                          {req.placement_name || "Active Placement"}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono text-slate-500 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           {req.passport_number || "—"}
                         </td>
                         <td className="py-2.5 px-3 border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
@@ -457,6 +479,22 @@ export default function AgentWakalaRequestsPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right border-b border-slate-100 dark:border-[#1c1c24] whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
+                            {/* Mark Paid Button (T6) */}
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                setPayingRequest(req);
+                                setMusanedRefNo("");
+                                setMusanedPaidDate(new Date().toISOString().split("T")[0]);
+                              }}
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs gap-1"
+                              title="Mark Wakala fee as paid on Musaned"
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              <span>Mark paid</span>
+                            </Button>
+
                             <a
                               href="https://musaned.com.sa"
                               target="_blank"
@@ -491,7 +529,7 @@ export default function AgentWakalaRequestsPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <td colSpan={5} className="py-12 text-center text-slate-400">
                         <CheckCircle2 className="h-8 w-8 text-emerald-600/40 mx-auto mb-2" />
                         Zero unpaid Wakala authorization requests found. All placements are paid or not at Embassy stage.
                       </td>
@@ -502,6 +540,84 @@ export default function AgentWakalaRequestsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Mark Wakala Paid Dialog (T6) */}
+        <Dialog open={Boolean(payingRequest)} onOpenChange={(open) => !open && setPayingRequest(null)}>
+          <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222228]">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                Mark Wakala Paid
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                Record Wakala authorization payment for{" "}
+                <strong className="text-slate-800 dark:text-zinc-200">
+                  {payingRequest?.full_name || payingRequest?.applicant_name || "Candidate"}
+                </strong>{" "}
+                ({payingRequest?.passport_number || "Passport"}).
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2 text-xs">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Musaned Reference Number (Optional)
+                </Label>
+                <Input
+                  placeholder="e.g. MUS-12345678"
+                  value={musanedRefNo}
+                  onChange={(e) => setMusanedRefNo(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Payment Date (Optional)
+                </Label>
+                <Input
+                  type="date"
+                  value={musanedPaidDate}
+                  onChange={(e) => setMusanedPaidDate(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPayingRequest(null)}
+                disabled={markPaidMutation.isPending}
+                className="h-8 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  if (!payingRequest) return;
+                  markPaidMutation.mutate({
+                    stepName: payingRequest.clearance_step_name,
+                    refNo: musanedRefNo.trim() || undefined,
+                    paidDate: musanedPaidDate.trim() || undefined,
+                  });
+                }}
+                disabled={markPaidMutation.isPending}
+                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              >
+                {markPaidMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Confirm Paid
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AgentLayout>
   );

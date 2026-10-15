@@ -98,10 +98,18 @@ export interface V2LmisUpdatePayload {
 export interface V2CountryBanRecord {
   name: string;
   applicant: string;
+  full_name?: string;
+  passport_number?: string;
   country: string;
   reason?: string;
   set_by?: string;
+  set_by_name?: string;
   set_on?: string;
+  active?: number;
+  lifted_by?: string;
+  lifted_by_name?: string;
+  lifted_on?: string;
+  lift_reason?: string;
   creation?: string;
   [key: string]: any;
 }
@@ -439,7 +447,7 @@ export async function listApplicantsV2(
 export async function listApplicantsV2(
   filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "modified desc",
+  orderBy: string = "creation desc",
   limitStart: number = 0,
   withTotal: number = 0
 ): Promise<V2ApplicantDetails[] | { data: V2ApplicantDetails[]; total_count: number }> {
