@@ -561,14 +561,6 @@ export function DepartureWorkspace({
       },
     },
     {
-      id: "visaDeadline",
-      header: "VISA VALID UNTIL",
-      width: "155px",
-      align: "center",
-      isReadOnly: true,
-      cell: (row) => <VisaValidUntil deadline={row.visaDeadline} />,
-    },
-    {
       id: "flightDate",
       header: "FLIGHT DATE",
       width: "140px",

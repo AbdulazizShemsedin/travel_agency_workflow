@@ -176,18 +176,6 @@ export function CandidateCard({
               ? `${maritalDisplay} (${childrenCount} ch.)`
               : maritalDisplay;
 
-          // Extract top verified skills
-          const c = candidate as any;
-          const topSkills: string[] = [];
-          if (c.skill_cooking || c.skill_arabic_cooking) topSkills.push("Cooking");
-          if (c.skill_cleaning) topSkills.push("Cleaning");
-          if (c.skill_baby_sitting || c.skill_babysitting || c.skill_children_care) topSkills.push("Babysitting");
-          if (c.skill_washing || c.skill_ironing) topSkills.push("Laundry");
-          if (c.skill_sewing) topSkills.push("Sewing");
-          if (topSkills.length === 0) {
-            if (c.arabic_level && c.arabic_level.toLowerCase() !== "none") topSkills.push(`Arabic: ${c.arabic_level}`);
-            if (c.english_level && c.english_level.toLowerCase() !== "none") topSkills.push(`English: ${c.english_level}`);
-          }
 
           return (
             <>
@@ -248,22 +236,6 @@ export function CandidateCard({
                 </div>
               </div>
 
-              {/* Skills Tags */}
-              {topSkills.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 px-0.5">
-                  <span className="text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
-                    Skills:
-                  </span>
-                  {topSkills.slice(0, 3).map((sk) => (
-                    <span
-                      key={sk}
-                      className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
-                    >
-                      {sk}
-                    </span>
-                  ))}
-                </div>
-              )}
 
               {/* Prior Work & Salary Row */}
               {(() => {

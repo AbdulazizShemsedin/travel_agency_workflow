@@ -25,7 +25,7 @@ import {
   FileText,
   AlertTriangle,
 } from "lucide-react";
-import { getApplicantV2, generateCvV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { getApplicantV2, generateCvV2, V2ApplicantDetails, isExperiencedCountry } from "@/lib/api/v2";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -160,19 +160,18 @@ export default function CandidateCvPreviewPage() {
   const isSaudi = destination.toLowerCase().includes("saudi") || destination.toLowerCase().includes("ksa");
   const isKuwait = destination.toLowerCase().includes("kuwait");
 
-  // Experience normalization
+  // Experience normalization: Only candidates with a real experience_country are marked experienced
   const rawCountry = (applicant.experience_country || "").trim();
   const rawPeriod = (applicant.experience_period || "").trim();
-  const isExperienced = Boolean(
-    rawCountry &&
-    rawCountry.toLowerCase() !== "none" &&
-    rawCountry.toLowerCase() !== "first time" &&
-    rawCountry.toLowerCase() !== "first time applicant" &&
-    rawCountry.toLowerCase() !== "overseas"
-  );
+  const isExperienced = isExperiencedCountry(rawCountry);
   const expCountryDisplay = isExperienced ? rawCountry.toUpperCase() : "NONE";
+  const yearsNum = Number(applicant.years_of_experience);
   const expDurationDisplay = isExperienced
-    ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years" ? rawPeriod : `${applicant.years_of_experience || 2} Years`)
+    ? (rawPeriod && rawPeriod !== "0" && rawPeriod !== "0 years"
+        ? rawPeriod
+        : !isNaN(yearsNum) && yearsNum > 0
+        ? `${yearsNum} ${yearsNum === 1 ? "Year" : "Years"}`
+        : "1 Year")
     : "FIRST TIME";
 
   // Skills normalization
@@ -303,11 +302,13 @@ export default function CandidateCvPreviewPage() {
   const nationality = (applicant.nationality || "Ethiopia").toUpperCase();
   const religion = (applicant.religion || "N/A").toUpperCase();
   const jobApplied = (applicant.target_job || applicant.job_applied || "House Worker").toUpperCase();
+  const isExperiencedSalary = isExperiencedCountry(applicant.experience_country);
+  const defaultSaudiSalary = isExperiencedSalary ? "1,200 SR" : "1,000 SR";
   const salaryDisplay = applicant.monthly_salary
     ? `${applicant.monthly_salary} ${isKuwait ? "KD" : "SR"}`
     : isKuwait
     ? "120 KD"
-    : "1,000 SR";
+    : defaultSaudiSalary;
 
   return (
     <div className="w-full space-y-6 pb-24 text-slate-900">

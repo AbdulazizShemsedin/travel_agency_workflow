@@ -491,6 +491,7 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
       .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
       .optional()
       .or(z.literal(""))
+      .nullable()
       .refine((val) => {
         if (!val || !val.trim()) return true;
         return isValid(parseISO(val));

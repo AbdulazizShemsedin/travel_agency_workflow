@@ -317,6 +317,14 @@ export function InjazWorkspace({
 
     try {
       await setTaeshirAppointmentV2(stepName, appointmentDate, injazNo);
+      const candId = row.applicantId || row.applicantName || row.name;
+      if (injazNo && candId) {
+        try {
+          await updateApplicantV2(candId, { application_number: injazNo.trim() });
+        } catch (e) {
+          console.warn("Failed to sync application_number to applicant:", e);
+        }
+      }
       toast.success("Te'shir details saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       onRefresh();
@@ -525,6 +533,15 @@ export function InjazWorkspace({
           modalAppointmentDate || "",
           modalInjazNumber || ""
         );
+        if (modalInjazNumber && editingRow.applicantId) {
+          try {
+            await updateApplicantV2(editingRow.applicantId, {
+              application_number: modalInjazNumber.trim(),
+            });
+          } catch (e) {
+            console.warn("Failed to sync application_number to applicant:", e);
+          }
+        }
       }
 
       // Update Remark on applicant record

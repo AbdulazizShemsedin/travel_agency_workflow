@@ -73,7 +73,7 @@ import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { shortRef } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
-type ActiveTab = "ledger" | "approval_queue" | "reconciliation";
+type ActiveTab = "ledger" | "reconciliation";
 
 export default function ExpensesIncomePage() {
   const queryClient = useQueryClient();
@@ -286,10 +286,7 @@ export default function ExpensesIncomePage() {
   const handleExportTransactions = async () => {
     setIsExporting(true);
     try {
-      const statusFilter = activeTab === "approval_queue" ? "Pending" : undefined;
-      const blob = await exportTransactionsXlsxV2({
-        status: statusFilter,
-      });
+      const blob = await exportTransactionsXlsxV2();
       const fallback = `Transactions_${activeTab}_${new Date().toISOString().split("T")[0]}`;
       const res = await downloadBackendSpreadsheet(blob, fallback);
       toast.success("Excel Spreadsheet Downloaded", {
@@ -732,25 +729,6 @@ export default function ExpensesIncomePage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab("approval_queue")}
-          className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-            activeTab === "approval_queue"
-              ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-              : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-          )}
-        >
-          <Inbox className="h-3.5 w-3.5" />
-          Pending Approvals
-          {pendingQueue.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-              {pendingQueue.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab("reconciliation")}
           className={cn(
             "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
@@ -881,233 +859,10 @@ export default function ExpensesIncomePage() {
                 Financial Audit & Ledger Rules
               </CardTitle>
               <CardDescription className="text-xs">
-                Transactions require Finance Manager approval before impacting ledger totals.
+                Transactions are automatically approved and applied directly to ledger totals.
               </CardDescription>
             </CardHeader>
           </Card>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* TAB 2: PENDING APPROVALS QUEUE                                 */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "approval_queue" && (
-        <div className="space-y-4">
-          {queueError && (
-            <LoadError
-              error={queueError}
-              resourceName="Pending Approval Queue"
-              onRetry={() => refetchQueue()}
-            />
-          )}
-
-          {!isFinanceManagerOrAdmin ? (
-            <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
-              <div className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-amber-600" />
-                <h3 className="text-sm font-bold">Approval Controls are Restricted</h3>
-              </div>
-              <p className="leading-relaxed">
-                Reviewing, approving, rejecting, or voiding transactions requires <strong>Finance Manager</strong> or <strong>Administrator</strong> privileges.
-              </p>
-            </div>
-          ) : (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-                      <Inbox className="h-4 w-4 text-emerald-600" />
-                      Pending Transaction Approval Queue
-                    </CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      Review oldest-first pending disbursements and fees. Approve to commit to ledger, or reject with a formal reason.
-                    </CardDescription>
-                  </div>
-                  <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 text-[10px]">
-                    {pendingQueue.length} Pending Actions
-                  </Badge>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-0">
-                <div className="overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-280px)] min-h-[300px] overflow-y-auto">
-                  <table className="w-full text-xs text-left border-collapse min-w-[850px] lg:min-w-0">
-                    <thead className="sticky top-0 z-20 text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
-                      <tr>
-                        <th className="lg:sticky lg:left-0 z-20 bg-slate-50 dark:bg-[#171720] py-2 px-2.5 lg:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Transaction</th>
-                        <th className="py-2 px-2.5">Type</th>
-                        <th className="py-2 px-2.5">Amount</th>
-                        <th className="py-2 px-2.5">Applicant</th>
-                        <th className="py-2 px-2.5">Candidate / Placement</th>
-                        <th className="py-2 px-2.5">Stage Status</th>
-                        <th className="py-2 px-2.5">Description</th>
-                        <th className="py-2 px-2.5">Logged By</th>
-                        <th className="py-2 px-2.5">Logged At</th>
-                        <th className="py-2 px-2.5 text-right">Approval Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                      {isQueueLoading ? (
-                        <tr>
-                          <td colSpan={10} className="py-8 text-center text-slate-400">
-                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
-                            Loading pending approval queue...
-                          </td>
-                        </tr>
-                      ) : pendingQueue.length > 0 ? (
-                        pendingQueue.map((tx) => {
-                          const staffName = resolveStaffName(tx.logged_by || tx.owner);
-                          const { applicantId, applicantName, stageStatus } = resolveApplicantInfo(tx);
-                          const originalAmount = tx.amount_original ?? tx.amount_birr ?? tx.amount ?? 0;
-                          const originalCurrency = tx.currency_original ?? tx.currency ?? "ETB";
-                          const formattedAmount = `${Number(originalAmount).toLocaleString()} ${originalCurrency}`;
-
-                          return (
-                            <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] group">
-                              <td className="lg:sticky lg:left-0 z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-50 dark:group-hover:bg-[#15151c] py-2 px-2.5 font-mono font-bold text-slate-900 dark:text-white lg:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] whitespace-nowrap">
-                                {shortRef(tx.name)}
-                              </td>
-                              <td className="py-2 px-2.5 whitespace-nowrap">
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "text-[10px]",
-                                    tx.transaction_type === "Income"
-                                      ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                      : "border-rose-300 text-rose-800 bg-rose-50"
-                                  )}
-                                >
-                                  {tx.transaction_type}
-                                </Badge>
-                              </td>
-                              <td className="py-2.5 px-3 font-bold font-mono text-slate-900 dark:text-white whitespace-nowrap">
-                                <div>{formattedAmount}</div>
-                                {isBirrConversionEnabled && tx.awaiting_fx_rate === 1 && (
-                                  <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
-                                    Awaiting FX Rate
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
-                                <div className="font-semibold text-slate-900 dark:text-white">
-                                  {applicantName}
-                                </div>
-                                {applicantId !== "—" && (
-                                  <div className="text-[10px] font-mono text-slate-400">
-                                    {shortRef(applicantId)}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">
-                                {shortRef(tx.placement) || shortRef(applicantId) || "General"}
-                              </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 border-slate-200 dark:border-zinc-700 font-medium"
-                                >
-                                  {stageStatus}
-                                </Badge>
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-700 dark:text-zinc-300 max-w-xs" title={tx.description}>
-                                {tx.fee_type && tx.clearance_step ? (
-                                  <div className="font-semibold text-slate-900 dark:text-zinc-100">
-                                    {tx.fee_type} · {tx.clearance_step}
-                                  </div>
-                                ) : tx.fee_type ? (
-                                  <div className="font-semibold text-slate-900 dark:text-zinc-100">
-                                    {tx.fee_type}
-                                  </div>
-                                ) : null}
-                                <div className="truncate">{tx.description}</div>
-                              </td>
-                              <td className="py-2.5 px-3 whitespace-nowrap">
-                                <div className="font-semibold text-slate-900 dark:text-white">
-                                  {staffName}
-                                </div>
-                                {(tx.logged_by || tx.owner) && (tx.logged_by || tx.owner) !== staffName && (
-                                  <div className="text-[10px] font-mono text-slate-400 truncate max-w-[140px]">
-                                    {tx.logged_by || tx.owner}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2.5 px-3 text-slate-400 whitespace-nowrap">
-                                {new Date(tx.creation).toLocaleDateString()}
-                              </td>
-                              <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={() => handleApprove(tx.name)}
-                                    className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white px-2.5 shadow-xs"
-                                    title="Approve transaction into ledger"
-                                  >
-                                    <Check className="h-3.5 w-3.5 mr-1" />
-                                    Approve
-                                  </Button>
-
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      setRejectingTx(tx);
-                                      setRejectionReason("");
-                                    }}
-                                    className="h-7 text-xs border-rose-300 text-rose-800 hover:bg-rose-50 px-2"
-                                    title="Reject pending transaction with remark"
-                                  >
-                                    <Ban className="h-3.5 w-3.5 mr-1" />
-                                    Reject
-                                  </Button>
-
-                                  {isFinanceManagerOrAdmin && (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        setVoidingTxName(tx.name);
-                                        setVoidReason("");
-                                      }}
-                                      className="h-7 text-xs border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-zinc-700 dark:text-zinc-300 px-2"
-                                      title="Void transaction with audit remark"
-                                    >
-                                      <AlertOctagon className="h-3.5 w-3.5 mr-1 text-rose-600" />
-                                      Void
-                                    </Button>
-                                  )}
-
-                                  <UndoLastStepButton
-                                    doctype="Applicant Transaction"
-                                    name={tx.name}
-                                    onSuccess={() => {
-                                      refetchQueue();
-                                      refetchLedger();
-                                    }}
-                                    size="sm"
-                                    className="h-7 text-xs px-2"
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={10} className="py-12 text-center text-slate-400">
-                            Zero pending transactions in queue. All records are approved or rejected.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
       )}
 

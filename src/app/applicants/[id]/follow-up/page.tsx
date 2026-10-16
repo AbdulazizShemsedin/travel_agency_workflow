@@ -90,7 +90,7 @@ export default function ApplicantFollowUpPage({
   }
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-150">
+    <div className="w-full h-full min-h-0 flex flex-col animate-in fade-in duration-150">
       <ApplicantFollowUpWorkspace
         isOpen={true}
         isFullPage={true}

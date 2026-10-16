@@ -223,11 +223,38 @@ export function SimpleSelect({
         disabled={disabled}
       >
         <SelectTrigger
-          className={cn(triggerClassName, className, hasSelectedValue && clearable && "pr-8")}
+          className={cn(triggerClassName, className)}
           error={error}
           aria-label={ariaLabel}
         >
-          <SelectValue placeholder={placeholder} />
+          <div className="flex items-center justify-between w-full min-w-0 gap-1.5">
+            <span className="truncate flex-1 text-left block">
+              <SelectValue placeholder={placeholder} />
+            </span>
+            {clearable && hasSelectedValue && !disabled && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label="Clear selection"
+                title="Clear selection"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onValueChange?.("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onValueChange?.("");
+                  }
+                }}
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer mr-0.5"
+              >
+                <X className="h-3 w-3" />
+              </span>
+            )}
+          </div>
         </SelectTrigger>
         <SelectContent className={contentClassName}>
           {clearable && hasSelectedValue && (
@@ -249,24 +276,6 @@ export function SimpleSelect({
           ))}
         </SelectContent>
       </RadixSelect>
-
-      {/* Quick 1-click unselect button on trigger */}
-      {clearable && hasSelectedValue && !disabled && (
-        <button
-          type="button"
-          tabIndex={0}
-          aria-label="Clear selection"
-          title="Clear selection"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onValueChange?.("");
-          }}
-          className="absolute right-7 top-1/2 -translate-y-1/2 z-10 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
     </div>
   );
 }

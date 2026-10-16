@@ -115,6 +115,35 @@ export interface V2CountryBanRecord {
 }
 
 /**
+ * Authoritative check: Only an applicant whose experience_country is filled
+ * with a real country (not empty, and not 'None' / 'First Time' / 'N/A')
+ * is considered an experienced candidate.
+ */
+export function isExperiencedCountry(country?: string | null): boolean {
+  if (!country) return false;
+  const trimmed = country.trim().toLowerCase();
+  if (!trimmed) return false;
+  const nonCountries = [
+    "none",
+    "first time",
+    "first time applicant",
+    "none / first time",
+    "none/first time",
+    "first-time",
+    "overseas",
+    "n/a",
+    "na",
+    "no",
+    "false",
+    "nil",
+    "not applicable",
+    "none / first timer",
+    "first timer",
+  ];
+  return !nonCountries.includes(trimmed);
+}
+
+/**
  * Normalizes applicant fields between frontend aliases and Frappe DocType fields.
  * Ensures target_job, education, salary_amount, salary_currency, photograph, etc.
  * are always populated for Frappe's field-floor checks.
@@ -217,18 +246,13 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.english_level = normalizeLanguageLevel(result.english_level);
   }
 
+
+
   // 3. Salary Amount & Monthly Salary (Experienced = 1200 SAR, First Timer = 1000 SAR)
-  const expCountry = String(result.experience_country || "").trim().toLowerCase();
-  const isExperiencedApplicant = Boolean(
-    (expCountry &&
-      expCountry !== "none" &&
-      expCountry !== "first time" &&
-      expCountry !== "first time applicant" &&
-      expCountry !== "overseas") ||
-    result.has_experience === true ||
-    result.experience_type === "experienced" ||
-    Number(result.years_of_experience) > 0
-  );
+  // ONLY an applicant with experience_country filled with an actual country has default 1200 SAR.
+  // If experience_country is not filled with a country, the default salary is 1000 SAR.
+  const expCountry = String(result.experience_country || "").trim();
+  const isExperiencedApplicant = isExperiencedCountry(expCountry);
 
   const rawSalary =
     result.salary_amount !== undefined && result.salary_amount !== null
@@ -242,7 +266,7 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   if (rawSalary !== undefined && rawSalary !== null && rawSalary !== "") {
     const num = Number(rawSalary);
     let validNum = !isNaN(num) && num > 0 ? num : standardSalary;
-    // Auto-correct discrepancy where experienced candidate defaulted to 1000
+    // Auto-correct discrepancy: only experienced applicant defaults to 1200, first timers default to 1000
     if (isExperiencedApplicant && validNum === 1000) {
       validNum = 1200;
     } else if (!isExperiencedApplicant && validNum === 1200) {
@@ -255,6 +279,17 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.salary_amount = standardSalary;
     result.salary = standardSalary;
     result.monthly_salary = String(standardSalary);
+  }
+
+  // Clear fictitious experience years if applicant has no experience country
+  if (!isExperiencedApplicant) {
+    if (result.experience_country && !isExperiencedCountry(result.experience_country)) {
+      result.experience_country = "";
+    }
+    result.experience_period = "";
+    result.years_of_experience = undefined;
+    result.has_experience = false;
+    result.experience_type = "first_time";
   }
 
   // 4. Salary Currency

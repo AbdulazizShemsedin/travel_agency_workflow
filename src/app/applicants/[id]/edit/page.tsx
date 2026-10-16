@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
-import { getApplicantV2, listPlacementsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { Button } from "@/components/ui/button";
 
@@ -40,22 +40,46 @@ export default function EditApplicantPage() {
     return placements.find((p: any) => p.status !== "Cancelled") || null;
   }, [placements]);
 
+  const { data: clearanceSteps = [] } = useQuery({
+    queryKey: ["clearance_steps_for_edit_applicant", activePlacement?.name],
+    queryFn: () => listMyClearanceStepsV2(activePlacement!.name),
+    enabled: !!activePlacement?.name,
+  });
+
+  const taeshirInjazId = React.useMemo(() => {
+    const step = clearanceSteps.find(
+      (s: any) =>
+        s.step_type === "Injaz" ||
+        s.step_type === "Taeshir" ||
+        String(s.step_type || "").toLowerCase().includes("injaz") ||
+        String(s.step_type || "").toLowerCase().includes("taeshir") ||
+        String(s.step_type || "").toLowerCase().includes("ta'shir")
+    );
+    return (step as any)?.injaz_application_id || (step as any)?.e_number || "";
+  }, [clearanceSteps]);
+
   const enrichedApplicant = React.useMemo(() => {
     if (!applicant) return applicant;
     return {
       ...applicant,
+      application_number:
+        (applicant as any).application_number ||
+        taeshirInjazId ||
+        (activePlacement as any)?.injaz_application_id ||
+        (activePlacement as any)?.e_number ||
+        "",
       visa_number: applicant.visa_number || activePlacement?.visa_number || (activePlacement as any)?.visa_reference_number || "",
       sponsor_name: (applicant as any).sponsor_name || activePlacement?.employer_name || (activePlacement as any)?.sponsor_name || "",
       sponsor_id: (applicant as any).sponsor_id || activePlacement?.employer_national_id || (activePlacement as any)?.sponsor_civil_id || "",
       sponsor_phone: (applicant as any).sponsor_phone || (activePlacement as any)?.employer_phone || (activePlacement as any)?.sponsor_phone || "",
       sponsor_address: (applicant as any).sponsor_address || (activePlacement as any)?.employer_address || (activePlacement as any)?.sponsor_address || "",
-      sponsor_arabic: (applicant as any).sponsor_arabic || (activePlacement as any)?.sponsor_arabic || (activePlacement as any)?.employer_arabic_name || "",
+      sponsor_arabic: (applicant as any).sponsor_arabic || "",
       sponsor_email: (applicant as any).sponsor_email || (activePlacement as any)?.employer_email || (activePlacement as any)?.sponsor_email || "",
       agent: (applicant as any).agent || activePlacement?.saudi_agency_name || (activePlacement as any)?.kuwait_agency_name || "",
       contract_number: (applicant as any).contract_number || activePlacement?.contract_number || "",
       active_placement: activePlacement,
     };
-  }, [applicant, activePlacement]);
+  }, [applicant, activePlacement, taeshirInjazId]);
 
   const isIdentityLocked = React.useMemo(() => {
     return activePlacement ? IDENTITY_LOCK_STATUSES.has(activePlacement.status) : false;

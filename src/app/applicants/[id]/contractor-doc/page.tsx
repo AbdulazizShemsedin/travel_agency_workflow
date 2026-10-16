@@ -256,7 +256,6 @@ export default function PlacementDocumentCenterPage() {
       const agency = agencyName || activePlacement.saudi_agency_name;
       const sponsorPhone = (contractParseResult as any)?.sponsor_phone || (contractParseResult as any)?.employer_phone || (activePlacement as any)?.employer_phone;
       const sponsorAddress = employerAddress || (activePlacement as any)?.employer_address;
-      const sponsorArabic = (contractParseResult as any)?.sponsor_arabic || (contractParseResult as any)?.employer_arabic_name || (activePlacement as any)?.sponsor_arabic;
       const sponsorEmail = (contractParseResult as any)?.sponsor_email || (contractParseResult as any)?.employer_email || (activePlacement as any)?.employer_email;
 
       if (visaNum) applicantUpdatePayload.visa_number = visaNum;
@@ -266,7 +265,6 @@ export default function PlacementDocumentCenterPage() {
       if (agency) applicantUpdatePayload.agent = agency;
       if (sponsorPhone) applicantUpdatePayload.sponsor_phone = sponsorPhone;
       if (sponsorAddress) applicantUpdatePayload.sponsor_address = sponsorAddress;
-      if (sponsorArabic) applicantUpdatePayload.sponsor_arabic = sponsorArabic;
       if (sponsorEmail) applicantUpdatePayload.sponsor_email = sponsorEmail;
 
       if (Object.keys(applicantUpdatePayload).length > 0 && applicantId) {

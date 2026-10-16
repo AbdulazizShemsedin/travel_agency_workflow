@@ -60,7 +60,6 @@ import {
   getFinancialOverviewV2,
   getCostBreakdownReportV2,
   getEmployeeFinancialReportV2,
-  getPendingApprovalQueueV2,
   exportCommissionsXlsxV2,
   exportTransactionsXlsxV2,
   V2OperationsSummary,
@@ -71,7 +70,6 @@ import {
   V2FinancialOverviewReport,
   V2CostBreakdownReport,
   V2EmployeeFinancialItem,
-  V2PendingApprovalItem,
 } from "@/lib/api/v2/reports";
 import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import {
@@ -85,7 +83,7 @@ import {
 } from "@/lib/api/v2/finance";
 import { cn } from "@/lib/utils";
 
-type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions" | "approvals";
+type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions";
 
 const FUNNEL_COLORS = [
   "#94a3b8", // Draft
@@ -331,19 +329,7 @@ export default function ReportsPage() {
     staleTime: 60000,
   });
 
-  // 9. Pending Approval Queue (Admin only)
-  const {
-    data: pendingApprovals = [],
-    isLoading: isApprovalsLoading,
-    refetch: refetchApprovals,
-  } = useQuery<V2PendingApprovalItem[]>({
-    queryKey: ["report_pending_approvals"],
-    queryFn: getPendingApprovalQueueV2,
-    enabled: Boolean(activeTab === "approvals" && isAdmin),
-    staleTime: 20000,
-  });
-
-  // 10. All Transactions Ledger (Admin / Finance Manager)
+  // All Transactions Ledger (Admin / Finance Manager)
   const {
     data: allTransactions = [],
     isLoading: isTransactionsLoading,
@@ -383,30 +369,23 @@ export default function ReportsPage() {
   const transactionMetrics = React.useMemo(() => {
     let totalExpenseBirr = 0;
     let totalIncomeBirr = 0;
-    let pendingCount = 0;
-    let approvedCount = 0;
-    let rejectedCount = 0;
 
     allTransactions.forEach((t: any) => {
       const birr = Number(t.amount_birr || t.amount || 0);
-      if (t.transaction_type === "Expense" && t.status === "Approved") {
+      if (t.transaction_type === "Expense") {
         totalExpenseBirr += birr;
-      } else if (t.transaction_type === "Income" && t.status === "Approved") {
+      } else if (t.transaction_type === "Income") {
         totalIncomeBirr += birr;
       }
-
-      if (t.status === "Pending") pendingCount++;
-      else if (t.status === "Approved") approvedCount++;
-      else if (t.status === "Rejected" || t.status === "Voided") rejectedCount++;
     });
+
+    const netBalanceBirr = totalIncomeBirr - totalExpenseBirr;
 
     return {
       totalCount: allTransactions.length,
       totalExpenseBirr,
       totalIncomeBirr,
-      pendingCount,
-      approvedCount,
-      rejectedCount,
+      netBalanceBirr,
     };
   }, [allTransactions]);
 
@@ -584,7 +563,7 @@ export default function ReportsPage() {
                 variant="outline"
                 size="sm"
                 disabled={isExportingTransactionsXlsx}
-                onClick={() => handleExportTransactionsXlsx(activeTab === "approvals" ? "Pending" : undefined)}
+                onClick={() => handleExportTransactionsXlsx(undefined)}
                 className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
                 title="Export all transactions (Expense/Income/Commission) with rich formatting to Excel (.xlsx)"
               >
@@ -690,21 +669,6 @@ export default function ReportsPage() {
           </button>
         )}
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("approvals")}
-            className={cn(
-              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
-              activeTab === "approvals"
-                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
-            )}
-          >
-            <Inbox className="h-3.5 w-3.5" />
-            Pending Approvals Queue
-          </button>
-        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -1254,23 +1218,19 @@ export default function ReportsPage() {
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardContent className="p-4 space-y-1">
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                      Pending Approvals
+                      Net Balance
                     </span>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-2xl font-bold text-amber-800 dark:text-amber-400">
-                        {transactionMetrics.pendingCount}
+                      <span
+                        className={cn(
+                          "text-2xl font-bold",
+                          transactionMetrics.netBalanceBirr >= 0
+                            ? "text-emerald-800 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        )}
+                      >
+                        ETB {transactionMetrics.netBalanceBirr.toLocaleString()}
                       </span>
-                      {transactionMetrics.pendingCount > 0 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setActiveTab("approvals")}
-                          className="h-6 text-[11px] px-2 text-amber-800 hover:text-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                        >
-                          Review Queue →
-                        </Button>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1541,111 +1501,6 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </div>
-          )}
-        </>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* TAB 5: PENDING APPROVAL QUEUE                                  */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "approvals" && (
-        <>
-          {!isAdmin ? (
-            <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
-              <div className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-amber-600" />
-                <h3 className="text-sm font-bold">Approval Queue is Admin-Restricted</h3>
-              </div>
-              <p className="leading-relaxed">
-                Access to Pending Approval Queue is restricted to <strong>Administrator</strong> roles.
-              </p>
-            </div>
-          ) : (
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Inbox className="h-4 w-4 text-emerald-600" />
-                    Pending Financial Approvals Queue (Oldest First)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isExportingTransactionsXlsx}
-                      onClick={() => handleExportTransactionsXlsx("Pending")}
-                      className="text-xs h-7 border-slate-300 dark:border-[#2a2a35]"
-                      title="Export pending queue to Excel (.xlsx)"
-                    >
-                      <FileSpreadsheet className="mr-1.5 h-3 w-3 text-emerald-600" />
-                      Export Queue (.xlsx)
-                    </Button>
-                    <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 text-[10px]">
-                      {pendingApprovals.length} Pending Actions
-                    </Badge>
-                  </div>
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Transactions awaiting finance approval.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
-                      <tr>
-                        <th className="py-2.5 px-3">Transaction</th>
-                        <th className="py-2.5 px-3">Type</th>
-                        <th className="py-2.5 px-3">Amount</th>
-                        <th className="py-2.5 px-3">Description</th>
-                        <th className="py-2.5 px-3">Logged By</th>
-                        <th className="py-2.5 px-3">Logged At</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                      {pendingApprovals.length > 0 ? (
-                        pendingApprovals.map((tx) => (
-                          <tr key={tx.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
-                            <td className="py-2.5 px-3 font-mono font-bold">{tx.name}</td>
-                            <td className="py-2.5 px-3">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px]",
-                                  tx.transaction_type === "Income"
-                                    ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                    : "border-red-300 text-red-800 bg-red-50"
-                                )}
-                              >
-                                {tx.transaction_type}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 px-3 font-bold">
-                              {(tx.amount_birr ?? tx.amount ?? 0).toLocaleString()} {tx.currency || "ETB"}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-600 dark:text-zinc-300">
-                              {tx.description}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono">{tx.logged_by || tx.owner || "System"}</td>
-                            <td className="py-2.5 px-3 text-slate-400">
-                              {new Date(tx.creation).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400">
-                            Zero pending transactions in queue. All records approved or voided.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
           )}
         </>
       )}

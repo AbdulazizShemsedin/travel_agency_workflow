@@ -27,7 +27,6 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   setLmisStatusV2,
-  setTaeshirAppointmentV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
@@ -206,32 +205,6 @@ export function FollowUpWorkspace({
     }
   };
 
-  // 2. Taeshir Appointment Date Inline Save
-  const handleSaveTaeshirDate = async (row: WorkspaceApplicantRow, newDate: string) => {
-    const stepName =
-      row.injaz?.name ||
-      (row as any).siblingSteps?.find(
-        (s: any) =>
-          s.step_type?.toLowerCase().includes("taeshir") ||
-          s.step_type?.toLowerCase().includes("injaz") ||
-          s.step_type?.toLowerCase().includes("telesign")
-      )?.name ||
-      row.clearanceStepName;
-
-    if (!stepName) {
-      toast.error("Could not find active Taeshir clearance step for this candidate.");
-      return;
-    }
-
-    try {
-      const currentInjazId = row.injazApplicationId || (row.injaz as any)?.injaz_application_id || "";
-      await setTaeshirAppointmentV2(stepName, newDate, currentInjazId);
-      await handleMutationSuccess("Taeshir appointment date updated");
-    } catch (err) {
-      toast.error(formatCleanErrorMessage(err));
-      throw err;
-    }
-  };
 
   // 3. Medical 2 Status Inline Save
   const handleSaveMedical2Status = async (row: WorkspaceApplicantRow, newStatus: string) => {
@@ -400,24 +373,6 @@ export function FollowUpWorkspace({
       },
     },
     {
-      id: "teshirApptDate",
-      header: "TE'SHIR APPT. DATE",
-      accessorKey: "appointmentDate",
-      width: "85px",
-      cell: (row) => {
-        const currentDate = row.appointmentDate && row.appointmentDate !== "—" ? row.appointmentDate : "";
-        return (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ExcelDateInput
-              value={currentDate}
-              onSave={(newDate) => handleSaveTaeshirDate(row, newDate)}
-              ariaLabel="Taeshir Appointment Date"
-            />
-          </div>
-        );
-      },
-    },
-    {
       id: "teshirStatus",
       header: "TE'SHIR STATUS",
       accessorKey: "teshirStatus",
@@ -449,8 +404,10 @@ export function FollowUpWorkspace({
       cell: (row) => {
         const currentVal = row.medical2Status && row.medical2Status !== "—" ? row.medical2Status : "Pending";
         const hasPlacement = Boolean(row.placementName || row.placementId || row.dsrName);
+        const stage = (row.stageStatus || "").toLowerCase();
+        const hasReachedTicketStage = stage === "ticketed" || stage === "departed";
 
-        if (!hasPlacement) {
+        if (!hasPlacement || !hasReachedTicketStage) {
           return getStatusBadge(row.medical2Status);
         }
 

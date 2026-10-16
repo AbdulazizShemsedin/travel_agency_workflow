@@ -1248,31 +1248,50 @@ export function ApplicantTable() {
                             </button>
                           )}
 
-                          {/* Record Medical — Selected stage, opens inline modal */}
-                          {stage === "Selected" && (applicant as any)._activePlacementName && (
+                          {/* View CV — directly on table when CV is generated or available */}
+                          {(cvGeneratedSet.has(applicant.name) || applicant.cv_attachment || applicant.cv_file) && (
+                            <Link
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-purple-950 dark:text-purple-200 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 border border-purple-300 dark:border-purple-700 transition cursor-pointer shadow-2xs"
+                              title="View or download CV"
+                            >
+                              <FileText className="h-3 w-3 text-purple-700 dark:text-purple-400" />
+                              <span>View CV</span>
+                            </Link>
+                          )}
+
+                          {/* View Contract / Contract Doc — directly on table for stages Selected and onwards */}
+                          {["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(stage) && (
+                            <Link
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-amber-950 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 transition cursor-pointer shadow-2xs"
+                              title={hasContract ? "View signed bilateral employment contract" : "Generate/Upload bilateral contract"}
+                            >
+                              <FileText className="h-3 w-3 text-amber-700 dark:text-amber-400" />
+                              <span>{hasContract ? "View Contract" : "Contract Doc"}</span>
+                            </Link>
+                          )}
+
+                          {/* Record Medical — Selected stage, opens inline modal only if NOT yet recorded */}
+                          {stage === "Selected" && (applicant as any)._activePlacementName && (!medicalStatus || (medicalStatus !== "FIT" && medicalStatus !== "UNFIT")) && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setMedicalTargetPlacementName((applicant as any)._activePlacementName);
                                 setMedicalTargetApplicantName(applicant.full_name || applicant.name);
-                                setMed1Status(
-                                  (medicalStatus === "FIT" || medicalStatus === "UNFIT") ? medicalStatus : "FIT"
-                                );
+                                setMed1Status("FIT");
                                 setMed1Date(examDate || "");
                                 setMed1Expiry("");
                                 setIsMedicalModalOpen(true);
                               }}
-                              className={cn(
-                                "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold border transition cursor-pointer shadow-2xs",
-                                medicalStatus === "FIT"
-                                  ? "text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border-emerald-300 dark:border-emerald-700"
-                                  : "text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
-                              )}
-                              title={`Medical status: ${medicalStatus || "Not recorded — click to record"}`}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
+                              title="Record Medical Status (FIT / UNFIT)"
                             >
-                              <HeartPulse className={cn("h-3 w-3", medicalStatus === "FIT" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500")} />
-                              <span>{medicalStatus || "Medical"}</span>
+                              <HeartPulse className="h-3 w-3 text-rose-500" />
+                              <span>Record Medical</span>
                             </button>
                           )}
 
@@ -1315,6 +1334,28 @@ export function ApplicantTable() {
                             >
                               <Ticket className="h-3 w-3 text-teal-700 dark:text-teal-400" />
                               <span>Book Ticket</span>
+                            </button>
+                          )}
+
+                          {/* Stage 8: Ticketed — Reschedule Flight */}
+                          {stage === "Ticketed" && (applicant as any)._activePlacementName && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const plc = (applicant as any)._activePlacementName
+                                  ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                  : null;
+                                setTicketingTargetPlacement(plc || null);
+                                setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                setTicketingInitialTab("reschedule");
+                                setIsTicketingModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-800 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 transition cursor-pointer shadow-2xs"
+                              title="Reschedule Flight"
+                            >
+                              <RotateCcw className="h-3 w-3 text-slate-600 dark:text-zinc-400" />
+                              <span>Reschedule</span>
                             </button>
                           )}
 

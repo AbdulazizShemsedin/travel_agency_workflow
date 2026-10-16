@@ -9,7 +9,7 @@ import {
   JOB_APPLIED_OPTIONS,
   DESTINATION_COUNTRY_OPTIONS,
 } from "@/lib/validations/applicant.schema";
-import { uploadFileV2 } from "@/lib/api/v2";
+import { uploadFileV2, isExperiencedCountry } from "@/lib/api/v2";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +45,7 @@ export function Step2EducationExperience({
   const yearsExp = watch("years_of_experience");
 
   const [hasExperience, setHasExperience] = React.useState<boolean>(() => {
-    return Boolean(expCountry || expPeriod || (yearsExp && Number(yearsExp) > 0));
+    return isExperiencedCountry(expCountry);
   });
 
   const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
@@ -69,10 +69,10 @@ export function Step2EducationExperience({
   };
 
   React.useEffect(() => {
-    if (expCountry || expPeriod || (yearsExp && Number(yearsExp) > 0)) {
+    if (isExperiencedCountry(expCountry)) {
       setHasExperience(true);
     }
-  }, [expCountry, expPeriod, yearsExp]);
+  }, [expCountry]);
 
   const isCooking = Boolean(
     watch("skill_cooking") === 1 ||
@@ -488,8 +488,10 @@ export function Step2EducationExperience({
                   setValue("experience_period", "", { shouldDirty: true });
                   setValue("years_of_experience", undefined, { shouldDirty: true });
                   setValue("monthly_salary", "1000", { shouldDirty: true });
+                  setValue("salary_amount" as any, 1000, { shouldDirty: true });
                 } else {
                   setValue("monthly_salary", "1200", { shouldDirty: true });
+                  setValue("salary_amount" as any, 1200, { shouldDirty: true });
                 }
               }}
             />
@@ -506,7 +508,18 @@ export function Step2EducationExperience({
                   <Input
                     id="experience_country"
                     placeholder="e.g., Saudi Arabia, UAE, Kuwait, Jordan"
-                    {...register("experience_country")}
+                    {...register("experience_country", {
+                      onChange: (e) => {
+                        const val = e.target.value;
+                        if (isExperiencedCountry(val)) {
+                          setValue("monthly_salary", "1200", { shouldDirty: true });
+                          setValue("salary_amount" as any, 1200, { shouldDirty: true });
+                        } else {
+                          setValue("monthly_salary", "1000", { shouldDirty: true });
+                          setValue("salary_amount" as any, 1000, { shouldDirty: true });
+                        }
+                      },
+                    })}
                   />
                 </div>
 

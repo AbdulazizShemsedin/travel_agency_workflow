@@ -59,6 +59,7 @@ import {
   uploadFileV2,
   parsePassportFileV2,
   normalizeApplicantFields,
+  isExperiencedCountry,
 } from "@/lib/api/v2";
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
@@ -223,11 +224,17 @@ export function ApplicantRegistrationForm({
   const form = useForm<BaseApplicantFormValues>({
     mode: "onChange",
     // @ts-expect-error zodResolver type widening across optional schema fields
-    resolver: zodResolver(stage1DraftSchema),
+    resolver: zodResolver(stage2RegistrationSchema),
     defaultValues: {
       applicant_type: (initialData?.applicant_type as any) || "Standard",
       destination_country: initialData?.destination_country || "Saudi Arabia",
-      application_number: (initialData as any)?.application_number || draftApplicantId || "",
+      application_number:
+        (initialData as any)?.application_number ||
+        (initialData as any)?.injaz_application_id ||
+        (initialData as any)?.e_number ||
+        (initialData as any)?.active_placement?.injaz_application_id ||
+        draftApplicantId ||
+        "",
       full_name: initFullName,
       first_name: initialData?.first_name || "",
       middle_name: initialData?.middle_name || "",
@@ -254,9 +261,8 @@ export function ApplicantRegistrationForm({
       target_job: initialData?.target_job || initialData?.job_applied || "HOUSE WORKER",
       highest_education: (initialData as any)?.qualification || initialData?.highest_education || initialData?.education || "SECONDARY LEVEL",
       education: (initialData as any)?.qualification || initialData?.education || initialData?.highest_education || "SECONDARY LEVEL",
-      qualification: (initialData as any)?.qualification || initialData?.education || "SECONDARY LEVEL",
-      monthly_salary: initialData?.monthly_salary || (initialData?.salary_amount ? String(initialData.salary_amount) : "1000"),
-      salary_amount: initialData?.salary_amount || (initialData?.monthly_salary ? Number(initialData.monthly_salary) : 1000),
+      monthly_salary: initialData?.monthly_salary || (initialData?.salary_amount ? String(initialData.salary_amount) : (initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? "1200" : "1000")),
+      salary_amount: initialData?.salary_amount || (initialData?.monthly_salary ? Number(initialData.monthly_salary) : (initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? 1200 : 1000)),
       salary_currency: initialData?.salary_currency || "SAR",
       photograph: initialData?.photograph || initialData?.photo_passport || initialData?.profile_photo_url || "",
       photo_passport: initialData?.photo_passport || initialData?.photograph || initialData?.profile_photo_url || "",
@@ -330,7 +336,7 @@ export function ApplicantRegistrationForm({
           : initialData?.arabic_level === "Poor" || initialData?.arabic_level === "Fair"
           ? "Basic"
           : "",
-      experience_country: initialData?.experience_country || "None / First Time",
+      experience_country: initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? initialData.experience_country : "",
       works_in: (initialData as any)?.works_in || "",
       height: initialData?.height || "",
       weight: initialData?.weight || "",
