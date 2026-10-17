@@ -26,6 +26,8 @@ import {
   ShieldCheck,
   Send,
   AlertCircle,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { WorkspaceApplicantRow } from "@/types/workspace";
 import { Button } from "@/components/ui/button";
@@ -71,6 +73,7 @@ import {
   recordRescheduleV2,
   advancePlacementV2,
   uploadPlacementVisaV2,
+  updatePlacementParsedFieldsV2,
   setTicketingRemarksV2,
   recordFlightOutcomeV2,
 } from "@/lib/api/v2/placements";
@@ -109,7 +112,36 @@ export function ApplicantFollowUpWorkspace({
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   React.useEffect(() => {
-    setCurrentRow(row);
+    if (!row) return;
+    setCurrentRow((prev) => {
+      if (!prev) return row;
+      const isSameApplicant =
+        (row.applicantId && prev.applicantId === row.applicantId) ||
+        (row.name && prev.name === row.name) ||
+        (row.passportNumber && prev.passportNumber === row.passportNumber);
+      if (!isSameApplicant) return row;
+
+      // Intelligently preserve locally modified statuses if refreshed row is stale
+      const localInjazPaid = (prev.injazPayment || "").toLowerCase() === "paid";
+      const serverInjazPaid = (row.injazPayment || "").toLowerCase() === "paid";
+      const resolvedInjazPayment = (localInjazPaid && !serverInjazPaid) ? prev.injazPayment : (row.injazPayment || prev.injazPayment);
+
+      const localTeshir = prev.teshirStatus;
+      const serverTeshir = row.teshirStatus;
+      const isServerTeshirValid = serverTeshir && serverTeshir !== "—" && serverTeshir !== "Pending" && serverTeshir !== "In Progress";
+      const resolvedTeshirStatus = isServerTeshirValid ? serverTeshir : (localTeshir || serverTeshir);
+
+      const localLmisIssued = (prev.lmisStatus || "").toUpperCase() === "ISSUED" || prev.lms?.status === "Issued" || prev.lms?.status === "Complete" || prev.lms?.status === "Completed";
+      const serverLmisIssued = (row.lmisStatus || "").toUpperCase() === "ISSUED" || row.lms?.status === "Issued" || row.lms?.status === "Complete" || row.lms?.status === "Completed";
+      const resolvedLmisStatus = (localLmisIssued && !serverLmisIssued) ? prev.lmisStatus : (row.lmisStatus || prev.lmisStatus);
+
+      return {
+        ...row,
+        lmisStatus: resolvedLmisStatus,
+        injazPayment: resolvedInjazPayment,
+        teshirStatus: resolvedTeshirStatus,
+      };
+    });
   }, [row]);
 
   // Handle ESC key to close
@@ -248,6 +280,17 @@ export function ApplicantFollowUpWorkspace({
   const [flightTimeVal, setFlightTimeVal] = React.useState("10:00");
   const [airlineVal, setAirlineVal] = React.useState("Ethiopian Airlines");
 
+  // Inline feedback states for field saving
+  const [savingField, setSavingField] = React.useState<Record<string, boolean>>({});
+  const [savedField, setSavedField] = React.useState<Record<string, boolean>>({});
+
+  const triggerSavedFeedback = React.useCallback((fieldKey: string) => {
+    setSavedField((prev) => ({ ...prev, [fieldKey]: true }));
+    setTimeout(() => {
+      setSavedField((prev) => ({ ...prev, [fieldKey]: false }));
+    }, 2500);
+  }, []);
+
   React.useEffect(() => {
     if (currentRow) {
       setLmisRemarkVal(currentRow.lmisRemark || currentRow.lms?.remarks || "");
@@ -376,26 +419,76 @@ export function ApplicantFollowUpWorkspace({
   // Deriving LMIS completion status
   const isLmisComplete =
     (currentRow.lmisStatus || "").toUpperCase() === "ISSUED" ||
+    String(currentRow.lmisStatus || "").toLowerCase() === "completed" ||
+    String(currentRow.lmisStatus || "").toLowerCase() === "complete" ||
     currentRow.lms?.status === "Issued" ||
     currentRow.lms?.status === "Completed" ||
-    currentRow.lms?.status === "Complete";
+    currentRow.lms?.status === "Complete" ||
+    currentRow.lms?.status === "Approved" ||
+    (currentRow.lms as any)?.lmis_status === "ISSUED" ||
+    Boolean((currentRow.lms as any)?.issueDate) ||
+    Boolean(currentRow.issueDate) ||
+    Boolean((currentRow.lms as any)?.date_completed);
 
   // Deriving Te'shir completion status strictly from authoritative backend step
   const isTeshirCompleted =
     currentRow.injaz?.status === "Completed" ||
-    currentRow.teshirStatus === "Completed" ||
-    currentRow.teshirStatus === "READY TO EMBASSY" ||
-    currentRow.teshirStatus === "RECEIVED";
-  const isInjazPaid = currentRow.injazPayment === "Paid" || currentRow.injaz?.payment_status === "Paid";
+    currentRow.injaz?.status === "Complete" ||
+    currentRow.injaz?.status === "Issued" ||
+    currentRow.injaz?.status === "Approved" ||
+    Boolean(currentRow.injaz?.date_completed) ||
+    String(currentRow.teshirStatus || "").trim().toLowerCase() === "completed" ||
+    String(currentRow.teshirStatus || "").trim().toLowerCase() === "complete";
+
+  const normalizedInjazPayment = React.useMemo(() => {
+    const p = String(currentRow?.injazPayment || currentRow?.injaz?.injaz_payment_status || currentRow?.injaz?.payment_status || "").trim().toLowerCase();
+    if (p === "paid") return "Paid";
+    if (p === "printed") return "Printed";
+    return "Unpaid";
+  }, [currentRow?.injazPayment, currentRow?.injaz]);
+
+  const isInjazPaid = normalizedInjazPayment === "Paid";
+
+  const normalizedTeshirStatus = React.useMemo(() => {
+    if (isTeshirCompleted) return "Completed";
+    const st = String(currentRow?.teshirStatus || (currentRow?.injaz as any)?.taeshir_status || "").trim().toUpperCase();
+    if (st === "RECEIVED") return "RECEIVED";
+    if (st === "READY TO EMBASSY") return "READY TO EMBASSY";
+    if (st === "COMPLETED" || st === "COMPLETE" || st === "ISSUED" || st === "APPROVED") return "Completed";
+    return "INFORMED";
+  }, [isTeshirCompleted, currentRow?.teshirStatus, currentRow?.injaz]);
 
   // Check if pipeline has advanced past embassy / ticketing
   const isPlacementAdvanced = ["Stamped", "Ticketed", "Departed"].includes(
     String(currentRow.placementStatus || currentRow.stageStatus || "")
   );
 
+  const country = String(
+    currentRow.destinationCountry ||
+    (currentRow.plc as any)?.destination_country ||
+    currentRow.applicant?.destination_country ||
+    ""
+  ).trim();
+  const isSaudiCorridor = !country || country.toLowerCase().includes("saudi");
+
+  // Te'shir is satisfied if not on Saudi corridor, OR if marked completed, ready to embassy, received, etc.
+  const isTeShirSatisfied =
+    !isSaudiCorridor ||
+    isTeshirCompleted ||
+    normalizedTeshirStatus === "READY TO EMBASSY" ||
+    normalizedTeshirStatus === "RECEIVED" ||
+    normalizedTeshirStatus === "Completed" ||
+    String((currentRow.injaz as any)?.taeshir_status || "").toUpperCase() === "READY TO EMBASSY" ||
+    String((currentRow.injaz as any)?.taeshir_status || "").toUpperCase() === "RECEIVED";
+
+  // Check if embassy stage has already started, been submitted, stamped, or progressed
+  const isEmbassyStartedOrDone =
+    Boolean(currentRow.embassyStatus && currentRow.embassyStatus !== "Pending" && currentRow.embassyStatus !== "—") ||
+    Boolean(currentRow.embassy?.status && currentRow.embassy.status !== "Pending");
+
   // Stage accessibility rules:
-  // Embassy requires both LMIS and Te'shir to be finished
-  const isEmbassyAccessible = isPlacementAdvanced || (isLmisComplete && isTeshirCompleted);
+  // Embassy requires LMIS to be finished and Te'shir to be satisfied (for Saudi)
+  const isEmbassyAccessible = isPlacementAdvanced || isEmbassyStartedOrDone || (isLmisComplete && isTeShirSatisfied);
   const isEmbassyLocked = !isEmbassyAccessible;
 
   // Flight Ticket & Departure requires Embassy to be Stamped
@@ -411,6 +504,269 @@ export function ApplicantFollowUpWorkspace({
     String(currentRow.placementStatus || currentRow.stageStatus || "")
   );
   const isTicketLocked = !isTicketAccessible;
+
+  // --- INLINE FIELD SUBMIT HANDLERS (ENTER KEY / BLUR WITH VISUAL FEEDBACK) ---
+  const handleSaveLmisRemark = async () => {
+    if (!lmsStepName || !canEditLmis) return;
+    const val = lmisRemarkVal.trim();
+    const currentVal = (currentRow?.lms?.remarks || currentRow?.lmisRemark || "").trim();
+    if (val === currentVal && savedField.lmisRemark) return;
+    try {
+      setSavingField((prev) => ({ ...prev, lmisRemark: true }));
+      await setStepRemarksV2(lmsStepName, val);
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        lmisRemark: val, 
+        lms: prev.lms ? { ...prev.lms, remarks: val } : prev.lms 
+      } : null);
+      triggerSavedFeedback("lmisRemark");
+      toast.success("LMIS step remark saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, lmisRemark: false }));
+    }
+  };
+
+  const handleSaveLaborId = async () => {
+    const applicantIdentifier = currentRow?.applicantId || currentRow?.name;
+    if (!applicantIdentifier || !canEditLmis) return;
+    const val = laborIdVal.trim();
+    const currentVal = (currentRow?.laborId || (currentRow?.applicant as any)?.labor_id || "").trim();
+    if (val === currentVal && savedField.laborId) return;
+    try {
+      setSavingField((prev) => ({ ...prev, laborId: true }));
+      await updateApplicantForLmisV2({
+        applicant_name: applicantIdentifier,
+        labor_id: val || undefined,
+      });
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        laborId: val,
+        applicant: prev.applicant ? { ...prev.applicant, labor_id: val } : prev.applicant 
+      } : null);
+      triggerSavedFeedback("laborId");
+      toast.success("Labor ID updated successfully");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, laborId: false }));
+    }
+  };
+
+  const handleSaveTeshirRemark = async () => {
+    if (!injazStepName || !canEditTaeshir) return;
+    const val = teshirRemarkVal.trim();
+    const currentVal = (currentRow?.injaz?.remarks || currentRow?.teshirRemark || "").trim();
+    if (val === currentVal && savedField.teshirRemark) return;
+    try {
+      setSavingField((prev) => ({ ...prev, teshirRemark: true }));
+      await setStepRemarksV2(injazStepName, val);
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        teshirRemark: val, 
+        injaz: prev.injaz ? { ...prev.injaz, remarks: val } : prev.injaz 
+      } : null);
+      triggerSavedFeedback("teshirRemark");
+      toast.success("Te'shir step remark saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, teshirRemark: false }));
+    }
+  };
+
+  const handleSaveTeshirInjazId = async () => {
+    if (!injazStepName || !canEditTaeshir) return;
+    const val = teshirInjazIdVal.trim().toUpperCase();
+    const currentVal = (currentRow?.injazApplicationId || "").trim().toUpperCase();
+    if (val === currentVal && savedField.teshirInjazId) return;
+    try {
+      setSavingField((prev) => ({ ...prev, teshirInjazId: true }));
+      await setTaeshirAppointmentV2(
+        injazStepName,
+        teshirApptDateVal || (currentRow?.appointmentDate || ""),
+        val
+      );
+      const candidateId = currentRow?.applicantId || currentRow?.name;
+      if (val && candidateId) {
+        try {
+          await updateApplicantV2(candidateId, { application_number: val });
+        } catch (err) {
+          console.warn("Failed to sync application_number:", err);
+        }
+      }
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        injazApplicationId: val,
+        injaz: prev.injaz ? { ...prev.injaz, injaz_application_id: val } : prev.injaz 
+      } : null);
+      triggerSavedFeedback("teshirInjazId");
+      toast.success("E-number saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, teshirInjazId: false }));
+    }
+  };
+
+  const handleSaveEmbassyRemark = async () => {
+    if (!embassyStepName || !canEditEmbassy || isEmbassyLocked) return;
+    const val = embassyRemarkVal.trim();
+    const currentVal = (currentRow?.embassy?.remarks || currentRow?.embassyRemarks || "").trim();
+    if (val === currentVal && savedField.embassyRemark) return;
+    try {
+      setSavingField((prev) => ({ ...prev, embassyRemark: true }));
+      await setStepRemarksV2(embassyStepName, val);
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        embassyRemarks: val, 
+        embassy: prev.embassy ? { ...prev.embassy, remarks: val } : prev.embassy 
+      } : null);
+      triggerSavedFeedback("embassyRemark");
+      toast.success("Embassy step remark saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, embassyRemark: false }));
+    }
+  };
+
+  const handleSaveEmbassyVisaNumber = async () => {
+    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    const val = embassyVisaNumberVal.trim();
+    const currentVal = (currentRow?.visaNumber || "").trim();
+    if (val === currentVal && savedField.embassyVisaNumber) return;
+    try {
+      setSavingField((prev) => ({ ...prev, embassyVisaNumber: true }));
+      await updatePlacementParsedFieldsV2(placementName, {
+        visa_number: val,
+        ...(embassyVisaIssueDateVal ? { visa_issue_date: embassyVisaIssueDateVal } : {}),
+        ...(embassyVisaExpiryDateVal ? { visa_expiry_date: embassyVisaExpiryDateVal } : {}),
+      });
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        visaNumber: val,
+        plc: prev.plc ? { ...prev.plc, visa_number: val } : prev.plc 
+      } : null);
+      triggerSavedFeedback("embassyVisaNumber");
+      toast.success("Visa number saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, embassyVisaNumber: false }));
+    }
+  };
+
+  const handleSaveEmbassyVisaIssueDate = async () => {
+    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    const val = embassyVisaIssueDateVal.trim();
+    const currentVal = (currentRow?.visaIssueDate || "").trim();
+    if (val === currentVal && savedField.embassyVisaIssueDate) return;
+    try {
+      setSavingField((prev) => ({ ...prev, embassyVisaIssueDate: true }));
+      await updatePlacementParsedFieldsV2(placementName, {
+        visa_issue_date: val,
+        ...(embassyVisaNumberVal ? { visa_number: embassyVisaNumberVal } : {}),
+        ...(embassyVisaExpiryDateVal ? { visa_expiry_date: embassyVisaExpiryDateVal } : {}),
+      });
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        visaIssueDate: val,
+        plc: prev.plc ? { ...prev.plc, visa_issue_date: val } : prev.plc 
+      } : null);
+      triggerSavedFeedback("embassyVisaIssueDate");
+      toast.success("Visa issue date saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, embassyVisaIssueDate: false }));
+    }
+  };
+
+  const handleSaveEmbassyVisaExpiryDate = async () => {
+    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    const val = embassyVisaExpiryDateVal.trim();
+    const currentVal = (currentRow?.visaDeadline || (currentRow?.plc as any)?.visa_deadline || (currentRow?.plc as any)?.visa_expiry_date || "").trim();
+    if (val === currentVal && savedField.embassyVisaExpiryDate) return;
+    try {
+      setSavingField((prev) => ({ ...prev, embassyVisaExpiryDate: true }));
+      await updatePlacementParsedFieldsV2(placementName, {
+        visa_expiry_date: val,
+        ...(embassyVisaNumberVal ? { visa_number: embassyVisaNumberVal } : {}),
+        ...(embassyVisaIssueDateVal ? { visa_issue_date: embassyVisaIssueDateVal } : {}),
+      });
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        visaDeadline: val,
+        plc: prev.plc ? { ...prev.plc, visa_deadline: val, visa_expiry_date: val } : prev.plc 
+      } : null);
+      triggerSavedFeedback("embassyVisaExpiryDate");
+      toast.success("Visa valid until date saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, embassyVisaExpiryDate: false }));
+    }
+  };
+
+  const handleSaveTicketRemark = async () => {
+    if (!placementName || !canEditDeparture || isTicketLocked) return;
+    const val = ticketRemarkVal.trim();
+    const currentVal = (currentRow?.ticketRemark || (currentRow?.plc as any)?.remarks || "").trim();
+    if (val === currentVal && savedField.ticketRemark) return;
+    try {
+      setSavingField((prev) => ({ ...prev, ticketRemark: true }));
+      await setTicketingRemarksV2(placementName, val);
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        ticketRemark: val, 
+        plc: prev.plc ? { ...prev.plc, remarks: val } : prev.plc 
+      } : null);
+      triggerSavedFeedback("ticketRemark");
+      toast.success("Ticket remark saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, ticketRemark: false }));
+    }
+  };
+
+  const handleSaveTicketNumber = async () => {
+    if (!placementName || !canEditDeparture || isTicketLocked) return;
+    const val = ticketNumberVal.trim().toUpperCase();
+    const currentVal = (currentRow?.ticketNumber || (currentRow?.plc as any)?.ticket_number || "").trim().toUpperCase();
+    if (val === currentVal && savedField.ticketNumber) return;
+    try {
+      setSavingField((prev) => ({ ...prev, ticketNumber: true }));
+      await recordTicketDetailsV2(
+        placementName,
+        val,
+        flightDateVal || new Date().toISOString().split("T")[0]
+      );
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        ticketNumber: val,
+        plc: prev.plc ? { ...prev.plc, ticket_number: val } : prev.plc 
+      } : null);
+      triggerSavedFeedback("ticketNumber");
+      toast.success("Ticket number recorded");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, ticketNumber: false }));
+    }
+  };
 
   return (
     <div
@@ -686,40 +1042,48 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Labor ID / Office Reference */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Labor ID (Office Ref)
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Labor ID (Office Ref)
+                          </Label>
+                          {savingField.laborId && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.laborId && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditLmis && (currentRow.applicantId || currentRow.name) ? (
-                          <Input
-                            type="text"
-                            value={laborIdVal}
-                            onChange={(e) => setLaborIdVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value.trim();
-                              const currentVal = (currentRow.laborId || (currentRow.applicant as any)?.labor_id || "").trim();
-                              if (val !== currentVal) {
-                                try {
-                                  const applicantIdentifier = currentRow.applicantId || currentRow.name;
-                                  await updateApplicantForLmisV2({
-                                    applicant_name: applicantIdentifier,
-                                    labor_id: val || undefined,
-                                  });
-                                  toast.success("Labor ID updated successfully");
-                                  setCurrentRow((prev) => (prev ? { ...prev, laborId: val } : null));
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              value={laborIdVal}
+                              onChange={(e) => setLaborIdVal(e.target.value)}
+                              onBlur={handleSaveLaborId}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveLaborId();
+                                  (e.target as HTMLInputElement).blur();
                                 }
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="Enter Labor ID"
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
-                          />
+                              }}
+                              placeholder="Enter Labor ID (Press Enter to save)"
+                              disabled={savingField.laborId}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium transition-colors",
+                                savedField.laborId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.laborId && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
                             {laborIdVal || currentRow.laborId || (currentRow.applicant as any)?.labor_id || "—"}
@@ -729,28 +1093,46 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 4: LMIS Remark (spans 2 columns) */}
                       <div className="col-span-2 space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          LMIS Remark
-                        </Label>
-                        <Input
-                          value={lmisRemarkVal}
-                          onChange={(e) => setLmisRemarkVal(e.target.value)}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (currentRow.lms?.remarks || currentRow.lmisRemark || "") && lmsStepName) {
-                              try {
-                                await setStepRemarksV2(lmsStepName, val);
-                                toast.success("LMIS step remark saved");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            LMIS Remark
+                          </Label>
+                          {savingField.lmisRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.lmisRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            value={lmisRemarkVal}
+                            onChange={(e) => setLmisRemarkVal(e.target.value)}
+                            onBlur={handleSaveLmisRemark}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveLmisRemark();
+                                (e.target as HTMLInputElement).blur();
                               }
-                            }
-                          }}
-                          placeholder="Operational remarks for LMIS processing..."
-                          disabled={!canEditLmis}
-                          className="h-7 sm:h-7.5 text-xs px-2"
-                        />
+                            }}
+                            placeholder="Operational remarks for LMIS processing... (Press Enter to save)"
+                            disabled={!canEditLmis || savingField.lmisRemark}
+                            className={cn(
+                              "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                              savedField.lmisRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
+                          />
+                          {savedField.lmisRemark && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Rejection Reasons Alert if rejected */}
@@ -930,42 +1312,48 @@ export function ApplicantFollowUpWorkspace({
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {/* Field 1: E-number (Injaz Application No.) */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          E-number (Injaz Application No.)
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            E-number (Injaz Application No.)
+                          </Label>
+                          {savingField.teshirInjazId && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.teshirInjazId && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditTaeshir && injazStepName ? (
-                          <Input
-                            type="text"
-                            value={teshirInjazIdVal}
-                            onChange={(e) => setTeshirInjazIdVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value.trim().toUpperCase();
-                              if (val !== (currentRow.injazApplicationId || "")) {
-                                try {
-                                  await setTaeshirAppointmentV2(
-                                    injazStepName,
-                                    teshirApptDateVal || (currentRow.appointmentDate || ""),
-                                    val
-                                  );
-                                  const candidateId = currentRow?.applicantId || currentRow?.name;
-                                  if (val && candidateId) {
-                                    try {
-                                      await updateApplicantV2(candidateId, { application_number: val });
-                                    } catch (err) {
-                                      console.warn("Failed to sync application_number:", err);
-                                    }
-                                  }
-                                  toast.success("E-number saved");
-                                  setCurrentRow((prev) => prev ? { ...prev, injazApplicationId: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              value={teshirInjazIdVal}
+                              onChange={(e) => setTeshirInjazIdVal(e.target.value)}
+                              onBlur={handleSaveTeshirInjazId}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTeshirInjazId();
+                                  (e.target as HTMLInputElement).blur();
                                 }
-                              }
-                            }}
-                            placeholder="e.g. E12345678"
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold"
-                          />
+                              }}
+                              placeholder="e.g. E12345678 (Press Enter to save)"
+                              disabled={savingField.teshirInjazId}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                savedField.teshirInjazId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.teshirInjazId && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
                             <span className="truncate">{teshirInjazIdVal || currentRow.injazApplicationId || "—"}</span>
@@ -1011,12 +1399,19 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 3: Te'shir Status */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Te&apos;shir Status
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Te&apos;shir Status
+                          </Label>
+                          {savedField.teshirStatus && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditTaeshir && injazStepName ? (
                           <select
-                            value={isTeshirCompleted ? "Completed" : (currentRow.teshirStatus || "INFORMED")}
+                            value={normalizedTeshirStatus}
                             onChange={async (e) => {
                               const val = e.target.value;
                               try {
@@ -1027,20 +1422,30 @@ export function ApplicantFollowUpWorkspace({
                                   }
                                   await completeClearanceStepV2(injazStepName);
                                   toast.success("Te'shir clearance completed");
-                                  setCurrentRow((prev) => (prev ? { ...prev, teshirStatus: "Completed" } : null));
+                                  setCurrentRow((prev) => (prev ? { 
+                                    ...prev, 
+                                    teshirStatus: "Completed",
+                                    injaz: prev.injaz ? { ...prev.injaz, status: "Completed", taeshir_status: "READY TO EMBASSY" } : prev.injaz
+                                  } : null));
                                 } else {
                                   await setTaeshirStatusV2(injazStepName, val);
                                   toast.success(`Te'shir status updated to ${val}`);
-                                  setCurrentRow((prev) => (prev ? { ...prev, teshirStatus: val } : null));
+                                  setCurrentRow((prev) => (prev ? { 
+                                    ...prev, 
+                                    teshirStatus: val,
+                                    injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
+                                  } : null));
                                 }
+                                triggerSavedFeedback("teshirStatus");
                                 refreshAll();
                               } catch (err) {
                                 toast.error(formatCleanErrorMessage(err));
                               }
                             }}
                             className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold",
-                              (isTeshirCompleted || currentRow.teshirStatus === "Completed")
+                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold transition-colors",
+                              savedField.teshirStatus && "border-emerald-500 ring-1 ring-emerald-500/20",
+                              (isTeshirCompleted || normalizedTeshirStatus === "Completed")
                                 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
                                 : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                             )}
@@ -1053,11 +1458,11 @@ export function ApplicantFollowUpWorkspace({
                         ) : (
                           <div className={cn(
                             "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
-                            (isTeshirCompleted || currentRow.teshirStatus === "Completed")
+                            (isTeshirCompleted || normalizedTeshirStatus === "Completed")
                               ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
                               : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                           )}>
-                            <span>{(isTeshirCompleted || currentRow.teshirStatus === "Completed") ? "Completed" : (currentRow.teshirStatus || "INFORMED")}</span>
+                            <span>{normalizedTeshirStatus}</span>
                             {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
@@ -1065,28 +1470,41 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 4: Injaz Payment (Unpaid, Printed, Paid) Dropdown */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Injaz Payment
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Injaz Payment
+                          </Label>
+                          {savedField.injazPayment && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditTaeshir && injazStepName ? (
                           <select
-                            value={currentRow.injazPayment || "Unpaid"}
+                            value={normalizedInjazPayment}
                             onChange={async (e) => {
                               const val = e.target.value as "Paid" | "Unpaid" | "Printed";
                               try {
                                 await recordInjazPaymentV2(injazStepName, val);
                                 toast.success(`Injaz payment updated to ${val}`);
-                                setCurrentRow((prev) => (prev ? { ...prev, injazPayment: val } : null));
+                                setCurrentRow((prev) => (prev ? { 
+                                  ...prev, 
+                                  injazPayment: val,
+                                  injaz: prev.injaz ? { ...prev.injaz, injaz_payment_status: val, payment_status: val } : { injaz_payment_status: val, payment_status: val }
+                                } : null));
+                                triggerSavedFeedback("injazPayment");
                                 refreshAll();
                               } catch (err) {
                                 toast.error(formatCleanErrorMessage(err));
                               }
                             }}
                             className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
+                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer transition-colors",
+                              savedField.injazPayment && "border-emerald-500 ring-1 ring-emerald-500/20",
                               isInjazPaid
                                 ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
-                                : currentRow.injazPayment === "Printed"
+                                : normalizedInjazPayment === "Printed"
                                 ? "bg-white dark:bg-[#16161d] text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"
                                 : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
                             )}
@@ -1098,10 +1516,10 @@ export function ApplicantFollowUpWorkspace({
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
                             <Badge
-                              variant={isInjazPaid ? "success" : currentRow.injazPayment === "Printed" ? "outline" : "warning"}
+                              variant={isInjazPaid ? "success" : normalizedInjazPayment === "Printed" ? "outline" : "warning"}
                               className="text-[10px] font-bold py-0 h-4.5"
                             >
-                              {currentRow.injazPayment || "Unpaid"}
+                              {normalizedInjazPayment}
                             </Badge>
                           </div>
                         )}
@@ -1125,7 +1543,12 @@ export function ApplicantFollowUpWorkspace({
                                 try {
                                   await completeClearanceStepV2(injazStepName);
                                   toast.success("Te'shir step completed successfully");
-                                  setCurrentRow((prev) => (prev ? { ...prev, teshirStatus: "Completed" } : null));
+                                  setCurrentRow((prev) => (prev ? { 
+                                    ...prev, 
+                                    teshirStatus: "Completed",
+                                    injaz: prev.injaz ? { ...prev.injaz, status: "Completed" } : prev.injaz
+                                  } : null));
+                                  triggerSavedFeedback("teshirStatus");
                                   refreshAll();
                                 } catch (err) {
                                   toast.error(formatCleanErrorMessage(err));
@@ -1163,28 +1586,46 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 6: Te'shir Remark (spans 2 columns) */}
                       <div className="col-span-2 space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Te&apos;shir Remark
-                        </Label>
-                        <Input
-                          value={teshirRemarkVal}
-                          onChange={(e) => setTeshirRemarkVal(e.target.value)}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (currentRow.injaz?.remarks || currentRow.teshirRemark || "") && injazStepName) {
-                              try {
-                                await setStepRemarksV2(injazStepName, val);
-                                toast.success("Te'shir step remark saved");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Te&apos;shir Remark
+                          </Label>
+                          {savingField.teshirRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.teshirRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            value={teshirRemarkVal}
+                            onChange={(e) => setTeshirRemarkVal(e.target.value)}
+                            onBlur={handleSaveTeshirRemark}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveTeshirRemark();
+                                (e.target as HTMLInputElement).blur();
                               }
-                            }
-                          }}
-                          placeholder="Appointment or biometric remarks..."
-                          disabled={!canEditTaeshir}
-                          className="h-7 sm:h-7.5 text-xs px-2"
-                        />
+                            }}
+                            placeholder="Appointment or biometric remarks... (Press Enter to save)"
+                            disabled={!canEditTaeshir || savingField.teshirRemark}
+                            className={cn(
+                              "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                              savedField.teshirRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
+                          />
+                          {savedField.teshirRemark && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1325,7 +1766,7 @@ export function ApplicantFollowUpWorkspace({
                   {isEmbassyLocked && (
                     <div className="bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/30 px-3 py-1 flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
                       <Lock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span>Stage Locked: Inaccessible until LMIS is Issued and Te&apos;shir is Completed.</span>
+                      <span>Stage Locked: Inaccessible until LMIS is Issued and {isSaudiCorridor ? "Te'shir is Completed." : "clearance requirements are met."}</span>
                     </div>
                   )}
 
@@ -1334,36 +1775,48 @@ export function ApplicantFollowUpWorkspace({
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {/* Field 1: Visa Number */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Visa Number
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Visa Number
+                          </Label>
+                          {savingField.embassyVisaNumber && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.embassyVisaNumber && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditEmbassy && !isEmbassyLocked && placementName ? (
-                          <Input
-                            type="text"
-                            value={embassyVisaNumberVal}
-                            onChange={(e) => setEmbassyVisaNumberVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value.trim();
-                              if (val && val !== (currentRow.visaNumber || "")) {
-                                try {
-                                  await uploadPlacementVisaV2(
-                                    placementName,
-                                    "",
-                                    val,
-                                    embassyVisaIssueDateVal || undefined,
-                                    embassyVisaExpiryDateVal || undefined
-                                  );
-                                  toast.success("Visa number saved");
-                                  setCurrentRow((prev) => prev ? { ...prev, visaNumber: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              value={embassyVisaNumberVal}
+                              onChange={(e) => setEmbassyVisaNumberVal(e.target.value)}
+                              onBlur={handleSaveEmbassyVisaNumber}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveEmbassyVisaNumber();
+                                  (e.target as HTMLInputElement).blur();
                                 }
-                              }
-                            }}
-                            placeholder="e.g. 1300892341"
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono font-bold"
-                          />
+                              }}
+                              placeholder="e.g. 1300892341 (Press Enter to save)"
+                              disabled={savingField.embassyVisaNumber}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-bold transition-colors",
+                                savedField.embassyVisaNumber && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.embassyVisaNumber && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
                             <span className="truncate">{embassyVisaNumberVal || currentRow.visaNumber || "—"}</span>
@@ -1457,34 +1910,39 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 4: Visa Issued On */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Visa Issued On
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Visa Issued On
+                          </Label>
+                          {savingField.embassyVisaIssueDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.embassyVisaIssueDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditEmbassy && !isEmbassyLocked && placementName ? (
                           <Input
                             type="date"
                             value={embassyVisaIssueDateVal}
                             onChange={(e) => setEmbassyVisaIssueDateVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value;
-                              if (val && val !== (currentRow.visaIssueDate || "")) {
-                                try {
-                                  await uploadPlacementVisaV2(
-                                    placementName,
-                                    "",
-                                    embassyVisaNumberVal || currentRow.visaNumber || "",
-                                    val,
-                                    embassyVisaExpiryDateVal || undefined
-                                  );
-                                  toast.success("Visa issue date saved");
-                                  setCurrentRow((prev) => prev ? { ...prev, visaIssueDate: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
-                                }
+                            onBlur={handleSaveEmbassyVisaIssueDate}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveEmbassyVisaIssueDate();
+                                (e.target as HTMLInputElement).blur();
                               }
                             }}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono"
+                            disabled={savingField.embassyVisaIssueDate}
+                            className={cn(
+                              "h-7 sm:h-7.5 px-2 text-xs font-mono transition-colors",
+                              savedField.embassyVisaIssueDate && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
@@ -1495,34 +1953,39 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 5: Visa Valid Until */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Visa Valid Until
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Visa Valid Until
+                          </Label>
+                          {savingField.embassyVisaExpiryDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.embassyVisaExpiryDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditEmbassy && !isEmbassyLocked && placementName ? (
                           <Input
                             type="date"
                             value={embassyVisaExpiryDateVal}
                             onChange={(e) => setEmbassyVisaExpiryDateVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value;
-                              if (val && val !== (visaDeadline || "")) {
-                                try {
-                                  await uploadPlacementVisaV2(
-                                    placementName,
-                                    "",
-                                    embassyVisaNumberVal || currentRow.visaNumber || "",
-                                    embassyVisaIssueDateVal || currentRow.visaIssueDate || undefined,
-                                    val
-                                  );
-                                  toast.success("Visa expiry date saved");
-                                  setCurrentRow((prev) => prev ? { ...prev, visaDeadline: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
-                                }
+                            onBlur={handleSaveEmbassyVisaExpiryDate}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveEmbassyVisaExpiryDate();
+                                (e.target as HTMLInputElement).blur();
                               }
                             }}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono"
+                            disabled={savingField.embassyVisaExpiryDate}
+                            className={cn(
+                              "h-7 sm:h-7.5 px-2 text-xs font-mono transition-colors",
+                              savedField.embassyVisaExpiryDate && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-mono text-slate-800 dark:text-zinc-200">
@@ -1608,28 +2071,46 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 7: Embassy Remarks (spans 2 columns) */}
                       <div className="col-span-2 space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Embassy Remarks
-                        </Label>
-                        <Input
-                          value={embassyRemarkVal}
-                          onChange={(e) => setEmbassyRemarkVal(e.target.value)}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (currentRow.embassy?.remarks || currentRow.embassyRemarks || "") && embassyStepName) {
-                              try {
-                                await setStepRemarksV2(embassyStepName, val);
-                                toast.success("Embassy step remark saved");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Embassy Remarks
+                          </Label>
+                          {savingField.embassyRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.embassyRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            value={embassyRemarkVal}
+                            onChange={(e) => setEmbassyRemarkVal(e.target.value)}
+                            onBlur={handleSaveEmbassyRemark}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveEmbassyRemark();
+                                (e.target as HTMLInputElement).blur();
                               }
-                            }
-                          }}
-                          placeholder="Submission, stamping, or feedback..."
-                          disabled={!canEditEmbassy || isEmbassyLocked}
-                          className="h-7 sm:h-7.5 text-xs px-2"
-                        />
+                            }}
+                            placeholder="Submission, stamping, or feedback... (Press Enter to save)"
+                            disabled={!canEditEmbassy || isEmbassyLocked || savingField.embassyRemark}
+                            className={cn(
+                              "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                              savedField.embassyRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
+                          />
+                          {savedField.embassyRemark && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1773,34 +2254,48 @@ export function ApplicantFollowUpWorkspace({
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {/* Field 1: Ticket Number */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Ticket Number
-                        </Label>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Ticket Number
+                          </Label>
+                          {savingField.ticketNumber && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.ticketNumber && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
                         {canEditDeparture && !isTicketLocked && placementName ? (
-                          <Input
-                            type="text"
-                            value={ticketNumberVal}
-                            onChange={(e) => setTicketNumberVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value.trim().toUpperCase();
-                              if (val && val !== (currentRow.ticketNumber || "")) {
-                                try {
-                                  await recordTicketDetailsV2(
-                                    placementName,
-                                    val,
-                                    flightDateVal || new Date().toISOString().split("T")[0]
-                                  );
-                                  toast.success("Ticket number recorded");
-                                  setCurrentRow((prev) => prev ? { ...prev, ticketNumber: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              value={ticketNumberVal}
+                              onChange={(e) => setTicketNumberVal(e.target.value)}
+                              onBlur={handleSaveTicketNumber}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTicketNumber();
+                                  (e.target as HTMLInputElement).blur();
                                 }
-                              }
-                            }}
-                            placeholder="e.g. ET-998231"
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold"
-                          />
+                              }}
+                              placeholder="e.g. ET-998231 (Press Enter to save)"
+                              disabled={savingField.ticketNumber}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                savedField.ticketNumber && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.ticketNumber && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
                             <span className="truncate">{ticketNumberVal || currentRow.ticketNumber || "—"}</span>
@@ -1978,28 +2473,46 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 6: Ticket Remark (spans 2 columns) */}
                       <div className="col-span-2 space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Ticket Remark
-                        </Label>
-                        <Input
-                          value={ticketRemarkVal}
-                          onChange={(e) => setTicketRemarkVal(e.target.value)}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (currentRow.ticketRemark || (currentRow.plc as any)?.remarks || "") && placementName) {
-                              try {
-                                await setTicketingRemarksV2(placementName, val);
-                                toast.success("Ticket remark saved");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Ticket Remark
+                          </Label>
+                          {savingField.ticketRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.ticketRemark && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            value={ticketRemarkVal}
+                            onChange={(e) => setTicketRemarkVal(e.target.value)}
+                            onBlur={handleSaveTicketRemark}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveTicketRemark();
+                                (e.target as HTMLInputElement).blur();
                               }
-                            }
-                          }}
-                          placeholder="Ticketing details, flight notes, or outcome..."
-                          disabled={!canEditDeparture || isTicketLocked}
-                          className="h-7 sm:h-7.5 text-xs px-2"
-                        />
+                            }}
+                            placeholder="Ticketing details, flight notes, or outcome... (Press Enter to save)"
+                            disabled={!canEditDeparture || isTicketLocked || savingField.ticketRemark}
+                            className={cn(
+                              "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                              savedField.ticketRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
+                          />
+                          {savedField.ticketRemark && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2368,13 +2881,11 @@ export function ApplicantFollowUpWorkspace({
                 try {
                   await stampEmbassyStepV2(embassyStepName, embassyVisaNumber);
                   if (placementName) {
-                    await uploadPlacementVisaV2(
-                      placementName,
-                      "",
-                      embassyVisaNumber,
-                      embassyVisaIssueDate,
-                      embassyVisaExpiryDate
-                    );
+                    await updatePlacementParsedFieldsV2(placementName, {
+                      visa_number: embassyVisaNumber,
+                      ...(embassyVisaIssueDate ? { visa_issue_date: embassyVisaIssueDate } : {}),
+                      ...(embassyVisaExpiryDate ? { visa_expiry_date: embassyVisaExpiryDate } : {}),
+                    });
                   }
                   toast.success("Embassy visa stamped successfully");
                   setIsEmbassyStampOpen(false);

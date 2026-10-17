@@ -43,6 +43,7 @@ interface FollowUpWorkspaceProps {
   corridorFilter: string;
   onCorridorChange: (corridor: string) => void;
   employees?: { name: string; full_name?: string; email?: string }[];
+  availableCorridors?: string[];
 }
 
 function getStageBadgeVariant(stage: string): {
@@ -127,74 +128,63 @@ function getStatusBadge(status?: string | null) {
 
 /**
  * Determines whether a candidate is eligible for Te'shir (.xls) export.
- * Rule: Candidate must have reached the Te'shir stage or later in the Saudi corridor
- * (i.e. LMIS is Issued, or Te'shir step is active/completed, or Stamped/Ticketed/Departed).
+ * Rule: Candidate must strictly have reached the Processing stage (LMIS and Te'shir) or later
+ * (Stamped, Ticketed, Departed) on the Saudi Arabia corridor.
+ * Candidates in Selected stage, Registered, Draft, or Cancelled are strictly ineligible.
  */
 export function isCandidateEligibleForTaeshir(row: WorkspaceApplicantRow): { eligible: boolean; reason?: string } {
-  const stage = (row.stageStatus || "").toLowerCase();
-  if (stage === "cancelled") {
+  const stage = (row.stageStatus || "").toLowerCase().trim();
+
+  // 1. Strict Stage Exclusion: Selected stage candidates can NEVER be exported for Te'shir
+  if (stage === "selected") {
     return {
       eligible: false,
-      reason: "Candidate placement is Cancelled.",
+      reason: "Candidate is in the Selected stage and has not reached the Processing stage (LMIS and Te'shir). Therefore, cannot generate export Excel for Te'shir.",
     };
   }
 
-  const country = (row.destinationCountry || "").toLowerCase();
-  if (country === "kuwait") {
+  // 2. Intake / Pre-placement stages
+  if (stage === "registered" || stage === "draft" || stage === "waiting to be selected" || stage === "cv generated") {
+    return {
+      eligible: false,
+      reason: `Candidate is in the "${row.stageStatus || "Intake"}" stage and has not reached the Processing stage (LMIS and Te'shir). Therefore, cannot generate export Excel for Te'shir.`,
+    };
+  }
+
+  // 3. Cancelled placements
+  if (stage === "cancelled") {
+    return {
+      eligible: false,
+      reason: "Candidate placement is Cancelled. Therefore, cannot generate export Excel for Te'shir.",
+    };
+  }
+
+  // 4. Strict Corridor Exclusion: Saudi Arabia corridor only
+  const country = (row.destinationCountry || "").toLowerCase().trim();
+  if (country === "kuwait" || (country !== "" && !country.includes("saudi"))) {
     return {
       eligible: false,
       reason: "Candidate is on the Kuwait corridor. Te'shir export is exclusively for the Saudi Arabia corridor.",
     };
   }
 
-  // 1. Post-Te'shir stages (Embassy Stamped, Ticketed, Departed)
-  const isPostTeShirStage =
+  // 5. Post-Processing stages (Stamped, Ticketed, Departed) are already past Te'shir and qualified
+  const isPostProcessing =
     ["stamped", "ticketed", "departed"].includes(stage) ||
-    ["stamped", "ticketed", "departed"].includes((row.departureStatus || "").toLowerCase()) ||
-    (row.embassyStatus || "").toLowerCase() === "stamped";
-  if (isPostTeShirStage) {
+    ["stamped", "ticketed", "departed"].includes((row.departureStatus || "").toLowerCase().trim()) ||
+    (row.embassyStatus || "").toLowerCase().trim() === "stamped";
+  if (isPostProcessing) {
     return { eligible: true };
   }
 
-  // 2. Active or completed Te'shir step
-  const teshirStatus = (row.teshirStatus || "").trim().toUpperCase();
-  const hasActiveTeShir =
-    (teshirStatus !== "" && teshirStatus !== "—" && teshirStatus !== "PENDING") ||
-    Boolean(row.injazApplicationId) ||
-    Boolean(row.appointmentDate) ||
-    Boolean(row.injaz && row.injaz.status && row.injaz.status !== "Pending");
-  if (hasActiveTeShir) {
+  // 6. Processing stage: candidate has reached clearance processing (LMIS and Te'shir)
+  if (stage === "processing") {
     return { eligible: true };
-  }
-
-  // 3. Completed LMIS clearance (LMIS Issued unlocks Te'shir)
-  const lmisStatus = (row.lmisStatus || "").trim().toUpperCase();
-  const isLmisIssued =
-    lmisStatus === "ISSUED" ||
-    row.lms?.status === "Issued" ||
-    row.lms?.status === "Completed" ||
-    row.lms?.status === "Complete";
-  if (isLmisIssued) {
-    return { eligible: true };
-  }
-
-  // Ineligible: Not reached Te'shir yet
-  if (stage === "registered" || stage === "draft") {
-    return {
-      eligible: false,
-      reason: "Candidate is still in the Registered stage and has not started LMIS or Te'shir clearance.",
-    };
-  }
-  if (stage === "selected") {
-    return {
-      eligible: false,
-      reason: "Candidate is in the Selected stage and has not yet started clearance processing.",
-    };
   }
 
   return {
     eligible: false,
-    reason: `Candidate is currently in LMIS processing (${row.lmisStatus || "Pending"}) and has not yet received LMIS clearance required to reach Te'shir.`,
+    reason: `Candidate is in the "${row.stageStatus || "Unknown"}" stage and has not reached the Processing stage (LMIS and Te'shir). Therefore, cannot generate export Excel for Te'shir.`,
   };
 }
 
@@ -205,6 +195,7 @@ export function FollowUpWorkspace({
   corridorFilter,
   onCorridorChange,
   employees = [],
+  availableCorridors,
 }: FollowUpWorkspaceProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -258,7 +249,7 @@ export function FollowUpWorkspace({
     } else {
       if (eligibleFilteredIds.length === 0) {
         toast.error(
-          "None of the candidates in the current view have reached Te'shir stage yet (LMIS must be issued). Please select or filter for candidates who have reached Te'shir stage."
+          "None of the candidates in the current view have reached the Processing stage (LMIS and Te'shir). Only candidates who have reached Processing stage or later on the Saudi corridor qualify for Te'shir export."
         );
         return;
       }
@@ -266,7 +257,7 @@ export function FollowUpWorkspace({
       if (eligibleFilteredIds.length < filteredData.length) {
         const skippedCount = filteredData.length - eligibleFilteredIds.length;
         toast.info(
-          `Selected ${eligibleFilteredIds.length} candidate${eligibleFilteredIds.length > 1 ? "s" : ""} eligible for Te'shir export. Skipped ${skippedCount} candidate${skippedCount > 1 ? "s" : ""} who have not reached Te'shir stage.`
+          `Selected ${eligibleFilteredIds.length} candidate${eligibleFilteredIds.length > 1 ? "s" : ""} qualified for Te'shir export. Skipped ${skippedCount} unqualified candidate${skippedCount > 1 ? "s" : ""} (must reach Processing stage).`
         );
       }
     }
@@ -276,7 +267,8 @@ export function FollowUpWorkspace({
     const { eligible, reason } = isCandidateEligibleForTaeshir(row);
     if (!eligible) {
       toast.error(
-        `Cannot select "${row.fullName}": ${reason} Please select only candidates who have reached Te'shir stage or later.`
+        `Not Qualified: "${row.fullName}" is not qualified and therefore cannot generate export Excel for Te'shir. ${reason}`,
+        { duration: 5000 }
       );
       return;
     }
@@ -306,21 +298,21 @@ export function FollowUpWorkspace({
           (r) => !isCandidateEligibleForTaeshir(r).eligible
         );
         if (ineligibleRows.length > 0) {
-          const names = ineligibleRows.map((r) => `"${r.fullName}"`).join(", ");
+          const names = ineligibleRows.map((r) => `"${r.fullName}" (${r.stageStatus || "Selected"})`).join(", ");
           toast.error(
-            `Export rejected: The following selected candidate(s) have not reached Te'shir stage: ${names}. Please deselect them and select only eligible candidates who have reached Te'shir stage or later.`
+            `Export rejected: The following candidate(s) are not qualified: ${names}. Only candidates who have reached the Processing stage (LMIS and Te'shir) can generate export Excel for Te'shir.`
           );
           return;
         }
         applicantIds = Array.from(selectedApplicantIds);
       } else {
-        // Automatically export all candidates who reached Te'shir stage or later
+        // Automatically export all candidates who reached Processing stage or later
         applicantIds = eligibleFilteredIds;
       }
 
       if (applicantIds.length === 0) {
         toast.error(
-          "No candidates in the workspace have reached Te'shir stage yet. Te'shir export requires candidates to have LMIS issued or be in Te'shir, Stamped, Ticketed, or Departed stage."
+          "No candidates in the workspace have reached the Processing stage (LMIS and Te'shir) yet. Te'shir export requires candidates to be in Processing, Stamped, Ticketed, or Departed stage on the Saudi corridor."
         );
         return;
       }
@@ -722,6 +714,7 @@ export function FollowUpWorkspace({
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
+        availableCorridors={availableCorridors}
         hideStatusFilter={true}
         extraHeaderActions={extraHeaderControls}
       />

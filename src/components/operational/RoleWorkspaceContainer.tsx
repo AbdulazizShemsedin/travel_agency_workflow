@@ -146,6 +146,13 @@ export function RoleWorkspaceContainer() {
   });
   const [corridorFilter, setCorridorFilter] = React.useState<string>(defaultCorridor);
 
+  // Dynamically accumulate destination corridors discovered from server data
+  const [discoveredCorridors, setDiscoveredCorridors] = React.useState<string[]>([
+    "All",
+    "Saudi Arabia",
+    "Kuwait",
+  ]);
+
   // T17: Effect 1 — Follow address changes (?tab= / ?status=) only when query parameters actually change
   React.useEffect(() => {
     if (tabParam && availableTabs.some((t) => t.id === tabParam)) {
@@ -190,6 +197,28 @@ export function RoleWorkspaceContainer() {
     enabled: isOperationalTab && isTabAllowed,
     staleTime: 0,
   });
+
+  React.useEffect(() => {
+    if (Array.isArray(workspaceData) && workspaceData.length > 0) {
+      setDiscoveredCorridors((prev) => {
+        const set = new Set(prev);
+        for (const row of workspaceData) {
+          const c = String(
+            (row as any)?.destinationCountry ||
+            (row as any)?.country ||
+            (row as any)?.destination_country ||
+            (row as any)?.applicant?.destination_country ||
+            (row as any)?.plc?.destination_country ||
+            ""
+          ).trim();
+          if (c && c !== "—" && c !== "All") {
+            set.add(c);
+          }
+        }
+        return Array.from(set);
+      });
+    }
+  }, [workspaceData]);
 
   // Workspace Titles & Descriptions for header
   const getHeaderInfo = () => {
@@ -325,6 +354,7 @@ export function RoleWorkspaceContainer() {
               corridorFilter={corridorFilter}
               onCorridorChange={setCorridorFilter}
               employees={employees}
+              availableCorridors={discoveredCorridors}
             />
           </div>
         )}
@@ -336,6 +366,7 @@ export function RoleWorkspaceContainer() {
             onRefresh={refetch}
             corridorFilter={corridorFilter}
             onCorridorChange={setCorridorFilter}
+            availableCorridors={discoveredCorridors}
           />
         )}
 

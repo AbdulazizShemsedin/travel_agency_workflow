@@ -191,6 +191,14 @@ export async function uploadPlacementVisaV2(
   visaIssueDate?: string,
   visaExpiryDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  if (!fileUrl) {
+    // If no file_url is provided, update the parsed visa fields directly via update_placement_parsed_fields
+    return updatePlacementParsedFieldsV2(placementName, {
+      ...(visaNumber ? { visa_number: visaNumber } : {}),
+      ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
+      ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
+    });
+  }
   return requestV2(
     "/api/method/agency_tracking.placement_api.upload_visa",
     {

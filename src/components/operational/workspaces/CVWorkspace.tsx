@@ -30,6 +30,7 @@ interface CVWorkspaceProps {
   onRefresh: () => void;
   corridorFilter: string;
   onCorridorChange: (corridor: string) => void;
+  availableCorridors?: string[];
 }
 
 export function CVWorkspace({
@@ -38,6 +39,7 @@ export function CVWorkspace({
   onRefresh,
   corridorFilter,
   onCorridorChange,
+  availableCorridors,
 }: CVWorkspaceProps) {
   const queryClient = useQueryClient();
   const { can } = useAuth();
@@ -664,7 +666,7 @@ export function CVWorkspace({
         onRefresh={onRefresh}
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
-        availableCorridors={["All", "Saudi Arabia", "Kuwait"]}
+        availableCorridors={availableCorridors}
         extraHeaderActions={extraHeaderFilters}
       />
     </div>

@@ -200,6 +200,7 @@ export function ApplicantTable() {
     }
     return "All";
   });
+  const [selectedCountry, setSelectedCountry] = React.useState<string>("All");
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [selectedRows, setSelectedRows] = React.useState<Set<string>>(new Set());
@@ -536,10 +537,22 @@ export function ApplicantTable() {
       copy.flight_outcome_date = plc.flight_outcome_date || (applicant as any).flight_outcome_date;
       copy.replacement_owed = plc.replacement_owed ?? (applicant as any).replacement_owed;
       // Store the active placement name so we can look up clearance steps per row
-      copy._activePlacementName = plc.name;
-      return copy;
-    });
-  }, [applicants, placementsData, clearedPlacementNames]);
+        copy._activePlacementName = plc.name;
+        return copy;
+      });
+    }, [applicants, placementsData, clearedPlacementNames]);
+
+  // Dynamically discover all destination countries present across applicants
+  const availableCountries = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const app of applicantRows) {
+      const dest = (app.destination_country || (app as any).country || "").trim();
+      if (dest && dest !== "—") set.add(dest);
+    }
+    if (!set.has("Saudi Arabia")) set.add("Saudi Arabia");
+    if (!set.has("Kuwait")) set.add("Kuwait");
+    return Array.from(set).sort();
+  }, [applicantRows]);
 
   // Filtered & searched data
   const filteredApplicants = React.useMemo(() => {
@@ -609,6 +622,12 @@ export function ApplicantTable() {
       if (selectedTrack === "Muayena" && !isApplicantMuayena) return false;
       if (selectedTrack === "Standard" && isApplicantMuayena) return false;
 
+      // Destination Country Filter
+      if (selectedCountry && selectedCountry !== "All") {
+        const dest = (applicant.destination_country || (applicant as any).country || "").trim().toLowerCase();
+        if (dest !== selectedCountry.toLowerCase()) return false;
+      }
+
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !query ||
@@ -620,7 +639,7 @@ export function ApplicantTable() {
 
       return matchesStage && matchesSearch;
     });
-  }, [applicantRows, selectedStage, selectedTrack, searchQuery, corridorRestriction]);
+  }, [applicantRows, selectedStage, selectedTrack, selectedCountry, searchQuery, corridorRestriction]);
 
   // Track counts (Standard vs Muayena)
   const trackCounts = React.useMemo(() => {
@@ -864,6 +883,26 @@ export function ApplicantTable() {
               ]}
               triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
               aria-label="Filter by Track"
+            />
+          </div>
+
+          {/* Country / Corridor Filter */}
+          <div className="w-36 sm:w-44">
+            <SimpleSelect
+              value={selectedCountry}
+              onValueChange={(val) => {
+                setSelectedCountry(val || "All");
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: "All", label: "All Countries" },
+                ...availableCountries.map((c) => ({
+                  value: c,
+                  label: c,
+                })),
+              ]}
+              triggerClassName="h-9.5 rounded-lg border-slate-300 dark:border-[#26262d] bg-white dark:bg-[#141418] text-xs font-semibold"
+              aria-label="Filter by Destination Country"
             />
           </div>
         </div>

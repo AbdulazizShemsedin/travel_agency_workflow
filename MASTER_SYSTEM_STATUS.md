@@ -648,4 +648,71 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Added a "Clear" button whenever candidates are selected.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
 
+## 16. Follow-Up Inline Enter Save & UI Feedback, Injaz/Te'shir Status Reversion Bug Fix & Processing Stage Te'shir Gating (2026-10-17)
+- **Enter Key Submission & Inline Visual Feedback on Follow-Up Details**:
+  - Wired Enter key listeners (`onKeyDown={(e) => { if (e.key === "Enter") ... }}`) across all editable fields and remarks on the Follow-up details page (`ApplicantFollowUpWorkspace.tsx`):
+    - `Labor ID` (LMIS Card)
+    - `LMIS Remark` (LMIS Card)
+    - `E-number / Injaz Application No.` (Te'shir Card)
+    - `Te'shir Remark` (Te'shir Card)
+    - `Visa Number` (Embassy Card)
+    - `Embassy Remarks` (Embassy Card)
+    - `Ticket Number` (Ticket & Departure Card)
+    - `Ticket Remark` (Ticket & Departure Card)
+  - Added rich inline visual UI feedback:
+    - Dedicated field label headers displaying `"Saving..."` spinner badge (`savingField[key]`) during API mutation.
+    - Prominent green `"Saved"` checkmark badge (`savedField[key]`) with smooth 2.5s display duration.
+    - Subtle green border and focus ring highlight (`border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100`) on the input field when saved.
+    - Inline checkmark icon (`<Check className="h-3.5 w-3.5" />`) positioned inside the right end of the input field.
+- **Injaz Payment & Te'shir Status Reversion Bug Fix**:
+  - Diagnosed and resolved the root cause of the status reversion bug where changing Injaz payment status to `Paid` followed by changing Te'shir status reverted both statuses to `Unpaid` and `INFORMED`:
+    1. Case Normalization: Normalized `injazPayment` across the backend data layer and `<select>` dropdowns to Title Case (`"Paid" | "Printed" | "Unpaid"`), preventing HTML `<select>` value mismatch fallbacks where uppercase `"PAID"` defaulted to the first option (`"Unpaid"`).
+    2. Field Fallbacks on Clearance Step: Enhanced `fetchOperationalWorkspaceDataV2` in `src/lib/api/v2/operational.ts` to inspect both `(injazStep as any)?.injaz_payment_status` and `(injazStep as any)?.payment_status`.
+    3. Authoritative Te'shir Status Mapping: Mapped `(injazStep as any)?.taeshir_status` directly in `operational.ts` rather than overwriting it with generic Clearance Step status (`"In Progress"`).
+    4. Guarded `isTeshirCompleted`: Strictly derived `isTeshirCompleted` from `injaz.status === "Completed" || teshirStatus === "Completed"`, preventing intermediate follow-up statuses (`RECEIVED`, `READY TO EMBASSY`) from falsely forcing terminal `"Completed"`.
+    5. Optimistic State Preservation: Hardened `useEffect([row])` in `ApplicantFollowUpWorkspace.tsx` to preserve optimistic local changes for the same candidate while queries revalidate in the background.
+- **Strict Processing Stage Te'shir Export Stage Gating**:
+  - Restructured `isCandidateEligibleForTaeshir` in `FollowUpWorkspace.tsx` with top-level exclusion guards:
+    - Candidates in `Selected` stage are strictly disqualified: *"Candidate is in the Selected stage and has not reached the Processing stage (LMIS and Te'shir). Therefore, cannot generate export Excel for Te'shir."*
+    - Candidates in pre-placement stages (`Registered`, `Draft`, `Waiting to be Selected`, `CV Generated`) or `Cancelled` are strictly disqualified.
+    - Candidates on non-Saudi corridors are strictly disqualified.
+    - Only candidates who have reached the `Processing` stage (LMIS and Te'shir) or later (`Stamped`, `Ticketed`, `Departed`) on the Saudi Arabia corridor are eligible for Te'shir export.
+  - Interactive Selection Disqualification:
+    - Attempting to select an unqualified candidate immediately displays an error toast: `"Not Qualified: '${row.fullName}' is not qualified and therefore cannot generate export Excel for Te'shir. ${reason}"`.
+    - Clicking `Export for Te'shir` immediately blocks export and alerts the operator if any unqualified candidates are selected.
+- **Verification**: Clean TypeScript check (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures. Fully aligned with live Railway backend.
+
+## 17. Dynamic Destination Country Filters & Embassy/Wakala Stage Unlock (2026-10-17)
+- **Dynamic Destination Country / Corridor Filters Across Workspaces**:
+  - `OperationalTable.tsx`: Implemented `effectiveCorridors` computation combining default corridors (`"All"`, `"Saudi Arabia"`, `"Kuwait"`) with all unique destination countries dynamically discovered from table rows (`destinationCountry`, `country`, `destination_country`, etc.) and the active `corridorFilter`. Automatically renders buttons for newly added countries (e.g. Jordan, UAE, Qatar, Oman, etc.).
+  - `RoleWorkspaceContainer.tsx`: Added `discoveredCorridors` tracking across server queries and passed `availableCorridors={discoveredCorridors}` to child operational workspaces (`FollowUpWorkspace`, `CVWorkspace`, etc.).
+  - `ApplicantTable.tsx`: Added `selectedCountry` state, computed `availableCountries` dynamically from `applicantRows`, added country filtering to `filteredApplicants`, and added a `SimpleSelect` Destination Country filter in the toolbar alongside the Stage and Track filters.
+  - `MedicalWorkspace.tsx`: Replaced hardcoded Saudi/Kuwait `<option>` tags with dynamic `availableCorridors` derived from all `mergedRecords`.
+  - `V2ClearanceQueueWorkspace.tsx`: Dynamic corridor pills and table filter populated from `enrichedRows` destination countries.
+- **Embassy / Wakala Stage Unlock on Candidate Follow-Up Details**:
+  - Diagnosed and resolved the root cause locking the Embassy/Wakala card when LMIS was issued and Te'shir completed:
+    1. Frappe Clearance Step Status Match: Checked both `"Complete"` (authoritative string returned by Frappe RPC `complete_clearance_step`) and `"Completed"`, `"Issued"`, `"Approved"`, and `date_completed`.
+    2. Te'shir Completion Sub-status Satisfaction: Allowed `normalizedTeshirStatus === "RECEIVED"` or `"READY TO EMBASSY"` or `"Completed"` to satisfy the Te'shir requirement.
+    3. Non-Saudi Corridor Te'shir Bypass: Corridors other than Saudi Arabia (which do not have a Te'shir stage) now cleanly unlock Embassy upon LMIS completion.
+    4. Started/Advanced Embassy Bypass: If the candidate's Embassy stage has already been submitted or stamped (`embassyStatus !== "Pending"`), the card remains permanently unlocked.
+    5. Optimistic State Preservation: Preserved `lmisStatus: "ISSUED"` and `teshirStatus` across query revalidations to eliminate locking flickers.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
+
+## 18. Visa Valid Until & Issued On Save Bug Fix (`upload_visa` 417 `file_url is required`) (2026-10-17)
+- **Root Cause**:
+  - Editing "Visa Valid Until", "Visa Issued On", or "Visa Number" on the Follow-Up details page (`ApplicantFollowUpWorkspace.tsx`) previously called `uploadPlacementVisaV2(placementName, "", ...)` with an empty string for `file_url`.
+  - The backend RPC `agency_tracking.placement_api.upload_visa` strictly validates `file_url` because it is an attachment endpoint (e.g. for Kuwait eVisa PDFs/images). When passed an empty string, the backend legitimately threw `417: file_url is required.`
+- **Authoritative Resolution**:
+  - Replaced `uploadPlacementVisaV2` with authoritative backend RPC `agency_tracking.placement_api.update_placement_parsed_fields` (`updatePlacementParsedFieldsV2`) in `ApplicantFollowUpWorkspace.tsx`:
+    - `handleSaveEmbassyVisaNumber` now calls `updatePlacementParsedFieldsV2(placementName, { visa_number: val, ... })`.
+    - Added `handleSaveEmbassyVisaIssueDate` calling `updatePlacementParsedFieldsV2(placementName, { visa_issue_date: val, ... })`.
+    - Added `handleSaveEmbassyVisaExpiryDate` calling `updatePlacementParsedFieldsV2(placementName, { visa_expiry_date: val, ... })`.
+    - Updated stamping confirmation dialog to update placement parsed fields via `updatePlacementParsedFieldsV2`.
+  - Added full inline visual feedback (`Saving...` spinner and `Saved` checkmark) and Enter key submit listeners to both Visa Issued On and Visa Valid Until date inputs.
+  - Hardened `uploadPlacementVisaV2` in `src/lib/api/v2/placements.ts` to automatically delegate to `updatePlacementParsedFieldsV2` when `fileUrl` is empty or omitted, completely preventing any future 417 errors.
+- **Verification**: Clean TypeScript check (`npx tsc --noEmit`, 0 errors). Zero mock data.
+
+
+
+
 

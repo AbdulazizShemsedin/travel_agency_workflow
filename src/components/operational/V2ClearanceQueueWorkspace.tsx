@@ -255,6 +255,21 @@ export function V2ClearanceQueueWorkspace() {
     });
   }, [enrichedRows, corridorFilter, selectedStepTypeFilter, activeSheetTab]);
 
+  // Dynamic Corridors derived from queue rows
+  const availableCorridors = React.useMemo<string[]>(() => {
+    const list = ["All", "Saudi Arabia", "Kuwait"];
+    enrichedRows.forEach((r) => {
+      const c = (r.destination_country || "").trim();
+      if (c && c !== "—" && !list.some((item) => item.toLowerCase() === c.toLowerCase())) {
+        list.push(c);
+      }
+    });
+    if (corridorFilter && corridorFilter !== "All" && !list.some((item) => item.toLowerCase() === corridorFilter.toLowerCase())) {
+      list.push(corridorFilter);
+    }
+    return list;
+  }, [enrichedRows, corridorFilter]);
+
   // Dynamic Step Types available in current view
   const availableStepTypes = React.useMemo<string[]>(() => {
     const types = new Set<string>();
@@ -1211,8 +1226,16 @@ export function V2ClearanceQueueWorkspace() {
 
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium">Filter Corridor:</span>
-            {["All", "Saudi Arabia", "Kuwait"].map((corridor) => {
+            {availableCorridors.map((corridor) => {
               const active = corridorFilter === corridor;
+              const flag =
+                corridor === "Saudi Arabia"
+                  ? "🇸🇦 "
+                  : corridor === "Kuwait"
+                  ? "🇰🇼 "
+                  : corridor === "All"
+                  ? "🌍 "
+                  : "🌐 ";
               return (
                 <button
                   key={corridor}
@@ -1228,7 +1251,7 @@ export function V2ClearanceQueueWorkspace() {
                       : "bg-slate-100 dark:bg-[#181820] text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-[#262630] hover:bg-slate-200 dark:hover:bg-[#20202a]"
                   )}
                 >
-                  {corridor === "Saudi Arabia" ? "🇸🇦 Saudi Arabia" : corridor === "Kuwait" ? "🇰🇼 Kuwait" : "🌍 All Corridors"}
+                  {flag}{corridor === "All" ? "All Corridors" : corridor}
                 </button>
               );
             })}
@@ -1372,7 +1395,7 @@ export function V2ClearanceQueueWorkspace() {
         onRefresh={refetchQueue}
         corridorFilter={corridorFilter}
         onCorridorChange={setCorridorFilter}
-        availableCorridors={["All", "Saudi Arabia", "Kuwait"]}
+        availableCorridors={availableCorridors}
         extraHeaderActions={
           <div className="flex items-center gap-2">
             {activeSheetTab === "all" && availableStepTypes.length > 0 && (

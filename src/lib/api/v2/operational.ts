@@ -183,7 +183,8 @@ export async function fetchOperationalWorkspaceDataV2(
         injazStep?.status === "Issued" ||
         injazStep?.status === "Approved";
 
-      const isInjazPaid = (injazStep as any)?.injaz_payment_status === "Paid";
+      const isInjazPaid =
+        String((injazStep as any)?.injaz_payment_status || (injazStep as any)?.payment_status || "").toLowerCase() === "paid";
 
       const isTeshirFullyCompleted = Boolean(injazStep && isTeshirStepFinished && (!isSaudi || isInjazPaid));
 
@@ -309,13 +310,13 @@ export async function fetchOperationalWorkspaceDataV2(
         }
       }
 
-      const rawInjazPayment = String((injazStep as any)?.injaz_payment_status || "").trim();
+      const rawInjazPayment = String((injazStep as any)?.injaz_payment_status || (injazStep as any)?.payment_status || "").trim();
       const injazPayment =
         rawInjazPayment.toLowerCase() === "paid"
-          ? "PAID"
+          ? "Paid"
           : rawInjazPayment.toLowerCase() === "printed"
-          ? "PRINTED"
-          : "UNPAID";
+          ? "Printed"
+          : "Unpaid";
       const lmisStatus =
         lmsStep?.lmis_status ||
         (lmsStep?.status === "Issued" || lmsStep?.status === "Complete" || lmsStep?.status === "Completed"
@@ -459,7 +460,17 @@ export async function fetchOperationalWorkspaceDataV2(
           const diff = Math.max(0, Math.floor((Date.now() - new Date(cDate).getTime()) / (1000 * 60 * 60 * 24)));
           return isNaN(diff) ? "—" : `${diff} days`;
         })(),
-        teshirStatus: injazStep?.status || "—",
+        teshirStatus: (() => {
+          const isDone =
+            injazStep?.status === "Completed" ||
+            injazStep?.status === "Complete" ||
+            injazStep?.status === "Issued" ||
+            injazStep?.status === "Approved";
+          const rawTaeshir = (injazStep as any)?.taeshir_status;
+          if (rawTaeshir === "READY TO EMBASSY" || rawTaeshir === "RECEIVED") return rawTaeshir;
+          if (isDone) return "Completed";
+          return rawTaeshir || injazStep?.status || "—";
+        })(),
         medical2Status: (plc as any)?.medical_2_status || (applicant as any).medical_2_status || (plc?.status === "Departed" || plc?.status === "Ticketed" ? "FIT" : "—"),
         departureStatus: plc?.status === "Departed" ? "Departed" : plc?.status === "Ticketed" ? "Ticketed" : (ticketStatus || "—"),
         lmisStatus,

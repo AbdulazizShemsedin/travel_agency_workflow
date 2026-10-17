@@ -83,6 +83,41 @@ export function OperationalTable<T extends Record<string, any> = any>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [selectedStatusFilter, setSelectedStatusFilter] = React.useState<string>("ALL");
+
+  // Dynamically compute corridors from passed availableCorridors, table data, and active corridorFilter
+  const effectiveCorridors = React.useMemo(() => {
+    const list = Array.isArray(availableCorridors) && availableCorridors.length > 0
+      ? [...availableCorridors]
+      : ["All", "Saudi Arabia", "Kuwait"];
+
+    // Ensure 'All' is at the start
+    if (!list.includes("All")) {
+      list.unshift("All");
+    }
+
+    // Inspect data rows for any new destination countries
+    if (Array.isArray(data)) {
+      for (const row of data) {
+        const country = String(
+          (row as any)?.destinationCountry ||
+          (row as any)?.country ||
+          (row as any)?.destination_country ||
+          (row as any)?.applicant?.destination_country ||
+          (row as any)?.plc?.destination_country ||
+          ""
+        ).trim();
+        if (country && country !== "—" && country !== "All" && !list.some((c) => c.toLowerCase() === country.toLowerCase())) {
+          list.push(country);
+        }
+      }
+    }
+
+    // If corridorFilter is set to something not yet in list (and not All), include it
+    if (corridorFilter && corridorFilter !== "All" && !list.some((c) => c.toLowerCase() === corridorFilter.toLowerCase())) {
+      list.push(corridorFilter);
+    }
+    return list;
+  }, [availableCorridors, data, corridorFilter]);
   const [selectedUrgencyFilter, setSelectedUrgencyFilter] = React.useState<string>("ALL");
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = React.useState(false);
 
@@ -522,7 +557,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
           {/* Corridor Selector */}
           {onCorridorChange && (
             <div className="flex items-center rounded-lg border border-slate-200 dark:border-[#2c2c36] bg-white dark:bg-[#1a1a20] p-0.5">
-              {availableCorridors.map((c) => (
+              {effectiveCorridors.map((c) => (
                 <button
                   key={c}
                   type="button"

@@ -179,6 +179,20 @@ export function MedicalWorkspace({
     return records;
   }, [placements, applicants]);
 
+  // Dynamically compute available corridors from medical records
+  const availableCorridors = React.useMemo(() => {
+    const set = new Set<string>(["Saudi Arabia", "Kuwait"]);
+    for (const rec of mergedRecords) {
+      if (rec.destinationCountry && rec.destinationCountry !== "—") {
+        set.add(rec.destinationCountry.trim());
+      }
+    }
+    if (corridorFilter && corridorFilter !== "All") {
+      set.add(corridorFilter.trim());
+    }
+    return Array.from(set);
+  }, [mergedRecords, corridorFilter]);
+
   // Filter records
   const filteredRecords = React.useMemo(() => {
     return mergedRecords.filter((rec) => {
@@ -361,8 +375,9 @@ export function MedicalWorkspace({
               className="h-8 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-slate-50 dark:bg-[#16161d] font-semibold text-slate-700 dark:text-zinc-200"
             >
               <option value="All">All Corridors</option>
-              <option value="Saudi Arabia">Saudi Arabia</option>
-              <option value="Kuwait">Kuwait</option>
+              {availableCorridors.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           )}
 
