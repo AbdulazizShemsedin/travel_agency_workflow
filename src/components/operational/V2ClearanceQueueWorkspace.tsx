@@ -565,7 +565,7 @@ export function V2ClearanceQueueWorkspace() {
     }
     if (s === "submitted") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-400 border border-purple-200 dark:border-purple-800/60">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-400 border border-teal-200 dark:border-teal-800/60">
           <Send className="h-3 w-3" />
           Submitted to Embassy
         </span>
@@ -919,7 +919,7 @@ export function V2ClearanceQueueWorkspace() {
       width: "200px",
       cell: (row) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-900 dark:text-purple-300 font-bold text-[10px] border border-purple-300/40 uppercase">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 font-bold text-[10px] border border-emerald-300/40 uppercase">
             {(row.full_name || "?").substring(0, 2)}
           </div>
           <span className="font-semibold text-slate-900 dark:text-white uppercase truncate block max-w-[180px] text-xs">
@@ -1000,7 +1000,7 @@ export function V2ClearanceQueueWorkspace() {
                 : st === "Rejected" || st === "Cancelled"
                 ? "bg-rose-600 text-white font-semibold text-[10px]"
                 : st === "Submitted"
-                ? "bg-purple-600 text-white font-semibold text-[10px]"
+                ? "bg-teal-600 text-white font-semibold text-[10px]"
                 : st === "In Progress"
                 ? "bg-blue-600 text-white font-semibold text-[10px]"
                 : "bg-amber-500 text-white font-semibold text-[10px]"
@@ -1031,7 +1031,7 @@ export function V2ClearanceQueueWorkspace() {
           variant="outline"
           size="sm"
           onClick={(e) => { e.stopPropagation(); handleRowClick(row); }}
-          className="h-7 px-2.5 text-xs font-semibold border-purple-300 dark:border-purple-800 text-purple-800 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+          className="h-7 px-2.5 text-xs font-semibold border-teal-300 dark:border-teal-800 text-teal-800 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30"
         >
           Open
         </Button>
@@ -1296,7 +1296,7 @@ export function V2ClearanceQueueWorkspace() {
             { id: "all",      label: "All Steps",  emoji: "📋", accentClass: "border-slate-700 dark:border-white text-slate-900 dark:text-white bg-slate-50/60 dark:bg-[#1a1a20]" },
             { id: "lmis",     label: "LMIS",       emoji: "🟢", accentClass: "border-emerald-700 dark:border-emerald-500 text-emerald-900 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30" },
             { id: "taeshir",  label: "Te'shir",    emoji: "🔵", accentClass: "border-blue-700 dark:border-blue-500 text-blue-900 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-950/30" },
-            { id: "embassy",  label: "Embassy",    emoji: "🟣", accentClass: "border-purple-700 dark:border-purple-500 text-purple-900 dark:text-purple-400 bg-purple-50/60 dark:bg-purple-950/30" },
+            { id: "embassy",  label: "Embassy",    emoji: "🟢", accentClass: "border-teal-700 dark:border-teal-500 text-teal-900 dark:text-teal-400 bg-teal-50/60 dark:bg-teal-950/30" },
           ] as const
         ).map((tab) => {
           const isActive = activeSheetTab === tab.id;
@@ -1782,7 +1782,7 @@ export function V2ClearanceQueueWorkspace() {
                   <div className="p-3 rounded-lg border border-slate-200 dark:border-[#272730] bg-slate-50/50 dark:bg-[#181820] space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-white">
-                        <Send className="h-4 w-4 text-purple-600" />
+                        <Send className="h-4 w-4 text-teal-600" />
                         Submit Dossier to Embassy
                       </div>
                       {isSaudi && (
@@ -1883,7 +1883,7 @@ export function V2ClearanceQueueWorkspace() {
                             : undefined,
                         })
                       }
-                      className="w-full bg-purple-700 hover:bg-purple-800 dark:bg-purple-600 dark:hover:bg-purple-500 text-white text-xs font-semibold h-9"
+                      className="w-full bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white text-xs font-semibold h-9"
                     >
                       {submitEmbassyMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-1.5" />

@@ -13,7 +13,7 @@ import {
   ShieldAlert,
   FileSpreadsheet,
   ClipboardList,
-  HeartPulse,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -22,7 +22,6 @@ import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { FollowUpWorkspace } from "./workspaces/FollowUpWorkspace";
 import { CVWorkspace } from "./workspaces/CVWorkspace";
-import { MedicalWorkspace } from "./workspaces/MedicalWorkspace";
 import { LMISWorkspace } from "./workspaces/LMISWorkspace";
 import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
@@ -63,7 +62,6 @@ export function RoleWorkspaceContainer() {
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
     { id: "follow_up", label: "Follow-up", icon: ClipboardList, desc: "Milestones & Progress" },
     { id: "cv", label: "CV", icon: FileSpreadsheet, desc: "Candidate Profiles & Bio" },
-    { id: "medical", label: "Medical Examination", icon: HeartPulse, desc: "Stage 1 & Pre-departure Medicals" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
@@ -96,12 +94,6 @@ export function RoleWorkspaceContainer() {
     if (hasRoleKeyword(["cv"])) {
       allowed.push("cv");
       if (prefTab === "directory") prefTab = "cv";
-    }
-
-    // 0b. Medical Examination: accessible to Medical Officer role or Admin
-    if (hasRoleKeyword(["medical"])) {
-      allowed.push("medical");
-      prefTab = "medical";
     }
 
     // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
@@ -213,12 +205,6 @@ export function RoleWorkspaceContainer() {
         subtitle: "Master candidate profiles, biological details, medical verification, and remarks.",
       };
     }
-    if (activeTab === "medical") {
-      return {
-        title: "Medical Examination Tracking",
-        subtitle: "Post-selection clearance (Medical 1) and pre-departure verification (Medical 2).",
-      };
-    }
     if (activeTab === "lms") {
       return {
         title: "LMIS Clearance",
@@ -273,6 +259,16 @@ export function RoleWorkspaceContainer() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href="/dashboard">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8.5 px-3 border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold gap-1.5"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Back to Dashboard</span>
+            </Button>
+          </Link>
           {canRegister && (
             <Link href="/applicants/new">
               <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-8.5 px-3">
@@ -341,15 +337,6 @@ export function RoleWorkspaceContainer() {
             corridorFilter={corridorFilter}
             onCorridorChange={setCorridorFilter}
           />
-        )}
-
-        {activeTab === "medical" && isTabAllowed && (
-          <div data-tour="medical-workspace-table">
-            <MedicalWorkspace
-              corridorFilter={corridorFilter}
-              onCorridorChange={setCorridorFilter}
-            />
-          </div>
         )}
 
         {activeTab === "lms" && isTabAllowed && (

@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ArrowLeft,
   TrendingUp,
   TrendingDown,
   Loader2,
@@ -654,6 +656,18 @@ export default function ExpensesIncomePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href="/dashboard">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold gap-1.5"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Back to Dashboard</span>
+            </Button>
+          </Link>
+
           <Button
             type="button"
             variant="outline"

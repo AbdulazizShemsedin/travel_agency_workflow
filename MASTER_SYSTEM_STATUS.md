@@ -599,5 +599,34 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Switched clearance step inspection to `agency_tracking.clearance_api.get_clearance_step` and contractor inspection to `agency_tracking.contractor_api.get_contractor`.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
 
-
+## 14. Follow-Up Stage Cards Action Buttons, Dropdowns, Table Responsiveness & Selective Export (2026-10-16)
+- **Foreign Agency Candidate Filters**:
+  - Added 'Place of birth' filter options: `AMHARA`, `OROMO`, `TIGRAY`, `SOMALIA`, `AFAR`, `GUMUZ`, `GURAGE`, `SILTE`, `DEBUB`, `GAMBELLA`.
+  - Added filter by skin color (`complexion`).
+  - Removed redundant 'x' clear buttons across filter dropdown triggers.
+- **Dashboard Quick Actions**:
+  - Synchronized Quick Action dashboard options with sidebar navigation.
+- **Applicant Follow-Up Workspace Inline Fields**:
+  - Overhauled all 4 cards (LMIS, Te'shir, Embassy, Ticket & Departure) with direct normal inputs and select dropdowns, removing unnecessary modal popups and deleting 'Set Appt'.
+  - Added dedicated stage table action buttons to each card (CV Doc, Extension, Injaz PDF, Issue, Start LMIS, Submit Embassy, Stamp Embassy, Record Ticket, Reschedule, Depart, and Undo Last Step).
+  - Converted Injaz Payment to `<select>` dropdown (`Unpaid`, `Printed`, `Paid`) calling `recordInjazPaymentV2`.
+  - Converted Wakala Status to `<select>` dropdown (`Pending`, `Paid`) calling `recordWakalaPaymentV2`.
+  - Converted `Te'shir completed?` to directly editable `<select>` dropdown (`In Progress`, `Completed`), strictly gating completion on Injaz Paid.
+  - Redesigned completion status badges (`ISSUED`, `COMPLETED`, `STAMPED`, `DEPARTED`): white background, green text (`border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d]`), standard badge sizing (`text-[10px] font-bold py-0 h-4.5 px-2`), with no checkmark symbol.
+- **Table Responsiveness & Horizontal Scrolling**:
+  - Removed all `lg:overflow-x-clip` across all 11 table containers (`OperationalTable`, `ApplicantTable`, `CountryBanRequestsWorkspace`, `employees`, `contractors`, `complaints`, `applicants/[id]`, agent portal tables), enabling natural horizontal scrollbars on all screen sizes with zero cut-off columns.
+- **Follow-Up Selective Export**:
+  - Added checkbox column with indeterminate header select-all next to the NO column in Follow-Up workspace.
+  - Added "Export for Te'shir" button invoking `exportGroupScheduleBioXlsV2`.
+- **Backend Handoff Specs (2026-10-16)**:
+  - B1: Clearance step remarks (`clearance_api.set_step_remarks` via `setStepRemarksV2`).
+  - B4: CV screen remarks (`cv_api.set_cv_remarks` via `setCvRemarksV2`).
+  - B5: Ticket & Departure remarks (`placement_api.set_ticketing_remarks` via `setTicketingRemarksV2`).
+- **Chat Role Isolation & Internal vs Foreign Agency Messaging Boundaries**:
+  - Removed erroneous `Foreign Agency` role from internal admin account `tutu@gmail.com` on Frappe backend, enabling clean `create_internal_thread` initialization.
+  - Staff-to-staff messaging: staff members can initialize conversations with colleagues via `create_internal_thread`.
+  - Foreign agency communication gating: strictly gated to users holding `Admin` or `Communication Manager` roles; staff with any other roles cannot see the option or selector to initiate conversations with Foreign Agencies.
+  - Foreign Agency restrictions: foreign agencies can communicate exclusively with headquarters Admin or Communication Manager (via `allowedStaffForAgency`); other staff and other Foreign Agencies are completely hidden and uncontactable.
+  - Internal thread privacy: Foreign Agencies are barred from internal staff threads, and regular staff cannot view Agency threads.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
 

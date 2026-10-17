@@ -558,7 +558,7 @@ export function ContractorRateMatrixModal({
                                 className={cn(
                                   "text-[10px]",
                                   row.entry_track === "Muayena"
-                                    ? "border-purple-300 text-purple-700 bg-purple-50 dark:bg-purple-950/30"
+                                    ? "border-teal-300 text-teal-700 bg-teal-50 dark:bg-teal-950/30"
                                     : "border-blue-300 text-blue-700 bg-blue-50 dark:bg-blue-950/30"
                                 )}
                               >

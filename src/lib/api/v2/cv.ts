@@ -102,3 +102,24 @@ export async function renderCvPdfV2(applicantName?: string): Promise<Blob> {
 
   return blob;
 }
+
+/**
+ * Sets remarks on the CV screen (B4: separate CV screen remark).
+ * Authoritative Backend Endpoint: cv_api.set_cv_remarks
+ * Roles: Registrar, Manager, Admin, CV
+ */
+export async function setCvRemarksV2(
+  applicantName: string,
+  remarks: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.cv_api.set_cv_remarks",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        remarks,
+      },
+    }
+  );
+}

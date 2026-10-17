@@ -51,7 +51,7 @@ export function AppNavbar({
           variant="ghost"
           size="sm"
           onClick={onMobileMenuToggle}
-          className="md:hidden h-8 w-8 p-0 text-slate-600 dark:text-zinc-300"
+          className="lg:hidden h-8 w-8 p-0 text-slate-600 dark:text-zinc-300"
           aria-label="Open mobile menu"
         >
           <Menu className="h-4 w-4" />
@@ -59,7 +59,7 @@ export function AppNavbar({
 
         <Link
           href="/dashboard"
-          className="flex md:hidden items-center gap-2 hover:opacity-90 transition-opacity"
+          className="flex lg:hidden items-center gap-2 hover:opacity-90 transition-opacity"
           title="Navigate to Dashboard"
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-900 dark:bg-emerald-600 text-white shadow-xs">
@@ -75,7 +75,7 @@ export function AppNavbar({
             variant="ghost"
             size="sm"
             onClick={onToggleSidebar}
-            className="hidden md:flex h-8 w-8 p-0 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#18181b]"
+            className="hidden lg:flex h-8 w-8 p-0 text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#18181b]"
             aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {isSidebarCollapsed ? (

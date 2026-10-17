@@ -286,10 +286,10 @@ export function PremiumDropzone({
       case "full_body":
         return (
           <div className="relative flex items-center justify-center">
-            <div className="h-16 w-11 rounded-lg border border-purple-500/30 bg-purple-50/50 dark:bg-purple-950/40 flex flex-col items-center justify-center shadow-xs transition-transform group-hover:scale-105">
-              <User className="h-8 w-8 text-purple-700 dark:text-purple-400" />
+            <div className="h-16 w-11 rounded-lg border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/40 flex flex-col items-center justify-center shadow-xs transition-transform group-hover:scale-105">
+              <User className="h-8 w-8 text-emerald-700 dark:text-emerald-400" />
             </div>
-            <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-purple-800 text-white shadow-md">
+            <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-800 text-white shadow-md">
               <Camera className="h-3 w-3" />
             </div>
           </div>

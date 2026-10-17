@@ -854,7 +854,7 @@ export function InjazWorkspace({
               {
                 value: "RECEIVED",
                 label: "RECEIVED",
-                badgeClass: "bg-purple-600 text-white font-semibold text-[10px]",
+                badgeClass: "bg-teal-600 text-white font-semibold text-[10px]",
               },
               {
                 value: "READY TO EMBASSY",

@@ -18,7 +18,7 @@ import { ExcelTextInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { updateApplicantForCvV2 } from "@/lib/api/v2/applicants";
-import { generateCvV2, renderCvPdfV2 } from "@/lib/api/v2/cv";
+import { generateCvV2, renderCvPdfV2, setCvRemarksV2 } from "@/lib/api/v2/cv";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { shortRef } from "@/lib/utils/display-id";
@@ -82,7 +82,16 @@ export function CVWorkspace({
   };
 
   const handleSaveRemark = async (row: WorkspaceApplicantRow, newRemark: string) => {
-    await handleUpdateField(row.applicantId, "remarks", newRemark);
+    try {
+      await setCvRemarksV2(row.applicantId, newRemark);
+      toast.success("CV remark saved");
+      queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      onRefresh();
+    } catch (err: any) {
+      toast.error("Failed to update CV remark", {
+        description: formatCleanErrorMessage(err),
+      });
+    }
   };
 
   // Helper to determine if an applicant's official CV has already been compiled
@@ -471,7 +480,7 @@ export function CVWorkspace({
         sortable: true,
         cell: (row) => (
           <ExcelTextInput
-            value={row.remark}
+            value={(row.applicant as any)?.cv_remarks || (row as any)?.cv_remarks || row.remark}
             onSave={(val) => handleSaveRemark(row, val)}
             placeholder="Click to add remark..."
             className="w-full text-xs"

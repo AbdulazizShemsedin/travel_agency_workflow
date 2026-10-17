@@ -8,6 +8,7 @@ import {
   Eye,
   Loader2,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -32,6 +33,7 @@ import {
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
 import { recordPredepartureMedicalResultV2 } from "@/lib/api/v2/placements";
+import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 
 interface FollowUpWorkspaceProps {
@@ -53,8 +55,8 @@ function getStageBadgeVariant(stage: string): {
     case "CV Generated":
     case "Waiting to be Selected":
       return {
-        variant: "purple",
-        className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+        variant: "neutral",
+        className: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800",
       };
     case "Selected":
       return { variant: "info" };
@@ -73,7 +75,7 @@ function getStageBadgeVariant(stage: string): {
     case "Departed":
       return {
         variant: "neutral",
-        className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800 font-bold",
+        className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 font-bold",
       };
     case "Draft":
       return { variant: "neutral" };
@@ -156,6 +158,80 @@ export function FollowUpWorkspace({
     );
   }, [data, stageFilter]);
 
+  // Candidate selection for Te'shir export
+  const [selectedApplicantIds, setSelectedApplicantIds] = React.useState<Set<string>>(new Set());
+  const [isExportingTaeshir, setIsExportingTaeshir] = React.useState(false);
+
+  const allFilteredIds = React.useMemo(
+    () => filteredData.map((r) => r.applicantId).filter(Boolean),
+    [filteredData]
+  );
+  const isAllSelected =
+    allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedApplicantIds.has(id));
+  const isSomeSelected =
+    allFilteredIds.some((id) => selectedApplicantIds.has(id)) && !isAllSelected;
+
+  const handleToggleAll = () => {
+    if (isAllSelected) {
+      setSelectedApplicantIds(new Set());
+    } else {
+      setSelectedApplicantIds(new Set(allFilteredIds));
+    }
+  };
+
+  const handleToggleRow = (applicantId: string) => {
+    setSelectedApplicantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(applicantId)) {
+        next.delete(applicantId);
+      } else {
+        next.add(applicantId);
+      }
+      return next;
+    });
+  };
+
+  const handleExportTaeshir = async () => {
+    try {
+      setIsExportingTaeshir(true);
+      const isSelective = selectedApplicantIds.size > 0;
+      const applicantIds = isSelective
+        ? Array.from(selectedApplicantIds)
+        : allFilteredIds;
+
+      if (applicantIds.length === 0) {
+        toast.error("No candidates in the workspace to export.");
+        return;
+      }
+
+      toast.info(
+        isSelective
+          ? `Exporting Taeshir schedule for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}...`
+          : `Exporting Taeshir schedule for all ${applicantIds.length} candidate${applicantIds.length > 1 ? "s" : ""}...`
+      );
+
+      const blob = await exportGroupScheduleBioXlsV2(applicantIds);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const fallbackFilename = `Group_Schedule_Bio_Applicants_${new Date().toISOString().split("T")[0]}.xls`;
+      a.download = (blob as any).filename || fallbackFilename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(
+        isSelective
+          ? `Export for Te'shir (.xls) downloaded successfully for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}!`
+          : "Export for Te'shir (.xls) downloaded successfully!"
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to export Te'shir (.xls) file.");
+    } finally {
+      setIsExportingTaeshir(false);
+    }
+  };
+
   // Quick rejection modal state for table inline edit
   const [tableRejectRow, setTableRejectRow] = React.useState<WorkspaceApplicantRow | null>(null);
   const [tableRejectReasons, setTableRejectReasons] = React.useState<string[]>([]);
@@ -223,25 +299,6 @@ export function FollowUpWorkspace({
     }
   };
 
-  // 4. COC Status Inline Save
-  const handleSaveCocStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
-    if (!row.applicantId) {
-      toast.error("Could not find applicant ID for this candidate.");
-      return;
-    }
-
-    try {
-      await updateApplicantForLmisV2({
-        applicant_name: row.applicantId,
-        coc_status: newStatus,
-      });
-      await handleMutationSuccess(`COC status updated to ${newStatus}`);
-    } catch (err) {
-      toast.error(formatCleanErrorMessage(err));
-      throw err;
-    }
-  };
-
   // Options for LMIS working status select dropdown
   const lmisOptions = React.useMemo(() => {
     return LMIS_WORKING_STATUSES.map((st) => ({
@@ -256,20 +313,46 @@ export function FollowUpWorkspace({
     }));
   }, []);
 
-  const cocOptions = React.useMemo(() => [
-    { value: "Issued", label: "Issued", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
-    { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
-    { value: "Not Started", label: "Not Started", badgeClass: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-zinc-800 dark:text-zinc-300" },
-  ], []);
-
   const med2Options = React.useMemo(() => [
     { value: "FIT", label: "FIT", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
     { value: "UNFIT", label: "UNFIT", badgeClass: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300" },
     { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
   ], []);
 
-  // Columns for Level 1 Table: Preserved exact approved order, with Agency, Sponsor & Destination removed, plus Action column
+  // Columns for Level 1 Table: Checkbox select, Number, and preserved exact approved order
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
+    {
+      id: "select",
+      header: (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isAllSelected}
+            ref={(input) => {
+              if (input) input.indeterminate = isSomeSelected;
+            }}
+            onChange={handleToggleAll}
+            className="h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-500 cursor-pointer"
+            aria-label="Select all candidates"
+          />
+        </div>
+      ),
+      width: "28px",
+      align: "center",
+      sortable: false,
+      isReadOnly: true,
+      cell: (row) => (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selectedApplicantIds.has(row.applicantId)}
+            onChange={() => handleToggleRow(row.applicantId)}
+            className="h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-500 cursor-pointer"
+            aria-label={`Select candidate ${row.fullName}`}
+          />
+        </div>
+      ),
+    },
     {
       id: "no",
       header: "NO",
@@ -331,26 +414,6 @@ export function FollowUpWorkspace({
           {row.contractDays || (row.duration ? `${row.duration}d` : "—")}
         </span>
       ),
-    },
-    {
-      id: "cocStatus",
-      header: "COC STATUS",
-      accessorKey: "cocStatus",
-      width: "75px",
-      cell: (row) => {
-        const currentVal = row.cocStatus || "Not Started";
-        return (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ExcelSelect
-              value={currentVal}
-              options={cocOptions}
-              onSave={(newVal) => handleSaveCocStatus(row, newVal)}
-              ariaLabel="COC Status"
-              className="text-[10px]"
-            />
-          </div>
-        );
-      },
     },
     {
       id: "lmisStatus",
@@ -456,16 +519,38 @@ export function FollowUpWorkspace({
     },
   ];
 
-  // Extra Header Filter: Filter by Stage Status
-  const stageFilterControl = (
-    <div className="min-w-[140px] sm:min-w-[160px]">
-      <SimpleSelect
-        value={stageFilter}
-        onValueChange={setStageFilter}
-        options={stageOptions}
-        triggerClassName="h-8 px-2.5 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] font-semibold whitespace-nowrap"
-        aria-label="Filter by Stage Status"
-      />
+  // Extra Header Actions: Export for Te'shir button + Filter by Stage Status
+  const extraHeaderControls = (
+    <div className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleExportTaeshir}
+        disabled={isExportingTaeshir || filteredData.length === 0}
+        className="h-8 px-2.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5 whitespace-nowrap cursor-pointer shadow-2xs"
+        title={
+          selectedApplicantIds.size > 0
+            ? `Export official Taeshir group bio (.xls) for ${selectedApplicantIds.size} selected candidate(s)`
+            : "Export official Taeshir group bio (.xls) for all filtered candidates"
+        }
+      >
+        <Download className={cn("h-3.5 w-3.5", isExportingTaeshir && "animate-spin")} />
+        <span>
+          {selectedApplicantIds.size > 0
+            ? `Export for Te'shir (${selectedApplicantIds.size})`
+            : "Export for Te'shir"}
+        </span>
+      </Button>
+      <div className="min-w-[140px] sm:min-w-[160px]">
+        <SimpleSelect
+          value={stageFilter}
+          onValueChange={setStageFilter}
+          options={stageOptions}
+          triggerClassName="h-8 px-2.5 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36] font-semibold whitespace-nowrap"
+          aria-label="Filter by Stage Status"
+        />
+      </div>
     </div>
   );
 
@@ -485,7 +570,7 @@ export function FollowUpWorkspace({
         corridorFilter={corridorFilter}
         onCorridorChange={onCorridorChange}
         hideStatusFilter={true}
-        extraHeaderActions={stageFilterControl}
+        extraHeaderActions={extraHeaderControls}
       />
 
       {/* Quick In-Table LMIS Rejection Reasons Dialog */}
@@ -499,7 +584,7 @@ export function FollowUpWorkspace({
               Select LMIS Rejection Reason(s)
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Candidate: <strong className="uppercase">{tableRejectRow?.fullName}</strong>. Backend state machine requires at least one official reason to reject LMIS clearance.
+              Candidate: <strong className="uppercase">{tableRejectRow?.fullName}</strong>. Please select the official reason for rejecting this clearance step.
             </DialogDescription>
           </DialogHeader>
 

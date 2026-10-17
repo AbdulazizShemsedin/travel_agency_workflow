@@ -81,9 +81,9 @@ function getStageBadgeVariant(stage: string): {
     case "CV Generated":
     case "Waiting to be Selected":
       return {
-        variant: "purple",
-        dotColor: "bg-purple-600",
-        className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800",
+        variant: "neutral",
+        dotColor: "bg-teal-600",
+        className: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800",
       };
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
@@ -871,7 +871,7 @@ export function ApplicantTable() {
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto lg:overflow-x-clip overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name (sticky) | Passport | Stage Status | Contract Date | Contract No |
@@ -1253,10 +1253,10 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-purple-950 dark:text-purple-200 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 border border-purple-300 dark:border-purple-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
                               title="View or download CV"
                             >
-                              <FileText className="h-3 w-3 text-purple-700 dark:text-purple-400" />
+                              <FileText className="h-3 w-3 text-teal-700 dark:text-teal-400" />
                               <span>View CV</span>
                             </Link>
                           )}
@@ -1372,10 +1372,10 @@ export function ApplicantTable() {
                                 setTicketingInitialTab("medical2");
                                 setIsTicketingModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-purple-950 dark:text-purple-200 bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/80 dark:hover:bg-purple-900 border border-purple-300 dark:border-purple-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Verify Pre-Departure Medical 2 and finalize departure"
                             >
-                              <HeartPulse className="h-3 w-3 text-purple-700 dark:text-purple-400" />
+                              <HeartPulse className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                               <span>Depart</span>
                             </button>
                           )}
@@ -1431,9 +1431,9 @@ export function ApplicantTable() {
                                 {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage) || applicant.cv_attachment || applicant.cv_file) && (
                                   <Link
                                     href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
-                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-950/40 dark:hover:text-purple-300 transition"
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition"
                                   >
-                                    <FileText className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                    <FileText className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
                                     <span>View / Download CV</span>
                                   </Link>
                                 )}

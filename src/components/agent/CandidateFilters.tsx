@@ -27,6 +27,8 @@ interface CandidateFiltersProps {
   onMedicalStatusChange: (value: string) => void;
   placeOfBirth: string;
   onPlaceOfBirthChange: (value: string) => void;
+  skinColor?: string;
+  onSkinColorChange?: (value: string) => void;
   experience: string;
   onExperienceChange: (value: string) => void;
   onReset: () => void;
@@ -46,6 +48,8 @@ export function CandidateFilters({
   onMedicalStatusChange,
   placeOfBirth,
   onPlaceOfBirthChange,
+  skinColor = "All Skin Colors",
+  onSkinColorChange,
   experience,
   onExperienceChange,
   onReset,
@@ -92,19 +96,41 @@ export function CandidateFilters({
     { value: "First Time", label: "First Time / Fresher" },
   ];
 
+  const PLACES_OF_BIRTH = [
+    { value: "All Places", label: "Place of Birth (All)", icon: <MapPin className="h-3.5 w-3.5 text-slate-400" /> },
+    { value: "AMHARA", label: "AMHARA" },
+    { value: "OROMO", label: "OROMO" },
+    { value: "TIGRAY", label: "TIGRAY" },
+    { value: "SOMALIA", label: "SOMALIA" },
+    { value: "AFAR", label: "AFAR" },
+    { value: "GUMUZ", label: "GUMUZ" },
+    { value: "GURAGE", label: "GURAGE" },
+    { value: "SILTE", label: "SILTE" },
+    { value: "DEBUB", label: "DEBUB" },
+    { value: "GAMBELLA", label: "GAMBELLA" },
+  ];
+
+  const SKIN_COLORS = [
+    { value: "All Skin Colors", label: "Skin Color (All)" },
+    { value: "FAIR", label: "Fair" },
+    { value: "MEDIUM", label: "Medium" },
+    { value: "DARK", label: "Dark" },
+  ];
+
   const hasActiveFilters =
     searchTerm ||
     destinationCountry !== "All Countries" ||
     jobApplied !== "All Jobs" ||
     religion !== "All Religions" ||
     medicalStatus !== "All Medical" ||
-    placeOfBirth.trim() !== "" ||
+    (placeOfBirth && placeOfBirth !== "All Places" && placeOfBirth.trim() !== "") ||
+    (skinColor && skinColor !== "All Skin Colors" && skinColor.trim() !== "") ||
     experience !== "All Experience";
 
   return (
     <div className="rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] p-4 shadow-2xs space-y-3">
       {/* Search & Top Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {/* Search Bar */}
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
@@ -117,15 +143,25 @@ export function CandidateFilters({
           />
         </div>
 
-        {/* Place of Birth Input Filter */}
-        <div className="relative w-full lg:w-48">
-          <MapPin className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
-          <Input
-            type="text"
-            value={placeOfBirth}
-            onChange={(e) => onPlaceOfBirthChange(e.target.value)}
-            placeholder="Place of Birth..."
-            className="pl-8 pr-3 h-10 text-xs rounded-xl bg-slate-50 dark:bg-[#17171d] border-slate-200 dark:border-[#26262f] focus-visible:ring-emerald-700"
+        {/* Place of Birth Dropdown Filter */}
+        <div className="w-full sm:w-48 lg:w-52">
+          <SimpleSelect
+            value={placeOfBirth || "All Places"}
+            onValueChange={onPlaceOfBirthChange}
+            options={PLACES_OF_BIRTH}
+            triggerClassName="h-10 text-xs rounded-xl bg-slate-50 dark:bg-[#17171d] border-slate-200 dark:border-[#26262f] font-medium"
+            aria-label="Place of Birth"
+          />
+        </div>
+
+        {/* Skin Color Dropdown Filter */}
+        <div className="w-full sm:w-40 lg:w-44">
+          <SimpleSelect
+            value={skinColor || "All Skin Colors"}
+            onValueChange={(val) => onSkinColorChange?.(val)}
+            options={SKIN_COLORS}
+            triggerClassName="h-10 text-xs rounded-xl bg-slate-50 dark:bg-[#17171d] border-slate-200 dark:border-[#26262f] font-medium"
+            aria-label="Skin Color"
           />
         </div>
       </div>

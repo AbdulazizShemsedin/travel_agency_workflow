@@ -104,7 +104,7 @@ export default function NotificationsPage() {
       );
     }
     if (category === "system") {
-      return <Briefcase className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
+      return <Briefcase className="h-4 w-4 text-teal-600 dark:text-teal-400" />;
     }
     return <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
   };
@@ -279,7 +279,7 @@ export default function NotificationsPage() {
           onClick={() => setActiveFilter("system")}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
             activeFilter === "system"
-              ? "bg-purple-900 text-white dark:bg-purple-700"
+              ? "bg-teal-800 text-white dark:bg-teal-700"
               : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
           }`}
         >

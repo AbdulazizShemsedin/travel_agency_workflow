@@ -816,7 +816,7 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
+          <div className="overflow-x-auto max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
             <table className="w-full text-left border-collapse text-xs min-w-[760px] md:min-w-0">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
@@ -901,7 +901,7 @@ export default function EmployeesPage() {
                                     variant="outline"
                                     className={cn(
                                       "text-[10px] px-1.5 py-0 font-medium",
-                                      isCore && "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+                                      isCore && "bg-teal-50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-400 border-teal-200 dark:border-teal-800",
                                       isPipeline && "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
                                       isFinance && "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800",
                                       !isCore && !isPipeline && !isFinance && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
@@ -1641,7 +1641,7 @@ export default function EmployeesPage() {
           <DialogContent className="sm:max-w-lg bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6 max-h-[85vh] overflow-y-auto">
             <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-3">
               <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                   <Shield className="h-5 w-5" />
                 </div>
                 <div>
@@ -1669,7 +1669,7 @@ export default function EmployeesPage() {
                       className={cn(
                         "flex items-start gap-2 p-2 rounded-lg cursor-pointer transition border text-[11px]",
                         isSelected
-                          ? "bg-purple-50/90 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800 text-purple-950 dark:text-purple-200 font-semibold"
+                          ? "bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 font-semibold"
                           : "bg-white dark:bg-[#1c1c24] border-slate-200 dark:border-[#282835] text-slate-700 dark:text-zinc-300 hover:border-slate-300"
                       )}
                     >
@@ -1677,7 +1677,7 @@ export default function EmployeesPage() {
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggleEditRole(role.name)}
-                        className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
+                        className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                       />
                       <div className="space-y-0.5">
                         <div className="font-bold flex items-center gap-1">
@@ -1711,7 +1711,7 @@ export default function EmployeesPage() {
                     roles: editingRoles,
                   })
                 }
-                className="bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold h-9 shadow-xs"
+                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold h-9 shadow-xs"
               >
                 {updateRolesMutation.isPending ? (
                   <>
@@ -2006,7 +2006,7 @@ export default function EmployeesPage() {
                       className={cn(
                         "text-[10px] px-1.5 py-0 font-medium",
                         role.category === "Core & Admin" &&
-                          "border-purple-300 text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20",
+                          "border-teal-300 text-teal-800 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-950/20",
                         role.category === "Intake & Registry" &&
                           "border-blue-300 text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
                         role.category === "Clearance Pipeline" &&

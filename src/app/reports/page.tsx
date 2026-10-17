@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ArrowLeft,
   BarChart3,
   Calendar,
   Download,
@@ -542,6 +543,18 @@ export default function ReportsPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link href="/dashboard">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold gap-1.5"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Back to Dashboard</span>
+              </Button>
+            </Link>
+
             {isManagerOrAdmin && (
               <Button
                 type="button"

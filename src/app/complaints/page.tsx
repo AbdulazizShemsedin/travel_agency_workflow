@@ -523,7 +523,7 @@ export default function AdminComplaintsPage() {
             No complaints found matching your active filters.
           </div>
         ) : (
-          <div className="overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
+          <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
             <table className="w-full text-left text-xs min-w-[960px] md:min-w-0 border-separate border-spacing-0">
               <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
                 <tr>

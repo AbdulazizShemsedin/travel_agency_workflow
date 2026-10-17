@@ -21,6 +21,13 @@ import {
   Receipt,
   BarChart3,
   Zap,
+  MessageSquare,
+  Briefcase,
+  Building2,
+  DollarSign,
+  AlertCircle,
+  Settings,
+  ShieldCheck,
 } from "lucide-react";
 import {
   listApplicantsV2,
@@ -33,6 +40,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { isAdminUser, PermissionAction } from "@/lib/auth/permissions";
 
 // Live backend truth: the Applicant DocType status remains at the intake milestone
 // (Draft / Registered / CV Generated / Cancelled). When a Placement exists, the operational
@@ -51,8 +59,38 @@ function resolveApplicantStage(app: any, plc: any): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { can } = useAuth();
+  const { user, authUser, can, roles } = useAuth();
   const canRegister = can("registerApplicant");
+
+  const isAdmin = Boolean(
+    isAdminUser(authUser) ||
+    user === "Administrator" ||
+    (authUser?.email && authUser.email.toLowerCase() === "administrator") ||
+    (roles || []).some((r: any) => {
+      const s = String(r?.role || r?.name || r).toLowerCase().trim();
+      return s === "administrator" || s === "system manager" || s === "admin";
+    })
+  );
+
+  const sidebarQuickActions = React.useMemo(() => {
+    const items = [
+      { label: "Applicants", href: "/applicants", icon: Users, desc: "Candidates & pipeline", action: "viewApplicants" as PermissionAction },
+      { label: "Messages", href: "/chat", icon: MessageSquare, desc: "Direct & group chats", action: "manageCommunication" as PermissionAction },
+      { label: "Employees", href: "/employees", icon: Briefcase, desc: "Staff directory & access", action: "manageUsers" as PermissionAction },
+      { label: "Foreign Agencies", href: "/contractors", icon: Building2, desc: "Partners & agency rates", action: "manageContractors" as PermissionAction },
+      { label: "Commissions", href: "/commission", icon: DollarSign, desc: "Accruals & statements", action: "manageCommission" as PermissionAction },
+      { label: "Complaints", href: "/complaints", icon: AlertCircle, desc: "Disputes & resolutions", action: "manageComplaints" as PermissionAction },
+      { label: "Reports", href: "/reports", icon: BarChart3, desc: "Analytics & export data", action: "viewReports" as PermissionAction },
+      { label: "Finance", href: "/expenses-income", icon: Receipt, desc: "Ledgers & vouchers", action: "viewFinance" as PermissionAction },
+      { label: "Settings", href: "/settings", icon: Settings, desc: "Corridors & config", action: "viewFinance" as PermissionAction },
+      { label: "Permissions", href: "/permissions", icon: ShieldCheck, desc: "Roles & access control", action: "manageUsers" as PermissionAction },
+    ];
+    if (!user) return items;
+    return items.filter((item) => {
+      if (item.action === "manageContractors" && !isAdmin) return false;
+      return can(item.action);
+    });
+  }, [user, authUser, can, isAdmin]);
 
   const canAccessClearances = can("manageClearances") || can("manageTicketing");
 
@@ -288,8 +326,8 @@ export default function DashboardPage() {
       title: "CV Generated",
       count: cvCount,
       badge: "CV Generated",
-      color: "border-purple-200 dark:border-purple-900/60 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 hover:border-purple-400 dark:hover:border-purple-700",
-      accent: "bg-purple-600",
+      color: "border-teal-200 dark:border-teal-900/60 bg-teal-50/50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-300 hover:border-teal-400 dark:hover:border-teal-700",
+      accent: "bg-teal-600",
       link: "/applicants?status=CV Generated",
     },
     {
@@ -450,13 +488,13 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=Departed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-purple-300 dark:hover:border-purple-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors truncate">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Departed
             </span>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 group-hover:scale-105 transition-transform">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
               <Plane className="h-4 w-4" />
             </div>
           </div>
@@ -597,7 +635,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Panel 2: Quick Actions */}
+        {/* Panel 2: Quick Actions (Exact match to Sidebar options) */}
         <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
@@ -606,88 +644,29 @@ export default function DashboardPage() {
               </span>
             </div>
             <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-              Operational Hub
+              Sidebar Navigation
             </span>
           </div>
           <CardContent className="p-2 sm:p-2.5 max-h-[190px] sm:max-h-[210px] overflow-y-auto">
             <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-              <Link
-                href="/applicants/new"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
-                  <PlusCircle className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Register Candidate</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">New intake &amp; passport</p>
-                </div>
-              </Link>
-
-              <Link
-                href="/applicants?tab=follow_up"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-blue-50 dark:hover:bg-blue-950/20 hover:border-blue-300 dark:hover:border-blue-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 group-hover:scale-105 transition-transform">
-                  <Activity className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Clearance Queue</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">Follow-up tracking</p>
-                </div>
-              </Link>
-
-              <Link
-                href="/applicants?tab=document"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-950/20 hover:border-indigo-300 dark:hover:border-indigo-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 group-hover:scale-105 transition-transform">
-                  <FileText className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Contract Center</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">Scan &amp; extract OCR</p>
-                </div>
-              </Link>
-
-              <Link
-                href="/applicants?status=Registered"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-purple-50 dark:hover:bg-purple-950/20 hover:border-purple-300 dark:hover:border-purple-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 group-hover:scale-105 transition-transform">
-                  <UserCheck className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Generate CV</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">Verified profiles</p>
-                </div>
-              </Link>
-
-              <Link
-                href="/expenses-income"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-teal-50 dark:hover:bg-teal-950/20 hover:border-teal-300 dark:hover:border-teal-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-teal-100 dark:bg-teal-950/70 text-teal-800 dark:text-teal-300 group-hover:scale-105 transition-transform">
-                  <Receipt className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Expense &amp; Finance</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">Ledger &amp; vouchers</p>
-                </div>
-              </Link>
-
-              <Link
-                href="/reports"
-                className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-amber-50 dark:hover:bg-amber-950/20 hover:border-amber-300 dark:hover:border-amber-800"
-              >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 group-hover:scale-105 transition-transform">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">Reports &amp; Metrics</p>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">Pipeline exports</p>
-                </div>
-              </Link>
+              {sidebarQuickActions.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
+                      <Icon className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.label}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">{item.desc}</p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

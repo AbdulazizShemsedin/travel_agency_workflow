@@ -351,12 +351,21 @@ export async function listAssignedStepsV2(placement?: string): Promise<V2Clearan
  * Authoritative Backend Endpoint: clearance_api.render_injaz_pdf
  * Roles: Management, assigned officer, or step's mapped country role
  */
-export async function renderInjazPdfV2(clearanceStepName: string): Promise<Blob> {
+export async function renderInjazPdfV2(
+  target: string | { clearance_step_name?: string; placement_name?: string }
+): Promise<Blob> {
+  const body =
+    typeof target === "string"
+      ? target.startsWith("PLM-")
+        ? { placement_name: target }
+        : { clearance_step_name: target }
+      : target;
+
   return requestV2<Blob>(
     "/api/method/agency_tracking.clearance_api.render_injaz_pdf",
     {
       method: "POST",
-      body: { clearance_step_name: clearanceStepName },
+      body,
       headers: {
         Accept: "application/pdf, application/octet-stream, */*",
       },
@@ -761,6 +770,27 @@ export async function undoForfeitInjazV2(
       body: {
         clearance_step_name: clearanceStepName,
         ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Sets remarks on a specific clearance step (B1: separate remark per clearance step).
+ * Authoritative Backend Endpoint: clearance_api.set_step_remarks
+ * Roles: Whoever may act on the step (assigned officer, step role, Manager, Admin)
+ */
+export async function setStepRemarksV2(
+  clearanceStepName: string,
+  remarks: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.clearance_api.set_step_remarks",
+    {
+      method: "POST",
+      body: {
+        clearance_step_name: clearanceStepName,
+        remarks,
       },
     }
   );

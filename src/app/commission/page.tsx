@@ -1321,7 +1321,7 @@ export default function AdminCommissionPage() {
                     className={cn(
                       "text-xs font-bold",
                       currentContractorDoc?.batch_mode === "Auto-Threshold"
-                        ? "bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300"
+                        ? "bg-teal-50 text-teal-800 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300"
                         : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-zinc-300"
                     )}
                   >
@@ -2631,7 +2631,7 @@ export default function AdminCommissionPage() {
                                 className={cn(
                                   "text-[10px] font-medium",
                                   rateRow.entry_track === "Muayena"
-                                    ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300"
+                                    ? "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300"
                                     : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300"
                                 )}
                               >

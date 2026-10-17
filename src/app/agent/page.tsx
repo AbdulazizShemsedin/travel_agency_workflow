@@ -132,7 +132,8 @@ export default function AgentDiscoveryPage() {
   const [jobApplied, setJobApplied] = React.useState("All Jobs");
   const [religion, setReligion] = React.useState("All Religions");
   const [medicalStatus, setMedicalStatus] = React.useState("All Medical");
-  const [placeOfBirth, setPlaceOfBirth] = React.useState("");
+  const [placeOfBirth, setPlaceOfBirth] = React.useState("All Places");
+  const [skinColor, setSkinColor] = React.useState("All Skin Colors");
   const [experience, setExperience] = React.useState("All Experience");
   const [viewMode, setViewMode] = React.useState<"grid" | "table">("grid");
 
@@ -217,9 +218,15 @@ export default function AgentDiscoveryPage() {
         }
 
         // Place of birth filter
-        if (placeOfBirth.trim()) {
-          const pob = (c.place_of_birth || c.leaving_town || "").toLowerCase();
-          if (!pob.includes(placeOfBirth.trim().toLowerCase())) return false;
+        if (placeOfBirth && placeOfBirth !== "All Places") {
+          const pob = (c.place_of_birth || c.leaving_town || "").toUpperCase();
+          if (!pob.includes(placeOfBirth.trim().toUpperCase())) return false;
+        }
+
+        // Skin color filter
+        if (skinColor && skinColor !== "All Skin Colors") {
+          const comp = String(c.complexion || "").toUpperCase().trim();
+          if (comp !== skinColor.toUpperCase().trim()) return false;
         }
 
         // Experience filter
@@ -245,10 +252,11 @@ export default function AgentDiscoveryPage() {
           c.target_job?.toLowerCase().includes(q) ||
           c.experience_country?.toLowerCase().includes(q) ||
           c.place_of_birth?.toLowerCase().includes(q) ||
+          c.complexion?.toLowerCase().includes(q) ||
           c.nationality?.toLowerCase().includes(q)
         );
       });
-  }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion, medicalStatus, placeOfBirth, experience]);
+  }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion, medicalStatus, placeOfBirth, skinColor, experience]);
 
   // Selection Mutation
   const selectMutation = useMutation({
@@ -390,7 +398,8 @@ export default function AgentDiscoveryPage() {
     setJobApplied("All Jobs");
     setReligion("All Religions");
     setMedicalStatus("All Medical");
-    setPlaceOfBirth("");
+    setPlaceOfBirth("All Places");
+    setSkinColor("All Skin Colors");
     setExperience("All Experience");
   };
 
@@ -553,6 +562,8 @@ export default function AgentDiscoveryPage() {
           onMedicalStatusChange={setMedicalStatus}
           placeOfBirth={placeOfBirth}
           onPlaceOfBirthChange={setPlaceOfBirth}
+          skinColor={skinColor}
+          onSkinColorChange={setSkinColor}
           experience={experience}
           onExperienceChange={setExperience}
           onReset={handleResetFilters}
@@ -659,7 +670,7 @@ export default function AgentDiscoveryPage() {
             ) : (
               /* Candidate Table */
               <div className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] shadow-xs">
-                <div className="overflow-x-auto lg:overflow-x-clip relative">
+                <div className="overflow-x-auto relative">
                   <table className="w-full text-left text-xs min-w-[780px] lg:min-w-0 border-separate border-spacing-0">
                     <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                       <tr>
@@ -726,7 +737,11 @@ export default function AgentDiscoveryPage() {
                               }
                               return "N/A";
                             })()}</div>
-                            <div className="text-[10px] text-slate-400">{candidate.marital_status || "Not Specified"}</div>
+                            <div className="text-[10px] text-slate-400">
+                              {candidate.marital_status || "Not Specified"}
+                              {(candidate.place_of_birth || candidate.leaving_town) ? ` • ${candidate.place_of_birth || candidate.leaving_town}` : ""}
+                              {candidate.complexion ? ` • ${candidate.complexion}` : ""}
+                            </div>
                           </td>
 
                           {/* Experience */}

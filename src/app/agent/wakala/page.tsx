@@ -422,7 +422,7 @@ export default function AgentWakalaRequestsPage() {
           </CardHeader>
 
           <CardContent className="p-0">
-            <div className="overflow-x-auto lg:overflow-x-clip relative">
+            <div className="overflow-x-auto relative">
               <table className="w-full text-xs text-left min-w-[640px] lg:min-w-0 border-separate border-spacing-0">
                 <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
                   <tr>
@@ -494,23 +494,6 @@ export default function AgentWakalaRequestsPage() {
                               <CheckCircle2 className="h-3 w-3" />
                               <span>Mark paid</span>
                             </Button>
-
-                            <a
-                              href="https://musaned.com.sa"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold"
-                                title="Open Musaned portal to authorize Wakala"
-                              >
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                Musaned
-                              </Button>
-                            </a>
                             <Link href="/agent/chat">
                               <Button
                                 type="button"

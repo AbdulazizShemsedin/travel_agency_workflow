@@ -247,7 +247,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
       </div>
 
       {/* Requests Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto lg:overflow-x-clip max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto shadow-xs">
         {isLoading ? (
           <div className="py-20 text-center">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-800 dark:text-emerald-400 mb-2" />
@@ -305,7 +305,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
                           "text-[10px] font-bold uppercase",
                           req.request_type === "Lift"
                             ? "border-emerald-400 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
-                            : "border-purple-400 text-purple-800 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300"
+                            : "border-rose-400 text-rose-800 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"
                         )}
                       >
                         {req.request_type}

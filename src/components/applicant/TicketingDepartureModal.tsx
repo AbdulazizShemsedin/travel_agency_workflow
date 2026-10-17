@@ -407,7 +407,7 @@ export function TicketingDepartureModal({
             onClick={() => setActiveTab("departure")}
             className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
               activeTab === "departure"
-                ? "bg-purple-900 text-white dark:bg-purple-700"
+                ? "bg-emerald-900 text-white dark:bg-emerald-700"
                 : "text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-[#171720]"
             }`}
           >
@@ -665,9 +665,9 @@ export function TicketingDepartureModal({
 
             {placement.status === "Ticketed" && (
               <>
-                <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 space-y-2 text-xs">
-                  <div className="flex items-center gap-2 font-bold text-purple-950 dark:text-purple-300">
-                    <Plane className="h-4 w-4 text-purple-700" />
+                <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2 text-xs">
+                  <div className="flex items-center gap-2 font-bold text-emerald-950 dark:text-emerald-300">
+                    <Plane className="h-4 w-4 text-emerald-700" />
                     Confirm Flight Boarding & Departure
                   </div>
                   <p className="text-slate-600 dark:text-zinc-400">
@@ -684,7 +684,7 @@ export function TicketingDepartureModal({
                       size="sm"
                       onClick={handleConfirmDeparture}
                       disabled={isSubmitting}
-                      className="bg-purple-900 hover:bg-purple-950 text-white font-semibold text-xs h-8"
+                      className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-8"
                     >
                       {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plane className="h-3.5 w-3.5 mr-1.5" />}
                       Confirm Final Departure

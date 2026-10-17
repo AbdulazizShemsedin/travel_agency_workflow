@@ -138,6 +138,7 @@ export function ChatContainer() {
       "kuwait telesign",
       "kuwait embassy",
       "medical officer",
+      "cv",
     ];
     if (
       currentEmail === "administrator" ||
@@ -176,10 +177,11 @@ export function ChatContainer() {
     return allUserRoles.has("communication manager");
   }, [roles, authUser]);
 
-  // Permission to communicate with Foreign Agencies: Admin OR Communication Manager
+  // Permission to communicate with Foreign Agencies: strictly Admin OR Communication Manager (internal staff only)
   const canCommunicateWithForeignAgents = React.useMemo(() => {
+    if (isForeignAgency) return false;
     return isAdmin || isCommunicationManager;
-  }, [isAdmin, isCommunicationManager]);
+  }, [isForeignAgency, isAdmin, isCommunicationManager]);
 
   // Audit and Oversight is strictly for users with Admin role only
   const isSupervisorOrAdmin = isAdmin;
@@ -222,6 +224,13 @@ export function ChatContainer() {
     }
   }, [isForeignAgency]);
 
+  // Staff without foreign agency privileges can strictly only create internal threads
+  React.useEffect(() => {
+    if (!canCommunicateWithForeignAgents && !isForeignAgency) {
+      setNewThreadType("Internal");
+    }
+  }, [canCommunicateWithForeignAgents, isForeignAgency]);
+
   // Add Participant Form State
   const [newParticipantEmail, setNewParticipantEmail] = React.useState<string>("");
 
@@ -237,6 +246,10 @@ export function ChatContainer() {
     const targetRoles = ["administrator", "admin", "system manager", "communication manager"];
     const filtered = internalEmployees.filter((emp: any) => {
       const empRoles = (emp.roles || []).map((r: string) => String(r).toLowerCase().trim());
+      // Explicitly reject if employee has foreign agency role
+      const isForeign = empRoles.some((r: string) => r.includes("foreign agency") || r.includes("foreign agent"));
+      if (isForeign) return false;
+
       const isEligible =
         emp.email?.toLowerCase() === "administrator" ||
         emp.name?.toLowerCase() === "administrator" ||
@@ -250,7 +263,7 @@ export function ChatContainer() {
           name: "Administrator",
           email: "Administrator",
           full_name: "Agency Headquarters Administrator",
-          roles: ["Administrator"],
+          roles: ["Admin"],
         },
       ];
     }
@@ -692,6 +705,16 @@ export function ChatContainer() {
   // Filter threads
   const filteredThreads = React.useMemo(() => {
     return activeThreads.filter((t) => {
+      // Foreign agencies can only see Agency threads with Headquarters (never internal staff threads or other agency threads)
+      if (isForeignAgency && t.thread_type === "Internal") {
+        return false;
+      }
+
+      // Regular staff (non-admin, non-communication manager) can only see internal threads (never agency threads)
+      if (!isForeignAgency && !canCommunicateWithForeignAgents && t.thread_type === "Agency") {
+        return false;
+      }
+
       // Type filter (only active if user has foreign agency communication privileges)
       if (canCommunicateWithForeignAgents && threadTypeFilter !== "All" && t.thread_type !== threadTypeFilter) {
         return false;
@@ -1310,7 +1333,9 @@ export function ChatContainer() {
                   ? "Staff Coordination & Messages"
                   : isSupervisorOrAdmin && viewMode === "oversight"
                   ? "Executive Communication Oversight & Supervision"
-                  : "Communication & Agency Chat"}
+                  : canCommunicateWithForeignAgents
+                  ? "Communication & Agency Chat"
+                  : "Internal Staff Communication"}
               </h1>
               {isSupervisorOrAdmin && viewMode === "oversight" && (
                 <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] px-2 py-0">
@@ -1324,7 +1349,9 @@ export function ChatContainer() {
                 ? "Direct bilateral channel with Agency Communication Manager."
                 : isSupervisorOrAdmin && viewMode === "oversight"
                 ? "Comprehensive supervision feed: internal staff discussions and foreign agency partner channels."
-                : "Live private discussions with internal colleagues and registered foreign agency partners."}
+                : canCommunicateWithForeignAgents
+                ? "Live private discussions with internal colleagues and registered foreign agency partners."
+                : "Live private discussions and coordination with internal agency colleagues."}
             </p>
           </div>
         </div>
@@ -1357,7 +1384,7 @@ export function ChatContainer() {
             ) : (
               <Plus className="mr-1.5 h-3.5 w-3.5" />
             )}
-            {isForeignAgency ? "Contact Headquarters Staff" : "New Conversation"}
+            {isForeignAgency ? "Contact Headquarters Staff" : canCommunicateWithForeignAgents ? "New Conversation" : "New Staff Discussion"}
           </Button>
         </div>
       </div>

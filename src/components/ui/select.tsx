@@ -231,29 +231,6 @@ export function SimpleSelect({
             <span className="truncate flex-1 text-left block">
               <SelectValue placeholder={placeholder} />
             </span>
-            {clearable && hasSelectedValue && !disabled && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="Clear selection"
-                title="Clear selection"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onValueChange?.("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onValueChange?.("");
-                  }
-                }}
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-200/60 dark:hover:bg-zinc-700 transition-colors cursor-pointer mr-0.5"
-              >
-                <X className="h-3 w-3" />
-              </span>
-            )}
           </div>
         </SelectTrigger>
         <SelectContent className={contentClassName}>

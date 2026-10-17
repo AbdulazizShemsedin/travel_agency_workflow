@@ -665,4 +665,25 @@ export async function listMyPlacementsV2(
   return list;
 }
 
+/**
+ * Sets remarks on Ticket & Departure screen (B5: separate Ticket & Departure screen remark).
+ * Authoritative Backend Endpoint: placement_api.set_ticketing_remarks
+ * Roles: Ticketer, Manager, Admin
+ */
+export async function setTicketingRemarksV2(
+  placementName: string,
+  remarks: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.set_ticketing_remarks",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        remarks,
+      },
+    }
+  );
+}
+
 

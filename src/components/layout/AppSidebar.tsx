@@ -124,7 +124,7 @@ export function AppSidebar({
       {isMobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs md:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs lg:hidden animate-in fade-in duration-200"
         />
       )}
 
@@ -133,9 +133,9 @@ export function AppSidebar({
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#0d0d10] transition-all duration-300 shadow-sm",
           // Mobile state: always full width (w-64) when opened
-          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full md:translate-x-0",
-          // Desktop collapsed state
-          isCollapsed ? "md:w-20" : "md:w-20 xl:w-64"
+          isMobileOpen ? "translate-x-0 w-64" : "-translate-x-full lg:translate-x-0",
+          // Desktop state: either expanded completely (w-64) or collapsed to icons (w-20)
+          isCollapsed ? "lg:w-20" : "lg:w-64"
         )}
       >
         {/* Brand Header */}
@@ -165,7 +165,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={onCloseMobile}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
