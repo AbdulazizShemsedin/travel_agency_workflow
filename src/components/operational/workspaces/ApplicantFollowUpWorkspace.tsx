@@ -229,6 +229,9 @@ export function ApplicantFollowUpWorkspace({
   // Editable LMIS Issue Date
   const [lmisIssueDate, setLmisIssueDate] = React.useState("");
 
+  // Editable Labor ID
+  const [laborIdVal, setLaborIdVal] = React.useState("");
+
   // Te'shir direct editable fields
   const [teshirInjazIdVal, setTeshirInjazIdVal] = React.useState("");
   const [teshirApptDateVal, setTeshirApptDateVal] = React.useState("");
@@ -253,6 +256,7 @@ export function ApplicantFollowUpWorkspace({
       setTicketRemarkVal(currentRow.ticketRemark || (currentRow.plc as any)?.remarks || "");
       const d = currentRow.issueDate || currentRow.lms?.date_completed || "";
       setLmisIssueDate(d && d !== "—" ? d : "");
+      setLaborIdVal(currentRow.laborId || (currentRow.applicant as any)?.labor_id || "");
 
       // Te'shir direct fields
       setTeshirInjazIdVal(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id || "");
@@ -603,7 +607,7 @@ export function ApplicantFollowUpWorkspace({
                                     lmsStepName,
                                     "ISSUED",
                                     undefined,
-                                    currentRow.laborId || undefined,
+                                    laborIdVal || currentRow.laborId || undefined,
                                     lmisIssueDate || new Date().toISOString().slice(0, 10)
                                   );
                                   toast.success("LMIS clearance issued successfully");
@@ -659,7 +663,7 @@ export function ApplicantFollowUpWorkspace({
                                 try {
                                   await completeClearanceStepV2(
                                     lmsStepName,
-                                    currentRow.laborId || undefined,
+                                    laborIdVal || currentRow.laborId || undefined,
                                     undefined,
                                     val
                                   );
@@ -685,9 +689,42 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Labor ID (Office Ref)
                         </Label>
-                        <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
-                          {currentRow.laborId || "—"}
-                        </div>
+                        {canEditLmis && (currentRow.applicantId || currentRow.name) ? (
+                          <Input
+                            type="text"
+                            value={laborIdVal}
+                            onChange={(e) => setLaborIdVal(e.target.value)}
+                            onBlur={async (e) => {
+                              const val = e.target.value.trim();
+                              const currentVal = (currentRow.laborId || (currentRow.applicant as any)?.labor_id || "").trim();
+                              if (val !== currentVal) {
+                                try {
+                                  const applicantIdentifier = currentRow.applicantId || currentRow.name;
+                                  await updateApplicantForLmisV2({
+                                    applicant_name: applicantIdentifier,
+                                    labor_id: val || undefined,
+                                  });
+                                  toast.success("Labor ID updated successfully");
+                                  setCurrentRow((prev) => (prev ? { ...prev, laborId: val } : null));
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
+                                }
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            placeholder="Enter Labor ID"
+                            className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
+                          />
+                        ) : (
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
+                            {laborIdVal || currentRow.laborId || (currentRow.applicant as any)?.labor_id || "—"}
+                          </div>
+                        )}
                       </div>
 
                       {/* Field 4: LMIS Remark (spans 2 columns) */}
@@ -789,7 +826,7 @@ export function ApplicantFollowUpWorkspace({
                                   lmsStepName,
                                   "ISSUED",
                                   undefined,
-                                  currentRow.laborId,
+                                  laborIdVal || currentRow.laborId,
                                   new Date().toISOString().split("T")[0]
                                 );
                                 toast.success("LMIS issued successfully");
@@ -1071,7 +1108,7 @@ export function ApplicantFollowUpWorkspace({
                       </div>
 
                       {/* Field 5: Te'shir Completed? Editable Dropdown */}
-                      <div className="space-y-0.5">
+                      <div className="col-span-2 space-y-0.5">
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Te&apos;shir Completed?
                         </Label>
@@ -1122,16 +1159,6 @@ export function ApplicantFollowUpWorkspace({
                             </Badge>
                           </div>
                         )}
-                      </div>
-
-                      {/* Sponsor & Foreign Agency context */}
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Agency / Sponsor
-                        </Label>
-                        <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center truncate text-slate-700 dark:text-zinc-300">
-                          {currentRow.agencyName || currentRow.sponsorName || "—"}
-                        </div>
                       </div>
 
                       {/* Field 6: Te'shir Remark (spans 2 columns) */}
@@ -2074,25 +2101,7 @@ export function ApplicantFollowUpWorkspace({
             </div>
           </div>
 
-          {/* ============================================================= */}
-          {/* FOOTER BAR                                                    */}
-          {/* ============================================================= */}
-          <div className="mt-auto px-3.5 py-1 sm:py-1.5 border-t border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 truncate">
-              Operational Follow-Up Workspace • Live Synchronized
-            </span>
-            {onClose && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onClose}
-                className="text-xs h-6.5 sm:h-7 px-2.5 border-slate-300 dark:border-zinc-700 gap-1 shrink-0 ml-2"
-              >
-                <ArrowLeft className="h-3 w-3" />
-                <span>Return to Follow-Up Tracking</span>
-              </Button>
-            )}
-          </div>
+
         </div>
       </div>
 

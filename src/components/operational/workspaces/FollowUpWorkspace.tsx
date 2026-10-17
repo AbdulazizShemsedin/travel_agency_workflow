@@ -125,6 +125,79 @@ function getStatusBadge(status?: string | null) {
   );
 }
 
+/**
+ * Determines whether a candidate is eligible for Te'shir (.xls) export.
+ * Rule: Candidate must have reached the Te'shir stage or later in the Saudi corridor
+ * (i.e. LMIS is Issued, or Te'shir step is active/completed, or Stamped/Ticketed/Departed).
+ */
+export function isCandidateEligibleForTaeshir(row: WorkspaceApplicantRow): { eligible: boolean; reason?: string } {
+  const stage = (row.stageStatus || "").toLowerCase();
+  if (stage === "cancelled") {
+    return {
+      eligible: false,
+      reason: "Candidate placement is Cancelled.",
+    };
+  }
+
+  const country = (row.destinationCountry || "").toLowerCase();
+  if (country === "kuwait") {
+    return {
+      eligible: false,
+      reason: "Candidate is on the Kuwait corridor. Te'shir export is exclusively for the Saudi Arabia corridor.",
+    };
+  }
+
+  // 1. Post-Te'shir stages (Embassy Stamped, Ticketed, Departed)
+  const isPostTeShirStage =
+    ["stamped", "ticketed", "departed"].includes(stage) ||
+    ["stamped", "ticketed", "departed"].includes((row.departureStatus || "").toLowerCase()) ||
+    (row.embassyStatus || "").toLowerCase() === "stamped";
+  if (isPostTeShirStage) {
+    return { eligible: true };
+  }
+
+  // 2. Active or completed Te'shir step
+  const teshirStatus = (row.teshirStatus || "").trim().toUpperCase();
+  const hasActiveTeShir =
+    (teshirStatus !== "" && teshirStatus !== "—" && teshirStatus !== "PENDING") ||
+    Boolean(row.injazApplicationId) ||
+    Boolean(row.appointmentDate) ||
+    Boolean(row.injaz && row.injaz.status && row.injaz.status !== "Pending");
+  if (hasActiveTeShir) {
+    return { eligible: true };
+  }
+
+  // 3. Completed LMIS clearance (LMIS Issued unlocks Te'shir)
+  const lmisStatus = (row.lmisStatus || "").trim().toUpperCase();
+  const isLmisIssued =
+    lmisStatus === "ISSUED" ||
+    row.lms?.status === "Issued" ||
+    row.lms?.status === "Completed" ||
+    row.lms?.status === "Complete";
+  if (isLmisIssued) {
+    return { eligible: true };
+  }
+
+  // Ineligible: Not reached Te'shir yet
+  if (stage === "registered" || stage === "draft") {
+    return {
+      eligible: false,
+      reason: "Candidate is still in the Registered stage and has not started LMIS or Te'shir clearance.",
+    };
+  }
+  if (stage === "selected") {
+    return {
+      eligible: false,
+      reason: "Candidate is in the Selected stage and has not yet started clearance processing.",
+    };
+  }
+
+  return {
+    eligible: false,
+    reason: `Candidate is currently in LMIS processing (${row.lmisStatus || "Pending"}) and has not yet received LMIS clearance required to reach Te'shir.`,
+  };
+}
+
 export function FollowUpWorkspace({
   data,
   isLoading,
@@ -162,30 +235,57 @@ export function FollowUpWorkspace({
   const [selectedApplicantIds, setSelectedApplicantIds] = React.useState<Set<string>>(new Set());
   const [isExportingTaeshir, setIsExportingTaeshir] = React.useState(false);
 
-  const allFilteredIds = React.useMemo(
-    () => filteredData.map((r) => r.applicantId).filter(Boolean),
+  // Strictly filter candidates who have reached Te'shir stage or later
+  const eligibleFilteredCandidates = React.useMemo(
+    () => filteredData.filter((r) => isCandidateEligibleForTaeshir(r).eligible),
     [filteredData]
   );
+
+  const eligibleFilteredIds = React.useMemo(
+    () => eligibleFilteredCandidates.map((r) => r.applicantId).filter(Boolean),
+    [eligibleFilteredCandidates]
+  );
+
   const isAllSelected =
-    allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedApplicantIds.has(id));
+    eligibleFilteredIds.length > 0 &&
+    eligibleFilteredIds.every((id) => selectedApplicantIds.has(id));
   const isSomeSelected =
-    allFilteredIds.some((id) => selectedApplicantIds.has(id)) && !isAllSelected;
+    eligibleFilteredIds.some((id) => selectedApplicantIds.has(id)) && !isAllSelected;
 
   const handleToggleAll = () => {
     if (isAllSelected) {
       setSelectedApplicantIds(new Set());
     } else {
-      setSelectedApplicantIds(new Set(allFilteredIds));
+      if (eligibleFilteredIds.length === 0) {
+        toast.error(
+          "None of the candidates in the current view have reached Te'shir stage yet (LMIS must be issued). Please select or filter for candidates who have reached Te'shir stage."
+        );
+        return;
+      }
+      setSelectedApplicantIds(new Set(eligibleFilteredIds));
+      if (eligibleFilteredIds.length < filteredData.length) {
+        const skippedCount = filteredData.length - eligibleFilteredIds.length;
+        toast.info(
+          `Selected ${eligibleFilteredIds.length} candidate${eligibleFilteredIds.length > 1 ? "s" : ""} eligible for Te'shir export. Skipped ${skippedCount} candidate${skippedCount > 1 ? "s" : ""} who have not reached Te'shir stage.`
+        );
+      }
     }
   };
 
-  const handleToggleRow = (applicantId: string) => {
+  const handleToggleRow = (row: WorkspaceApplicantRow) => {
+    const { eligible, reason } = isCandidateEligibleForTaeshir(row);
+    if (!eligible) {
+      toast.error(
+        `Cannot select "${row.fullName}": ${reason} Please select only candidates who have reached Te'shir stage or later.`
+      );
+      return;
+    }
     setSelectedApplicantIds((prev) => {
       const next = new Set(prev);
-      if (next.has(applicantId)) {
-        next.delete(applicantId);
+      if (next.has(row.applicantId)) {
+        next.delete(row.applicantId);
       } else {
-        next.add(applicantId);
+        next.add(row.applicantId);
       }
       return next;
     });
@@ -195,19 +295,40 @@ export function FollowUpWorkspace({
     try {
       setIsExportingTaeshir(true);
       const isSelective = selectedApplicantIds.size > 0;
-      const applicantIds = isSelective
-        ? Array.from(selectedApplicantIds)
-        : allFilteredIds;
+      let applicantIds: string[] = [];
+
+      if (isSelective) {
+        // Double check all selected candidates are strictly eligible
+        const selectedRows = filteredData.filter((r) =>
+          selectedApplicantIds.has(r.applicantId)
+        );
+        const ineligibleRows = selectedRows.filter(
+          (r) => !isCandidateEligibleForTaeshir(r).eligible
+        );
+        if (ineligibleRows.length > 0) {
+          const names = ineligibleRows.map((r) => `"${r.fullName}"`).join(", ");
+          toast.error(
+            `Export rejected: The following selected candidate(s) have not reached Te'shir stage: ${names}. Please deselect them and select only eligible candidates who have reached Te'shir stage or later.`
+          );
+          return;
+        }
+        applicantIds = Array.from(selectedApplicantIds);
+      } else {
+        // Automatically export all candidates who reached Te'shir stage or later
+        applicantIds = eligibleFilteredIds;
+      }
 
       if (applicantIds.length === 0) {
-        toast.error("No candidates in the workspace to export.");
+        toast.error(
+          "No candidates in the workspace have reached Te'shir stage yet. Te'shir export requires candidates to have LMIS issued or be in Te'shir, Stamped, Ticketed, or Departed stage."
+        );
         return;
       }
 
       toast.info(
         isSelective
-          ? `Exporting Taeshir schedule for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}...`
-          : `Exporting Taeshir schedule for all ${applicantIds.length} candidate${applicantIds.length > 1 ? "s" : ""}...`
+          ? `Exporting Te'shir schedule for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}...`
+          : `Exporting Te'shir schedule for ${applicantIds.length} candidate${applicantIds.length > 1 ? "s" : ""} at Te'shir stage or later...`
       );
 
       const blob = await exportGroupScheduleBioXlsV2(applicantIds);
@@ -223,7 +344,7 @@ export function FollowUpWorkspace({
       toast.success(
         isSelective
           ? `Export for Te'shir (.xls) downloaded successfully for ${applicantIds.length} selected candidate${applicantIds.length > 1 ? "s" : ""}!`
-          : "Export for Te'shir (.xls) downloaded successfully!"
+          : `Export for Te'shir (.xls) downloaded successfully for ${applicantIds.length} candidate${applicantIds.length > 1 ? "s" : ""} at Te'shir stage or later!`
       );
     } catch (err: any) {
       toast.error(err?.message || "Failed to export Te'shir (.xls) file.");
@@ -341,17 +462,37 @@ export function FollowUpWorkspace({
       align: "center",
       sortable: false,
       isReadOnly: true,
-      cell: (row) => (
-        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={selectedApplicantIds.has(row.applicantId)}
-            onChange={() => handleToggleRow(row.applicantId)}
-            className="h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-500 cursor-pointer"
-            aria-label={`Select candidate ${row.fullName}`}
-          />
-        </div>
-      ),
+      cell: (row) => {
+        const { eligible, reason } = isCandidateEligibleForTaeshir(row);
+        const isSelected = selectedApplicantIds.has(row.applicantId);
+        return (
+          <div
+            className="flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleRow(row);
+            }}
+            title={
+              eligible
+                ? isSelected
+                  ? "Deselect candidate"
+                  : "Select candidate for Te'shir export"
+                : `Ineligible: ${reason}`
+            }
+          >
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => handleToggleRow(row)}
+              className={cn(
+                "h-3.5 w-3.5 rounded border-slate-300 dark:border-zinc-700 text-emerald-800 focus:ring-emerald-500",
+                eligible ? "cursor-pointer" : "opacity-40 cursor-not-allowed"
+              )}
+              aria-label={`Select candidate ${row.fullName}`}
+            />
+          </div>
+        );
+      },
     },
     {
       id: "no",
@@ -527,12 +668,12 @@ export function FollowUpWorkspace({
         variant="outline"
         size="sm"
         onClick={handleExportTaeshir}
-        disabled={isExportingTaeshir || filteredData.length === 0}
+        disabled={isExportingTaeshir || (selectedApplicantIds.size === 0 && eligibleFilteredIds.length === 0)}
         className="h-8 px-2.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5 whitespace-nowrap cursor-pointer shadow-2xs"
         title={
           selectedApplicantIds.size > 0
             ? `Export official Taeshir group bio (.xls) for ${selectedApplicantIds.size} selected candidate(s)`
-            : "Export official Taeshir group bio (.xls) for all filtered candidates"
+            : `Export official Taeshir group bio (.xls) for all ${eligibleFilteredIds.length} candidate(s) at Te'shir stage or later`
         }
       >
         <Download className={cn("h-3.5 w-3.5", isExportingTaeshir && "animate-spin")} />
@@ -542,6 +683,18 @@ export function FollowUpWorkspace({
             : "Export for Te'shir"}
         </span>
       </Button>
+      {selectedApplicantIds.size > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setSelectedApplicantIds(new Set())}
+          className="h-8 px-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer"
+          title="Clear candidate selection"
+        >
+          Clear
+        </Button>
+      )}
       <div className="min-w-[140px] sm:min-w-[160px]">
         <SimpleSelect
           value={stageFilter}

@@ -630,3 +630,22 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Internal thread privacy: Foreign Agencies are barred from internal staff threads, and regular staff cannot view Agency threads.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
 
+## 15. LMIS Labour ID In-Place Editing, Te'shir Card Layout Streamlining & Strict Te'shir Export Gating (2026-10-17)
+- **LMIS Card Editable Labour ID**:
+  - Replaced the static, read-only display of `Labor ID (Office Ref)` with an interactive input field auto-saving changes on blur and Enter via authenticated backend RPC `agency_tracking.applicant_api.update_applicant_for_lmis` (`updateApplicantForLmisV2`).
+  - Propagated `laborIdVal` directly to `setLmisStatusV2` and `completeClearanceStepV2`, ensuring any newly entered Labor ID is saved alongside LMIS Issued transitions.
+- **Te'shir Card Layout Streamlining**:
+  - Removed the obsolete and redundant `Agency / Sponsor` field from the Te'shir / Injaz card in `ApplicantFollowUpWorkspace.tsx`, allowing the `Te'shir Completed?` status selector to cleanly span the grid.
+- **Bottom Navigation De-Cluttering**:
+  - Removed the bottom `Return to Follow-Up Tracking` button and the bottom footer bar from `ApplicantFollowUpWorkspace.tsx`.
+  - This freed up vertical space for the bottom cards (Embassy & Ticket/Departure), eliminating cluttered action buttons while preserving the top `Back to Follow-Up` button.
+- **Strict Te'shir Export Gating & Eligibility Rules**:
+  - Implemented `isCandidateEligibleForTaeshir` helper in `FollowUpWorkspace.tsx` strictly enforcing that only candidates who have reached the Te'shir stage or later in the Saudi corridor (LMIS Issued, active/completed Te'shir, Stamped, Ticketed, or Departed) are eligible for Te'shir (.xls) export.
+  - Ineligible candidates (e.g. still in LMIS processing, Registered, Selected, Cancelled, or on Kuwait corridor) cannot be selected; attempting to click their checkbox immediately rejects selection and displays a clear English error explaining their current status and guiding the user to select eligible candidates.
+  - Ineligible checkboxes are styled with `opacity-40 cursor-not-allowed` with descriptive hover tooltips.
+  - "Select All" dynamically selects only eligible candidates in the current view and displays a toast reporting how many eligible candidates were selected and how many ineligible candidates were skipped.
+  - When clicking "Export for Te'shir", the export routine strictly filters and exports only candidates who have reached Te'shir stage or later, validating all selected candidates and preventing ineligible candidate export.
+  - Added a "Clear" button whenever candidates are selected.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
+
+
