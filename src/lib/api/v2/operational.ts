@@ -501,7 +501,10 @@ export async function fetchOperationalWorkspaceDataV2(
           return rawTaeshir || injazStep?.status || "—";
         })(),
         medical2Status: (plc as any)?.medical_2_status || (applicant as any).medical_2_status || (plc?.status === "Departed" || plc?.status === "Ticketed" ? "FIT" : "—"),
-        departureStatus: plc?.status === "Departed" ? "Departed" : plc?.status === "Ticketed" ? "Ticketed" : (ticketStatus || "—"),
+        departureStatus:
+          plc?.status === "Departed" || (plc as any)?.departure_status === "Departed"
+            ? "Departed"
+            : (plc as any)?.departure_status || (applicant as any)?.departure_status || (plc?.status === "Ticketed" ? "Ticketed" : (ticketStatus || "—")),
         lmisStatus,
         lmisRejectionReasons:
           typeof lmisRejectionReasons === "string"

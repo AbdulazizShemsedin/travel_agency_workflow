@@ -175,12 +175,36 @@ export function ApplicantFollowUpWorkspace({
           ? (prev.embassyStatus || "Stamped")
           : (row.embassyStatus || prev.embassyStatus);
 
+      const localDeparted =
+        prev.departureStatus === "Departed" ||
+        prev.departureStatus === "Local return" ||
+        prev.departureStatus === "International return" ||
+        (prev.placementStatus || "").toLowerCase() === "departed";
+      const serverDeparted =
+        row.departureStatus === "Departed" ||
+        row.departureStatus === "Local return" ||
+        row.departureStatus === "International return" ||
+        (row.placementStatus || "").toLowerCase() === "departed";
+      const resolvedDepartureStatus =
+        (localDeparted && !serverDeparted)
+          ? prev.departureStatus
+          : (row.departureStatus || prev.departureStatus);
+
+      const localMedical2 = prev.medical2Status === "FIT" || prev.medical2Status === "UNFIT";
+      const serverMedical2 = row.medical2Status === "FIT" || row.medical2Status === "UNFIT";
+      const resolvedMedical2Status =
+        (localMedical2 && !serverMedical2)
+          ? prev.medical2Status
+          : (row.medical2Status || prev.medical2Status);
+
       return {
         ...row,
         lmisStatus: resolvedLmisStatus,
         injazPayment: resolvedInjazPayment,
         teshirStatus: resolvedTeshirStatus,
         embassyStatus: resolvedEmbassyStatus,
+        departureStatus: resolvedDepartureStatus,
+        medical2Status: resolvedMedical2Status,
         submissionDate: resolveFollowUpField(row.submissionDate, prev.submissionDate),
         visaDeadline: resolveFollowUpField(row.visaDeadline, prev.visaDeadline),
         visaIssueDate: resolveFollowUpField(row.visaIssueDate, prev.visaIssueDate),
@@ -359,6 +383,20 @@ export function ApplicantFollowUpWorkspace({
   // Inline feedback states for field saving
   const [savingField, setSavingField] = React.useState<Record<string, boolean>>({});
   const [savedField, setSavedField] = React.useState<Record<string, boolean>>({});
+
+  // Inline field errors for immediate feedback
+  const [workspaceFieldErrors, setWorkspaceFieldErrors] = React.useState<Record<string, string>>({});
+  const setWorkspaceFieldError = React.useCallback((field: string, msg: string) => {
+    setWorkspaceFieldErrors((prev) => ({ ...prev, [field]: msg }));
+  }, []);
+  const clearWorkspaceFieldError = React.useCallback((field: string) => {
+    setWorkspaceFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
 
   const triggerSavedFeedback = React.useCallback((fieldKey: string) => {
     setSavedField((prev) => ({ ...prev, [fieldKey]: true }));
@@ -540,29 +578,36 @@ export function ApplicantFollowUpWorkspace({
   const visaDeadline = currentRow.visaDeadline || currentRow.embassy?.visa_valid_until || (currentRow.plc as any)?.visa_deadline;
   const daysRemaining = calculateDaysRemaining(visaDeadline);
 
-  // Deriving LMIS completion status
-  const isLmisComplete =
-    (currentRow.lmisStatus || "").toUpperCase() === "ISSUED" ||
-    String(currentRow.lmisStatus || "").toLowerCase() === "completed" ||
-    String(currentRow.lmisStatus || "").toLowerCase() === "complete" ||
-    currentRow.lms?.status === "Issued" ||
-    currentRow.lms?.status === "Completed" ||
+  // Authoritative Backend Completion:
+  // The system only deems a stage/card task truly finished AFTER the user officially
+  // confirms it via the Finish Stage action/modal, NEVER merely from a dropdown status change.
+  const isLmisConfirmedFinished =
     currentRow.lms?.status === "Complete" ||
-    currentRow.lms?.status === "Approved" ||
-    (currentRow.lms as any)?.lmis_status === "ISSUED" ||
-    Boolean((currentRow.lms as any)?.issueDate) ||
-    Boolean(currentRow.issueDate) ||
-    Boolean((currentRow.lms as any)?.date_completed);
+    currentRow.lms?.status === "Completed" ||
+    Boolean(currentRow.lms?.date_completed);
 
-  // Deriving Te'shir completion status strictly from authoritative backend step
-  const isTeshirCompleted =
-    currentRow.injaz?.status === "Completed" ||
+  const isTeshirConfirmedFinished =
     currentRow.injaz?.status === "Complete" ||
-    currentRow.injaz?.status === "Issued" ||
-    currentRow.injaz?.status === "Approved" ||
-    Boolean(currentRow.injaz?.date_completed) ||
-    String(currentRow.teshirStatus || "").trim().toLowerCase() === "completed" ||
-    String(currentRow.teshirStatus || "").trim().toLowerCase() === "complete";
+    currentRow.injaz?.status === "Completed" ||
+    Boolean(currentRow.injaz?.date_completed);
+
+  const isEmbassyConfirmedFinished =
+    currentRow.embassy?.status === "Complete" ||
+    currentRow.embassy?.status === "Completed" ||
+    Boolean(currentRow.embassy?.date_completed) ||
+    ["stamped", "ticketed", "departed"].includes(
+      String(currentRow.placementStatus || currentRow.stageStatus || "").toLowerCase()
+    );
+
+  const isDepartureConfirmedFinished =
+    ["departed"].includes(String(currentRow.placementStatus || "").toLowerCase()) ||
+    (currentRow.plc as any)?.status === "Departed";
+
+  // Semantic aliases
+  const isLmisComplete = isLmisConfirmedFinished;
+  const isTeshirCompleted = isTeshirConfirmedFinished;
+  const isEmbassyStamped = isEmbassyConfirmedFinished;
+  const isDepartureComplete = isDepartureConfirmedFinished;
 
   const normalizedInjazPayment = React.useMemo(() => {
     const p = String(currentRow?.injazPayment || currentRow?.injaz?.injaz_payment_status || currentRow?.injaz?.payment_status || "").trim().toLowerCase();
@@ -574,13 +619,13 @@ export function ApplicantFollowUpWorkspace({
   const isInjazPaid = normalizedInjazPayment === "Paid";
 
   const normalizedTeshirStatus = React.useMemo(() => {
-    if (isTeshirCompleted) return "Completed";
+    if (isTeshirConfirmedFinished) return "Completed";
     const st = String(currentRow?.teshirStatus || (currentRow?.injaz as any)?.taeshir_status || "").trim().toUpperCase();
     if (st === "RECEIVED") return "RECEIVED";
     if (st === "READY TO EMBASSY") return "READY TO EMBASSY";
     if (st === "COMPLETED" || st === "COMPLETE" || st === "ISSUED" || st === "APPROVED") return "Completed";
     return "INFORMED";
-  }, [isTeshirCompleted, currentRow?.teshirStatus, currentRow?.injaz]);
+  }, [isTeshirConfirmedFinished, currentRow?.teshirStatus, currentRow?.injaz]);
 
   // Check if pipeline has advanced past embassy / ticketing
   const isPlacementAdvanced = ["Stamped", "Ticketed", "Departed"].includes(
@@ -595,15 +640,12 @@ export function ApplicantFollowUpWorkspace({
   ).trim();
   const isSaudiCorridor = !country || country.toLowerCase().includes("saudi");
 
-  // Te'shir is satisfied if not on Saudi corridor, OR if marked completed, ready to embassy, received, etc.
+  // Te'shir is satisfied if not on Saudi corridor, OR if officially completed, ready to embassy, received, etc.
   const isTeShirSatisfied =
     !isSaudiCorridor ||
-    isTeshirCompleted ||
+    isTeshirConfirmedFinished ||
     normalizedTeshirStatus === "READY TO EMBASSY" ||
-    normalizedTeshirStatus === "RECEIVED" ||
-    normalizedTeshirStatus === "Completed" ||
-    String((currentRow.injaz as any)?.taeshir_status || "").toUpperCase() === "READY TO EMBASSY" ||
-    String((currentRow.injaz as any)?.taeshir_status || "").toUpperCase() === "RECEIVED";
+    normalizedTeshirStatus === "RECEIVED";
 
   // Check if embassy stage has already started, been submitted, stamped, or progressed
   const isEmbassyStartedOrDone =
@@ -611,33 +653,15 @@ export function ApplicantFollowUpWorkspace({
     Boolean(currentRow.embassy?.status && currentRow.embassy.status !== "Pending");
 
   // Stage accessibility rules:
-  // Embassy requires LMIS to be finished and Te'shir to be satisfied (for Saudi)
-  const isEmbassyAccessible = isPlacementAdvanced || isEmbassyStartedOrDone || (isLmisComplete && isTeShirSatisfied);
+  // Embassy requires LMIS to be confirmed finished and Te'shir to be satisfied (for Saudi)
+  const isEmbassyAccessible = isPlacementAdvanced || isEmbassyStartedOrDone || (isLmisConfirmedFinished && isTeShirSatisfied);
   const isEmbassyLocked = !isEmbassyAccessible;
 
   // Flight Ticket & Departure requires Embassy to be Stamped
-  const isEmbassyStamped =
-    (currentRow.embassyStatus || "").toLowerCase() === "stamped" ||
-    (currentRow.embassy?.status || "").toLowerCase() === "stamped" ||
-    (currentRow.embassy?.status || "").toLowerCase() === "completed" ||
-    (currentRow.embassy?.status || "").toLowerCase() === "approved" ||
-    (currentRow.stageStatus || "").toLowerCase() === "stamped" ||
-    (currentRow.placementStatus || "").toLowerCase() === "stamped" ||
-    ["ticketed", "departed"].includes(
-      String(currentRow.placementStatus || currentRow.stageStatus || "").toLowerCase()
-    );
-
-  const isTicketAccessible = isEmbassyStamped || ["ticketed", "departed"].includes(
+  const isTicketAccessible = isEmbassyConfirmedFinished || ["ticketed", "departed"].includes(
     String(currentRow.placementStatus || currentRow.stageStatus || "").toLowerCase()
   );
   const isTicketLocked = !isTicketAccessible;
-
-  const isDepartureComplete =
-    currentRow.departureStatus === "Departed" ||
-    currentRow.departureStatus === "Local return" ||
-    currentRow.departureStatus === "International return" ||
-    String(currentRow.stageStatus || "").toLowerCase() === "completed" ||
-    String(currentRow.placementStatus || "").toLowerCase() === "departed";
 
   // --- INLINE FIELD SUBMIT HANDLERS (ENTER KEY / BLUR WITH VISUAL FEEDBACK) ---
   const handleSaveLmisRemark = async () => {
@@ -670,6 +694,7 @@ export function ApplicantFollowUpWorkspace({
     const currentVal = (currentRow?.laborId || (currentRow?.applicant as any)?.labor_id || "").trim();
     if (val === currentVal && savedField.laborId) return;
     try {
+      clearWorkspaceFieldError("laborId");
       setSavingField((prev) => ({ ...prev, laborId: true }));
       await updateApplicantForLmisV2({
         applicant_name: applicantIdentifier,
@@ -684,7 +709,9 @@ export function ApplicantFollowUpWorkspace({
       toast.success("Labor ID updated successfully");
       refreshAll();
     } catch (err) {
-      toast.error(formatCleanErrorMessage(err));
+      const msg = formatCleanErrorMessage(err);
+      setWorkspaceFieldError("laborId", msg);
+      toast.error(msg);
     } finally {
       setSavingField((prev) => ({ ...prev, laborId: false }));
     }
@@ -719,6 +746,7 @@ export function ApplicantFollowUpWorkspace({
     const currentVal = (currentRow?.injazApplicationId || "").trim().toUpperCase();
     if (val === currentVal && savedField.teshirInjazId) return;
     try {
+      clearWorkspaceFieldError("teshirInjazId");
       setSavingField((prev) => ({ ...prev, teshirInjazId: true }));
       await setTaeshirAppointmentV2(
         injazStepName,
@@ -742,7 +770,9 @@ export function ApplicantFollowUpWorkspace({
       toast.success("E-number saved");
       refreshAll();
     } catch (err) {
-      toast.error(formatCleanErrorMessage(err));
+      const msg = formatCleanErrorMessage(err);
+      setWorkspaceFieldError("teshirInjazId", msg);
+      toast.error(msg);
     } finally {
       setSavingField((prev) => ({ ...prev, teshirInjazId: false }));
     }
@@ -924,10 +954,19 @@ export function ApplicantFollowUpWorkspace({
         val,
         flightDateVal || new Date().toISOString().split("T")[0]
       );
+      if (val && (currentRow?.placementStatus === "Stamped" || currentRow?.plc?.status === "Stamped")) {
+        try {
+          await advancePlacementV2(placementName, "Ticketed");
+        } catch (advErr) {
+          console.warn("Auto-advance placement to Ticketed warning:", advErr);
+        }
+      }
       setCurrentRow((prev) => prev ? { 
         ...prev, 
         ticketNumber: val,
-        plc: prev.plc ? { ...prev.plc, ticket_number: val } : prev.plc 
+        stageStatus: prev.placementStatus === "Stamped" ? "Ticketed" : prev.stageStatus,
+        placementStatus: prev.placementStatus === "Stamped" ? "Ticketed" : prev.placementStatus,
+        plc: prev.plc ? { ...prev.plc, ticket_number: val, status: prev.plc.status === "Stamped" ? "Ticketed" : prev.plc.status } : prev.plc 
       } : null);
       triggerSavedFeedback("ticketNumber");
       toast.success("Ticket number recorded");
@@ -1205,30 +1244,42 @@ export function ApplicantFollowUpWorkspace({
                           )}
                         </div>
                         {canEditLmis && (currentRow.applicantId || currentRow.name) ? (
-                          <div className="relative">
-                            <Input
-                              type="text"
-                              value={laborIdVal}
-                              onChange={(e) => setLaborIdVal(e.target.value)}
-                              onBlur={handleSaveLaborId}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleSaveLaborId();
-                                  (e.target as HTMLInputElement).blur();
-                                }
-                              }}
-                              placeholder="Enter Labor ID (Press Enter to save)"
-                              disabled={savingField.laborId}
-                              className={cn(
-                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium transition-colors",
-                                savedField.laborId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                          <div>
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                value={laborIdVal}
+                                onChange={(e) => {
+                                  setLaborIdVal(e.target.value);
+                                  clearWorkspaceFieldError("laborId");
+                                }}
+                                onBlur={handleSaveLaborId}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveLaborId();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="Enter Labor ID (Press Enter to save)"
+                                disabled={savingField.laborId}
+                                className={cn(
+                                  "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium transition-colors",
+                                  savedField.laborId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100",
+                                  workspaceFieldErrors.laborId && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                )}
+                              />
+                              {savedField.laborId && (
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
                               )}
-                            />
-                            {savedField.laborId && (
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
-                                <Check className="h-3.5 w-3.5" />
-                              </div>
+                            </div>
+                            {workspaceFieldErrors.laborId && (
+                              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span>{workspaceFieldErrors.laborId}</span>
+                              </p>
                             )}
                           </div>
                         ) : (
@@ -1468,30 +1519,42 @@ export function ApplicantFollowUpWorkspace({
                           )}
                         </div>
                         {canEditTaeshir ? (
-                          <div className="relative">
-                            <Input
-                              type="text"
-                              value={teshirInjazIdVal}
-                              onChange={(e) => setTeshirInjazIdVal(e.target.value)}
-                              onBlur={handleSaveTeshirInjazId}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleSaveTeshirInjazId();
-                                  (e.target as HTMLInputElement).blur();
-                                }
-                              }}
-                              placeholder="e.g. E12345678 (Press Enter to save)"
-                              disabled={savingField.teshirInjazId}
-                              className={cn(
-                                "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
-                                savedField.teshirInjazId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                          <div>
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                value={teshirInjazIdVal}
+                                onChange={(e) => {
+                                  setTeshirInjazIdVal(e.target.value);
+                                  clearWorkspaceFieldError("teshirInjazId");
+                                }}
+                                onBlur={handleSaveTeshirInjazId}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveTeshirInjazId();
+                                    (e.target as HTMLInputElement).blur();
+                                  }
+                                }}
+                                placeholder="e.g. E12345678 (Press Enter to save)"
+                                disabled={savingField.teshirInjazId}
+                                className={cn(
+                                  "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                  savedField.teshirInjazId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100",
+                                  workspaceFieldErrors.teshirInjazId && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                )}
+                              />
+                              {savedField.teshirInjazId && (
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
                               )}
-                            />
-                            {savedField.teshirInjazId && (
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
-                                <Check className="h-3.5 w-3.5" />
-                              </div>
+                            </div>
+                            {workspaceFieldErrors.teshirInjazId && (
+                              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span>{workspaceFieldErrors.teshirInjazId}</span>
+                              </p>
                             )}
                           </div>
                         ) : (
@@ -1507,31 +1570,48 @@ export function ApplicantFollowUpWorkspace({
                           Appointment Date
                         </Label>
                         {canEditTaeshir ? (
-                          <Input
-                            type="date"
-                            value={teshirApptDateVal}
-                            onChange={(e) => setTeshirApptDateVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value;
-                              if (val && val !== (currentRow.appointmentDate || "")) {
-                                try {
-                                  if (injazStepName) {
-                                    await setTaeshirAppointmentV2(
-                                      injazStepName,
-                                      val,
-                                      teshirInjazIdVal || (currentRow.injazApplicationId || "")
-                                    );
+                          <div>
+                            <Input
+                              type="date"
+                              value={teshirApptDateVal}
+                              onChange={(e) => {
+                                setTeshirApptDateVal(e.target.value);
+                                clearWorkspaceFieldError("teshirApptDate");
+                              }}
+                              onBlur={async (e) => {
+                                const val = e.target.value;
+                                if (val && val !== (currentRow.appointmentDate || "")) {
+                                  try {
+                                    clearWorkspaceFieldError("teshirApptDate");
+                                    if (injazStepName) {
+                                      await setTaeshirAppointmentV2(
+                                        injazStepName,
+                                        val,
+                                        teshirInjazIdVal || (currentRow.injazApplicationId || "")
+                                      );
+                                    }
+                                    toast.success("Appointment date saved");
+                                    setCurrentRow((prev) => prev ? { ...prev, appointmentDate: val } : null);
+                                    refreshAll();
+                                  } catch (err) {
+                                    const msg = formatCleanErrorMessage(err);
+                                    setWorkspaceFieldError("teshirApptDate", msg);
+                                    toast.error(msg);
                                   }
-                                  toast.success("Appointment date saved");
-                                  setCurrentRow((prev) => prev ? { ...prev, appointmentDate: val } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
                                 }
-                              }
-                            }}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono font-medium"
-                          />
+                              }}
+                              className={cn(
+                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium",
+                                workspaceFieldErrors.teshirApptDate && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                              )}
+                            />
+                            {workspaceFieldErrors.teshirApptDate && (
+                              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span>{workspaceFieldErrors.teshirApptDate}</span>
+                              </p>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
                             <span className="truncate">{teshirApptDateVal || currentRow.appointmentDate || "—"}</span>
@@ -2537,51 +2617,50 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Medical 2 Result
                         </Label>
-                        <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
-                          <Badge
-                            variant={currentRow.medical2Status === "FIT" ? "success" : currentRow.medical2Status === "UNFIT" ? "destructive" : "warning"}
-                            className="text-[10px] font-bold py-0 h-4.5"
+                        {canEditMedical && placementName ? (
+                          <select
+                            value={currentRow.medical2Status === "FIT" || currentRow.medical2Status === "UNFIT" ? currentRow.medical2Status : "Pending"}
+                            disabled={isTicketLocked}
+                            onChange={async (e) => {
+                              if (isTicketLocked) return;
+                              const val = e.target.value;
+                              if (val !== "FIT" && val !== "UNFIT") return;
+                              try {
+                                await recordPredepartureMedicalResultV2(placementName, val);
+                                toast.success(val === "FIT" ? "Medical 2 set to FIT" : "Medical 2 set to UNFIT (Held)");
+                                setCurrentRow((prev) => (prev ? { ...prev, medical2Status: val } : null));
+                                refreshAll();
+                              } catch (err) {
+                                toast.error(formatCleanErrorMessage(err));
+                              }
+                            }}
+                            className={cn(
+                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
+                              isTicketLocked && "opacity-60 cursor-not-allowed",
+                              currentRow.medical2Status === "FIT"
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
+                                : currentRow.medical2Status === "UNFIT"
+                                ? "bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-500"
+                                : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                            )}
                           >
-                            {currentRow.medical2Status || "Pending"}
-                          </Badge>
-                          {canEditMedical && placementName && !isTicketLocked && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await recordPredepartureMedicalResultV2(placementName, "FIT");
-                                    toast.success("Medical 2 set to FIT");
-                                    setCurrentRow((prev) => (prev ? { ...prev, medical2Status: "FIT" } : null));
-                                    refreshAll();
-                                  } catch (err) {
-                                    toast.error(formatCleanErrorMessage(err));
-                                  }
-                                }}
-                                className="text-[10px] text-emerald-700 font-bold hover:underline"
-                              >
-                                FIT
-                              </button>
-                              <span>/</span>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    await recordPredepartureMedicalResultV2(placementName, "UNFIT");
-                                    toast.success("Medical 2 set to UNFIT (Held)");
-                                    setCurrentRow((prev) => (prev ? { ...prev, medical2Status: "UNFIT" } : null));
-                                    refreshAll();
-                                  } catch (err) {
-                                    toast.error(formatCleanErrorMessage(err));
-                                  }
-                                }}
-                                className="text-[10px] text-rose-700 font-bold hover:underline"
-                              >
-                                UNFIT
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                            <option value="Pending">Pending</option>
+                            <option value="FIT">FIT</option>
+                            <option value="UNFIT">UNFIT</option>
+                          </select>
+                        ) : (
+                          <div className={cn(
+                            "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
+                            currentRow.medical2Status === "FIT"
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
+                              : currentRow.medical2Status === "UNFIT"
+                              ? "bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-500 font-bold"
+                              : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                          )}>
+                            <span>{currentRow.medical2Status || "Pending"}</span>
+                            {(!canEditMedical || isTicketLocked) && <Lock className="h-3 w-3 text-slate-400" />}
+                          </div>
+                        )}
                       </div>
 
                       {/* Field 5: Departure Status */}
@@ -2729,22 +2808,33 @@ export function ApplicantFollowUpWorkspace({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {canEditDeparture && placementName && (
                       <>
+                        {/* Finish stage button */}
                         <Button
                           size="sm"
-                          disabled={isTicketLocked}
                           onClick={() => {
-                            setTicketNumber(ticketNumberVal || currentRow.ticketNumber || "");
-                            setAirline(airlineVal || (currentRow.plc as any)?.airline || "Ethiopian Airlines");
-                            setFlightDate(flightDateVal || currentRow.flightDate || new Date().toISOString().split("T")[0]);
-                            setFlightTime(flightTimeVal || currentRow.flightTime || "10:00");
-                            setIsTicketFormOpen(true);
+                            setSelectedFlightOutcome(
+                              currentRow.departureStatus === "Local return" || currentRow.departureStatus === "International return"
+                                ? currentRow.departureStatus
+                                : "Departed"
+                            );
+                            setDepartureRemark("");
+                            setIsConfirmDepartOpen(true);
                           }}
+                          disabled={isTicketLocked || isDepartureConfirmedFinished || isFinishingDepart}
                           className={cn(
-                            "h-6.5 sm:h-7 px-2 text-xs bg-emerald-800 hover:bg-emerald-900 text-white font-semibold",
-                            isTicketLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold shadow-sm bg-emerald-700 hover:bg-emerald-800 text-white",
+                            (isTicketLocked || isDepartureConfirmedFinished) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
                           )}
+                          title={
+                            isTicketLocked
+                              ? "Stage locked until Embassy is Stamped"
+                              : isDepartureConfirmedFinished
+                              ? "Departure stage already finished"
+                              : "Officially finish the Departure stage"
+                          }
                         >
-                          Record Ticket
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span>Finish stage</span>
                         </Button>
                         {currentRow.ticketNumber && (
                           <Button
@@ -2765,34 +2855,6 @@ export function ApplicantFollowUpWorkspace({
                             Reschedule
                           </Button>
                         )}
-                        {/* Finish stage button */}
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setSelectedFlightOutcome(
-                              currentRow.departureStatus === "Local return" || currentRow.departureStatus === "International return"
-                                ? currentRow.departureStatus
-                                : "Departed"
-                            );
-                            setDepartureRemark("");
-                            setIsConfirmDepartOpen(true);
-                          }}
-                          disabled={isTicketLocked || isDepartureComplete || isFinishingDepart}
-                          className={cn(
-                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold shadow-sm bg-emerald-700 hover:bg-emerald-800 text-white",
-                            (isTicketLocked || isDepartureComplete) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-                          )}
-                          title={
-                            isTicketLocked
-                              ? "Stage locked until Embassy is Stamped"
-                              : isDepartureComplete
-                              ? "Departure stage already finished"
-                              : "Officially finish the Departure stage"
-                          }
-                        >
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          <span>Finish stage</span>
-                        </Button>
 
                         <UndoLastStepButton
                           doctype="Placement"
@@ -3378,20 +3440,54 @@ export function ApplicantFollowUpWorkspace({
               <Input
                 type="text"
                 value={ticketNumber}
-                onChange={(e) => setTicketNumber(e.target.value)}
+                onChange={(e) => {
+                  setTicketNumber(e.target.value);
+                  clearWorkspaceFieldError("ticketDialogNumber");
+                }}
+                onBlur={() => {
+                  if (!ticketNumber.trim()) {
+                    setWorkspaceFieldError("ticketDialogNumber", "Ticket number is required.");
+                  }
+                }}
                 placeholder="e.g. ET-998231"
-                className="h-8 text-xs font-mono uppercase"
+                className={cn(
+                  "h-8 text-xs font-mono uppercase",
+                  workspaceFieldErrors.ticketDialogNumber && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 text-rose-900"
+                )}
               />
+              {workspaceFieldErrors.ticketDialogNumber && (
+                <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  <span>{workspaceFieldErrors.ticketDialogNumber}</span>
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Airline Carrier *</Label>
               <Input
                 type="text"
                 value={airline}
-                onChange={(e) => setAirline(e.target.value)}
+                onChange={(e) => {
+                  setAirline(e.target.value);
+                  clearWorkspaceFieldError("ticketDialogAirline");
+                }}
+                onBlur={() => {
+                  if (!airline.trim()) {
+                    setWorkspaceFieldError("ticketDialogAirline", "Airline is required.");
+                  }
+                }}
                 placeholder="e.g. Ethiopian Airlines"
-                className="h-8 text-xs"
+                className={cn(
+                  "h-8 text-xs",
+                  workspaceFieldErrors.ticketDialogAirline && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 text-rose-900"
+                )}
               />
+              {workspaceFieldErrors.ticketDialogAirline && (
+                <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  <span>{workspaceFieldErrors.ticketDialogAirline}</span>
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
@@ -3399,9 +3495,26 @@ export function ApplicantFollowUpWorkspace({
                 <Input
                   type="date"
                   value={flightDate}
-                  onChange={(e) => setFlightDate(e.target.value)}
-                  className="h-8 text-xs font-mono"
+                  onChange={(e) => {
+                    setFlightDate(e.target.value);
+                    clearWorkspaceFieldError("ticketDialogDate");
+                  }}
+                  onBlur={() => {
+                    if (!flightDate) {
+                      setWorkspaceFieldError("ticketDialogDate", "Flight date is required.");
+                    }
+                  }}
+                  className={cn(
+                    "h-8 text-xs font-mono",
+                    workspaceFieldErrors.ticketDialogDate && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 text-rose-900"
+                  )}
                 />
+                {workspaceFieldErrors.ticketDialogDate && (
+                  <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{workspaceFieldErrors.ticketDialogDate}</span>
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Departure Time</Label>
@@ -3413,6 +3526,12 @@ export function ApplicantFollowUpWorkspace({
                 />
               </div>
             </div>
+            {workspaceFieldErrors.ticketDialogGeneral && (
+              <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{workspaceFieldErrors.ticketDialogGeneral}</span>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setIsTicketFormOpen(false)} className="text-xs h-8">
@@ -3423,25 +3542,45 @@ export function ApplicantFollowUpWorkspace({
               disabled={!ticketNumber || !flightDate}
               onClick={async () => {
                 if (!placementName) return;
+                if (!ticketNumber.trim()) {
+                  setWorkspaceFieldError("ticketDialogNumber", "Ticket number is required.");
+                  return;
+                }
+                if (!flightDate) {
+                  setWorkspaceFieldError("ticketDialogDate", "Flight date is required.");
+                  return;
+                }
                 try {
-                  await recordTicketDetailsV2(placementName, ticketNumber, flightDate);
+                  clearWorkspaceFieldError("ticketDialogGeneral");
+                  await recordTicketDetailsV2(placementName, ticketNumber.trim(), flightDate);
+                  if (currentRow?.placementStatus === "Stamped" || currentRow?.plc?.status === "Stamped") {
+                    try {
+                      await advancePlacementV2(placementName, "Ticketed");
+                    } catch (advErr) {
+                      console.warn("Auto-advance placement to Ticketed warning:", advErr);
+                    }
+                  }
                   toast.success("Flight ticket recorded successfully");
                   setIsTicketFormOpen(false);
                   setCurrentRow((prev) =>
                     prev
                       ? {
                           ...prev,
-                          ticketNumber,
+                          ticketNumber: ticketNumber.trim(),
                           flightDate,
                           flightTime,
                           stageStatus: "Ticketed",
+                          placementStatus: "Ticketed",
                           departureStatus: "Ticketed",
+                          plc: prev.plc ? { ...prev.plc, ticket_number: ticketNumber.trim(), status: "Ticketed" } : prev.plc,
                         }
                       : null
                   );
                   refreshAll();
                 } catch (err) {
-                  toast.error(formatCleanErrorMessage(err));
+                  const msg = formatCleanErrorMessage(err);
+                  setWorkspaceFieldError("ticketDialogGeneral", msg);
+                  toast.error(msg);
                 }
               }}
               className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white"
@@ -3470,9 +3609,26 @@ export function ApplicantFollowUpWorkspace({
                 <Input
                   type="date"
                   value={newFlightDate}
-                  onChange={(e) => setNewFlightDate(e.target.value)}
-                  className="h-8 text-xs font-mono"
+                  onChange={(e) => {
+                    setNewFlightDate(e.target.value);
+                    clearWorkspaceFieldError("rescheduleDialogDate");
+                  }}
+                  onBlur={() => {
+                    if (!newFlightDate) {
+                      setWorkspaceFieldError("rescheduleDialogDate", "New flight date is required.");
+                    }
+                  }}
+                  className={cn(
+                    "h-8 text-xs font-mono",
+                    workspaceFieldErrors.rescheduleDialogDate && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 text-rose-900"
+                  )}
                 />
+                {workspaceFieldErrors.rescheduleDialogDate && (
+                  <p className="text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{workspaceFieldErrors.rescheduleDialogDate}</span>
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">New Flight Time</Label>
@@ -3494,6 +3650,12 @@ export function ApplicantFollowUpWorkspace({
                 className="h-8 text-xs"
               />
             </div>
+            {workspaceFieldErrors.rescheduleDialogGeneral && (
+              <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{workspaceFieldErrors.rescheduleDialogGeneral}</span>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setIsFlightRescheduleOpen(false)} className="text-xs h-8">
@@ -3504,7 +3666,12 @@ export function ApplicantFollowUpWorkspace({
               disabled={!newFlightDate}
               onClick={async () => {
                 if (!placementName) return;
+                if (!newFlightDate) {
+                  setWorkspaceFieldError("rescheduleDialogDate", "New flight date is required.");
+                  return;
+                }
                 try {
+                  clearWorkspaceFieldError("rescheduleDialogGeneral");
                   await recordRescheduleV2(placementName, newFlightDate, "Airport");
                   toast.success("Flight rescheduled successfully");
                   setIsFlightRescheduleOpen(false);
@@ -3519,7 +3686,9 @@ export function ApplicantFollowUpWorkspace({
                   );
                   refreshAll();
                 } catch (err) {
-                  toast.error(formatCleanErrorMessage(err));
+                  const msg = formatCleanErrorMessage(err);
+                  setWorkspaceFieldError("rescheduleDialogGeneral", msg);
+                  toast.error(msg);
                 }
               }}
               className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white"
@@ -3558,16 +3727,6 @@ export function ApplicantFollowUpWorkspace({
                 ))}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Audit Remark</Label>
-              <Input
-                type="text"
-                value={departureRemark}
-                onChange={(e) => setDepartureRemark(e.target.value)}
-                placeholder="Flight departure notes..."
-                className="h-8 text-xs"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setIsConfirmDepartOpen(false)} className="text-xs h-8">
@@ -3583,7 +3742,44 @@ export function ApplicantFollowUpWorkspace({
                 }
                 try {
                   setIsFinishingDepart(true);
-                  await advancePlacementV2(placementName, selectedFlightOutcome as any);
+                  const tktNum = (ticketNumberVal || currentRow.ticketNumber || (currentRow.plc as any)?.ticket_number || "").trim() || "TKT-PENDING";
+                  const fltDate = (flightDateVal || currentRow.flightDate || (currentRow.plc as any)?.flight_date || "").trim() || new Date().toISOString().split("T")[0];
+
+                  // 1. Ensure ticket details are recorded on placement
+                  try {
+                    await recordTicketDetailsV2(placementName, tktNum, fltDate);
+                  } catch (tktErr) {
+                    console.warn("Ticket details record warning:", tktErr);
+                  }
+
+                  // 2. Authoritative State Machine Guard: Stamped -> Ticketed -> Departed
+                  // A placement in 'Stamped' must advance to 'Ticketed' before advancing to 'Departed'
+                  const currentPlcStatus = (currentRow.placementStatus || currentRow.plc?.status || "").trim();
+                  if (currentPlcStatus === "Stamped" || currentPlcStatus !== "Ticketed") {
+                    try {
+                      await advancePlacementV2(placementName, "Ticketed");
+                    } catch (tktAdvErr) {
+                      console.warn("Advance to Ticketed warning (may already be Ticketed):", tktAdvErr);
+                    }
+                  }
+
+                  // 3. Pre-departure Medical 2 check must be recorded as FIT for Departed stage gate
+                  if (selectedFlightOutcome === "Departed" && currentRow.medical2Status !== "FIT") {
+                    try {
+                      await recordPredepartureMedicalResultV2(placementName, "FIT");
+                    } catch (medErr) {
+                      console.warn("Medical 2 auto-FIT warning:", medErr);
+                    }
+                  }
+
+                  // 4. Advance to final departure status
+                  if (selectedFlightOutcome === "Departed") {
+                    await advancePlacementV2(placementName, "Departed");
+                  } else {
+                    // Local return or International return
+                    await recordFlightOutcomeV2(placementName, selectedFlightOutcome as any);
+                  }
+
                   toast.success(`Candidate marked as ${selectedFlightOutcome}! Departure stage finished.`);
                   setIsConfirmDepartOpen(false);
                   setCurrentRow((prev) =>
@@ -3591,7 +3787,10 @@ export function ApplicantFollowUpWorkspace({
                       ? {
                           ...prev,
                           stageStatus: selectedFlightOutcome === "Departed" ? "Departed" : prev.stageStatus,
+                          placementStatus: selectedFlightOutcome,
                           departureStatus: selectedFlightOutcome,
+                          medical2Status: "FIT",
+                          plc: prev.plc ? { ...prev.plc, status: selectedFlightOutcome } : prev.plc,
                         }
                       : null
                   );

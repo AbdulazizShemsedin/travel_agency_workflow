@@ -17,7 +17,6 @@ z.setErrorMap(businessZodErrorMap);
 export const GENDER_OPTIONS = ["Male", "Female"] as const;
 
 export const RELIGION_OPTIONS = [
-  "Islam",
   "Muslim",
   "Orthodox",
   "Protestant",
@@ -105,16 +104,25 @@ const optionalBoolean = z.preprocess((val) => {
   return false;
 }, z.boolean().default(false));
 
+// Safe preprocessor for optional string fields: handles null, undefined, empty strings, numbers, spaces
+export const optionalString = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined) return "";
+    return typeof val === "string" ? val.trim() : String(val).trim();
+  },
+  z.string().default("")
+);
+
 // Base Applicant Schema
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS).default("Standard"),
-  application_number: z.string().trim().optional().or(z.literal("")),
+  application_number: optionalString,
   first_name: z.string().trim().default(""),
-  middle_name: z.string().trim().optional().or(z.literal("")),
+  middle_name: optionalString,
   last_name: z.string().trim().default(""),
   gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default("Female"),
-  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Islam"),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Muslim"),
   marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default("Single"),
   children: z.preprocess(
     (val) => {
@@ -138,86 +146,79 @@ export const baseApplicantSchema = z.object({
   country: z.string().trim().default("Ethiopia"),
 
   // Stage 2: Registration KYC & Medical Fields
-  date_of_birth: z.string().optional().or(z.literal("")),
-  passport_number: z.string().optional().or(z.literal("")),
-  passport_issue_date: z.string().optional().or(z.literal("")),
-  passport_expiry: z.string().optional().or(z.literal("")),
-  place_of_issue: z.string().trim().optional().or(z.literal("")).default("ADDIS ABABA"),
-  place_of_birth: z.string().trim().optional().or(z.literal("")),
-  job_applied: z.string().trim().default("HOUSE WORKER"),
+  date_of_birth: optionalString,
+  passport_number: optionalString,
+  passport_issue_date: optionalString,
+  passport_expiry: optionalString,
+  place_of_issue: optionalString.default("ADDIS ABABA"),
+  place_of_birth: optionalString,
+  job_applied: optionalString.default("HOUSE WORKER"),
   highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
-  labour_id: z.string().optional().or(z.literal("")),
-  national_id: z.string().optional().or(z.literal("")),
-  contact_person_name: z.string().optional().or(z.literal("")),
-  contact_person_phone: z.string().optional().or(z.literal("")),
-  emergency_contact_name: z.string().optional().or(z.literal("")),
-  emergency_contact_phone: z.string().optional().or(z.literal("")),
-  emergency_relationship: z.string().optional().or(z.literal("")),
+  labour_id: optionalString,
+  national_id: optionalString,
+  contact_person_name: optionalString,
+  contact_person_phone: optionalString,
+  emergency_contact_name: optionalString,
+  emergency_contact_phone: optionalString,
+  emergency_relationship: optionalString,
   coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).default(""),
-  exam_date: z
-    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
-    .optional()
-    .or(z.literal(""))
-    .nullable(),
+  exam_date: optionalString,
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
-  medical_issue_date: z.string().optional().or(z.literal("")),
-  medical_expiry_date: z
-    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
-    .optional()
-    .or(z.literal("")),
+  medical_issue_date: optionalString,
+  medical_expiry_date: optionalString,
 
   // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
-  target_job: z.string().trim().optional().or(z.literal("")).default("HOUSE WORKER"),
+  target_job: optionalString.default("HOUSE WORKER"),
   education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
   salary_amount: optionalNumber(
     z.number({ invalid_type_error: "Please enter a valid salary amount" }).min(0, "Salary amount cannot be negative")
   ),
   salary_currency: z.enum(["SAR", "KWD", "USD", "ETB", "AED", "QAR"]).default("SAR"),
-  photograph: z.string().optional().or(z.literal("")),
-  passport_expiry_date: z.string().optional().or(z.literal("")),
-  passport_issue_place: z.string().trim().optional().or(z.literal("")).default("ADDIS ABABA"),
-  labor_id: z.string().optional().or(z.literal("")),
+  photograph: optionalString,
+  passport_expiry_date: optionalString,
+  passport_issue_place: optionalString.default("ADDIS ABABA"),
+  labor_id: optionalString,
 
   // Photos & Attachments
-  profile_photo_url: z.string().optional().or(z.literal("")),
-  photo_passport: z.string().optional().or(z.literal("")),
-  photo_full_body: z.string().optional().or(z.literal("")),
-  passport_scan: z.string().optional().or(z.literal("")),
-  college_certificate: z.string().optional().or(z.literal("")),
-  original_id_scan: z.string().optional().or(z.literal("")),
+  profile_photo_url: optionalString,
+  photo_passport: optionalString,
+  photo_full_body: optionalString,
+  passport_scan: optionalString,
+  college_certificate: optionalString,
+  original_id_scan: optionalString,
 
   // Video & Intro Attachments
-  video_url: z.string().optional().or(z.literal("")),
-  intro_video: z.string().optional().or(z.literal("")),
+  video_url: optionalString,
+  intro_video: optionalString,
 
   // Second Contact Person (Delala / Broker)
-  second_contact_name: z.string().trim().optional().or(z.literal("")),
-  second_contact_phone: z.string().trim().optional().or(z.literal("")),
-  second_contact_address: z.string().trim().optional().or(z.literal("")),
+  second_contact_name: optionalString,
+  second_contact_phone: optionalString,
+  second_contact_address: optionalString,
 
   // Physical & CV Attributes
-  monthly_salary: z.string().trim().default("1000"),
-  height: z.string().trim().optional().or(z.literal("")),
-  weight: z.string().trim().optional().or(z.literal("")),
-  complexion: z.string().trim().default("FAIR"),
-  leaving_town: z.string().trim().optional().or(z.literal("")),
+  monthly_salary: optionalString.default("1000"),
+  height: optionalString,
+  weight: optionalString,
+  complexion: optionalString.default("FAIR"),
+  leaving_town: optionalString,
 
   // Stage 3: Optional Context & Skills Matrix Fields
-  alternate_phone: z.string().trim().optional().or(z.literal("")),
-  email: z.string().trim().optional().or(z.literal("")),
-  region: z.string().trim().optional().or(z.literal("")),
-  sub_region: z.string().trim().optional().or(z.literal("")),
-  address_line_1: z.string().trim().optional().or(z.literal("")),
-  institution: z.string().trim().optional().or(z.literal("")),
+  alternate_phone: optionalString,
+  email: optionalString,
+  region: optionalString,
+  sub_region: optionalString,
+  address_line_1: optionalString,
+  institution: optionalString,
   graduation_year: optionalNumber(
     z.number().int().min(1950).max(new Date().getFullYear() + 1)
   ),
-  current_employer: z.string().trim().optional().or(z.literal("")),
+  current_employer: optionalString,
   years_of_experience: optionalNumber(z.number().min(0).max(50)),
-  english_level: z.string().optional().or(z.literal("")),
-  arabic_level: z.string().optional().or(z.literal("")),
-  experience_country: z.string().trim().optional().or(z.literal("")),
-  experience_period: z.string().trim().optional().or(z.literal("")),
+  english_level: optionalString,
+  arabic_level: optionalString,
+  experience_country: optionalString,
+  experience_period: optionalString,
   skill_cleaning: z.union([z.boolean(), z.string(), z.number()]).default(1),
   skill_cooking: z.union([z.boolean(), z.string(), z.number()]).default(0),
   skill_washing: z.union([z.boolean(), z.string(), z.number()]).default(1),
@@ -230,55 +231,51 @@ export const baseApplicantSchema = z.object({
   skill_elderly_care: z.union([z.boolean(), z.string(), z.number()]).default(0),
   skill_driving: z.union([z.boolean(), z.string(), z.number()]).default(0),
   skill_sewing: z.union([z.boolean(), z.string(), z.number()]).default(0),
-  remarks: z.string().optional().or(z.literal("")),
-  medical_remarks: z.string().optional().or(z.literal("")),
-  education_remarks: z.string().optional().or(z.literal("")),
+  remarks: optionalString,
+  medical_remarks: optionalString,
+  education_remarks: optionalString,
 
   // Client Preferred Form Structure Fields (Screen Recording 2026-09-17)
-  full_name: z.string().trim().optional().or(z.literal("")),
-  registration_date: z.string().optional().or(z.literal("")),
+  full_name: optionalString,
+  registration_date: optionalString,
   is_active: optionalBoolean.default(true),
-  passport_type: z.string().trim().default("Normal"),
-  qualification: z.string().trim().optional().or(z.literal("")).default("SECONDARY LEVEL"),
-  visa_number: z.string().trim().optional().or(z.literal("")),
-  sponsor_name: z.string().trim().optional().or(z.literal("")),
-  sponsor_id: z.string().trim().optional().or(z.literal("")),
-  sponsor_phone: z.string().trim().optional().or(z.literal("")),
-  sponsor_address: z.string().trim().optional().or(z.literal("")),
-  agent: z.string().trim().optional().or(z.literal("")),
-  sponsor_arabic: z.string().trim().optional().or(z.literal("")),
-  visa_type: z.string().trim().default("Work"),
-  relative_name: z.string().trim().optional().or(z.literal("")),
-  relative_phone: z.string().trim().optional().or(z.literal("")),
-  relative_kinship: z.string().trim().optional().or(z.literal("")),
-  address_region: z.string().trim().optional().or(z.literal("")),
-  relative_woreda: z.string().trim().optional().or(z.literal("")),
-  relative_house_no: z.string().trim().optional().or(z.literal("")),
-  relative_gender: z.string().trim().optional().or(z.literal("")),
-  r_birth_date: z.string().trim().optional().or(z.literal("")),
-  woreda: z.string().trim().optional().or(z.literal("")),
-  house_no: z.string().trim().optional().or(z.literal("")),
-  file_no: z.string().trim().optional().or(z.literal("")),
-  contract_number: z.string().trim().optional().or(z.literal("")),
-  wakala_number: z.string().trim().optional().or(z.literal("")),
-  sticker_visa_number: z.string().trim().optional().or(z.literal("")),
-  signed_on: z.string().trim().optional().or(z.literal("")),
-  biometric_id: z.string().trim().optional().or(z.literal("")),
-  contact_person_2nd: z.string().trim().optional().or(z.literal("")),
-  contact_phone_2nd: z.string().trim().optional().or(z.literal("")),
-  coc_center: z.string().trim().optional().or(z.literal("")),
-  certified_date: z
-    .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
-    .optional()
-    .or(z.literal(""))
-    .nullable(),
-  certificate_no: z.string().trim().optional().or(z.literal("")),
-  training_type: z.string().trim().optional().or(z.literal("")),
+  passport_type: optionalString.default("Normal"),
+  qualification: optionalString.default("SECONDARY LEVEL"),
+  visa_number: optionalString,
+  sponsor_name: optionalString,
+  sponsor_id: optionalString,
+  sponsor_phone: optionalString,
+  sponsor_address: optionalString,
+  agent: optionalString,
+  sponsor_arabic: optionalString,
+  visa_type: optionalString.default("Work"),
+  relative_name: optionalString,
+  relative_phone: optionalString,
+  relative_kinship: optionalString,
+  address_region: optionalString,
+  relative_woreda: optionalString,
+  relative_house_no: optionalString,
+  relative_gender: optionalString,
+  r_birth_date: optionalString,
+  woreda: optionalString,
+  house_no: optionalString,
+  file_no: optionalString,
+  contract_number: optionalString,
+  wakala_number: optionalString,
+  sticker_visa_number: optionalString,
+  signed_on: optionalString,
+  biometric_id: optionalString,
+  contact_person_2nd: optionalString,
+  contact_phone_2nd: optionalString,
+  coc_center: optionalString,
+  certified_date: optionalString,
+  certificate_no: optionalString,
+  training_type: optionalString,
   photos_2: optionalBoolean,
   is_filed: optionalBoolean,
   relative_id_card: optionalBoolean,
-  works_in: z.string().trim().optional().or(z.literal("")),
-  reference_no: z.string().trim().optional().or(z.literal("")),
+  works_in: optionalString,
+  reference_no: optionalString,
 });
 
 // Stage 1 Base Object Schema
@@ -305,7 +302,7 @@ export const stage1DraftBaseSchema = baseApplicantSchema.extend({
 
   gender: z.enum(GENDER_OPTIONS).or(z.literal("")).default("Female"),
 
-  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Islam"),
+  religion: z.enum(RELIGION_OPTIONS).or(z.literal("")).default("Muslim"),
 
   marital_status: z.enum(MARITAL_STATUS_OPTIONS).or(z.literal("")).default("Single"),
 
@@ -460,7 +457,7 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
       .optional()
       .or(z.literal("")),
 
-    place_of_issue: z.string().trim().optional().or(z.literal("")),
+    place_of_issue: optionalString.default("ADDIS ABABA"),
 
     job_applied: z
       .string({ required_error: "Job / Position Applied is required for registration" })
@@ -469,29 +466,25 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
 
     highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).optional(),
 
-    english_level: z.string().optional().or(z.literal("")),
+    english_level: optionalString,
 
-    arabic_level: z.string().optional().or(z.literal("")),
+    arabic_level: optionalString,
 
-    height: z.string().trim().optional().or(z.literal("")),
+    height: optionalString,
 
-    weight: z.string().trim().optional().or(z.literal("")),
+    weight: optionalString,
 
-    complexion: z.string().trim().optional().or(z.literal("")),
+    complexion: optionalString,
 
-    place_of_birth: z.string().trim().optional().or(z.literal("")),
+    place_of_birth: optionalString,
 
-    monthly_salary: z.string().trim().optional().or(z.literal("")),
+    monthly_salary: optionalString,
 
-    passport_scan: z.string().optional().or(z.literal("")),
+    passport_scan: optionalString,
 
     medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).optional(),
 
-    medical_expiry_date: z
-      .preprocess((val) => (val === null || val === undefined ? "" : String(val).trim()), z.string())
-      .optional()
-      .or(z.literal(""))
-      .nullable()
+    medical_expiry_date: optionalString
       .refine((val) => {
         if (!val || !val.trim()) return true;
         return isValid(parseISO(val));

@@ -951,8 +951,8 @@ export function ApplicantTable() {
                 {/* Col 6: Contract Date */}
                 <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Contract Date</th>
 
-                {/* Col 7: Contract No */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Contract No.</th>
+                {/* Col 7: Sponsor Name */}
+                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Sponsor Name</th>
 
                 {/* Col 8: Medical Status */}
                 <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Medical Status</th>
@@ -1010,6 +1010,10 @@ export function ApplicantTable() {
                   const contractNo =
                     (applicant as any).contract_number ||
                     (applicant as any).contract_no ||
+                    null;
+                  const sponsorName =
+                    (applicant as any).sponsor_name ||
+                    (applicant as any).employer_name ||
                     null;
                   const contractFileUrl =
                     (applicant as any).contract_file_url ||
@@ -1133,11 +1137,11 @@ export function ApplicantTable() {
                         )}
                       </td>
 
-                      {/* Contract No */}
-                      <td className="px-2 py-1.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
-                        {contractNo ? (
-                          <span className="font-semibold text-emerald-900 dark:text-emerald-400">
-                            {contractNo}
+                      {/* Col 7: Sponsor Name */}
+                      <td className="px-2 py-1.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                        {sponsorName ? (
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[150px] inline-block" title={sponsorName}>
+                            {sponsorName}
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
@@ -1355,26 +1359,7 @@ export function ApplicantTable() {
                             </button>
                           )}
 
-                          {/* Stage 7: Stamped — Book Flight Ticket */}
-                          {stage === "Stamped" && (applicant as any)._activePlacementName && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const plc = (applicant as any)._activePlacementName
-                                  ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
-                                  : null;
-                                setTicketingTargetPlacement(plc || null);
-                                setTicketingTargetApplicantName(applicant.full_name || applicant.name);
-                                setTicketingInitialTab("ticket");
-                                setIsTicketingModalOpen(true);
-                              }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
-                              title="Book Flight Ticket"
-                            >
-                              <Ticket className="h-3 w-3 text-teal-700 dark:text-teal-400" />
-                              <span>Book Ticket</span>
-                            </button>
-                          )}
+
 
                           {/* Stage 8: Ticketed — Reschedule Flight */}
                           {stage === "Ticketed" && (applicant as any)._activePlacementName && (

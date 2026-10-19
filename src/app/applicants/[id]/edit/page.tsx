@@ -177,7 +177,7 @@ export default function EditApplicantPage() {
         existingApplicantId={applicant.name}
         initialData={enrichedApplicant as any}
         lockedIdentityFields={isIdentityLocked}
-        onSuccessRedirect={(id) => router.push(`/applicants/${encodeURIComponent(id)}`)}
+        onSuccessRedirect={() => router.push("/applicants")}
       />
     </div>
   );

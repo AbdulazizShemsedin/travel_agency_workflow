@@ -633,7 +633,11 @@ export function Step2EducationExperience({
                 id="leaving_town"
                 placeholder="e.g., Addis Ababa"
                 {...register("leaving_town")}
+                className={errors.leaving_town ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
               />
+              {errors.leaving_town && (
+                <p className="text-xs text-rose-600 dark:text-rose-400 mt-1">{errors.leaving_town.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">

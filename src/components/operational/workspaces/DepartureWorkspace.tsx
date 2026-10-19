@@ -12,6 +12,7 @@ import {
   User,
   ShieldCheck,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   Edit3,
   FileDown,
@@ -136,9 +137,24 @@ export function DepartureWorkspace({
   );
   const [modalRescheduleCost, setModalRescheduleCost] = React.useState<number | "">("");
 
+  // Modal field-level errors for immediate feedback
+  const [modalFieldErrors, setModalFieldErrors] = React.useState<Record<string, string>>({});
+  const setModalFieldError = React.useCallback((field: string, msg: string) => {
+    setModalFieldErrors((prev) => ({ ...prev, [field]: msg }));
+  }, []);
+  const clearModalFieldError = React.useCallback((field: string) => {
+    setModalFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
+
   // Sync edit modal state when editingRow changes
   React.useEffect(() => {
     if (!editingRow) return;
+    setModalFieldErrors({});
 
     const tkt = editingRow.ticket;
     const dep = editingRow.departure;
@@ -358,6 +374,27 @@ export function DepartureWorkspace({
         throw new Error("No linked active placement found for this candidate.");
       }
 
+      // Early field-level validation
+      const errors: Record<string, string> = {};
+      if (modalTicketStatus === "Booked" && !modalTicketNumber.trim()) {
+        errors.ticketNumber = "Ticket / PNR number is required when Booked.";
+      }
+      if (modalDepartureStatus === "Rescheduled") {
+        if (!modalRescheduleDate) {
+          errors.rescheduleDate = "Reschedule date is required.";
+        }
+        if (modalRescheduleCause === "Internal" && (!modalRescheduleCost || Number(modalRescheduleCost) <= 0)) {
+          errors.rescheduleCost = "Internal reschedule requires penalty cost > 0.";
+        }
+      }
+      if (modalDepartureStatus === "Departed" && modalMedical2Result !== "Pass") {
+        errors.medical2 = "Pre-departure Medical 2 check must be Pass before marking Departed.";
+      }
+      if (Object.keys(errors).length > 0) {
+        setModalFieldErrors(errors);
+        throw new Error(Object.values(errors)[0]);
+      }
+
       // 1. Record Ticket Details (no airline!)
       if (modalTicketNumber.trim()) {
         const fullFlightDate = modalFlightDate
@@ -426,7 +463,9 @@ export function DepartureWorkspace({
       onRefresh();
     },
     onError: (err: any) => {
-      toast.error(formatCleanErrorMessage(err));
+      const msg = formatCleanErrorMessage(err);
+      setModalFieldError("general", msg);
+      toast.error(msg);
     },
   });
 
@@ -887,7 +926,15 @@ export function DepartureWorkspace({
                   <select
                     value={modalTicketStatus}
                     disabled={!canEdit || modalSaveMutation.isPending}
-                    onChange={(e) => setModalTicketStatus(e.target.value as any)}
+                    onChange={(e) => {
+                      const nextStatus = e.target.value as any;
+                      setModalTicketStatus(nextStatus);
+                      if (nextStatus === "Booked" && !modalTicketNumber.trim()) {
+                        setModalFieldError("ticketNumber", "Ticket / PNR number is required when Booked.");
+                      } else {
+                        clearModalFieldError("ticketNumber");
+                      }
+                    }}
                     className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="Pending">Pending (Not Booked)</option>
@@ -905,9 +952,26 @@ export function DepartureWorkspace({
                     placeholder="e.g. 071-2394829103"
                     value={modalTicketNumber}
                     disabled={!canEdit || modalSaveMutation.isPending}
-                    onChange={(e) => setModalTicketNumber(e.target.value)}
-                    className="h-9 mt-1 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                    onChange={(e) => {
+                      setModalTicketNumber(e.target.value);
+                      clearModalFieldError("ticketNumber");
+                    }}
+                    onBlur={() => {
+                      if (modalTicketStatus === "Booked" && !modalTicketNumber.trim()) {
+                        setModalFieldError("ticketNumber", "Ticket / PNR number is required when Booked.");
+                      }
+                    }}
+                    className={cn(
+                      "h-9 mt-1 text-xs font-mono font-bold bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]",
+                      modalFieldErrors.ticketNumber && "border-rose-500 ring-1 ring-rose-500/20"
+                    )}
                   />
+                  {modalFieldErrors.ticketNumber && (
+                    <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      <span>{modalFieldErrors.ticketNumber}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -918,9 +982,21 @@ export function DepartureWorkspace({
                     type="date"
                     value={modalFlightDate}
                     disabled={!canEdit || modalSaveMutation.isPending}
-                    onChange={(e) => setModalFlightDate(e.target.value)}
-                    className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                    onChange={(e) => {
+                      setModalFlightDate(e.target.value);
+                      clearModalFieldError("flightDate");
+                    }}
+                    className={cn(
+                      "h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]",
+                      modalFieldErrors.flightDate && "border-rose-500 ring-1 ring-rose-500/20"
+                    )}
                   />
+                  {modalFieldErrors.flightDate && (
+                    <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      <span>{modalFieldErrors.flightDate}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -984,12 +1060,29 @@ export function DepartureWorkspace({
                   <select
                     value={modalMedical2Result}
                     disabled={!canEdit || modalSaveMutation.isPending}
-                    onChange={(e) => setModalMedical2Result(e.target.value as any)}
-                    className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
+                    onChange={(e) => {
+                      const nextRes = e.target.value as any;
+                      setModalMedical2Result(nextRes);
+                      if (modalDepartureStatus === "Departed" && nextRes !== "Pass") {
+                        setModalFieldError("medical2", "Pre-departure Medical 2 check must be Pass before marking Departed.");
+                      } else {
+                        clearModalFieldError("medical2");
+                      }
+                    }}
+                    className={cn(
+                      "h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white",
+                      modalFieldErrors.medical2 && "border-rose-500 ring-1 ring-rose-500/20"
+                    )}
                   >
                     <option value="Pass">Pass (FIT)</option>
                     <option value="Failed">Failed (UNFIT)</option>
                   </select>
+                  {modalFieldErrors.medical2 && (
+                    <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      <span>{modalFieldErrors.medical2}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1023,7 +1116,20 @@ export function DepartureWorkspace({
                   <select
                     value={modalDepartureStatus}
                     disabled={!canEdit || modalSaveMutation.isPending}
-                    onChange={(e) => setModalDepartureStatus(e.target.value as any)}
+                    onChange={(e) => {
+                      const nextDep = e.target.value as any;
+                      setModalDepartureStatus(nextDep);
+                      if (nextDep === "Departed" && modalMedical2Result !== "Pass") {
+                        setModalFieldError("medical2", "Pre-departure Medical 2 check must be Pass before marking Departed.");
+                      } else {
+                        clearModalFieldError("medical2");
+                      }
+                      if (nextDep === "Rescheduled" && !modalRescheduleDate) {
+                        setModalFieldError("rescheduleDate", "Reschedule date is required.");
+                      } else {
+                        clearModalFieldError("rescheduleDate");
+                      }
+                    }}
                     className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white"
                   >
                     <option value="Pending">Pending (Not Dispatched)</option>
@@ -1043,9 +1149,26 @@ export function DepartureWorkspace({
                         type="date"
                         value={modalRescheduleDate}
                         disabled={!canEdit || modalSaveMutation.isPending}
-                        onChange={(e) => setModalRescheduleDate(e.target.value)}
-                        className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                        onChange={(e) => {
+                          setModalRescheduleDate(e.target.value);
+                          clearModalFieldError("rescheduleDate");
+                        }}
+                        onBlur={() => {
+                          if (!modalRescheduleDate) {
+                            setModalFieldError("rescheduleDate", "Reschedule date is required.");
+                          }
+                        }}
+                        className={cn(
+                          "h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]",
+                          modalFieldErrors.rescheduleDate && "border-rose-500 ring-1 ring-rose-500/20"
+                        )}
                       />
+                      {modalFieldErrors.rescheduleDate && (
+                        <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          <span>{modalFieldErrors.rescheduleDate}</span>
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
@@ -1054,7 +1177,15 @@ export function DepartureWorkspace({
                       <select
                         value={modalRescheduleCause}
                         disabled={!canEdit || modalSaveMutation.isPending}
-                        onChange={(e) => setModalRescheduleCause(e.target.value as any)}
+                        onChange={(e) => {
+                          const cause = e.target.value as any;
+                          setModalRescheduleCause(cause);
+                          if (cause === "Internal" && (!modalRescheduleCost || Number(modalRescheduleCost) <= 0)) {
+                            setModalFieldError("rescheduleCost", "Internal reschedule requires penalty cost > 0.");
+                          } else {
+                            clearModalFieldError("rescheduleCost");
+                          }
+                        }}
                         className="h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md text-slate-900 dark:text-white"
                       >
                         <option value="Airport">Airport / Flight Delay</option>
@@ -1070,16 +1201,37 @@ export function DepartureWorkspace({
                         placeholder="e.g. 50"
                         value={modalRescheduleCost}
                         disabled={!canEdit || modalSaveMutation.isPending}
-                        onChange={(e) =>
-                          setModalRescheduleCost(e.target.value ? Number(e.target.value) : "")
-                        }
-                        className="h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]"
+                        onChange={(e) => {
+                          setModalRescheduleCost(e.target.value ? Number(e.target.value) : "");
+                          clearModalFieldError("rescheduleCost");
+                        }}
+                        onBlur={() => {
+                          if (modalRescheduleCause === "Internal" && (!modalRescheduleCost || Number(modalRescheduleCost) <= 0)) {
+                            setModalFieldError("rescheduleCost", "Internal reschedule requires penalty cost > 0.");
+                          }
+                        }}
+                        className={cn(
+                          "h-9 mt-1 text-xs bg-white dark:bg-[#1a1a20] border-slate-200 dark:border-[#2c2c36]",
+                          modalFieldErrors.rescheduleCost && "border-rose-500 ring-1 ring-rose-500/20"
+                        )}
                       />
+                      {modalFieldErrors.rescheduleCost && (
+                        <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 shrink-0" />
+                          <span>{modalFieldErrors.rescheduleCost}</span>
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
               </div>
             </div>
+            {modalFieldErrors.general && (
+              <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{modalFieldErrors.general}</span>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-slate-100 dark:border-zinc-800">

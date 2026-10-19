@@ -28,6 +28,7 @@ export function ExcelTextInput({
     value !== undefined && value !== null ? String(value) : ""
   );
   const [isSaving, setIsSaving] = React.useState(false);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -53,9 +54,11 @@ export function ExcelTextInput({
     const original = value !== undefined && value !== null ? String(value).trim() : "";
     if (trimmed !== original && !disabled) {
       try {
+        setErrorMsg(null);
         setIsSaving(true);
         await onSave(trimmed);
-      } catch {
+      } catch (err: any) {
+        setErrorMsg(err?.message || "Failed to save change");
         setCurrentValue(original);
       } finally {
         setIsSaving(false);
@@ -94,14 +97,17 @@ export function ExcelTextInput({
       <div
         onClick={(e) => {
           e.stopPropagation();
+          setErrorMsg(null);
           setIsEditing(true);
         }}
         className={cn(
-          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs text-slate-800 dark:text-zinc-200 truncate cursor-pointer rounded transition-all flex items-center justify-between border border-transparent",
-          "hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
+          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs truncate cursor-pointer rounded transition-all flex items-center justify-between border",
+          errorMsg
+            ? "border-rose-500 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-400"
+            : "text-slate-800 dark:text-zinc-200 border-transparent hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
           className
         )}
-        title="Click to edit"
+        title={errorMsg || "Click to edit"}
       >
         <span
           className={cn(
@@ -178,6 +184,7 @@ export function ExcelSelect({
 }: ExcelSelectProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const currentVal = value || options[0]?.value || "";
   const selectRef = React.useRef<HTMLSelectElement>(null);
 
@@ -194,8 +201,11 @@ export function ExcelSelect({
     setIsEditing(false);
     if (newVal === currentVal || disabled) return;
     try {
+      setErrorMsg(null);
       setIsSaving(true);
       await onSave(newVal);
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to update option");
     } finally {
       setIsSaving(false);
     }
@@ -300,6 +310,7 @@ export function ExcelDateInput({
 }: ExcelDateInputProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [dateVal, setDateVal] = React.useState(value || "");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -320,9 +331,11 @@ export function ExcelDateInput({
     setIsEditing(false);
     if (newVal !== value && !disabled) {
       try {
+        setErrorMsg(null);
         setIsSaving(true);
         await onSave(newVal);
-      } catch {
+      } catch (err: any) {
+        setErrorMsg(err?.message || "Failed to update date");
         setDateVal(value || "");
       } finally {
         setIsSaving(false);
@@ -350,14 +363,17 @@ export function ExcelDateInput({
       <div
         onClick={(e) => {
           e.stopPropagation();
+          setErrorMsg(null);
           setIsEditing(true);
         }}
         className={cn(
-          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs font-mono text-slate-700 dark:text-zinc-300 truncate cursor-pointer rounded transition-all flex items-center justify-between border border-transparent",
-          "hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
+          "group/excel-cell w-full min-h-[26px] px-1.5 py-1 text-xs font-mono truncate cursor-pointer rounded transition-all flex items-center justify-between border",
+          errorMsg
+            ? "border-rose-500 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-400"
+            : "text-slate-700 dark:text-zinc-300 border-transparent hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 hover:border-emerald-400/80 dark:hover:border-emerald-600/80 hover:shadow-2xs",
           className
         )}
-        title="Click to edit date"
+        title={errorMsg || "Click to edit date"}
       >
         <span className={!dateVal ? "text-slate-400 dark:text-zinc-500 italic" : undefined}>
           {dateVal || "—"}

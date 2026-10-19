@@ -55,7 +55,62 @@ const FIELD_LABELS: Record<string, string> = {
   flight_date: "Flight Departure Date",
   rejection_remark: "Rejection Reason",
   override_reason: "Override Reason",
+  leaving_town: "Leaving Town",
+  labor_id: "Ministry Labor ID",
+  labour_id: "Ministry Labour ID",
+  national_id: "National ID",
 };
+
+const OPTIONAL_FIELD_NAMES = new Set([
+  "national_id",
+  "labor_id",
+  "labour_id",
+  "leaving_town",
+  "middle_name",
+  "last_name",
+  "alternate_phone",
+  "email",
+  "second_contact_name",
+  "second_contact_phone",
+  "second_contact_address",
+  "remarks",
+  "medical_remarks",
+  "education_remarks",
+  "height",
+  "weight",
+  "sponsor_id",
+  "sponsor_phone",
+  "sponsor_address",
+  "sponsor_arabic",
+  "relative_name",
+  "relative_phone",
+  "relative_kinship",
+  "address_region",
+  "relative_woreda",
+  "relative_house_no",
+  "relative_gender",
+  "r_birth_date",
+  "woreda",
+  "house_no",
+  "file_no",
+  "contract_number",
+  "wakala_number",
+  "sticker_visa_number",
+  "signed_on",
+  "biometric_id",
+  "contact_person_2nd",
+  "contact_phone_2nd",
+  "coc_center",
+  "certificate_no",
+  "training_type",
+  "works_in",
+  "reference_no",
+  "video_url",
+  "intro_video",
+  "photo_full_body",
+  "college_certificate",
+  "original_id_scan",
+]);
 
 /**
  * Global Zod Error Map for Business Users
@@ -89,11 +144,23 @@ export const businessZodErrorMap: z.ZodErrorMap = (issue, ctx) => {
         return { message: `Please enter a valid number or amount for ${label.toLowerCase()}.` };
       }
 
-      if (fieldName === "medical_expiry_date" || fieldName === "national_id" || fieldName === "exam_date" || fieldName === "certified_date") {
+      if (
+        fieldName === "medical_expiry_date" ||
+        fieldName === "national_id" ||
+        fieldName === "labor_id" ||
+        fieldName === "labour_id" ||
+        fieldName === "leaving_town" ||
+        fieldName === "exam_date" ||
+        fieldName === "certified_date" ||
+        OPTIONAL_FIELD_NAMES.has(fieldName)
+      ) {
         return { message: `Please enter a valid ${label.toLowerCase()} or leave blank.` };
       }
 
       if (issue.expected === "string" && (issue.received === "undefined" || issue.received === "null")) {
+        if (OPTIONAL_FIELD_NAMES.has(fieldName)) {
+          return { message: `Please enter a valid ${label.toLowerCase()} or leave blank.` };
+        }
         return { message: `${label} is required. Please fill in this information.` };
       }
 

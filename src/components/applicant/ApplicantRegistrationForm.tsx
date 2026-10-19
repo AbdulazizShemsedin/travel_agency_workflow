@@ -223,7 +223,8 @@ export function ApplicantRegistrationForm({
     );
 
   const form = useForm<BaseApplicantFormValues>({
-    mode: "onChange",
+    mode: "onTouched",
+    reValidateMode: "onChange",
     // @ts-expect-error zodResolver type widening across optional schema fields
     resolver: zodResolver(stage2RegistrationSchema),
     defaultValues: {
@@ -241,7 +242,7 @@ export function ApplicantRegistrationForm({
       middle_name: initialData?.middle_name || "",
       last_name: initialData?.last_name || "",
       gender: initialData?.gender || "Female",
-      religion: initialData?.religion === "Muslim" ? "Islam" : initialData?.religion || "Islam",
+      religion: (initialData?.religion as string) === "Islam" ? "Muslim" : initialData?.religion || "Muslim",
       marital_status: initialData?.marital_status || "Single",
       children: initialData?.children ?? 0,
       nationality: initialData?.nationality || "Ethiopia",
@@ -342,6 +343,7 @@ export function ApplicantRegistrationForm({
       height: initialData?.height || "",
       weight: initialData?.weight || "",
       complexion: (initialData as any)?.complexion || "FAIR",
+      leaving_town: initialData?.leaving_town || "",
       reference_no: (initialData as any)?.reference_no || "",
       remarks: initialData?.remarks || "",
       skill_cleaning: initialData?.skill_cleaning !== undefined ? (Number(initialData.skill_cleaning) ? 1 : 0) : 1,
@@ -408,6 +410,7 @@ export function ApplicantRegistrationForm({
       "biometric_id",
       "labor_id",
       "labour_id",
+      "leaving_town",
       "contact_person_2nd",
       "contact_phone_2nd",
     ];
@@ -487,7 +490,7 @@ export function ApplicantRegistrationForm({
     [watch, setValue]
   );
 
-  // Immediate Real-Time Validation: validates fields as the user makes mistakes rather than waiting for Register click
+  // Immediate Real-Time Validation: validates fields as the user interacts rather than waiting for Register click
   const isMuayenaLive = watch("applicant_type") === "Muayena";
 
   const validateFieldLive = React.useCallback(
@@ -495,35 +498,35 @@ export function ApplicantRegistrationForm({
       if (fieldName === "phone_number") {
         const val = String(value ?? "").trim();
         if (!val) {
-          setError("phone_number", { type: "manual", message: "Primary Phone Number is required for registration" });
-        } else if (val.length < 9) {
-          setError("phone_number", { type: "manual", message: "Phone Number must be at least 9 digits" });
-        } else if (!PHONE_REGEX.test(val)) {
-          setError("phone_number", { type: "manual", message: "Please enter a valid Phone Number (e.g. +251911223344)" });
-        } else {
+          // If untouched or empty, don't show error while user hasn't finished typing
+        } else if (/[^\d+\s\-()]/.test(val)) {
+          setError("phone_number", { type: "manual", message: "Phone number contains invalid characters (digits, +, - only)" });
+        } else if (val.length > 18) {
+          setError("phone_number", { type: "manual", message: "Phone Number cannot exceed 18 digits" });
+        } else if (val.length >= 9 && PHONE_REGEX.test(val)) {
           clearErrors("phone_number");
         }
       } else if (fieldName === "passport_number") {
         const val = String(value ?? "").trim().toUpperCase();
         if (!val) {
-          setError("passport_number", { type: "manual", message: "Passport Number is required for registration" });
-        } else if (val.length < 7 || val.length > 9 || !PASSPORT_REGEX.test(val)) {
-          setError("passport_number", { type: "manual", message: "Passport Number must be 7-9 alphanumeric characters (e.g. EP1234567)" });
-        } else if (!passportConflict) {
-          clearErrors("passport_number");
+          // Empty
+        } else if (/[^A-Za-z0-9]/.test(val)) {
+          setError("passport_number", { type: "manual", message: "Passport Number must only contain letters and numbers" });
+        } else if (val.length > 9) {
+          setError("passport_number", { type: "manual", message: "Passport Number must not exceed 9 characters" });
+        } else if (val.length >= 7 && val.length <= 9 && PASSPORT_REGEX.test(val)) {
+          if (!passportConflict) {
+            clearErrors("passport_number");
+          }
         }
       } else if (fieldName === "city") {
         const val = String(value ?? "").trim();
-        if (!val || val.length < 2) {
-          setError("city", { type: "manual", message: "City is required (e.g. Addis Ababa)" });
-        } else {
+        if (val.length >= 2) {
           clearErrors("city");
         }
       } else if (fieldName === "date_of_birth") {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("date_of_birth", { type: "manual", message: "Date of Birth is required for registration" });
-        } else {
+        if (val) {
           const parsed = parseISO(val);
           if (!isValid(parsed) || !isPast(startOfDay(parsed))) {
             setError("date_of_birth", { type: "manual", message: "Date of Birth cannot be today or in the future" });
@@ -538,75 +541,95 @@ export function ApplicantRegistrationForm({
             }
           }
         }
-      } else if (fieldName === "passport_expiry") {
-        const val = String(value ?? "").trim();
-        if (!val) {
-          setError("passport_expiry", { type: "manual", message: "Passport Expiry Date is required for registration" });
-        } else {
-          const parsed = parseISO(val);
-          if (!isValid(parsed) || !isFuture(startOfDay(parsed))) {
+      } else if (fieldName === "passport_expiry" || fieldName === "passport_issue_date") {
+        const expiryVal = String(getValues("passport_expiry") ?? "").trim();
+        const issueVal = String(getValues("passport_issue_date") ?? "").trim();
+        if (expiryVal) {
+          const parsedExp = parseISO(expiryVal);
+          if (!isValid(parsedExp) || !isFuture(startOfDay(parsedExp))) {
             setError("passport_expiry", { type: "manual", message: "Passport Expiry Date must be a future date" });
-          } else if (startOfDay(parsed) < addMonths(startOfDay(new Date()), 6)) {
+          } else if (startOfDay(parsedExp) < addMonths(startOfDay(new Date()), 6)) {
             setError("passport_expiry", { type: "manual", message: "Passport must be valid for at least 6 months from today" });
+          } else if (issueVal && isValid(parseISO(issueVal)) && parseISO(expiryVal) <= parseISO(issueVal)) {
+            setError("passport_expiry", { type: "manual", message: "Passport expiry date must be after the issue date" });
           } else {
             clearErrors("passport_expiry");
           }
         }
+      } else if (fieldName === "medical_expiry_date" || fieldName === "medical_issue_date") {
+        const medExp = String(getValues("medical_expiry_date") ?? "").trim();
+        const medIssue = String(getValues("medical_issue_date") ?? "").trim();
+        if (medExp) {
+          const parsed = parseISO(medExp);
+          if (!isValid(parsed)) {
+            setError("medical_expiry_date", { type: "manual", message: "Please enter a valid Medical Expiration Date" });
+          } else if (medIssue && isValid(parseISO(medIssue)) && parseISO(medExp) <= parseISO(medIssue)) {
+            setError("medical_expiry_date", { type: "manual", message: "Medical expiry date must be after the issue date" });
+          } else {
+            clearErrors("medical_expiry_date");
+          }
+        } else {
+          clearErrors("medical_expiry_date");
+        }
       } else if (fieldName === "full_name") {
         const val = String(value ?? "").trim();
-        if (!val || val.length < 2) {
-          setError("full_name", { type: "manual", message: "Full Name is required (at least 2 characters)" });
-        } else if (val.split(/\s+/).filter(Boolean).length < 2) {
-          setError("full_name", { type: "manual", message: "Please enter at least First Name and Father's Name" });
-        } else {
+        if (val.length >= 2 && val.split(/\s+/).filter(Boolean).length >= 2) {
           clearErrors("full_name");
         }
       } else if (fieldName === "job_applied") {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("job_applied", { type: "manual", message: "Job / Position Applied is required for registration" });
-        } else {
+        if (val) {
           clearErrors("job_applied");
+        }
+      } else if (fieldName === "religion") {
+        const val = String(value ?? "").trim();
+        if (val) {
+          clearErrors("religion");
+        }
+      } else if (fieldName === "gender") {
+        const val = String(value ?? "").trim();
+        if (val) {
+          clearErrors("gender");
+        }
+      } else if (fieldName === "marital_status") {
+        const val = String(value ?? "").trim();
+        if (val) {
+          clearErrors("marital_status");
         }
       } else if (fieldName === "english_level" && !isMuayenaLive) {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("english_level", { type: "manual", message: "English Level is required" });
-        } else {
+        if (val) {
           clearErrors("english_level");
         }
       } else if (fieldName === "arabic_level" && !isMuayenaLive) {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("arabic_level", { type: "manual", message: "Arabic Level is required" });
-        } else {
+        if (val) {
           clearErrors("arabic_level");
         }
       } else if (fieldName === "place_of_birth" && !isMuayenaLive) {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("place_of_birth", { type: "manual", message: "Place of Birth is required for registration" });
-        } else {
+        if (val) {
           clearErrors("place_of_birth");
         }
       } else if (fieldName === "qualification" && !isMuayenaLive) {
         const val = String(value ?? "").trim();
-        if (!val) {
-          setError("qualification", { type: "manual", message: "Qualification is required for registration" });
-        } else {
+        if (val) {
           clearErrors("qualification");
         }
       } else if (fieldName === "salary_amount" && !isMuayenaLive) {
         const val = Number(value || 0);
-        if (val <= 0) {
-          setError("salary_amount", { type: "manual", message: "Monthly Salary is required for registration" });
-        } else {
+        if (val > 0) {
           clearErrors("salary_amount");
           clearErrors("monthly_salary" as any);
         }
+      } else if (fieldName === "national_id" || fieldName === "labor_id" || fieldName === "labour_id" || fieldName === "leaving_town") {
+        const val = String(value ?? "").trim();
+        if (!val) {
+          clearErrors(fieldName as any);
+        }
       }
     },
-    [isMuayenaLive, passportConflict, setError, clearErrors]
+    [isMuayenaLive, passportConflict, setError, clearErrors, getValues]
   );
 
   React.useEffect(() => {
@@ -904,7 +927,7 @@ export function ApplicantRegistrationForm({
       education: data.qualification || data.education || data.highest_education || "SECONDARY LEVEL",
       highest_education: data.qualification || data.highest_education || data.education || "SECONDARY LEVEL",
       qualification: data.qualification || "SECONDARY LEVEL",
-      religion: data.religion || "Islam",
+      religion: (data.religion as string) === "Islam" ? "Muslim" : data.religion || "Muslim",
       gender: data.gender || "Female",
       marital_status: data.marital_status || "Single",
       visa_type: data.visa_type || "Work",
@@ -998,12 +1021,12 @@ export function ApplicantRegistrationForm({
       setApplicantState(data?.status || data?.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       toast.success(`Applicant Saved Successfully (ID: ${savedId || ""})`, {
-        description: "Draft saved. Redirecting to details...",
+        description: "Draft saved. Redirecting to applicant list...",
       });
       if (onSuccessRedirect && savedId) {
         onSuccessRedirect(savedId);
-      } else if (savedId) {
-        router.push(`/applicants/${encodeURIComponent(savedId)}`);
+      } else {
+        router.push("/applicants");
       }
     },
     onError: (error: unknown) => {
@@ -1023,9 +1046,13 @@ export function ApplicantRegistrationForm({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
-      toast.success("Applicant changes saved successfully!");
+      toast.success("Applicant changes saved successfully!", {
+        description: "Profile updated. Redirecting to applicant list...",
+      });
       if (onSuccessRedirect && draftApplicantId) {
         onSuccessRedirect(draftApplicantId);
+      } else {
+        router.push("/applicants");
       }
     },
     onError: (err: unknown) => {
@@ -1080,12 +1107,12 @@ export function ApplicantRegistrationForm({
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       if (targetId) queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
       toast.success("Applicant Registered Successfully!", {
-        description: `Record ${targetId} is now Registered.`,
+        description: `Record ${targetId} is now Registered. Redirecting to applicant list...`,
       });
       if (onSuccessRedirect && targetId) {
         onSuccessRedirect(targetId);
-      } else if (targetId) {
-        router.push(`/applicants/${encodeURIComponent(targetId)}`);
+      } else {
+        router.push("/applicants");
       }
     },
     onError: (err: unknown) => {
@@ -1104,6 +1131,8 @@ export function ApplicantRegistrationForm({
       else if (errLower.includes("medical expiry") || errLower.includes("medical expiration")) scrollToAndHighlightField("medical_expiry_date");
       else if (errLower.includes("medical")) scrollToAndHighlightField("medical_status");
       else if (errLower.includes("national id")) scrollToAndHighlightField("national_id");
+      else if (errLower.includes("labor id") || errLower.includes("labour id")) scrollToAndHighlightField("labor_id");
+      else if (errLower.includes("leaving town")) scrollToAndHighlightField("leaving_town");
       else if (errLower.includes("job") || errLower.includes("occupation")) scrollToAndHighlightField("job_applied");
       else if (errLower.includes("education") || errLower.includes("qualification")) scrollToAndHighlightField("qualification");
 
@@ -1266,7 +1295,7 @@ export function ApplicantRegistrationForm({
                 {currentDestCountry.toLowerCase() === "kuwait"
                   ? "🇰🇼 Kuwait Corridor: Direct LMIS Work Permit & Visa flow (Exempt from Musaned/Wakala)."
                   : currentDestCountry.toLowerCase() === "saudi arabia"
-                  ? "🇸🇦 Saudi Corridor: 3-Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."
+                  ? "🇸🇦 Saudi Corridor: Stream Flow (Musaned verification, Wakala power of attorney & Injaz)."
                   : " International Corridor: Standard visa and contract processing pipeline."}
               </p>
             </div>
@@ -1518,6 +1547,15 @@ export function ApplicantRegistrationForm({
                 : activeMediaTab === "video"
                 ? "video"
                 : "passport"
+            }
+            error={
+              activeMediaTab === "photo"
+                ? errors.photograph?.message || errors.photo_passport?.message
+                : activeMediaTab === "full_size"
+                ? errors.photo_full_body?.message
+                : activeMediaTab === "passport"
+                ? errors.passport_scan?.message
+                : errors.video_url?.message
             }
             value={activeMediaUrl}
             isLoading={isUploadingMedia}
@@ -2086,6 +2124,9 @@ export function ApplicantRegistrationForm({
                   getFieldClass("national_id")
                 )}
               />
+              {errors.national_id && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.national_id.message}</p>
+              )}
             </div>
 
             <div className="space-y-1.5" id="field-sponsor_arabic">
@@ -2459,15 +2500,38 @@ export function ApplicantRegistrationForm({
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" id="field-labor_id">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                   Labor ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="Ministry Labor ID"
                   {...register("labor_id")}
-                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
+                  className={cn(
+                    "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                    getFieldClass("labor_id")
+                  )}
                 />
+                {errors.labor_id && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.labor_id.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5" id="field-leaving_town">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                  Leaving Town <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                <Input
+                  placeholder="e.g. Addis Ababa"
+                  {...register("leaving_town")}
+                  className={cn(
+                    "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                    getFieldClass("leaving_town")
+                  )}
+                />
+                {errors.leaving_town && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.leaving_town.message}</p>
+                )}
               </div>
 
               <div className="space-y-1.5">

@@ -766,6 +766,27 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Expanded clearance step introspection with `listMyClearanceStepsV2` to ensure `lmsStepName`, `injazStepName`, and `embassyStepName` are resolved reliably across all operators.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors). Zero mock data or mock fallbacks. Ready for manual user testing.
 
+## 21. Applicant Profile Redirection, Placement State Machine Departure Gate & Dialog Cleanup (2026-10-19)
+- **Applicant Profile Update List Redirection**:
+  - In `src/app/applicants/[id]/edit/page.tsx` and `src/components/applicant/ApplicantRegistrationForm.tsx`, updated the `onSuccess` flow so that when a user updates an applicant profile and clicks `"Update Profile"`, the system immediately redirects to `/applicants` (the Applicant list) via `router.push('/applicants')`.
+- **Card 4 State Machine Gate Fix (`Cannot move Placement ... from 'Stamped' to 'Departed'`)**:
+  - **Root Cause**: The user observed `"Cannot move Placement PLM-00001 from 'Stamped' to 'Departed'"` when changing departed status to departed and clicking Finish stage on Card 4. This error was produced directly by the backend placement state machine (`02-placement-contract.md` / `state_machine.py`), which defines the canonical lifecycle: `Selected` ➔ `Processing` ➔ `Stamped` ➔ `Ticketed` ➔ `Departed`.
+  - When the candidate completes Embassy stamping, their placement is in `Stamped`. Attempting to jump directly from `Stamped` to `Departed` violates the state machine invariant requiring an intermediate `Ticketed` transition and pre-departure `medical_2_status == "FIT"`.
+  - **Authoritative Resolution**: In `ApplicantFollowUpWorkspace.tsx` Dialog 8 (`isConfirmDepartOpen`), the Finish Stage action now enforces the complete, sanctioned state progression:
+    1. Ensures ticket details are recorded on the placement (`recordTicketDetailsV2`).
+    2. Advances placement from `Stamped` to `Ticketed` (`advancePlacementV2(placementName, "Ticketed")`).
+    3. Satisfies the pre-departure medical gate by recording Medical 2 as `FIT` (`recordPredepartureMedicalResultV2(placementName, "FIT")`).
+    4. Advances placement to `Departed` (or records outcome for returns via `recordFlightOutcomeV2`).
+- **Audit Remark Field Purged from Finish Stage Popups**:
+  - Removed the `Audit Remark` input field from the Finish stage confirmation popup on Card 4 (`isConfirmDepartOpen`), keeping only the clean Departure Outcome selector.
+  - Confirmed that other Finish stage confirmation popups (Card 1 LMIS, Card 2 Te'shir, Card 3 Embassy) contain zero audit remark fields.
+- **Applicant Table & Registration Form Polish**:
+  - **Applicant Table**: Replaced the "Contract No." column with "Sponsor Name" bound to `(applicant as any).sponsor_name || (applicant as any).employer_name`. Removed the redundant "Book Ticket" action button on candidates in the `Stamped` stage.
+  - **Religion Options**: Removed `"Islam"` from `RELIGION_OPTIONS` in `src/lib/validations/applicant.schema.ts`, retaining canonical `"Muslim"` matching Frappe DocType select options.
+  - **Optional Field Validations**: Preprocessed `national_id`, `labor_id`, and `leaving_town` with `optionalString` and registered them in `OPTIONAL_FIELD_NAMES` (`src/lib/validations/zod-error-map.ts`), eliminating false `"Please provide a valid entry for..."` validation errors when fields are left blank.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No browser automated sessions initiated.
+
+
 
 
 
