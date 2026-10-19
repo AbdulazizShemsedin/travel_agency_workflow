@@ -292,6 +292,16 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.experience_type = "first_time";
   }
 
+  // Clear or normalize optional graduation_year if invalid or 0
+  if (result.graduation_year !== undefined) {
+    const gyNum = Number(result.graduation_year);
+    if (isNaN(gyNum) || gyNum < 1950) {
+      delete result.graduation_year;
+    } else {
+      result.graduation_year = gyNum;
+    }
+  }
+
   // 4. Salary Currency
   if (!result.salary_currency || String(result.salary_currency).trim() === "") {
     const currencyMap: Record<string, string> = {

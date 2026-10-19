@@ -1025,9 +1025,8 @@ export function ApplicantRegistrationForm({
       });
       if (onSuccessRedirect && savedId) {
         onSuccessRedirect(savedId);
-      } else {
-        router.push("/applicants");
       }
+      router.push("/applicants");
     },
     onError: (error: unknown) => {
       toast.error("Could not save applicant", {
@@ -1051,9 +1050,8 @@ export function ApplicantRegistrationForm({
       });
       if (onSuccessRedirect && draftApplicantId) {
         onSuccessRedirect(draftApplicantId);
-      } else {
-        router.push("/applicants");
       }
+      router.push("/applicants");
     },
     onError: (err: unknown) => {
       toast.error("Failed to save changes", {
@@ -1111,9 +1109,8 @@ export function ApplicantRegistrationForm({
       });
       if (onSuccessRedirect && targetId) {
         onSuccessRedirect(targetId);
-      } else {
-        router.push("/applicants");
       }
+      router.push("/applicants");
     },
     onError: (err: unknown) => {
       const errorMsg = formatCleanErrorMessage(err);

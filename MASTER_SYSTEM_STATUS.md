@@ -786,6 +786,20 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - **Optional Field Validations**: Preprocessed `national_id`, `labor_id`, and `leaving_town` with `optionalString` and registered them in `OPTIONAL_FIELD_NAMES` (`src/lib/validations/zod-error-map.ts`), eliminating false `"Please provide a valid entry for..."` validation errors when fields are left blank.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No browser automated sessions initiated.
 
+## 22. Applicant Details Redirection & Graduation Year False Validation Elimination (2026-10-19)
+- **Applicant Details Profile Update Redirection**:
+  - In `src/app/applicants/[id]/page.tsx`, `onSuccessRedirect` previously only invalidated query keys without performing navigation. Added `router.push('/applicants')` to `onSuccessRedirect`.
+  - In `src/components/applicant/ApplicantRegistrationForm.tsx`, updated `saveChangesMutation.onSuccess`, `saveDraftMutation.onSuccess`, and `registerMutation.onSuccess` to unconditionally execute `router.push('/applicants')`.
+  - Whenever an operator updates candidate details on `/applicants/[id]` or `/applicants/[id]/edit` and clicks **"Update Profile"**, the browser immediately redirects to `/applicants` (the Applicant list).
+- **Graduation Year False Validation Elimination**:
+  - **Root Cause**: Frappe DocType `Applicant` returns `graduation_year: 0` for empty Int fields. In `applicant.schema.ts`, `graduation_year` was validated with `optionalNumber(z.number().int().min(1950))`. Because `0` is a number, it evaluated $0 < 1950$ and triggered the Zod error: `"Graduation Year must be at least 1950."`, blocking registration on a field not even rendered in the intake form.
+  - **Resolution**:
+    1. Preprocessed `graduation_year` in `applicant.schema.ts` to map `0`, `"0"`, `""`, `null`, `undefined`, or any value `< 1950` to `undefined`.
+    2. In `normalizeApplicantFields` (`src/lib/api/v2/applicants.ts`), stripped `graduation_year` if its value is `< 1950`.
+    3. Added `graduation_year` and `years_of_experience` to `OPTIONAL_FIELD_NAMES` in `src/lib/validations/zod-error-map.ts`.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors). Zero mock data or mock fallbacks. No browser subagent invoked.
+
+
 
 
 

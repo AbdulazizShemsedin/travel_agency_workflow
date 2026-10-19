@@ -210,11 +210,23 @@ export const baseApplicantSchema = z.object({
   sub_region: optionalString,
   address_line_1: optionalString,
   institution: optionalString,
-  graduation_year: optionalNumber(
-    z.number().int().min(1950).max(new Date().getFullYear() + 1)
-  ),
+  graduation_year: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined || val === 0 || val === "0") {
+      return undefined;
+    }
+    const num = Number(val);
+    if (Number.isNaN(num) || num < 1950 || num > new Date().getFullYear() + 1) {
+      return undefined;
+    }
+    return num;
+  }, z.number().int().optional().nullable()),
   current_employer: optionalString,
-  years_of_experience: optionalNumber(z.number().min(0).max(50)),
+  years_of_experience: z.preprocess((val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    const num = Number(val);
+    if (Number.isNaN(num) || num < 0) return 0;
+    return num;
+  }, z.number().min(0).max(50).optional().nullable()),
   english_level: optionalString,
   arabic_level: optionalString,
   experience_country: optionalString,

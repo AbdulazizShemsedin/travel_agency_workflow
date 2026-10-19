@@ -414,6 +414,7 @@ export default function ApplicantDetailPage() {
           queryClient.invalidateQueries({ queryKey: ["applicant", id] });
           queryClient.invalidateQueries({ queryKey: ["applicants"] });
           queryClient.invalidateQueries({ queryKey: ["placements", id] });
+          router.push("/applicants");
         }}
       />
 

@@ -62,6 +62,8 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const OPTIONAL_FIELD_NAMES = new Set([
+  "graduation_year",
+  "years_of_experience",
   "national_id",
   "labor_id",
   "labour_id",
