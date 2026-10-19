@@ -639,6 +639,12 @@ export default function ExpensesIncomePage() {
       {/* ------------------------------------------------------------- */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
+          </Link>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Finance
@@ -656,18 +662,6 @@ export default function ExpensesIncomePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/dashboard">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold gap-1.5"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Dashboard</span>
-            </Button>
-          </Link>
-
           <Button
             type="button"
             variant="outline"

@@ -712,6 +712,62 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - Hardened `uploadPlacementVisaV2` in `src/lib/api/v2/placements.ts` to automatically delegate to `updatePlacementParsedFieldsV2` when `fileUrl` is empty or omitted, completely preventing any future 417 errors.
 - **Verification**: Clean TypeScript check (`npx tsc --noEmit`, 0 errors). Zero mock data.
 
+## 19. Follow-Up Field Persistence (Embassy Submission Date & Visa Valid Until Bug Fix) & Registration Place of Birth Dropdown (2026-10-17)
+- **Problem Statement**:
+  - On the Follow-Up details page, after entering and saving fields on the Embassy card section (specifically `Submission Date` and `Visa Valid Until`), a success toast was displayed but the input fields immediately reset to blank.
+  - On the Applicant Registration Form, `place_of_birth` was a plain text input instead of a dropdown listing the canonical Ethiopian birthplaces matching the Foreign Agency candidate filter.
+- **Root Cause Analysis**:
+  - In `src/lib/api/v2/operational.ts`, `fetchOperationalWorkspaceDataV2` mapped `visaDeadline` strictly from `(plc as any)?.visa_deadline || (embassyStep as any)?.visa_deadline || ""`, completely omitting `plc?.visa_expiry_date` (which is where `update_placement_parsed_fields` writes). It also omitted `submissionDate`, `visaIssueDate`, remarks, and `plc` from the returned `row`.
+  - When `refreshAll()` refetched follow-up data, `row.submissionDate` was `undefined` and `row.visaDeadline` was `""`.
+  - In `ApplicantFollowUpWorkspace.tsx`, `useEffect([row])` spread the raw newly fetched `row` over local state, wiping out existing values. Then `useEffect([currentRow])` wiped non-empty input states with empty strings.
+  - `submissionDate` was saved purely via `onBlur` without dedicated Enter key submission, inline `Saving...`/`Saved` feedback, or persistent state preservation.
+- **Authoritative Resolution**:
+  1. **Operational Workspace Data Mapping (`operational.ts`)**:
+     - Mapped `visaDeadline` to inspect `plc?.visa_expiry_date`, `plc?.visa_deadline`, `embassyStep?.visa_valid_until`, `embassyStep?.visa_deadline`, and `embassyStep?.visa_expiry_date`.
+     - Mapped `submissionDate` to inspect `embassyStep?.submission_date`, `embassyStep?.date_submitted`, and `embassyStep?.date_started`.
+     - Mapped `visaIssueDate`, `embassyRemarks`, `lmisRemark`, `teshirRemark`, `ticketRemark`, and stored `plc` on `row.plc`.
+     - Updated `WorkspaceApplicantRow` interface in `src/types/workspace.ts` with explicit typed definitions.
+  2. **Applicant Follow-Up Workspace State Protection (`ApplicantFollowUpWorkspace.tsx`)**:
+     - Added `resolveFollowUpField` in `useEffect([row])` preserving local populated values whenever the incoming server field is blank/undefined.
+     - Added safe state synchronization helpers (`syncStr`, `syncDate`) in `useEffect([currentRow])` that never overwrite a populated input state with an empty string.
+     - Created `handleSaveEmbassySubmissionDate` calling `submitEmbassyStepV2`, updating local `currentRow.submissionDate`, triggering inline `savingField` / `savedField` visual feedback, Enter key submission, and input styling.
+     - Hardened `handleSaveEmbassyVisaExpiryDate`, `handleSaveEmbassyVisaIssueDate`, and `handleSaveEmbassyVisaNumber` to ensure `plc` object state is safely assigned.
+  3. **Applicant Registration Form Place of Birth Dropdown (`ApplicantRegistrationForm.tsx` & `CandidateFilters.tsx`)**:
+     - Exported `PLACE_OF_BIRTH_OPTIONS` from `CandidateFilters.tsx` containing the canonical 10 Ethiopian regions/cities: `["AMHARA", "OROMO", "TIGRAY", "SOMALIA", "AFAR", "GUMUZ", "GURAGE", "SILTE", "DEBUB", "GAMBELLA"]`.
+     - Replaced text `<Input>` in `ApplicantRegistrationForm.tsx` (and `Step1PersonalInfo.tsx`) with styled `<select>` populated with `PLACE_OF_BIRTH_OPTIONS`.
+     - Added graceful fallback preserving any pre-existing or passport OCR-extracted value if not in the 10 options (`watchPlaceOfBirth && !PLACE_OF_BIRTH_OPTIONS.includes(...)`).
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, 0 errors). Zero mock data or fallback demo fixtures.
+
+## 20. Back Button System-Wide Unification & Follow-Up Multi-Stage "Finish stage" Architecture (2026-10-17)
+- **Unified Back Button Design Across the Entire System**:
+  - Identified two conflicting back button patterns in the system: a left-aligned text link with arrow (`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 ... <ArrowLeft className="h-3.5 w-3.5" /> Back to ...`) versus a right-aligned bordered outline button (`<Button variant="outline" ...> <ArrowLeft ... /> Back to ...</Button>`).
+  - Standardized the entire system on the approved left-type design:
+    - `src/app/applicants/new/page.tsx`: Removed the redundant right-aligned "Back to Dashboard" button, keeping only the canonical left-aligned "Back to Applicants" navigation.
+    - `src/components/operational/RoleWorkspaceContainer.tsx`: Moved "Back to Dashboard" from the right-side controls cluster to the top-left above the workspace title using the standard left-type link.
+    - `src/app/reports/page.tsx`: Moved "Back to Dashboard" from the right-side filter controls cluster to the top-left above the report header using the standard left-type link.
+    - `src/app/expenses-income/page.tsx`: Moved "Back to Dashboard" from the right-side action controls cluster to the top-left above the finance header using the standard left-type link.
+    - `src/components/operational/workspaces/ApplicantFollowUpWorkspace.tsx`: Moved "Back to Follow-Up" from the right-side header controls to the top-left above the candidate identity context using the standard left-type button.
+- **Resolved Embassy Stamping 417 Error (`Taeshir must be complete before the Embassy step can be Stamped`)**:
+  - **Root Cause**: On the Saudi Arabia corridor, the backend RPC `agency_tracking.clearance_api.stamp_embassy_step` requires the preceding `Taeshir` clearance step to be in a complete terminal state (`Complete`, `Issued`, `Approved`). Because the Te'shir card previously lacked a dedicated step completion button, the underlying Clearance Step doc remained `status: "Pending"`.
+  - **Authoritative Resolution**:
+    1. Added a dedicated "Finish stage" button to the Te'shir card executing `completeClearanceStepV2(injazStepName)`.
+    2. Implemented prerequisite auto-completion in the Embassy finish handler: before invoking `stampEmbassyStepV2`, the system checks whether the Te'shir step (`injazStepName`) is still `Pending` or `In Progress`. If so, it automatically calls `completeClearanceStepV2(injazStepName)` first, guaranteeing 100% prerequisite satisfaction and permanently preventing 417 exceptions.
+- **Comprehensive "Finish stage" Buttons with Confirmation Dialogs on All 4 Follow-Up Cards**:
+  - Implemented consistent "Finish stage" buttons across all four operational cards to support replacing the excel-like tables with the Follow-up workspace:
+    - **Card 1 (LMIS)**: Added "Finish stage" button opening `isLmisFinishOpen` confirmation dialog. Upon confirmation, calls `setLmisStatusV2` (setting status to `"ISSUED"`) and `completeClearanceStepV2(lmsStepName)`.
+    - **Card 2 (Te'shir)**: Added "Finish stage" button opening `isTeshirFinishOpen` confirmation dialog. Upon confirmation, calls `completeClearanceStepV2(injazStepName)`.
+    - **Card 3 (Embassy)**: Renamed "Stamp Visa" to "Finish stage" opening the confirmation dialog (titled "Finish Embassy Stage"). Prompts for visa number, issue date, and expiry date, automatically resolves prerequisite Te'shir completion, stamps the visa via `stampEmbassyStepV2`, and persists placement parsed fields via `updatePlacementParsedFieldsV2`.
+    - **Card 4 (Ticket & Departure)**: Added "Finish stage" button opening `isConfirmDepartOpen` confirmation dialog (titled "Finish Departure Stage"). Upon confirmation, advances placement to selected outcome (`"Departed"`, `"Local return"`, `"International return"`) via `advancePlacementV2`.
+- **Permanent "Finish stage" Button Visibility & Interactive Field Decoupling**:
+  - Eliminated premature disabling and `pointer-events-none` locking of the "Finish stage" button when fields or dropdowns on a card are edited (e.g., LMIS status to ISSUED, Te'shir status to Completed, Embassy status to Stamped, Departure status to Departed).
+  - Ensured the "Finish stage" button remains permanently visible, clickable, and vibrant on all four cards (`canEditLmis`, `canEditTaeshir`, `canEditEmbassy`, `canEditDeparture && placementName`).
+  - Removed aggressive lock conditions (`disabled={is*Locked}` and `pointer-events-none`) across card bodies and action bars. Card 4 fields (Ticket Number, Flight Date, Flight Time, Airline, Medical 2 result, and Ticket Remark) are fully interactive and persist via Enter key / onBlur without auto-completing stages.
+  - Clicking "Finish stage" on any card opens its dedicated confirmation popup modal, which is the sole trigger for officially completing the stage on the backend via live V2 RPCs.
+  - Expanded clearance step introspection with `listMyClearanceStepsV2` to ensure `lmsStepName`, `injazStepName`, and `embassyStepName` are resolved reliably across all operators.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors). Zero mock data or mock fallbacks. Ready for manual user testing.
+
+
+
 
 
 

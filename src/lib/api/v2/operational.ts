@@ -13,6 +13,7 @@
  * - listMyClearanceStepsV2
  */
 
+import { ApiV2Error } from "./client";
 import { listApplicantsV2, V2ApplicantDetails } from "./applicants";
 import { listPlacementsV2, V2PlacementRecord } from "./placements";
 import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
@@ -44,20 +45,48 @@ export async function fetchOperationalWorkspaceDataV2(
   corridorFilter: string = "All"
 ): Promise<WorkspaceApplicantRow[]> {
   try {
+    const isNetworkError = (err: any) => {
+      if (!err) return false;
+      if (typeof window !== "undefined" && typeof navigator !== "undefined" && !navigator.onLine) return true;
+      if (err instanceof ApiV2Error && (err.statusCode === 0 || err.excType === "NetworkError")) return true;
+      const msg = String(err.message || "").toLowerCase();
+      return (
+        msg.includes("network error") ||
+        msg.includes("failed to fetch") ||
+        msg.includes("unable to reach the server") ||
+        msg.includes("cannot connect to server") ||
+        msg.includes("internet connection") ||
+        err?.name === "NetworkError"
+      );
+    };
+
+    let applicantsError: any = null;
+    let placementsError: any = null;
+
     const [applicants, placements, clearanceSteps] = await Promise.all([
       listApplicantsV2().catch((err) => {
+        if (isNetworkError(err)) throw err;
+        applicantsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listApplicantsV2 failed", err);
         return [] as V2ApplicantDetails[];
       }),
       listPlacementsV2().catch((err) => {
+        if (isNetworkError(err)) throw err;
+        placementsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listPlacementsV2 failed", err);
         return [] as V2PlacementRecord[];
       }),
       listMyClearanceStepsV2().catch((err) => {
+        if (isNetworkError(err)) throw err;
         console.warn("fetchOperationalWorkspaceDataV2: listMyClearanceStepsV2 failed", err);
         return [] as V2ClearanceStepItem[];
       }),
     ]);
+
+    // If both primary data sources failed, rethrow honest error instead of synthesizing empty 0 records
+    if (applicants.length === 0 && placements.length === 0 && (applicantsError || placementsError)) {
+      throw (placementsError || applicantsError);
+    }
 
     const placementsByApplicant = new Map<string, V2PlacementRecord>();
     for (const p of placements) {
@@ -488,7 +517,45 @@ export async function fetchOperationalWorkspaceDataV2(
           (plc as any)?.flight_time ||
           (plc?.flight_date?.includes(" ") ? plc.flight_date.split(" ")[1] : "") ||
           "",
-        visaDeadline: (plc as any)?.visa_deadline || (embassyStep as any)?.visa_deadline || "",
+        visaDeadline:
+          (plc as any)?.visa_expiry_date ||
+          (plc as any)?.visa_deadline ||
+          (embassyStep as any)?.visa_valid_until ||
+          (embassyStep as any)?.visa_deadline ||
+          (embassyStep as any)?.visa_expiry_date ||
+          (applicant as any)?.visa_expiry_date ||
+          "",
+        visaIssueDate:
+          (plc as any)?.visa_issue_date ||
+          (embassyStep as any)?.visa_issue_date ||
+          (applicant as any)?.visa_issue_date ||
+          "",
+        submissionDate:
+          (embassyStep as any)?.submission_date ||
+          (embassyStep as any)?.date_submitted ||
+          embassyStep?.date_started?.split(" ")[0] ||
+          (embassyStep?.creation ? embassyStep.creation.split(" ")[0] : "") ||
+          "",
+        embassyRemarks:
+          embassyStep?.notes ||
+          embassyStep?.rejection_remark ||
+          (embassyStep as any)?.remarks ||
+          "",
+        lmisRemark:
+          lmsStep?.notes ||
+          lmsStep?.rejection_remark ||
+          (lmsStep as any)?.remarks ||
+          "",
+        teshirRemark:
+          injazStep?.notes ||
+          injazStep?.rejection_remark ||
+          (injazStep as any)?.remarks ||
+          "",
+        ticketRemark:
+          (plc as any)?.remarks ||
+          (plc as any)?.ticketing_remarks ||
+          "",
+        plc,
 
         // Clearances records
         lms: lmsStep,

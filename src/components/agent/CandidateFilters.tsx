@@ -35,6 +35,19 @@ interface CandidateFiltersProps {
   totalAvailable: number;
 }
 
+export const PLACE_OF_BIRTH_OPTIONS = [
+  "AMHARA",
+  "OROMO",
+  "TIGRAY",
+  "SOMALIA",
+  "AFAR",
+  "GUMUZ",
+  "GURAGE",
+  "SILTE",
+  "DEBUB",
+  "GAMBELLA",
+] as const;
+
 export function CandidateFilters({
   searchTerm,
   onSearchChange,
@@ -98,16 +111,7 @@ export function CandidateFilters({
 
   const PLACES_OF_BIRTH = [
     { value: "All Places", label: "Place of Birth (All)", icon: <MapPin className="h-3.5 w-3.5 text-slate-400" /> },
-    { value: "AMHARA", label: "AMHARA" },
-    { value: "OROMO", label: "OROMO" },
-    { value: "TIGRAY", label: "TIGRAY" },
-    { value: "SOMALIA", label: "SOMALIA" },
-    { value: "AFAR", label: "AFAR" },
-    { value: "GUMUZ", label: "GUMUZ" },
-    { value: "GURAGE", label: "GURAGE" },
-    { value: "SILTE", label: "SILTE" },
-    { value: "DEBUB", label: "DEBUB" },
-    { value: "GAMBELLA", label: "GAMBELLA" },
+    ...PLACE_OF_BIRTH_OPTIONS.map((place) => ({ value: place, label: place })),
   ];
 
   const SKIN_COLORS = [

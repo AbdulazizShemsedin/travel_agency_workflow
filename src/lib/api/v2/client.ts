@@ -136,6 +136,14 @@ export async function requestV2<T = any>(
     }
   }
 
+  if (typeof window !== "undefined" && typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new ApiV2Error(
+      "No internet connection detected. Please check your network and try again.",
+      0,
+      "NetworkError"
+    );
+  }
+
   let response: Response;
   try {
     response = await fetch(endpoint, {
@@ -146,10 +154,13 @@ export async function requestV2<T = any>(
     });
   } catch (err: any) {
     const isAbort = err?.name === "AbortError";
+    const isOffline = typeof window !== "undefined" && typeof navigator !== "undefined" && !navigator.onLine;
     throw new ApiV2Error(
       isAbort
         ? "The server took too long to respond. Please check your connection and try again."
-        : "Network error: we could not reach the server. Check your internet connection and try again.",
+        : isOffline
+        ? "No internet connection detected. Please check your network and try again."
+        : "Unable to reach the server. Please check your internet connection (even if connected to Wi-Fi) and try again.",
       isAbort ? 504 : 0,
       "NetworkError",
       undefined,

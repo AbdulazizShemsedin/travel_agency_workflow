@@ -63,13 +63,6 @@ export default function NewApplicantPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href="/dashboard"
-              className="text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-white font-semibold py-1.5 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 flex items-center gap-1.5 transition"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Dashboard</span>
-            </Link>
-            <Link
               href="/applicants"
               className="text-xs text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white font-medium py-1.5 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800 transition"
             >

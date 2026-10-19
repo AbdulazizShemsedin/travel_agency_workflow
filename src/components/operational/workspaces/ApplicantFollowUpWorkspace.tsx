@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X,
@@ -65,6 +65,7 @@ import {
   forfeitInjazAndRestartV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
+  listMyClearanceStepsV2,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import {
@@ -111,6 +112,20 @@ export function ApplicantFollowUpWorkspace({
   const [currentRow, setCurrentRow] = React.useState<WorkspaceApplicantRow | null>(row);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
+  const activePlacementIdentifier =
+    currentRow?.placementName ||
+    currentRow?.placementId ||
+    row?.placementName ||
+    row?.placementId ||
+    "";
+
+  // Authoritative on-demand resolution of clearance steps for this candidate's placement
+  const { data: placementSteps = [] } = useQuery({
+    queryKey: ["placement_clearance_steps", activePlacementIdentifier],
+    queryFn: () => listMyClearanceStepsV2(activePlacementIdentifier),
+    enabled: Boolean(activePlacementIdentifier),
+  });
+
   React.useEffect(() => {
     if (!row) return;
     setCurrentRow((prev) => {
@@ -120,6 +135,14 @@ export function ApplicantFollowUpWorkspace({
         (row.name && prev.name === row.name) ||
         (row.passportNumber && prev.passportNumber === row.passportNumber);
       if (!isSameApplicant) return row;
+
+      // Helper to preserve populated local field value if server row has undefined/blank
+      const resolveFollowUpField = (serverVal: any, localVal: any) => {
+        if (serverVal !== undefined && serverVal !== null && serverVal !== "" && serverVal !== "—") {
+          return serverVal;
+        }
+        return localVal !== undefined && localVal !== null && localVal !== "—" ? localVal : serverVal;
+      };
 
       // Intelligently preserve locally modified statuses if refreshed row is stale
       const localInjazPaid = (prev.injazPayment || "").toLowerCase() === "paid";
@@ -135,11 +158,49 @@ export function ApplicantFollowUpWorkspace({
       const serverLmisIssued = (row.lmisStatus || "").toUpperCase() === "ISSUED" || row.lms?.status === "Issued" || row.lms?.status === "Complete" || row.lms?.status === "Completed";
       const resolvedLmisStatus = (localLmisIssued && !serverLmisIssued) ? prev.lmisStatus : (row.lmisStatus || prev.lmisStatus);
 
+      const localEmbassyStamped =
+        (prev.embassyStatus || "").toLowerCase() === "stamped" ||
+        (prev.embassy?.status || "").toLowerCase() === "stamped" ||
+        (prev.embassy?.status || "").toLowerCase() === "approved" ||
+        (prev.embassy?.status || "").toLowerCase() === "complete" ||
+        (prev.embassy?.status || "").toLowerCase() === "completed";
+      const serverEmbassyStamped =
+        (row.embassyStatus || "").toLowerCase() === "stamped" ||
+        (row.embassy?.status || "").toLowerCase() === "stamped" ||
+        (row.embassy?.status || "").toLowerCase() === "approved" ||
+        (row.embassy?.status || "").toLowerCase() === "complete" ||
+        (row.embassy?.status || "").toLowerCase() === "completed";
+      const resolvedEmbassyStatus =
+        (localEmbassyStamped && !serverEmbassyStamped)
+          ? (prev.embassyStatus || "Stamped")
+          : (row.embassyStatus || prev.embassyStatus);
+
       return {
         ...row,
         lmisStatus: resolvedLmisStatus,
         injazPayment: resolvedInjazPayment,
         teshirStatus: resolvedTeshirStatus,
+        embassyStatus: resolvedEmbassyStatus,
+        submissionDate: resolveFollowUpField(row.submissionDate, prev.submissionDate),
+        visaDeadline: resolveFollowUpField(row.visaDeadline, prev.visaDeadline),
+        visaIssueDate: resolveFollowUpField(row.visaIssueDate, prev.visaIssueDate),
+        visaNumber: resolveFollowUpField(row.visaNumber, prev.visaNumber),
+        embassyRemarks: resolveFollowUpField(row.embassyRemarks, prev.embassyRemarks),
+        lmisRemark: resolveFollowUpField(row.lmisRemark, prev.lmisRemark),
+        teshirRemark: resolveFollowUpField(row.teshirRemark, prev.teshirRemark),
+        ticketRemark: resolveFollowUpField(row.ticketRemark, prev.ticketRemark),
+        laborId: resolveFollowUpField(row.laborId, prev.laborId),
+        injazApplicationId: resolveFollowUpField(row.injazApplicationId, prev.injazApplicationId),
+        appointmentDate: resolveFollowUpField(row.appointmentDate, prev.appointmentDate),
+        ticketNumber: resolveFollowUpField(row.ticketNumber, prev.ticketNumber),
+        flightDate: resolveFollowUpField(row.flightDate, prev.flightDate),
+        flightTime: resolveFollowUpField(row.flightTime, prev.flightTime),
+        plc: row.plc || prev.plc,
+        embassy: (localEmbassyStamped && !serverEmbassyStamped)
+          ? (prev.embassy ? { ...prev.embassy, status: "Stamped" } : ({ status: "Stamped" } as any))
+          : (row.embassy || prev.embassy),
+        lms: row.lms || prev.lms,
+        injaz: row.injaz || prev.injaz,
       };
     });
   }, [row]);
@@ -202,11 +263,16 @@ export function ApplicantFollowUpWorkspace({
     [roles]
   );
 
-  const canEditLmis = isAdmin || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS"]) || hasRoleKeyword(["lms", "lmis"]);
-  const canEditTaeshir = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign"]) || hasRoleKeyword(["taeshir", "teshir", "injaz", "telesign"]);
-  const canEditEmbassy = isAdmin || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy"]) || hasRoleKeyword(["embassy"]);
-  const canEditDeparture = isAdmin || hasAnyV2Role(authUserV2, ["Ticketer"]) || hasRoleKeyword(["ticket", "ticketer"]);
-  const canEditMedical = isAdmin || hasRoleKeyword(["medical"]) || canEditDeparture;
+  const isFollowUpOperator =
+    isAdmin ||
+    hasAnyV2Role(authUserV2, ["Manager", "Clearance Officer", "Placement Officer", "Agency Coordinator"]) ||
+    hasRoleKeyword(["manager", "clearance", "placement", "follow-up", "followup", "coordinator", "officer"]);
+
+  const canEditLmis = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS"]) || hasRoleKeyword(["lms", "lmis"]);
+  const canEditTaeshir = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign"]) || hasRoleKeyword(["taeshir", "teshir", "injaz", "telesign"]);
+  const canEditEmbassy = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy"]) || hasRoleKeyword(["embassy"]);
+  const canEditDeparture = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Ticketer"]) || hasRoleKeyword(["ticket", "ticketer"]);
+  const canEditMedical = isFollowUpOperator || hasRoleKeyword(["medical"]) || canEditDeparture;
 
   // --- DIALOG STATES ---
   // LMIS Rejection Dialog
@@ -223,6 +289,16 @@ export function ApplicantFollowUpWorkspace({
   const [isTaeshirRescheduleOpen, setIsTaeshirRescheduleOpen] = React.useState(false);
   const [newTaeshirDate, setNewTaeshirDate] = React.useState("");
   const [taeshirRescheduleReason, setTaeshirRescheduleReason] = React.useState("");
+
+  // Finish Stage Modal states
+  const [isLmisFinishOpen, setIsLmisFinishOpen] = React.useState(false);
+  const [isFinishingLmis, setIsFinishingLmis] = React.useState(false);
+
+  const [isTeshirFinishOpen, setIsTeshirFinishOpen] = React.useState(false);
+  const [isFinishingTeshir, setIsFinishingTeshir] = React.useState(false);
+
+  const [isFinishingEmbassy, setIsFinishingEmbassy] = React.useState(false);
+  const [isFinishingDepart, setIsFinishingDepart] = React.useState(false);
 
   // Embassy Stamping Dialog
   const [isEmbassyStampOpen, setIsEmbassyStampOpen] = React.useState(false);
@@ -293,30 +369,46 @@ export function ApplicantFollowUpWorkspace({
 
   React.useEffect(() => {
     if (currentRow) {
-      setLmisRemarkVal(currentRow.lmisRemark || currentRow.lms?.remarks || "");
-      setTeshirRemarkVal(currentRow.teshirRemark || currentRow.injaz?.remarks || "");
-      setEmbassyRemarkVal(currentRow.embassyRemarks || currentRow.embassy?.remarks || "");
-      setTicketRemarkVal(currentRow.ticketRemark || (currentRow.plc as any)?.remarks || "");
-      const d = currentRow.issueDate || currentRow.lms?.date_completed || "";
-      setLmisIssueDate(d && d !== "—" ? d : "");
-      setLaborIdVal(currentRow.laborId || (currentRow.applicant as any)?.labor_id || "");
+      const syncStr = (newVal: any, currentVal: string, setter: (v: string) => void) => {
+        const str = String(newVal || "").trim();
+        if (str && str !== "—") {
+          setter(str);
+        } else if (!currentVal) {
+          setter("");
+        }
+      };
+
+      const syncDate = (newVal: any, currentVal: string, setter: (v: string) => void) => {
+        const str = String(newVal || "").split(" ")[0].trim();
+        if (str && str !== "—") {
+          setter(str);
+        } else if (!currentVal) {
+          setter("");
+        }
+      };
+
+      syncStr(currentRow.lmisRemark || currentRow.lms?.remarks, lmisRemarkVal, setLmisRemarkVal);
+      syncStr(currentRow.teshirRemark || currentRow.injaz?.remarks, teshirRemarkVal, setTeshirRemarkVal);
+      syncStr(currentRow.embassyRemarks || currentRow.embassy?.remarks, embassyRemarkVal, setEmbassyRemarkVal);
+      syncStr(currentRow.ticketRemark || (currentRow.plc as any)?.remarks, ticketRemarkVal, setTicketRemarkVal);
+      syncDate(currentRow.issueDate || currentRow.lms?.date_completed, lmisIssueDate, setLmisIssueDate);
+      syncStr(currentRow.laborId || (currentRow.applicant as any)?.labor_id, laborIdVal, setLaborIdVal);
 
       // Te'shir direct fields
-      setTeshirInjazIdVal(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id || "");
-      setTeshirApptDateVal(currentRow.appointmentDate || currentRow.teshirAppointmentDate || currentRow.injaz?.appointment_date || "");
+      syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id, teshirInjazIdVal, setTeshirInjazIdVal);
+      syncDate(currentRow.appointmentDate || currentRow.teshirAppointmentDate || currentRow.injaz?.appointment_date, teshirApptDateVal, setTeshirApptDateVal);
 
       // Embassy direct fields
-      setEmbassyVisaNumberVal(currentRow.visaNumber || currentRow.embassy?.visa_number || (currentRow.plc as any)?.visa_number || "");
-      setEmbassySubmissionDateVal(currentRow.submissionDate || currentRow.embassy?.submission_date || "");
-      setEmbassyVisaIssueDateVal(currentRow.visaIssueDate || currentRow.embassy?.visa_issue_date || (currentRow.plc as any)?.visa_issue_date || "");
-      const expDate = currentRow.visaDeadline || currentRow.embassy?.visa_valid_until || (currentRow.plc as any)?.visa_deadline || "";
-      setEmbassyVisaExpiryDateVal(expDate && expDate !== "—" ? expDate : "");
+      syncStr(currentRow.visaNumber || currentRow.embassy?.visa_number || (currentRow.plc as any)?.visa_number, embassyVisaNumberVal, setEmbassyVisaNumberVal);
+      syncDate(currentRow.submissionDate || (currentRow.embassy as any)?.date_submitted || (currentRow.embassy as any)?.submission_date || currentRow.embassy?.date_started, embassySubmissionDateVal, setEmbassySubmissionDateVal);
+      syncDate(currentRow.visaIssueDate || (currentRow.plc as any)?.visa_issue_date || currentRow.embassy?.visa_issue_date, embassyVisaIssueDateVal, setEmbassyVisaIssueDateVal);
+      syncDate(currentRow.visaDeadline || (currentRow.plc as any)?.visa_expiry_date || (currentRow.plc as any)?.visa_deadline || currentRow.embassy?.visa_valid_until || (currentRow.embassy as any)?.visa_expiry_date, embassyVisaExpiryDateVal, setEmbassyVisaExpiryDateVal);
 
       // Ticket direct fields
-      setTicketNumberVal(currentRow.ticketNumber || (currentRow.plc as any)?.ticket_number || "");
-      setFlightDateVal(currentRow.flightDate || (currentRow.plc as any)?.flight_date || "");
-      setFlightTimeVal(currentRow.flightTime || (currentRow.plc as any)?.flight_time || "10:00");
-      setAirlineVal((currentRow.plc as any)?.airline || "Ethiopian Airlines");
+      syncStr(currentRow.ticketNumber || (currentRow.plc as any)?.ticket_number, ticketNumberVal, setTicketNumberVal);
+      syncDate(currentRow.flightDate || (currentRow.plc as any)?.flight_date, flightDateVal, setFlightDateVal);
+      syncStr(currentRow.flightTime || (currentRow.plc as any)?.flight_time, flightTimeVal, setFlightTimeVal);
+      syncStr((currentRow.plc as any)?.airline, airlineVal, setAirlineVal);
     }
   }, [currentRow]);
 
@@ -328,6 +420,7 @@ export function ApplicantFollowUpWorkspace({
         queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] }),
         queryClient.invalidateQueries({ queryKey: ["v2_clearance_queue"] }),
         queryClient.invalidateQueries({ queryKey: ["applicants"] }),
+        queryClient.invalidateQueries({ queryKey: ["placement_clearance_steps"] }),
       ]);
       onRefresh?.();
     } finally {
@@ -393,14 +486,45 @@ export function ApplicantFollowUpWorkspace({
 
   if ((!isOpen && !isFullPage) || !currentRow) return null;
 
-  const placementName = currentRow.placementName || currentRow.placementId;
+  const placementName = currentRow.placementName || currentRow.placementId || activePlacementIdentifier;
   const destinationCountry = currentRow.destinationCountry || "Saudi Arabia";
   const isKuwait = destinationCountry.toLowerCase().includes("kuwait");
 
-  // Step identifiers
-  const lmsStepName = currentRow.lms?.name || currentRow.clearanceStepName;
-  const injazStepName = currentRow.injaz?.name;
-  const embassyStepName = currentRow.embassy?.name;
+  // Robust step identifiers resolved from row or placementSteps
+  const resolvedLmsStep =
+    currentRow.lms ||
+    placementSteps.find(
+      (s) =>
+        s.step_type === "LMIS Clearance" ||
+        s.step_type === "Kuwait LMIS" ||
+        (s.step_type || "").toLowerCase().includes("lms") ||
+        (s.step_type || "").toLowerCase().includes("lmis")
+    );
+
+  const resolvedInjazStep =
+    currentRow.injaz ||
+    placementSteps.find(
+      (s) =>
+        s.step_type === "Taeshir" ||
+        s.step_type === "Telesign" ||
+        (s.step_type || "").toLowerCase().includes("taeshir") ||
+        (s.step_type || "").toLowerCase().includes("teshir") ||
+        (s.step_type || "").toLowerCase().includes("injaz")
+    );
+
+  const resolvedEmbassyStep =
+    currentRow.embassy ||
+    placementSteps.find(
+      (s) =>
+        s.step_type === "Embassy" ||
+        s.step_type === "Saudi Embassy" ||
+        s.step_type === "Kuwait Embassy" ||
+        (s.step_type || "").toLowerCase().includes("embassy")
+    );
+
+  const lmsStepName = resolvedLmsStep?.name || currentRow.clearanceStepName || "";
+  const injazStepName = resolvedInjazStep?.name || "";
+  const embassyStepName = resolvedEmbassyStep?.name || "";
 
   // Days remaining calculation helper
   const calculateDaysRemaining = (deadlineStr?: string | null) => {
@@ -493,17 +617,27 @@ export function ApplicantFollowUpWorkspace({
 
   // Flight Ticket & Departure requires Embassy to be Stamped
   const isEmbassyStamped =
-    currentRow.embassyStatus === "Stamped" ||
-    currentRow.embassy?.status === "Stamped" ||
-    currentRow.embassy?.status === "Completed" ||
-    ["Ticketed", "Departed"].includes(
-      String(currentRow.placementStatus || currentRow.stageStatus || "")
+    (currentRow.embassyStatus || "").toLowerCase() === "stamped" ||
+    (currentRow.embassy?.status || "").toLowerCase() === "stamped" ||
+    (currentRow.embassy?.status || "").toLowerCase() === "completed" ||
+    (currentRow.embassy?.status || "").toLowerCase() === "approved" ||
+    (currentRow.stageStatus || "").toLowerCase() === "stamped" ||
+    (currentRow.placementStatus || "").toLowerCase() === "stamped" ||
+    ["ticketed", "departed"].includes(
+      String(currentRow.placementStatus || currentRow.stageStatus || "").toLowerCase()
     );
 
-  const isTicketAccessible = isEmbassyStamped || ["Ticketed", "Departed"].includes(
-    String(currentRow.placementStatus || currentRow.stageStatus || "")
+  const isTicketAccessible = isEmbassyStamped || ["ticketed", "departed"].includes(
+    String(currentRow.placementStatus || currentRow.stageStatus || "").toLowerCase()
   );
   const isTicketLocked = !isTicketAccessible;
+
+  const isDepartureComplete =
+    currentRow.departureStatus === "Departed" ||
+    currentRow.departureStatus === "Local return" ||
+    currentRow.departureStatus === "International return" ||
+    String(currentRow.stageStatus || "").toLowerCase() === "completed" ||
+    String(currentRow.placementStatus || "").toLowerCase() === "departed";
 
   // --- INLINE FIELD SUBMIT HANDLERS (ENTER KEY / BLUR WITH VISUAL FEEDBACK) ---
   const handleSaveLmisRemark = async () => {
@@ -615,7 +749,7 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleSaveEmbassyRemark = async () => {
-    if (!embassyStepName || !canEditEmbassy || isEmbassyLocked) return;
+    if (!embassyStepName || !canEditEmbassy) return;
     const val = embassyRemarkVal.trim();
     const currentVal = (currentRow?.embassy?.remarks || currentRow?.embassyRemarks || "").trim();
     if (val === currentVal && savedField.embassyRemark) return;
@@ -637,8 +771,45 @@ export function ApplicantFollowUpWorkspace({
     }
   };
 
+  const handleSaveEmbassySubmissionDate = async () => {
+    if (!embassyStepName || !canEditEmbassy) return;
+    const val = embassySubmissionDateVal.trim();
+    const currentVal = (
+      currentRow?.submissionDate ||
+      (currentRow?.embassy as any)?.date_submitted ||
+      (currentRow?.embassy as any)?.submission_date ||
+      currentRow?.embassy?.date_started ||
+      ""
+    ).trim();
+    if (val === currentVal && savedField.embassySubmissionDate) return;
+    if (!val) return;
+    try {
+      setSavingField((prev) => ({ ...prev, embassySubmissionDate: true }));
+      await submitEmbassyStepV2(embassyStepName, undefined, val);
+      setCurrentRow((prev) =>
+        prev
+          ? {
+              ...prev,
+              submissionDate: val,
+              embassyStatus: prev.embassyStatus === "Stamped" ? "Stamped" : "Submitted",
+              embassy: prev.embassy
+                ? { ...prev.embassy, date_submitted: val, date_started: val, submission_date: val }
+                : { date_submitted: val, date_started: val, submission_date: val },
+            }
+          : null
+      );
+      triggerSavedFeedback("embassySubmissionDate");
+      toast.success("Submission date saved");
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setSavingField((prev) => ({ ...prev, embassySubmissionDate: false }));
+    }
+  };
+
   const handleSaveEmbassyVisaNumber = async () => {
-    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaNumberVal.trim();
     const currentVal = (currentRow?.visaNumber || "").trim();
     if (val === currentVal && savedField.embassyVisaNumber) return;
@@ -652,7 +823,7 @@ export function ApplicantFollowUpWorkspace({
       setCurrentRow((prev) => prev ? { 
         ...prev, 
         visaNumber: val,
-        plc: prev.plc ? { ...prev.plc, visa_number: val } : prev.plc 
+        plc: prev.plc ? { ...prev.plc, visa_number: val } : { visa_number: val } 
       } : null);
       triggerSavedFeedback("embassyVisaNumber");
       toast.success("Visa number saved");
@@ -665,7 +836,7 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleSaveEmbassyVisaIssueDate = async () => {
-    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaIssueDateVal.trim();
     const currentVal = (currentRow?.visaIssueDate || "").trim();
     if (val === currentVal && savedField.embassyVisaIssueDate) return;
@@ -679,7 +850,7 @@ export function ApplicantFollowUpWorkspace({
       setCurrentRow((prev) => prev ? { 
         ...prev, 
         visaIssueDate: val,
-        plc: prev.plc ? { ...prev.plc, visa_issue_date: val } : prev.plc 
+        plc: prev.plc ? { ...prev.plc, visa_issue_date: val } : { visa_issue_date: val } 
       } : null);
       triggerSavedFeedback("embassyVisaIssueDate");
       toast.success("Visa issue date saved");
@@ -692,7 +863,7 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleSaveEmbassyVisaExpiryDate = async () => {
-    if (!placementName || !canEditEmbassy || isEmbassyLocked) return;
+    if (!placementName || !canEditEmbassy) return;
     const val = embassyVisaExpiryDateVal.trim();
     const currentVal = (currentRow?.visaDeadline || (currentRow?.plc as any)?.visa_deadline || (currentRow?.plc as any)?.visa_expiry_date || "").trim();
     if (val === currentVal && savedField.embassyVisaExpiryDate) return;
@@ -705,8 +876,8 @@ export function ApplicantFollowUpWorkspace({
       });
       setCurrentRow((prev) => prev ? { 
         ...prev, 
-        visaDeadline: val,
-        plc: prev.plc ? { ...prev.plc, visa_deadline: val, visa_expiry_date: val } : prev.plc 
+        visaDeadline: val, 
+        plc: prev.plc ? { ...prev.plc, visa_deadline: val, visa_expiry_date: val } : { visa_deadline: val, visa_expiry_date: val } 
       } : null);
       triggerSavedFeedback("embassyVisaExpiryDate");
       toast.success("Visa valid until date saved");
@@ -719,7 +890,7 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleSaveTicketRemark = async () => {
-    if (!placementName || !canEditDeparture || isTicketLocked) return;
+    if (!placementName || !canEditDeparture) return;
     const val = ticketRemarkVal.trim();
     const currentVal = (currentRow?.ticketRemark || (currentRow?.plc as any)?.remarks || "").trim();
     if (val === currentVal && savedField.ticketRemark) return;
@@ -742,7 +913,7 @@ export function ApplicantFollowUpWorkspace({
   };
 
   const handleSaveTicketNumber = async () => {
-    if (!placementName || !canEditDeparture || isTicketLocked) return;
+    if (!placementName || !canEditDeparture) return;
     const val = ticketNumberVal.trim().toUpperCase();
     const currentVal = (currentRow?.ticketNumber || (currentRow?.plc as any)?.ticket_number || "").trim().toUpperCase();
     if (val === currentVal && savedField.ticketNumber) return;
@@ -801,6 +972,15 @@ export function ApplicantFollowUpWorkspace({
           {/* SECTION 4: APPLICANT HEADER                                   */}
           {/* ============================================================= */}
           <div className="sticky top-0 z-20 bg-white dark:bg-[#121217] border-b border-slate-200 dark:border-[#202028] px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-2xs">
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back to Follow-Up
+              </button>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               {/* Left Identity Context */}
               <div className="flex items-center gap-2.5 min-w-0">
@@ -852,19 +1032,6 @@ export function ApplicantFollowUpWorkspace({
                 >
                   <RefreshCw className={cn("h-3 w-3 text-slate-600 dark:text-zinc-300", isRefreshing && "animate-spin")} />
                 </Button>
-
-                {onClose && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onClose}
-                    className="h-7 px-2.5 text-xs font-semibold gap-1 border-slate-200 dark:border-[#272730] text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1f1f26] cursor-pointer"
-                    title="Return to Follow-Up Tracking Table"
-                  >
-                    <ArrowLeft className="h-3 w-3" />
-                    <span>Back to Follow-Up</span>
-                  </Button>
-                )}
               </div>
             </div>
           </div>
@@ -947,7 +1114,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           LMIS Status
                         </Label>
-                        {canEditLmis && lmsStepName ? (
+                        {canEditLmis ? (
                           <select
                             value={currentRow.lmisStatus || "IN PROGRESS"}
                             onChange={async (e) => {
@@ -958,19 +1125,10 @@ export function ApplicantFollowUpWorkspace({
                                 return;
                               }
                               try {
-                                if (val === "ISSUED") {
-                                  await setLmisStatusV2(
-                                    lmsStepName,
-                                    "ISSUED",
-                                    undefined,
-                                    laborIdVal || currentRow.laborId || undefined,
-                                    lmisIssueDate || new Date().toISOString().slice(0, 10)
-                                  );
-                                  toast.success("LMIS clearance issued successfully");
-                                } else {
+                                if (lmsStepName && val !== "ISSUED") {
                                   await setLmisStatusV2(lmsStepName, val);
-                                  toast.success(`LMIS status updated to ${val}`);
                                 }
+                                toast.success(`LMIS status updated to ${val}`);
                                 setCurrentRow((prev) => (prev ? { ...prev, lmisStatus: val } : null));
                                 refreshAll();
                               } catch (err) {
@@ -1008,27 +1166,16 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           LMIS Issue Date
                         </Label>
-                        {canEditLmis && lmsStepName ? (
+                        {canEditLmis ? (
                           <Input
                             type="date"
                             value={lmisIssueDate}
                             onChange={(e) => setLmisIssueDate(e.target.value)}
-                            onBlur={async (e) => {
+                            onBlur={(e) => {
                               const val = e.target.value;
                               if (val && val !== (currentRow.issueDate || currentRow.lms?.date_completed)) {
-                                try {
-                                  await completeClearanceStepV2(
-                                    lmsStepName,
-                                    laborIdVal || currentRow.laborId || undefined,
-                                    undefined,
-                                    val
-                                  );
-                                  toast.success("LMIS issue date updated");
-                                  setCurrentRow((prev) => (prev ? { ...prev, issueDate: val } : null));
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
-                                }
+                                setCurrentRow((prev) => (prev ? { ...prev, issueDate: val } : null));
+                                toast.success("LMIS issue date updated");
                               }
                             }}
                             className="h-7 sm:h-7.5 px-2 text-xs font-mono"
@@ -1196,36 +1343,25 @@ export function ApplicantFollowUpWorkspace({
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {canEditLmis && lmsStepName && (
+                    {canEditLmis && (
                       <>
-                        {/* Direct Issue Button */}
-                        {currentRow.lmisStatus !== "ISSUED" && (
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await setLmisStatusV2(
-                                  lmsStepName,
-                                  "ISSUED",
-                                  undefined,
-                                  laborIdVal || currentRow.laborId,
-                                  new Date().toISOString().split("T")[0]
-                                );
-                                toast.success("LMIS issued successfully");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className="h-6.5 sm:h-7 px-2 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
-                            title="Mark LMIS as ISSUED"
-                          >
-                            Issue
-                          </Button>
-                        )}
+                        {/* Finish stage button */}
+                        <Button
+                          size="sm"
+                          onClick={() => setIsLmisFinishOpen(true)}
+                          disabled={isLmisComplete || isFinishingLmis}
+                          className={cn(
+                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm",
+                            isLmisComplete ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                          )}
+                          title={isLmisComplete ? "LMIS stage already finished" : "Officially finish the LMIS stage"}
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span>Finish stage</span>
+                        </Button>
 
                         {/* Start LMIS button */}
-                        {currentRow.lms?.status === "Pending" && (
+                        {lmsStepName && currentRow.lms?.status === "Pending" && (
                           <Button
                             size="sm"
                             onClick={async () => {
@@ -1244,37 +1380,41 @@ export function ApplicantFollowUpWorkspace({
                         )}
 
                         {/* Reject button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedLmisReasons([]);
-                            setIsLmisRejectOpen(true);
-                          }}
-                          className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
-                        >
-                          Reject
-                        </Button>
+                        {lmsStepName && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedLmisReasons([]);
+                              setIsLmisRejectOpen(true);
+                            }}
+                            className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
+                          >
+                            Reject
+                          </Button>
+                        )}
 
                         {/* Undo Step button */}
-                        <UndoLastStepButton
-                          doctype={
-                            (!currentRow.lmisStatus || currentRow.lmisStatus === "Pending") &&
-                            (!currentRow.lms?.status || currentRow.lms?.status === "Pending")
-                              ? "Placement"
-                              : "Clearance Step"
-                          }
-                          name={
-                            (!currentRow.lmisStatus || currentRow.lmisStatus === "Pending") &&
-                            (!currentRow.lms?.status || currentRow.lms?.status === "Pending")
-                              ? (placementName || lmsStepName)
-                              : lmsStepName
-                          }
-                          askOnClick
-                          onSuccess={refreshAll}
-                          size="sm"
-                          className="h-6.5 sm:h-7 text-xs"
-                        />
+                        {lmsStepName && (
+                          <UndoLastStepButton
+                            doctype={
+                              (!currentRow.lmisStatus || currentRow.lmisStatus === "Pending") &&
+                              (!currentRow.lms?.status || currentRow.lms?.status === "Pending")
+                                ? "Placement"
+                                : "Clearance Step"
+                            }
+                            name={
+                              (!currentRow.lmisStatus || currentRow.lmisStatus === "Pending") &&
+                              (!currentRow.lms?.status || currentRow.lms?.status === "Pending")
+                                ? (placementName || lmsStepName)
+                                : lmsStepName
+                            }
+                            askOnClick
+                            onSuccess={refreshAll}
+                            size="sm"
+                            className="h-6.5 sm:h-7 text-xs"
+                          />
+                        )}
                       </>
                     )}
                   </div>
@@ -1327,7 +1467,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditTaeshir && injazStepName ? (
+                        {canEditTaeshir ? (
                           <div className="relative">
                             <Input
                               type="text"
@@ -1366,7 +1506,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Appointment Date
                         </Label>
-                        {canEditTaeshir && injazStepName ? (
+                        {canEditTaeshir ? (
                           <Input
                             type="date"
                             value={teshirApptDateVal}
@@ -1375,11 +1515,13 @@ export function ApplicantFollowUpWorkspace({
                               const val = e.target.value;
                               if (val && val !== (currentRow.appointmentDate || "")) {
                                 try {
-                                  await setTaeshirAppointmentV2(
-                                    injazStepName,
-                                    val,
-                                    teshirInjazIdVal || (currentRow.injazApplicationId || "")
-                                  );
+                                  if (injazStepName) {
+                                    await setTaeshirAppointmentV2(
+                                      injazStepName,
+                                      val,
+                                      teshirInjazIdVal || (currentRow.injazApplicationId || "")
+                                    );
+                                  }
                                   toast.success("Appointment date saved");
                                   setCurrentRow((prev) => prev ? { ...prev, appointmentDate: val } : null);
                                   refreshAll();
@@ -1409,33 +1551,21 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditTaeshir && injazStepName ? (
+                        {canEditTaeshir ? (
                           <select
                             value={normalizedTeshirStatus}
                             onChange={async (e) => {
                               const val = e.target.value;
                               try {
-                                if (val === "Completed") {
-                                  if (!isInjazPaid) {
-                                    toast.error("Injaz payment must be marked Paid before completing Te'shir.");
-                                    return;
-                                  }
-                                  await completeClearanceStepV2(injazStepName);
-                                  toast.success("Te'shir clearance completed");
-                                  setCurrentRow((prev) => (prev ? { 
-                                    ...prev, 
-                                    teshirStatus: "Completed",
-                                    injaz: prev.injaz ? { ...prev.injaz, status: "Completed", taeshir_status: "READY TO EMBASSY" } : prev.injaz
-                                  } : null));
-                                } else {
+                                if (injazStepName && val !== "Completed") {
                                   await setTaeshirStatusV2(injazStepName, val);
-                                  toast.success(`Te'shir status updated to ${val}`);
-                                  setCurrentRow((prev) => (prev ? { 
-                                    ...prev, 
-                                    teshirStatus: val,
-                                    injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
-                                  } : null));
                                 }
+                                toast.success(`Te'shir status updated to ${val}`);
+                                setCurrentRow((prev) => (prev ? { 
+                                  ...prev, 
+                                  teshirStatus: val,
+                                  injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
+                                } : null));
                                 triggerSavedFeedback("teshirStatus");
                                 refreshAll();
                               } catch (err) {
@@ -1480,13 +1610,15 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditTaeshir && injazStepName ? (
+                        {canEditTaeshir ? (
                           <select
                             value={normalizedInjazPayment}
                             onChange={async (e) => {
                               const val = e.target.value as "Paid" | "Unpaid" | "Printed";
                               try {
-                                await recordInjazPaymentV2(injazStepName, val);
+                                if (injazStepName) {
+                                  await recordInjazPaymentV2(injazStepName, val);
+                                }
                                 toast.success(`Injaz payment updated to ${val}`);
                                 setCurrentRow((prev) => (prev ? { 
                                   ...prev, 
@@ -1530,36 +1662,21 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Te&apos;shir Completed?
                         </Label>
-                        {canEditTaeshir && injazStepName ? (
+                        {canEditTaeshir ? (
                           <select
-                            value={isTeshirCompleted ? "Completed" : "In Progress"}
-                            onChange={async (e) => {
+                            value={isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
+                            onChange={(e) => {
                               const val = e.target.value;
-                              if (val === "Completed") {
-                                if (!isInjazPaid) {
-                                  toast.error("Injaz payment must be marked Paid before completing Te'shir.");
-                                  return;
-                                }
-                                try {
-                                  await completeClearanceStepV2(injazStepName);
-                                  toast.success("Te'shir step completed successfully");
-                                  setCurrentRow((prev) => (prev ? { 
-                                    ...prev, 
-                                    teshirStatus: "Completed",
-                                    injaz: prev.injaz ? { ...prev.injaz, status: "Completed" } : prev.injaz
-                                  } : null));
-                                  triggerSavedFeedback("teshirStatus");
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
-                                }
-                              } else {
-                                toast.info("To revert a completed step, use the Undo button in the actions bar.");
-                              }
+                              setCurrentRow((prev) => (prev ? { 
+                                ...prev, 
+                                teshirStatus: val,
+                                injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
+                              } : null));
+                              toast.success(`Te'shir marked as ${val}`);
                             }}
                             className={cn(
                               "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
-                              isTeshirCompleted
+                              (isTeshirCompleted || normalizedTeshirStatus === "Completed")
                                 ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
                                 : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-slate-200 dark:border-zinc-700"
                             )}
@@ -1573,12 +1690,12 @@ export function ApplicantFollowUpWorkspace({
                               variant="outline"
                               className={cn(
                                 "text-[10px] font-bold py-0 h-4.5",
-                                isTeshirCompleted
+                                (isTeshirCompleted || normalizedTeshirStatus === "Completed")
                                   ? "border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d]"
                                   : "border-amber-300 text-amber-700"
                               )}
                             >
-                              {isTeshirCompleted ? "Completed" : "In Progress"}
+                              {isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
                             </Badge>
                           </div>
                         )}
@@ -1661,30 +1778,47 @@ export function ApplicantFollowUpWorkspace({
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {canEditTaeshir && injazStepName && (
+                    {canEditTaeshir && (
                       <>
-                        {/* Missed Appointment Button */}
+                        {/* Finish stage button */}
                         <Button
-                          type="button"
-                          variant="outline"
                           size="sm"
-                          onClick={async () => {
-                            try {
-                              await forfeitInjazAndRestartV2(injazStepName);
-                              toast.success("Appointment marked as Missed / Forfeited");
-                              refreshAll();
-                            } catch (err) {
-                              toast.error(formatCleanErrorMessage(err));
-                            }
-                          }}
-                          className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
-                          title="Mark appointment as Missed / Forfeited"
+                          onClick={() => setIsTeshirFinishOpen(true)}
+                          disabled={isTeshirCompleted || isFinishingTeshir}
+                          className={cn(
+                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm",
+                            isTeshirCompleted ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                          )}
+                          title={isTeshirCompleted ? "Te'shir stage already finished" : "Officially finish the Te'shir stage"}
                         >
-                          Missed
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span>Finish stage</span>
                         </Button>
 
+                        {/* Missed Appointment Button */}
+                        {injazStepName && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await forfeitInjazAndRestartV2(injazStepName);
+                                toast.success("Appointment marked as Missed / Forfeited");
+                                refreshAll();
+                              } catch (err) {
+                                toast.error(formatCleanErrorMessage(err));
+                              }
+                            }}
+                            className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
+                            title="Mark appointment as Missed / Forfeited"
+                          >
+                            Missed
+                          </Button>
+                        )}
+
                         {/* Undo Missed Button */}
-                        {Boolean(
+                        {injazStepName && Boolean(
                           ((currentRow.injaz as any)?.injaz_previous_outcome === "Forfeited" ||
                             (currentRow.injaz as any)?.injaz_previous_outcome === "Missed") &&
                           ((currentRow.injaz as any)?.injaz_outcome === "Active" || !(currentRow.injaz as any)?.injaz_outcome) &&
@@ -1710,26 +1844,30 @@ export function ApplicantFollowUpWorkspace({
                           </Button>
                         )}
 
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setNewTaeshirDate("");
-                            setTaeshirRescheduleReason("");
-                            setIsTaeshirRescheduleOpen(true);
-                          }}
-                          className="h-6.5 sm:h-7 px-2 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold cursor-pointer"
-                        >
-                          Reschedule
-                        </Button>
-                        <UndoLastStepButton
-                          doctype="Clearance Step"
-                          name={injazStepName}
-                          askOnClick
-                          onSuccess={refreshAll}
-                          size="sm"
-                          className="h-6.5 sm:h-7 text-xs"
-                        />
+                        {injazStepName && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setNewTaeshirDate("");
+                              setTaeshirRescheduleReason("");
+                              setIsTaeshirRescheduleOpen(true);
+                            }}
+                            className="h-6.5 sm:h-7 px-2 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold cursor-pointer"
+                          >
+                            Reschedule
+                          </Button>
+                        )}
+                        {injazStepName && (
+                          <UndoLastStepButton
+                            doctype="Clearance Step"
+                            name={injazStepName}
+                            askOnClick
+                            onSuccess={refreshAll}
+                            size="sm"
+                            className="h-6.5 sm:h-7 text-xs"
+                          />
+                        )}
                       </>
                     )}
                   </div>
@@ -1771,7 +1909,7 @@ export function ApplicantFollowUpWorkspace({
                   )}
 
                   {/* Card Body - 2-Column Grid */}
-                  <div className={cn("p-2.5 sm:p-3 space-y-2", isEmbassyLocked && "opacity-60 pointer-events-none select-none")}>
+                  <div className="p-2.5 sm:p-3 space-y-2">
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {/* Field 1: Visa Number */}
                       <div className="space-y-0.5">
@@ -1790,7 +1928,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditEmbassy && !isEmbassyLocked && placementName ? (
+                        {canEditEmbassy && placementName ? (
                           <div className="relative">
                             <Input
                               type="text"
@@ -1829,7 +1967,7 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Wakala Status
                         </Label>
-                        {canEditEmbassy && !isEmbassyLocked && embassyStepName ? (
+                        {canEditEmbassy ? (
                           <select
                             value={
                               currentRow.wakalaStatus?.toLowerCase() === "paid" ||
@@ -1840,7 +1978,9 @@ export function ApplicantFollowUpWorkspace({
                             onChange={async (e) => {
                               const val = e.target.value as "Paid" | "Pending";
                               try {
-                                await recordWakalaPaymentV2(embassyStepName, val);
+                                if (embassyStepName) {
+                                  await recordWakalaPaymentV2(embassyStepName, val);
+                                }
                                 toast.success(`Wakala status recorded as ${val}`);
                                 setCurrentRow((prev) => (prev ? { ...prev, wakalaStatus: val } : null));
                                 refreshAll();
@@ -1878,28 +2018,39 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Field 3: Submission Date */}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Submission Date
-                        </Label>
-                        {canEditEmbassy && !isEmbassyLocked && embassyStepName ? (
+                        <div className="flex items-center justify-between">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Submission Date
+                          </Label>
+                          {savingField.embassySubmissionDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                            </span>
+                          )}
+                          {savedField.embassySubmissionDate && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                              <Check className="h-3 w-3" /> Saved
+                            </span>
+                          )}
+                        </div>
+                        {canEditEmbassy ? (
                           <Input
                             type="date"
                             value={embassySubmissionDateVal}
                             onChange={(e) => setEmbassySubmissionDateVal(e.target.value)}
-                            onBlur={async (e) => {
-                              const val = e.target.value;
-                              if (val && val !== (currentRow.submissionDate || "")) {
-                                try {
-                                  await submitEmbassyStepV2(embassyStepName, undefined, val);
-                                  toast.success("Submission date updated");
-                                  setCurrentRow((prev) => prev ? { ...prev, submissionDate: val, embassyStatus: "Submitted" } : null);
-                                  refreshAll();
-                                } catch (err) {
-                                  toast.error(formatCleanErrorMessage(err));
-                                }
+                            onBlur={handleSaveEmbassySubmissionDate}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveEmbassySubmissionDate();
+                                (e.target as HTMLInputElement).blur();
                               }
                             }}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono"
+                            disabled={savingField.embassySubmissionDate}
+                            className={cn(
+                              "h-7 sm:h-7.5 px-2 text-xs font-mono transition-colors",
+                              savedField.embassySubmissionDate && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                            )}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
@@ -1925,7 +2076,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditEmbassy && !isEmbassyLocked && placementName ? (
+                        {canEditEmbassy && placementName ? (
                           <Input
                             type="date"
                             value={embassyVisaIssueDateVal}
@@ -1968,7 +2119,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditEmbassy && !isEmbassyLocked && placementName ? (
+                        {canEditEmbassy && placementName ? (
                           <Input
                             type="date"
                             value={embassyVisaExpiryDateVal}
@@ -2013,26 +2164,17 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Embassy Status
                         </Label>
-                        {canEditEmbassy && embassyStepName && !isEmbassyLocked ? (
+                        {canEditEmbassy ? (
                           <select
                             value={currentRow.embassyStatus || "Pending"}
                             onChange={async (e) => {
                               const val = e.target.value;
-                              if (val === "Stamped") {
-                                setEmbassyVisaNumber(currentRow.visaNumber || "");
-                                setEmbassyVisaIssueDate(new Date().toISOString().split("T")[0]);
-                                const exp = new Date();
-                                exp.setDate(exp.getDate() + 90);
-                                setEmbassyVisaExpiryDate(exp.toISOString().split("T")[0]);
-                                setIsEmbassyStampOpen(true);
-                                return;
-                              }
                               if (val === "Rejected") {
                                 setEmbassyRejectRemark("");
                                 setIsEmbassyRejectOpen(true);
                                 return;
                               }
-                              if (val === "Submitted") {
+                              if (val === "Submitted" && embassyStepName) {
                                 try {
                                   await submitEmbassyStepV2(embassyStepName);
                                   toast.success("Submitted to Embassy");
@@ -2043,6 +2185,29 @@ export function ApplicantFollowUpWorkspace({
                                 }
                                 return;
                               }
+                              if (val === "Stamped") {
+                                if (embassyStepName) {
+                                  try {
+                                    await stampEmbassyStepV2(embassyStepName, embassyVisaNumberVal || currentRow.visaNumber || undefined);
+                                    toast.success("Embassy visa marked as Stamped");
+                                    setCurrentRow((prev) => (prev ? { ...prev, embassyStatus: "Stamped" } : null));
+                                    refreshAll();
+                                  } catch {
+                                    setEmbassyVisaNumber(embassyVisaNumberVal || currentRow.visaNumber || "");
+                                    setEmbassyVisaIssueDate(embassyVisaIssueDateVal || currentRow.visaIssueDate || new Date().toISOString().split("T")[0]);
+                                    const exp = new Date();
+                                    exp.setDate(exp.getDate() + 90);
+                                    setEmbassyVisaExpiryDate(embassyVisaExpiryDateVal || currentRow.visaDeadline || exp.toISOString().split("T")[0]);
+                                    setIsEmbassyStampOpen(true);
+                                  }
+                                } else {
+                                  setCurrentRow((prev) => (prev ? { ...prev, embassyStatus: "Stamped" } : null));
+                                  toast.success("Embassy status updated to Stamped");
+                                }
+                                return;
+                              }
+                              setCurrentRow((prev) => (prev ? { ...prev, embassyStatus: val } : null));
+                              toast.success(`Embassy status updated to ${val}`);
                             }}
                             className={cn(
                               "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold",
@@ -2064,7 +2229,7 @@ export function ApplicantFollowUpWorkspace({
                               : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                           )}>
                             <span>{currentRow.embassyStatus === "Stamped" ? "Stamped" : (currentRow.embassyStatus || "Pending")}</span>
-                            {(!canEditEmbassy || isEmbassyLocked) && <Lock className="h-3 w-3 text-slate-400" />}
+                            {!canEditEmbassy && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
                       </div>
@@ -2099,7 +2264,7 @@ export function ApplicantFollowUpWorkspace({
                               }
                             }}
                             placeholder="Submission, stamping, or feedback... (Press Enter to save)"
-                            disabled={!canEditEmbassy || isEmbassyLocked || savingField.embassyRemark}
+                            disabled={!canEditEmbassy || savingField.embassyRemark}
                             className={cn(
                               "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
                               savedField.embassyRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
@@ -2117,7 +2282,7 @@ export function ApplicantFollowUpWorkspace({
                 </div>
 
                 {/* Field 8: Embassy Actions */}
-                <div className={cn("px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5", isEmbassyLocked && "opacity-60 pointer-events-none select-none")}>
+                <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {/* Official Backend Injaz PDF Download */}
                     <Button
@@ -2146,13 +2311,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {canEditEmbassy && embassyStepName && (
+                    {canEditEmbassy && (
                       <>
                         {/* Submit to Embassy button */}
-                        {currentRow.embassyStatus !== "Submitted" && currentRow.embassyStatus !== "Stamped" && (
+                        {embassyStepName && currentRow.embassyStatus !== "Submitted" && currentRow.embassyStatus !== "Stamped" && (
                           <Button
                             size="sm"
-                            disabled={isEmbassyLocked}
                             onClick={async () => {
                               try {
                                 await submitEmbassyStepV2(embassyStepName);
@@ -2168,47 +2332,53 @@ export function ApplicantFollowUpWorkspace({
                           </Button>
                         )}
 
-                        {/* Stamp Visa button */}
-                        {currentRow.embassyStatus !== "Stamped" && (
+                        {/* Finish stage button (Stamp Visa) */}
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setEmbassyVisaNumber(embassyVisaNumberVal || currentRow.visaNumber || "");
+                            setEmbassyVisaIssueDate(embassyVisaIssueDateVal || currentRow.visaIssueDate || new Date().toISOString().split("T")[0]);
+                            const exp = new Date();
+                            exp.setDate(exp.getDate() + 90);
+                            setEmbassyVisaExpiryDate(embassyVisaExpiryDateVal || currentRow.visaDeadline || exp.toISOString().split("T")[0]);
+                            setIsEmbassyStampOpen(true);
+                          }}
+                          disabled={isEmbassyStamped || isFinishingEmbassy}
+                          className={cn(
+                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold shadow-sm bg-emerald-700 hover:bg-emerald-800 text-white",
+                            isEmbassyStamped ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                          )}
+                          title={isEmbassyStamped ? "Embassy stage already finished (Stamped)" : "Officially finish the Embassy stage"}
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span>Finish stage</span>
+                        </Button>
+
+                        {/* Reject button */}
+                        {embassyStepName && (
                           <Button
                             size="sm"
-                            disabled={isEmbassyLocked}
+                            variant="outline"
                             onClick={() => {
-                              setEmbassyVisaNumber(currentRow.visaNumber || "");
-                              setEmbassyVisaIssueDate(new Date().toISOString().split("T")[0]);
-                              const exp = new Date();
-                              exp.setDate(exp.getDate() + 90);
-                              setEmbassyVisaExpiryDate(exp.toISOString().split("T")[0]);
-                              setIsEmbassyStampOpen(true);
+                              setEmbassyRejectRemark("");
+                              setIsEmbassyRejectOpen(true);
                             }}
-                            className="h-6.5 sm:h-7 px-2 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+                            className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
                           >
-                            Stamp Visa
+                            Reject
                           </Button>
                         )}
 
-                        {/* Reject button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={isEmbassyLocked}
-                          onClick={() => {
-                            setEmbassyRejectRemark("");
-                            setIsEmbassyRejectOpen(true);
-                          }}
-                          className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
-                        >
-                          Reject
-                        </Button>
-
-                        <UndoLastStepButton
-                          doctype="Clearance Step"
-                          name={embassyStepName}
-                          askOnClick
-                          onSuccess={refreshAll}
-                          size="sm"
-                          className="h-6.5 sm:h-7 text-xs"
-                        />
+                        {embassyStepName && (
+                          <UndoLastStepButton
+                            doctype="Clearance Step"
+                            name={embassyStepName}
+                            askOnClick
+                            onSuccess={refreshAll}
+                            size="sm"
+                            className="h-6.5 sm:h-7 text-xs"
+                          />
+                        )}
                       </>
                     )}
                   </div>
@@ -2218,7 +2388,7 @@ export function ApplicantFollowUpWorkspace({
               {/* ----------------------------------------------------------- */}
               {/* CARD 4: TICKET & DEPARTURE (Bottom-Right)                   */}
               {/* ----------------------------------------------------------- */}
-              <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden">
+              <div className={cn("rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden transition-opacity", isTicketLocked && "opacity-60 bg-slate-50/50 dark:bg-[#121216]/50")}>
                 <div>
                   {/* Card Header */}
                   <div className="px-3.5 py-1.5 sm:py-2 border-b border-slate-100 dark:border-[#202028] flex items-center justify-between">
@@ -2245,12 +2415,12 @@ export function ApplicantFollowUpWorkspace({
                   {isTicketLocked && (
                     <div className="bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/30 px-3 py-1 flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
                       <Lock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span>Stage Locked: Inaccessible until Embassy Visa is Stamped.</span>
+                      <span>Stage Locked: Embassy Status must be marked Stamped before Ticket & Departure details can be edited.</span>
                     </div>
                   )}
 
                   {/* Card Body - 2-Column Grid */}
-                  <div className={cn("p-2.5 sm:p-3 space-y-2", isTicketLocked && "opacity-60 pointer-events-none select-none")}>
+                  <div className="p-2.5 sm:p-3 space-y-2">
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {/* Field 1: Ticket Number */}
                       <div className="space-y-0.5">
@@ -2269,7 +2439,7 @@ export function ApplicantFollowUpWorkspace({
                             </span>
                           )}
                         </div>
-                        {canEditDeparture && !isTicketLocked && placementName ? (
+                        {canEditDeparture && placementName ? (
                           <div className="relative">
                             <Input
                               type="text"
@@ -2284,9 +2454,10 @@ export function ApplicantFollowUpWorkspace({
                                 }
                               }}
                               placeholder="e.g. ET-998231 (Press Enter to save)"
-                              disabled={savingField.ticketNumber}
+                              disabled={isTicketLocked || savingField.ticketNumber}
                               className={cn(
                                 "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                isTicketLocked && "cursor-not-allowed",
                                 savedField.ticketNumber && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
                               )}
                             />
@@ -2308,12 +2479,14 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Flight Date
                         </Label>
-                        {canEditDeparture && !isTicketLocked && placementName ? (
+                        {canEditDeparture && placementName ? (
                           <Input
                             type="date"
                             value={flightDateVal}
                             onChange={(e) => setFlightDateVal(e.target.value)}
+                            disabled={isTicketLocked}
                             onBlur={async (e) => {
+                              if (isTicketLocked) return;
                               const val = e.target.value;
                               if (val && val !== (currentRow.flightDate || "")) {
                                 try {
@@ -2330,7 +2503,7 @@ export function ApplicantFollowUpWorkspace({
                                 }
                               }
                             }}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono"
+                            className={cn("h-7 sm:h-7.5 px-2 text-xs font-mono", isTicketLocked && "cursor-not-allowed")}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
@@ -2344,12 +2517,13 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Flight Time
                         </Label>
-                        {canEditDeparture && !isTicketLocked ? (
+                        {canEditDeparture ? (
                           <Input
                             type="time"
                             value={flightTimeVal}
                             onChange={(e) => setFlightTimeVal(e.target.value)}
-                            className="h-7 sm:h-7.5 px-2 text-xs font-mono"
+                            disabled={isTicketLocked}
+                            className={cn("h-7 sm:h-7.5 px-2 text-xs font-mono", isTicketLocked && "cursor-not-allowed")}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
@@ -2370,7 +2544,7 @@ export function ApplicantFollowUpWorkspace({
                           >
                             {currentRow.medical2Status || "Pending"}
                           </Badge>
-                          {canEditMedical && !isTicketLocked && placementName && (
+                          {canEditMedical && placementName && !isTicketLocked && (
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
@@ -2415,19 +2589,21 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Departure Status
                         </Label>
-                        {canEditDeparture && !isTicketLocked && placementName ? (
+                        {canEditDeparture && placementName ? (
                           <select
                             value={currentRow.departureStatus || "Pending"}
+                            disabled={isTicketLocked}
                             onChange={(e) => {
+                              if (isTicketLocked) return;
                               const val = e.target.value;
+                              setCurrentRow((prev) => (prev ? { ...prev, departureStatus: val } : null));
                               if (val === "Departed" || val === "Local return" || val === "International return") {
                                 setSelectedFlightOutcome(val as any);
-                                setDepartureRemark("");
-                                setIsConfirmDepartOpen(true);
                               }
                             }}
                             className={cn(
                               "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold",
+                              isTicketLocked && "opacity-60 cursor-not-allowed",
                               currentRow.departureStatus === "Departed"
                                 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
                                 : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
@@ -2456,13 +2632,14 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Airline Carrier
                         </Label>
-                        {canEditDeparture && !isTicketLocked ? (
+                        {canEditDeparture ? (
                           <Input
                             type="text"
                             value={airlineVal}
                             onChange={(e) => setAirlineVal(e.target.value)}
+                            disabled={isTicketLocked}
                             placeholder="e.g. Ethiopian Airlines"
-                            className="h-7 sm:h-7.5 px-2 text-xs font-medium"
+                            className={cn("h-7 sm:h-7.5 px-2 text-xs font-medium", isTicketLocked && "cursor-not-allowed")}
                           />
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center text-slate-800 dark:text-zinc-200 font-medium">
@@ -2501,9 +2678,10 @@ export function ApplicantFollowUpWorkspace({
                               }
                             }}
                             placeholder="Ticketing details, flight notes, or outcome... (Press Enter to save)"
-                            disabled={!canEditDeparture || isTicketLocked || savingField.ticketRemark}
+                            disabled={isTicketLocked || !canEditDeparture || savingField.ticketRemark}
                             className={cn(
                               "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                              isTicketLocked && "cursor-not-allowed",
                               savedField.ticketRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
                             )}
                           />
@@ -2519,7 +2697,7 @@ export function ApplicantFollowUpWorkspace({
                 </div>
 
                 {/* Field 7: Ticket Actions */}
-                <div className={cn("px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5", isTicketLocked && "opacity-60 pointer-events-none select-none")}>
+                <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {/* CV / Dossier PDF Download */}
                     <Button
@@ -2561,7 +2739,10 @@ export function ApplicantFollowUpWorkspace({
                             setFlightTime(flightTimeVal || currentRow.flightTime || "10:00");
                             setIsTicketFormOpen(true);
                           }}
-                          className="h-6.5 sm:h-7 px-2 text-xs bg-emerald-800 hover:bg-emerald-900 text-white font-semibold cursor-pointer"
+                          className={cn(
+                            "h-6.5 sm:h-7 px-2 text-xs bg-emerald-800 hover:bg-emerald-900 text-white font-semibold",
+                            isTicketLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                          )}
                         >
                           Record Ticket
                         </Button>
@@ -2576,26 +2757,42 @@ export function ApplicantFollowUpWorkspace({
                               setFlightRescheduleReason("");
                               setIsFlightRescheduleOpen(true);
                             }}
-                            className="h-6.5 sm:h-7 px-2 text-xs border-slate-300 dark:border-zinc-700 font-semibold cursor-pointer"
+                            className={cn(
+                              "h-6.5 sm:h-7 px-2 text-xs border-slate-300 dark:border-zinc-700 font-semibold",
+                              isTicketLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                            )}
                           >
                             Reschedule
                           </Button>
                         )}
-                        {currentRow.departureStatus !== "Departed" && (
-                          <Button
-                            size="sm"
-                            disabled={isTicketLocked}
-                            onClick={() => {
-                              setSelectedFlightOutcome("Departed");
-                              setDepartureRemark("");
-                              setIsConfirmDepartOpen(true);
-                            }}
-                            className="h-6.5 sm:h-7 px-2 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
-                            title="Confirm Departure"
-                          >
-                            Depart
-                          </Button>
-                        )}
+                        {/* Finish stage button */}
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setSelectedFlightOutcome(
+                              currentRow.departureStatus === "Local return" || currentRow.departureStatus === "International return"
+                                ? currentRow.departureStatus
+                                : "Departed"
+                            );
+                            setDepartureRemark("");
+                            setIsConfirmDepartOpen(true);
+                          }}
+                          disabled={isTicketLocked || isDepartureComplete || isFinishingDepart}
+                          className={cn(
+                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold shadow-sm bg-emerald-700 hover:bg-emerald-800 text-white",
+                            (isTicketLocked || isDepartureComplete) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                          )}
+                          title={
+                            isTicketLocked
+                              ? "Stage locked until Embassy is Stamped"
+                              : isDepartureComplete
+                              ? "Departure stage already finished"
+                              : "Officially finish the Departure stage"
+                          }
+                        >
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span>Finish stage</span>
+                        </Button>
 
                         <UndoLastStepButton
                           doctype="Placement"
@@ -2687,6 +2884,97 @@ export function ApplicantFollowUpWorkspace({
               className="text-xs h-8 bg-rose-700 hover:bg-rose-800 text-white"
             >
               Confirm Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 1b. Finish LMIS Stage Confirmation Dialog */}
+      <Dialog open={isLmisFinishOpen} onOpenChange={setIsLmisFinishOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Finish LMIS Stage
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Officially finish the LMIS stage for candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
+              This will set LMIS clearance to ISSUED and officially complete the clearance step on the pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Labor ID / Reference (Optional)</Label>
+              <Input
+                type="text"
+                value={laborIdVal || currentRow.laborId || ""}
+                onChange={(e) => setLaborIdVal(e.target.value)}
+                placeholder="e.g. LAB-982341"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Approval / Issue Date</Label>
+              <Input
+                type="date"
+                value={lmisIssueDate || new Date().toISOString().split("T")[0]}
+                onChange={(e) => setLmisIssueDate(e.target.value)}
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setIsLmisFinishOpen(false)} className="text-xs h-8">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isFinishingLmis}
+              onClick={async () => {
+                if (!lmsStepName) {
+                  toast.error("LMIS clearance step record not found.");
+                  return;
+                }
+                try {
+                  setIsFinishingLmis(true);
+                  const approvalDate = lmisIssueDate || new Date().toISOString().split("T")[0];
+                  await setLmisStatusV2(
+                    lmsStepName,
+                    "ISSUED",
+                    undefined,
+                    laborIdVal || currentRow.laborId || undefined,
+                    approvalDate
+                  );
+                  await completeClearanceStepV2(lmsStepName);
+                  toast.success("LMIS stage finished and marked as ISSUED!");
+                  setIsLmisFinishOpen(false);
+                  setCurrentRow((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          lmisStatus: "ISSUED",
+                          lms: prev.lms ? { ...prev.lms, status: "Complete" } : undefined,
+                        }
+                      : null
+                  );
+                  refreshAll();
+                } catch (err) {
+                  toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsFinishingLmis(false);
+                }
+              }}
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
+            >
+              {isFinishingLmis ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Finishing...
+                </>
+              ) : (
+                "Confirm & Finish Stage"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2826,15 +3114,95 @@ export function ApplicantFollowUpWorkspace({
         </DialogContent>
       </Dialog>
 
-      {/* 4. Embassy Stamp Visa Dialog */}
+      {/* 3b. Finish Te'shir Stage Confirmation Dialog */}
+      <Dialog open={isTeshirFinishOpen} onOpenChange={setIsTeshirFinishOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Finish Te&apos;shir Stage
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Officially finish the Te&apos;shir / Injaz clearance stage for candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
+              This marks the clearance step complete on the backend pipeline and satisfies requirements for Embassy submission.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="p-2.5 rounded-lg bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/40 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-zinc-400">Injaz Application No (E-Number):</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  {teshirInjazIdVal || (currentRow.injaz as any)?.injaz_application_no || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-600 dark:text-zinc-400">Payment Status:</span>
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {(currentRow.injaz as any)?.injaz_payment_status || "Paid"}
+                </span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setIsTeshirFinishOpen(false)} className="text-xs h-8">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isFinishingTeshir}
+              onClick={async () => {
+                if (!injazStepName) {
+                  toast.error("Te'shir clearance step record not found.");
+                  return;
+                }
+                try {
+                  setIsFinishingTeshir(true);
+                  await completeClearanceStepV2(injazStepName);
+                  toast.success("Te'shir stage completed successfully!");
+                  setIsTeshirFinishOpen(false);
+                  setCurrentRow((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          teshirStatus: "Completed",
+                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete" } : undefined,
+                        }
+                      : null
+                  );
+                  refreshAll();
+                } catch (err) {
+                  toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsFinishingTeshir(false);
+                }
+              }}
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+            >
+              {isFinishingTeshir ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Finishing...
+                </>
+              ) : (
+                "Confirm & Finish Stage"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. Finish Embassy Stage Dialog */}
       <Dialog open={isEmbassyStampOpen} onOpenChange={setIsEmbassyStampOpen}>
         <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-teal-700 dark:text-teal-400">
-              Stamp Embassy Visa
+            <DialogTitle className="text-base font-bold text-teal-700 dark:text-teal-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Finish Embassy Stage
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Marks visa as officially stamped and records issuance and expiry dates.
+              Officially stamp the visa and finish the Embassy stage for candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
@@ -2875,10 +3243,31 @@ export function ApplicantFollowUpWorkspace({
             </Button>
             <Button
               size="sm"
-              disabled={!embassyVisaNumber}
+              disabled={!embassyVisaNumber || isFinishingEmbassy}
               onClick={async () => {
-                if (!embassyStepName) return;
+                if (!embassyStepName) {
+                  toast.error("Embassy clearance step record not found.");
+                  return;
+                }
                 try {
+                  setIsFinishingEmbassy(true);
+
+                  // PREREQUISITE AUTO-COMPLETION FIX:
+                  // The Frappe backend requires the Taeshir step to be in a complete state before Embassy can be stamped.
+                  // If injazStepName exists and is still Pending or In Progress, complete it first!
+                  if (
+                    injazStepName &&
+                    currentRow.injaz?.status !== "Complete" &&
+                    currentRow.injaz?.status !== "Issued" &&
+                    currentRow.injaz?.status !== "Approved"
+                  ) {
+                    try {
+                      await completeClearanceStepV2(injazStepName);
+                    } catch (e) {
+                      console.warn("Auto-completing prerequisite Te'shir step:", e);
+                    }
+                  }
+
                   await stampEmbassyStepV2(embassyStepName, embassyVisaNumber);
                   if (placementName) {
                     await updatePlacementParsedFieldsV2(placementName, {
@@ -2887,7 +3276,7 @@ export function ApplicantFollowUpWorkspace({
                       ...(embassyVisaExpiryDate ? { visa_expiry_date: embassyVisaExpiryDate } : {}),
                     });
                   }
-                  toast.success("Embassy visa stamped successfully");
+                  toast.success("Embassy stage officially finished and visa stamped!");
                   setIsEmbassyStampOpen(false);
                   setCurrentRow((prev) =>
                     prev
@@ -2897,17 +3286,27 @@ export function ApplicantFollowUpWorkspace({
                           visaNumber: embassyVisaNumber,
                           visaIssueDate: embassyVisaIssueDate,
                           visaDeadline: embassyVisaExpiryDate,
+                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete" } : prev.injaz,
                         }
                       : null
                   );
                   refreshAll();
                 } catch (err) {
                   toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsFinishingEmbassy(false);
                 }
               }}
-              className="text-xs h-8 bg-teal-700 hover:bg-teal-800 text-white"
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
             >
-              Confirm Stamped
+              {isFinishingEmbassy ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Finishing...
+                </>
+              ) : (
+                "Confirm & Finish Stage"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3131,15 +3530,17 @@ export function ApplicantFollowUpWorkspace({
         </DialogContent>
       </Dialog>
 
-      {/* 8. Confirm Departure / Outcome Dialog */}
+      {/* 8. Confirm Departure / Finish Stage Dialog */}
       <Dialog open={isConfirmDepartOpen} onOpenChange={setIsConfirmDepartOpen}>
         <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-emerald-700 dark:text-emerald-400">
-              Record Candidate Flight Outcome
+            <DialogTitle className="text-base font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Finish Departure Stage
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Finalizes departure status or records return outcome for candidate lifecycle.
+              Officially finish the Departure stage for candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
@@ -3174,11 +3575,16 @@ export function ApplicantFollowUpWorkspace({
             </Button>
             <Button
               size="sm"
+              disabled={isFinishingDepart}
               onClick={async () => {
-                if (!placementName) return;
+                if (!placementName) {
+                  toast.error("Candidate placement record not found.");
+                  return;
+                }
                 try {
+                  setIsFinishingDepart(true);
                   await advancePlacementV2(placementName, selectedFlightOutcome as any);
-                  toast.success(`Candidate marked as ${selectedFlightOutcome}!`);
+                  toast.success(`Candidate marked as ${selectedFlightOutcome}! Departure stage finished.`);
                   setIsConfirmDepartOpen(false);
                   setCurrentRow((prev) =>
                     prev
@@ -3192,11 +3598,20 @@ export function ApplicantFollowUpWorkspace({
                   refreshAll();
                 } catch (err) {
                   toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsFinishingDepart(false);
                 }
               }}
-              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
             >
-              Save Outcome
+              {isFinishingDepart ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Finishing...
+                </>
+              ) : (
+                "Confirm & Finish Stage"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

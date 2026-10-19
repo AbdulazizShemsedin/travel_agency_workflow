@@ -277,35 +277,33 @@ export function RoleWorkspaceContainer() {
       {/* ------------------------------------------------------------- */}
       {/* Top Header Bar                                                */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            {headerInfo.title}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            {headerInfo.subtitle}
-          </p>
-        </div>
+      <div>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
+        </Link>
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {headerInfo.title}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+              {headerInfo.subtitle}
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8.5 px-3 border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold gap-1.5"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Dashboard</span>
-            </Button>
-          </Link>
-          {canRegister && (
-            <Link href="/applicants/new">
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-8.5 px-3">
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                New Applicant
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {canRegister && (
+              <Link href="/applicants/new">
+                <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white shadow-xs font-semibold text-xs h-8.5 px-3">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  New Applicant
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

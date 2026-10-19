@@ -7,6 +7,7 @@ import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STAT
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { listApplicantsV2, checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { parseMRZText } from "@/lib/utils/mrzScanner";
+import { PLACE_OF_BIRTH_OPTIONS } from "@/components/agent/CandidateFilters";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +46,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   const fullBodyPhotoValue = watch("photo_full_body");
   const passportScanValue = watch("passport_scan");
   const passportNumber = watch("passport_number");
+  const watchPlaceOfBirth = watch("place_of_birth");
 
   const currentDestCountry = watch("destination_country") || "";
   const isKnownPredefinedCountry = DESTINATION_COUNTRY_OPTIONS.filter((c) => c !== "Other").includes(
@@ -1137,13 +1139,26 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     </Label>
                     <span className="text-[10px] text-slate-400 font-normal">Optional / Auto-extracted</span>
                   </div>
-                  <Input
+                  <select
                     id="place_of_birth"
-                    placeholder="e.g., ADDIS ABABA, OROMIA, HAWASSA"
                     {...register("place_of_birth")}
                     disabled={locked}
-                    className="h-9 text-xs uppercase"
-                  />
+                    className={cn(
+                      "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                      errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500" : ""
+                    )}
+                  >
+                    <option value="">Select Place of Birth...</option>
+                    {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    {watchPlaceOfBirth &&
+                      !PLACE_OF_BIRTH_OPTIONS.includes(watchPlaceOfBirth.toUpperCase().trim() as any) && (
+                        <option value={watchPlaceOfBirth}>{watchPlaceOfBirth}</option>
+                      )}
+                  </select>
                   {errors.place_of_birth && (
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
                   )}
@@ -1345,12 +1360,25 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                   <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
                     Place of Birth <span className="text-rose-500">*</span>
                   </Label>
-                  <Input
+                  <select
                     id="place_of_birth"
-                    placeholder="e.g., Oromia, Amhara"
                     {...register("place_of_birth")}
-                    className={errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500 focus-visible:ring-rose-500/20" : ""}
-                  />
+                    className={cn(
+                      "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                      errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500" : ""
+                    )}
+                  >
+                    <option value="">Select Place of Birth...</option>
+                    {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                    {watchPlaceOfBirth &&
+                      !PLACE_OF_BIRTH_OPTIONS.includes(watchPlaceOfBirth.toUpperCase().trim() as any) && (
+                        <option value={watchPlaceOfBirth}>{watchPlaceOfBirth}</option>
+                      )}
+                  </select>
                   {errors.place_of_birth && (
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
                   )}

@@ -119,6 +119,13 @@ export interface WorkspaceApplicantRow {
   flightDate?: string;
   flightTime?: string;
   visaDeadline?: string;
+  visaIssueDate?: string;
+  submissionDate?: string;
+  embassyRemarks?: string;
+  lmisRemark?: string;
+  teshirRemark?: string;
+  ticketRemark?: string;
+  plc?: any | null;
 
   // Stream-specific records
   lms?: any | null;
