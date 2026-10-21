@@ -853,8 +853,12 @@ export function ApplicantTable() {
                 { value: "All", label: `All Stages (${stageCounts.All})` },
                 { value: "Draft", label: `Draft (${stageCounts.Draft})` },
                 { value: "Registered", label: `Registered (${stageCounts.Registered})` },
-                { value: "CV Generated", label: `CV Generated (${stageCounts["CV Generated"]})` },
-                { value: "Selected", label: `Selected (${stageCounts.Selected})` },
+                ...(selectedTrack !== "Muayena"
+                  ? [
+                      { value: "CV Generated", label: `CV Generated (${stageCounts["CV Generated"]})` },
+                      { value: "Selected", label: `Selected (${stageCounts.Selected})` },
+                    ]
+                  : []),
                 { value: "Processing", label: `Processing (${stageCounts.Processing})` },
                 { value: "Stamped", label: `Stamped (${stageCounts.Stamped})` },
                 { value: "Ticketed", label: `Ticketed (${stageCounts.Ticketed})` },
@@ -1261,8 +1265,15 @@ export function ApplicantTable() {
                             </button>
                           )}
 
-                          {/* Generate CV — shown for Registered stage while CV not yet generated */}
-                          {stage === "Registered" && !cvGeneratedSet.has(applicant.name) && can("generateCv") && (
+                          {/* Generate CV — shown for Registered stage while CV not yet generated (Standard track only; Muayena skips CV) */}
+                          {stage === "Registered" &&
+                            !cvGeneratedSet.has(applicant.name) &&
+                            can("generateCv") &&
+                            !(
+                              applicant.entry_track === "Muayena" ||
+                              applicant.applicant_type === "Muayena" ||
+                              Boolean((applicant as any).is_muayena)
+                            ) && (
                             <button
                               type="button"
                               disabled={isGeneratingCv || generateCvMutation.isPending || applicant.medical_status === "UNFIT"}
@@ -1277,8 +1288,8 @@ export function ApplicantTable() {
                               }}
                               className={
                                 applicant.medical_status === "UNFIT"
-                                  ? "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
-                                  : "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                    ? "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                                    : "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               }
                               title={applicant.medical_status === "UNFIT" ? "Medically UNFIT -- cannot generate CV" : "Generate bilateral recruitment CV"}
                             >
@@ -1291,8 +1302,13 @@ export function ApplicantTable() {
                             </button>
                           )}
 
-                          {/* View CV — directly on table when CV is generated or available */}
-                          {(cvGeneratedSet.has(applicant.name) || applicant.cv_attachment || applicant.cv_file) && (
+                          {/* View CV — directly on table when CV is generated or available (Standard track only) */}
+                          {(cvGeneratedSet.has(applicant.name) || applicant.cv_attachment || applicant.cv_file) &&
+                            !(
+                              applicant.entry_track === "Muayena" ||
+                              applicant.applicant_type === "Muayena" ||
+                              Boolean((applicant as any).is_muayena)
+                            ) && (
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
                               onClick={(e) => e.stopPropagation()}

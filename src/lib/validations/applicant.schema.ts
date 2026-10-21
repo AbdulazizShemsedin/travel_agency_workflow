@@ -117,6 +117,7 @@ export const optionalString = z.preprocess(
 export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS).default("Standard"),
+  entry_track: z.enum(APPLICANT_TYPE_OPTIONS).optional(),
   application_number: optionalString,
   first_name: z.string().trim().default(""),
   middle_name: optionalString,
@@ -190,6 +191,7 @@ export const baseApplicantSchema = z.object({
   // Video & Intro Attachments
   video_url: optionalString,
   intro_video: optionalString,
+  video: optionalString,
 
   // Second Contact Person (Delala / Broker)
   second_contact_name: optionalString,
@@ -503,7 +505,7 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
       }, "Please enter a valid Medical Expiration Date"),
   })
   .superRefine((data: any, ctx: z.RefinementCtx) => {
-    const isMuayena = data.applicant_type === "Muayena";
+    const isMuayena = data.applicant_type === "Muayena" || data.entry_track === "Muayena";
 
     // For Standard applicants: CV generation fields and salary are mandatory
     if (!isMuayena) {

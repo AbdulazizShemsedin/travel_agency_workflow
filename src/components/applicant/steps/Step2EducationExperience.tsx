@@ -49,7 +49,7 @@ export function Step2EducationExperience({
   });
 
   const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
-  const videoUrl = watch("video_url" as any) || watch("intro_video" as any);
+  const videoUrl = watch("video_url" as any) || watch("intro_video" as any) || watch("video" as any);
 
   const handleVideoFileSelect = async (file: File) => {
     try {
@@ -59,6 +59,7 @@ export function Step2EducationExperience({
       if (url) {
         setValue("video_url" as any, url, { shouldDirty: true });
         setValue("intro_video" as any, url, { shouldDirty: true });
+        setValue("video" as any, url, { shouldDirty: true });
         toast.success("Candidate video uploaded successfully!");
       }
     } catch (err: any) {
@@ -551,6 +552,7 @@ export function Step2EducationExperience({
                   onRemove={() => {
                     setValue("video_url" as any, "", { shouldDirty: true });
                     setValue("intro_video" as any, "", { shouldDirty: true });
+                    setValue("video" as any, "", { shouldDirty: true });
                     toast.info("Candidate video removed");
                   }}
                 />

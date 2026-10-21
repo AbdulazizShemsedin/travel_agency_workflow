@@ -77,6 +77,24 @@ export default function EditApplicantPage() {
       sponsor_email: (applicant as any).sponsor_email || (activePlacement as any)?.employer_email || (activePlacement as any)?.sponsor_email || "",
       agent: (applicant as any).agent || activePlacement?.saudi_agency_name || (activePlacement as any)?.kuwait_agency_name || "",
       contract_number: (applicant as any).contract_number || activePlacement?.contract_number || "",
+      video_url:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
+      intro_video:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
+      video:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
       active_placement: activePlacement,
     };
   }, [applicant, activePlacement, taeshirInjazId]);

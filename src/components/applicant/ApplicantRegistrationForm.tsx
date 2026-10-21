@@ -60,6 +60,7 @@ import {
   parsePassportFileV2,
   normalizeApplicantFields,
   isExperiencedCountry,
+  attachVideoToApplicantV2,
 } from "@/lib/api/v2";
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
@@ -166,7 +167,7 @@ export function ApplicantRegistrationForm({
   const queryClient = useQueryClient();
 
   const [draftApplicantId, setDraftApplicantId] = React.useState<string | null>(
-    existingApplicantId || null
+    existingApplicantId || (initialData as any)?.name || (initialData as any)?.applicant_id || null
   );
   const [applicantState, setApplicantState] = React.useState<string>(
     (initialData as any)?.status || (initialData as any)?.applicant_state || "Draft"
@@ -228,7 +229,18 @@ export function ApplicantRegistrationForm({
     // @ts-expect-error zodResolver type widening across optional schema fields
     resolver: zodResolver(stage2RegistrationSchema),
     defaultValues: {
-      applicant_type: (initialData?.applicant_type as any) || "Standard",
+      applicant_type:
+        (initialData as any)?.entry_track === "Muayena" ||
+        (initialData?.applicant_type as any) === "Muayena" ||
+        Boolean((initialData as any)?.is_muayena)
+          ? "Muayena"
+          : "Standard",
+      entry_track:
+        (initialData as any)?.entry_track === "Muayena" ||
+        (initialData?.applicant_type as any) === "Muayena" ||
+        Boolean((initialData as any)?.is_muayena)
+          ? "Muayena"
+          : "Standard",
       destination_country: initialData?.destination_country || "Saudi Arabia",
       application_number:
         (initialData as any)?.application_number ||
@@ -271,7 +283,9 @@ export function ApplicantRegistrationForm({
       profile_photo_url: initialData?.profile_photo_url || initialData?.photograph || "",
       photo_full_body: initialData?.photo_full_body || "",
       passport_scan: initialData?.passport_scan || "",
-      video_url: initialData?.video_url || (initialData as any)?.intro_video || "",
+      video_url: initialData?.video_url || (initialData as any)?.intro_video || (initialData as any)?.video || "",
+      intro_video: initialData?.video_url || (initialData as any)?.intro_video || (initialData as any)?.video || "",
+      video: initialData?.video_url || (initialData as any)?.intro_video || (initialData as any)?.video || "",
       is_active: (initialData as any)?.is_active ?? true,
       registration_date: (initialData as any)?.registration_date || new Date().toISOString().slice(0, 10),
 
@@ -688,16 +702,30 @@ export function ApplicantRegistrationForm({
           normalized.middle_name || "",
           normalized.last_name || ""
         );
+      const currentFormVideo = getValues("video_url") || (getValues() as any)?.intro_video || (getValues() as any)?.video || "";
+      const resolvedVideo =
+        normalized.video_url ||
+        (normalized as any)?.intro_video ||
+        (normalized as any)?.video ||
+        (initialData as any)?.video_url ||
+        (initialData as any)?.intro_video ||
+        (initialData as any)?.video ||
+        currentFormVideo ||
+        "";
       reset({
         ...getValues(),
         ...normalized,
         full_name: name,
+        video_url: resolvedVideo,
+        intro_video: resolvedVideo,
+        video: resolvedVideo,
       });
-      if (existingApplicantId) {
-        setDraftApplicantId(existingApplicantId);
+      const targetId = existingApplicantId || (initialData as any)?.name || (initialData as any)?.applicant_id;
+      if (targetId) {
+        setDraftApplicantId(targetId);
       }
     }
-  }, [initialData, existingApplicantId, reset]);
+  }, [initialData, existingApplicantId, reset, getValues]);
 
   // Synchronize full_name to first_name, middle_name, last_name (always UPPERCASE)
   const handleFullNameChange = (val: string) => {
@@ -915,13 +943,32 @@ export function ApplicantRegistrationForm({
         ? Number(data.monthly_salary)
         : 1000;
 
+    const finalTrack =
+      watch("entry_track") ||
+      (data as any)?.entry_track ||
+      data.applicant_type ||
+      (initialData as any)?.entry_track ||
+      (initialData as any)?.applicant_type ||
+      ((initialData as any)?.is_muayena ? "Muayena" : "Standard");
+
+    const effectiveVideo =
+      data.video_url ||
+      (data as any)?.intro_video ||
+      (data as any)?.video ||
+      videoValue ||
+      initialData?.video_url ||
+      (initialData as any)?.intro_video ||
+      (initialData as any)?.video ||
+      "";
+
     const rawPayload: Record<string, any> = {
       ...data,
       full_name: data.full_name || `${finalFirst} ${finalMiddle} ${finalLast}`.trim(),
       first_name: finalFirst,
       middle_name: finalMiddle,
       last_name: finalLast,
-      entry_track: data.applicant_type || "Standard",
+      entry_track: finalTrack,
+      applicant_type: finalTrack,
       target_job: data.target_job || data.job_applied || "HOUSE WORKER",
       job_applied: data.job_applied || data.target_job || "HOUSE WORKER",
       education: data.qualification || data.education || data.highest_education || "SECONDARY LEVEL",
@@ -958,6 +1005,9 @@ export function ApplicantRegistrationForm({
       coc_status: data.coc_status || "",
       college_certificate: data.college_certificate || "",
       original_id_scan: data.original_id_scan || "",
+      video_url: effectiveVideo,
+      intro_video: effectiveVideo,
+      video: effectiveVideo,
     };
 
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
@@ -971,25 +1021,35 @@ export function ApplicantRegistrationForm({
     setIsUploadingMedia(true);
     try {
       const isPrivate = activeMediaTab === "passport";
-      const res = await uploadFileV2(file, isPrivate, "Applicant", draftApplicantId || undefined);
+      const activeTargetId =
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
+      const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
 
       if (activeMediaTab === "photo") {
-        setValue("photograph", url);
-        setValue("photo_passport", url);
-        setValue("profile_photo_url", url);
+        setValue("photograph", url, { shouldDirty: true });
+        setValue("photo_passport", url, { shouldDirty: true });
+        setValue("profile_photo_url", url, { shouldDirty: true });
         toast.success("Photo uploaded successfully!");
       } else if (activeMediaTab === "full_size") {
-        setValue("photo_full_body", url);
+        setValue("photo_full_body", url, { shouldDirty: true });
         toast.success("Full-size photo uploaded successfully!");
       } else if (activeMediaTab === "passport") {
-        setValue("passport_scan", url);
+        setValue("passport_scan", url, { shouldDirty: true });
         toast.success("Passport scan uploaded!");
         // Run OCR on passport
         handlePassportAutoScan(file);
       } else if (activeMediaTab === "video") {
-        setValue("video_url", url);
+        setValue("video_url", url, { shouldDirty: true });
+        setValue("intro_video" as any, url, { shouldDirty: true });
+        setValue("video" as any, url, { shouldDirty: true });
+        if (activeTargetId) {
+          await attachVideoToApplicantV2(activeTargetId, url);
+        }
         toast.success("Video interview uploaded successfully!");
       }
     } catch (err: any) {
@@ -1008,25 +1068,52 @@ export function ApplicantRegistrationForm({
       clearErrors();
       const payload = buildPayload();
       let res;
-      if (draftApplicantId) {
-        res = await updateApplicantV2(draftApplicantId, payload);
+      const targetExistingId =
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
+
+      if (targetExistingId) {
+        res = await updateApplicantV2(targetExistingId, payload);
       } else {
         res = await createApplicantV2(payload as any);
+      }
+
+      const savedId = res?.name || targetExistingId;
+      const videoToAttach = payload.video_url || getValues("video_url") || "";
+      if (videoToAttach && savedId) {
+        await attachVideoToApplicantV2(savedId, videoToAttach);
       }
       return res;
     },
     onSuccess: (data) => {
-      const savedId = data?.name || draftApplicantId;
+      const savedId =
+        data?.name ||
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
       if (savedId) setDraftApplicantId(savedId);
       setApplicantState(data?.status || data?.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      if (savedId) queryClient.invalidateQueries({ queryKey: ["applicant", savedId] });
       toast.success(`Applicant Saved Successfully (ID: ${savedId || ""})`, {
         description: "Draft saved. Redirecting to applicant list...",
       });
       if (onSuccessRedirect && savedId) {
-        onSuccessRedirect(savedId);
+        if (typeof onSuccessRedirect === "function") {
+          onSuccessRedirect(savedId);
+        } else if (typeof onSuccessRedirect === "string") {
+          router.push(onSuccessRedirect);
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.location.href = "/applicants";
+        } else {
+          router.push("/applicants");
+        }
       }
-      router.push("/applicants");
     },
     onError: (error: unknown) => {
       toast.error("Could not save applicant", {
@@ -1038,20 +1125,44 @@ export function ApplicantRegistrationForm({
   // 2. SAVE CHANGES MUTATION (FOR EDIT MODE)
   const saveChangesMutation = useMutation({
     mutationFn: async () => {
-      if (!draftApplicantId) throw new Error("No applicant ID to update.");
+      const targetId =
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
+      if (!targetId) throw new Error("No applicant ID to update.");
       const payload = buildPayload();
-      return await updateApplicantV2(draftApplicantId, payload);
+      const res = await updateApplicantV2(targetId, payload);
+      const videoToAttach = payload.video_url || getValues("video_url") || "";
+      if (videoToAttach && targetId) {
+        await attachVideoToApplicantV2(targetId, videoToAttach);
+      }
+      return res;
     },
     onSuccess: () => {
+      const targetId =
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
-      queryClient.invalidateQueries({ queryKey: ["applicant", draftApplicantId] });
+      if (targetId) queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
       toast.success("Applicant changes saved successfully!", {
         description: "Profile updated. Redirecting to applicant list...",
       });
-      if (onSuccessRedirect && draftApplicantId) {
-        onSuccessRedirect(draftApplicantId);
+      if (onSuccessRedirect && targetId) {
+        if (typeof onSuccessRedirect === "function") {
+          onSuccessRedirect(targetId);
+        } else if (typeof onSuccessRedirect === "string") {
+          router.push(onSuccessRedirect);
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.location.href = "/applicants";
+        } else {
+          router.push("/applicants");
+        }
       }
-      router.push("/applicants");
     },
     onError: (err: unknown) => {
       toast.error("Failed to save changes", {
@@ -1084,7 +1195,11 @@ export function ApplicantRegistrationForm({
         throw new Error(firstErr);
       }
 
-      let activeId = draftApplicantId;
+      let activeId =
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
       const payload = buildPayload();
 
       if (!activeId) {
@@ -1095,11 +1210,25 @@ export function ApplicantRegistrationForm({
         await updateApplicantV2(activeId, payload);
       }
 
+      if (!activeId) {
+        throw new Error("Could not initialize applicant record before transitioning to Registered.");
+      }
+
+      const videoToAttach = payload.video_url || getValues("video_url") || "";
+      if (videoToAttach && activeId) {
+        await attachVideoToApplicantV2(activeId, videoToAttach);
+      }
+
       const regRes = await registerApplicantV2(activeId);
       return { ...regRes, applicantId: activeId };
     },
     onSuccess: (data: any) => {
-      const targetId = data?.applicantId || draftApplicantId;
+      const targetId =
+        data?.applicantId ||
+        draftApplicantId ||
+        existingApplicantId ||
+        (initialData as any)?.name ||
+        (initialData as any)?.applicant_id;
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -1108,9 +1237,18 @@ export function ApplicantRegistrationForm({
         description: `Record ${targetId} is now Registered. Redirecting to applicant list...`,
       });
       if (onSuccessRedirect && targetId) {
-        onSuccessRedirect(targetId);
+        if (typeof onSuccessRedirect === "function") {
+          onSuccessRedirect(targetId);
+        } else if (typeof onSuccessRedirect === "string") {
+          router.push(onSuccessRedirect);
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.location.href = "/applicants";
+        } else {
+          router.push("/applicants");
+        }
       }
-      router.push("/applicants");
     },
     onError: (err: unknown) => {
       const errorMsg = formatCleanErrorMessage(err);
@@ -1143,8 +1281,20 @@ export function ApplicantRegistrationForm({
   const photoValue = watch("photograph") || watch("photo_passport") || watch("profile_photo_url");
   const fullSizeValue = watch("photo_full_body");
   const passportValue = watch("passport_scan");
-  const videoValue = watch("video_url");
-  const currentApplicantType = watch("applicant_type") || "Standard";
+  const videoValue =
+    watch("video_url") ||
+    (watch() as any)?.intro_video ||
+    (watch() as any)?.video ||
+    (initialData as any)?.video_url ||
+    (initialData as any)?.intro_video ||
+    (initialData as any)?.video ||
+    "";
+  const currentApplicantType =
+    watch("entry_track") ||
+    watch("applicant_type") ||
+    (initialData as any)?.entry_track ||
+    (initialData as any)?.applicant_type ||
+    ((initialData as any)?.is_muayena ? "Muayena" : "Standard");
   const isMuayena = currentApplicantType === "Muayena";
   const currentDestCountry = watch("destination_country") || "Saudi Arabia";
 
@@ -1222,6 +1372,7 @@ export function ApplicantRegistrationForm({
                   disabled={lockedIdentityFields}
                   onClick={() => {
                     setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
+                    setValue("entry_track" as any, "Standard", { shouldDirty: true, shouldValidate: true });
                     if (watch("relative_name") === "Muayena") {
                       setValue("relative_name", "");
                       setValue("relative_kinship", "Mother");
@@ -1242,6 +1393,7 @@ export function ApplicantRegistrationForm({
                   disabled={lockedIdentityFields}
                   onClick={() => {
                     setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
+                    setValue("entry_track" as any, "Muayena", { shouldDirty: true, shouldValidate: true });
                     const currentContact = watch("relative_name");
                     if (!currentContact || currentContact === "") {
                       setValue("relative_name", "Muayena");
@@ -1581,7 +1733,9 @@ export function ApplicantRegistrationForm({
                     } else if (activeMediaTab === "full_size") {
                       setValue("photo_full_body", url);
                     } else if (activeMediaTab === "video") {
-                      setValue("video_url", url);
+                      setValue("video_url", url, { shouldDirty: true });
+                      setValue("intro_video" as any, url, { shouldDirty: true });
+                      setValue("video" as any, url, { shouldDirty: true });
                     }
                     toast.success("File uploaded successfully");
                   }
@@ -1602,7 +1756,9 @@ export function ApplicantRegistrationForm({
               } else if (activeMediaTab === "passport") {
                 setValue("passport_scan", "");
               } else if (activeMediaTab === "video") {
-                setValue("video_url", "");
+                setValue("video_url", "", { shouldDirty: true });
+                setValue("intro_video" as any, "", { shouldDirty: true });
+                setValue("video" as any, "", { shouldDirty: true });
               }
               toast.info("Media cleared");
             }}

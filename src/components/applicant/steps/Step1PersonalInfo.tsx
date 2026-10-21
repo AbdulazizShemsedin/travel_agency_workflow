@@ -958,13 +958,16 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                       disabled={locked}
                       onClick={() => {
                         setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
+                        setValue("entry_track" as any, "Standard", { shouldDirty: true, shouldValidate: true });
                         if (watch("contact_person_name") === "Muayena") {
                           setValue("contact_person_name", "", { shouldDirty: true });
                           setValue("emergency_relationship", "", { shouldDirty: true });
                         }
                       }}
                       className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${locked ? "cursor-not-allowed opacity-60" : ""} ${
-                        watch("applicant_type") === "Standard" || !watch("applicant_type")
+                        (watch("entry_track") === "Standard" || watch("applicant_type") === "Standard" || (!watch("entry_track") && !watch("applicant_type"))) &&
+                        watch("entry_track") !== "Muayena" &&
+                        watch("applicant_type") !== "Muayena"
                           ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
                           : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
                       }`}
@@ -976,6 +979,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                       disabled={locked}
                       onClick={() => {
                         setValue("applicant_type", "Muayena", { shouldDirty: true, shouldValidate: true });
+                        setValue("entry_track" as any, "Muayena", { shouldDirty: true, shouldValidate: true });
                         const currentContact = watch("contact_person_name");
                         if (!currentContact || currentContact === "") {
                           setValue("contact_person_name", "Muayena", { shouldDirty: true });
@@ -983,7 +987,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                         }
                       }}
                       className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition text-center ${locked ? "cursor-not-allowed opacity-60" : ""} ${
-                        watch("applicant_type") === "Muayena"
+                        watch("entry_track") === "Muayena" || watch("applicant_type") === "Muayena"
                           ? "bg-emerald-900 dark:bg-emerald-700 text-white shadow-xs"
                           : "text-slate-600 dark:text-zinc-400 hover:text-slate-900"
                       }`}

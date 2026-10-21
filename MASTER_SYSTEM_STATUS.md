@@ -799,11 +799,66 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
     3. Added `graduation_year` and `years_of_experience` to `OPTIONAL_FIELD_NAMES` in `src/lib/validations/zod-error-map.ts`.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors). Zero mock data or mock fallbacks. No browser subagent invoked.
 
+## 23. Muayena Specialized Workflow Customization, Track Reversion Fix & Follow-Up Extensions Dropdown (2026-10-19)
+- **Applicant Detail Direct Redirection**:
+  - Configured `onSuccessRedirect` in `src/app/applicants/[id]/page.tsx` and mutation callbacks in `src/components/applicant/ApplicantRegistrationForm.tsx` to execute `window.location.href = "/applicants"` immediately upon successful "Update Profile" or "Register Applicant". This prevents Next.js router transition stalls and immediately redirects the user to the Applicant list.
+- **Muayena Workflow Customization**:
+  - **Concept**: Muayena applicants enter with an employer/sponsor contract already established, meaning the `CV Generated` and `Selected` stages are entirely bypassed.
+  - **Progress Bar Customization**: On `src/app/applicants/[id]/page.tsx`, dynamically set stages for Muayena candidates to 6 canonical steps: `["Draft", "Registered", "Processing", "Stamped", "Ticketed", "Departed"]`.
+  - **Progress Mapping**: Mapped `Selected` to `Processing` and `CV Generated` to `Registered` for Muayena applicants so the progress ribbon cleanly indicates operational status without non-existent intermediary stages.
+  - **Header Track Indicator**: Added prominent Track badge in the candidate header (`Track: Muayena Track` in emerald vs `Track: Standard Track` in blue).
+  - **Candidate List & Filter Polishing**: On `ApplicantTable.tsx`, hid "Generate CV" and "View CV" action buttons for Muayena candidates, and dynamically excluded "CV Generated" and "Selected" from the stage filter dropdown when filtering by Muayena track.
+- **Follow-Up Workspace "Extensions" Dropdown**:
+  - In `src/components/operational/workspaces/FollowUpWorkspace.tsx`, added an "Extensions" button to the ACTION column.
+  - Clicking "Extensions" displays a dropdown menu with options: `"For LMIS"`, `"For Taeshir"`, and `"For Musaned"`.
+  - Selecting an option dispatches the candidate record to the Chrome extension bridge (`sendApplicantToExtension`) configured with target extension parameters and gives immediate toast feedback.
+- **Muayena Track Reversion & Registered-to-Draft Regression Bug Fix**:
+  - **Root Cause**: The backend Frappe DocType schema uses the field name `entry_track` (`"Standard"` | `"Muayena"`), whereas the frontend form previously tracked only `applicant_type`. When updating an applicant profile, `buildPayload` sent `entry_track: "Standard"` by default. In Frappe's `state_machine.py`, mutating `entry_track` while an applicant is in `Registered` status triggered an automatic server-side regression back to `Draft`.
+  - **Resolution**:
+    1. Added `entry_track: z.enum(APPLICANT_TYPE_OPTIONS).optional()` in `src/lib/validations/applicant.schema.ts`.
+    2. Implemented bidirectional synchronization in `normalizeApplicantFields` (`src/lib/api/v2/applicants.ts`) so `entry_track` and `applicant_type` always stay synchronized.
+    3. In `ApplicantRegistrationForm.tsx` and `Step1PersonalInfo.tsx`, initialized and updated both `entry_track` and `applicant_type` together from `initialData.entry_track || initialData.applicant_type`.
+    4. Ensured `buildPayload` resolves `finalTrack` properly and includes both fields, eliminating server-side regression to "Standard" and status regression to "Draft".
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No automated browser testing executed.
 
+## 24. Follow-Up Processing Stage Lock & Universal In-Field and Detail Video Playback (2026-10-19)
+- **Follow-Up Details Page Stage Gating**:
+  - In `src/components/operational/workspaces/ApplicantFollowUpWorkspace.tsx`, added `hasReachedProcessing` and `currentStageName` introspection.
+  - When a candidate has not reached the `Processing` stage (e.g., they are in `Draft`, `Registered`, `CV Generated`, `Waiting to be Selected`, or `Selected` without active clearance processing), all four operational cards (LMIS, Te'shir, Embassy, and Ticket & Departure) are disabled via `opacity-50 pointer-events-none select-none cursor-not-allowed filter grayscale-[25%]`.
+  - Displayed a prominent alert banner at the top of the workspace explaining to the operator that clearance stages are disabled because the applicant is currently in `[Current Stage]`, and guiding them to proceed through earlier workflow stages (Registration, CV Generation, Foreign Agency Selection, or Muayena Placement Contract Attachment) before updating clearance records.
+- **Universal In-Field & Detail Page Video Player**:
+  - **In-Field Video Player**: Upgraded `src/components/ui/PremiumDropzone.tsx` so that when a video is uploaded or present, it embeds a responsive, playable HTML5 video player with full native controls (`controls`, `playsInline`, `preload="metadata"`), duration, and an external full-size preview link. Stopped click propagation on the player container so clicking on the video or controls plays and interacts with the video rather than opening the file browser dialog.
+  - **Form State Synchronization**: In `src/components/applicant/ApplicantRegistrationForm.tsx` and `src/components/applicant/steps/Step2EducationExperience.tsx`, synchronized `video_url` and `intro_video` across form default values, watches, and upload handlers.
+  - **Applicant Detail Page Video Player**: In `src/app/applicants/[id]/page.tsx`:
+    1. Added an interactive "Play Interview Video" action button with `Film` icon in the candidate header.
+    2. Embedded a dedicated "Candidate Interview Video" player card directly on the page above the registration form when an applicant has a video attached.
+    3. Added a full-size Video Player modal dialog (`Dialog`) for theater-style playback.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No automated browser sessions initiated.
 
-
-
-
-
-
+## 25. Applicant Video Field Persistence Across Navigation & Form Lifecycle (2026-10-19)
+- **Root Cause Analysis**:
+  - Uploaded videos displayed initially in the registration form via local react-hook-form state.
+  - When the user clicked "Save as Draft", "Update Profile", or "Register Applicant", navigated to another page, and returned, the candidate video was missing from the "Video Interview" field.
+  - Root causes identified:
+    1. **DocType Field Alias Mismatch**: The backend Frappe schema accepts `video_url`, `intro_video`, or `video`. In `buildPayload()`, only `...data` was passed without ensuring all video aliases were defined. Frappe silently ignores attributes not matching DocType field names.
+    2. **Unsynchronized API Normalization**: `normalizeApplicantFields` did not harmonize video fields. When `getApplicantV2` or `listApplicantsV2` returned documents, any alias mismatch left other keys empty.
+    3. **Form Reset Clobbering**: In `ApplicantRegistrationForm.tsx`, `useEffect` listening to `initialData` ran `reset({ ...getValues(), ...normalized })`. Because `normalized.video_url` or `intro_video` could be empty/undefined, active video state was overwritten with empty strings.
+- **Surgical Implementation**:
+  - **API Layer Normalization**: In `src/lib/api/v2/applicants.ts`, added Section 5.1 in `normalizeApplicantFields` linking `video_url`, `intro_video`, and `video`. Whenever any video alias exists, all three are populated with the valid URL.
+  - **Payload Construction**: In `ApplicantRegistrationForm.tsx`, added `effectiveVideo` resolution checking `data.video_url`, `data.intro_video`, `data.video`, `videoValue`, and `initialData` aliases. Explicitly included `video_url: effectiveVideo`, `intro_video: effectiveVideo`, and `video: effectiveVideo` in `rawPayload`.
+  - **Form Initialization & Reset**: In `ApplicantRegistrationForm.tsx`, added `video_url`, `intro_video`, and `video` to `defaultValues`, and safeguarded the `initialData` `useEffect` `reset()` call with `resolvedVideo` so existing video state is never clobbered.
+  - **Upload & Remove Handlers**: Synchronized `video_url`, `intro_video`, and `video` across `handleFileUpload`, `onFileSelect`, and `onRemove` in both `ApplicantRegistrationForm.tsx` and `Step2EducationExperience.tsx`.
+  - **Detail & Edit Pages**: Bound `video_url`, `intro_video`, and `video` in `enrichedApplicant` in `src/app/applicants/[id]/page.tsx` and `src/app/applicants/[id]/edit/page.tsx`.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No automated browser testing initiated.
+ 
+## 26. Follow-Up Start LMIS Removal & Te'shir E-Number Save Date Error Elimination (2026-10-19)
+- **Start LMIS Button Removal**:
+  - Removed the redundant "Start LMIS" button from Card 1 footer in `src/components/operational/workspaces/ApplicantFollowUpWorkspace.tsx`. Operators can initiate or progress stages seamlessly by entering data directly into the input fields on the cards without needing separate start buttons.
+  - Purged unused `startClearanceStepV2` import from `ApplicantFollowUpWorkspace.tsx`.
+- **Elimination of MySQL 1292 OperationalError on Te'shir Card**:
+  - **Error Root Cause**: `operational.ts` maps unbooked appointment dates to the em-dash string `"—"`. When a candidate had not yet booked an appointment date, `currentRow.appointmentDate` was `"—"`. In `handleSaveTeshirInjazId`, `teshirApptDateVal || (currentRow?.appointmentDate || "")` evaluated to `"—"`. When sent to `/api/method/agency_tracking.clearance_api.set_taeshir_appointment`, PyMySQL attempted to insert `'—'` into `agency_tracking.tabInjaz Attempt.appointment_date` (a MySQL `DATE` column), crashing with `pymysql.err.OperationalError: (1292, "Incorrect date value: '—' for column agency_tracking.tabInjaz Attempt.appointment_date at row 1")`.
+  - **Surgical Workspace Resolution**: In `src/components/operational/workspaces/ApplicantFollowUpWorkspace.tsx`, added `resolveTaeshirDate()`, which checks `teshirApptDateVal`, `currentRow?.injaz?.appointment_date`, `currentRow?.teshirAppointmentDate`, and `currentRow?.appointmentDate` against ISO date format (`/^\d{4}-\d{2}-\d{2}/`). If no valid date is booked, it returns `null` rather than passing the em-dash placeholder `"—"`.
+  - **Defensive API Layer Sanitization**: In `src/lib/api/v2/clearance.ts` (`setTaeshirAppointmentV2`), sanitized `appointmentDate` to ensure only valid `YYYY-MM-DD` date strings or `null` are sent in the JSON body, preventing any caller from transmitting `"—"` or invalid date formats to the MySQL database.
+  - **OnBlur Input Guard**: In `ApplicantFollowUpWorkspace.tsx` appointment date `onBlur`, guarded comparisons against `"—"` so placeholder dashes are never evaluated as active dates.
+- **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No automated browser sessions initiated.
 

@@ -379,16 +379,21 @@ export async function renderInjazPdfV2(
  */
 export async function setTaeshirAppointmentV2(
   clearanceStepName: string,
-  appointmentDate: string,
+  appointmentDate: string | null | undefined,
   injazApplicationId: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  const trimmed = typeof appointmentDate === "string" ? appointmentDate.trim() : "";
+  const validDate = trimmed && /^\d{4}-\d{2}-\d{2}/.test(trimmed)
+    ? trimmed.split("T")[0].split(" ")[0]
+    : null;
+
   return requestV2(
     "/api/method/agency_tracking.clearance_api.set_taeshir_appointment",
     {
       method: "POST",
       body: {
         clearance_step_name: clearanceStepName,
-        appointment_date: appointmentDate,
+        appointment_date: validDate,
         injaz_application_id: injazApplicationId,
       },
     }

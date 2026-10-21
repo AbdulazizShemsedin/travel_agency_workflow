@@ -381,17 +381,17 @@ export function PremiumDropzone({
 
   const isImagePreview =
     previewUrl &&
+    variant !== "video" &&
     (variant === "passport" ||
       variant === "portrait" ||
       variant === "full_body" ||
-      (!previewUrl.endsWith(".pdf") && !previewUrl.endsWith(".csv")));
+      (!/\.(pdf|csv|mp4|webm|mov|m4v)(\?.*)?$/i.test(previewUrl)));
 
   const isVideoPreview =
     previewUrl &&
     (variant === "video" ||
-      previewUrl.endsWith(".mp4") ||
-      previewUrl.endsWith(".webm") ||
-      previewUrl.endsWith(".mov"));
+      /\.(mp4|webm|mov|m4v|ogg|ogv)(\?.*)?$/i.test(previewUrl) ||
+      (typeof previewUrl === "string" && previewUrl.includes("video")));
 
   const isDocumentPreview =
     previewUrl && (previewUrl.endsWith(".pdf") || variant === "document" || variant === "compact");
@@ -565,14 +565,36 @@ export function PremiumDropzone({
 
             {/* 2. Video Preview */}
             {isVideoPreview && (
-              <div className="relative w-full max-w-sm rounded-xl overflow-hidden border border-slate-200 dark:border-[#22222a] bg-slate-900 shadow-xs">
+              <div
+                className="relative w-full max-w-lg rounded-xl overflow-hidden border border-slate-200 dark:border-[#22222a] bg-black shadow-md flex flex-col items-center"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <video
                   src={previewUrl}
-                  controls={isVideoPlaying}
-                  className="w-full max-h-[180px] object-cover"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full max-h-[260px] sm:max-h-[300px] object-contain bg-black"
                   onPlay={() => setIsVideoPlaying(true)}
                   onPause={() => setIsVideoPlaying(false)}
                 />
+                <div className="w-full px-3 py-1.5 bg-slate-900/95 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+                  <span className="flex items-center gap-1.5 font-medium text-[11px] text-emerald-400">
+                    <Film className="h-3.5 w-3.5" />
+                    Candidate Video Interview
+                  </span>
+                  {typeof previewUrl === "string" && (
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[11px] text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <Eye className="h-3 w-3" /> Full Size
+                    </a>
+                  )}
+                </div>
               </div>
             )}
 

@@ -9,6 +9,9 @@ import {
   Loader2,
   AlertTriangle,
   Download,
+  Puzzle,
+  ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
@@ -16,6 +19,11 @@ import { ExcelSelect, ExcelDateInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SimpleSelect } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +34,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import {
   setLmisStatusV2,
   LMIS_WORKING_STATUSES,
@@ -186,6 +195,92 @@ export function isCandidateEligibleForTaeshir(row: WorkspaceApplicantRow): { eli
     eligible: false,
     reason: `Candidate is in the "${row.stageStatus || "Unknown"}" stage and has not reached the Processing stage (LMIS and Te'shir). Therefore, cannot generate export Excel for Te'shir.`,
   };
+}
+
+function FollowUpExtensionsDropdown({ row }: { row: WorkspaceApplicantRow }) {
+  const [open, setOpen] = React.useState(false);
+  const [isSending, setIsSending] = React.useState(false);
+
+  const handleSend = async (target: "LMIS" | "Taeshir" | "Musaned", label: string) => {
+    setOpen(false);
+    setIsSending(true);
+    try {
+      const candidatePayload = {
+        ...(row.applicant || (row as any)),
+        applicantId: row.applicantId,
+        fullName: row.fullName,
+        passportNumber: row.passportNumber,
+        target_portal: target,
+        extension_target: target,
+      };
+      const res = await sendApplicantToExtension(candidatePayload);
+      if (res?.success) {
+        toast.success(`${row.fullName} loaded into Extension (${label})!`);
+      } else {
+        toast.info(`Candidate dispatched to Extension (${label})`);
+      }
+    } catch (err: any) {
+      toast.error(`Failed to send candidate to ${label}`, {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isSending}
+          onClick={(e) => e.stopPropagation()}
+          className="h-6 px-2 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 gap-1 shadow-2xs cursor-pointer"
+          title="Send candidate data to browser extensions"
+        >
+          <Puzzle className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+          <span>Extensions</span>
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={4}
+        onClick={(e) => e.stopPropagation()}
+        className="w-44 p-1 rounded-lg border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#121215] shadow-lg z-50"
+      >
+        <div className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 px-2 py-1 uppercase tracking-wider">
+          Browser Extensions
+        </div>
+        <button
+          type="button"
+          onClick={() => handleSend("LMIS", "For LMIS")}
+          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+        >
+          <span>For LMIS</span>
+          <ExternalLink className="h-3 w-3 opacity-50" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSend("Taeshir", "For Taeshir")}
+          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+        >
+          <span>For Taeshir</span>
+          <ExternalLink className="h-3 w-3 opacity-50" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSend("Musaned", "For Musaned")}
+          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+        >
+          <span>For Musaned</span>
+          <ExternalLink className="h-3 w-3 opacity-50" />
+        </button>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function FollowUpWorkspace({
@@ -631,12 +726,13 @@ export function FollowUpWorkspace({
     {
       id: "actions",
       header: "ACTION",
-      width: "38px",
+      width: "140px",
       align: "center",
       sortable: false,
       isReadOnly: true,
       cell: (row) => (
-        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <FollowUpExtensionsDropdown row={row} />
           <Button
             type="button"
             variant="ghost"

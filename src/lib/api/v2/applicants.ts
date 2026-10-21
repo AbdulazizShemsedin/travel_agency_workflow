@@ -75,6 +75,9 @@ export interface V2ApplicantDetails {
   is_uploaded_to_musaned?: number | boolean;
   musaned_status?: string;
   musaned_reference_no?: string;
+  video_url?: string;
+  intro_video?: string;
+  video?: string;
   creation?: string;
   modified?: string;
   [key: string]: any;
@@ -173,6 +176,14 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     }
   } else if (!result.full_name && (result.first_name || result.last_name)) {
     result.full_name = [result.first_name, result.middle_name, result.last_name].filter(Boolean).join(" ").trim().toUpperCase();
+  }
+
+  // 0.1 Entry Track Synchronization (canonical: entry_track: "Standard" | "Muayena")
+  const rawTrack = result.entry_track || result.applicant_type;
+  if (rawTrack) {
+    const normalizedTrack = String(rawTrack).trim().toLowerCase() === "muayena" ? "Muayena" : "Standard";
+    result.entry_track = normalizedTrack;
+    result.applicant_type = normalizedTrack;
   }
 
   // 1. Target Job / Position / Occupation
@@ -328,6 +339,23 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.photo_passport = photo;
   }
 
+  // 5.1 Candidate Video / Interview Video (Synchronize all video aliases)
+  const videoVal =
+    result.video_url ||
+    result.intro_video ||
+    result.video ||
+    result.video_interview ||
+    result.candidate_video ||
+    result.interview_video;
+  if (videoVal) {
+    result.video_url = videoVal;
+    result.intro_video = videoVal;
+    result.video = videoVal;
+    result.video_interview = videoVal;
+    result.candidate_video = videoVal;
+    result.interview_video = videoVal;
+  }
+
   // 6. Passport Expiry Date
   const expiry = result.passport_expiry_date || result.passport_expiry;
   if (expiry) {
@@ -431,18 +459,115 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
 }
 
 /**
+ * Permanently links an uploaded video file to an Applicant record in Frappe File registry.
+ * Ensures persistence even when Applicant DocType lacks a dedicated video_url database column.
+ */
+export async function attachVideoToApplicantV2(
+  applicantName: string,
+  videoUrl: string
+): Promise<void> {
+  if (!applicantName || !videoUrl || !videoUrl.trim()) return;
+  const cleanUrl = videoUrl.trim();
+  const fileName = cleanUrl.split("/").pop()?.split("?")[0] || "candidate_video.mp4";
+
+  try {
+    // 1. Check if Frappe already has a File document for this URL
+    let fileDocName: string | null = null;
+    let isAlreadyLinked = false;
+
+    try {
+      const existingFiles = await requestV2<any[]>("/api/method/frappe.client.get_list", {
+        method: "POST",
+        body: {
+          doctype: "File",
+          filters: { file_url: cleanUrl },
+          fields: ["name", "file_url", "attached_to_doctype", "attached_to_name"],
+          limit_page_length: 5,
+        },
+      });
+
+      if (Array.isArray(existingFiles) && existingFiles.length > 0) {
+        fileDocName = existingFiles[0].name;
+        isAlreadyLinked =
+          existingFiles[0].attached_to_name === applicantName &&
+          existingFiles[0].attached_to_doctype === "Applicant";
+      }
+    } catch {
+      // get_list check fallback
+    }
+
+    if (fileDocName && !isAlreadyLinked) {
+      await requestV2("/api/method/frappe.client.set_value", {
+        method: "POST",
+        body: {
+          doctype: "File",
+          name: fileDocName,
+          fieldname: {
+            attached_to_doctype: "Applicant",
+            attached_to_name: applicantName,
+            attached_to_field: "video_url",
+          },
+        },
+      });
+    } else if (!fileDocName) {
+      // 2. Insert new File record attached to Applicant
+      await requestV2("/api/method/frappe.client.insert", {
+        method: "POST",
+        body: {
+          doc: {
+            doctype: "File",
+            file_name: fileName,
+            file_url: cleanUrl,
+            attached_to_doctype: "Applicant",
+            attached_to_name: applicantName,
+            attached_to_field: "video_url",
+            is_private: 0,
+          },
+        },
+      });
+    }
+
+    // 3. In addition, attempt setting video_url directly on Applicant doc via frappe.client.set_value (in case custom field exists)
+    try {
+      await requestV2("/api/method/frappe.client.set_value", {
+        method: "POST",
+        body: {
+          doctype: "Applicant",
+          name: applicantName,
+          fieldname: "video_url",
+          value: cleanUrl,
+        },
+      });
+    } catch {
+      // DocType might not have video_url column in MariaDB tabApplicant; ignored safely
+    }
+  } catch (err) {
+    console.warn("[attachVideoToApplicantV2] Note linking file attachment:", err);
+  }
+}
+
+/**
  * Opens a new Applicant file at Draft status.
  */
 export async function createApplicantV2(
   payload: V2CreateApplicantPayload
 ): Promise<{ name?: string; message?: string; [key: string]: any }> {
-  return requestV2(
+  const cleanPayload = normalizeApplicantFields(payload);
+  const res = await requestV2<{ name?: string; message?: string; [key: string]: any }>(
     "/api/method/agency_tracking.applicant_api.create_applicant",
     {
       method: "POST",
-      body: normalizeApplicantFields(payload),
+      body: cleanPayload,
     }
   );
+
+  const createdName = res?.name || (res as any)?.message?.name;
+  const videoUrl = cleanPayload.video_url || cleanPayload.intro_video || cleanPayload.video;
+  if (createdName && videoUrl) {
+    await attachVideoToApplicantV2(createdName, videoUrl);
+  }
+
+  return res;
 }
 
 /**
@@ -465,6 +590,88 @@ export async function getApplicantV2(
     Object.assign(result, normalized);
     if (result.status && !result.applicant_state) {
       result.applicant_state = result.status;
+    }
+
+    // Video interview persistence:
+    // If video_url is not returned on the Applicant document directly, query attachments for this Applicant from Frappe
+    if (!result.video_url && !result.intro_video && !result.video) {
+      try {
+        let videoFound = "";
+
+        // 1. Query frappe.client.get_list for File attached to Applicant
+        try {
+          const files = await requestV2<any[]>("/api/method/frappe.client.get_list", {
+            method: "POST",
+            body: {
+              doctype: "File",
+              filters: {
+                attached_to_doctype: "Applicant",
+                attached_to_name: applicantName,
+              },
+              fields: ["name", "file_name", "file_url", "attached_to_field"],
+              order_by: "creation desc",
+              limit_page_length: 20,
+            },
+          });
+
+          if (Array.isArray(files) && files.length > 0) {
+            const vFile = files.find((f) => {
+              const u = String(f.file_url || "").toLowerCase();
+              const n = String(f.file_name || "").toLowerCase();
+              const fld = String(f.attached_to_field || "").toLowerCase();
+              return (
+                fld.includes("video") ||
+                /\.(mp4|webm|mov|m4v|avi|mkv)(\?.*)?$/i.test(u) ||
+                /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(n) ||
+                n.includes("video") ||
+                n.includes("interview") ||
+                u.includes("video") ||
+                u.includes("interview")
+              );
+            });
+            if (vFile?.file_url) {
+              videoFound = vFile.file_url;
+            }
+          }
+        } catch {
+          // frappe.client.get_list fallback
+        }
+
+        // 2. If not found, query frappe.desk.form.load.get_attachments
+        if (!videoFound) {
+          try {
+            const attachments = await requestV2<any[]>(
+              `/api/method/frappe.desk.form.load.get_attachments?doctype=Applicant&docname=${encodeURIComponent(applicantName)}`,
+              { method: "GET" }
+            );
+            if (Array.isArray(attachments) && attachments.length > 0) {
+              const vAtt = attachments.find((a) => {
+                const u = String(a.file_url || "").toLowerCase();
+                const n = String(a.file_name || "").toLowerCase();
+                return (
+                  /\.(mp4|webm|mov|m4v|avi|mkv)(\?.*)?$/i.test(u) ||
+                  /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(n) ||
+                  n.includes("video") ||
+                  n.includes("interview")
+                );
+              });
+              if (vAtt?.file_url) {
+                videoFound = vAtt.file_url;
+              }
+            }
+          } catch {
+            // get_attachments fallback
+          }
+        }
+
+        if (videoFound) {
+          result.video_url = videoFound;
+          result.intro_video = videoFound;
+          result.video = videoFound;
+        }
+      } catch (err) {
+        console.warn("[getApplicantV2] could not resolve candidate video attachments:", err);
+      }
     }
   }
 
@@ -589,7 +796,7 @@ export async function updateApplicantV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   const cleanFields = extraFields ? normalizeApplicantFields(extraFields) : {};
-  return requestV2(
+  const res = await requestV2<{ message?: string; [key: string]: any }>(
     "/api/method/agency_tracking.applicant_api.update_applicant",
     {
       method: "POST",
@@ -600,6 +807,13 @@ export async function updateApplicantV2(
       },
     }
   );
+
+  const videoUrl = cleanFields.video_url || cleanFields.intro_video || cleanFields.video;
+  if (applicantName && videoUrl) {
+    await attachVideoToApplicantV2(applicantName, videoUrl);
+  }
+
+  return res;
 }
 
 /**

@@ -48,7 +48,6 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import {
-  startClearanceStepV2,
   completeClearanceStepV2,
   rejectEmbassyStepV2,
   setLmisStatusV2,
@@ -297,6 +296,50 @@ export function ApplicantFollowUpWorkspace({
   const canEditEmbassy = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy"]) || hasRoleKeyword(["embassy"]);
   const canEditDeparture = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Ticketer"]) || hasRoleKeyword(["ticket", "ticketer"]);
   const canEditMedical = isFollowUpOperator || hasRoleKeyword(["medical"]) || canEditDeparture;
+
+  // Candidate stage resolution for follow-up gating
+  const currentStageName = React.useMemo(() => {
+    return (
+      currentRow?.stageStatus ||
+      currentRow?.placementStatus ||
+      currentRow?.plc?.status ||
+      currentRow?.applicant?.applicant_state ||
+      currentRow?.applicant?.status ||
+      "Draft"
+    );
+  }, [currentRow]);
+
+  const hasReachedProcessing = React.useMemo(() => {
+    const rawStage = String(
+      currentRow?.stageStatus ||
+      currentRow?.placementStatus ||
+      currentRow?.plc?.status ||
+      currentRow?.applicant?.applicant_state ||
+      currentRow?.applicant?.status ||
+      ""
+    ).trim();
+
+    // Check placement status
+    const plcStatus = String(currentRow?.plc?.status || currentRow?.placementStatus || "").trim();
+    if (["Processing", "Stamped", "Ticketed", "Departed"].includes(plcStatus)) {
+      return true;
+    }
+
+    // Check stage status
+    if (["Processing", "Stamped", "Ticketed", "Departed"].includes(rawStage)) {
+      return true;
+    }
+
+    // Check if any clearance steps have actually started
+    if (placementSteps && placementSteps.length > 0) {
+      const hasActiveStep = placementSteps.some(
+        (s) => s.status && s.status !== "Pending" && s.status !== "Cancelled"
+      );
+      if (hasActiveStep) return true;
+    }
+
+    return false;
+  }, [currentRow, placementSteps]);
 
   // --- DIALOG STATES ---
   // LMIS Rejection Dialog
@@ -740,6 +783,24 @@ export function ApplicantFollowUpWorkspace({
     }
   };
 
+  const resolveTaeshirDate = (): string | null => {
+    const candidates = [
+      teshirApptDateVal,
+      currentRow?.injaz?.appointment_date,
+      currentRow?.teshirAppointmentDate,
+      currentRow?.appointmentDate,
+    ];
+    for (const d of candidates) {
+      if (typeof d === "string") {
+        const trimmed = d.trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+          return trimmed.split("T")[0].split(" ")[0];
+        }
+      }
+    }
+    return null;
+  };
+
   const handleSaveTeshirInjazId = async () => {
     if (!injazStepName || !canEditTaeshir) return;
     const val = teshirInjazIdVal.trim().toUpperCase();
@@ -750,7 +811,7 @@ export function ApplicantFollowUpWorkspace({
       setSavingField((prev) => ({ ...prev, teshirInjazId: true }));
       await setTaeshirAppointmentV2(
         injazStepName,
-        teshirApptDateVal || (currentRow?.appointmentDate || ""),
+        resolveTaeshirDate(),
         val
       );
       const candidateId = currentRow?.applicantId || currentRow?.name;
@@ -1079,7 +1140,34 @@ export function ApplicantFollowUpWorkspace({
           {/* FOUR-CARD 2x2 GRID WORKSPACE                                 */}
           {/* ============================================================= */}
           <div className="p-2 sm:p-2.5 lg:p-3 flex-1 flex flex-col justify-between">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5 flex-1 items-stretch">
+            {/* Warning banner when candidate has not reached Processing */}
+            {!hasReachedProcessing && (
+              <div className="mb-2.5 p-3 sm:p-3.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-xs flex items-start gap-3 animate-in fade-in duration-200">
+                <div className="p-1.5 rounded-lg bg-amber-200/80 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs sm:text-sm font-bold uppercase tracking-wide text-amber-950 dark:text-amber-100">
+                      Follow-Up Stages Disabled • Candidate Has Not Reached Processing Stage
+                    </h4>
+                    <Badge variant="outline" className="text-[10px] font-bold border-amber-400 dark:border-amber-700 bg-white dark:bg-[#16161d] text-amber-900 dark:text-amber-200 uppercase px-2 py-0 h-4.5">
+                      Current Stage: {currentStageName}
+                    </Badge>
+                  </div>
+                  <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+                    All operational cards (LMIS, Te&apos;shir, Embassy, and Ticket &amp; Departure) are disabled because this applicant has not reached the <strong>Processing</strong> stage. The applicant is currently in the <strong>{currentStageName}</strong> stage. Please proceed accordingly through earlier stages (Registration, CV Generation, Foreign Agency Selection, or Muayena Placement Contract Attachment) before updating follow-up clearance records.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div
+              className={cn(
+                "grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-2.5 flex-1 items-stretch transition-opacity",
+                !hasReachedProcessing && "opacity-50 pointer-events-none select-none cursor-not-allowed filter grayscale-[25%]"
+              )}
+            >
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 1: LMIS (Top-Left)                                     */}
@@ -1411,24 +1499,6 @@ export function ApplicantFollowUpWorkspace({
                           <span>Finish stage</span>
                         </Button>
 
-                        {/* Start LMIS button */}
-                        {lmsStepName && currentRow.lms?.status === "Pending" && (
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await startClearanceStepV2(lmsStepName);
-                                toast.success("LMIS clearance step started");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className="h-6.5 sm:h-7 px-2.5 text-xs bg-blue-700 hover:bg-blue-800 text-white font-semibold cursor-pointer"
-                          >
-                            Start LMIS
-                          </Button>
-                        )}
 
                         {/* Reject button */}
                         {lmsStepName && (
@@ -1580,7 +1650,8 @@ export function ApplicantFollowUpWorkspace({
                               }}
                               onBlur={async (e) => {
                                 const val = e.target.value;
-                                if (val && val !== (currentRow.appointmentDate || "")) {
+                                const currentAppt = currentRow.appointmentDate && currentRow.appointmentDate !== "—" ? currentRow.appointmentDate : "";
+                                if (val && val !== currentAppt) {
                                   try {
                                     clearWorkspaceFieldError("teshirApptDate");
                                     if (injazStepName) {

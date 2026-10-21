@@ -12,6 +12,9 @@ import {
   RotateCcw,
   Ban,
   AlertTriangle,
+  Film,
+  Video,
+  Eye,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { restartApplicantV2, cancelApplicantV2 } from "@/lib/api/v2/applicants";
@@ -35,6 +38,15 @@ const CANONICAL_STAGES = [
   "Registered",
   "CV Generated",
   "Selected",
+  "Processing",
+  "Stamped",
+  "Ticketed",
+  "Departed",
+];
+
+const MUAYENA_STAGES = [
+  "Draft",
+  "Registered",
   "Processing",
   "Stamped",
   "Ticketed",
@@ -111,10 +123,28 @@ export default function ApplicantDetailPage() {
     return (step as any)?.injaz_application_id || (step as any)?.e_number || "";
   }, [clearanceSteps]);
 
+  const isMuayena = React.useMemo(() => {
+    return (
+      applicant?.entry_track === "Muayena" ||
+      (applicant as any)?.applicant_type === "Muayena" ||
+      Boolean((applicant as any)?.is_muayena) ||
+      Boolean(activePlacement?.is_muayena)
+    );
+  }, [applicant, activePlacement]);
+
   const enrichedApplicant = React.useMemo(() => {
     if (!applicant) return applicant;
+    const trackValue =
+      (applicant as any)?.entry_track === "Muayena" ||
+      (applicant as any)?.applicant_type === "Muayena" ||
+      Boolean((applicant as any)?.is_muayena)
+        ? "Muayena"
+        : "Standard";
     return {
       ...applicant,
+      entry_track: trackValue,
+      applicant_type: trackValue,
+      is_muayena: trackValue === "Muayena" ? 1 : 0,
       application_number:
         (applicant as any).application_number ||
         taeshirInjazId ||
@@ -130,9 +160,37 @@ export default function ApplicantDetailPage() {
       sponsor_email: (applicant as any).sponsor_email || (activePlacement as any)?.employer_email || (activePlacement as any)?.sponsor_email || "",
       agent: (applicant as any).agent || activePlacement?.saudi_agency_name || (activePlacement as any)?.kuwait_agency_name || "",
       contract_number: (applicant as any).contract_number || activePlacement?.contract_number || "",
+      video_url:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
+      intro_video:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
+      video:
+        applicant?.video_url ||
+        (applicant as any)?.intro_video ||
+        (applicant as any)?.video ||
+        (activePlacement as any)?.video_url ||
+        "",
       active_placement: activePlacement,
     };
   }, [applicant, activePlacement, taeshirInjazId]);
+
+  const candidateVideoUrl = React.useMemo(() => {
+    return (
+      applicant?.video_url ||
+      (applicant as any)?.intro_video ||
+      (applicant as any)?.video ||
+      (activePlacement as any)?.video_url ||
+      ""
+    );
+  }, [applicant, activePlacement]);
 
   const isIdentityLocked = React.useMemo(() => {
     return activePlacement ? IDENTITY_LOCK_STATUSES.has(activePlacement.status) : false;
@@ -152,7 +210,19 @@ export default function ApplicantDetailPage() {
     return ownStatus;
   }, [applicant, activePlacement]);
 
-  const currentStageIndex = CANONICAL_STAGES.indexOf(currentStage);
+  const activeStages = isMuayena ? MUAYENA_STAGES : CANONICAL_STAGES;
+
+  const normalizedStageForProgress = React.useMemo(() => {
+    if (!isMuayena) return currentStage;
+    if (currentStage === "CV Generated") return "Registered";
+    if (currentStage === "Selected") return "Processing";
+    return currentStage;
+  }, [isMuayena, currentStage]);
+
+  const currentStageIndex = activeStages.indexOf(normalizedStageForProgress);
+
+  // Video Modal State
+  const [isVideoModalOpen, setIsVideoModalOpen] = React.useState(false);
 
   // Restart / Resume Modal State
   const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
@@ -269,6 +339,19 @@ export default function ApplicantDetailPage() {
                   </div>
                 </>
               )}
+              <span className="text-slate-300 dark:text-zinc-700">•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 dark:text-zinc-500 font-medium">Track:</span>
+                {isMuayena ? (
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[11px] font-bold uppercase tracking-wide">
+                    Muayena Track
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-slate-600 dark:text-zinc-300 border-slate-300 dark:border-zinc-700 text-[11px] font-semibold uppercase">
+                    Standard Track
+                  </Badge>
+                )}
+              </div>
               {currentStage === "Cancelled" && (
                 <>
                   <span className="text-slate-300 dark:text-zinc-700">•</span>
@@ -290,6 +373,20 @@ export default function ApplicantDetailPage() {
 
           {/* Action Column: Resume / Cancel / Undo Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Play Interview Video Button (when candidate video exists) */}
+            {candidateVideoUrl && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setIsVideoModalOpen(true)}
+                className="border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold gap-1.5 shadow-2xs"
+              >
+                <Film className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Play Interview Video</span>
+              </Button>
+            )}
+
             {/* Resume / Restart Button for Cancelled applicant */}
             {currentStage === "Cancelled" && (
               <Button
@@ -360,7 +457,7 @@ export default function ApplicantDetailPage() {
       {/* Stage Status Bar */}
       <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3 sm:p-4 shadow-xs overflow-x-auto">
         <div className="flex items-center justify-between min-w-[700px] lg:min-w-0 gap-2">
-          {CANONICAL_STAGES.map((stage, idx) => {
+          {activeStages.map((stage, idx) => {
             const isCompleted = idx < currentStageIndex;
             const isCurrent = idx === currentStageIndex;
             return (
@@ -391,7 +488,7 @@ export default function ApplicantDetailPage() {
                     {STAGE_DISPLAY_LABELS[stage] || stage}
                   </span>
                 </div>
-                {idx !== CANONICAL_STAGES.length - 1 && (
+                {idx !== activeStages.length - 1 && (
                   <div
                     className={cn(
                       "h-0.5 flex-1 mx-2",
@@ -405,16 +502,65 @@ export default function ApplicantDetailPage() {
         </div>
       </Card>
 
+      {/* Candidate Video Interview Player Card (when candidate video exists) */}
+      {candidateVideoUrl && (
+        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] overflow-hidden shadow-xs">
+          <div className="px-4 py-2.5 border-b border-slate-100 dark:border-[#202028] bg-slate-50/70 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 shadow-2xs">
+                <Film className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Candidate Interview Video</span>
+                  <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 py-0 h-4 px-1.5">
+                    Ready to Play
+                  </Badge>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                  Recorded skill &amp; language interview demonstration
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={candidateVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span>Open in New Tab</span>
+              </a>
+            </div>
+          </div>
+          <div className="p-4 sm:p-5 flex flex-col items-center justify-center bg-slate-950">
+            <div className="w-full max-w-2xl rounded-xl overflow-hidden border border-slate-800 shadow-xl bg-black">
+              <video
+                src={candidateVideoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full max-h-[380px] object-contain bg-black"
+              />
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Multi-step Registration Workflow Form pre-filled with existing data */}
       <ApplicantRegistrationForm
         existingApplicantId={applicant.name}
         initialData={enrichedApplicant as any}
         lockedIdentityFields={isIdentityLocked}
         onSuccessRedirect={(id) => {
-          queryClient.invalidateQueries({ queryKey: ["applicant", id] });
           queryClient.invalidateQueries({ queryKey: ["applicants"] });
-          queryClient.invalidateQueries({ queryKey: ["placements", id] });
-          router.push("/applicants");
+          queryClient.invalidateQueries({ queryKey: ["applicant", id] });
+          if (typeof window !== "undefined") {
+            window.location.href = "/applicants";
+          } else {
+            router.push("/applicants");
+          }
         }}
       />
 
@@ -532,6 +678,30 @@ export default function ApplicantDetailPage() {
                 <><Ban className="h-3.5 w-3.5 mr-1.5" />Confirm Cancel</>
               )}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video Player Modal */}
+      <Dialog open={isVideoModalOpen} onOpenChange={setIsVideoModalOpen}>
+        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-black border-slate-800 text-white">
+          <DialogHeader className="p-3 bg-slate-900 border-b border-slate-800 flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-emerald-400" />
+              <DialogTitle className="font-bold text-sm uppercase text-white">
+                {fullName} • Interview Video
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="p-2 sm:p-4 flex items-center justify-center bg-black">
+            <video
+              src={candidateVideoUrl}
+              controls
+              autoPlay
+              playsInline
+              preload="metadata"
+              className="w-full max-h-[500px] object-contain bg-black rounded-lg"
+            />
           </div>
         </DialogContent>
       </Dialog>

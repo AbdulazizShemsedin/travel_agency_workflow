@@ -109,6 +109,7 @@ const OPTIONAL_FIELD_NAMES = new Set([
   "reference_no",
   "video_url",
   "intro_video",
+  "video",
   "photo_full_body",
   "college_certificate",
   "original_id_scan",
