@@ -37,7 +37,6 @@ const ADMIN_OVERRIDE_ROLES = new Set([
   "administrator",
   "system manager",
   "agency admin",
-  "manager",
 ]);
 
 /**

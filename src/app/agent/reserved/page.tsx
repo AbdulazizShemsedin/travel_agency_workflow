@@ -216,8 +216,8 @@ export default function MyReservedCandidatesPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto relative">
-              <table className="w-full text-left text-xs min-w-[780px] lg:min-w-0 border-separate border-spacing-0">
+            <div className="overflow-x-auto lg:overflow-hidden relative">
+              <table className="w-full text-left text-xs min-w-[780px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
                 <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
                     <th className="lg:sticky lg:left-0 lg:z-20 bg-slate-100 dark:bg-[#16161b] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)]">

@@ -859,7 +859,7 @@ export function ApplicantTable() {
                       { value: "Selected", label: `Selected (${stageCounts.Selected})` },
                     ]
                   : []),
-                { value: "Processing", label: `Processing (${stageCounts.Processing})` },
+                { value: "Processing", label: `Processing (LMIS and Teashir) (${stageCounts.Processing})` },
                 { value: "Stamped", label: `Stamped (${stageCounts.Stamped})` },
                 { value: "Ticketed", label: `Ticketed (${stageCounts.Ticketed})` },
                 { value: "Departed", label: `Departed (${stageCounts.Departed})` },
@@ -914,19 +914,19 @@ export function ApplicantTable() {
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
+        <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
           {/*
             Column order:
-            ✓ (checkbox) | No | Name (sticky) | Passport | Stage Status | Contract Date | Contract No |
+            ✓ (checkbox) | No | Name | Passport | Stage Status | Contract Date | Contract No |
             Medical Status | Exam Date | Exam Remaining | Te'shir | Injaz | Wokala Status |
             Embassy | Embassy Expire Date | Actions
             Total: 16 columns
           */}
-          <table className="w-full min-w-[960px] md:min-w-0 text-left text-xs border-collapse">
+          <table className="w-full min-w-[960px] lg:min-w-0 text-left text-xs border-collapse lg:table-fixed">
             <thead className="sticky top-0 z-30 border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[10px] xl:text-[11px] leading-tight">
               <tr>
-                {/* Col 1: Checkbox only — no header text */}
-                <th className="px-2 py-1.5 w-7 bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
+                {/* Col 1: Checkbox */}
+                <th className="px-1 py-1.5 w-7 lg:w-[2.5%] bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
@@ -939,51 +939,51 @@ export function ApplicantTable() {
                 </th>
 
                 {/* Col 2: Row number */}
-                <th className="px-1.5 py-1.5 w-9 text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
+                <th className="px-1 py-1.5 w-8 lg:w-[2.5%] text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
 
-                {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
-                <th className="px-2 py-1.5 lg:sticky lg:left-0 lg:z-30 bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap">
+                {/* Col 3: Name */}
+                <th className="px-1.5 py-1.5 lg:w-[13%] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold border-r border-slate-300 dark:border-[#272730] truncate">
                   Full Name
                 </th>
 
                 {/* Col 4: Passport */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Passport No.</th>
+                <th className="px-1 py-1.5 lg:w-[8%] border-r border-slate-200 dark:border-[#272730] truncate">Passport No.</th>
 
                 {/* Col 5: Stage Status */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Stage Status</th>
+                <th className="px-1 py-1.5 lg:w-[9.5%] border-r border-slate-200 dark:border-[#272730] truncate">Stage Status</th>
 
                 {/* Col 6: Contract Date */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Contract Date</th>
+                <th className="px-1 py-1.5 lg:w-[7%] border-r border-slate-200 dark:border-[#272730] truncate">Contract Date</th>
 
                 {/* Col 7: Sponsor Name */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Sponsor Name</th>
+                <th className="px-1 py-1.5 lg:w-[8%] border-r border-slate-200 dark:border-[#272730] truncate">Sponsor Name</th>
 
                 {/* Col 8: Medical Status */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Medical Status</th>
+                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Medical Status</th>
 
                 {/* Col 9: Exam Date */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Exam Date</th>
+                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Exam Date</th>
 
                 {/* Col 10: Exam Remaining */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Exam Remaining</th>
+                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Exam Remaining</th>
 
                 {/* Col 11: Te'shir */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Te&apos;shir</th>
+                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Te&apos;shir</th>
 
                 {/* Col 12: Injaz */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Injaz</th>
+                <th className="px-1 py-1.5 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] truncate">Injaz</th>
 
                 {/* Col 13: Wokala Status */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Wokala Status</th>
+                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Wokala Status</th>
 
                 {/* Col 14: Embassy */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Embassy</th>
+                <th className="px-1 py-1.5 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] truncate">Embassy</th>
 
                 {/* Col 15: Embassy Expire Date */}
-                <th className="px-1.5 py-1.5 whitespace-normal break-words border-r border-slate-200 dark:border-[#272730]">Embassy Exp. Date</th>
+                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Embassy Exp. Date</th>
 
                 {/* Col 16: Actions */}
-                <th className="px-2 py-1.5 text-right whitespace-nowrap">Actions</th>
+                <th className="px-1.5 py-1.5 lg:w-[7.5%] text-right truncate">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
@@ -1069,45 +1069,45 @@ export function ApplicantTable() {
                     >
                       {/* Col 1: Checkbox — separate from No, stops row-click propagation */}
                       <td
-                        className="px-2.5 py-2.5 text-center border-r border-slate-100 dark:border-[#1e1e26]"
+                        className="px-1 py-1 text-center border-r border-slate-100 dark:border-[#1e1e26]"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
+                          className="h-3 w-3 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
                           checked={isSelected}
                           onChange={(e) => handleToggleRow(applicant.name, e as unknown as React.MouseEvent)}
                         />
                       </td>
 
                       {/* Col 2: Row number */}
-                      <td className="px-2 py-2.5 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-[11px] border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-[10px] xl:text-[11px] border-r border-slate-100 dark:border-[#1e1e26]">
                         {rowOffset + idx + 1}
                       </td>
 
-                      {/* Col 3: Name — STICKY LEFT-0 ON DESKTOP ONLY */}
+                      {/* Col 3: Name */}
                       <td
                         className={cn(
-                          "px-2 py-1.5 lg:sticky lg:left-0 lg:z-10 lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730] whitespace-nowrap",
+                          "px-1.5 py-1 border-r border-slate-200 dark:border-[#272730] truncate min-w-0",
                           isSelected
                             ? "!bg-emerald-100 dark:!bg-[#183428]"
                             : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
                         )}
                       >
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[9px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                             {applicant.first_name?.[0] || "A"}
                           </div>
-                          <div className="min-w-0 flex items-center gap-1.5">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-xs uppercase truncate max-w-[170px]">
+                          <div className="min-w-0 flex items-center gap-1 truncate">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] uppercase truncate">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
                             {(applicant.entry_track === "Muayena" ||
                               applicant.applicant_type === "Muayena" ||
                               Boolean((applicant as any).is_muayena)) && (
-                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
-                                Muayena
+                              <span className="px-1 py-0 rounded text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                                M
                               </span>
                             )}
                           </div>
@@ -1115,19 +1115,19 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 4: Passport No */}
-                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[10.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {applicant.passport_number || "—"}
                       </td>
 
                       {/* Col 5: Stage Status */}
-                      <td className="px-2 py-1.5 whitespace-nowrap border-r border-slate-100 dark:border-[#1e1e26]">
-                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-1.5 text-[10px]", badge.className)}>
-                          {stage}
+                      <td className="px-1 py-1 text-center truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.2 px-1 text-[9px] truncate max-w-full inline-block", badge.className)}>
+                          {stage === "Processing" ? "Processing (LMIS and Teashir)" : stage}
                         </Badge>
                       </td>
 
                       {/* Contract Date */}
-                      <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 font-mono text-slate-700 dark:text-slate-300 text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractDate ? (
                           <span className="font-semibold text-slate-800 dark:text-zinc-200">
                             {new Date(contractDate).toLocaleDateString("en-GB", {
@@ -1142,9 +1142,9 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 7: Sponsor Name */}
-                      <td className="px-2 py-1.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 text-[10.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {sponsorName ? (
-                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[150px] inline-block" title={sponsorName}>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-full block" title={sponsorName}>
                             {sponsorName}
                           </span>
                         ) : (
@@ -1153,14 +1153,14 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Medical Status */}
-                      <td className="px-2 py-1.5 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 text-center text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         <span className={medicalClass}>
                           {medicalStatus || "—"}
                         </span>
                       </td>
 
                       {/* Exam Date */}
-                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {examDate
                           ? new Date(examDate).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -1171,11 +1171,11 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Exam Remaining */}
-                      <td className="px-2 py-1.5 font-mono whitespace-nowrap text-xs border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 font-mono text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {examExpiry ? (
                           <span
                             className={cn(
-                              "text-[10px] font-semibold",
+                              "font-semibold text-[9.5px]",
                               new Date(examExpiry) > new Date()
                                 ? "text-emerald-700 dark:text-emerald-400"
                                 : "text-rose-600 dark:text-rose-400"
@@ -1189,27 +1189,27 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Te'shir */}
-                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
+                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
                         {stepStatusLabel(teshirStatus)}
                       </td>
 
                       {/* Injaz */}
-                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
+                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
                         {stepStatusLabel(injazStatus)}
                       </td>
 
                       {/* Wokala Status */}
-                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
+                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
                         {stepStatusLabel(wakalaStatus)}
                       </td>
 
                       {/* Embassy */}
-                      <td className={cn("px-2 py-1.5 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
+                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
                         {stepStatusLabel(embassyStatus)}
                       </td>
 
                       {/* Embassy Expire Date */}
-                      <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[10px] border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {embassyExpiry
                           ? new Date(embassyExpiry).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -1221,23 +1221,23 @@ export function ApplicantTable() {
 
                       {/* Actions */}
                       <td
-                        className="px-2 py-1.5 text-right whitespace-nowrap"
+                        className="px-1 py-1 text-right truncate"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1 flex-nowrap">
+                        <div className="flex items-center justify-end gap-1 truncate">
                           {/* Stage: Draft — Register Applicant */}
                           {stage === "Draft" && (
                             <button
                               type="button"
                               disabled={registerApplicantMutation.isPending && registeringApplicant === applicant.name}
                               onClick={() => registerApplicantMutation.mutate(applicant.name)}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Register this applicant"
                             >
                               {registerApplicantMutation.isPending && registeringApplicant === applicant.name ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-emerald-700" />
+                                <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-700" />
                               ) : (
-                                <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                               )}
                               <span>Register</span>
                             </button>
@@ -1257,10 +1257,10 @@ export function ApplicantTable() {
                                 setMuayenaTargetApplicant(applicant);
                                 setIsMuayenaModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Create Muayena Placement directly with foreign agency"
                             >
-                              <Building2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <Building2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                               <span>Muayena</span>
                             </button>
                           )}
@@ -1288,17 +1288,17 @@ export function ApplicantTable() {
                               }}
                               className={
                                 applicant.medical_status === "UNFIT"
-                                    ? "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
-                                    : "inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                    ? "inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                                    : "inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               }
                               title={applicant.medical_status === "UNFIT" ? "Medically UNFIT -- cannot generate CV" : "Generate bilateral recruitment CV"}
                             >
                               {isGeneratingCv ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-emerald-700" />
+                                <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-700" />
                               ) : (
-                                <FileText className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                                <FileText className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                               )}
-                              <span>{isGeneratingCv ? "Generating..." : applicant.medical_status === "UNFIT" ? "UNFIT" : "Generate CV"}</span>
+                              <span>{isGeneratingCv ? "Generating..." : applicant.medical_status === "UNFIT" ? "UNFIT" : "CV"}</span>
                             </button>
                           )}
 
@@ -1312,10 +1312,10 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
                               title="View or download CV"
                             >
-                              <FileText className="h-3 w-3 text-teal-700 dark:text-teal-400" />
+                              <FileText className="h-2.5 w-2.5 text-teal-700 dark:text-teal-400" />
                               <span>View CV</span>
                             </Link>
                           )}
@@ -1325,11 +1325,11 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-amber-950 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-amber-950 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 transition cursor-pointer shadow-2xs"
                               title={hasContract ? "View signed bilateral employment contract" : "Generate/Upload bilateral contract"}
                             >
-                              <FileText className="h-3 w-3 text-amber-700 dark:text-amber-400" />
-                              <span>{hasContract ? "View Contract" : "Contract Doc"}</span>
+                              <FileText className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
+                              <span>{hasContract ? "Contract" : "Doc"}</span>
                             </Link>
                           )}
 
@@ -1346,11 +1346,11 @@ export function ApplicantTable() {
                                 setMed1Expiry("");
                                 setIsMedicalModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
                               title="Record Medical Status (FIT / UNFIT)"
                             >
-                              <HeartPulse className="h-3 w-3 text-rose-500" />
-                              <span>Record Medical</span>
+                              <HeartPulse className="h-2.5 w-2.5 text-rose-500" />
+                              <span>Medical</span>
                             </button>
                           )}
 
@@ -1363,19 +1363,17 @@ export function ApplicantTable() {
                                 e.stopPropagation();
                                 advanceToProcessingMutation.mutate((applicant as any)._activePlacementName);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Advance this placement to Processing stage"
                             >
                               {advanceToProcessingMutation.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                                <Loader2 className="h-2.5 w-2.5 animate-spin text-blue-600" />
                               ) : (
-                                <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                                <Clock className="h-2.5 w-2.5 text-blue-600 dark:text-blue-400" />
                               )}
                               <span>Processing</span>
                             </button>
                           )}
-
-
 
                           {/* Stage 8: Ticketed — Reschedule Flight */}
                           {stage === "Ticketed" && (applicant as any)._activePlacementName && (
@@ -1391,11 +1389,11 @@ export function ApplicantTable() {
                                 setTicketingInitialTab("reschedule");
                                 setIsTicketingModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-slate-800 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-800 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 transition cursor-pointer shadow-2xs"
                               title="Reschedule Flight"
                             >
-                              <RotateCcw className="h-3 w-3 text-slate-600 dark:text-zinc-400" />
-                              <span>Reschedule</span>
+                              <RotateCcw className="h-2.5 w-2.5 text-slate-600 dark:text-zinc-400" />
+                              <span>Resched</span>
                             </button>
                           )}
 
@@ -1412,10 +1410,10 @@ export function ApplicantTable() {
                                 setTicketingInitialTab("medical2");
                                 setIsTicketingModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Verify Pre-Departure Medical 2 and finalize departure"
                             >
-                              <HeartPulse className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <HeartPulse className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                               <span>Depart</span>
                             </button>
                           )}
@@ -1430,10 +1428,10 @@ export function ApplicantTable() {
                                 setRestartTargetStatus("Draft");
                                 setIsRestartModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 h-6 px-2 rounded text-[11px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Candidate returned from abroad — restart process to send again"
                             >
-                              <RotateCcw className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                              <RotateCcw className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
                               <span>Send Again</span>
                             </button>
                           )}
@@ -1444,10 +1442,10 @@ export function ApplicantTable() {
                               <button
                                 type="button"
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center justify-center h-6 w-6 rounded text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#252530] border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer"
+                                className="inline-flex items-center justify-center h-5 w-5 rounded text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#252530] border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition cursor-pointer shrink-0"
                                 title="More actions"
                               >
-                                <MoreVertical className="h-3.5 w-3.5" />
+                                <MoreVertical className="h-3 w-3" />
                               </button>
                             </PopoverTrigger>
                             <PopoverContent

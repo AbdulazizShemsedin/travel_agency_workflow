@@ -317,8 +317,8 @@ export default function AgentComplaintsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
-              <table className="w-full text-left text-xs min-w-[800px] lg:min-w-0 border-separate border-spacing-0">
+            <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto lg:overflow-hidden relative">
+              <table className="w-full text-left text-xs min-w-[800px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
                 <thead className="sticky top-0 z-20 bg-slate-100/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
                     <th className="px-3 py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>

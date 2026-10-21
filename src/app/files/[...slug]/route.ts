@@ -3,8 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
-    process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://agencytracking-production-4974.up.railway.app";
+    process.env.NEXT_PUBLIC_FRAPPE_URL;
+
+  if (!url) {
+    return null;
+  }
 
   const userSessionHeaders: Record<string, string> = {
     Accept: "*/*",

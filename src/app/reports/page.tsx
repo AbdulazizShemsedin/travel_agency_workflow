@@ -82,6 +82,9 @@ import {
   listTransactionsV2,
   V2TransactionRecord,
 } from "@/lib/api/v2/finance";
+import { useBirrConversion } from "@/components/finance/useBirrConversion";
+import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { shortRef, stripRecordIds } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
 type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions";
@@ -116,6 +119,7 @@ export default function ReportsPage() {
 
   // Role guard
   const canViewReports = can("viewReports");
+  const { isBirrConversionEnabled } = useBirrConversion();
 
   // All hooks must come before any conditional returns - tab determination based on authoritative RBAC
   const [activeTab, setActiveTab] = React.useState<ReportTab>(() => {
@@ -370,13 +374,19 @@ export default function ReportsPage() {
   const transactionMetrics = React.useMemo(() => {
     let totalExpenseBirr = 0;
     let totalIncomeBirr = 0;
+    const expenseByCurr: Record<string, number> = {};
+    const incomeByCurr: Record<string, number> = {};
 
     allTransactions.forEach((t: any) => {
+      const origCurr = t.currency_original || t.currency || "ETB";
+      const origAmt = Number(t.amount_original || t.amount || 0);
       const birr = Number(t.amount_birr || t.amount || 0);
       if (t.transaction_type === "Expense") {
         totalExpenseBirr += birr;
+        expenseByCurr[origCurr] = (expenseByCurr[origCurr] || 0) + origAmt;
       } else if (t.transaction_type === "Income") {
         totalIncomeBirr += birr;
+        incomeByCurr[origCurr] = (incomeByCurr[origCurr] || 0) + origAmt;
       }
     });
 
@@ -387,6 +397,8 @@ export default function ReportsPage() {
       totalExpenseBirr,
       totalIncomeBirr,
       netBalanceBirr,
+      expenseByCurr,
+      incomeByCurr,
     };
   }, [allTransactions]);
 
@@ -441,7 +453,7 @@ export default function ReportsPage() {
       { stage: "Registered", count: f.Registered || 0 },
       { stage: "CV Generated", count: f["CV Generated"] || 0 },
       { stage: "Selected", count: f.Selected || 0 },
-      { stage: "Processing", count: f.Processing || 0 },
+      { stage: "Processing (LMIS and Teashir)", count: f.Processing || 0 },
       { stage: "Stamped", count: f.Stamped || 0 },
       { stage: "Ticketed", count: f.Ticketed || 0 },
       { stage: "Departed", count: f.Departed || 0 },
@@ -834,8 +846,8 @@ export default function ReportsPage() {
             </CardHeader>
 
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="overflow-x-auto lg:overflow-hidden">
+                <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
                     <tr>
                       <th className="py-2.5 px-3">Officer</th>
@@ -903,8 +915,8 @@ export default function ReportsPage() {
             </CardHeader>
 
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="overflow-x-auto lg:overflow-hidden">
+                <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-red-50/50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-950/40">
                     <tr>
                       <th className="py-2.5 px-3">Placement ID</th>
@@ -960,8 +972,8 @@ export default function ReportsPage() {
             </CardHeader>
 
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="overflow-x-auto lg:overflow-hidden">
+                <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
                     <tr>
                       <th className="py-2.5 px-3">Complaint</th>
@@ -1019,8 +1031,9 @@ export default function ReportsPage() {
           ) : (
             <div className="space-y-6">
               {/* Awaiting FX Rate Callout Banner */}
-              {((financialOverview?.awaiting_fx && financialOverview.awaiting_fx.count > 0) ||
-                (costBreakdown?.awaiting_fx && costBreakdown.awaiting_fx.count > 0)) && (
+              {isBirrConversionEnabled &&
+                ((financialOverview?.awaiting_fx && financialOverview.awaiting_fx.count > 0) ||
+                  (costBreakdown?.awaiting_fx && costBreakdown.awaiting_fx.count > 0)) && (
                 <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -1050,9 +1063,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Total Income
                     </span>
-                    <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
-                      ETB {(financialOverview?.totals_birr?.income || 0).toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
+                        ETB {(financialOverview?.totals_birr?.income || 0).toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {financialOverview?.by_currency && Object.keys(financialOverview.by_currency).length > 0 ? (
+                          Object.entries(financialOverview.by_currency).map(([c, val]: [string, any]) => (
+                            <div key={c} className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+                              {c} {Number(val?.income || 0).toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1061,9 +1088,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Total Expense
                     </span>
-                    <span className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      ETB {(financialOverview?.totals_birr?.expense || 0).toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                        ETB {(financialOverview?.totals_birr?.expense || 0).toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {financialOverview?.by_currency && Object.keys(financialOverview.by_currency).length > 0 ? (
+                          Object.entries(financialOverview.by_currency).map(([c, val]: [string, any]) => (
+                            <div key={c} className="text-lg font-bold text-red-600 dark:text-red-400">
+                              {c} {Number(val?.expense || 0).toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-red-600 dark:text-red-400">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1072,9 +1113,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Outstanding Commissions Owed
                     </span>
-                    <span className="text-2xl font-bold text-amber-800 dark:text-amber-400">
-                      ETB {(financialOverview?.outstanding_owed_birr || 0).toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-amber-800 dark:text-amber-400">
+                        ETB {(financialOverview?.outstanding_owed_birr || 0).toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {financialOverview?.by_currency && Object.keys(financialOverview.by_currency).length > 0 ? (
+                          Object.entries(financialOverview.by_currency).map(([c, val]: [string, any]) => (
+                            <div key={c} className="text-lg font-bold text-amber-800 dark:text-amber-400">
+                              {c} {Number(val?.outstanding_owed || 0).toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-amber-800 dark:text-amber-400">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1083,9 +1138,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Settled Commissions in Period
                     </span>
-                    <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                      ETB {(financialOverview?.settled_in_period_birr || 0).toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                        ETB {(financialOverview?.settled_in_period_birr || 0).toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {financialOverview?.by_currency && Object.keys(financialOverview.by_currency).length > 0 ? (
+                          Object.entries(financialOverview.by_currency).map(([c, val]: [string, any]) => (
+                            <div key={c} className="text-lg font-bold text-slate-900 dark:text-white">
+                              {c} {Number(val?.settled_in_period || 0).toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-slate-900 dark:text-white">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -1099,24 +1168,59 @@ export default function ReportsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-60 w-full pt-2">
-                    {costByCountryData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={costByCountryData}>
-                          <XAxis dataKey="country" tick={{ fontSize: 11 }} />
-                          <YAxis tick={{ fontSize: 11 }} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: "#1e1e24", border: "1px solid #333", borderRadius: "8px", fontSize: "12px", color: "#fff" }}
-                          />
-                          <Bar dataKey="amount" fill="#047857" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                        Zero cost data recorded for window.
-                      </div>
-                    )}
-                  </div>
+                  {isBirrConversionEnabled ? (
+                    <div className="h-60 w-full pt-2">
+                      {costByCountryData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={costByCountryData}>
+                            <XAxis dataKey="country" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: "#1e1e24", border: "1px solid #333", borderRadius: "8px", fontSize: "12px", color: "#fff" }}
+                            />
+                            <Bar dataKey="amount" fill="#047857" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                          Zero cost data recorded for window.
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto lg:overflow-hidden">
+                      <table className="w-full text-xs text-left lg:table-fixed">
+                        <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
+                          <tr>
+                            <th className="py-2 px-3">Country</th>
+                            <th className="py-2 px-3">Currency</th>
+                            <th className="py-2 px-3 text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
+                          {costBreakdown?.by_country && Object.keys(costBreakdown.by_country).length > 0 ? (
+                            Object.entries(costBreakdown.by_country).flatMap(([country, currMap]) =>
+                              Object.entries(currMap || {}).map(([curr, amt]) => (
+                                <tr key={`${country}-${curr}`} className="hover:bg-slate-50 dark:hover:bg-[#181822]">
+                                  <td className="py-2 px-3 font-semibold text-slate-800 dark:text-zinc-200">{country}</td>
+                                  <td className="py-2 px-3 font-mono text-slate-600 dark:text-zinc-400">{curr}</td>
+                                  <td className="py-2 px-3 font-mono font-bold text-right text-emerald-800 dark:text-emerald-400">
+                                    {Number(amt).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ))
+                            )
+                          ) : (
+                            <tr>
+                              <td colSpan={3} className="py-4 text-center text-slate-400">
+                                Zero cost data recorded for window.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1128,8 +1232,8 @@ export default function ReportsPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
+                  <div className="overflow-x-auto lg:overflow-hidden">
+                    <table className="w-full text-xs text-left lg:table-fixed">
                       <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
                         <tr>
                           <th className="py-2 px-3">Officer</th>
@@ -1145,7 +1249,17 @@ export default function ReportsPage() {
                               <td className="py-2 px-3 font-semibold">{ef.full_name || ef.user}</td>
                               <td className="py-2 px-3 text-emerald-800 font-bold">{ef.approved_transactions_count || 0}</td>
                               <td className="py-2 px-3 text-red-600 font-bold">{ef.rejected_transactions_count || 0}</td>
-                              <td className="py-2 px-3 font-bold">ETB {(ef.net_expense_handled_birr || 0).toLocaleString()}</td>
+                              <td className="py-2 px-3 font-bold">
+                                {isBirrConversionEnabled ? (
+                                  `ETB ${(ef.net_expense_handled_birr || 0).toLocaleString()}`
+                                ) : ef.net_expense_by_currency ? (
+                                  Object.entries(ef.net_expense_by_currency)
+                                    .map(([curr, amt]) => `${curr} ${Number(amt).toLocaleString()}`)
+                                    .join(", ") || "—"
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
                             </tr>
                           ))
                         ) : (
@@ -1205,9 +1319,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Approved Expenses
                     </span>
-                    <span className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      ETB {transactionMetrics.totalExpenseBirr.toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                        ETB {transactionMetrics.totalExpenseBirr.toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {Object.keys(transactionMetrics.expenseByCurr).length > 0 ? (
+                          Object.entries(transactionMetrics.expenseByCurr).map(([c, amt]) => (
+                            <div key={c} className="text-lg font-bold text-red-600 dark:text-red-400">
+                              {c} {amt.toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-red-600 dark:text-red-400">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1216,9 +1344,23 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Approved Income
                     </span>
-                    <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
-                      ETB {transactionMetrics.totalIncomeBirr.toLocaleString()}
-                    </span>
+                    {isBirrConversionEnabled ? (
+                      <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
+                        ETB {transactionMetrics.totalIncomeBirr.toLocaleString()}
+                      </span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {Object.keys(transactionMetrics.incomeByCurr).length > 0 ? (
+                          Object.entries(transactionMetrics.incomeByCurr).map(([c, amt]) => (
+                            <div key={c} className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+                              {c} {amt.toLocaleString()}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">0</span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1227,18 +1369,41 @@ export default function ReportsPage() {
                     <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Net Balance
                     </span>
-                    <div className="flex items-baseline justify-between">
-                      <span
-                        className={cn(
-                          "text-2xl font-bold",
-                          transactionMetrics.netBalanceBirr >= 0
-                            ? "text-emerald-800 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
+                    {isBirrConversionEnabled ? (
+                      <div className="flex items-baseline justify-between">
+                        <span
+                          className={cn(
+                            "text-2xl font-bold",
+                            transactionMetrics.netBalanceBirr >= 0
+                              ? "text-emerald-800 dark:text-emerald-400"
+                              : "text-red-600 dark:text-red-400"
+                          )}
+                        >
+                          ETB {transactionMetrics.netBalanceBirr.toLocaleString()}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {Object.keys({ ...transactionMetrics.incomeByCurr, ...transactionMetrics.expenseByCurr }).length > 0 ? (
+                          Object.keys({ ...transactionMetrics.incomeByCurr, ...transactionMetrics.expenseByCurr }).map((c) => {
+                            const net = (transactionMetrics.incomeByCurr[c] || 0) - (transactionMetrics.expenseByCurr[c] || 0);
+                            return (
+                              <div
+                                key={c}
+                                className={cn(
+                                  "text-lg font-bold",
+                                  net >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                                )}
+                              >
+                                {c} {net.toLocaleString()}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <span className="text-2xl font-bold text-slate-400">0</span>
                         )}
-                      >
-                        ETB {transactionMetrics.netBalanceBirr.toLocaleString()}
-                      </span>
-                    </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -1337,8 +1502,8 @@ export default function ReportsPage() {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
+                  <div className="overflow-x-auto lg:overflow-hidden">
+                    <table className="w-full text-xs text-left lg:table-fixed">
                       <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#20202a]">
                         <tr>
                           <th className="py-2.5 px-3 font-semibold">Transaction</th>
@@ -1346,16 +1511,19 @@ export default function ReportsPage() {
                           <th className="py-2.5 px-3 font-semibold">Description & Stage</th>
                           <th className="py-2.5 px-3 font-semibold">Candidate / Placement</th>
                           <th className="py-2.5 px-3 font-semibold text-right">Amount (Original)</th>
-                          <th className="py-2.5 px-3 font-semibold text-right">Amount (ETB)</th>
+                          {isBirrConversionEnabled && (
+                            <th className="py-2.5 px-3 font-semibold text-right">Amount (ETB)</th>
+                          )}
                           <th className="py-2.5 px-3 font-semibold text-center">Status</th>
                           <th className="py-2.5 px-3 font-semibold">Logged By</th>
                           <th className="py-2.5 px-3 font-semibold">Approval / Audit</th>
+                          <th className="py-2.5 px-3 font-semibold text-center">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                         {isTransactionsLoading ? (
                           <tr>
-                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                            <td colSpan={isBirrConversionEnabled ? 10 : 9} className="py-12 text-center text-slate-400">
                               <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-600 mb-2" />
                               Loading financial transactions...
                             </td>
@@ -1370,7 +1538,7 @@ export default function ReportsPage() {
                             return (
                               <tr key={t.name} className="hover:bg-slate-50/80 dark:hover:bg-[#181822] transition-colors">
                                 <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                                  <div>{t.name}</div>
+                                  <div>#{shortRef(t.name)}</div>
                                   <div className="text-[10px] font-normal text-slate-400 font-sans">
                                     {t.creation ? t.creation.split(" ")[0] : "—"}
                                   </div>
@@ -1393,7 +1561,7 @@ export default function ReportsPage() {
                                 <td className="py-2.5 px-3 max-w-xs">
                                   {t.fee_type && t.clearance_step ? (
                                     <div className="font-semibold text-slate-900 dark:text-zinc-100">
-                                      {t.fee_type} · {t.clearance_step}
+                                      {t.fee_type} · {stripRecordIds(t.clearance_step)}
                                     </div>
                                   ) : t.fee_type ? (
                                     <div className="font-semibold text-slate-900 dark:text-zinc-100">
@@ -1401,7 +1569,7 @@ export default function ReportsPage() {
                                     </div>
                                   ) : null}
                                   <div className="font-medium text-slate-800 dark:text-zinc-200 line-clamp-1">
-                                    {t.description || "No description"}
+                                    {stripRecordIds(t.description) || "No description"}
                                   </div>
                                   {t.stage_logged_at && (
                                     <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
@@ -1417,12 +1585,12 @@ export default function ReportsPage() {
                                       href={`/applicants/${encodeURIComponent(t.applicant)}`}
                                       className="text-emerald-800 dark:text-emerald-400 hover:underline block font-semibold"
                                     >
-                                      {t.applicant}
+                                      {shortRef(t.applicant)}
                                     </Link>
                                   ) : null}
                                   {t.placement && (
                                     <span className="text-[10px] text-slate-400 block font-normal">
-                                      {t.placement}
+                                      {shortRef(t.placement)}
                                     </span>
                                   )}
                                   {!t.applicant && !t.placement && (
@@ -1434,16 +1602,18 @@ export default function ReportsPage() {
                                   {origCurr} {origAmt.toLocaleString()}
                                 </td>
 
-                                <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
-                                  <div className={cn(isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
-                                    {isExpense ? "-" : "+"} ETB {birrAmt.toLocaleString()}
-                                  </div>
-                                  {t.awaiting_fx_rate === 1 && (
-                                    <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
-                                      Awaiting FX Rate
-                                    </Badge>
-                                  )}
-                                </td>
+                                {isBirrConversionEnabled && (
+                                  <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
+                                    <div className={cn(isExpense ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
+                                      {isExpense ? "-" : "+"} ETB {birrAmt.toLocaleString()}
+                                    </div>
+                                    {t.awaiting_fx_rate === 1 && (
+                                      <Badge variant="outline" className="mt-0.5 text-[9px] border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40">
+                                        Awaiting FX Rate
+                                      </Badge>
+                                    )}
+                                  </td>
+                                )}
 
                                 <td className="py-2.5 px-3 text-center whitespace-nowrap">
                                   <Badge
@@ -1486,12 +1656,28 @@ export default function ReportsPage() {
                                     <div className="text-amber-800 dark:text-amber-400 italic">Awaiting review</div>
                                   )}
                                 </td>
+
+                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                  {t.status !== "Pending" ? (
+                                    <UndoLastStepButton
+                                      doctype="Applicant Transaction"
+                                      name={t.name}
+                                      askOnClick
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs text-slate-500 hover:text-rose-600"
+                                      onSuccess={() => refetchTransactions()}
+                                    />
+                                  ) : (
+                                    <span className="text-slate-300 text-[10px]">—</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })
                         ) : (
                           <tr>
-                            <td colSpan={9} className="py-12 text-center text-slate-400">
+                            <td colSpan={isBirrConversionEnabled ? 10 : 9} className="py-12 text-center text-slate-400">
                               <Receipt className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-2" />
                               <p className="font-semibold text-slate-600 dark:text-zinc-400">No transactions found</p>
                               <p className="text-[11px] text-slate-400 mt-1">

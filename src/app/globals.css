@@ -44,6 +44,15 @@ html, body {
   width: 100%;
 }
 
+@media (min-width: 1024px) {
+  html, body {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);

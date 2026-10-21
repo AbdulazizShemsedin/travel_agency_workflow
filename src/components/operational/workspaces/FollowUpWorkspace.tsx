@@ -12,12 +12,23 @@ import {
   Puzzle,
   ChevronDown,
   ExternalLink,
+  CheckCircle2,
+  Check,
+  Edit3,
+  X,
+  Lock,
+  FileCheck2,
+  CreditCard,
+  Building2,
+  Plane,
 } from "lucide-react";
 import { OperationalColumn, WorkspaceApplicantRow } from "@/types/workspace";
 import { OperationalTable } from "../OperationalTable";
 import { ExcelSelect, ExcelDateInput } from "../ExcelCellComponents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SimpleSelect } from "@/components/ui/select";
 import {
   Popover,
@@ -37,13 +48,281 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import {
   setLmisStatusV2,
+  completeClearanceStepV2,
+  recordPoliceAsharaV2,
+  setTaeshirStatusV2,
+  setTaeshirAppointmentV2,
+  recordInjazPaymentV2,
+  submitEmbassyStepV2,
+  stampEmbassyStepV2,
+  rejectEmbassyStepV2,
+  setVisaIssueDateV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
-import { recordPredepartureMedicalResultV2 } from "@/lib/api/v2/placements";
+import { recordTicketDetailsV2, advancePlacementV2 } from "@/lib/api/v2/placements";
 import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { hasAnyV2Role } from "@/lib/auth/v2Roles";
+
+export interface StageValidationResult {
+  isComplete: boolean;
+  isPartial: boolean;
+  missingFields: string[];
+  fieldValues: {
+    laborId?: string;
+    issueDate?: string;
+    cocStatus?: string;
+    policeAsharaStatus?: string;
+    policeAsharaDate?: string;
+    policeAsharaRemark?: string;
+    telesignRef?: string;
+    injazApplicationId?: string;
+    appointmentDate?: string;
+    injazPaymentStatus?: string;
+    visaNumber?: string;
+    visaIssueDate?: string;
+    wakalaStatus?: string;
+    ticketNumber?: string;
+    airline?: string;
+    flightNumber?: string;
+    departureDate?: string;
+    departureTime?: string;
+    [key: string]: any;
+  };
+}
+
+export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageValidationResult {
+  const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+
+  // Labor / Reference ID: cannot be empty, cannot start with "APP-"
+  const rawLaborId = (
+    row.laborId ||
+    row.lms?.referenceNo ||
+    (row.lms as any)?.reference_no ||
+    (row.applicant as any)?.labor_id ||
+    ""
+  ).trim();
+  const cleanLaborId = rawLaborId.toUpperCase().startsWith("APP-") ? "" : rawLaborId;
+
+  // Issue date: valid non-empty date
+  const rawIssueDate = (
+    row.issueDate ||
+    row.lms?.date_completed ||
+    (row.lms as any)?.issued_on ||
+    (row.lms as any)?.date_completed ||
+    ""
+  ).trim();
+  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? rawIssueDate : "";
+
+  const missingFields: string[] = [];
+
+  if (!cleanLaborId) {
+    missingFields.push(isKuwait ? "Labor / Reference ID" : "Labor ID / Reference No");
+  }
+  if (!cleanIssueDate) {
+    missingFields.push(isKuwait ? "Completion / Issue Date" : "Approval / Issue Date");
+  }
+
+  if (isKuwait) {
+    const rawPoliceStatus = (
+      (row.lms as any)?.police_ashara_status ||
+      row.policeAsharaStatus ||
+      (row as any).police_ashara_status ||
+      ""
+    ).trim();
+    const cleanPoliceStatus =
+      rawPoliceStatus && rawPoliceStatus !== "—" ? rawPoliceStatus : "";
+
+    const rawPoliceDate = (
+      (row.lms as any)?.police_ashara_appointment_date ||
+      row.policeAsharaDate ||
+      (row as any).police_ashara_appointment_date ||
+      ""
+    ).trim();
+    const cleanPoliceDate =
+      rawPoliceDate && rawPoliceDate !== "—" ? rawPoliceDate : "";
+
+    const rawPoliceRemark = (
+      (row.lms as any)?.police_ashara_remark ||
+      row.policeAsharaRemark ||
+      (row as any).police_ashara_remark ||
+      ""
+    ).trim();
+
+    if (!cleanPoliceStatus || cleanPoliceStatus === "Pending") {
+      missingFields.push("Police Ashara Status (Scheduled or Completed)");
+    } else if (cleanPoliceStatus === "Failed" && !rawPoliceRemark) {
+      missingFields.push("Police Ashara Remark (Required for Failed status)");
+    }
+
+    if (!cleanPoliceDate) {
+      missingFields.push("Police Ashara Appointment Date");
+    }
+
+    const hasAnyField = Boolean(cleanLaborId || cleanIssueDate || cleanPoliceStatus || cleanPoliceDate);
+
+    return {
+      isComplete: missingFields.length === 0,
+      isPartial: missingFields.length > 0 && hasAnyField,
+      missingFields,
+      fieldValues: {
+        laborId: cleanLaborId,
+        issueDate: cleanIssueDate,
+        policeAsharaStatus: cleanPoliceStatus || "Pending",
+        policeAsharaDate: cleanPoliceDate,
+        policeAsharaRemark: rawPoliceRemark,
+      },
+    };
+  } else {
+    // Saudi Arabia
+    const rawCoc = (
+      row.cocStatus ||
+      (row.applicant as any)?.coc_status ||
+      ""
+    ).trim();
+    const cleanCoc = rawCoc && rawCoc !== "—" && rawCoc !== "Not Started" ? rawCoc : "";
+
+    if (!cleanCoc) {
+      missingFields.push("COC Status");
+    }
+
+    const hasAnyField = Boolean(cleanLaborId || cleanIssueDate || cleanCoc);
+
+    return {
+      isComplete: missingFields.length === 0,
+      isPartial: missingFields.length > 0 && hasAnyField,
+      missingFields,
+      fieldValues: {
+        laborId: cleanLaborId,
+        issueDate: cleanIssueDate,
+        cocStatus: cleanCoc || (row.cocStatus === "Not Started" ? "Not Started" : "Pending"),
+      },
+    };
+  }
+}
+
+export function checkTaeshirStageRequirements(row: WorkspaceApplicantRow): StageValidationResult {
+  const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+  const missingFields: string[] = [];
+
+  if (isKuwait) {
+    const rawRef = (row.teshirReferenceNo || row.injaz?.reference_no || "").trim();
+    const cleanRef = rawRef && rawRef !== "—" ? rawRef : "";
+    if (!cleanRef) missingFields.push("Telesign Reference Number");
+
+    return {
+      isComplete: missingFields.length === 0,
+      isPartial: Boolean(cleanRef) && missingFields.length > 0,
+      missingFields,
+      fieldValues: {
+        telesignRef: cleanRef,
+      },
+    };
+  } else {
+    const rawInjazId = (
+      row.injazApplicantNumber ||
+      row.injaz?.injaz_application_id ||
+      (row.injaz as any)?.injaz_application_no ||
+      ""
+    ).trim();
+    const cleanInjazId = rawInjazId && rawInjazId !== "—" ? rawInjazId : "";
+
+    const rawApptDate = (row.appointmentDate || row.injaz?.appointment_date || "").trim();
+    const cleanApptDate = rawApptDate && rawApptDate !== "—" ? rawApptDate : "";
+
+    const rawPayment = (row.injaz?.injaz_payment_status || "Pending").trim();
+
+    if (!cleanInjazId) missingFields.push("Injaz Application ID (E-Number)");
+    if (!cleanApptDate) missingFields.push("Appointment Date");
+    if (rawPayment !== "Paid") missingFields.push("Injaz Payment Status (Must be Paid)");
+
+    const hasAny = Boolean(cleanInjazId || cleanApptDate || rawPayment === "Paid");
+
+    return {
+      isComplete: missingFields.length === 0,
+      isPartial: missingFields.length > 0 && hasAny,
+      missingFields,
+      fieldValues: {
+        injazApplicationId: cleanInjazId,
+        appointmentDate: cleanApptDate,
+        injazPaymentStatus: rawPayment,
+      },
+    };
+  }
+}
+
+export function checkEmbassyStageRequirements(row: WorkspaceApplicantRow): StageValidationResult {
+  const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+  const missingFields: string[] = [];
+
+  const rawVisaNumber = (row.visaNumber || row.embassy?.reference_no || "").trim();
+  const cleanVisaNumber = rawVisaNumber && rawVisaNumber !== "—" ? rawVisaNumber : "";
+
+  const rawIssueDate = (row.embassy?.date_completed || row.issueDate || "").trim();
+  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? rawIssueDate : "";
+
+  if (!cleanVisaNumber) missingFields.push("Visa Number");
+  if (!cleanIssueDate) missingFields.push("Visa Issue Date");
+
+  let cleanWakala = "Pending";
+  if (!isKuwait) {
+    cleanWakala = (row.wakalaStatus || (row.embassy as any)?.wakala_status || "Pending").trim();
+    if (cleanWakala !== "Paid") {
+      missingFields.push("Wakala Payment Status (Must be Paid)");
+    }
+  }
+
+  const hasAny = Boolean(cleanVisaNumber || cleanIssueDate || (cleanWakala === "Paid"));
+
+  return {
+    isComplete: missingFields.length === 0,
+    isPartial: missingFields.length > 0 && hasAny,
+    missingFields,
+    fieldValues: {
+      visaNumber: cleanVisaNumber,
+      visaIssueDate: cleanIssueDate,
+      wakalaStatus: cleanWakala,
+    },
+  };
+}
+
+export function checkDepartureStageRequirements(row: WorkspaceApplicantRow): StageValidationResult {
+  const missingFields: string[] = [];
+
+  const rawTicketNo = (row.ticketNumber || (row.ticket as any)?.ticket_number || "").trim();
+  const cleanTicketNo = rawTicketNo && rawTicketNo !== "—" ? rawTicketNo : "";
+
+  const rawAirline = (row.airline || (row.ticket as any)?.airline || "").trim();
+  const cleanAirline = rawAirline && rawAirline !== "—" ? rawAirline : "";
+
+  const rawFlightNo = (row.flightNumber || (row.ticket as any)?.flight_number || "").trim();
+  const cleanFlightNo = rawFlightNo && rawFlightNo !== "—" ? rawFlightNo : "";
+
+  const rawFlightDate = (row.flightDate || (row.ticket as any)?.departure_date || "").trim();
+  const cleanFlightDate = rawFlightDate && rawFlightDate !== "—" ? rawFlightDate : "";
+
+  if (!cleanTicketNo) missingFields.push("Ticket Number");
+  if (!cleanAirline) missingFields.push("Airline");
+  if (!cleanFlightNo) missingFields.push("Flight Number");
+  if (!cleanFlightDate) missingFields.push("Departure Date");
+
+  const hasAny = Boolean(cleanTicketNo || cleanAirline || cleanFlightNo || cleanFlightDate);
+
+  return {
+    isComplete: missingFields.length === 0,
+    isPartial: missingFields.length > 0 && hasAny,
+    missingFields,
+    fieldValues: {
+      ticketNumber: cleanTicketNo,
+      airline: cleanAirline,
+      flightNumber: cleanFlightNo,
+      departureDate: cleanFlightDate,
+      departureTime: (row.flightTime || (row.ticket as any)?.departure_time || "").trim(),
+    },
+  };
+}
 
 interface FollowUpWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -238,12 +517,12 @@ function FollowUpExtensionsDropdown({ row }: { row: WorkspaceApplicantRow }) {
           size="sm"
           disabled={isSending}
           onClick={(e) => e.stopPropagation()}
-          className="h-6 px-2 text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 gap-1 shadow-2xs cursor-pointer"
+          className="h-5 px-1.5 text-[9.5px] font-bold text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 gap-0.5 shadow-2xs cursor-pointer"
           title="Send candidate data to browser extensions"
         >
-          <Puzzle className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-          <span>Extensions</span>
-          <ChevronDown className="h-3 w-3 opacity-60" />
+          <Puzzle className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
+          <span>Ext</span>
+          <ChevronDown className="h-2.5 w-2.5 opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -308,7 +587,7 @@ export function FollowUpWorkspace({
     { value: "ALL", label: `All Stages (${data.length})` },
     { value: "Registered", label: "Stage: Registered" },
     { value: "Selected", label: "Stage: Selected" },
-    { value: "Processing", label: "Stage: Processing" },
+    { value: "Processing", label: "Stage: Processing (LMIS and Teashir)" },
     { value: "Stamped", label: "Stage: Stamped" },
     { value: "Ticketed", label: "Stage: Ticketed" },
     { value: "Departed", label: "Stage: Departed" },
@@ -445,10 +724,84 @@ export function FollowUpWorkspace({
     }
   };
 
+  // --- PERMISSIONS & ROLES ---
+  const authUserV2 = authUser
+    ? {
+        user: authUser.email,
+        full_name: authUser.full_name || authUser.email,
+        roles: Array.isArray(authUser.roles) ? authUser.roles : [],
+      }
+    : null;
+
+  const isStrictAdmin = Boolean(
+    (authUser?.email || "").toLowerCase() === "administrator" ||
+      (authUser?.roles || []).some((r: any) =>
+        ["admin", "administrator", "system manager"].includes(String(r).trim().toLowerCase())
+      )
+  );
+
+  const isAdmin =
+    isStrictAdmin ||
+    (authUserV2?.roles || []).some((r: any) =>
+      ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
+    );
+
+  const isFollowUpOperator =
+    isAdmin ||
+    hasAnyV2Role(authUserV2, ["Manager", "Clearance Officer", "Placement Officer", "Agency Coordinator"]) ||
+    (authUser?.roles || []).some((r: any) =>
+      ["manager", "clearance", "placement", "follow-up", "followup", "coordinator", "officer"].some((k) =>
+        String(r).toLowerCase().includes(k)
+      )
+    );
+
+  const canEditLmis = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS"]);
+  const canEditTaeshir = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign"]);
+  const canEditEmbassy = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy"]);
+  const canEditDeparture = isFollowUpOperator || hasAnyV2Role(authUserV2, ["Ticketer"]);
+
   // Quick rejection modal state for table inline edit
   const [tableRejectRow, setTableRejectRow] = React.useState<WorkspaceApplicantRow | null>(null);
   const [tableRejectReasons, setTableRejectReasons] = React.useState<string[]>([]);
   const [isSubmittingTableReject, setIsSubmittingTableReject] = React.useState(false);
+
+  // Quick custom status (OTHER) modal state
+  const [tableOtherRow, setTableOtherRow] = React.useState<WorkspaceApplicantRow | null>(null);
+  const [tableOtherStatusText, setTableOtherStatusText] = React.useState<string>("");
+  const [isSubmittingTableOther, setIsSubmittingTableOther] = React.useState(false);
+
+  // --- STAGE COMPLETION & VALIDATION MODAL STATE (Cases A, B, C, D) ---
+  interface StageModalState {
+    open: boolean;
+    mode: "confirm" | "edit";
+    stage: "LMIS" | "KUWAIT_LMIS" | "TAESHIR" | "TELESIGN" | "EMBASSY" | "KUWAIT_EMBASSY" | "DEPARTURE";
+    targetStatus: string;
+    row: WorkspaceApplicantRow;
+    validation: StageValidationResult;
+  }
+
+  const [stageModalState, setStageModalState] = React.useState<StageModalState | null>(null);
+  const [isSubmittingStageAction, setIsSubmittingStageAction] = React.useState(false);
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+
+  // Stage form inputs
+  const [formLaborId, setFormLaborId] = React.useState("");
+  const [formIssueDate, setFormIssueDate] = React.useState("");
+  const [formCocStatus, setFormCocStatus] = React.useState("Issued");
+  const [formPoliceAsharaStatus, setFormPoliceAsharaStatus] = React.useState("Completed");
+  const [formPoliceAsharaDate, setFormPoliceAsharaDate] = React.useState("");
+  const [formPoliceAsharaRemark, setFormPoliceAsharaRemark] = React.useState("");
+  const [formTeshirRef, setFormTeshirRef] = React.useState("");
+  const [formAppointmentDate, setFormAppointmentDate] = React.useState("");
+  const [formInjazAppId, setFormInjazAppId] = React.useState("");
+  const [formInjazPaymentStatus, setFormInjazPaymentStatus] = React.useState("Paid");
+  const [formVisaNumber, setFormVisaNumber] = React.useState("");
+  const [formWakalaStatus, setFormWakalaStatus] = React.useState("Paid");
+  const [formTicketNumber, setFormTicketNumber] = React.useState("");
+  const [formAirline, setFormAirline] = React.useState("");
+  const [formFlightNumber, setFormFlightNumber] = React.useState("");
+  const [formDepartureDate, setFormDepartureDate] = React.useState("");
+  const [formDepartureTime, setFormDepartureTime] = React.useState("");
 
   // Invalidate queries helper
   const handleMutationSuccess = async (message: string) => {
@@ -465,6 +818,7 @@ export function FollowUpWorkspace({
 
   // 1. LMIS Status Inline Save
   const handleSaveLmisStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
     const stepName =
       row.lms?.name ||
       row.clearanceStepName ||
@@ -475,7 +829,14 @@ export function FollowUpWorkspace({
       )?.name;
 
     if (!stepName) {
-      toast.error("Could not find active LMIS clearance step for this candidate.");
+      toast.error(
+        `Cannot update LMIS status: Candidate "${row.fullName}" is in the "${row.stageStatus || "Intake"}" stage and has not reached the "Processing (LMIS and Teashir)" stage yet. Clearance steps are only initialized once an applicant is advanced to Processing.`
+      );
+      return;
+    }
+
+    if (row.lmisStatus === "ISSUED") {
+      toast.error("An issued LMIS clearance step is finalized and cannot be relabelled.");
       return;
     }
 
@@ -485,6 +846,50 @@ export function FollowUpWorkspace({
       return;
     }
 
+    if (newStatus === "OTHER") {
+      setTableOtherRow(row);
+      setTableOtherStatusText("");
+      return;
+    }
+
+    if (newStatus === "ISSUED") {
+      // 1. Intercept before normal status-update request is made
+      // 2. Keep the existing displayed status in the table unchanged
+      const validation = checkLmisStageRequirements(row);
+
+      setFormLaborId(validation.fieldValues.laborId || "");
+      setFormIssueDate(validation.fieldValues.issueDate || new Date().toISOString().split("T")[0]);
+      setFormCocStatus(validation.fieldValues.cocStatus || "Issued");
+      setFormPoliceAsharaStatus(validation.fieldValues.policeAsharaStatus || "Completed");
+      setFormPoliceAsharaDate(validation.fieldValues.policeAsharaDate || new Date().toISOString().split("T")[0]);
+      setFormPoliceAsharaRemark(validation.fieldValues.policeAsharaRemark || "");
+      setFieldErrors({});
+
+      if (validation.isComplete) {
+        // Case B: All required info is already saved and valid -> Confirmation Modal
+        setStageModalState({
+          open: true,
+          mode: "confirm",
+          stage: isKuwait ? "KUWAIT_LMIS" : "LMIS",
+          targetStatus: "ISSUED",
+          row,
+          validation,
+        });
+      } else {
+        // Case A (Missing) & Case C (Partial/Invalid) -> Stage Editor Modal with validation
+        setStageModalState({
+          open: true,
+          mode: "edit",
+          stage: isKuwait ? "KUWAIT_LMIS" : "LMIS",
+          targetStatus: "ISSUED",
+          row,
+          validation,
+        });
+      }
+      return;
+    }
+
+    // Working statuses update (IN PROGRESS, PULLED, CHECKED, etc.)
     try {
       await setLmisStatusV2(stepName, newStatus);
       await handleMutationSuccess(`LMIS status updated to ${newStatus}`);
@@ -494,21 +899,451 @@ export function FollowUpWorkspace({
     }
   };
 
+  // 2. Te'shir / Telesign Inline Save
+  const handleSaveTeshirStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+    const stepName =
+      row.injaz?.name ||
+      (row as any).siblingSteps?.find(
+        (s: any) =>
+          s.step_type?.toLowerCase().includes("taeshir") ||
+          s.step_type?.toLowerCase().includes("telesign") ||
+          s.step_type?.toLowerCase().includes("injaz")
+      )?.name;
 
-  // 3. Medical 2 Status Inline Save
-  const handleSaveMedical2Status = async (row: WorkspaceApplicantRow, newStatus: string) => {
-    const placementName = row.placementName || row.placementId || row.dsrName;
-    if (!placementName) {
-      toast.error("Could not find placement record for this candidate.");
+    if (!stepName) {
+      toast.error(`Cannot update Te'shir/Telesign: Candidate "${row.fullName}" has not reached the clearance processing stage yet.`);
+      return;
+    }
+
+    if (row.teshirStatus === "Completed" || row.injaz?.status === "Complete") {
+      toast.error("This stage is already complete and cannot be relabelled.");
+      return;
+    }
+
+    if (newStatus === "Completed") {
+      const validation = checkTaeshirStageRequirements(row);
+      setFormTeshirRef(validation.fieldValues.telesignRef || "");
+      setFormAppointmentDate(validation.fieldValues.appointmentDate || new Date().toISOString().split("T")[0]);
+      setFormInjazAppId(validation.fieldValues.injazApplicationId || "");
+      setFormInjazPaymentStatus(validation.fieldValues.injazPaymentStatus || "Paid");
+      setFieldErrors({});
+
+      if (validation.isComplete) {
+        setStageModalState({
+          open: true,
+          mode: "confirm",
+          stage: isKuwait ? "TELESIGN" : "TAESHIR",
+          targetStatus: "Completed",
+          row,
+          validation,
+        });
+      } else {
+        setStageModalState({
+          open: true,
+          mode: "edit",
+          stage: isKuwait ? "TELESIGN" : "TAESHIR",
+          targetStatus: "Completed",
+          row,
+          validation,
+        });
+      }
       return;
     }
 
     try {
-      await recordPredepartureMedicalResultV2(placementName, newStatus as "FIT" | "UNFIT");
-      await handleMutationSuccess(`Pre-departure medical recorded as ${newStatus}`);
+      if (!isKuwait) {
+        await setTaeshirStatusV2(stepName, newStatus);
+      }
+      await handleMutationSuccess(`Status updated to ${newStatus}`);
     } catch (err) {
       toast.error(formatCleanErrorMessage(err));
       throw err;
+    }
+  };
+
+  // 3. Embassy Visa Inline Save
+  const handleSaveEmbassyStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+    const stepName =
+      row.embassy?.name ||
+      (row as any).siblingSteps?.find((s: any) => s.step_type?.toLowerCase().includes("embassy"))?.name;
+
+    if (!stepName) {
+      toast.error(`Cannot update Embassy: Candidate "${row.fullName}" has not reached the embassy clearance stage yet.`);
+      return;
+    }
+
+    if (row.embassyStatus === "Stamped" || row.embassy?.status === "Stamped") {
+      toast.error("Visa is already stamped and cannot be relabelled.");
+      return;
+    }
+
+    if (newStatus === "Stamped") {
+      const validation = checkEmbassyStageRequirements(row);
+      setFormVisaNumber(validation.fieldValues.visaNumber || "");
+      setFormIssueDate(validation.fieldValues.visaIssueDate || new Date().toISOString().split("T")[0]);
+      setFormWakalaStatus(validation.fieldValues.wakalaStatus || "Paid");
+      setFieldErrors({});
+
+      if (validation.isComplete) {
+        setStageModalState({
+          open: true,
+          mode: "confirm",
+          stage: isKuwait ? "KUWAIT_EMBASSY" : "EMBASSY",
+          targetStatus: "Stamped",
+          row,
+          validation,
+        });
+      } else {
+        setStageModalState({
+          open: true,
+          mode: "edit",
+          stage: isKuwait ? "KUWAIT_EMBASSY" : "EMBASSY",
+          targetStatus: "Stamped",
+          row,
+          validation,
+        });
+      }
+      return;
+    }
+
+    if (newStatus === "Submitted") {
+      try {
+        await submitEmbassyStepV2(stepName);
+        await handleMutationSuccess(`Embassy clearance submitted for ${row.fullName}`);
+      } catch (err) {
+        toast.error(formatCleanErrorMessage(err));
+        throw err;
+      }
+      return;
+    }
+
+    if (newStatus === "Rejected") {
+      const remark = window.prompt(`Enter mandatory rejection remark for ${row.fullName}:`);
+      if (!remark || !remark.trim()) {
+        toast.error("Rejection remark is required to reject an Embassy step.");
+        return;
+      }
+      try {
+        await rejectEmbassyStepV2(stepName, remark.trim());
+        await handleMutationSuccess(`Embassy clearance rejected for ${row.fullName}`);
+      } catch (err) {
+        toast.error(formatCleanErrorMessage(err));
+        throw err;
+      }
+      return;
+    }
+  };
+
+  // 4. Departure Inline Save
+  const handleSaveDepartureStatus = async (row: WorkspaceApplicantRow, newStatus: string) => {
+    const placementName = row.placementName || row.placementId || row.dsrName;
+    if (!placementName) {
+      toast.error(`Placement record not found for "${row.fullName}".`);
+      return;
+    }
+
+    if (row.departureStatus === "Departed" || row.stageStatus === "Departed") {
+      toast.error("Candidate has already departed and stage is finalized.");
+      return;
+    }
+
+    if (newStatus === "Departed") {
+      const validation = checkDepartureStageRequirements(row);
+      setFormTicketNumber(validation.fieldValues.ticketNumber || "");
+      setFormAirline(validation.fieldValues.airline || "");
+      setFormFlightNumber(validation.fieldValues.flightNumber || "");
+      setFormDepartureDate(validation.fieldValues.departureDate || new Date().toISOString().split("T")[0]);
+      setFormDepartureTime(validation.fieldValues.departureTime || "00:00");
+      setFieldErrors({});
+
+      if (validation.isComplete) {
+        setStageModalState({
+          open: true,
+          mode: "confirm",
+          stage: "DEPARTURE",
+          targetStatus: "Departed",
+          row,
+          validation,
+        });
+      } else {
+        setStageModalState({
+          open: true,
+          mode: "edit",
+          stage: "DEPARTURE",
+          targetStatus: "Departed",
+          row,
+          validation,
+        });
+      }
+      return;
+    }
+  };
+
+  // --- STAGE ACTION MODAL SUBMISSION HANDLERS ---
+
+  // Case B Submission: Confirmed directly since all required info is saved
+  const handleConfirmStageAction = async () => {
+    if (!stageModalState) return;
+    const { row, stage, targetStatus } = stageModalState;
+    const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+
+    setIsSubmittingStageAction(true);
+    try {
+      if (stage === "LMIS" || stage === "KUWAIT_LMIS") {
+        const stepName =
+          row.lms?.name ||
+          row.clearanceStepName ||
+          (row as any).siblingSteps?.find(
+            (s: any) =>
+              s.step_type?.toLowerCase().includes("lmis") ||
+              s.step_type?.toLowerCase().includes("lms")
+          )?.name;
+        if (!stepName) throw new Error("LMIS clearance step record not found.");
+
+        const laborId = stageModalState.validation.fieldValues.laborId || undefined;
+        const issueDate = stageModalState.validation.fieldValues.issueDate || new Date().toISOString().split("T")[0];
+
+        await setLmisStatusV2(stepName, "ISSUED", undefined, laborId, issueDate);
+        await completeClearanceStepV2(stepName, laborId, undefined, issueDate);
+
+        await handleMutationSuccess(`LMIS clearance completed as ISSUED for ${row.fullName}`);
+        setStageModalState(null);
+      } else if (stage === "TAESHIR" || stage === "TELESIGN") {
+        const stepName =
+          row.injaz?.name ||
+          (row as any).siblingSteps?.find(
+            (s: any) =>
+              s.step_type?.toLowerCase().includes("taeshir") ||
+              s.step_type?.toLowerCase().includes("telesign") ||
+              s.step_type?.toLowerCase().includes("injaz")
+          )?.name;
+        if (!stepName) throw new Error("Te'shir clearance step record not found.");
+
+        const refNo = stageModalState.validation.fieldValues.telesignRef || undefined;
+        await completeClearanceStepV2(stepName, refNo);
+
+        await handleMutationSuccess(`Te'shir clearance marked as Complete for ${row.fullName}`);
+        setStageModalState(null);
+      } else if (stage === "EMBASSY" || stage === "KUWAIT_EMBASSY") {
+        const stepName =
+          row.embassy?.name ||
+          (row as any).siblingSteps?.find((s: any) => s.step_type?.toLowerCase().includes("embassy"))?.name;
+        if (!stepName) throw new Error("Embassy clearance step record not found.");
+
+        const visaNumber = stageModalState.validation.fieldValues.visaNumber;
+        await stampEmbassyStepV2(stepName, visaNumber);
+
+        await handleMutationSuccess(`Embassy visa clearance stamped for ${row.fullName}`);
+        setStageModalState(null);
+      } else if (stage === "DEPARTURE") {
+        const placementName = row.placementName || row.placementId || row.dsrName;
+        if (!placementName) throw new Error("Placement record not found.");
+
+        await advancePlacementV2(placementName, "Departed");
+        await handleMutationSuccess(`Candidate ${row.fullName} marked as Departed`);
+        setStageModalState(null);
+      }
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setIsSubmittingStageAction(false);
+    }
+  };
+
+  // Case A & C Submission: Save details and optionally invoke backend completion
+  const handleSubmitStageEditor = async (andComplete: boolean = true) => {
+    if (!stageModalState) return;
+    const { row, stage } = stageModalState;
+    const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+    const errors: Record<string, string> = {};
+
+    if (stage === "LMIS" || stage === "KUWAIT_LMIS") {
+      const trimmedLabor = formLaborId.trim();
+      if (!trimmedLabor) {
+        errors.laborId = "Labor / Reference ID is required.";
+      } else if (trimmedLabor.toUpperCase().startsWith("APP-")) {
+        errors.laborId = "Applicant ID (APP-...) cannot be used as Labor ID.";
+      }
+
+      if (!formIssueDate) {
+        errors.issueDate = "Completion / Issue date is required.";
+      }
+
+      if (isKuwait) {
+        if (!formPoliceAsharaStatus || formPoliceAsharaStatus === "Pending") {
+          errors.policeAsharaStatus = "Police Ashara must be Scheduled or Completed.";
+        }
+        if (!formPoliceAsharaDate) {
+          errors.policeAsharaDate = "Police Ashara appointment date is required.";
+        }
+        if (formPoliceAsharaStatus === "Failed" && !formPoliceAsharaRemark.trim()) {
+          errors.policeAsharaRemark = "A remark is required when Police Ashara status is Failed.";
+        }
+      } else {
+        if (!formCocStatus || formCocStatus === "Not Started") {
+          errors.cocStatus = "COC status is required for Saudi Arabia corridor.";
+        }
+      }
+    } else if (stage === "TAESHIR") {
+      if (!formInjazAppId.trim()) errors.injazAppId = "Injaz E-Number is required.";
+      if (!formAppointmentDate) errors.appointmentDate = "Appointment Date is required.";
+      if (formInjazPaymentStatus !== "Paid") errors.injazPaymentStatus = "Payment status must be Paid.";
+    } else if (stage === "TELESIGN") {
+      if (!formTeshirRef.trim()) errors.teshirRef = "Telesign Reference Number is required.";
+    } else if (stage === "EMBASSY" || stage === "KUWAIT_EMBASSY") {
+      if (!formVisaNumber.trim()) errors.visaNumber = "Visa Number is required.";
+      if (!formIssueDate) errors.issueDate = "Visa Issue Date is required.";
+      if (!isKuwait && formWakalaStatus !== "Paid") errors.wakalaStatus = "Wakala Payment must be Paid.";
+    } else if (stage === "DEPARTURE") {
+      if (!formTicketNumber.trim()) errors.ticketNumber = "Ticket Number is required.";
+      if (!formAirline.trim()) errors.airline = "Airline is required.";
+      if (!formFlightNumber.trim()) errors.flightNumber = "Flight Number is required.";
+      if (!formDepartureDate) errors.departureDate = "Departure Date is required.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      toast.error("Please fill in all required fields before completing the stage.");
+      return;
+    }
+
+    setFieldErrors({});
+    setIsSubmittingStageAction(true);
+
+    let stageDetailsSaved = false;
+    try {
+      if (stage === "LMIS" || stage === "KUWAIT_LMIS") {
+        const stepName =
+          row.lms?.name ||
+          row.clearanceStepName ||
+          (row as any).siblingSteps?.find(
+            (s: any) =>
+              s.step_type?.toLowerCase().includes("lmis") ||
+              s.step_type?.toLowerCase().includes("lms")
+          )?.name;
+        if (!stepName) throw new Error("LMIS clearance step record not found.");
+
+        const cleanLabor = formLaborId.trim();
+
+        // 1. Save stage details
+        if (isKuwait) {
+          await recordPoliceAsharaV2(stepName, {
+            police_ashara_status: formPoliceAsharaStatus,
+            police_ashara_appointment_date: formPoliceAsharaDate,
+            police_ashara_remark: formPoliceAsharaRemark.trim() || undefined,
+          });
+          if (cleanLabor) {
+            await updateApplicantForLmisV2({
+              applicant_name: row.applicantId,
+              labor_id: cleanLabor,
+            });
+          }
+        } else {
+          await updateApplicantForLmisV2({
+            applicant_name: row.applicantId,
+            labor_id: cleanLabor,
+            coc_status: formCocStatus,
+          });
+        }
+        stageDetailsSaved = true;
+
+        // 2. If completing stage
+        if (andComplete) {
+          await setLmisStatusV2(stepName, "ISSUED", undefined, cleanLabor, formIssueDate);
+          await completeClearanceStepV2(stepName, cleanLabor, undefined, formIssueDate);
+          await handleMutationSuccess(`LMIS clearance details saved and marked as ISSUED for ${row.fullName}`);
+          setStageModalState(null);
+        } else {
+          await handleMutationSuccess(`LMIS stage details saved for ${row.fullName}`);
+          setStageModalState(null);
+        }
+      } else if (stage === "TAESHIR") {
+        const stepName =
+          row.injaz?.name ||
+          (row as any).siblingSteps?.find(
+            (s: any) =>
+              s.step_type?.toLowerCase().includes("taeshir") ||
+              s.step_type?.toLowerCase().includes("injaz")
+          )?.name;
+        if (!stepName) throw new Error("Te'shir clearance step record not found.");
+
+        await setTaeshirAppointmentV2(stepName, formAppointmentDate, formInjazAppId.trim());
+        if (formInjazPaymentStatus === "Paid") {
+          await recordInjazPaymentV2(stepName, "Paid");
+        }
+        stageDetailsSaved = true;
+
+        if (andComplete) {
+          await completeClearanceStepV2(stepName);
+          await handleMutationSuccess(`Te'shir stage completed for ${row.fullName}`);
+          setStageModalState(null);
+        } else {
+          await handleMutationSuccess(`Te'shir stage details saved for ${row.fullName}`);
+          setStageModalState(null);
+        }
+      } else if (stage === "TELESIGN") {
+        const stepName =
+          row.injaz?.name ||
+          (row as any).siblingSteps?.find((s: any) => s.step_type?.toLowerCase().includes("telesign"))?.name;
+        if (!stepName) throw new Error("Telesign clearance step record not found.");
+
+        stageDetailsSaved = true;
+        if (andComplete) {
+          await completeClearanceStepV2(stepName, formTeshirRef.trim());
+          await handleMutationSuccess(`Telesign stage completed for ${row.fullName}`);
+          setStageModalState(null);
+        } else {
+          await completeClearanceStepV2(stepName, formTeshirRef.trim());
+          await handleMutationSuccess(`Telesign details saved for ${row.fullName}`);
+          setStageModalState(null);
+        }
+      } else if (stage === "EMBASSY" || stage === "KUWAIT_EMBASSY") {
+        const stepName =
+          row.embassy?.name ||
+          (row as any).siblingSteps?.find((s: any) => s.step_type?.toLowerCase().includes("embassy"))?.name;
+        if (!stepName) throw new Error("Embassy clearance step record not found.");
+
+        if (formIssueDate) {
+          await setVisaIssueDateV2(stepName, formIssueDate);
+        }
+        stageDetailsSaved = true;
+
+        if (andComplete) {
+          await stampEmbassyStepV2(stepName, formVisaNumber.trim());
+          await handleMutationSuccess(`Embassy visa stamped for ${row.fullName}`);
+          setStageModalState(null);
+        } else {
+          await handleMutationSuccess(`Embassy details saved for ${row.fullName}`);
+          setStageModalState(null);
+        }
+      } else if (stage === "DEPARTURE") {
+        const placementName = row.placementName || row.placementId || row.dsrName;
+        if (!placementName) throw new Error("Placement record not found.");
+
+        await recordTicketDetailsV2(placementName, formTicketNumber.trim(), formDepartureDate);
+        stageDetailsSaved = true;
+
+        if (andComplete) {
+          await advancePlacementV2(placementName, "Departed");
+          await handleMutationSuccess(`Candidate ${row.fullName} marked as Departed`);
+          setStageModalState(null);
+        } else {
+          await handleMutationSuccess(`Departure ticket details saved for ${row.fullName}`);
+          setStageModalState(null);
+        }
+      }
+    } catch (err) {
+      if (stageDetailsSaved && andComplete) {
+        toast.error(
+          `Stage details were saved successfully, but marking the stage as complete failed: ${formatCleanErrorMessage(err)}. Please retry.`
+        );
+      } else {
+        toast.error(formatCleanErrorMessage(err));
+      }
+    } finally {
+      setIsSubmittingStageAction(false);
     }
   };
 
@@ -526,10 +1361,30 @@ export function FollowUpWorkspace({
     }));
   }, []);
 
-  const med2Options = React.useMemo(() => [
-    { value: "FIT", label: "FIT", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
-    { value: "UNFIT", label: "UNFIT", badgeClass: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300" },
-    { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
+  const saudiTaeshirOptions = React.useMemo(() => [
+    { value: "INFORMED", label: "INFORMED", badgeClass: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300" },
+    { value: "RECEIVED", label: "RECEIVED", badgeClass: "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300" },
+    { value: "READY TO EMBASSY", label: "READY TO EMBASSY", badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300" },
+    { value: "Completed", label: "Completed", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+  ], []);
+
+  const kuwaitTelesignOptions = React.useMemo(() => [
+    { value: "Pending", label: "Pending", badgeClass: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-zinc-800 dark:text-zinc-200" },
+    { value: "Submitted", label: "Submitted", badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300" },
+    { value: "Completed", label: "Completed", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+  ], []);
+
+  const embassyOptions = React.useMemo(() => [
+    { value: "Pending", label: "Pending", badgeClass: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-zinc-800 dark:text-zinc-200" },
+    { value: "Submitted", label: "Submitted", badgeClass: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300" },
+    { value: "Stamped", label: "Stamped", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300" },
+    { value: "Rejected", label: "Rejected", badgeClass: "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950 dark:text-rose-300" },
+  ], []);
+
+  const departureOptions = React.useMemo(() => [
+    { value: "Pending", label: "Pending", badgeClass: "bg-slate-100 text-slate-800 border-slate-200 dark:bg-zinc-800 dark:text-zinc-200" },
+    { value: "Ticketed", label: "Ticketed", badgeClass: "bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-950 dark:text-cyan-300" },
+    { value: "Departed", label: "Departed", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-bold" },
   ], []);
 
   // Columns for Level 1 Table: Checkbox select, Number, and preserved exact approved order (14 columns)
@@ -621,75 +1476,19 @@ export function FollowUpWorkspace({
         </div>
       ),
     },
-    // 2. Destination Country
-    {
-      id: "destinationCountry",
-      header: "COUNTRY",
-      accessorKey: "destinationCountry",
-      width: "80px",
-      isReadOnly: true,
-      cell: (row) => {
-        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
-        return (
-          <Badge
-            variant="outline"
-            className={cn(
-              "text-[9.5px] py-0 px-1 font-semibold",
-              isKuwait
-                ? "border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/50 dark:bg-sky-950/30"
-                : "border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30"
-            )}
-          >
-            {isKuwait ? "Kuwait" : "Saudi"}
-          </Badge>
-        );
-      },
-    },
-    // 3. Agency Name
-    {
-      id: "agencyName",
-      header: "AGENCY",
-      accessorKey: "agencyName",
-      width: "85px",
-      isReadOnly: true,
-      cell: (row) => (
-        <span
-          className="font-medium text-slate-700 dark:text-zinc-300 text-[10.5px] truncate block max-w-[80px]"
-          title={row.agencyName || "—"}
-        >
-          {row.agencyName && row.agencyName !== "—" ? row.agencyName : "—"}
-        </span>
-      ),
-    },
-    // 4. Sponsor Name
-    {
-      id: "sponsorName",
-      header: "SPONSOR",
-      accessorKey: "sponsorName",
-      width: "85px",
-      isReadOnly: true,
-      cell: (row) => (
-        <span
-          className="font-medium text-slate-700 dark:text-zinc-300 text-[10.5px] truncate block max-w-[80px]"
-          title={row.sponsorName || "—"}
-        >
-          {row.sponsorName && row.sponsorName !== "—" ? row.sponsorName : "—"}
-        </span>
-      ),
-    },
-    // 5. Stage Status
+    // 2. Stage Status
     {
       id: "stageStatus",
       header: "STAGE",
       accessorKey: "stageStatus",
-      width: "80px",
+      width: "95px",
       isReadOnly: true,
       cell: (row) => {
         const stage = row.stageStatus || "Draft";
         const cfg = getStageBadgeVariant(stage);
         return (
           <Badge variant={cfg.variant} className={cn("text-[9.5px] py-0 px-1 font-semibold", cfg.className)}>
-            {stage}
+            {stage === "Processing" ? "Processing (LMIS and Teashir)" : stage}
           </Badge>
         );
       },
@@ -707,22 +1506,7 @@ export function FollowUpWorkspace({
         </span>
       ),
     },
-    // 7. COC Status
-    {
-      id: "cocStatus",
-      header: "COC STATUS",
-      accessorKey: "cocStatus",
-      width: "75px",
-      isReadOnly: true,
-      cell: (row) => {
-        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
-        if (isKuwait) {
-          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait">—</span>;
-        }
-        return getStatusBadge(row.cocStatus || "Not Started");
-      },
-    },
-    // 8. LMIS Status
+    // 7. LMIS Status
     {
       id: "lmisStatus",
       header: "LMIS STATUS",
@@ -730,12 +1514,14 @@ export function FollowUpWorkspace({
       width: "85px",
       cell: (row) => {
         const currentVal = row.lmisStatus || "Pending";
+        const isIssued = currentVal === "ISSUED";
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
               value={currentVal}
               options={lmisOptions}
               onSave={(newVal) => handleSaveLmisStatus(row, newVal)}
+              disabled={!canEditLmis || isIssued}
               ariaLabel="LMIS Working Status"
               className="text-[10px]"
             />
@@ -743,33 +1529,42 @@ export function FollowUpWorkspace({
         );
       },
     },
-    // 9. Taeshir Appointment Date
-    {
-      id: "taeshirApptDate",
-      header: "TAESHIR APPT",
-      accessorKey: "appointmentDate",
-      width: "85px",
-      isReadOnly: true,
-      cell: (row) => {
-        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
-        if (isKuwait) {
-          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait (Telesign has no appointment date)">—</span>;
-        }
-        const dateVal = row.appointmentDate && row.appointmentDate !== "—" ? row.appointmentDate : "—";
-        return <span className="font-mono text-slate-700 dark:text-zinc-300 text-[10px]">{dateVal}</span>;
-      },
-    },
-    // 10. Taeshir Status (Saudi) / Telesign Status (Kuwait)
+    // 6. Taeshir Status (Saudi) / Telesign Status (Kuwait)
     {
       id: "teshirStatus",
       header: "TAESHIR / TELESIGN",
       accessorKey: "teshirStatus",
       width: "85px",
-      isReadOnly: true,
       cell: (row) => {
         const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
         const status = row.teshirStatus || (isKuwait ? "Pending" : "—");
-        return getStatusBadge(status);
+        const isComplete = status === "Completed" || row.injaz?.status === "Complete";
+        const options = isKuwait ? kuwaitTelesignOptions : saudiTaeshirOptions;
+        const hasStep = Boolean(
+          row.injazStepName ||
+          row.injaz?.name ||
+          (row as any).siblingSteps?.some(
+            (s: any) =>
+              s.step_type?.toLowerCase().includes("taeshir") ||
+              s.step_type?.toLowerCase().includes("telesign") ||
+              s.step_type?.toLowerCase().includes("injaz")
+          )
+        );
+        if (!canEditTaeshir || !hasStep) {
+          return getStatusBadge(status);
+        }
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ExcelSelect
+              value={status}
+              options={options}
+              onSave={(newVal) => handleSaveTeshirStatus(row, newVal)}
+              disabled={isComplete}
+              ariaLabel="Te'shir / Telesign Status"
+              className="text-[10px]"
+            />
+          </div>
+        );
       },
     },
     // 11. Wakala Status
@@ -793,52 +1588,62 @@ export function FollowUpWorkspace({
       header: "EMBASSY / VISA",
       accessorKey: "embassyStatus",
       width: "80px",
-      isReadOnly: true,
-      cell: (row) => getStatusBadge(row.embassyStatus),
-    },
-    // 13. Medical 2 Status
-    {
-      id: "medical2Status",
-      header: "MEDICAL 2",
-      accessorKey: "medical2Status",
-      width: "75px",
       cell: (row) => {
-        const currentVal = row.medical2Status && row.medical2Status !== "—" ? row.medical2Status : "Pending";
-        const hasPlacement = Boolean(row.placementName || row.placementId || row.dsrName);
-        const stage = (row.stageStatus || "").toLowerCase();
-        const hasReachedTicketStage = stage === "ticketed" || stage === "departed";
-
-        if (!hasPlacement || !hasReachedTicketStage) {
-          return getStatusBadge(row.medical2Status);
+        const currentVal = row.embassyStatus || "Pending";
+        const isStamped = currentVal === "Stamped" || row.embassy?.status === "Stamped";
+        const hasStep = Boolean(
+          row.embassyStepName ||
+          row.embassy?.name ||
+          (row as any).siblingSteps?.some((s: any) => s.step_type?.toLowerCase().includes("embassy"))
+        );
+        if (!canEditEmbassy || !hasStep) {
+          return getStatusBadge(currentVal);
         }
-
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
               value={currentVal}
-              options={med2Options}
-              onSave={(newVal) => handleSaveMedical2Status(row, newVal)}
-              ariaLabel="Medical 2 Status"
+              options={embassyOptions}
+              onSave={(newVal) => handleSaveEmbassyStatus(row, newVal)}
+              disabled={isStamped}
+              ariaLabel="Embassy Visa Status"
               className="text-[10px]"
             />
           </div>
         );
       },
     },
-    // 14. Departure Status
+    // Departure Status
     {
       id: "departureStatus",
       header: "DEPARTURE",
       accessorKey: "departureStatus",
       width: "75px",
-      isReadOnly: true,
-      cell: (row) => getStatusBadge(row.departureStatus),
+      cell: (row) => {
+        const currentVal = row.departureStatus || "Pending";
+        const isDeparted = currentVal === "Departed" || row.stageStatus === "Departed";
+        if (!canEditDeparture) {
+          return getStatusBadge(currentVal);
+        }
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ExcelSelect
+              value={currentVal}
+              options={departureOptions}
+              onSave={(newVal) => handleSaveDepartureStatus(row, newVal)}
+              disabled={isDeparted}
+              ariaLabel="Departure Status"
+              className="text-[10px]"
+            />
+          </div>
+        );
+      },
     },
     // Row Actions
     {
       id: "actions",
       header: "ACTION",
-      width: "115px",
+      width: "65px",
       align: "center",
       sortable: false,
       isReadOnly: true,
@@ -1004,6 +1809,766 @@ export function FollowUpWorkspace({
               {isSubmittingTableReject ? "Saving..." : "Confirm Rejection"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick In-Table LMIS Custom Status (OTHER) Dialog */}
+      <Dialog
+        open={Boolean(tableOtherRow)}
+        onOpenChange={(open) => !open && setTableOtherRow(null)}
+      >
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+              Specify Custom LMIS Status
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Candidate: <strong className="uppercase">{tableOtherRow?.fullName}</strong>. Enter the specific status description (up to 140 characters).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2 text-xs space-y-2">
+            <input
+              type="text"
+              maxLength={140}
+              value={tableOtherStatusText}
+              onChange={(e) => setTableOtherStatusText(e.target.value)}
+              placeholder="e.g. Awaiting biometric re-capture..."
+              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+            />
+            <div className="text-right text-[10px] text-slate-400">
+              {tableOtherStatusText.length}/140 characters
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTableOtherRow(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!tableOtherStatusText.trim() || isSubmittingTableOther}
+              onClick={async () => {
+                if (!tableOtherRow) return;
+                const stepName =
+                  tableOtherRow.lms?.name ||
+                  tableOtherRow.clearanceStepName ||
+                  (tableOtherRow as any).siblingSteps?.find(
+                    (s: any) =>
+                      s.step_type?.toLowerCase().includes("lmis") ||
+                      s.step_type?.toLowerCase().includes("lms")
+                  )?.name;
+                if (!stepName) return;
+                try {
+                  setIsSubmittingTableOther(true);
+                  await setLmisStatusV2(stepName, "OTHER", undefined, undefined, undefined, tableOtherStatusText.trim());
+                  await handleMutationSuccess(`LMIS custom status set for ${tableOtherRow.fullName}`);
+                  setTableOtherRow(null);
+                } catch (err) {
+                  toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsSubmittingTableOther(false);
+                }
+              }}
+              className="text-xs h-8 bg-emerald-800 hover:bg-emerald-900 text-white"
+            >
+              {isSubmittingTableOther ? "Saving..." : "Save Custom Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Comprehensive Stage Completion & Validation Modal (Case A, B, C, D) */}
+      <Dialog
+        open={Boolean(stageModalState?.open)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStageModalState(null);
+            setFieldErrors({});
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg bg-white dark:bg-[#141419] border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-2xl p-5">
+          {stageModalState && (
+            <>
+              {/* Header */}
+              <DialogHeader className="pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className={cn(
+                      "p-2 rounded-xl",
+                      stageModalState.mode === "confirm"
+                        ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50"
+                        : "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50"
+                    )}>
+                      {stageModalState.stage.includes("LMIS") && <FileCheck2 className="h-5 w-5" />}
+                      {stageModalState.stage.includes("TAESHIR") && <CreditCard className="h-5 w-5" />}
+                      {stageModalState.stage.includes("TELESIGN") && <CreditCard className="h-5 w-5" />}
+                      {stageModalState.stage.includes("EMBASSY") && <Building2 className="h-5 w-5" />}
+                      {stageModalState.stage.includes("DEPARTURE") && <Plane className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                        {stageModalState.mode === "confirm" ? (
+                          <>Confirm Stage Completion</>
+                        ) : (
+                          <>Validate Stage Information</>
+                        )}
+                      </DialogTitle>
+                      <DialogDescription asChild>
+                        <div className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                          Candidate: <strong className="text-slate-800 dark:text-zinc-200 font-semibold uppercase">{stageModalState.row.fullName}</strong>
+                          {" • "}
+                          <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                            {stageModalState.stage.replace("_", " ")}
+                          </span>
+                          {" • "}
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 ml-1">
+                            {(stageModalState.row.destinationCountry || "").toLowerCase().includes("kuwait") ? "Kuwait" : "Saudi Arabia"}
+                          </Badge>
+                        </div>
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Body */}
+              <div className="py-3 text-xs space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+                {stageModalState.mode === "confirm" ? (
+                  /* --- CASE B: ALL REQUIRED INFORMATION ALREADY SAVED & VALID --- */
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 flex items-start gap-2.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-emerald-900 dark:text-emerald-200 text-xs">
+                          All Required Information Is Saved
+                        </p>
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-300/90 mt-0.5">
+                          This stage has all verified mandatory information saved on the record. Confirm below to complete the transition to <span className="font-bold underline">{stageModalState.targetStatus}</span> on the backend.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Summary of Saved Information */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-[#181820] space-y-2.5">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                        Verified Saved Details
+                      </div>
+                      
+                      {(stageModalState.stage === "LMIS" || stageModalState.stage === "KUWAIT_LMIS") && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Labor / Reference ID:</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.laborId || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Completion / Issue Date:</span>
+                            <span className="font-mono text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.issueDate || "—"}
+                            </span>
+                          </div>
+                          {stageModalState.stage === "LMIS" && (
+                            <div>
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">COC Status:</span>
+                              <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
+                                {stageModalState.validation.fieldValues.cocStatus || "Issued"}
+                              </Badge>
+                            </div>
+                          )}
+                          {stageModalState.stage === "KUWAIT_LMIS" && (
+                            <>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Police Ashara Status:</span>
+                                <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
+                                  {stageModalState.validation.fieldValues.policeAsharaStatus || "Completed"}
+                                </Badge>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Police Ashara Appt:</span>
+                                <span className="font-mono text-slate-900 dark:text-white">
+                                  {stageModalState.validation.fieldValues.policeAsharaDate || "—"}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {(stageModalState.stage === "TAESHIR" || stageModalState.stage === "TELESIGN") && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {stageModalState.stage === "TAESHIR" ? (
+                            <>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Injaz E-Number:</span>
+                                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                  {stageModalState.validation.fieldValues.injazApplicationId || "—"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Appointment Date:</span>
+                                <span className="font-mono text-slate-900 dark:text-white">
+                                  {stageModalState.validation.fieldValues.appointmentDate || "—"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Payment Status:</span>
+                                <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
+                                  {stageModalState.validation.fieldValues.injazPaymentStatus || "Paid"}
+                                </Badge>
+                              </div>
+                            </>
+                          ) : (
+                            <div>
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Telesign Reference:</span>
+                              <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                {stageModalState.validation.fieldValues.telesignRef || "—"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {(stageModalState.stage === "EMBASSY" || stageModalState.stage === "KUWAIT_EMBASSY") && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Visa Number:</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.visaNumber || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Visa Issue Date:</span>
+                            <span className="font-mono text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.visaIssueDate || "—"}
+                            </span>
+                          </div>
+                          {stageModalState.stage === "EMBASSY" && (
+                            <div>
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Wakala Payment:</span>
+                              <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
+                                {stageModalState.validation.fieldValues.wakalaStatus || "Paid"}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {stageModalState.stage === "DEPARTURE" && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Ticket Number:</span>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.ticketNumber || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Airline & Flight:</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.airline} ({stageModalState.validation.fieldValues.flightNumber})
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Departure Date:</span>
+                            <span className="font-mono text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.departureDate}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* --- CASE A & C: MISSING OR PARTIAL/INVALID INFORMATION --- */
+                  <div className="space-y-3.5">
+                    <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50 flex items-start gap-2.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-amber-900 dark:text-amber-200 text-xs">
+                          {stageModalState.validation.isPartial
+                            ? "Incomplete Stage Information"
+                            : "Required Information Missing"}
+                        </p>
+                        <p className="text-[11px] text-amber-800 dark:text-amber-300/90 mt-0.5">
+                          The required fields below must be provided and validated before this stage can be marked as <span className="font-bold underline">{stageModalState.targetStatus}</span>.
+                        </p>
+                        {stageModalState.validation.missingFields.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {stageModalState.validation.missingFields.map((field) => (
+                              <Badge key={field} variant="destructive" className="text-[9.5px] py-0 px-1.5 font-medium">
+                                Missing: {field}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Stage Specific Input Fields */}
+                    {(stageModalState.stage === "LMIS" || stageModalState.stage === "KUWAIT_LMIS") && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Labor ID / Reference No <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formLaborId}
+                            onChange={(e) => {
+                              setFormLaborId(e.target.value);
+                              if (fieldErrors.laborId) setFieldErrors((prev) => ({ ...prev, laborId: "" }));
+                            }}
+                            placeholder="e.g. LAB-2026-9812"
+                            className={cn(
+                              "h-8 text-xs font-mono",
+                              fieldErrors.laborId && "border-rose-500 focus-visible:ring-rose-500"
+                            )}
+                          />
+                          {fieldErrors.laborId && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                              {fieldErrors.laborId}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Official Ministry labor reference or contract number (cannot be applicant ID).
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Approval / Issue Date <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="date"
+                            value={formIssueDate}
+                            onChange={(e) => {
+                              setFormIssueDate(e.target.value);
+                              if (fieldErrors.issueDate) setFieldErrors((prev) => ({ ...prev, issueDate: "" }));
+                            }}
+                            className={cn(
+                              "h-8 text-xs font-mono",
+                              fieldErrors.issueDate && "border-rose-500 focus-visible:ring-rose-500"
+                            )}
+                          />
+                          {fieldErrors.issueDate && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                              {fieldErrors.issueDate}
+                            </p>
+                          )}
+                        </div>
+
+                        {stageModalState.stage === "LMIS" ? (
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              COC Status <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <select
+                              value={formCocStatus}
+                              onChange={(e) => {
+                                setFormCocStatus(e.target.value);
+                                if (fieldErrors.cocStatus) setFieldErrors((prev) => ({ ...prev, cocStatus: "" }));
+                              }}
+                              className={cn(
+                                "w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                fieldErrors.cocStatus && "border-rose-500"
+                              )}
+                            >
+                              <option value="Issued">Issued (Certified)</option>
+                              <option value="Certified">Certified</option>
+                              <option value="In Training">In Training</option>
+                              <option value="Pending">Pending</option>
+                              <option value="Exempt">Exempt</option>
+                            </select>
+                            {fieldErrors.cocStatus && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                                {fieldErrors.cocStatus}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          /* Kuwait LMIS Police Ashara fields */
+                          <div className="space-y-3 pt-1 border-t border-slate-100 dark:border-zinc-800">
+                            <div>
+                              <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                                Police Ashara Status <span className="text-rose-500 font-bold">*</span>
+                              </Label>
+                              <select
+                                value={formPoliceAsharaStatus}
+                                onChange={(e) => {
+                                  setFormPoliceAsharaStatus(e.target.value);
+                                  if (fieldErrors.policeAsharaStatus) setFieldErrors((prev) => ({ ...prev, policeAsharaStatus: "" }));
+                                }}
+                                className={cn(
+                                  "w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                  fieldErrors.policeAsharaStatus && "border-rose-500"
+                                )}
+                              >
+                                <option value="Completed">Completed</option>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Failed">Failed</option>
+                              </select>
+                              {fieldErrors.policeAsharaStatus && (
+                                <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                                  {fieldErrors.policeAsharaStatus}
+                                </p>
+                              )}
+                            </div>
+
+                            <div>
+                              <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                                Police Ashara Appointment Date <span className="text-rose-500 font-bold">*</span>
+                              </Label>
+                              <Input
+                                type="date"
+                                value={formPoliceAsharaDate}
+                                onChange={(e) => {
+                                  setFormPoliceAsharaDate(e.target.value);
+                                  if (fieldErrors.policeAsharaDate) setFieldErrors((prev) => ({ ...prev, policeAsharaDate: "" }));
+                                }}
+                                className={cn(
+                                  "h-8 text-xs font-mono",
+                                  fieldErrors.policeAsharaDate && "border-rose-500 focus-visible:ring-rose-500"
+                                )}
+                              />
+                              {fieldErrors.policeAsharaDate && (
+                                <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                                  {fieldErrors.policeAsharaDate}
+                                </p>
+                              )}
+                            </div>
+
+                            {formPoliceAsharaStatus === "Failed" && (
+                              <div>
+                                <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                                  Police Ashara Failure Remark <span className="text-rose-500 font-bold">*</span>
+                                </Label>
+                                <Input
+                                  type="text"
+                                  value={formPoliceAsharaRemark}
+                                  onChange={(e) => {
+                                    setFormPoliceAsharaRemark(e.target.value);
+                                    if (fieldErrors.policeAsharaRemark) setFieldErrors((prev) => ({ ...prev, policeAsharaRemark: "" }));
+                                  }}
+                                  placeholder="Reason for failure..."
+                                  className={cn(
+                                    "h-8 text-xs",
+                                    fieldErrors.policeAsharaRemark && "border-rose-500 focus-visible:ring-rose-500"
+                                  )}
+                                />
+                                {fieldErrors.policeAsharaRemark && (
+                                  <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">
+                                    {fieldErrors.policeAsharaRemark}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {stageModalState.stage === "TAESHIR" && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Injaz Application ID (E-Number) <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formInjazAppId}
+                            onChange={(e) => {
+                              setFormInjazAppId(e.target.value);
+                              if (fieldErrors.injazAppId) setFieldErrors((prev) => ({ ...prev, injazAppId: "" }));
+                            }}
+                            placeholder="e.g. E98234190"
+                            className={cn("h-8 text-xs font-mono", fieldErrors.injazAppId && "border-rose-500")}
+                          />
+                          {fieldErrors.injazAppId && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.injazAppId}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Taeshir Appointment Date <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="date"
+                            value={formAppointmentDate}
+                            onChange={(e) => {
+                              setFormAppointmentDate(e.target.value);
+                              if (fieldErrors.appointmentDate) setFieldErrors((prev) => ({ ...prev, appointmentDate: "" }));
+                            }}
+                            className={cn("h-8 text-xs font-mono", fieldErrors.appointmentDate && "border-rose-500")}
+                          />
+                          {fieldErrors.appointmentDate && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.appointmentDate}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Injaz Payment Status <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <select
+                            value={formInjazPaymentStatus}
+                            onChange={(e) => setFormInjazPaymentStatus(e.target.value)}
+                            className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                          >
+                            <option value="Paid">Paid</option>
+                            <option value="Printed">Printed</option>
+                            <option value="Unpaid">Unpaid</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {stageModalState.stage === "TELESIGN" && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Telesign Reference Number <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formTeshirRef}
+                            onChange={(e) => {
+                              setFormTeshirRef(e.target.value);
+                              if (fieldErrors.teshirRef) setFieldErrors((prev) => ({ ...prev, teshirRef: "" }));
+                            }}
+                            placeholder="e.g. TL-8912304"
+                            className={cn("h-8 text-xs font-mono", fieldErrors.teshirRef && "border-rose-500")}
+                          />
+                          {fieldErrors.teshirRef && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.teshirRef}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {(stageModalState.stage === "EMBASSY" || stageModalState.stage === "KUWAIT_EMBASSY") && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Visa Number <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formVisaNumber}
+                            onChange={(e) => {
+                              setFormVisaNumber(e.target.value);
+                              if (fieldErrors.visaNumber) setFieldErrors((prev) => ({ ...prev, visaNumber: "" }));
+                            }}
+                            placeholder="e.g. 1309824102"
+                            className={cn("h-8 text-xs font-mono", fieldErrors.visaNumber && "border-rose-500")}
+                          />
+                          {fieldErrors.visaNumber && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.visaNumber}</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Visa Issue Date <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="date"
+                            value={formIssueDate}
+                            onChange={(e) => {
+                              setFormIssueDate(e.target.value);
+                              if (fieldErrors.issueDate) setFieldErrors((prev) => ({ ...prev, issueDate: "" }));
+                            }}
+                            className={cn("h-8 text-xs font-mono", fieldErrors.issueDate && "border-rose-500")}
+                          />
+                          {fieldErrors.issueDate && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.issueDate}</p>
+                          )}
+                        </div>
+                        {stageModalState.stage === "EMBASSY" && (
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Wakala Payment Status <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <select
+                              value={formWakalaStatus}
+                              onChange={(e) => setFormWakalaStatus(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                            >
+                              <option value="Paid">Paid</option>
+                              <option value="Pending">Pending</option>
+                            </select>
+                            {fieldErrors.wakalaStatus && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.wakalaStatus}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {stageModalState.stage === "DEPARTURE" && (
+                      <div className="space-y-3 pt-1">
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Ticket Number <span className="text-rose-500 font-bold">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formTicketNumber}
+                            onChange={(e) => setFormTicketNumber(e.target.value)}
+                            placeholder="e.g. ET-071-891230491"
+                            className="h-8 text-xs font-mono"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Airline <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <Input
+                              type="text"
+                              value={formAirline}
+                              onChange={(e) => setFormAirline(e.target.value)}
+                              placeholder="e.g. Ethiopian Airlines"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Flight Number <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <Input
+                              type="text"
+                              value={formFlightNumber}
+                              onChange={(e) => setFormFlightNumber(e.target.value)}
+                              placeholder="e.g. ET 402"
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Departure Date <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <Input
+                              type="date"
+                              value={formDepartureDate}
+                              onChange={(e) => setFormDepartureDate(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Departure Time
+                            </Label>
+                            <Input
+                              type="time"
+                              value={formDepartureTime}
+                              onChange={(e) => setFormDepartureTime(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <DialogFooter className="pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center justify-between sm:justify-between w-full">
+                {stageModalState.mode === "confirm" ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStageModalState(null)}
+                      className="text-xs h-8 cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setStageModalState((prev) => prev ? { ...prev, mode: "edit" } : null);
+                        }}
+                        className="text-xs h-8 gap-1.5 cursor-pointer"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        <span>Change info</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isSubmittingStageAction}
+                        onClick={handleConfirmStageAction}
+                        className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+                      >
+                        {isSubmittingStageAction ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                            Confirming...
+                          </>
+                        ) : (
+                          `Confirm ${stageModalState.targetStatus}`
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStageModalState(null)}
+                      className="text-xs h-8 cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isSubmittingStageAction}
+                        onClick={() => handleSubmitStageEditor(false)}
+                        className="text-xs h-8 cursor-pointer"
+                        title="Save entered data without completing the stage"
+                      >
+                        Save Draft Info
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isSubmittingStageAction}
+                        onClick={() => handleSubmitStageEditor(true)}
+                        className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+                      >
+                        {isSubmittingStageAction ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                            Saving & Completing...
+                          </>
+                        ) : (
+                          `Save & Mark as ${stageModalState.targetStatus}`
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

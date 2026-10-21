@@ -341,7 +341,7 @@ export default function DashboardPage() {
     },
     {
       step: 4,
-      title: "Processing",
+      title: "Processing (LMIS and Teashir)",
       count: processingCount,
       badge: "Parallel Streams",
       color: "border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-200 hover:border-emerald-500 dark:hover:border-emerald-600",

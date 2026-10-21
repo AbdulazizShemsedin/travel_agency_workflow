@@ -461,7 +461,7 @@ export function ClearanceGridWorkspace({
       )}
 
       {/* Main Excel Grid Table Container */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto lg:overflow-hidden shadow-xs">
         {isColsLoading || isRowsLoading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
@@ -472,7 +472,7 @@ export function ClearanceGridWorkspace({
             No clearance records found for <strong>{selectedStepType}</strong>.
           </div>
         ) : (
-          <table className="w-full text-xs text-left border-collapse">
+          <table className="w-full text-xs text-left border-collapse lg:table-fixed">
             <thead>
               <tr className="bg-slate-100/80 dark:bg-[#181820] border-b border-slate-200 dark:border-[#222228] text-slate-700 dark:text-zinc-300 font-semibold uppercase text-[11px] tracking-wider select-none">
                 <th className="py-2.5 px-3 whitespace-nowrap w-12 text-center">#</th>

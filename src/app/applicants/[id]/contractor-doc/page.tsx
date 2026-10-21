@@ -425,40 +425,33 @@ export default function PlacementDocumentCenterPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full max-h-full overflow-y-auto overflow-x-hidden space-y-2.5 pr-1 pb-4">
       {/* ------------------------------------------------------------- */}
       {/* Top Header & Breadcrumb                                       */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/applicants/${encodeURIComponent(applicantId)}`}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Dossier
-            </Link>
-            <span className="text-slate-300 dark:text-zinc-700">•</span>
-            <span className="text-xs font-mono text-slate-400">
-              {applicantId}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Placement Document Center
-            </h1>
-            <Badge
-              variant="outline"
-              className="text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-            >
-              Verified Placement Documents
-            </Badge>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Upload and verify placement contracts and visas.
-          </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Link
+            href={`/applicants/${encodeURIComponent(applicantId)}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Dossier
+          </Link>
+          <span className="text-slate-300 dark:text-zinc-700">•</span>
+          <span className="text-xs font-mono text-slate-400">
+            {applicantId}
+          </span>
+          <span className="text-slate-300 dark:text-zinc-700">•</span>
+          <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            Placement Document Center
+          </h1>
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 py-0"
+          >
+            Verified Placement Documents
+          </Badge>
         </div>
 
         <div className="flex items-center gap-2">
@@ -470,92 +463,90 @@ export default function PlacementDocumentCenterPage() {
               refetchApplicant();
               refetchPlacements();
             }}
-            className="text-xs h-8"
+            className="text-xs h-7 px-2.5"
           >
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            <RefreshCw className="h-3 w-3 mr-1" />
             Refresh
           </Button>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Placement & Candidate Context Card                            */}
+      {/* Placement & Candidate Context Strip (Compact 1-Row Bar)      */}
       {/* ------------------------------------------------------------- */}
-      <div className="p-4 rounded-xl border border-slate-200 dark:border-[#262632] bg-white dark:bg-[#121217] shadow-xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 text-xs">
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Candidate Name</span>
-            <span className="font-bold text-slate-900 dark:text-white truncate block">
-              {applicant?.full_name || "Unknown Candidate"}
+      <div className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#262632] bg-white dark:bg-[#121217] shadow-xs flex items-center justify-between flex-wrap gap-x-4 gap-y-1 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Candidate:</span>
+          <span className="font-bold text-slate-900 dark:text-white truncate max-w-[150px]">
+            {applicant?.full_name || "Unknown Candidate"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Passport:</span>
+          <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">
+            {applicant?.passport_number || "Not Recorded"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Destination:</span>
+          <span className="font-semibold text-slate-800 dark:text-zinc-200 flex items-center gap-1">
+            <Plane className="h-3 w-3 text-emerald-600" />
+            {destinationCountry}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Placement:</span>
+          {activePlacement ? (
+            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+              {activePlacement.name}
             </span>
-          </div>
-
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Passport Number</span>
-            <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200">
-              {applicant?.passport_number || "Not Recorded"}
+          ) : (
+            <span className="text-amber-700 dark:text-amber-400 font-semibold">
+              No Placement Yet
             </span>
-          </div>
+          )}
+        </div>
 
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Destination Country</span>
-            <span className="font-semibold text-slate-800 dark:text-zinc-200 flex items-center gap-1">
-              <Plane className="h-3 w-3 text-emerald-600" />
-              {destinationCountry}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Status:</span>
+          {activePlacement ? (
+            <Badge
+              variant="outline"
+              className="text-[10px] py-0 font-semibold border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50"
+            >
+              {activePlacement.status}
+            </Badge>
+          ) : (
+            <span className="text-slate-400">N/A</span>
+          )}
+        </div>
 
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Active Placement</span>
-            {activePlacement ? (
-              <span className="font-mono font-bold text-emerald-800 dark:text-emerald-400">
-                {activePlacement.name}
-              </span>
-            ) : (
-              <span className="text-amber-800 dark:text-amber-400 font-semibold">
-                No Placement Yet
-              </span>
-            )}
-          </div>
-
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Placement Status</span>
-            {activePlacement ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] font-semibold border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50"
-              >
-                {activePlacement.status}
-              </Badge>
-            ) : (
-              <span className="text-slate-400">N/A</span>
-            )}
-          </div>
-
-          <div>
-            <span className="text-[11px] text-slate-400 block mb-0.5">Foreign Contractor</span>
-            <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate block">
-              {activePlacement?.contractor || activePlacement?.contractor_name || "Unassigned"}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] uppercase font-bold text-slate-400">Contractor:</span>
+          <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate max-w-[140px]">
+            {activePlacement?.contractor || activePlacement?.contractor_name || "Unassigned"}
+          </span>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
       {/* Navigation Tabs (Contract vs Kuwait Visa)                     */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#22222a] pb-2">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#22222a] pb-1.5">
         <button
           type="button"
           onClick={() => setActiveTab("contract")}
           className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+            "px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
             activeTab === "contract"
               ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
               : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
           )}
         >
-          <FileText className="h-3.5 w-3.5" />
+          <FileText className="h-3 w-3" />
           Employment Contract
           {activePlacement?.contract_file && (
             <CheckCircle2 className="h-3 w-3 text-emerald-400" />
@@ -566,13 +557,13 @@ export default function PlacementDocumentCenterPage() {
           type="button"
           onClick={() => setActiveTab("visa")}
           className={cn(
-            "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+            "px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5",
             activeTab === "visa"
               ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
               : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
           )}
         >
-          <Stamp className="h-3.5 w-3.5" />
+          <Stamp className="h-3 w-3" />
           Kuwait eVisa
           {isKuwait && activePlacement?.visa_file && (
             <CheckCircle2 className="h-3 w-3 text-emerald-400" />
@@ -587,14 +578,14 @@ export default function PlacementDocumentCenterPage() {
       {/* Tab 1: Employment Contract Upload & Parsing                   */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "contract" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column (first in DOM = left on desktop, top on mobile): Document Viewer */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 items-start">
+          {/* Left Column: Document Viewer */}
           <div>
-            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-slate-500" />
+            <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col">
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-xs font-bold flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5">
+                    <Eye className="h-3.5 w-3.5 text-slate-500" />
                     Document Viewer
                   </span>
                   {(contractPreviewUrl || previewFileUrl) && (
@@ -608,10 +599,10 @@ export default function PlacementDocumentCenterPage() {
                           const win = window.open(url, "_blank");
                           win?.focus();
                         }}
-                        className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
+                        className="h-6 px-2 text-[11px] border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
                         title="Print Document"
                       >
-                        <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                        <Printer className="h-3 w-3 mr-1 text-slate-500" />
                         Print
                       </Button>
                       <Button
@@ -628,10 +619,10 @@ export default function PlacementDocumentCenterPage() {
                           document.body.removeChild(a);
                           toast.success("Document downloaded!");
                         }}
-                        className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
+                        className="h-6 px-2 text-[11px] bg-blue-900 hover:bg-blue-950 text-white font-semibold"
                         title="Save as PDF"
                       >
-                        <Download className="h-3.5 w-3.5 mr-1" />
+                        <Download className="h-3 w-3 mr-1" />
                         Save as PDF
                       </Button>
                     </div>
@@ -643,12 +634,12 @@ export default function PlacementDocumentCenterPage() {
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 min-h-[420px] p-2 bg-slate-100 dark:bg-[#0d0d11] rounded-xl overflow-hidden flex items-center justify-center">
+              <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
                 {contractPreviewUrl || previewFileUrl ? (
                   <iframe
                     src={contractPreviewUrl || previewFileUrl}
                     title="Contract Document Viewer"
-                    className="w-full h-full min-h-[420px] rounded-lg border-0"
+                    className="w-full h-full rounded-lg border-0"
                   />
                 ) : (
                   <div className="text-center text-xs text-slate-400 space-y-2 p-6">
@@ -665,40 +656,37 @@ export default function PlacementDocumentCenterPage() {
             </Card>
           </div>
 
-          {/* Right Column (second in DOM = right on desktop, bottom on mobile): Upload & Extracted Fields */}
-          <div className="space-y-4">
+          {/* Right Column: Upload & Extracted Fields */}
+          <div className="space-y-2.5">
+            {/* Card 1: Compact Attach Signed Contract */}
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <FileUp className="h-4 w-4 text-emerald-600" />
+              <CardHeader className="py-2 px-3">
+                <CardTitle className="text-xs font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <FileUp className="h-3.5 w-3.5 text-emerald-600" />
                     Attach Signed Contract
                   </span>
                   {activePlacement?.contract_file ? (
-                    <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-800 bg-emerald-50">
+                    <Badge variant="outline" className="text-[9.5px] py-0 border-emerald-300 text-emerald-800 bg-emerald-50">
                       Contract Attached
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-500">
+                    <Badge variant="outline" className="text-[9.5px] py-0 border-slate-300 text-slate-500">
                       Not Attached
                     </Badge>
                   )}
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Upload signed contract — extracted info will appear automatically.
-                </CardDescription>
               </CardHeader>
 
-              <CardContent className="space-y-4">
-                {/* Premium Contract File Dropzone */}
+              <CardContent className="px-3 pb-2.5 pt-0 space-y-2">
                 <PremiumDropzone
                   id="contract-doc-dropzone"
-                  variant="document"
+                  variant="compact"
                   value={contractFile || contractPreviewUrl}
                   fileName={contractFile?.name}
                   fileSize={contractFile?.size}
                   isLoading={isContractUploading}
-                  loadingText="Uploading and extracting contract info..."
+                  loadingText="Uploading & extracting contract info..."
                   label="Employment Contract Document"
                   description="PDF or image"
                   onFileSelect={(file) => {
@@ -711,37 +699,35 @@ export default function PlacementDocumentCenterPage() {
                   }}
                 />
 
-                {/* Upload Action Buttons */}
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    type="button"
-                    disabled={!contractFile || isContractUploading}
-                    onClick={() => handleUploadContract(false)}
-                    className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
-                  >
-                    {isContractUploading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <FileCheck2 className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    Extract contract info
-                  </Button>
-                </div>
+                {contractFile && (
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <Button
+                      type="button"
+                      disabled={!contractFile || isContractUploading}
+                      onClick={() => handleUploadContract(false)}
+                      className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-7.5 shadow-xs"
+                    >
+                      {isContractUploading ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                      ) : (
+                        <FileCheck2 className="h-3 w-3 mr-1.5" />
+                      )}
+                      Extract contract info
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Extracted Contract Fields Card */}
+            {/* Card 2: Extracted Contract Terms & Approve Action */}
             <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-              <CardHeader className="pb-2">
+              <CardHeader className="py-2 px-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <FileCheck2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                      <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                       Extracted Contract Terms
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                      Structured values stored on the candidate placement record.
-                    </CardDescription>
                   </div>
                   {activePlacement && (
                     <Button
@@ -749,134 +735,125 @@ export default function PlacementDocumentCenterPage() {
                       variant="outline"
                       size="sm"
                       onClick={handleOpenEditModal}
-                      className="text-xs h-7 px-2.5 gap-1.5 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                      className="text-[11px] h-6 px-2 gap-1 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                     >
-                      <Pencil className="h-3 w-3" />
+                      <Pencil className="h-2.5 w-2.5" />
                       Edit Terms
                     </Button>
                   )}
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[10px] text-slate-400 block">Signed Date</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">
+              <CardContent className="px-3 pb-3 pt-0 space-y-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
+                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Signed Date</span>
+                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {activePlacement?.contract_signed_date || contractParseResult?.status || "Not Extracted"}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[10px] text-slate-400 block">Negotiated Salary</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">
+                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Salary</span>
+                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {activePlacement?.contract_salary_amount
                         ? `${activePlacement.contract_salary_amount} ${activePlacement.contract_salary_currency || "SAR"}`
                         : "Not Set"}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[10px] text-slate-400 block">Employer / Sponsor</span>
-                    <span className="font-semibold text-slate-900 dark:text-white truncate block">
+                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer / Sponsor</span>
+                    <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {activePlacement?.employer_name || contractParseResult?.sponsor_name || "Not Extracted"}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[10px] text-slate-400 block">
+                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">
                       {isKuwait ? "Employment Site" : "Contract Number"}
                     </span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                    <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {isKuwait
                         ? activePlacement?.employment_site || "Kuwait"
                         : activePlacement?.contract_number || contractParseResult?.contract_number || "Pending"}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                    <span className="text-[10px] text-slate-400 block">Visa Number</span>
-                    <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                  <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                    <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Number</span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {activePlacement?.visa_number || contractParseResult?.visa_number || "Not Extracted"}
                     </span>
                   </div>
 
                   {!isKuwait && (
                     <>
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Employer ID / Iqama</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer ID</span>
+                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.employer_national_id || contractParseResult?.sponsor_id || "Not Extracted"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Saudi Partner Agency</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Saudi Partner Agency</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.saudi_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
                         </span>
                       </div>
                     </>
                   )}
-                </div>
 
-                {activePlacement?.contract_file && (
-                  <div className="pt-2">
-                    <a
-                      href={activePlacement.contract_file}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      View Attached Contract File ({activePlacement.contract_file})
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
+                  {activePlacement?.contract_file && (
+                    <div className="p-1.5 px-2 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/40 flex items-center">
+                      <a
+                        href={activePlacement.contract_file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline truncate"
+                        title={activePlacement.contract_file}
+                      >
+                        <Download className="h-3 w-3 shrink-0" />
+                        <span className="truncate">View File</span>
+                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                      </a>
+                    </div>
+                  )}
+                </div>
 
                 {/* Stage Advancement Action Gate */}
                 {activePlacement && (
-                  <div className="pt-3 border-t border-slate-100 dark:border-[#222228] space-y-2">
+                  <div className="pt-2 border-t border-slate-100 dark:border-[#222228] space-y-1.5">
                     {activePlacement.status === "Selected" ? (
                       <>
                         {Boolean(activePlacement.contract_file || activePlacement.contract_number) ? (
-                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 p-3 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
-                            <div className="font-bold flex items-center gap-1.5">
-                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                              Contract Attached — Ready for Verification
+                          <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-800/60 px-2.5 py-1.5 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between gap-2">
+                            <div className="font-semibold flex items-center gap-1.5 text-[11px]">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span>Contract Attached — Ready for Verification</span>
                             </div>
-                            <p className="text-[11px] text-emerald-800/80 dark:text-emerald-400/80">
-                              Approving terms verifies the signed contract and records the extracted details onto the placement record.
-                            </p>
+                            <span className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 hidden sm:inline">
+                              Approving terms saves extracted details to placement
+                            </span>
                           </div>
                         ) : (
-                          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 p-3 text-xs text-amber-900 dark:text-amber-300 space-y-1">
-                            <div className="font-bold flex items-center gap-1.5">
-                              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                              Signed Contract Document Required
-                            </div>
-                            <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80">
-                              Please choose and attach the signed contract document above before approving extracted data.
-                            </p>
+                          <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span className="text-[11px] font-semibold">Signed Contract Document Required before approving</span>
                           </div>
                         )}
                         {isContractApproved ? (
-                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-4 text-xs text-emerald-900 dark:text-emerald-300 space-y-2 animate-in fade-in">
-                            <div className="flex items-center gap-2 font-bold text-sm text-emerald-800 dark:text-emerald-300">
-                              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                              <span>Contract Approved Successfully!</span>
+                          <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-2 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between gap-2 animate-in fade-in">
+                            <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                              <span>Contract Approved Successfully! Returning...</span>
                             </div>
-                            <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                              Extracted details have been saved to the placement and candidate profile. Returning to candidate profile...
-                            </p>
-                            <div className="pt-1">
-                              <Link href={`/applicants/${encodeURIComponent(applicantId)}`}>
-                                <Button size="sm" variant="outline" className="text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100">
-                                  Return to Candidate Dossier Now
-                                </Button>
-                              </Link>
-                            </div>
+                            <Link href={`/applicants/${encodeURIComponent(applicantId)}`}>
+                              <Button size="sm" variant="outline" className="text-xs h-6.5 px-2 border-emerald-300 text-emerald-800 hover:bg-emerald-100">
+                                Return to Dossier Now
+                              </Button>
+                            </Link>
                           </div>
                         ) : (
                           <Button
@@ -884,7 +861,7 @@ export default function PlacementDocumentCenterPage() {
                             disabled={isApprovingContract || !Boolean(activePlacement.contract_file || activePlacement.contract_number)}
                             onClick={handleApproveContractData}
                             className={cn(
-                              "w-full font-bold text-xs h-10 shadow-md flex items-center justify-center gap-2",
+                              "w-full font-bold text-xs h-8.5 shadow-sm flex items-center justify-center gap-2",
                               Boolean(activePlacement.contract_file || activePlacement.contract_number)
                                 ? "bg-emerald-800 hover:bg-emerald-900 text-white cursor-pointer"
                                 : "bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed"
@@ -892,12 +869,12 @@ export default function PlacementDocumentCenterPage() {
                           >
                             {isApprovingContract ? (
                               <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 Approving Contract...
                               </>
                             ) : (
                               <>
-                                <CheckCircle2 className="h-4 w-4" />
+                                <CheckCircle2 className="h-3.5 w-3.5" />
                                 Approve Contract
                               </>
                             )}
@@ -905,19 +882,19 @@ export default function PlacementDocumentCenterPage() {
                         )}
                       </>
                     ) : activePlacement.status === "Processing" ? (
-                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 p-3 text-xs text-blue-900 dark:text-blue-300 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          <span>Placement is active in <strong>Processing</strong> stage.</span>
+                      <div className="rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 px-2.5 py-1.5 text-xs text-blue-900 dark:text-blue-300 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                          <span className="text-[11px]">Placement is active in <strong>Processing</strong> stage.</span>
                         </div>
                         <Link href={`/applicants/${encodeURIComponent(applicantId)}`}>
-                          <Button variant="outline" size="sm" className="text-xs h-7">
+                          <Button variant="outline" size="sm" className="text-xs h-6 px-2">
                             View Candidate Dossier
                           </Button>
                         </Link>
                       </div>
                     ) : (
-                      <div className="text-xs text-slate-500 italic">
+                      <div className="text-[11px] text-slate-500 italic">
                         Current Placement Status: <strong>{activePlacement.status}</strong>
                       </div>
                     )}
@@ -926,11 +903,8 @@ export default function PlacementDocumentCenterPage() {
               </CardContent>
             </Card>
           </div>
-
         </div>
       )}
-
-
 
       {/* ------------------------------------------------------------- */}
       {/* Tab 2: Kuwait eVisa Upload & Parsing                          */}
@@ -938,50 +912,46 @@ export default function PlacementDocumentCenterPage() {
       {activeTab === "visa" && (
         <>
           {!isKuwait ? (
-            <div className="p-6 rounded-2xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 text-xs text-blue-900 dark:text-blue-300 space-y-3">
-              <div className="flex items-center gap-2.5">
-                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <h3 className="text-sm font-bold">
+            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-950/20 text-xs text-blue-900 dark:text-blue-300 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                <h3 className="text-xs font-bold">
                   eVisa Upload Specific to Kuwait Corridor
                 </h3>
               </div>
-              <p className="leading-relaxed">
+              <p className="leading-relaxed text-[11px]">
                 Candidate <strong>{applicant?.full_name}</strong> is designated for <strong>{destinationCountry}</strong>.
                 Direct eVisa document upload and parsing is implemented exclusively for the Kuwait corridor.
                 For Saudi Arabia, consular visa clearance is coordinated via the <strong>Taeshir</strong> biometric gate and <strong>Saudi Embassy Stamping</strong> clearance steps.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 items-start">
               {/* Left Column: Upload & Actions */}
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <Stamp className="h-4 w-4 text-emerald-600" />
+                  <CardHeader className="py-2 px-3">
+                    <CardTitle className="text-xs font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Stamp className="h-3.5 w-3.5 text-emerald-600" />
                         Attach Kuwait eVisa Document
                       </span>
                       {activePlacement?.visa_file ? (
-                        <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-800 bg-emerald-50">
+                        <Badge variant="outline" className="text-[9.5px] py-0 border-emerald-300 text-emerald-800 bg-emerald-50">
                           Visa Attached
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-500">
+                        <Badge variant="outline" className="text-[9.5px] py-0 border-slate-300 text-slate-500">
                           Not Attached
                         </Badge>
                       )}
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                      Upload Kuwait eVisa to extract details.
-                    </CardDescription>
                   </CardHeader>
 
-                  <CardContent className="space-y-4">
-                    {/* Premium Kuwait eVisa File Dropzone */}
+                  <CardContent className="px-3 pb-2.5 pt-0 space-y-2">
                     <PremiumDropzone
                       id="visa-doc-dropzone"
-                      variant="document"
+                      variant="compact"
                       value={visaFile || visaPreviewUrl}
                       fileName={visaFile?.name}
                       fileSize={visaFile?.size}
@@ -999,105 +969,103 @@ export default function PlacementDocumentCenterPage() {
                       }}
                     />
 
-                    {/* Upload Action Buttons */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        type="button"
-                        disabled={!visaFile || isVisaUploading}
-                        onClick={() => handleUploadVisa(false)}
-                        className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
-                      >
-                        {isVisaUploading ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                        ) : (
-                          <FileCheck2 className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        Attach to Placement
-                      </Button>
+                    {visaFile && (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Button
+                          type="button"
+                          disabled={!visaFile || isVisaUploading}
+                          onClick={() => handleUploadVisa(false)}
+                          className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-7.5 shadow-xs"
+                        >
+                          {isVisaUploading ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                          ) : (
+                            <FileCheck2 className="h-3 w-3 mr-1.5" />
+                          )}
+                          Attach to Placement
+                        </Button>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!visaFile || isVisaUploading}
-                        onClick={() => handleUploadVisa(true)}
-                        className="text-xs h-9"
-                        title="Run OCR parsing preview without mutating placement"
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Preview OCR
-                      </Button>
-                    </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={!visaFile || isVisaUploading}
+                          onClick={() => handleUploadVisa(true)}
+                          className="text-xs h-7.5 px-2.5"
+                          title="Run OCR parsing preview without mutating placement"
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          Preview OCR
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
                 {/* Extracted Visa Fields Card */}
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <FileCheck2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <CardHeader className="py-2 px-3">
+                    <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                      <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                       Extracted Visa Information
                     </CardTitle>
-                    <CardDescription className="text-xs">
-                      Structured Kuwait eVisa records registered on the Placement.
-                    </CardDescription>
                   </CardHeader>
 
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Visa Reference / Number</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                  <CardContent className="px-3 pb-3 pt-0 space-y-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-xs">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Ref / Number</span>
+                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.visa_reference_number || activePlacement?.visa_number || visaParseResult?.visa_number || "Pending"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Visa Type</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Type</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.visa_type || visaParseResult?.visa_type || "Work Visa"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Issue Date</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Issue Date</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.visa_issue_date || visaParseResult?.issue_date || "Not Extracted"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Expiry Date</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Expiry Date</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.visa_expiry_date || visaParseResult?.expiry_date || "Not Extracted"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Sponsor Name</span>
-                        <span className="font-semibold text-slate-900 dark:text-white truncate block">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Name</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.sponsor_name || visaParseResult?.sponsor_name || "Not Extracted"}
                         </span>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
-                        <span className="text-[10px] text-slate-400 block">Sponsor Civil ID</span>
-                        <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Civil ID</span>
+                        <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                           {activePlacement?.sponsor_civil_id || visaParseResult?.sponsor_id || "Not Extracted"}
                         </span>
                       </div>
                     </div>
 
                     {activePlacement?.visa_file && (
-                      <div className="pt-2">
+                      <div className="pt-1">
                         <a
                           href={activePlacement.visa_file}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline"
                         >
-                          <Download className="h-3.5 w-3.5" />
+                          <Download className="h-3 w-3" />
                           View Attached Visa File ({activePlacement.visa_file})
-                          <ExternalLink className="h-3 w-3" />
+                          <ExternalLink className="h-2.5 w-2.5" />
                         </a>
                       </div>
                     )}
@@ -1107,11 +1075,11 @@ export default function PlacementDocumentCenterPage() {
 
               {/* Right Column: Embedded Preview */}
               <div>
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] h-full flex flex-col">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-bold flex flex-wrap items-center justify-between gap-2">
-                      <span className="flex items-center gap-2">
-                        <Eye className="h-4 w-4 text-slate-500" />
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col">
+                  <CardHeader className="py-2 px-3">
+                    <CardTitle className="text-xs font-bold flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5 text-slate-500" />
                         Visa Document Viewer
                       </span>
                       {(visaPreviewUrl || previewFileUrl) && (
@@ -1125,10 +1093,10 @@ export default function PlacementDocumentCenterPage() {
                               const win = window.open(url, "_blank");
                               win?.focus();
                             }}
-                            className="h-7 px-2 text-xs border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
+                            className="h-6 px-2 text-[11px] border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
                             title="Print Visa Document"
                           >
-                            <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                            <Printer className="h-3 w-3 mr-1 text-slate-500" />
                             Print
                           </Button>
                           <Button
@@ -1145,10 +1113,10 @@ export default function PlacementDocumentCenterPage() {
                               document.body.removeChild(a);
                               toast.success("Visa document downloaded!");
                             }}
-                            className="h-7 px-2 text-xs bg-blue-900 hover:bg-blue-950 text-white font-semibold"
+                            className="h-6 px-2 text-[11px] bg-blue-900 hover:bg-blue-950 text-white font-semibold"
                             title="Save as PDF"
                           >
-                            <Download className="h-3.5 w-3.5 mr-1" />
+                            <Download className="h-3 w-3 mr-1" />
                             Save as PDF
                           </Button>
                         </div>
@@ -1160,12 +1128,12 @@ export default function PlacementDocumentCenterPage() {
                       )}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex-1 min-h-[420px] p-2 bg-slate-100 dark:bg-[#0d0d11] rounded-xl overflow-hidden flex items-center justify-center">
+                  <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
                     {visaPreviewUrl || previewFileUrl ? (
                       <iframe
                         src={visaPreviewUrl || previewFileUrl}
                         title="Kuwait eVisa Viewer"
-                        className="w-full h-full min-h-[420px] rounded-lg border-0"
+                        className="w-full h-full rounded-lg border-0"
                       />
                     ) : (
                       <div className="text-center text-xs text-slate-400 space-y-2 p-6">

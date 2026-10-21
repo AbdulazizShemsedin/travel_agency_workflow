@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { shortRef, isRecordId } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
 interface OperationalDrawerProps {
@@ -75,16 +76,21 @@ export function OperationalDrawer({
 
   if (!isOpen) return null;
 
+  const displayName =
+    applicantName && !isRecordId(applicantName)
+      ? applicantName
+      : shortRef(applicantId) || "Candidate Details";
+
   // Derives 2-letter initials from name
-  const initials = applicantName
-    ? applicantName
+  const initials = displayName && !isRecordId(displayName)
+    ? displayName
         .trim()
         .split(/\s+/)
         .map((n) => n[0])
         .slice(0, 2)
         .join("")
         .toUpperCase()
-    : "AP";
+    : "CD";
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
@@ -110,7 +116,7 @@ export function OperationalDrawer({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
-                    {applicantName || "Applicant Details"}
+                    {displayName}
                   </h3>
                   {statusBadge}
                 </div>
@@ -124,7 +130,7 @@ export function OperationalDrawer({
                     <>
                       {passportNumber && <span>•</span>}
                       <span className="font-mono text-[11px] text-slate-400 dark:text-zinc-500">
-                        Ref: {applicantId}
+                        Ref: {shortRef(applicantId)}
                       </span>
                     </>
                   )}

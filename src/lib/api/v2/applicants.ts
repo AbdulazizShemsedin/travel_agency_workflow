@@ -637,32 +637,6 @@ export async function getApplicantV2(
           // frappe.client.get_list fallback
         }
 
-        // 2. If not found, query frappe.desk.form.load.get_attachments
-        if (!videoFound) {
-          try {
-            const attachments = await requestV2<any[]>(
-              `/api/method/frappe.desk.form.load.get_attachments?doctype=Applicant&docname=${encodeURIComponent(applicantName)}`,
-              { method: "GET" }
-            );
-            if (Array.isArray(attachments) && attachments.length > 0) {
-              const vAtt = attachments.find((a) => {
-                const u = String(a.file_url || "").toLowerCase();
-                const n = String(a.file_name || "").toLowerCase();
-                return (
-                  /\.(mp4|webm|mov|m4v|avi|mkv)(\?.*)?$/i.test(u) ||
-                  /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(n) ||
-                  n.includes("video") ||
-                  n.includes("interview")
-                );
-              });
-              if (vAtt?.file_url) {
-                videoFound = vAtt.file_url;
-              }
-            }
-          } catch {
-            // get_attachments fallback
-          }
-        }
 
         if (videoFound) {
           result.video_url = videoFound;
@@ -1236,5 +1210,107 @@ export async function checkApplicantUniquenessV2(
   const freeResult: UniquenessCheckResult = { isConflict: false };
   uniquenessCheckCache.set(cacheKey, { result: freeResult, timestamp: Date.now() });
   return freeResult;
+}
+
+/**
+ * October 21 direct video upload protocol:
+ * 1. startVideoUploadV2(applicantName, filename, sizeBytes) -> { upload_url, headers, key }
+ * 2. PUT file binary directly to upload_url with headers
+ * 3. finishVideoUploadV2(applicantName, key)
+ * 4. getApplicantMediaUrlV2(applicantName, kind) -> temporary signed 2-hr expiring URL
+ */
+export async function startVideoUploadV2(
+  applicantName: string,
+  filename: string,
+  sizeBytes: number
+): Promise<{ upload_url: string; headers?: Record<string, string>; key: string; [key: string]: any }> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.applicant_api.start_video_upload",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        filename,
+        size: sizeBytes,
+      },
+    }
+  );
+  return res?.message || res;
+}
+
+export async function finishVideoUploadV2(
+  applicantName: string,
+  key: string
+): Promise<any> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.applicant_api.finish_video_upload",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        key,
+      },
+    }
+  );
+  return res?.message || res;
+}
+
+export async function getApplicantMediaUrlV2(
+  applicantName: string,
+  kind: string = "experience_video"
+): Promise<{ url: string; expires_in?: number; [key: string]: any }> {
+  try {
+    const applicant = await getApplicantV2(applicantName);
+    const mediaUrl =
+      applicant?.experience_video ||
+      applicant?.video_url ||
+      (applicant as any)?.intro_video ||
+      (applicant as any)?.video ||
+      "";
+    return { url: mediaUrl };
+  } catch {
+    return { url: "" };
+  }
+}
+
+export async function uploadVideoFileDirectly(
+  uploadUrl: string,
+  headers: Record<string, string> = {},
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+
+    if (headers) {
+      Object.entries(headers).forEach(([k, v]) => {
+        xhr.setRequestHeader(k, v);
+      });
+    }
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Direct storage upload failed with status ${xhr.status}: ${xhr.statusText}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("Network error during direct video storage upload."));
+    };
+
+    xhr.send(file);
+  });
 }
 

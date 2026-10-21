@@ -195,8 +195,8 @@ export default function PermissionsPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto lg:overflow-hidden">
+                  <table className="w-full text-left text-xs lg:table-fixed">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-[#1d1d24] text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
                         <th className="px-4 py-2.5 w-1/2">Action / Capability</th>

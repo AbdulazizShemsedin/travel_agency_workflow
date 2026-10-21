@@ -523,20 +523,20 @@ export default function AdminComplaintsPage() {
             No complaints found matching your active filters.
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto relative">
-            <table className="w-full text-left text-xs min-w-[960px] md:min-w-0 border-separate border-spacing-0">
-              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+          <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden relative">
+            <table className="w-full text-left text-xs min-w-[960px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
+              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[10.5px] xl:text-[11px]">
                 <tr>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Ticket #</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Partner Agency</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Candidate</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Passport</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Contact Person</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Sponsor Details</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">Status</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] min-w-[200px]">Complaint Details</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] whitespace-nowrap">{activeTab === "resolved" ? "Resolution" : "Date"}</th>
-                  <th className="px-2.5 py-2 lg:px-3 lg:py-2.5 border-b border-slate-200 dark:border-[#222227] text-right whitespace-nowrap">Actions</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[7%] truncate">Ticket #</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Partner Agency</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Candidate</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] truncate">Passport</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] truncate">Contact Person</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Sponsor Details</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] truncate">Status</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[19%] truncate">Complaint Details</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] truncate">{activeTab === "resolved" ? "Resolution" : "Date"}</th>
+                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] text-right lg:w-[7%] truncate">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">

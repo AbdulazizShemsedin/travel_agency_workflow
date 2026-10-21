@@ -67,6 +67,7 @@ import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { listPortalCandidatesV2 } from "@/lib/api/v2/portal";
 import { requestV2 } from "@/lib/api/v2/client";
+import { shortRef, stripRecordIds } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
 function WhatsAppDoubleCheck({ className }: { className?: string }) {
@@ -157,15 +158,24 @@ export function ChatContainer() {
 
   // Executive Admin check: strictly Administrator, System Manager, or Admin only
   const isAdmin = React.useMemo(() => {
+    // Foreign agencies / foreign agents or contractor-linked users can never be Admin
+    if (isForeignAgency) return false;
     const adminRoles = ["administrator", "system manager", "admin"];
     const userRoles = (roles || []).map((r) => String(r).toLowerCase().trim());
     const authUserRoles = (authUser?.roles || []).map((r: any) =>
       typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
     );
     const allUserRoles = new Set([...userRoles, ...authUserRoles]);
+    if (
+      allUserRoles.has("foreign agency") ||
+      allUserRoles.has("foreign agent") ||
+      Boolean((authUser as any)?.contractor)
+    ) {
+      return false;
+    }
     if (currentEmail === "administrator") return true;
     return adminRoles.some((role) => allUserRoles.has(role));
-  }, [roles, authUser, currentEmail]);
+  }, [isForeignAgency, roles, authUser, currentEmail]);
 
   // Communication Manager check
   const isCommunicationManager = React.useMemo(() => {
@@ -188,6 +198,13 @@ export function ChatContainer() {
 
   // View Mode: "my" (only communicating parties) vs "oversight" (Admin supervision)
   const [viewMode, setViewMode] = React.useState<"my" | "oversight">("my");
+
+  // Ensure viewMode is strictly forced to "my" if user is not Admin
+  React.useEffect(() => {
+    if (!isAdmin && viewMode === "oversight") {
+      setViewMode("my");
+    }
+  }, [isAdmin, viewMode]);
   const [oversightStaffFilter, setOversightStaffFilter] = React.useState<string>("all");
 
   // Selected Thread State
@@ -241,20 +258,53 @@ export function ChatContainer() {
     staleTime: 60000,
   });
 
-  // Foreign agents can ONLY communicate with Administrator / Admin and Communication Manager
+  // Foreign agents can ONLY communicate internally with users holding Admin or Communication Manager roles.
+  // Any user with roles other than these must NOT be listed.
   const allowedStaffForAgency = React.useMemo(() => {
-    const targetRoles = ["administrator", "admin", "system manager", "communication manager"];
+    const authorizedRoles = new Set([
+      "admin",
+      "administrator",
+      "system manager",
+      "communication manager",
+      "communications manager",
+    ]);
+    const systemTags = new Set(["desk user", "all"]);
+
     const filtered = internalEmployees.filter((emp: any) => {
-      const empRoles = (emp.roles || []).map((r: string) => String(r).toLowerCase().trim());
+      // Must be an active / enabled account
+      if (emp.enabled === 0 || emp.enabled === false) return false;
+
+      const email = (emp.email || "").toLowerCase().trim();
+      const name = (emp.name || "").toLowerCase().trim();
+
+      // Exclude self
+      if (email === currentEmail || name === currentEmail) return false;
+
+      // Administrator is always authorized headquarters personnel
+      if (email === "administrator" || name === "administrator") return true;
+
+      const rawRoles: unknown[] = Array.isArray(emp.roles) ? emp.roles : [];
+      const normRoles = rawRoles
+        .map((r: any) => (typeof r === "string" ? r : r?.role || "").toLowerCase().trim())
+        .filter(Boolean);
+
       // Explicitly reject if employee has foreign agency role
-      const isForeign = empRoles.some((r: string) => r.includes("foreign agency") || r.includes("foreign agent"));
+      const isForeign = normRoles.some((r) => r.includes("foreign agency") || r.includes("foreign agent"));
       if (isForeign) return false;
 
-      const isEligible =
-        emp.email?.toLowerCase() === "administrator" ||
-        emp.name?.toLowerCase() === "administrator" ||
-        empRoles.some((r: string) => targetRoles.includes(r));
-      return isEligible && emp.email?.toLowerCase() !== currentEmail;
+      // Filter out general system tags ("desk user", "all")
+      const functionalRoles = normRoles.filter((r) => !systemTags.has(r));
+      if (functionalRoles.length === 0) return false;
+
+      // Must have at least one authorized role (Admin, System Manager, Communication Manager)
+      const hasAuthorizedRole = functionalRoles.some((r) => authorizedRoles.has(r));
+      if (!hasAuthorizedRole) return false;
+
+      // Any user with roles other than these must NOT be listed
+      const hasUnauthorizedRole = functionalRoles.some((r) => !authorizedRoles.has(r));
+      if (hasUnauthorizedRole) return false;
+
+      return true;
     });
 
     if (filtered.length === 0) {
@@ -1616,7 +1666,7 @@ export function ChatContainer() {
                         </Badge>
                         {thread.context_type && thread.context_type !== "General" && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-200/80 dark:bg-[#1e1e28] text-slate-700 dark:text-zinc-300">
-                            {thread.context_type}: {thread.context_reference || "Linked"}
+                            {thread.context_type}: {shortRef(thread.context_reference) || "Linked"}
                           </span>
                         )}
                       </div>
@@ -1708,7 +1758,7 @@ export function ChatContainer() {
                       <h2 className="text-sm font-bold text-white lg:text-slate-900 lg:dark:text-white truncate">
                         {isAgencyThread && isForeignAgency
                           ? `Headquarters • ${selectedParties?.staffName || "Staff"}`
-                          : selectedParties?.partyLine || selectedThread.title || selectedThread.name}
+                          : selectedParties?.partyLine || stripRecordIds(selectedThread.title) || shortRef(selectedThread.name)}
                       </h2>
                       <Badge
                         variant="outline"
@@ -1759,7 +1809,7 @@ export function ChatContainer() {
                       className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/15 lg:bg-slate-100 text-white lg:text-slate-700 border border-white/20 lg:border-slate-200 hover:underline"
                     >
                       <User className="h-3 w-3" />
-                      Dossier: {selectedThread.context_reference}
+                      Candidate: {shortRef(selectedThread.context_reference)}
                       <ExternalLink className="h-2.5 w-2.5" />
                     </Link>
                   )}

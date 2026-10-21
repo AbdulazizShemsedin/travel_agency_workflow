@@ -174,8 +174,8 @@ export function CountryBansTab({ isManagerOrAdmin, onRefresh }: CountryBansTabPr
       </div>
 
       {/* Bans Table */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-        <table className="w-full text-xs text-left border-separate border-spacing-0">
+      <div className="overflow-x-auto lg:overflow-hidden rounded-lg border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+        <table className="w-full text-xs text-left border-separate border-spacing-0 lg:table-fixed">
           <thead className="text-[11px] text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-[#171720] uppercase font-semibold">
             <tr>
               <th className="py-2.5 px-3 border-b border-slate-200 dark:border-[#202028]">Candidate</th>

@@ -204,8 +204,8 @@ export default function AgencyReplacementsPage() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-[#222227] bg-white dark:bg-[#121216] shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto lg:overflow-hidden">
+              <table className="w-full text-left text-xs lg:table-fixed">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-[#222227] bg-slate-50/75 dark:bg-[#16161c] text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                     <th className="px-4 py-3.5">Candidate</th>

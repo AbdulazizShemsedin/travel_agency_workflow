@@ -1366,8 +1366,12 @@ export function ApplicantFollowUpWorkspace({
                                 setIsLmisRejectOpen(true);
                                 return;
                               }
+                              if (val === "ISSUED") {
+                                setIsLmisFinishOpen(true);
+                                return;
+                              }
                               try {
-                                if (lmsStepName && val !== "ISSUED") {
+                                if (lmsStepName) {
                                   await setLmisStatusV2(lmsStepName, val);
                                 }
                                 toast.success(`LMIS status updated to ${val}`);
@@ -3432,7 +3436,9 @@ export function ApplicantFollowUpWorkspace({
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Labor ID / Reference (Optional)</Label>
+              <Label className="text-xs font-semibold">
+                Labor ID / Reference <span className="text-rose-500">*</span>
+              </Label>
               <Input
                 type="text"
                 value={laborIdVal || currentRow.laborId || ""}
@@ -3442,7 +3448,9 @@ export function ApplicantFollowUpWorkspace({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Approval / Issue Date</Label>
+              <Label className="text-xs font-semibold">
+                Approval / Issue Date <span className="text-rose-500">*</span>
+              </Label>
               <Input
                 type="date"
                 value={lmisIssueDate || new Date().toISOString().split("T")[0]}
@@ -3463,25 +3471,68 @@ export function ApplicantFollowUpWorkspace({
                   toast.error("LMIS clearance step record not found.");
                   return;
                 }
+                const cleanLabor = (laborIdVal || currentRow.laborId || "").trim();
+                if (!cleanLabor) {
+                  toast.error("Labor ID / Reference Number is required before LMIS can be finalized.");
+                  return;
+                }
+                if (cleanLabor.toUpperCase().startsWith("APP-")) {
+                  toast.error("Valid Labor ID required. Candidate ID (APP-*) cannot be used as Labor ID.");
+                  return;
+                }
+                const approvalDate = lmisIssueDate || new Date().toISOString().split("T")[0];
+                if (!approvalDate) {
+                  toast.error("Approval / Issue Date is required.");
+                  return;
+                }
+
+                const isKuwait = (currentRow.destinationCountry || "").toLowerCase().includes("kuwait");
+                if (isKuwait) {
+                  const asharaStatus = currentRow.lms?.police_ashara_status;
+                  if (!asharaStatus || asharaStatus === "Pending") {
+                    toast.error("Kuwait Police Ashara status must be Scheduled or Completed before LMIS can be finalized.");
+                    return;
+                  }
+                } else {
+                  const coc = (currentRow.cocStatus || "").trim().toLowerCase();
+                  if (!coc || coc === "not started" || coc === "pending") {
+                    toast.error("Saudi LMIS requires a valid COC Status (Issued / Passed) before finalizing.");
+                    return;
+                  }
+                }
+
                 try {
                   setIsFinishingLmis(true);
-                  const approvalDate = lmisIssueDate || new Date().toISOString().split("T")[0];
+                  if (isKuwait) {
+                    await updateApplicantForLmisV2({
+                      applicant_name: currentRow.applicantId,
+                      labor_id: cleanLabor,
+                    });
+                  } else {
+                    await updateApplicantForLmisV2({
+                      applicant_name: currentRow.applicantId,
+                      labor_id: cleanLabor,
+                      coc_status: currentRow.cocStatus,
+                    });
+                  }
                   await setLmisStatusV2(
                     lmsStepName,
                     "ISSUED",
                     undefined,
-                    laborIdVal || currentRow.laborId || undefined,
+                    cleanLabor,
                     approvalDate
                   );
-                  await completeClearanceStepV2(lmsStepName);
+                  await completeClearanceStepV2(lmsStepName, cleanLabor, undefined, approvalDate);
                   toast.success("LMIS stage finished and marked as ISSUED!");
                   setIsLmisFinishOpen(false);
                   setCurrentRow((prev) =>
                     prev
                       ? {
                           ...prev,
+                          laborId: cleanLabor,
+                          issueDate: approvalDate,
                           lmisStatus: "ISSUED",
-                          lms: prev.lms ? { ...prev.lms, status: "Complete" } : undefined,
+                          lms: prev.lms ? { ...prev.lms, status: "Complete", reference_no: cleanLabor, date_completed: approvalDate } : undefined,
                         }
                       : null
                   );

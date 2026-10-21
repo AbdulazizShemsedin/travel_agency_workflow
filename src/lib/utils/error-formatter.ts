@@ -436,9 +436,22 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   }
 
   // Clearance Step State Machine Rules
+  if (/Could not find active (?:LMIS|clearance) step/i.test(text) || /No active clearance step found/i.test(text)) {
+    return "This candidate has not reached the Processing (LMIS and Teashir) stage yet. Clearance steps are only initialized once an applicant is advanced to Processing.";
+  }
+  if (/Placement must be in Processing or beyond/i.test(text)) {
+    return "This candidate must be advanced to the Processing (LMIS and Teashir) stage before updating clearance steps.";
+  }
+  if (/User [^ ]+ not found/i.test(text)) {
+    return "The user account could not be found in the system.";
+  }
   if (/A '([^']+)' clearance step cannot be completed/i.test(text)) {
     const match = text.match(/A '([^']+)' clearance step cannot be completed/i);
     return `A clearance step in '${match ? match[1] : "this"}' status cannot be completed.`;
+  }
+  if (/A '([^']+)' clearance step cannot be started/i.test(text)) {
+    const match = text.match(/A '([^']+)' clearance step cannot be started/i);
+    return `A clearance step in '${match ? match[1] : "this"}' status cannot be started.`;
   }
   if (/already Departed\/Cancelled; its clearance steps can no longer be edited/i.test(text)) {
     return "This placement is already Departed or Cancelled and cannot be changed.";

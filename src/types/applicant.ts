@@ -51,6 +51,26 @@ export const STATE_PROGRESS_MAP: Record<ApplicantState, number> = {
   Cancelled: 0,
 };
 
+export const STAGE_DISPLAY_NAMES: Record<string, string> = {
+  Draft: "Draft",
+  Registered: "Registered",
+  "CV Generated": "CV Generated",
+  "Request Pending": "Request Pending",
+  Selected: "Selected",
+  Processing: "Processing (LMIS and Teashir)",
+  Stamped: "Stamped",
+  Ticketed: "Ticketed",
+  Departed: "Departed",
+  Cancelled: "Cancelled",
+};
+
+export function getStageDisplayName(stage?: string | null): string {
+  if (!stage) return "";
+  const trimmed = stage.trim();
+  if (trimmed.toLowerCase() === "processing") return "Processing (LMIS and Teashir)";
+  return STAGE_DISPLAY_NAMES[trimmed] || trimmed;
+}
+
 export interface IncomeExpenseLog {
   name?: string;
   transaction_type: "Income" | "Expense";

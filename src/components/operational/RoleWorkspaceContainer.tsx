@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   ClipboardList,
   ArrowLeft,
+  HeartPulse,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -22,6 +23,7 @@ import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { FollowUpWorkspace } from "./workspaces/FollowUpWorkspace";
 import { CVWorkspace } from "./workspaces/CVWorkspace";
+import { MedicalWorkspace } from "./workspaces/MedicalWorkspace";
 import { LMISWorkspace } from "./workspaces/LMISWorkspace";
 import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
@@ -62,6 +64,7 @@ export function RoleWorkspaceContainer() {
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
     { id: "follow_up", label: "Follow-up", icon: ClipboardList, desc: "Milestones & Progress" },
     { id: "cv", label: "CV", icon: FileSpreadsheet, desc: "Candidate Profiles & Bio" },
+    { id: "medical", label: "Medical Clearance", icon: HeartPulse, desc: "FIT / UNFIT Determinations" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
     { id: "injaz", label: "Te'shir / Injaz", icon: CreditCard, desc: "Saudi MOFA & Biometrics" },
     { id: "embassy", label: "Embassy & Stamping", icon: Building2, desc: "Embassy, Wakala & Stamping" },
@@ -94,6 +97,12 @@ export function RoleWorkspaceContainer() {
     if (hasRoleKeyword(["cv"])) {
       allowed.push("cv");
       if (prefTab === "directory") prefTab = "cv";
+    }
+
+    // 0.5 Medical Clearance Table: strictly restricted to user with "medical" role or Admin
+    if (hasRoleKeyword(["medical", "doctor"])) {
+      allowed.push("medical");
+      if (prefTab === "directory") prefTab = "medical";
     }
 
     // 1. LMIS Clearance table: strictly restricted to LMIS roles (Saudi LMIS, Kuwait LMIS) or Admin
@@ -311,7 +320,7 @@ export function RoleWorkspaceContainer() {
       {/* Operational Workspace Navigation Tabs                         */}
       {/* ------------------------------------------------------------- */}
       {availableTabs.length > 1 && (
-        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1 overflow-x-auto pb-0.5 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
+        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1 overflow-x-auto lg:overflow-x-hidden pb-0.5 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
           {availableTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -323,7 +332,7 @@ export function RoleWorkspaceContainer() {
                 data-tour={`applicants-tab-${tab.id}`}
                 onClick={() => handleTabClick(tab.id)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 lg:px-2 lg:py-1 text-xs lg:text-[11px] xl:px-3 xl:text-xs font-semibold rounded-t-lg transition-all border-b-2 whitespace-nowrap",
                   isActive
                     ? "border-emerald-700 dark:border-emerald-500 text-emerald-950 dark:text-emerald-400 bg-emerald-50/50 dark:bg-[#13241d]/50"
                     : "border-transparent text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-[#181820]"
@@ -366,6 +375,15 @@ export function RoleWorkspaceContainer() {
             onCorridorChange={setCorridorFilter}
             availableCorridors={discoveredCorridors}
           />
+        )}
+
+        {activeTab === "medical" && isTabAllowed && (
+          <div data-tour="medical-workspace-table">
+            <MedicalWorkspace
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+            />
+          </div>
         )}
 
         {activeTab === "lms" && isTabAllowed && (

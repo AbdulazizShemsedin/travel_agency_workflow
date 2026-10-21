@@ -38,6 +38,8 @@ import {
   getForeignAgencyNotificationsV2,
   getPushSubscriptionStatusV2,
   subscribeToPushV2,
+  unsubscribeFromPushV2,
+  sendTestPushV2,
   getVapidPublicKeyV2,
   regenerateVapidKeysV2,
   V2AppNotification,
@@ -390,6 +392,11 @@ export function PushNotificationToggle() {
         if (reg) {
           const sub = await reg.pushManager.getSubscription();
           if (sub) {
+            try {
+              await unsubscribeFromPushV2(sub.endpoint);
+            } catch (unsubErr) {
+              console.warn("Backend unsubscribe warning:", unsubErr);
+            }
             await sub.unsubscribe();
           }
         }
@@ -410,20 +417,23 @@ export function PushNotificationToggle() {
     }
   };
 
-  // 5. Send Test Notification
+  // 5. Send Test Notification via backend notification_api.send_test_push
   const handleSendTestPush = async () => {
     try {
-      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-        new Notification("Travel Agency Workflow Alert", {
-          body: "Push notifications active! You will receive live alerts for candidate progress.",
-          icon: "/favicon.ico",
-        });
-        showFeedback("Test notification dispatched to your device!");
+      setIsLoading(true);
+      const res = await sendTestPushV2();
+      if (res?.error) {
+        showFeedback(`Test alert refused: ${res.error}`, "error");
+        sonnerToast.error("Test alert refused", { description: res.error });
       } else {
-        showFeedback("Notification permission not granted.", "error");
+        showFeedback("Test alert dispatched from backend server!", "success");
+        sonnerToast.success("Test alert sent", { description: "Backend server successfully dispatched a push alert." });
       }
-    } catch {
-      showFeedback("Test notification sent.", "success");
+    } catch (err: any) {
+      showFeedback(err?.message || "Test alert failed", "error");
+      sonnerToast.error("Test alert failed", { description: err?.message || String(err) });
+    } finally {
+      setIsLoading(false);
     }
   };
 

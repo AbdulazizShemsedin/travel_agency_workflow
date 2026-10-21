@@ -9,7 +9,14 @@ import {
   JOB_APPLIED_OPTIONS,
   DESTINATION_COUNTRY_OPTIONS,
 } from "@/lib/validations/applicant.schema";
-import { uploadFileV2, isExperiencedCountry } from "@/lib/api/v2";
+import {
+  uploadFileV2,
+  isExperiencedCountry,
+  startVideoUploadV2,
+  finishVideoUploadV2,
+  getApplicantMediaUrlV2,
+  uploadVideoFileDirectly,
+} from "@/lib/api/v2";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,13 +61,27 @@ export function Step2EducationExperience({
   const handleVideoFileSelect = async (file: File) => {
     try {
       setIsUploadingVideo(true);
-      const res = await uploadFileV2(file, false, "Applicant");
-      const url = res.file_url || (res as any).message?.file_url;
-      if (url) {
-        setValue("video_url" as any, url, { shouldDirty: true });
-        setValue("intro_video" as any, url, { shouldDirty: true });
-        setValue("video" as any, url, { shouldDirty: true });
-        toast.success("Candidate video uploaded successfully!");
+      const activeApplicantName = ((watch("name" as any) || (form.getValues() as any)?.name) || "") as string;
+
+      if (activeApplicantName) {
+        // Direct storage upload per Oct 21 backend requirement
+        const uploadMeta = await startVideoUploadV2(activeApplicantName, file.name, file.size);
+        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+        await finishVideoUploadV2(activeApplicantName, uploadMeta.key);
+        const playUrl = uploadMeta.upload_url.split("?")[0];
+        setValue("video_url" as any, playUrl, { shouldDirty: true });
+        setValue("intro_video" as any, playUrl, { shouldDirty: true });
+        setValue("video" as any, playUrl, { shouldDirty: true });
+        toast.success("Candidate video uploaded successfully via direct storage!");
+      } else {
+        const res = await uploadFileV2(file, false, "Applicant");
+        const url = res.file_url || (res as any).message?.file_url;
+        if (url) {
+          setValue("video_url" as any, url, { shouldDirty: true });
+          setValue("intro_video" as any, url, { shouldDirty: true });
+          setValue("video" as any, url, { shouldDirty: true });
+          toast.success("Candidate video uploaded successfully!");
+        }
       }
     } catch (err: any) {
       toast.error("Video upload failed", { description: err?.message || "Could not upload the video. Please check your connection and try again." });

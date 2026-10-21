@@ -454,17 +454,17 @@ export default function ContractorsPage() {
             <span className="ml-2 text-xs text-slate-500">Loading agencies...</span>
           </div>
         ) : (
-          <div className="w-full max-w-full min-w-0 overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto touch-pan-x">
-            <table className="w-full min-w-[750px] md:min-w-0 text-left text-xs">
-              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[11px]">
+          <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+            <table className="w-full min-w-[750px] lg:min-w-0 text-left text-xs lg:table-fixed">
+              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[10.5px] xl:text-[11px]">
                 <tr>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Agency ID</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Agency Name</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Country</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">User Account</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5">Phone & Contact</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5 text-center">Status</th>
-                  <th className="px-3 py-2.5 lg:px-4 lg:py-2.5 text-right">Actions</th>
+                  <th className="px-2.5 py-2 lg:w-[12%] truncate">Agency ID</th>
+                  <th className="px-2.5 py-2 lg:w-[22%] truncate">Agency Name</th>
+                  <th className="px-2.5 py-2 lg:w-[12%] truncate">Country</th>
+                  <th className="px-2.5 py-2 lg:w-[20%] truncate">User Account</th>
+                  <th className="px-2.5 py-2 lg:w-[18%] truncate">Phone & Contact</th>
+                  <th className="px-2.5 py-2 lg:w-[8%] text-center truncate">Status</th>
+                  <th className="px-2.5 py-2 lg:w-[8%] text-right truncate">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">

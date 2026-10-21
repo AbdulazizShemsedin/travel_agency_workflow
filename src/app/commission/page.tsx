@@ -1385,8 +1385,8 @@ export default function AdminCommissionPage() {
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="overflow-x-auto lg:overflow-hidden">
+                <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                     <tr>
                       <th className="py-2.5 px-3 w-8">
@@ -1514,8 +1514,8 @@ export default function AdminCommissionPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto max-h-72">
-                  <table className="w-full text-xs text-left">
+                <div className="overflow-x-auto max-h-72 lg:overflow-hidden">
+                  <table className="w-full text-xs text-left lg:table-fixed">
                     <thead className="bg-slate-50 dark:bg-[#181820] text-slate-500 font-semibold uppercase tracking-wider sticky top-0 border-b border-slate-100 dark:border-[#202028]">
                       <tr>
                         <th className="py-2.5 px-3">Placement</th>
@@ -1530,7 +1530,7 @@ export default function AdminCommissionPage() {
                       {pendingAccrualPlacements.map((plc) => (
                         <tr key={plc.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c] transition-colors">
                           <td className="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                            {plc.name}
+                            #{shortRef(plc.name)}
                           </td>
                           <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
                             {getCandidateName(plc)}
@@ -1635,7 +1635,7 @@ export default function AdminCommissionPage() {
                   <span>Showing <strong>{filteredBatches.length}</strong> batches</span>
                   {selectedBatchName && (
                     <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
-                      Selected: {selectedBatchName}
+                      Selected: #{shortRef(selectedBatchName)}
                     </span>
                   )}
                 </div>
@@ -1679,7 +1679,7 @@ export default function AdminCommissionPage() {
                           "font-mono font-bold text-xs",
                           isCurrentActive ? "text-emerald-900 dark:text-emerald-300" : "text-slate-900 dark:text-white"
                         )}>
-                          {batch.name}
+                          #{shortRef(batch.name)}
                         </span>
                         <Badge
                           variant="outline"
@@ -1784,7 +1784,7 @@ export default function AdminCommissionPage() {
                       }}
                       className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs h-8 mt-2"
                     >
-                      Select First Batch ({filteredBatches[0].name})
+                      Select First Batch (#{shortRef(filteredBatches[0].name)})
                     </Button>
                   )}
                 </CardContent>
@@ -1799,7 +1799,7 @@ export default function AdminCommissionPage() {
                         <div className="flex items-center gap-2">
                           <Receipt className="h-4 w-4 text-emerald-600" />
                           <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
-                            Batch: <span className="font-mono text-emerald-800 dark:text-emerald-400">{activeBatch.name}</span>
+                            Batch: <span className="font-mono text-emerald-800 dark:text-emerald-400">#{shortRef(activeBatch.name)}</span>
                           </CardTitle>
                           <Badge
                             variant="outline"
@@ -1987,8 +1987,8 @@ export default function AdminCommissionPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs text-left">
+                      <div className="overflow-x-auto lg:overflow-hidden">
+                        <table className="w-full text-xs text-left lg:table-fixed">
                           <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
                             <tr>
                               <th className="py-2 px-3 w-8"></th>
@@ -2603,8 +2603,8 @@ export default function AdminCommissionPage() {
                   </Button>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-[#24242e]">
-                  <table className="w-full text-xs text-left">
+                <div className="overflow-x-auto lg:overflow-hidden rounded-lg border border-slate-200 dark:border-[#24242e]">
+                  <table className="w-full text-xs text-left lg:table-fixed">
                     <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
                       <tr>
                         <th className="py-2.5 px-3">Destination Country</th>

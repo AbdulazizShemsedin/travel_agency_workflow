@@ -67,7 +67,7 @@ function normalizeAndDeduplicateRoles(rawRoles: unknown[]): string[] {
     const r = typeof item === "string" ? item : (item as any)?.role;
     if (typeof r === "string" && r.trim()) {
       const lower = r.trim().toLowerCase();
-      if (lower === "administrator" || lower === "system manager" || lower === "manager") {
+      if (lower === "administrator" || lower === "system manager") {
         set.add("Admin");
       } else {
         set.add(r.trim());
@@ -153,16 +153,26 @@ export async function updateEmployeeRolesV2(
   return updateEmployeeRolesApiV2(userEmail, newRoles);
 }
 
+function resolveFrappeUserDocName(userIdentifier: string): string {
+  const trimmed = (userIdentifier || "").trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "admin@example.com" || lower === "administrator") {
+    return "Administrator";
+  }
+  return trimmed;
+}
+
 /**
  * Retrieves the recorded password for a user from their User profile if available.
  */
 export async function getUserPasswordV2(userEmail: string): Promise<string | null> {
   try {
+    const docName = resolveFrappeUserDocName(userEmail);
     const res = await requestV2<any>("/api/method/frappe.client.get_value", {
       method: "POST",
       body: {
         doctype: "User",
-        filters: { name: userEmail },
+        filters: { name: docName },
         fieldname: ["name", "bio"],
       },
     });
@@ -183,11 +193,12 @@ export async function getUserPasswordV2(userEmail: string): Promise<string | nul
  */
 export async function saveUserPasswordRecordV2(userEmail: string, password: string): Promise<void> {
   try {
+    const docName = resolveFrappeUserDocName(userEmail);
     await requestV2("/api/method/frappe.client.set_value", {
       method: "POST",
       body: {
         doctype: "User",
-        name: userEmail,
+        name: docName,
         fieldname: { bio: `pwd:${password}` },
       },
     });

@@ -150,10 +150,10 @@ export function PremiumDropzone({
     (file: File) => {
       setDragError(null);
 
-      // Check file size (200MB for video, 20MB for everything else unless explicitly specified)
+      // Check file size (500MB for video per Oct 21 backend spec, 20MB for everything else unless explicitly specified)
       const isVideo = variant === "video";
       const effectiveMaxSizeMB = isVideo
-        ? 200
+        ? 500
         : maxSizeMB !== undefined && maxSizeMB > 0 && isFinite(maxSizeMB)
         ? maxSizeMB
         : 20;
@@ -368,7 +368,7 @@ export function PremiumDropzone({
       case "full_body":
         return "Full-length standing photo (up to 20MB)";
       case "video":
-        return "MP4, WebM, or MOV video (up to 200MB)";
+        return "MP4, WebM, or MOV video (up to 500MB)";
       case "spreadsheet":
         return "CSV with date, reference & amount (up to 20MB)";
       case "compact":

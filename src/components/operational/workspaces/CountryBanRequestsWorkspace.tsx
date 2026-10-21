@@ -247,7 +247,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
       </div>
 
       {/* Requests Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto overflow-y-auto lg:overflow-hidden shadow-xs">
         {isLoading ? (
           <div className="py-20 text-center">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-800 dark:text-emerald-400 mb-2" />
@@ -258,18 +258,18 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
             No country ban exception requests found for <strong>{statusFilter}</strong>.
           </div>
         ) : (
-          <table className="w-full text-xs text-left border-collapse min-w-[850px] md:min-w-0">
+          <table className="w-full text-xs text-left border-collapse min-w-[850px] lg:min-w-0 lg:table-fixed">
             <thead className="sticky top-0 z-20">
-              <tr className="bg-slate-100/95 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#222228] text-slate-700 dark:text-zinc-300 font-semibold uppercase text-[11px] tracking-wider select-none">
-                <th className="py-2.5 px-3 whitespace-nowrap">Applicant</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Country</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Type</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Action</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Requested By</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Reason</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
-                <th className="py-2.5 px-3 whitespace-nowrap">Decided By</th>
-                <th className="py-2.5 px-3 whitespace-nowrap text-right">Actions</th>
+              <tr className="bg-slate-100/95 dark:bg-[#181820]/95 backdrop-blur-xs border-b border-slate-200 dark:border-[#222228] text-slate-700 dark:text-zinc-300 font-semibold uppercase text-[10.5px] xl:text-[11px] tracking-wider select-none">
+                <th className="py-2 px-2.5 lg:w-[15%] truncate">Applicant</th>
+                <th className="py-2 px-2.5 lg:w-[10%] truncate">Country</th>
+                <th className="py-2 px-2.5 lg:w-[10%] truncate">Type</th>
+                <th className="py-2 px-2.5 lg:w-[10%] truncate">Action</th>
+                <th className="py-2 px-2.5 lg:w-[12%] truncate">Requested By</th>
+                <th className="py-2 px-2.5 lg:w-[18%] truncate">Reason</th>
+                <th className="py-2 px-2.5 lg:w-[9%] truncate">Status</th>
+                <th className="py-2 px-2.5 lg:w-[8%] truncate">Decided By</th>
+                <th className="py-2 px-2.5 lg:w-[8%] truncate text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-[#1d1d24]">

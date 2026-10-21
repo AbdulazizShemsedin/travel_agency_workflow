@@ -58,7 +58,7 @@ const STAGE_DISPLAY_LABELS: Record<string, string> = {
   Registered: "Registered",
   "CV Generated": "CV Generated",
   Selected: "Selected",
-  Processing: "Processing",
+  Processing: "Processing (LMIS and Teashir)",
   Stamped: "Stamped / Embassy",
   Ticketed: "Ticketed",
   Departed: "Departed",
@@ -184,6 +184,7 @@ export default function ApplicantDetailPage() {
 
   const candidateVideoUrl = React.useMemo(() => {
     return (
+      applicant?.experience_video ||
       applicant?.video_url ||
       (applicant as any)?.intro_video ||
       (applicant as any)?.video ||

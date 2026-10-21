@@ -194,76 +194,26 @@ export async function updateContractorV2(
     [key: string]: any;
   }
 ): Promise<any> {
-  try {
-    return await requestV2(
-      "/api/method/agency_tracking.contractor_api.update_contractor",
-      {
-        method: "POST",
-        body: {
-          name,
-          contractor_name: payload.contractor_name || payload.company_name,
-          company_name: payload.company_name,
-          country: payload.country,
-          contact_person: payload.contact_person,
-          communication_manager: payload.communication_manager,
-          phone: payload.phone,
-          whatsapp: payload.whatsapp,
-          email: payload.email,
-          notes: payload.notes,
-          ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
-          ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),
-        },
-      }
-    );
-  } catch (err: any) {
-    // If the dedicated endpoint fails or is in a direct backend environment, fallback to direct frappe.client updates
-    try {
-      const current = await getContractorV2(name);
-      if (!current) throw err;
-
-      const fieldUpdates: Record<string, any> = {};
-      if (payload.country) fieldUpdates.country = payload.country;
-      if (payload.communication_manager !== undefined) fieldUpdates.communication_manager = payload.communication_manager;
-      if (payload.notes !== undefined) fieldUpdates.notes = payload.notes;
-      if (payload.phone !== undefined) fieldUpdates.telephone = payload.phone;
-      if (payload.telephone !== undefined) fieldUpdates.telephone = payload.telephone;
-
-      if (Object.keys(fieldUpdates).length > 0) {
-        await requestV2("/api/method/frappe.client.set_value", {
-          method: "POST",
-          body: {
-            doctype: "Contractor",
-            name,
-            fieldname: fieldUpdates,
-          },
-        });
-      }
-
-      // Update linked User if present
-      const userIdentifier = current.user || current.user_email || payload.user || payload.email;
-      if (userIdentifier && userIdentifier.toLowerCase() !== "administrator") {
-        const userUpdates: Record<string, any> = {};
-        if (payload.contact_person) userUpdates.first_name = payload.contact_person;
-        if (payload.phone !== undefined) userUpdates.phone = payload.phone;
-        if (payload.whatsapp !== undefined) userUpdates.mobile_no = payload.whatsapp;
-
-        if (Object.keys(userUpdates).length > 0) {
-          await requestV2("/api/method/frappe.client.set_value", {
-            method: "POST",
-            body: {
-              doctype: "User",
-              name: userIdentifier,
-              fieldname: userUpdates,
-            },
-          });
-        }
-      }
-
-      return { success: true, name };
-    } catch {
-      throw err;
+  return await requestV2(
+    "/api/method/agency_tracking.contractor_api.update_contractor",
+    {
+      method: "POST",
+      body: {
+        name,
+        contractor_name: payload.contractor_name || payload.company_name,
+        company_name: payload.company_name,
+        country: payload.country,
+        contact_person: payload.contact_person,
+        communication_manager: payload.communication_manager,
+        phone: payload.phone,
+        whatsapp: payload.whatsapp,
+        email: payload.email,
+        notes: payload.notes,
+        ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
+        ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),
+      },
     }
-  }
+  );
 }
 
 /**

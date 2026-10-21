@@ -61,6 +61,10 @@ import {
   normalizeApplicantFields,
   isExperiencedCountry,
   attachVideoToApplicantV2,
+  startVideoUploadV2,
+  finishVideoUploadV2,
+  getApplicantMediaUrlV2,
+  uploadVideoFileDirectly,
 } from "@/lib/api/v2";
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
@@ -1005,10 +1009,10 @@ export function ApplicantRegistrationForm({
       coc_status: data.coc_status || "",
       college_certificate: data.college_certificate || "",
       original_id_scan: data.original_id_scan || "",
-      video_url: effectiveVideo,
-      intro_video: effectiveVideo,
-      video: effectiveVideo,
     };
+
+    // Do not include experience_video in save payloads per Oct 21 backend requirement
+    delete (rawPayload as any).experience_video;
 
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
   };
@@ -1026,6 +1030,29 @@ export function ApplicantRegistrationForm({
         existingApplicantId ||
         (initialData as any)?.name ||
         (initialData as any)?.applicant_id;
+
+      if (activeMediaTab === "video") {
+        if (activeTargetId) {
+          const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
+          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+          await finishVideoUploadV2(activeTargetId, uploadMeta.key);
+          const playUrl = uploadMeta.upload_url.split("?")[0];
+          setValue("video_url", playUrl, { shouldDirty: true });
+          setValue("intro_video" as any, playUrl, { shouldDirty: true });
+          setValue("video" as any, playUrl, { shouldDirty: true });
+          toast.success("Video interview uploaded successfully via direct storage!");
+        } else {
+          const res = await uploadFileV2(file, false, "Applicant");
+          const url = (res as any)?.message?.file_url || (res as any)?.file_url;
+          if (!url) throw new Error("Upload succeeded but no file URL returned.");
+          setValue("video_url", url, { shouldDirty: true });
+          setValue("intro_video" as any, url, { shouldDirty: true });
+          setValue("video" as any, url, { shouldDirty: true });
+          toast.success("Video interview uploaded successfully!");
+        }
+        return;
+      }
+
       const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
@@ -1043,14 +1070,6 @@ export function ApplicantRegistrationForm({
         toast.success("Passport scan uploaded!");
         // Run OCR on passport
         handlePassportAutoScan(file);
-      } else if (activeMediaTab === "video") {
-        setValue("video_url", url, { shouldDirty: true });
-        setValue("intro_video" as any, url, { shouldDirty: true });
-        setValue("video" as any, url, { shouldDirty: true });
-        if (activeTargetId) {
-          await attachVideoToApplicantV2(activeTargetId, url);
-        }
-        toast.success("Video interview uploaded successfully!");
       }
     } catch (err: any) {
       toast.error("Upload failed", {

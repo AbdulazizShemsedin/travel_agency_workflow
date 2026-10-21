@@ -485,7 +485,7 @@ export function MedicalWorkspace({
       </div>
 
       {/* Main Table Container */}
-      <div className="rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto shadow-xs">
+      <div className="rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto lg:overflow-hidden shadow-xs">
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
             <HeartPulse className="h-6 w-6 animate-pulse text-emerald-600" />
@@ -496,7 +496,7 @@ export function MedicalWorkspace({
             No candidates matching the current filter criteria.
           </div>
         ) : (
-          <table className="w-full text-xs text-left border-collapse">
+          <table className="w-full text-xs text-left border-collapse lg:table-fixed">
             <thead>
               <tr className="bg-slate-50 dark:bg-[#16161d] border-b border-slate-200 dark:border-[#222228] text-slate-600 dark:text-zinc-400 font-semibold uppercase text-[10px] tracking-wider select-none">
                 <th className="py-2.5 px-3 whitespace-nowrap w-10 text-center">#</th>

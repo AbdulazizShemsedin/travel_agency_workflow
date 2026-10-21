@@ -2,54 +2,95 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   AlertTriangle,
-  FileText,
   CheckCircle2,
   ShieldAlert,
   Clock,
   ExternalLink,
-  Check,
-  Trash2,
   RefreshCw,
-  Filter,
   UserCheck,
-  Plane,
-  Stamp,
-  HeartPulse,
-  Briefcase,
   ListTodo,
+  Send,
+  Calendar,
+  AlertCircle,
+  FileText,
+  User,
+  HeartPulse,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getComplianceNotificationsV2, V2AppNotification } from "@/lib/api/v2/notifications";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  getSentNotificationsV2,
+  getLiveAlertsV2,
+  V2SentNotificationItem,
+  V2LiveAlertItem,
+} from "@/lib/api/v2/notifications";
 import { listMyTodosV2 } from "@/lib/api/v2/clearance";
 import { V2UserTodoItem } from "@/types/workspace";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { toast } from "sonner";
+import { isPureForeignAgency } from "@/lib/auth/permissions";
+import { stripRecordIds, shortRef } from "@/lib/utils/display-id";
+import { cn } from "@/lib/utils";
 
 export default function NotificationsPage() {
-  const queryClient = useQueryClient();
   const { authUser } = useAuth();
-  const [activeFilter, setActiveFilter] = React.useState<
-    "all" | "tasks" | "compliance" | "workflow" | "complaints" | "system"
-  >("all");
-  const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(new Set());
+  const isAgency = React.useMemo(() => isPureForeignAgency(authUser), [authUser]);
 
+  // Three primary tabs: "attention" (Needs attention) | "sent" (Sent to you) | "tasks" (My tasks)
+  const [activeTab, setActiveTab] = React.useState<"attention" | "sent" | "tasks">(
+    isAgency ? "sent" : "attention"
+  );
+  const [sentPage, setSentPage] = React.useState<number>(1);
+
+  React.useEffect(() => {
+    if (isAgency && activeTab !== "sent") {
+      setActiveTab("sent");
+    }
+  }, [isAgency, activeTab]);
+
+  // Tab 1: Live Alerts ("Needs attention")
   const {
-    data: allNotifications = [],
-    isLoading,
-    isRefetching,
-    refetch,
-  } = useQuery<V2AppNotification[]>({
-    queryKey: ["v2_compliance_notifications", authUser?.email, authUser?.roles],
-    queryFn: () => getComplianceNotificationsV2(authUser),
+    data: liveAlertsData,
+    isLoading: isLoadingAlerts,
+    isRefetching: isRefetchingAlerts,
+    refetch: refetchAlerts,
+  } = useQuery({
+    queryKey: ["v2_live_alerts"],
+    queryFn: getLiveAlertsV2,
+    enabled: !isAgency,
     refetchInterval: 30000,
   });
 
+  const alerts = React.useMemo<V2LiveAlertItem[]>(() => {
+    return liveAlertsData?.alerts || [];
+  }, [liveAlertsData]);
+
+  const unreadAlertsCount = liveAlertsData?.unread_count ?? alerts.length;
+
+  // Tab 2: Sent Notifications ("Sent to you")
+  const {
+    data: sentData,
+    isLoading: isLoadingSent,
+    isRefetching: isRefetchingSent,
+    refetch: refetchSent,
+  } = useQuery({
+    queryKey: ["v2_sent_notifications", sentPage],
+    queryFn: () => getSentNotificationsV2(sentPage, 50),
+    refetchInterval: 30000,
+  });
+
+  const sentNotifications = React.useMemo<V2SentNotificationItem[]>(() => {
+    return sentData?.notifications || [];
+  }, [sentData]);
+
+  const sentTotalCount = sentData?.total_count || 0;
+  const sentTotalPages = Math.max(1, Math.ceil(sentTotalCount / 50));
+
+  // Tab 3: My Tasks ("My tasks")
   const {
     data: myTodos = [],
     isLoading: isLoadingTodos,
@@ -58,55 +99,66 @@ export default function NotificationsPage() {
   } = useQuery<V2UserTodoItem[]>({
     queryKey: ["v2_my_todos", authUser?.email],
     queryFn: () => listMyTodosV2("Open"),
-    enabled: Boolean(authUser?.email),
+    enabled: !isAgency && Boolean(authUser?.email),
     refetchInterval: 30000,
   });
 
-  const notifications = React.useMemo(() => {
-    return allNotifications.filter((n) => !dismissedIds.has(n.id));
-  }, [allNotifications, dismissedIds]);
-
-  const handleDismiss = (id: string) => {
-    setDismissedIds((prev) => new Set([...prev, id]));
-    toast.success("Notification dismissed for current session");
+  const handleRefresh = () => {
+    if (activeTab === "attention") refetchAlerts();
+    else if (activeTab === "sent") refetchSent();
+    else if (activeTab === "tasks") refetchTodos();
   };
 
-  const handleDismissAll = () => {
-    setDismissedIds(new Set(allNotifications.map((n) => n.id)));
-    toast.success("All notifications dismissed for current session");
-  };
+  const isCurrentRefetching =
+    activeTab === "attention"
+      ? isRefetchingAlerts
+      : activeTab === "sent"
+      ? isRefetchingSent
+      : isRefetchingTodos;
 
-  const handleRestoreAll = () => {
-    setDismissedIds(new Set());
-    toast.success("All notifications restored");
-  };
+  const isCurrentLoading =
+    activeTab === "attention"
+      ? isLoadingAlerts
+      : activeTab === "sent"
+      ? isLoadingSent
+      : isLoadingTodos;
 
-  const filteredNotifications = notifications.filter((n) => {
-    if (activeFilter === "all") return true;
-    return n.category === activeFilter;
-  });
-
-  const urgentCount = notifications.filter((n) => n.severity === "urgent").length;
-  const complianceCount = notifications.filter((n) => n.category === "compliance").length;
-  const workflowCount = notifications.filter((n) => n.category === "workflow").length;
-  const systemCount = notifications.filter((n) => n.category === "system").length;
-  const complaintsCount = notifications.filter((n) => n.category === "complaints").length;
-
-  const getCategoryIcon = (category: string, severity: string) => {
-    if (category === "complaints") {
-      return <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />;
+  // Resolve target link and icon for notification alerts
+  const resolveAlertMeta = (alert: V2LiveAlertItem) => {
+    const alertType = String(alert.type || alert.title || "").toLowerCase();
+    if (alertType.includes("visa_deadline") || alertType.includes("visa deadline")) {
+      return {
+        icon: <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+        href: alert.url || "/workspaces?tab=embassy",
+        label: "Open Visa Clearance",
+      };
     }
-    if (category === "compliance") {
-      return severity === "urgent" ? (
-        <ShieldAlert className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-      ) : (
-        <HeartPulse className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-      );
+    if (alertType.includes("replacement_owed") || alertType.includes("replacement")) {
+      return {
+        icon: <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />,
+        href: alert.url || "/agent/replacements",
+        label: "View Replacements",
+      };
     }
-    if (category === "system") {
-      return <Briefcase className="h-4 w-4 text-teal-600 dark:text-teal-400" />;
+    if (alertType.includes("medical") || alertType.includes("unfit")) {
+      return {
+        icon: <HeartPulse className="h-4 w-4 text-rose-600 dark:text-rose-400" />,
+        href: alert.url || "/workspaces?tab=medical",
+        label: "View Medical Gate",
+      };
     }
-    return <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
+    if (alertType.includes("complaint")) {
+      return {
+        icon: <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />,
+        href: alert.url || "/complaints",
+        label: "View Complaint",
+      };
+    }
+    return {
+      icon: <Bell className="h-4 w-4 text-teal-600 dark:text-teal-400" />,
+      href: alert.url || "/workspaces",
+      label: "View Details",
+    };
   };
 
   return (
@@ -118,12 +170,24 @@ export default function NotificationsPage() {
             <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Notifications & Action Center
             </h2>
-            <Badge variant="neutral" className="font-mono text-xs">
-              {notifications.length} Active
-            </Badge>
+            {activeTab === "attention" && unreadAlertsCount > 0 && (
+              <Badge className="bg-rose-600 text-white font-mono text-xs font-bold">
+                {unreadAlertsCount} Unread
+              </Badge>
+            )}
+            {activeTab === "sent" && (
+              <Badge variant="outline" className="font-mono text-xs">
+                {sentTotalCount} Dispatched
+              </Badge>
+            )}
+            {activeTab === "tasks" && (
+              <Badge variant="outline" className="font-mono text-xs">
+                {myTodos.length} Open
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-            Live compliance alerts and queue updates.
+            Real-time compliance alerts, server dispatch logs, and assigned operational duties.
           </p>
         </div>
 
@@ -131,356 +195,321 @@ export default function NotificationsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              refetch();
-              refetchTodos();
-            }}
-            disabled={isRefetching || isRefetchingTodos}
+            onClick={handleRefresh}
+            disabled={isCurrentRefetching}
             className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-slate-700 dark:text-zinc-300"
           >
             <RefreshCw
-              className={`mr-1.5 h-3.5 w-3.5 ${
-                isRefetching || isRefetchingTodos ? "animate-spin text-emerald-600" : ""
-              }`}
+              className={cn("mr-1.5 h-3.5 w-3.5", isCurrentRefetching && "animate-spin text-emerald-600")}
             />
             Refresh
           </Button>
+        </div>
+      </div>
 
-          {notifications.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDismissAll}
-              className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-slate-700 dark:text-zinc-300"
-            >
-              <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-              Mark All Read
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRestoreAll}
-            className="text-xs text-slate-500 dark:text-zinc-400 hover:text-slate-800"
-            title="Restore previously dismissed notifications"
+      {/* Tab Navigation Strip */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#222227] pb-3">
+        {!isAgency && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("attention")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer",
+              activeTab === "attention"
+                ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
+                : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
+            )}
           >
-            Reset Dismissed
-          </Button>
-        </div>
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>Needs Attention</span>
+            {unreadAlertsCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-mono font-bold">
+                {unreadAlertsCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("sent")}
+          className={cn(
+            "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer",
+            activeTab === "sent"
+              ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
+              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
+          )}
+        >
+          <Send className="h-3.5 w-3.5" />
+          <span>Sent to You</span>
+          {sentTotalCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-slate-300 dark:bg-zinc-700 text-slate-800 dark:text-zinc-200 font-mono">
+              {sentTotalCount}
+            </span>
+          )}
+        </button>
+
+        {!isAgency && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("tasks")}
+            className={cn(
+              "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer",
+              activeTab === "tasks"
+                ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
+                : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
+            )}
+          >
+            <ListTodo className="h-3.5 w-3.5" />
+            <span>My Tasks</span>
+            {myTodos.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-blue-500 text-white font-mono font-bold">
+                {myTodos.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
-      {/* KPI Overview Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-              Total Alerts
-            </span>
-            <Bell className="h-4 w-4 text-slate-400" />
-          </div>
-          <p className="mt-1 text-xl font-bold text-slate-900 dark:text-white font-mono">
-            {notifications.length}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-blue-200 dark:border-blue-950/50 bg-blue-50/50 dark:bg-blue-950/20 p-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-400">
-              My Assigned Tasks
-            </span>
-            <ListTodo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          </div>
-          <p className="mt-1 text-xl font-bold text-blue-700 dark:text-blue-400 font-mono">
-            {myTodos.length}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-rose-200 dark:border-rose-950/50 bg-rose-50/50 dark:bg-rose-950/20 p-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-400">
-              Urgent / Expired
-            </span>
-            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-          </div>
-          <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 font-mono">
-            {urgentCount}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-amber-200 dark:border-amber-950/50 bg-amber-50/50 dark:bg-amber-950/20 p-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-              Compliance & Medical
-            </span>
-            <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          </div>
-          <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 font-mono">
-            {complianceCount}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-950/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-              Workflow Actions
-            </span>
-            <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 font-mono">
-            {workflowCount}
-          </p>
-        </div>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200/80 dark:border-[#222227] pb-3">
-        <button
-          onClick={() => setActiveFilter("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "all"
-              ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          All Notifications ({notifications.length})
-        </button>
-        <button
-          onClick={() => setActiveFilter("tasks")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "tasks"
-              ? "bg-blue-900 text-white dark:bg-blue-700"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          My Assigned Tasks ({myTodos.length})
-        </button>
-        <button
-          onClick={() => setActiveFilter("compliance")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "compliance"
-              ? "bg-rose-900 text-white dark:bg-rose-700"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          Compliance & Expiry ({complianceCount})
-        </button>
-        <button
-          onClick={() => setActiveFilter("workflow")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "workflow"
-              ? "bg-emerald-900 text-white dark:bg-emerald-700"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          Workflow & Clearances ({workflowCount})
-        </button>
-        <button
-          onClick={() => setActiveFilter("system")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "system"
-              ? "bg-teal-800 text-white dark:bg-teal-700"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          System Alerts ({systemCount})
-        </button>
-        <button
-          onClick={() => setActiveFilter("complaints")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-            activeFilter === "complaints"
-              ? "bg-rose-900 text-white dark:bg-rose-700"
-              : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200"
-          }`}
-        >
-          Complaints & Disputes ({complaintsCount})
-        </button>
-      </div>
-
-      {/* Tasks Queue View */}
-      {activeFilter === "tasks" ? (
-        isLoadingTodos ? (
-          <div className="py-12 text-center text-xs text-slate-400">
-            Loading your assigned tasks...
-          </div>
-        ) : myTodos.length === 0 ? (
-          <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-            <CardContent className="py-12 text-center space-y-3">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                You're Caught Up! (0 Open Tasks)
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-sm mx-auto">
-                You have no pending Clearance Step assignments or Placement ticketing tasks in your queue.
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 1: Needs Attention                                        */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "attention" && !isAgency && (
+        <div className="space-y-3">
+          {isCurrentLoading ? (
+            <div className="p-12 text-center text-xs text-slate-500">
+              <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-emerald-600" />
+              Loading real-time alerts...
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-[#222227] p-12 text-center">
+              <CheckCircle2 className="h-8 w-8 mx-auto text-emerald-600 dark:text-emerald-400 mb-2" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">All Clear</h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                No active compliance warnings or attention items require immediate action.
               </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {myTodos.map((todo) => {
-              const isPlacement = todo.reference_type === "Placement";
-              const targetUrl = isPlacement
-                ? `/applicants?search=${encodeURIComponent(todo.reference_name)}`
-                : todo.placement
-                ? `/applicants?search=${encodeURIComponent(todo.placement)}`
-                : "/clearance";
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {alerts.map((alert, idx) => {
+                const meta = resolveAlertMeta(alert);
+                const displayTitle = stripRecordIds(alert.title || "Compliance Alert");
+                const displayBody = stripRecordIds(alert.body || alert.description || "");
 
-              return (
-                <Card
-                  key={todo.name}
-                  className="border-l-4 border-l-blue-600 border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] transition hover:shadow-md"
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <ListTodo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        <Badge
-                          variant="neutral"
-                          className="text-[10px] uppercase tracking-wider font-bold"
-                        >
-                          {todo.reference_type}
-                        </Badge>
-                        {todo.step_type && (
-                          <Badge
-                            variant="info"
-                            className="text-[10px] uppercase tracking-wider font-bold"
-                          >
-                            {todo.step_type}
-                          </Badge>
-                        )}
-                        <Badge
-                          variant="success"
-                          className="text-[10px] uppercase tracking-wider font-bold"
-                        >
-                          {todo.status}
-                        </Badge>
+                return (
+                  <Card
+                    key={alert.name || idx}
+                    className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-[#1a1a22] shrink-0 mt-0.5">
+                          {meta.icon}
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                              {displayTitle}
+                            </h4>
+                            {alert.applicant_name && (
+                              <Badge variant="outline" className="text-[10px] font-mono py-0">
+                                {alert.applicant_name}
+                                {alert.passport_number ? ` (${alert.passport_number})` : ""}
+                              </Badge>
+                            )}
+                          </div>
+                          {displayBody && (
+                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+                              {displayBody}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono pt-1">
+                            <Clock className="h-3 w-3" />
+                            <span>{alert.created_at || alert.creation || "Recent"}</span>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 font-mono">
-                        {todo.reference_name}
-                      </span>
-                    </div>
-                    <CardTitle className="text-sm font-bold text-slate-900 dark:text-white mt-1.5">
-                      {todo.description}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pt-0">
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500">
-                        Assigned on: {todo.creation ? new Date(todo.creation).toLocaleDateString() : "Active"}
-                      </span>
-                      <Link href={targetUrl} className="ml-auto">
-                        <Button
-                          size="sm"
-                          className="text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white"
+
+                      {meta.href && (
+                        <Link
+                          href={meta.href}
+                          className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition"
                         >
-                          Open Queue Item <ExternalLink className="ml-1.5 h-3 w-3" />
-                        </Button>
+                          <span>{meta.label}</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 2: Sent to You                                            */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "sent" && (
+        <div className="space-y-3">
+          {isCurrentLoading ? (
+            <div className="p-12 text-center text-xs text-slate-500">
+              <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-emerald-600" />
+              Loading sent notifications...
+            </div>
+          ) : sentNotifications.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-[#222227] p-12 text-center">
+              <Send className="h-8 w-8 mx-auto text-slate-400 mb-2" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Pushes Sent Yet</h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                You have not received any direct push dispatches in the past 30 days.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sentNotifications.map((n, idx) => {
+                const displayTitle = stripRecordIds(n.title || "Notification");
+                const displayBody = stripRecordIds(n.body || "");
+
+                return (
+                  <Card
+                    key={idx}
+                    className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-slate-100 dark:bg-[#1a1a22] shrink-0 mt-0.5 text-slate-600 dark:text-zinc-400">
+                          <Send className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                              {displayTitle}
+                            </h4>
+                            {n.delivered ? (
+                              <Badge className="text-[10px] bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 py-0">
+                                <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-600" />
+                                Delivered
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 py-0">
+                                <Clock className="h-3 w-3 mr-1 text-amber-600" />
+                                Not delivered
+                              </Badge>
+                            )}
+                          </div>
+                          {displayBody && (
+                            <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+                              {displayBody}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono pt-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{n.sent_at}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+
+              {/* Pagination */}
+              {sentTotalPages > 1 && (
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-[#1e1e24] text-xs">
+                  <span className="text-slate-500 font-mono">
+                    Page {sentPage} of {sentTotalPages} ({sentTotalCount} total)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSentPage((p) => Math.max(1, p - 1))}
+                      disabled={sentPage <= 1}
+                      className="h-8 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSentPage((p) => Math.min(sentTotalPages, p + 1))}
+                      disabled={sentPage >= sentTotalPages}
+                      className="h-8 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 3: My Tasks                                               */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "tasks" && !isAgency && (
+        <div className="space-y-3">
+          {isCurrentLoading ? (
+            <div className="p-12 text-center text-xs text-slate-500">
+              <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-blue-600" />
+              Loading open tasks...
+            </div>
+          ) : myTodos.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-[#222227] p-12 text-center">
+              <CheckCircle2 className="h-8 w-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Open Tasks</h3>
+              <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+                You are completely caught up on your assigned clearance steps and operational duties.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {myTodos.map((todo) => {
+                const displayDesc = stripRecordIds(todo.description || "Operational Duty");
+
+                return (
+                  <Card
+                    key={todo.name}
+                    className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">
+                          <ListTodo className="h-4 w-4" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                              {displayDesc}
+                            </h4>
+                            <Badge variant="outline" className="text-[10px] font-mono py-0 text-blue-700 border-blue-200 dark:border-blue-800">
+                              {todo.reference_type || "Clearance Step"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono pt-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>Created: {todo.creation}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Link
+                        href="/workspaces"
+                        className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 hover:bg-blue-100 transition"
+                      >
+                        <span>Open Workspace</span>
+                        <ExternalLink className="h-3 w-3" />
                       </Link>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )
-      ) : isLoading ? (
-        <div className="py-12 text-center text-xs text-slate-400">
-          Loading live operational alerts...
-        </div>
-      ) : filteredNotifications.length === 0 ? (
-        <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215]">
-          <CardContent className="py-12 text-center space-y-3">
-            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-              All Clear! No Pending Alerts
-            </h4>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-sm mx-auto">
-              There are no pending compliance alerts or unhandled actions in this category. All candidate stages are currently on track.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {filteredNotifications.map((n) => {
-            const isUrgent = n.severity === "urgent";
-            const isWarn = n.severity === "warning";
-
-            return (
-              <Card
-                key={n.id}
-                className={`border-l-4 transition hover:shadow-md bg-white dark:bg-[#121215] ${
-                  isUrgent
-                    ? "border-l-rose-600 border-slate-200/80 dark:border-[#222227]"
-                    : isWarn
-                    ? "border-l-amber-500 border-slate-200/80 dark:border-[#222227]"
-                    : "border-l-emerald-600 border-slate-200/80 dark:border-[#222227]"
-                }`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      {getCategoryIcon(n.category, n.severity)}
-                      <Badge
-                        variant={
-                          isUrgent
-                            ? "destructive"
-                            : isWarn
-                            ? "warning"
-                            : "success"
-                        }
-                        className="text-[10px] uppercase tracking-wider font-bold"
-                      >
-                        {n.severity} • {n.category}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500">
-                        {n.timestamp}
-                      </span>
-                      <button
-                        onClick={() => handleDismiss(n.id)}
-                        className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition p-0.5"
-                        title="Dismiss"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white mt-1.5">
-                    {n.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-0">
-                  <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
-                    {n.description}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-1">
-                    {n.applicant_name && (
-                      <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">
-                        Candidate: <strong className="text-slate-700 dark:text-zinc-200">{n.applicant_name}</strong>
-                      </span>
-                    )}
-
-                    <Link href={n.action_url || "#"} className="ml-auto">
-                      <Button
-                        size="sm"
-                        className={`text-xs font-semibold ${
-                          isUrgent
-                            ? "bg-rose-700 hover:bg-rose-800 text-white"
-                            : isWarn
-                            ? "bg-amber-800 hover:bg-amber-900 text-white"
-                            : "bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-800 dark:hover:bg-emerald-700 text-white"
-                        }`}
-                      >
-                        {n.action_label} <ExternalLink className="ml-1.5 h-3 w-3" />
-                      </Button>
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -331,7 +331,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
     initialState: {
       pagination: {
         pageIndex: 0,
-        pageSize: 15,
+        pageSize: 10,
       },
     },
   });
@@ -607,10 +607,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto max-h-[calc(100vh-270px)] min-h-[320px] touch-pan-x">
-        <table className="w-full min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730]">
+      <div className="relative w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+        <table className="w-full min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730] lg:table-fixed">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-30 text-[10.5px] xl:text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
+          <thead className="sticky top-0 z-30 text-[10px] xl:text-[10.5px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
@@ -636,15 +636,11 @@ export function OperationalTable<T extends Record<string, any> = any>({
                       style={{
                         width,
                         ...(isNameCol ? { left: 0 } : {}),
-                        ...(isActionCol && isLastCol ? { right: 0 } : {}),
                       }}
                       className={cn(
-                        "py-1 px-1.5 xl:px-2 select-none border-r border-slate-300 dark:border-[#272730] leading-tight",
+                        "py-1 px-1 xl:px-1.5 select-none border-r border-slate-300 dark:border-[#272730] leading-tight truncate min-w-0",
                         isNameCol &&
                           "lg:sticky lg:left-0 lg:z-30 bg-slate-100 dark:bg-[#181820] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                        isActionCol &&
-                          isLastCol &&
-                          "lg:sticky lg:right-0 lg:z-30 bg-slate-100 dark:bg-[#181820] lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
                         align === "right" && "text-right",
                         canSort && "cursor-pointer hover:bg-slate-200/60 dark:hover:bg-[#22222a]"
@@ -707,12 +703,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         key={idx}
                         style={{
                           ...(isNameCol ? { left: 0 } : {}),
-                          ...(isActionCol && isLastCol ? { right: 0 } : {}),
                         }}
                         className={cn(
                           "py-1.5 px-2",
-                          isNameCol && "lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                          isActionCol && isLastCol && "lg:sticky lg:right-0 lg:z-10 bg-white dark:bg-[#121216] lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] border-l border-slate-200 dark:border-[#22222a]"
+                          isNameCol && "lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]"
                         )}
                       >
                         <div className="h-3.5 bg-slate-200 dark:bg-[#252530] rounded-sm w-3/4" />
@@ -764,8 +758,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           (cell.column.columnDef.header.toUpperCase() === "NAME" ||
                             cell.column.columnDef.header.toUpperCase() === "CANDIDATE"));
                       const isLastCol = colIdx === row.getVisibleCells().length - 1;
-                      const isActionCol = (cell.column.columnDef.meta as any)?.isActionCol;
-                      const isStickyCol = isNameCol || (isActionCol && isLastCol);
+                      const isStickyCol = isNameCol;
 
                       const isReadOnly = (cell.column.columnDef.meta as any)?.isReadOnly;
 
@@ -775,13 +768,11 @@ export function OperationalTable<T extends Record<string, any> = any>({
                           style={{
                             width: (cell.column.columnDef.meta as any)?.width,
                             ...(isNameCol ? { left: 0 } : {}),
-                            ...(isActionCol && isLastCol ? { right: 0 } : {}),
                           }}
                           className={cn(
-                            "py-1 px-1.5 xl:px-2 text-slate-800 dark:text-zinc-200 text-[10.5px] xl:text-xs border-r border-b border-slate-200 dark:border-[#22222a]",
+                            "py-1 px-1 xl:px-1.5 text-slate-800 dark:text-zinc-200 text-[10px] xl:text-[10.5px] border-r border-b border-slate-200 dark:border-[#22222a] truncate min-w-0",
                             isStickyCol && "lg:sticky lg:z-20",
                             isNameCol && "lg:left-0 lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
-                            isActionCol && isLastCol && "lg:right-0 lg:shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 dark:border-[#22222a]",
                             isNameCol && (
                               isSelected
                                 ? "!bg-emerald-100 dark:!bg-[#183428]"

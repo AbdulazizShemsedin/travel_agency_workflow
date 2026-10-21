@@ -94,6 +94,124 @@ export async function triggerWakalaReminderV2(
   );
 }
 
+export interface V2SentNotificationItem {
+  name: string;
+  title: string;
+  body: string;
+  sent_at: string;
+  delivered: boolean;
+}
+
+export interface V2SentNotificationsResponse {
+  notifications: V2SentNotificationItem[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface V2LiveAlertItem {
+  name: string;
+  title: string;
+  body?: string;
+  description?: string;
+  type?: string;
+  url?: string;
+  read?: number | boolean;
+  dismissed?: number | boolean;
+  created_at?: string;
+  creation?: string;
+  severity?: "urgent" | "warning" | "info";
+  applicant_name?: string;
+  passport_number?: string;
+  [key: string]: any;
+}
+
+export interface V2LiveAlertsResponse {
+  alerts: V2LiveAlertItem[];
+  unread_count: number;
+}
+
+/**
+ * Unsubscribes the current browser push subscription from the backend.
+ */
+export async function unsubscribeFromPushV2(
+  endpoint: string
+): Promise<{ status?: string; message?: string }> {
+  return await requestV2(
+    "/api/method/agency_tracking.notification_api.unsubscribe_from_push",
+    {
+      method: "POST",
+      body: { endpoint },
+    }
+  );
+}
+
+/**
+ * Sends a real backend test push alert.
+ */
+export async function sendTestPushV2(): Promise<{ status: string; error?: string }> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.notification_api.send_test_push",
+    {
+      method: "POST",
+    }
+  );
+  return res?.message || res;
+}
+
+/**
+ * Fetches sent notifications (last 30 days) for the authenticated user.
+ */
+export async function getSentNotificationsV2(
+  page: number = 1,
+  pageSize: number = 50
+): Promise<V2SentNotificationsResponse> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.notification_api.get_sent_notifications",
+    {
+      method: "POST",
+      body: {
+        page,
+        page_size: pageSize,
+      },
+    }
+  );
+  const data = res?.message || res;
+  return {
+    notifications: Array.isArray(data?.notifications) ? data.notifications : [],
+    total_count: Number(data?.total_count || 0),
+    page: Number(data?.page || page),
+    page_size: Number(data?.page_size || pageSize),
+  };
+}
+
+/**
+ * Fetches live server-side alerts feed for "Needs attention" and bell unread count.
+ */
+export async function getLiveAlertsV2(): Promise<V2LiveAlertsResponse> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.notification_api.get_live_alerts",
+    {
+      method: "POST",
+    }
+  );
+  const data = res?.message || res;
+  const alerts = Array.isArray(data?.alerts)
+    ? data.alerts
+    : Array.isArray(data)
+    ? data
+    : [];
+  const unread_count =
+    typeof data?.unread_count === "number"
+      ? data.unread_count
+      : alerts.filter((a: any) => !a.read && !a.dismissed).length;
+
+  return {
+    alerts,
+    unread_count,
+  };
+}
+
 /**
  * Dynamically computes real-time operational compliance notifications from live V2 backend data,
  * implementing all 4 backend-specified watchdogs:

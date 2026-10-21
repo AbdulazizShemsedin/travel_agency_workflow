@@ -302,6 +302,31 @@ export default function EmployeesPage() {
     });
   }, [authUser, roles]);
 
+  const isActualAdmin = React.useMemo<boolean>(() => {
+    const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
+    if (emailOrName === "administrator") return true;
+    if (!Array.isArray(roles)) return false;
+    return roles.some((r) => {
+      const norm = String(r).trim().toLowerCase();
+      return (
+        norm === "system manager" ||
+        norm === "administrator" ||
+        norm === "admin" ||
+        norm === "agency admin"
+      );
+    });
+  }, [authUser, roles]);
+
+  const isFirstAdminAccount = React.useCallback((emp: { email?: string; name?: string }) => {
+    const email = (emp.email || "").toLowerCase().trim();
+    const name = (emp.name || "").toLowerCase().trim();
+    return email === "administrator" || name === "administrator";
+  }, []);
+
+  const assignableRoles = React.useMemo(() => {
+    return isActualAdmin ? CANONICAL_V2_ROLES : CANONICAL_V2_ROLES.filter((r) => r.name !== "Admin");
+  }, [isActualAdmin]);
+
   // Query: Fetch staff employees
   const {
     data: employees = [],
@@ -851,16 +876,16 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-[calc(100vh-320px)] min-h-[300px] overflow-y-auto">
-            <table className="w-full text-left border-collapse text-xs min-w-[760px] md:min-w-0">
+          <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden">
+            <table className="w-full text-left border-collapse text-xs min-w-[760px] lg:min-w-0 lg:table-fixed">
               <thead className="sticky top-0 z-20">
-                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Staff Member</th>
-                  <th className="py-2.5 px-3">Contact</th>
-                  <th className="py-2.5 px-3">Security Roles</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Created Date</th>
-                  {isManagerOrAdmin && <th className="py-2.5 px-3 text-right">Actions</th>}
+                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[10.5px] xl:text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
+                  <th className="py-2 px-2.5 lg:w-[25%] truncate">Staff Member</th>
+                  <th className="py-2 px-2.5 lg:w-[20%] truncate">Contact</th>
+                  <th className="py-2 px-2.5 lg:w-[25%] truncate">Security Roles</th>
+                  <th className="py-2 px-2.5 lg:w-[10%] truncate">Status</th>
+                  <th className="py-2 px-2.5 lg:w-[10%] truncate">Created Date</th>
+                  {isManagerOrAdmin && <th className="py-2 px-2.5 lg:w-[10%] text-right truncate">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">
@@ -988,96 +1013,135 @@ export default function EmployeesPage() {
                       </td>
 
                       {/* Actions */}
-                      {isManagerOrAdmin && (
-                        <td className="py-2 px-3 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenEditEmployee(emp)}
-                              className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-blue-600"
-                              title="Edit Employee Profile"
-                            >
-                              <Pencil className="h-3 w-3 mr-1 text-blue-600" />
-                              Edit
-                            </Button>
+                      {isManagerOrAdmin && (() => {
+                        const empIsFirstAdmin = isFirstAdminAccount(emp);
+                        const empIsAdmin = empIsFirstAdmin || (emp.roles || []).some((r) => {
+                          const norm = r.toLowerCase().trim();
+                          return norm === "admin" || norm === "system manager" || norm === "administrator" || norm === "agency admin";
+                        });
+                        const isSelf = Boolean(
+                          authUser?.email &&
+                          (emp.email.toLowerCase().trim() === authUser.email.toLowerCase().trim() ||
+                           emp.name.toLowerCase().trim() === authUser.email.toLowerCase().trim())
+                        );
+                        const currentIsFirstAdmin = (authUser?.email || authUser?.full_name || "").toLowerCase().trim() === "administrator";
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenEditRoles(emp)}
-                              className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-emerald-600"
-                              title="Edit Security Roles"
-                            >
-                              <Shield className="h-3 w-3 mr-1 text-emerald-600" />
-                              Roles
-                            </Button>
+                        // Manager cannot manage Admin rows
+                        if (!isActualAdmin && empIsAdmin) {
+                          return (
+                            <td className="py-2 px-3 text-right">
+                              <span className="text-[10px] text-slate-400 font-mono italic">
+                                Protected Admin
+                              </span>
+                            </td>
+                          );
+                        }
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenResetPassword(emp)}
-                              className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-amber-600"
-                              title="Reset Password"
-                            >
-                              <KeyRound className="h-3 w-3 mr-1 text-amber-600" />
-                              Password
-                            </Button>
+                        // First Administrator protections
+                        const canChangeRoles = isActualAdmin && !empIsFirstAdmin;
+                        const canResetPassword = isActualAdmin && (!empIsFirstAdmin || currentIsFirstAdmin);
+                        const canToggleStatus = isActualAdmin && !empIsFirstAdmin && !isSelf;
+                        const canDelete = isActualAdmin && !empIsFirstAdmin && !isSelf;
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                if (emp.enabled === 1) {
-                                  setEmployeeToDeactivate(emp);
-                                } else {
-                                  toggleStatusMutation.mutate({
-                                    email: emp.email,
-                                    enabled: true,
-                                  });
-                                }
-                              }}
-                              disabled={toggleStatusMutation.isPending}
-                              className={cn(
-                                "h-7 px-2 text-[11px]",
-                                emp.enabled === 1
-                                  ? "text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                                  : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                        return (
+                          <td className="py-2 px-3 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditEmployee(emp)}
+                                className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-blue-600"
+                                title="Edit Employee Profile"
+                              >
+                                <Pencil className="h-3 w-3 mr-1 text-blue-600" />
+                                Edit
+                              </Button>
+
+                              {canChangeRoles && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditRoles(emp)}
+                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-emerald-600"
+                                  title="Edit Security Roles"
+                                >
+                                  <Shield className="h-3 w-3 mr-1 text-emerald-600" />
+                                  Roles
+                                </Button>
                               )}
-                              title={emp.enabled === 1 ? "Deactivate Account" : "Activate Account"}
-                            >
-                              {emp.enabled === 1 ? (
-                                <>
-                                  <UserX className="h-3 w-3 mr-1" />
-                                  Disable
-                                </>
-                              ) : (
-                                <>
-                                  <UserCheck className="h-3 w-3 mr-1" />
-                                  Enable
-                                </>
-                              )}
-                            </Button>
 
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setEmployeeToDelete(emp)}
-                              disabled={deleteMutation.isPending}
-                              className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                              title="Delete Employee Account"
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      )}
+                              {canResetPassword && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenResetPassword(emp)}
+                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-amber-600"
+                                  title="Reset Password"
+                                >
+                                  <KeyRound className="h-3 w-3 mr-1 text-amber-600" />
+                                  Password
+                                </Button>
+                              )}
+
+                              {canToggleStatus && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (emp.enabled === 1) {
+                                      setEmployeeToDeactivate(emp);
+                                    } else {
+                                      toggleStatusMutation.mutate({
+                                        email: emp.email,
+                                        enabled: true,
+                                      });
+                                    }
+                                  }}
+                                  disabled={toggleStatusMutation.isPending}
+                                  className={cn(
+                                    "h-7 px-2 text-[11px]",
+                                    emp.enabled === 1
+                                      ? "text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                      : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                                  )}
+                                  title={emp.enabled === 1 ? "Deactivate Account" : "Activate Account"}
+                                >
+                                  {emp.enabled === 1 ? (
+                                    <>
+                                      <UserX className="h-3 w-3 mr-1" />
+                                      Disable
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="h-3 w-3 mr-1" />
+                                      Enable
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+                              {canDelete && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEmployeeToDelete(emp)}
+                                  disabled={deleteMutation.isPending}
+                                  className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                  title="Delete Employee Account"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })()}
                     </tr>
                   );
                 })}
@@ -1598,7 +1662,7 @@ export default function EmployeesPage() {
               </div>
 
               <div className="max-h-52 overflow-y-auto p-2.5 rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {CANONICAL_V2_ROLES.map((role) => {
+                {assignableRoles.map((role) => {
                   const isSelected = addForm.roles.includes(role.name);
                   return (
                     <label
@@ -1828,8 +1892,15 @@ export default function EmployeesPage() {
               </p>
 
               <div className="max-h-60 overflow-y-auto p-2.5 rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {CANONICAL_V2_ROLES.map((role) => {
+                {assignableRoles.map((role) => {
                   const isSelected = editingRoles.includes(role.name);
+                  const isSelf = Boolean(
+                    authUser?.email &&
+                    selectedForRoles &&
+                    (selectedForRoles.email.toLowerCase().trim() === authUser.email.toLowerCase().trim() ||
+                     selectedForRoles.name.toLowerCase().trim() === authUser.email.toLowerCase().trim())
+                  );
+                  const isSelfAdminProtected = isSelf && role.name === "Admin";
                   return (
                     <label
                       key={role.name}
@@ -1837,18 +1908,28 @@ export default function EmployeesPage() {
                         "flex items-start gap-2 p-2 rounded-lg cursor-pointer transition border text-[11px]",
                         isSelected
                           ? "bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 font-semibold"
-                          : "bg-white dark:bg-[#1c1c24] border-slate-200 dark:border-[#282835] text-slate-700 dark:text-zinc-300 hover:border-slate-300"
+                          : "bg-white dark:bg-[#1c1c24] border-slate-200 dark:border-[#282835] text-slate-700 dark:text-zinc-300 hover:border-slate-300",
+                        isSelfAdminProtected && "opacity-75 cursor-not-allowed"
                       )}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => handleToggleEditRole(role.name)}
+                        disabled={isSelfAdminProtected}
+                        onChange={() => {
+                          if (isSelfAdminProtected) return;
+                          handleToggleEditRole(role.name);
+                        }}
                         className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                       />
                       <div className="space-y-0.5">
                         <div className="font-bold flex items-center gap-1">
                           {role.name}
+                          {isSelfAdminProtected && (
+                            <span className="text-[9px] font-normal text-amber-600 dark:text-amber-400">
+                              (Required for your signed-in session)
+                            </span>
+                          )}
                         </div>
                         <p className="text-[10px] text-slate-500 dark:text-zinc-400 leading-tight font-normal">
                           {role.description}
