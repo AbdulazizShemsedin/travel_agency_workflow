@@ -210,6 +210,8 @@ export async function updateContractorV2(
           whatsapp: payload.whatsapp,
           email: payload.email,
           notes: payload.notes,
+          ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
+          ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),
         },
       }
     );
@@ -284,7 +286,7 @@ export async function getContractorV2(name: string): Promise<V2ContractorRecord 
 
 /**
  * Updates Contractor batch configuration (batch_mode, batch_threshold) and default commission rates
- * via frappe.client.save.
+ * via authoritative contractor_api.update_contractor and contractor_api.set_commission_rates.
  */
 export async function updateContractorBatchConfigV2(
   contractorName: string,
@@ -299,30 +301,30 @@ export async function updateContractorBatchConfigV2(
       entry_track?: "Standard" | "Muayena" | string;
     }>;
   }
-): Promise<V2ContractorRecord> {
-  // First fetch current doc to preserve other fields
-  const current = await getContractorV2(contractorName);
-  if (!current) {
-    throw new Error(`Contractor "${contractorName}" not found.`);
+): Promise<any> {
+  const body: Record<string, any> = {
+    name: contractorName,
+  };
+  if (config.batch_mode !== undefined) {
+    body.batch_mode = config.batch_mode;
+  }
+  if (config.batch_threshold !== undefined) {
+    body.batch_threshold = config.batch_threshold;
   }
 
-  const updatedDoc = {
-    ...current,
-    ...(config.batch_mode !== undefined ? { batch_mode: config.batch_mode } : {}),
-    ...(config.batch_threshold !== undefined ? { batch_threshold: config.batch_threshold } : {}),
-    ...(config.default_commission_rates !== undefined
-      ? { default_commission_rates: config.default_commission_rates }
-      : {}),
-  };
+  const res = await requestV2(
+    "/api/method/agency_tracking.contractor_api.update_contractor",
+    {
+      method: "POST",
+      body,
+    }
+  );
 
-  const saveRes = await requestV2<any>("/api/method/frappe.client.save", {
-    method: "POST",
-    body: {
-      doc: updatedDoc,
-    },
-  });
+  if (config.default_commission_rates && config.default_commission_rates.length > 0) {
+    await setCommissionRatesV2(contractorName, config.default_commission_rates as any);
+  }
 
-  return saveRes;
+  return res;
 }
 
 /**
@@ -391,14 +393,24 @@ function normalizeRateCurrency(currency: string | undefined, country: string): s
   }
 }
 
+function normalizeEntryTrack(track: string | undefined): "Standard" | "Muayena" {
+  if (track === "Muayena") return "Muayena";
+  return "Standard";
+}
+
+function normalizeRateGender(gender: string | undefined): "Female" | "Male" {
+  if (gender === "Male") return "Male";
+  return "Female";
+}
+
 export async function setCommissionRatesV2(
   contractor: string,
   rates: V2ContractorCommissionRate[]
 ): Promise<V2ContractorCommissionRate[]> {
   const cleanedRates = rates.map((r) => ({
     destination_country: r.destination_country,
-    entry_track: r.entry_track,
-    gender: r.gender,
+    entry_track: normalizeEntryTrack(r.entry_track),
+    gender: normalizeRateGender(r.gender),
     rate: Number(r.rate) || 0,
     currency: normalizeRateCurrency(r.currency, r.destination_country),
   }));
@@ -419,18 +431,6 @@ export async function setCommissionRatesV2(
     if (result && Array.isArray((result as any).message)) return (result as any).message;
     return cleanedRates;
   } catch (err: any) {
-    const errMsg = String(err?.message || err);
-    // Only attempt legacy DocType fallback if the server specifically lacks the endpoint method attribute
-    if (
-      errMsg.includes("has no attribute 'set_commission_rates'") ||
-      errMsg.includes("Failed to get method for command agency_tracking.contractor_api.set_commission_rates")
-    ) {
-      console.warn(`[Contractors] contractor_api.set_commission_rates unavailable on server, saving directly to Contractor doc:`, errMsg);
-      await updateContractorBatchConfigV2(contractor, {
-        default_commission_rates: cleanedRates,
-      });
-      return cleanedRates;
-    }
     throw err;
   }
 }

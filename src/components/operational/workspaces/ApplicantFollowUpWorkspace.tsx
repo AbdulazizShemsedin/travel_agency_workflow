@@ -28,6 +28,7 @@ import {
   AlertCircle,
   Check,
   Loader2,
+  Play,
 } from "lucide-react";
 import { WorkspaceApplicantRow } from "@/types/workspace";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,9 @@ import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import {
   completeClearanceStepV2,
+  startClearanceStepV2,
+  reopenClearanceStepV2,
+  recordPoliceAsharaV2,
   rejectEmbassyStepV2,
   setLmisStatusV2,
   setTaeshirStatusV2,
@@ -364,6 +368,19 @@ export function ApplicantFollowUpWorkspace({
   const [isTeshirFinishOpen, setIsTeshirFinishOpen] = React.useState(false);
   const [isFinishingTeshir, setIsFinishingTeshir] = React.useState(false);
 
+  // Kuwait Telesign Finish Stage Modal & Starting states
+  const [isTelesignFinishOpen, setIsTelesignFinishOpen] = React.useState(false);
+  const [isFinishingTelesign, setIsFinishingTelesign] = React.useState(false);
+  const [isStartingTelesign, setIsStartingTelesign] = React.useState(false);
+
+  // Kuwait LMIS Police Ashara sub-check Dialog states
+  const [isPoliceAsharaOpen, setIsPoliceAsharaOpen] = React.useState(false);
+  const [policeAsharaStatus, setPoliceAsharaStatus] = React.useState("Pending");
+  const [policeAsharaApptDate, setPoliceAsharaApptDate] = React.useState("");
+  const [policeAsharaAmount, setPoliceAsharaAmount] = React.useState("");
+  const [policeAsharaRemark, setPoliceAsharaRemark] = React.useState("");
+  const [isSavingPoliceAshara, setIsSavingPoliceAshara] = React.useState(false);
+
   const [isFinishingEmbassy, setIsFinishingEmbassy] = React.useState(false);
   const [isFinishingDepart, setIsFinishingDepart] = React.useState(false);
 
@@ -410,6 +427,7 @@ export function ApplicantFollowUpWorkspace({
   // Te'shir direct editable fields
   const [teshirInjazIdVal, setTeshirInjazIdVal] = React.useState("");
   const [teshirApptDateVal, setTeshirApptDateVal] = React.useState("");
+  const [telesignRefNoVal, setTelesignRefNoVal] = React.useState("");
 
   // Embassy direct editable fields
   const [embassyVisaNumberVal, setEmbassyVisaNumberVal] = React.useState("");
@@ -477,7 +495,14 @@ export function ApplicantFollowUpWorkspace({
 
       // Te'shir direct fields
       syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id, teshirInjazIdVal, setTeshirInjazIdVal);
+      syncStr(currentRow.injazApplicationId || currentRow.injaz?.injaz_application_id || (currentRow.injaz as any)?.reference_number, telesignRefNoVal, setTelesignRefNoVal);
       syncDate(currentRow.appointmentDate || currentRow.teshirAppointmentDate || currentRow.injaz?.appointment_date, teshirApptDateVal, setTeshirApptDateVal);
+
+      // Kuwait LMIS Police Ashara sub-check fields
+      syncStr(currentRow.lms?.police_ashara_status, policeAsharaStatus, setPoliceAsharaStatus);
+      syncDate(currentRow.lms?.police_ashara_appointment_date, policeAsharaApptDate, setPoliceAsharaApptDate);
+      syncStr(currentRow.lms?.police_ashara_amount ? String(currentRow.lms.police_ashara_amount) : "", policeAsharaAmount, setPoliceAsharaAmount);
+      syncStr(currentRow.lms?.police_ashara_remark, policeAsharaRemark, setPoliceAsharaRemark);
 
       // Embassy direct fields
       syncStr(currentRow.visaNumber || currentRow.embassy?.visa_number || (currentRow.plc as any)?.visa_number, embassyVisaNumberVal, setEmbassyVisaNumberVal);
@@ -839,6 +864,92 @@ export function ApplicantFollowUpWorkspace({
     }
   };
 
+  const handleSaveTelesignRefNo = async () => {
+    if (!injazStepName || !canEditTaeshir) return;
+    const val = telesignRefNoVal.trim().toUpperCase();
+    const currentVal = (currentRow?.injazApplicationId || "").trim().toUpperCase();
+    if (val === currentVal && savedField.telesignRefNo) return;
+    try {
+      clearWorkspaceFieldError("telesignRefNo");
+      setSavingField((prev) => ({ ...prev, telesignRefNo: true }));
+      await setStepRemarksV2(injazStepName, val ? `Ref: ${val}` : "");
+      const candidateId = currentRow?.applicantId || currentRow?.name;
+      if (val && candidateId) {
+        try {
+          await updateApplicantV2(candidateId, { application_number: val });
+        } catch (err) {
+          console.warn("Failed to sync application_number:", err);
+        }
+      }
+      setCurrentRow((prev) => prev ? { 
+        ...prev, 
+        injazApplicationId: val,
+        injaz: prev.injaz ? { ...prev.injaz, injaz_application_id: val } : prev.injaz 
+      } : null);
+      triggerSavedFeedback("telesignRefNo");
+      toast.success("Telesign reference number saved");
+      refreshAll();
+    } catch (err) {
+      const msg = formatCleanErrorMessage(err);
+      setWorkspaceFieldError("telesignRefNo", msg);
+      toast.error(msg);
+    } finally {
+      setSavingField((prev) => ({ ...prev, telesignRefNo: false }));
+    }
+  };
+
+  const handleStartTelesign = async () => {
+    if (!injazStepName || !canEditTaeshir) return;
+    try {
+      setIsStartingTelesign(true);
+      await startClearanceStepV2(injazStepName);
+      toast.success("Telesign step started");
+      setCurrentRow((prev) => prev ? {
+        ...prev,
+        teshirStatus: "In Progress",
+        injaz: prev.injaz ? { ...prev.injaz, status: "In Progress" } : prev.injaz,
+      } : null);
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setIsStartingTelesign(false);
+    }
+  };
+
+  const handleSavePoliceAshara = async () => {
+    if (!lmsStepName) {
+      toast.error("Kuwait LMIS clearance step record not found.");
+      return;
+    }
+    try {
+      setIsSavingPoliceAshara(true);
+      await recordPoliceAsharaV2(lmsStepName, {
+        police_ashara_status: policeAsharaStatus || "Pending",
+        police_ashara_appointment_date: policeAsharaApptDate || undefined,
+        police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
+        police_ashara_remark: policeAsharaRemark || undefined,
+      });
+      toast.success("Kuwait Police Ashara details recorded successfully");
+      setIsPoliceAsharaOpen(false);
+      setCurrentRow((prev) => prev ? {
+        ...prev,
+        lms: prev.lms ? {
+          ...prev.lms,
+          police_ashara_status: policeAsharaStatus || "Pending",
+          police_ashara_appointment_date: policeAsharaApptDate || undefined,
+          police_ashara_amount: policeAsharaAmount ? Number(policeAsharaAmount) : undefined,
+          police_ashara_remark: policeAsharaRemark || undefined,
+        } : prev.lms,
+      } : null);
+      refreshAll();
+    } catch (err) {
+      toast.error(formatCleanErrorMessage(err));
+    } finally {
+      setIsSavingPoliceAshara(false);
+    }
+  };
+
   const handleSaveEmbassyRemark = async () => {
     if (!embassyStepName || !canEditEmbassy) return;
     const val = embassyRemarkVal.trim();
@@ -1181,7 +1292,7 @@ export function ApplicantFollowUpWorkspace({
                         <FileCheck2 className="h-3.5 w-3.5" />
                       </div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                        LMIS
+                        {isKuwait ? "KUWAIT LMIS" : "LMIS"}
                       </h3>
                     </div>
                     {currentRow.lmisStatus === "ISSUED" ? (
@@ -1203,7 +1314,11 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           COC Status
                         </Label>
-                        {canEditLmis && currentRow.applicantId ? (
+                        {isKuwait ? (
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-400 dark:text-zinc-500 text-xs">
+                            <span>— N/A (Kuwait)</span>
+                          </div>
+                        ) : canEditLmis && currentRow.applicantId ? (
                           <select
                             value={currentRow.cocStatus || "Not Started"}
                             onChange={async (e) => {
@@ -1431,10 +1546,29 @@ export function ApplicantFollowUpWorkspace({
 
                       {/* Kuwait LMIS Police Ashara sub-check */}
                       {isKuwait && (
-                        <div className="col-span-2 p-1.5 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-1">
-                          <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300 block">
-                            Kuwait Police Ashara Sub-check
-                          </span>
+                        <div className="col-span-2 p-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[11px] text-amber-900 dark:text-amber-300">
+                              Kuwait Police Ashara Sub-check
+                            </span>
+                            {canEditLmis && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setPoliceAsharaStatus(currentRow.lms?.police_ashara_status || "Pending");
+                                  setPoliceAsharaApptDate(currentRow.lms?.police_ashara_appointment_date || "");
+                                  setPoliceAsharaAmount(currentRow.lms?.police_ashara_amount ? String(currentRow.lms.police_ashara_amount) : "");
+                                  setPoliceAsharaRemark(currentRow.lms?.police_ashara_remark || "");
+                                  setIsPoliceAsharaOpen(true);
+                                }}
+                                className="h-5 text-[10px] px-2 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950 font-semibold cursor-pointer"
+                              >
+                                Manage Police Ashara
+                              </Button>
+                            )}
+                          </div>
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-slate-400 block text-[9px]">Appt Date:</span>
@@ -1543,487 +1677,741 @@ export function ApplicantFollowUpWorkspace({
               </div>
 
               {/* ----------------------------------------------------------- */}
-              {/* CARD 2: TE'SHIR / INJAZ (Top-Right)                         */}
+              {/* CARD 2: TELESIGN (KUWAIT) OR TE'SHIR / INJAZ (SAUDI)        */}
               {/* ----------------------------------------------------------- */}
-              <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
-                <div>
-                  {/* Card Header */}
-                  <div className="px-3.5 py-1.5 sm:py-2 border-b border-slate-100 dark:border-[#202028] flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400">
-                        <CreditCard className="h-3.5 w-3.5" />
-                      </div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                        TE&apos;SHIR / INJAZ
-                      </h3>
-                    </div>
-                    {(currentRow.teshirStatus === "Completed" || isTeshirCompleted) ? (
-                      <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d] py-0 h-4.5 px-2">
-                        COMPLETED
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 py-0 h-4.5 px-2">
-                        {currentRow.teshirStatus || "Pending"}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Card Body - 2-Column Grid */}
-                  <div className="p-2.5 sm:p-3 space-y-2">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      {/* Field 1: E-number (Injaz Application No.) */}
-                      <div className="space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            E-number (Injaz Application No.)
-                          </Label>
-                          {savingField.teshirInjazId && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
-                            </span>
-                          )}
-                          {savedField.teshirInjazId && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                              <Check className="h-3 w-3" /> Saved
-                            </span>
-                          )}
+              {isKuwait ? (
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
+                  <div>
+                    {/* Card Header */}
+                    <div className="px-3.5 py-1.5 sm:py-2 border-b border-slate-100 dark:border-[#202028] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400">
+                          <CreditCard className="h-3.5 w-3.5" />
                         </div>
-                        {canEditTaeshir ? (
-                          <div>
-                            <div className="relative">
-                              <Input
-                                type="text"
-                                value={teshirInjazIdVal}
-                                onChange={(e) => {
-                                  setTeshirInjazIdVal(e.target.value);
-                                  clearWorkspaceFieldError("teshirInjazId");
-                                }}
-                                onBlur={handleSaveTeshirInjazId}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleSaveTeshirInjazId();
-                                    (e.target as HTMLInputElement).blur();
-                                  }
-                                }}
-                                placeholder="e.g. E12345678 (Press Enter to save)"
-                                disabled={savingField.teshirInjazId}
-                                className={cn(
-                                  "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
-                                  savedField.teshirInjazId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100",
-                                  workspaceFieldErrors.teshirInjazId && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
-                                )}
-                              />
-                              {savedField.teshirInjazId && (
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
-                                  <Check className="h-3.5 w-3.5" />
-                                </div>
-                              )}
-                            </div>
-                            {workspaceFieldErrors.teshirInjazId && (
-                              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3 shrink-0" />
-                                <span>{workspaceFieldErrors.teshirInjazId}</span>
-                              </p>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                          TELESIGN (KUWAIT)
+                        </h3>
+                      </div>
+                      {(currentRow.teshirStatus === "Completed" || isTeshirCompleted || resolvedInjazStep?.status === "Complete") ? (
+                        <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d] py-0 h-4.5 px-2">
+                          COMPLETED
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 py-0 h-4.5 px-2">
+                          {currentRow.teshirStatus || resolvedInjazStep?.status || "Pending"}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Card Body - 2-Column Grid */}
+                    <div className="p-2.5 sm:p-3 space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {/* Field 1: Telesign Reference No */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Telesign Ref No.
+                            </Label>
+                            {savingField.telesignRefNo && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.telesignRefNo && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
                             )}
                           </div>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
-                            <span className="truncate">{teshirInjazIdVal || currentRow.injazApplicationId || "—"}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Field 2: Appointment Date */}
-                      <div className="space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Appointment Date
-                        </Label>
-                        {canEditTaeshir ? (
-                          <div>
-                            <Input
-                              type="date"
-                              value={teshirApptDateVal}
-                              onChange={(e) => {
-                                setTeshirApptDateVal(e.target.value);
-                                clearWorkspaceFieldError("teshirApptDate");
-                              }}
-                              onBlur={async (e) => {
-                                const val = e.target.value;
-                                const currentAppt = currentRow.appointmentDate && currentRow.appointmentDate !== "—" ? currentRow.appointmentDate : "";
-                                if (val && val !== currentAppt) {
-                                  try {
-                                    clearWorkspaceFieldError("teshirApptDate");
-                                    if (injazStepName) {
-                                      await setTaeshirAppointmentV2(
-                                        injazStepName,
-                                        val,
-                                        teshirInjazIdVal || (currentRow.injazApplicationId || "")
-                                      );
+                          {canEditTaeshir ? (
+                            <div>
+                              <div className="relative">
+                                <Input
+                                  type="text"
+                                  value={telesignRefNoVal}
+                                  onChange={(e) => {
+                                    setTelesignRefNoVal(e.target.value);
+                                    clearWorkspaceFieldError("telesignRefNo");
+                                  }}
+                                  onBlur={handleSaveTelesignRefNo}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSaveTelesignRefNo();
+                                      (e.target as HTMLInputElement).blur();
                                     }
-                                    toast.success("Appointment date saved");
-                                    setCurrentRow((prev) => prev ? { ...prev, appointmentDate: val } : null);
-                                    refreshAll();
-                                  } catch (err) {
-                                    const msg = formatCleanErrorMessage(err);
-                                    setWorkspaceFieldError("teshirApptDate", msg);
-                                    toast.error(msg);
+                                  }}
+                                  placeholder="e.g. TEL-892341"
+                                  disabled={savingField.telesignRefNo}
+                                  className={cn(
+                                    "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                    savedField.telesignRefNo && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100",
+                                    workspaceFieldErrors.telesignRefNo && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                  )}
+                                />
+                                {savedField.telesignRefNo && (
+                                  <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                    <Check className="h-3.5 w-3.5" />
+                                  </div>
+                                )}
+                              </div>
+                              {workspaceFieldErrors.telesignRefNo && (
+                                <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                  <span>{workspaceFieldErrors.telesignRefNo}</span>
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
+                              <span className="truncate">{telesignRefNoVal || currentRow.injazApplicationId || "—"}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Field 2: Telesign Status */}
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Telesign Status
+                          </Label>
+                          <div className={cn(
+                            "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
+                            (isTeshirCompleted || currentRow.teshirStatus === "Completed" || resolvedInjazStep?.status === "Complete")
+                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
+                              : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                          )}>
+                            <span>{isTeshirCompleted ? "Complete" : (currentRow.teshirStatus || resolvedInjazStep?.status || "Pending")}</span>
+                            {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
+                          </div>
+                        </div>
+
+                        {/* Field 3: Date Started */}
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Date Started
+                          </Label>
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                            <span className="truncate">{resolvedInjazStep?.date_started || "—"}</span>
+                          </div>
+                        </div>
+
+                        {/* Field 4: Date Completed */}
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Date Completed
+                          </Label>
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono text-slate-800 dark:text-zinc-200">
+                            <span className="truncate">{resolvedInjazStep?.date_completed || "—"}</span>
+                          </div>
+                        </div>
+
+                        {/* Field 5: Telesign Remark (spans 2 columns) */}
+                        <div className="col-span-2 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Telesign Remark
+                            </Label>
+                            {savingField.teshirRemark && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.teshirRemark && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <Input
+                              value={teshirRemarkVal}
+                              onChange={(e) => setTeshirRemarkVal(e.target.value)}
+                              onBlur={handleSaveTeshirRemark}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTeshirRemark();
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              placeholder="Telesign verification notes or remarks... (Press Enter to save)"
+                              disabled={!canEditTaeshir || savingField.teshirRemark}
+                              className={cn(
+                                "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                                savedField.teshirRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.teshirRemark && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Telesign Actions */}
+                  <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadCvPdf}
+                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold cursor-pointer"
+                        title="Download Candidate CV PDF"
+                      >
+                        <FileDown className="h-3 w-3 text-emerald-600" />
+                        <span>CV</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSendToExtension}
+                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold cursor-pointer"
+                        title="Send Candidate details to Browser Extension"
+                      >
+                        <Send className="h-3 w-3 text-sky-600" />
+                        <span>Extension</span>
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {canEditTaeshir && (
+                        <>
+                          {/* Start Telesign button if Pending */}
+                          {injazStepName && (currentRow.teshirStatus === "Pending" || resolvedInjazStep?.status === "Pending") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleStartTelesign}
+                              disabled={isStartingTelesign}
+                              className="h-6.5 sm:h-7 px-2 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold cursor-pointer"
+                              title="Start Telesign clearance step"
+                            >
+                              {isStartingTelesign ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                <Play className="h-3 w-3 mr-1" />
+                              )}
+                              <span>Start Telesign</span>
+                            </Button>
+                          )}
+
+                          {/* Finish stage button */}
+                          <Button
+                            size="sm"
+                            onClick={() => setIsTelesignFinishOpen(true)}
+                            disabled={isTeshirCompleted || isFinishingTelesign}
+                            className={cn(
+                              "h-6.5 sm:h-7 px-2.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm",
+                              isTeshirCompleted ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                            )}
+                            title={isTeshirCompleted ? "Telesign stage already finished" : "Officially finish the Telesign stage"}
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            <span>Finish stage</span>
+                          </Button>
+
+                          {injazStepName && (
+                            <UndoLastStepButton
+                              doctype="Clearance Step"
+                              name={injazStepName}
+                              askOnClick
+                              onSuccess={refreshAll}
+                              size="sm"
+                              className="h-6.5 sm:h-7 text-xs"
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
+                  <div>
+                    {/* Card Header */}
+                    <div className="px-3.5 py-1.5 sm:py-2 border-b border-slate-100 dark:border-[#202028] flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400">
+                          <CreditCard className="h-3.5 w-3.5" />
+                        </div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                          TE&apos;SHIR / INJAZ
+                        </h3>
+                      </div>
+                      {(currentRow.teshirStatus === "Completed" || isTeshirCompleted) ? (
+                        <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d] py-0 h-4.5 px-2">
+                          COMPLETED
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300 bg-indigo-50/50 py-0 h-4.5 px-2">
+                          {currentRow.teshirStatus || "Pending"}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Card Body - 2-Column Grid */}
+                    <div className="p-2.5 sm:p-3 space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {/* Field 1: E-number (Injaz Application No.) */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              E-number (Injaz Application No.)
+                            </Label>
+                            {savingField.teshirInjazId && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.teshirInjazId && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
+                          </div>
+                          {canEditTaeshir ? (
+                            <div>
+                              <div className="relative">
+                                <Input
+                                  type="text"
+                                  value={teshirInjazIdVal}
+                                  onChange={(e) => {
+                                    setTeshirInjazIdVal(e.target.value);
+                                    clearWorkspaceFieldError("teshirInjazId");
+                                  }}
+                                  onBlur={handleSaveTeshirInjazId}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSaveTeshirInjazId();
+                                      (e.target as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  placeholder="e.g. E12345678 (Press Enter to save)"
+                                  disabled={savingField.teshirInjazId}
+                                  className={cn(
+                                    "h-7 sm:h-7.5 px-2 text-xs font-mono uppercase font-bold transition-colors",
+                                    savedField.teshirInjazId && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100",
+                                    workspaceFieldErrors.teshirInjazId && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                  )}
+                                />
+                                {savedField.teshirInjazId && (
+                                  <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                    <Check className="h-3.5 w-3.5" />
+                                  </div>
+                                )}
+                              </div>
+                              {workspaceFieldErrors.teshirInjazId && (
+                                <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                  <span>{workspaceFieldErrors.teshirInjazId}</span>
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-bold text-slate-900 dark:text-white">
+                              <span className="truncate">{teshirInjazIdVal || currentRow.injazApplicationId || "—"}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Field 2: Appointment Date */}
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Appointment Date
+                          </Label>
+                          {canEditTaeshir ? (
+                            <div>
+                              <Input
+                                type="date"
+                                value={teshirApptDateVal}
+                                onChange={(e) => {
+                                  setTeshirApptDateVal(e.target.value);
+                                  clearWorkspaceFieldError("teshirApptDate");
+                                }}
+                                onBlur={async (e) => {
+                                  const val = e.target.value;
+                                  const currentAppt = currentRow.appointmentDate && currentRow.appointmentDate !== "—" ? currentRow.appointmentDate : "";
+                                  if (val && val !== currentAppt) {
+                                    try {
+                                      clearWorkspaceFieldError("teshirApptDate");
+                                      if (injazStepName) {
+                                        await setTaeshirAppointmentV2(
+                                          injazStepName,
+                                          val,
+                                          teshirInjazIdVal || (currentRow.injazApplicationId || "")
+                                        );
+                                      }
+                                      toast.success("Appointment date saved");
+                                      setCurrentRow((prev) => prev ? { ...prev, appointmentDate: val } : null);
+                                      refreshAll();
+                                    } catch (err) {
+                                      const msg = formatCleanErrorMessage(err);
+                                      setWorkspaceFieldError("teshirApptDate", msg);
+                                      toast.error(msg);
+                                    }
                                   }
+                                }}
+                                className={cn(
+                                  "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium",
+                                  workspaceFieldErrors.teshirApptDate && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                )}
+                              />
+                              {workspaceFieldErrors.teshirApptDate && (
+                                <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                  <span>{workspaceFieldErrors.teshirApptDate}</span>
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
+                              <span className="truncate">{teshirApptDateVal || currentRow.appointmentDate || "—"}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Field 3: Te'shir Status */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Te&apos;shir Status
+                            </Label>
+                            {savedField.teshirStatus && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
+                          </div>
+                          {canEditTaeshir ? (
+                            <select
+                              value={normalizedTeshirStatus}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                try {
+                                  if (injazStepName && val !== "Completed") {
+                                    await setTaeshirStatusV2(injazStepName, val);
+                                  }
+                                  toast.success(`Te'shir status updated to ${val}`);
+                                  setCurrentRow((prev) => (prev ? { 
+                                    ...prev, 
+                                    teshirStatus: val,
+                                    injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
+                                  } : null));
+                                  triggerSavedFeedback("teshirStatus");
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
                                 }
                               }}
                               className={cn(
-                                "h-7 sm:h-7.5 px-2 text-xs font-mono font-medium",
-                                workspaceFieldErrors.teshirApptDate && "border-rose-500 ring-1 ring-rose-500/20 bg-rose-50/20 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+                                "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold transition-colors",
+                                savedField.teshirStatus && "border-emerald-500 ring-1 ring-emerald-500/20",
+                                (isTeshirCompleted || normalizedTeshirStatus === "Completed")
+                                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
+                                  : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                               )}
-                            />
-                            {workspaceFieldErrors.teshirApptDate && (
-                              <p className="mt-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3 shrink-0" />
-                                <span>{workspaceFieldErrors.teshirApptDate}</span>
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-mono font-medium text-slate-800 dark:text-zinc-200">
-                            <span className="truncate">{teshirApptDateVal || currentRow.appointmentDate || "—"}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Field 3: Te'shir Status */}
-                      <div className="space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Te&apos;shir Status
-                          </Label>
-                          {savedField.teshirStatus && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                              <Check className="h-3 w-3" /> Saved
-                            </span>
+                            >
+                              <option value="INFORMED">INFORMED</option>
+                              <option value="RECEIVED">RECEIVED</option>
+                              <option value="READY TO EMBASSY">READY TO EMBASSY</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          ) : (
+                            <div className={cn(
+                              "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
+                              (isTeshirCompleted || normalizedTeshirStatus === "Completed")
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
+                                : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
+                            )}>
+                              <span>{normalizedTeshirStatus}</span>
+                              {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
+                            </div>
                           )}
                         </div>
-                        {canEditTaeshir ? (
-                          <select
-                            value={normalizedTeshirStatus}
-                            onChange={async (e) => {
-                              const val = e.target.value;
-                              try {
-                                if (injazStepName && val !== "Completed") {
-                                  await setTaeshirStatusV2(injazStepName, val);
+
+                        {/* Field 4: Injaz Payment (Unpaid, Printed, Paid) Dropdown */}
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Injaz Payment
+                            </Label>
+                            {savedField.injazPayment && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
+                          </div>
+                          {canEditTaeshir ? (
+                            <select
+                              value={normalizedInjazPayment}
+                              onChange={async (e) => {
+                                const val = e.target.value as "Paid" | "Unpaid" | "Printed";
+                                try {
+                                  if (injazStepName) {
+                                    await recordInjazPaymentV2(injazStepName, val);
+                                  }
+                                  toast.success(`Injaz payment updated to ${val}`);
+                                  setCurrentRow((prev) => (prev ? { 
+                                    ...prev, 
+                                    injazPayment: val,
+                                    injaz: prev.injaz ? { ...prev.injaz, injaz_payment_status: val, payment_status: val } : { injaz_payment_status: val, payment_status: val }
+                                  } : null));
+                                  triggerSavedFeedback("injazPayment");
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
                                 }
-                                toast.success(`Te'shir status updated to ${val}`);
+                              }}
+                              className={cn(
+                                "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer transition-colors",
+                                savedField.injazPayment && "border-emerald-500 ring-1 ring-emerald-500/20",
+                                isInjazPaid
+                                  ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
+                                  : normalizedInjazPayment === "Printed"
+                                  ? "bg-white dark:bg-[#16161d] text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"
+                                  : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                              )}
+                            >
+                              <option value="Unpaid">Unpaid</option>
+                              <option value="Printed">Printed</option>
+                              <option value="Paid">Paid</option>
+                            </select>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
+                              <Badge
+                                variant={isInjazPaid ? "success" : normalizedInjazPayment === "Printed" ? "outline" : "warning"}
+                                className="text-[10px] font-bold py-0 h-4.5"
+                              >
+                                {normalizedInjazPayment}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Field 5: Te'shir Completed? Editable Dropdown */}
+                        <div className="col-span-2 space-y-0.5">
+                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                            Te&apos;shir Completed?
+                          </Label>
+                          {canEditTaeshir ? (
+                            <select
+                              value={isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
+                              onChange={(e) => {
+                                const val = e.target.value;
                                 setCurrentRow((prev) => (prev ? { 
                                   ...prev, 
                                   teshirStatus: val,
                                   injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
                                 } : null));
-                                triggerSavedFeedback("teshirStatus");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold transition-colors",
-                              savedField.teshirStatus && "border-emerald-500 ring-1 ring-emerald-500/20",
-                              (isTeshirCompleted || normalizedTeshirStatus === "Completed")
-                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500"
-                                : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
-                            )}
-                          >
-                            <option value="INFORMED">INFORMED</option>
-                            <option value="RECEIVED">RECEIVED</option>
-                            <option value="READY TO EMBASSY">READY TO EMBASSY</option>
-                            <option value="Completed">Completed</option>
-                          </select>
-                        ) : (
-                          <div className={cn(
-                            "h-7 sm:h-7.5 px-2 rounded-md border flex items-center justify-between font-semibold",
-                            (isTeshirCompleted || normalizedTeshirStatus === "Completed")
-                              ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
-                              : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
-                          )}>
-                            <span>{normalizedTeshirStatus}</span>
-                            {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Field 4: Injaz Payment (Unpaid, Printed, Paid) Dropdown */}
-                      <div className="space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Injaz Payment
-                          </Label>
-                          {savedField.injazPayment && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                              <Check className="h-3 w-3" /> Saved
-                            </span>
-                          )}
-                        </div>
-                        {canEditTaeshir ? (
-                          <select
-                            value={normalizedInjazPayment}
-                            onChange={async (e) => {
-                              const val = e.target.value as "Paid" | "Unpaid" | "Printed";
-                              try {
-                                if (injazStepName) {
-                                  await recordInjazPaymentV2(injazStepName, val);
-                                }
-                                toast.success(`Injaz payment updated to ${val}`);
-                                setCurrentRow((prev) => (prev ? { 
-                                  ...prev, 
-                                  injazPayment: val,
-                                  injaz: prev.injaz ? { ...prev.injaz, injaz_payment_status: val, payment_status: val } : { injaz_payment_status: val, payment_status: val }
-                                } : null));
-                                triggerSavedFeedback("injazPayment");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer transition-colors",
-                              savedField.injazPayment && "border-emerald-500 ring-1 ring-emerald-500/20",
-                              isInjazPaid
-                                ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
-                                : normalizedInjazPayment === "Printed"
-                                ? "bg-white dark:bg-[#16161d] text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700"
-                                : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
-                            )}
-                          >
-                            <option value="Unpaid">Unpaid</option>
-                            <option value="Printed">Printed</option>
-                            <option value="Paid">Paid</option>
-                          </select>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between">
-                            <Badge
-                              variant={isInjazPaid ? "success" : normalizedInjazPayment === "Printed" ? "outline" : "warning"}
-                              className="text-[10px] font-bold py-0 h-4.5"
-                            >
-                              {normalizedInjazPayment}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Field 5: Te'shir Completed? Editable Dropdown */}
-                      <div className="col-span-2 space-y-0.5">
-                        <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                          Te&apos;shir Completed?
-                        </Label>
-                        {canEditTaeshir ? (
-                          <select
-                            value={isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCurrentRow((prev) => (prev ? { 
-                                ...prev, 
-                                teshirStatus: val,
-                                injaz: prev.injaz ? { ...prev.injaz, taeshir_status: val } : prev.injaz
-                              } : null));
-                              toast.success(`Te'shir marked as ${val}`);
-                            }}
-                            className={cn(
-                              "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
-                              (isTeshirCompleted || normalizedTeshirStatus === "Completed")
-                                ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
-                                : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-slate-200 dark:border-zinc-700"
-                            )}
-                          >
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
-                          </select>
-                        ) : (
-                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center">
-                            <Badge
-                              variant="outline"
+                                toast.success(`Te'shir marked as ${val}`);
+                              }}
                               className={cn(
-                                "text-[10px] font-bold py-0 h-4.5",
+                                "w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md font-bold cursor-pointer",
                                 (isTeshirCompleted || normalizedTeshirStatus === "Completed")
-                                  ? "border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d]"
-                                  : "border-amber-300 text-amber-700"
+                                  ? "bg-white dark:bg-[#16161d] text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700"
+                                  : "bg-white dark:bg-[#16161d] text-amber-700 dark:text-amber-400 border-slate-200 dark:border-zinc-700"
                               )}
                             >
-                              {isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Field 6: Te'shir Remark (spans 2 columns) */}
-                      <div className="col-span-2 space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
-                            Te&apos;shir Remark
-                          </Label>
-                          {savingField.teshirRemark && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
-                            </span>
-                          )}
-                          {savedField.teshirRemark && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                              <Check className="h-3 w-3" /> Saved
-                            </span>
-                          )}
-                        </div>
-                        <div className="relative">
-                          <Input
-                            value={teshirRemarkVal}
-                            onChange={(e) => setTeshirRemarkVal(e.target.value)}
-                            onBlur={handleSaveTeshirRemark}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleSaveTeshirRemark();
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            placeholder="Appointment or biometric remarks... (Press Enter to save)"
-                            disabled={!canEditTaeshir || savingField.teshirRemark}
-                            className={cn(
-                              "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
-                              savedField.teshirRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
-                            )}
-                          />
-                          {savedField.teshirRemark && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
-                              <Check className="h-3.5 w-3.5" />
+                              <option value="In Progress">In Progress</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          ) : (
+                            <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] font-bold py-0 h-4.5",
+                                  (isTeshirCompleted || normalizedTeshirStatus === "Completed")
+                                    ? "border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-[#16161d]"
+                                    : "border-amber-300 text-amber-700"
+                                )}
+                              >
+                                {isTeshirCompleted || normalizedTeshirStatus === "Completed" ? "Completed" : "In Progress"}
+                              </Badge>
                             </div>
                           )}
+                        </div>
+
+                        {/* Field 6: Te'shir Remark (spans 2 columns) */}
+                        <div className="col-span-2 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
+                              Te&apos;shir Remark
+                            </Label>
+                            {savingField.teshirRemark && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-medium text-slate-500 animate-pulse">
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Saving...
+                              </span>
+                            )}
+                            {savedField.teshirRemark && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                <Check className="h-3 w-3" /> Saved
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <Input
+                              value={teshirRemarkVal}
+                              onChange={(e) => setTeshirRemarkVal(e.target.value)}
+                              onBlur={handleSaveTeshirRemark}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveTeshirRemark();
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
+                              placeholder="Appointment or biometric remarks... (Press Enter to save)"
+                              disabled={!canEditTaeshir || savingField.teshirRemark}
+                              className={cn(
+                                "h-7 sm:h-7.5 text-xs px-2 pr-7 transition-colors",
+                                savedField.teshirRemark && "border-emerald-500 ring-1 ring-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100"
+                              )}
+                            />
+                            {savedField.teshirRemark && (
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 dark:text-emerald-400">
+                                <Check className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Field 7: Te'shir Actions */}
-                <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Official Backend Injaz PDF Download */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownloadOfficialInjazPdf(injazStepName || placementName || "")}
-                      className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
-                      title="Download Official Injaz PDF"
-                    >
-                      <FileDown className="h-3 w-3 text-indigo-600" />
-                      <span>Injaz PDF</span>
-                    </Button>
+                  {/* Field 7: Te'shir Actions */}
+                  <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Official Backend Injaz PDF Download */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownloadOfficialInjazPdf(injazStepName || placementName || "")}
+                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                        title="Download Official Injaz PDF"
+                      >
+                        <FileDown className="h-3 w-3 text-indigo-600" />
+                        <span>Injaz PDF</span>
+                      </Button>
 
-                    {/* Dispatch to Extension */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSendToExtension}
-                      className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
-                      title="Send Candidate details to Browser Extension"
-                    >
-                      <Send className="h-3 w-3 text-sky-600" />
-                      <span>Extension</span>
-                    </Button>
-                  </div>
+                      {/* Dispatch to Extension */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSendToExtension}
+                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                        title="Send Candidate details to Browser Extension"
+                      >
+                        <Send className="h-3 w-3 text-sky-600" />
+                        <span>Extension</span>
+                      </Button>
+                    </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {canEditTaeshir && (
-                      <>
-                        {/* Finish stage button */}
-                        <Button
-                          size="sm"
-                          onClick={() => setIsTeshirFinishOpen(true)}
-                          disabled={isTeshirCompleted || isFinishingTeshir}
-                          className={cn(
-                            "h-6.5 sm:h-7 px-2.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm",
-                            isTeshirCompleted ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {canEditTaeshir && (
+                        <>
+                          {/* Finish stage button */}
+                          <Button
+                            size="sm"
+                            onClick={() => setIsTeshirFinishOpen(true)}
+                            disabled={isTeshirCompleted || isFinishingTeshir}
+                            className={cn(
+                              "h-6.5 sm:h-7 px-2.5 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm",
+                              isTeshirCompleted ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+                            )}
+                            title={isTeshirCompleted ? "Te'shir stage already finished" : "Officially finish the Te'shir stage"}
+                          >
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            <span>Finish stage</span>
+                          </Button>
+
+                          {/* Missed Appointment Button */}
+                          {injazStepName && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await forfeitInjazAndRestartV2(injazStepName);
+                                  toast.success("Appointment marked as Missed / Forfeited");
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
+                                }
+                              }}
+                              className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
+                              title="Mark appointment as Missed / Forfeited"
+                            >
+                              Missed
+                            </Button>
                           )}
-                          title={isTeshirCompleted ? "Te'shir stage already finished" : "Officially finish the Te'shir stage"}
-                        >
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          <span>Finish stage</span>
-                        </Button>
 
-                        {/* Missed Appointment Button */}
-                        {injazStepName && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await forfeitInjazAndRestartV2(injazStepName);
-                                toast.success("Appointment marked as Missed / Forfeited");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className="h-6.5 sm:h-7 px-2 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 font-semibold cursor-pointer"
-                            title="Mark appointment as Missed / Forfeited"
-                          >
-                            Missed
-                          </Button>
-                        )}
+                          {/* Undo Missed Button */}
+                          {injazStepName && Boolean(
+                            ((currentRow.injaz as any)?.injaz_previous_outcome === "Forfeited" ||
+                              (currentRow.injaz as any)?.injaz_previous_outcome === "Missed") &&
+                            ((currentRow.injaz as any)?.injaz_outcome === "Active" || !(currentRow.injaz as any)?.injaz_outcome) &&
+                            ((currentRow.injaz as any)?.injaz_payment_status === "Unpaid" || !(currentRow.injaz as any)?.injaz_payment_status)
+                          ) && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await undoForfeitInjazV2(injazStepName);
+                                  toast.success("Missed appointment status undone successfully");
+                                  refreshAll();
+                                } catch (err) {
+                                  toast.error(formatCleanErrorMessage(err));
+                                }
+                              }}
+                              className="h-6.5 sm:h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold cursor-pointer"
+                              title="Undo missed appointment status"
+                            >
+                              Undo Missed
+                            </Button>
+                          )}
 
-                        {/* Undo Missed Button */}
-                        {injazStepName && Boolean(
-                          ((currentRow.injaz as any)?.injaz_previous_outcome === "Forfeited" ||
-                            (currentRow.injaz as any)?.injaz_previous_outcome === "Missed") &&
-                          ((currentRow.injaz as any)?.injaz_outcome === "Active" || !(currentRow.injaz as any)?.injaz_outcome) &&
-                          ((currentRow.injaz as any)?.injaz_payment_status === "Unpaid" || !(currentRow.injaz as any)?.injaz_payment_status)
-                        ) && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await undoForfeitInjazV2(injazStepName);
-                                toast.success("Missed appointment status undone successfully");
-                                refreshAll();
-                              } catch (err) {
-                                toast.error(formatCleanErrorMessage(err));
-                              }
-                            }}
-                            className="h-6.5 sm:h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 font-semibold cursor-pointer"
-                            title="Undo missed appointment status"
-                          >
-                            Undo Missed
-                          </Button>
-                        )}
-
-                        {injazStepName && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setNewTaeshirDate("");
-                              setTaeshirRescheduleReason("");
-                              setIsTaeshirRescheduleOpen(true);
-                            }}
-                            className="h-6.5 sm:h-7 px-2 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold cursor-pointer"
-                          >
-                            Reschedule
-                          </Button>
-                        )}
-                        {injazStepName && (
-                          <UndoLastStepButton
-                            doctype="Clearance Step"
-                            name={injazStepName}
-                            askOnClick
-                            onSuccess={refreshAll}
-                            size="sm"
-                            className="h-6.5 sm:h-7 text-xs"
-                          />
-                        )}
-                      </>
-                    )}
+                          {injazStepName && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setNewTaeshirDate("");
+                                setTaeshirRescheduleReason("");
+                                setIsTaeshirRescheduleOpen(true);
+                              }}
+                              className="h-6.5 sm:h-7 px-2 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-semibold cursor-pointer"
+                            >
+                              Reschedule
+                            </Button>
+                          )}
+                          {injazStepName && (
+                            <UndoLastStepButton
+                              doctype="Clearance Step"
+                              name={injazStepName}
+                              askOnClick
+                              onSuccess={refreshAll}
+                              size="sm"
+                              className="h-6.5 sm:h-7 text-xs"
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 3: EMBASSY / WAKALA (Bottom-Left)                      */}
@@ -2037,7 +2425,7 @@ export function ApplicantFollowUpWorkspace({
                         <Building2 className="h-3.5 w-3.5" />
                       </div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                        EMBASSY / WAKALA
+                        {isKuwait ? "KUWAIT EMBASSY" : "EMBASSY / WAKALA"}
                       </h3>
                     </div>
                     {currentRow.embassyStatus === "Stamped" ? (
@@ -2055,7 +2443,7 @@ export function ApplicantFollowUpWorkspace({
                   {isEmbassyLocked && (
                     <div className="bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/30 px-3 py-1 flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
                       <Lock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span>Stage Locked: Inaccessible until LMIS is Issued and {isSaudiCorridor ? "Te'shir is Completed." : "clearance requirements are met."}</span>
+                      <span>Stage Locked: Inaccessible until LMIS is Issued and {isKuwait ? "Telesign is Completed." : "Te'shir is Completed."}</span>
                     </div>
                   )}
 
@@ -2118,7 +2506,11 @@ export function ApplicantFollowUpWorkspace({
                         <Label className="text-[10px] font-semibold text-slate-600 dark:text-zinc-400">
                           Wakala Status
                         </Label>
-                        {canEditEmbassy ? (
+                        {isKuwait ? (
+                          <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center font-medium text-slate-400 dark:text-zinc-500 text-xs">
+                            <span>— N/A (Kuwait)</span>
+                          </div>
+                        ) : canEditEmbassy ? (
                           <select
                             value={
                               currentRow.wakalaStatus?.toLowerCase() === "paid" ||
@@ -2435,17 +2827,19 @@ export function ApplicantFollowUpWorkspace({
                 {/* Field 8: Embassy Actions */}
                 <div className="px-3 py-1 sm:py-1.5 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161c] flex items-center justify-between flex-wrap gap-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {/* Official Backend Injaz PDF Download */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownloadOfficialInjazPdf(embassyStepName || placementName || "")}
-                      className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
-                      title="Download Official Injaz PDF"
-                    >
-                      <FileDown className="h-3 w-3 text-teal-600" />
-                      <span>Injaz PDF</span>
-                    </Button>
+                    {/* Official Backend Injaz PDF Download (Saudi only) */}
+                    {!isKuwait && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownloadOfficialInjazPdf(embassyStepName || placementName || "")}
+                        className="h-6.5 sm:h-7 text-xs px-2 gap-1 border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold"
+                        title="Download Official Injaz PDF"
+                      >
+                        <FileDown className="h-3 w-3 text-teal-600" />
+                        <span>Injaz PDF</span>
+                      </Button>
+                    )}
 
                     {/* Dispatch to Extension */}
                     <Button
@@ -3319,6 +3713,166 @@ export function ApplicantFollowUpWorkspace({
                 </>
               ) : (
                 "Confirm & Finish Stage"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3c. Finish Kuwait Telesign Stage Confirmation Dialog */}
+      <Dialog open={isTelesignFinishOpen} onOpenChange={setIsTelesignFinishOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Finish Telesign Stage (Kuwait)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Officially finish the Telesign clearance stage for Kuwait candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
+              This completes the clearance step on the backend pipeline and satisfies requirements for Kuwait Embassy submission.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Telesign Reference Number (Optional)</Label>
+              <Input
+                type="text"
+                value={telesignRefNoVal}
+                onChange={(e) => setTelesignRefNoVal(e.target.value)}
+                placeholder="e.g. TEL-892341"
+                className="h-8 text-xs font-mono uppercase"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setIsTelesignFinishOpen(false)} className="text-xs h-8">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isFinishingTelesign}
+              onClick={async () => {
+                if (!injazStepName) {
+                  toast.error("Telesign clearance step record not found.");
+                  return;
+                }
+                try {
+                  setIsFinishingTelesign(true);
+                  if (telesignRefNoVal.trim()) {
+                    await setStepRemarksV2(injazStepName, `Ref: ${telesignRefNoVal.trim()}`);
+                  }
+                  await completeClearanceStepV2(injazStepName);
+                  toast.success("Telesign stage completed successfully!");
+                  setIsTelesignFinishOpen(false);
+                  setCurrentRow((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          teshirStatus: "Completed",
+                          injaz: prev.injaz ? { ...prev.injaz, status: "Complete" } : undefined,
+                        }
+                      : null
+                  );
+                  refreshAll();
+                } catch (err) {
+                  toast.error(formatCleanErrorMessage(err));
+                } finally {
+                  setIsFinishingTelesign(false);
+                }
+              }}
+              className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+            >
+              {isFinishingTelesign ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Finishing...
+                </>
+              ) : (
+                "Confirm & Finish Stage"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 1c. Manage Kuwait LMIS Police Ashara Dialog */}
+      <Dialog open={isPoliceAsharaOpen} onOpenChange={setIsPoliceAsharaOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#141419]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Manage Kuwait Police Ashara
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Record official Police Ashara sub-check details for Kuwait LMIS candidate{" "}
+              <strong className="text-slate-900 dark:text-zinc-100 font-semibold">{currentRow.fullName}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Police Ashara Status *</Label>
+              <select
+                value={policeAsharaStatus}
+                onChange={(e) => setPoliceAsharaStatus(e.target.value)}
+                className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-bold"
+              >
+                <option value="Pending">Pending</option>
+                <option value="Booked">Booked</option>
+                <option value="Completed">Completed</option>
+                <option value="Cleared">Cleared</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Appointment Date</Label>
+                <Input
+                  type="date"
+                  value={policeAsharaApptDate}
+                  onChange={(e) => setPoliceAsharaApptDate(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Amount (ETB / Fee)</Label>
+                <Input
+                  type="number"
+                  value={policeAsharaAmount}
+                  onChange={(e) => setPoliceAsharaAmount(e.target.value)}
+                  placeholder="e.g. 500"
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Police Ashara Remark</Label>
+              <Input
+                type="text"
+                value={policeAsharaRemark}
+                onChange={(e) => setPoliceAsharaRemark(e.target.value)}
+                placeholder="Police station or biometric remarks..."
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setIsPoliceAsharaOpen(false)} className="text-xs h-8">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={isSavingPoliceAshara}
+              onClick={handleSavePoliceAshara}
+              className="text-xs h-8 bg-amber-700 hover:bg-amber-800 text-white font-semibold cursor-pointer"
+            >
+              {isSavingPoliceAshara ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                  Saving...
+                </>
+              ) : (
+                "Save Police Ashara"
               )}
             </Button>
           </DialogFooter>

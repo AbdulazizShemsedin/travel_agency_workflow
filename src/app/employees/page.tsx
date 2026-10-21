@@ -32,6 +32,7 @@ import {
   Check,
   Undo2,
   Copy,
+  Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ import {
   listEmployeesV2,
   createEmployeeV2,
   updateEmployeeRolesV2,
+  updateEmployeeInfoV2,
   resetEmployeePasswordV2,
   toggleEmployeeStatusV2,
   deleteEmployeeV2,
@@ -253,6 +255,12 @@ export default function EmployeesPage() {
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = React.useState<boolean>(false);
+  const [employeeToEdit, setEmployeeToEdit] = React.useState<V2EmployeeRecord | null>(null);
+  const [editInfoForm, setEditInfoForm] = React.useState({
+    first_name: "",
+    last_name: "",
+    phone: "",
+  });
   const [selectedForRoles, setSelectedForRoles] = React.useState<V2EmployeeRecord | null>(null);
   const [editingRoles, setEditingRoles] = React.useState<string[]>([]);
   const [selectedForPassword, setSelectedForPassword] = React.useState<V2EmployeeRecord | null>(null);
@@ -372,6 +380,24 @@ export default function EmployeesPage() {
     },
   });
 
+  // Mutation 1.5: Update Employee Profile Info
+  const updateInfoMutation = useMutation({
+    mutationFn: (payload: { email: string; first_name: string; last_name?: string; phone?: string }) =>
+      updateEmployeeInfoV2(payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["v2_employees_directory"] });
+      setEmployeeToEdit(null);
+      toast.success("Employee profile updated successfully!", {
+        description: `Updated profile details for ${variables.email}.`,
+      });
+    },
+    onError: (err: any) => {
+      toast.error("Failed to update employee profile", {
+        description: formatCleanErrorMessage(err) || err.message || "Please verify the information and try again.",
+      });
+    },
+  });
+
   // Mutation 2: Update Security Roles
   const updateRolesMutation = useMutation({
     mutationFn: (payload: { email: string; roles: string[] }) =>
@@ -469,6 +495,15 @@ export default function EmployeesPage() {
     setEditingRoles((prev) => {
       const exists = prev.includes(roleName);
       return exists ? prev.filter((r) => r !== roleName) : [...prev, roleName];
+    });
+  };
+
+  const handleOpenEditEmployee = (emp: V2EmployeeRecord) => {
+    setEmployeeToEdit(emp);
+    setEditInfoForm({
+      first_name: emp.first_name || "",
+      last_name: emp.last_name || "",
+      phone: emp.phone || emp.mobile_no || "",
     });
   };
 
@@ -956,6 +991,18 @@ export default function EmployeesPage() {
                       {isManagerOrAdmin && (
                         <td className="py-2 px-3 text-right">
                           <div className="inline-flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditEmployee(emp)}
+                              className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-blue-600"
+                              title="Edit Employee Profile"
+                            >
+                              <Pencil className="h-3 w-3 mr-1 text-blue-600" />
+                              Edit
+                            </Button>
+
                             <Button
                               type="button"
                               variant="outline"
@@ -1632,6 +1679,126 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Modal 1.5: Edit Employee Profile                              */}
+      {/* ------------------------------------------------------------- */}
+      {employeeToEdit && (
+        <Dialog open={Boolean(employeeToEdit)} onOpenChange={(open) => !open && setEmployeeToEdit(null)}>
+          <DialogContent className="sm:max-w-md bg-white dark:bg-[#121215] border-slate-200 dark:border-[#222227] text-slate-900 dark:text-white p-6">
+            <DialogHeader className="border-b border-slate-100 dark:border-[#1e1e24] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Pencil className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
+                    Edit Employee Profile
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+                    Updating account details for <strong>{employeeToEdit.email}</strong>.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!editInfoForm.first_name.trim()) {
+                  toast.error("First name is required");
+                  return;
+                }
+                updateInfoMutation.mutate({
+                  email: employeeToEdit.email,
+                  first_name: editInfoForm.first_name,
+                  last_name: editInfoForm.last_name,
+                  phone: editInfoForm.phone,
+                });
+              }}
+              className="space-y-4 py-3"
+            >
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Email Address (System Identifier)
+                </Label>
+                <Input
+                  type="email"
+                  value={employeeToEdit.email}
+                  disabled
+                  className="bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-not-allowed text-xs h-9 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    First Name <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    required
+                    value={editInfoForm.first_name}
+                    onChange={(e) => setEditInfoForm((prev) => ({ ...prev, first_name: e.target.value }))}
+                    className="text-xs h-9"
+                    placeholder="e.g. John"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Last Name
+                  </Label>
+                  <Input
+                    type="text"
+                    value={editInfoForm.last_name}
+                    onChange={(e) => setEditInfoForm((prev) => ({ ...prev, last_name: e.target.value }))}
+                    className="text-xs h-9"
+                    placeholder="e.g. Doe"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Phone Number / Mobile
+                </Label>
+                <Input
+                  type="text"
+                  value={editInfoForm.phone}
+                  onChange={(e) => setEditInfoForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  className="text-xs h-9 font-mono"
+                  placeholder="e.g. +251 911 234 567"
+                />
+              </div>
+
+              <DialogFooter className="border-t border-slate-100 dark:border-[#1e1e24] pt-3 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEmployeeToEdit(null)}
+                  className="text-xs h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateInfoMutation.isPending || !editInfoForm.first_name.trim()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 shadow-xs"
+                >
+                  {updateInfoMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Saving Changes...
+                    </>
+                  ) : (
+                    "Save Profile"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* Modal 2: Edit Security Roles                                  */}

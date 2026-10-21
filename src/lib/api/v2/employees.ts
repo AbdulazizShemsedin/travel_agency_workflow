@@ -41,6 +41,14 @@ export interface UpdateEmployeeRolesPayload {
   roles: string[];
 }
 
+export interface UpdateEmployeeInfoPayload {
+  email: string;
+  first_name: string;
+  last_name?: string | null;
+  phone?: string | null;
+  mobile_no?: string | null;
+}
+
 export interface ResetEmployeePasswordPayload {
   email: string;
   new_password: string;
@@ -217,6 +225,29 @@ export async function toggleEmployeeStatusV2(
  */
 export async function deleteEmployeeV2(userEmail: string): Promise<DeleteEmployeeResult> {
   return deleteEmployeeApiV2(userEmail);
+}
+
+/**
+ * Updates an employee's personal profile information (name, phone) on the User record.
+ * Uses native frappe.client.set_value RPC per AGENTS.md Rule 7.
+ */
+export async function updateEmployeeInfoV2(
+  payload: UpdateEmployeeInfoPayload
+): Promise<void> {
+  const email = payload.email.trim().toLowerCase();
+  await requestV2("/api/method/frappe.client.set_value", {
+    method: "POST",
+    body: {
+      doctype: "User",
+      name: email,
+      fieldname: {
+        first_name: payload.first_name.trim(),
+        last_name: (payload.last_name || "").trim(),
+        phone: (payload.phone || "").trim(),
+        mobile_no: (payload.mobile_no || payload.phone || "").trim(),
+      },
+    },
+  });
 }
 
 /**

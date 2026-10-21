@@ -200,6 +200,7 @@ export function isCandidateEligibleForTaeshir(row: WorkspaceApplicantRow): { eli
 function FollowUpExtensionsDropdown({ row }: { row: WorkspaceApplicantRow }) {
   const [open, setOpen] = React.useState(false);
   const [isSending, setIsSending] = React.useState(false);
+  const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
 
   const handleSend = async (target: "LMIS" | "Taeshir" | "Musaned", label: string) => {
     setOpen(false);
@@ -262,22 +263,26 @@ function FollowUpExtensionsDropdown({ row }: { row: WorkspaceApplicantRow }) {
           <span>For LMIS</span>
           <ExternalLink className="h-3 w-3 opacity-50" />
         </button>
-        <button
-          type="button"
-          onClick={() => handleSend("Taeshir", "For Taeshir")}
-          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
-        >
-          <span>For Taeshir</span>
-          <ExternalLink className="h-3 w-3 opacity-50" />
-        </button>
-        <button
-          type="button"
-          onClick={() => handleSend("Musaned", "For Musaned")}
-          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
-        >
-          <span>For Musaned</span>
-          <ExternalLink className="h-3 w-3 opacity-50" />
-        </button>
+        {!isKuwait && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleSend("Taeshir", "For Taeshir")}
+              className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+            >
+              <span>For Taeshir</span>
+              <ExternalLink className="h-3 w-3 opacity-50" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSend("Musaned", "For Musaned")}
+              className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+            >
+              <span>For Musaned</span>
+              <ExternalLink className="h-3 w-3 opacity-50" />
+            </button>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -527,7 +532,7 @@ export function FollowUpWorkspace({
     { value: "Pending", label: "Pending", badgeClass: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300" },
   ], []);
 
-  // Columns for Level 1 Table: Checkbox select, Number, and preserved exact approved order
+  // Columns for Level 1 Table: Checkbox select, Number, and preserved exact approved order (14 columns)
   const columns: OperationalColumn<WorkspaceApplicantRow>[] = [
     {
       id: "select",
@@ -594,6 +599,7 @@ export function FollowUpWorkspace({
         </span>
       ),
     },
+    // 1. Name
     {
       id: "name",
       header: "NAME",
@@ -615,9 +621,66 @@ export function FollowUpWorkspace({
         </div>
       ),
     },
+    // 2. Destination Country
+    {
+      id: "destinationCountry",
+      header: "COUNTRY",
+      accessorKey: "destinationCountry",
+      width: "80px",
+      isReadOnly: true,
+      cell: (row) => {
+        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[9.5px] py-0 px-1 font-semibold",
+              isKuwait
+                ? "border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/50 dark:bg-sky-950/30"
+                : "border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30"
+            )}
+          >
+            {isKuwait ? "Kuwait" : "Saudi"}
+          </Badge>
+        );
+      },
+    },
+    // 3. Agency Name
+    {
+      id: "agencyName",
+      header: "AGENCY",
+      accessorKey: "agencyName",
+      width: "85px",
+      isReadOnly: true,
+      cell: (row) => (
+        <span
+          className="font-medium text-slate-700 dark:text-zinc-300 text-[10.5px] truncate block max-w-[80px]"
+          title={row.agencyName || "—"}
+        >
+          {row.agencyName && row.agencyName !== "—" ? row.agencyName : "—"}
+        </span>
+      ),
+    },
+    // 4. Sponsor Name
+    {
+      id: "sponsorName",
+      header: "SPONSOR",
+      accessorKey: "sponsorName",
+      width: "85px",
+      isReadOnly: true,
+      cell: (row) => (
+        <span
+          className="font-medium text-slate-700 dark:text-zinc-300 text-[10.5px] truncate block max-w-[80px]"
+          title={row.sponsorName || "—"}
+        >
+          {row.sponsorName && row.sponsorName !== "—" ? row.sponsorName : "—"}
+        </span>
+      ),
+    },
+    // 5. Stage Status
     {
       id: "stageStatus",
-      header: "STAGE STATUS",
+      header: "STAGE",
       accessorKey: "stageStatus",
       width: "80px",
       isReadOnly: true,
@@ -631,6 +694,7 @@ export function FollowUpWorkspace({
         );
       },
     },
+    // 6. Duration
     {
       id: "duration",
       header: "DURATION",
@@ -643,6 +707,22 @@ export function FollowUpWorkspace({
         </span>
       ),
     },
+    // 7. COC Status
+    {
+      id: "cocStatus",
+      header: "COC STATUS",
+      accessorKey: "cocStatus",
+      width: "75px",
+      isReadOnly: true,
+      cell: (row) => {
+        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+        if (isKuwait) {
+          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait">—</span>;
+        }
+        return getStatusBadge(row.cocStatus || "Not Started");
+      },
+    },
+    // 8. LMIS Status
     {
       id: "lmisStatus",
       header: "LMIS STATUS",
@@ -663,22 +743,51 @@ export function FollowUpWorkspace({
         );
       },
     },
+    // 9. Taeshir Appointment Date
+    {
+      id: "taeshirApptDate",
+      header: "TAESHIR APPT",
+      accessorKey: "appointmentDate",
+      width: "85px",
+      isReadOnly: true,
+      cell: (row) => {
+        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+        if (isKuwait) {
+          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait (Telesign has no appointment date)">—</span>;
+        }
+        const dateVal = row.appointmentDate && row.appointmentDate !== "—" ? row.appointmentDate : "—";
+        return <span className="font-mono text-slate-700 dark:text-zinc-300 text-[10px]">{dateVal}</span>;
+      },
+    },
+    // 10. Taeshir Status (Saudi) / Telesign Status (Kuwait)
     {
       id: "teshirStatus",
-      header: "TE'SHIR STATUS",
+      header: "TAESHIR / TELESIGN",
       accessorKey: "teshirStatus",
-      width: "70px",
+      width: "85px",
       isReadOnly: true,
-      cell: (row) => getStatusBadge(row.teshirStatus),
+      cell: (row) => {
+        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+        const status = row.teshirStatus || (isKuwait ? "Pending" : "—");
+        return getStatusBadge(status);
+      },
     },
+    // 11. Wakala Status
     {
       id: "wakalaStatus",
       header: "WAKALA STATUS",
       accessorKey: "wakalaStatus",
-      width: "70px",
+      width: "75px",
       isReadOnly: true,
-      cell: (row) => getStatusBadge(row.wakalaStatus),
+      cell: (row) => {
+        const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
+        if (isKuwait) {
+          return <span className="text-slate-400 font-mono text-[11px]" title="Not applicable for Kuwait">—</span>;
+        }
+        return getStatusBadge(row.wakalaStatus);
+      },
     },
+    // 12. Embassy/Visa Status
     {
       id: "embassyStatus",
       header: "EMBASSY / VISA",
@@ -687,9 +796,10 @@ export function FollowUpWorkspace({
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.embassyStatus),
     },
+    // 13. Medical 2 Status
     {
       id: "medical2Status",
-      header: "MEDICAL 2 STATUS",
+      header: "MEDICAL 2",
       accessorKey: "medical2Status",
       width: "75px",
       cell: (row) => {
@@ -715,18 +825,20 @@ export function FollowUpWorkspace({
         );
       },
     },
+    // 14. Departure Status
     {
       id: "departureStatus",
-      header: "DEPARTURE STATUS",
+      header: "DEPARTURE",
       accessorKey: "departureStatus",
       width: "75px",
       isReadOnly: true,
       cell: (row) => getStatusBadge(row.departureStatus),
     },
+    // Row Actions
     {
       id: "actions",
       header: "ACTION",
-      width: "140px",
+      width: "115px",
       align: "center",
       sortable: false,
       isReadOnly: true,

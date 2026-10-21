@@ -187,6 +187,7 @@ export async function fetchOperationalWorkspaceDataV2(
 
       // Check step completion statuses
       const isSaudi = dest.toLowerCase().includes("saudi");
+      const isKuwait = dest.toLowerCase().includes("kuwait");
 
       // 1. LMIS Completion: LMIS step must be Issued/Completed, and COC fields finished (for Saudi)
       const isLmsIssued =
@@ -442,7 +443,7 @@ export async function fetchOperationalWorkspaceDataV2(
         nationalId: applicant.national_id || "",
         emergencyContactName: applicant.emergency_contact_name || (applicant as any).relative_name || "",
         emergencyContactPhone: applicant.emergency_contact_phone || (applicant as any).relative_phone || "",
-        cocStatus: applicant.coc_status || "Not Started",
+        cocStatus: isKuwait ? "—" : (applicant.coc_status || "Not Started"),
         contractDate: contractDate || "—",
         duration: duration || 0,
         medicalRemaining,
@@ -453,10 +454,12 @@ export async function fetchOperationalWorkspaceDataV2(
           (injazStep as any)?.reference_no ||
           "",
         appointmentDate:
-          injazStep?.appointment_date ||
-          injazStep?.date_started ||
-          injazStep?.due_date ||
-          "—",
+          isKuwait
+            ? "—"
+            : injazStep?.appointment_date ||
+              injazStep?.date_started ||
+              injazStep?.due_date ||
+              "—",
         contact:
           applicant.phone ||
           applicant.phone_number ||
@@ -475,7 +478,7 @@ export async function fetchOperationalWorkspaceDataV2(
         age: applicant.age ?? (applicant.date_of_birth ? calculateAge(applicant.date_of_birth) : "—"),
         maritalStatus: applicant.marital_status || "Single",
         children: typeof applicant.children === "number" ? applicant.children : 0,
-        wakalaStatus,
+        wakalaStatus: isKuwait ? "—" : wakalaStatus,
         wakalaAmount,
         wakalaPaidDate,
         embassyStatus,
@@ -490,6 +493,9 @@ export async function fetchOperationalWorkspaceDataV2(
           return isNaN(diff) ? "—" : `${diff} days`;
         })(),
         teshirStatus: (() => {
+          if (isKuwait) {
+            return injazStep?.status || "Pending";
+          }
           const isDone =
             injazStep?.status === "Completed" ||
             injazStep?.status === "Complete" ||
@@ -563,6 +569,7 @@ export async function fetchOperationalWorkspaceDataV2(
         // Clearances records
         lms: lmsStep,
         injaz: injazStep,
+        telesign: isKuwait ? injazStep : undefined,
         wakala: undefined,
         embassy: embassyStep,
         stamp: embassyStep?.status === "Stamped" ? embassyStep : undefined,

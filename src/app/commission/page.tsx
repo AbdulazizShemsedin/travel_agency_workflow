@@ -180,15 +180,8 @@ export default function AdminCommissionPage() {
   // Contractor Batch Config States (Tab 7)
   const [configContractorName, setConfigContractorName] = React.useState<string>("");
   const [configBatchMode, setConfigBatchMode] = React.useState<string>("Manual Only");
-  const [configBatchThreshold, setConfigBatchThreshold] = React.useState<number>(10);
-  const [configRates, setConfigRates] = React.useState<
-    Array<{
-      destination_country: string;
-      gender?: "Both" | "Male" | "Female" | string;
-      rate: number;
-      currency: string;
-    }>
-  >([]);
+  const [configBatchThreshold, setConfigBatchThreshold] = React.useState<number | string>(10);
+  const [configRates, setConfigRates] = React.useState<V2ContractorCommissionRate[]>([]);
   const [isSavingConfig, setIsSavingConfig] = React.useState<boolean>(false);
 
   // Action Confirmation States
@@ -261,7 +254,8 @@ export default function AdminCommissionPage() {
       setConfigRates(
         contractorRates.map((r) => ({
           destination_country: r.destination_country,
-          gender: r.gender || "Both",
+          entry_track: (r.entry_track === "Muayena" ? "Muayena" : "Standard") as "Standard" | "Muayena",
+          gender: (r.gender === "Male" ? "Male" : "Female") as "Female" | "Male",
           rate: Number(r.rate) || 0,
           currency: r.currency || "USD",
         }))
@@ -989,7 +983,7 @@ export default function AdminCommissionPage() {
     try {
       await updateContractorBatchConfigV2(targetContractor, {
         batch_mode: configBatchMode as "Manual Only" | "Auto-Threshold",
-        batch_threshold: Number(configBatchThreshold) || 10,
+        batch_threshold: Math.max(1, parseInt(String(configBatchThreshold), 10) || 10),
       });
 
       if (configRates && configRates.length > 0) {
@@ -1015,7 +1009,8 @@ export default function AdminCommissionPage() {
       ...prev,
       {
         destination_country: "Saudi Arabia",
-        gender: "Both",
+        entry_track: "Standard",
+        gender: "Female",
         rate: 0,
         currency: "SAR",
       },
@@ -2565,7 +2560,15 @@ export default function AdminCommissionPage() {
                     type="number"
                     min="1"
                     value={configBatchThreshold}
-                    onChange={(e) => setConfigBatchThreshold(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/^0+(?=\d)/, "");
+                      setConfigBatchThreshold(val === "" ? "" : Number(val));
+                    }}
+                    onBlur={(e) => {
+                      const num = parseInt(e.target.value, 10);
+                      const clean = isNaN(num) || num < 1 ? 10 : num;
+                      setConfigBatchThreshold(clean);
+                    }}
                     className="h-8 text-xs"
                     placeholder="e.g. 10"
                   />
