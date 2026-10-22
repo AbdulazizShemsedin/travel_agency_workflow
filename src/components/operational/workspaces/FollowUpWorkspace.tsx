@@ -982,10 +982,12 @@ export function FollowUpWorkspace({
       setFormTeshirRef(validation.fieldValues.telesignRef || "");
       setFormAppointmentDate(validation.fieldValues.appointmentDate || new Date().toISOString().split("T")[0]);
       setFormInjazAppId(validation.fieldValues.injazApplicationId || "");
-      setFormInjazPaymentStatus(validation.fieldValues.injazPaymentStatus || "Paid");
-      setFormTeshirStatus(validation.fieldValues.teshirStatus || "INFORMED");
-      setFormTeshirCompleted(validation.fieldValues.teshirCompleted || "In Progress");
+      // When user chooses Completed, default Injaz Payment to Paid if currently Unpaid/Printed
+      setFormInjazPaymentStatus(validation.fieldValues.injazPaymentStatus === "Paid" ? "Paid" : "Paid");
+      setFormTeshirStatus(validation.fieldValues.teshirStatus === "INFORMED" ? "READY TO EMBASSY" : validation.fieldValues.teshirStatus || "READY TO EMBASSY");
+      setFormTeshirCompleted("Completed");
       setFormTeshirRemark(validation.fieldValues.teshirRemark || "");
+      setFormIssueDate((row.injaz as any)?.date_completed || new Date().toISOString().split("T")[0]);
       setFieldErrors({});
 
       if (validation.isComplete) {
@@ -1044,7 +1046,7 @@ export function FollowUpWorkspace({
       setFormIssueDate(validation.fieldValues.visaIssueDate || new Date().toISOString().split("T")[0]);
       setFormSubmissionDate(validation.fieldValues.submissionDate || "");
       setFormVisaValidUntil(validation.fieldValues.visaDeadline || "");
-      setFormWakalaStatus(validation.fieldValues.wakalaStatus || "Paid");
+      setFormWakalaStatus("Paid");
       setFormEmbassyRemark(validation.fieldValues.embassyRemark || "");
       setFieldErrors({});
 
@@ -1118,7 +1120,7 @@ export function FollowUpWorkspace({
       setFormFlightNumber(validation.fieldValues.flightNumber || "");
       setFormDepartureDate(validation.fieldValues.departureDate || new Date().toISOString().split("T")[0]);
       setFormDepartureTime(validation.fieldValues.departureTime || "10:00");
-      setFormMedical2Status(validation.fieldValues.medical2Status || "FIT");
+      setFormMedical2Status(validation.fieldValues.medical2Status === "UNFIT" ? "UNFIT" : "FIT");
       setFormDepartureStatus(validation.fieldValues.departureStatus || "Scheduled");
       setFormTicketRemark(validation.fieldValues.ticketRemark || "");
       setFieldErrors({});
@@ -1186,8 +1188,13 @@ export function FollowUpWorkspace({
           )?.name;
         if (!stepName) throw new Error("Te'shir clearance step record not found.");
 
-        const refNo = stageModalState.validation.fieldValues.telesignRef || undefined;
-        await completeClearanceStepV2(stepName, refNo);
+        const refNo =
+          stageModalState.validation.fieldValues.telesignRef ||
+          stageModalState.validation.fieldValues.injazApplicationId ||
+          formTeshirRef.trim() ||
+          formInjazAppId.trim() ||
+          undefined;
+        await completeClearanceStepV2(stepName, refNo, undefined, formIssueDate || undefined);
 
         await handleMutationSuccess(`Te'shir clearance marked as Complete for ${row.fullName}`);
         setStageModalState(null);
@@ -1272,7 +1279,9 @@ export function FollowUpWorkspace({
 
       if (Object.keys(errors).length > 0) {
         setFieldErrors(errors);
-        toast.error("Please fill in all required fields before completing the stage.");
+        toast.error("Please fill in all required fields before completing the stage.", {
+          description: Object.values(errors).join(" • "),
+        });
         return;
       }
     }
@@ -1361,7 +1370,12 @@ export function FollowUpWorkspace({
         stageDetailsSaved = true;
 
         if (andComplete || formTeshirCompleted === "Completed") {
-          await completeClearanceStepV2(stepName);
+          await completeClearanceStepV2(
+            stepName,
+            formInjazAppId.trim() || undefined,
+            undefined,
+            formIssueDate || undefined
+          );
           await handleMutationSuccess(`Te'shir stage completed for ${row.fullName}`);
           setStageModalState(null);
         } else {
@@ -1380,12 +1394,12 @@ export function FollowUpWorkspace({
         stageDetailsSaved = true;
 
         if (andComplete || formTeshirCompleted === "Completed") {
-          await completeClearanceStepV2(stepName, formTeshirRef.trim());
+          await completeClearanceStepV2(stepName, formTeshirRef.trim(), undefined, formIssueDate || undefined);
           await handleMutationSuccess(`Telesign stage completed for ${row.fullName}`);
           setStageModalState(null);
         } else {
           if (formTeshirRef.trim()) {
-            await completeClearanceStepV2(stepName, formTeshirRef.trim());
+            await completeClearanceStepV2(stepName, formTeshirRef.trim(), undefined, formIssueDate || undefined);
           }
           await handleMutationSuccess(`Telesign details saved for ${row.fullName}`);
           setStageModalState(null);
@@ -2515,22 +2529,35 @@ export function FollowUpWorkspace({
                             <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.injazAppId}</p>
                           )}
                         </div>
-                        <div>
-                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                            Taeshir Appointment Date <span className="text-rose-500 font-bold">*</span>
-                          </Label>
-                          <Input
-                            type="date"
-                            value={formAppointmentDate}
-                            onChange={(e) => {
-                              setFormAppointmentDate(e.target.value);
-                              if (fieldErrors.appointmentDate) setFieldErrors((prev) => ({ ...prev, appointmentDate: "" }));
-                            }}
-                            className={cn("h-8 text-xs font-mono", fieldErrors.appointmentDate && "border-rose-500")}
-                          />
-                          {fieldErrors.appointmentDate && (
-                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.appointmentDate}</p>
-                          )}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Taeshir Appointment Date <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <Input
+                              type="date"
+                              value={formAppointmentDate}
+                              onChange={(e) => {
+                                setFormAppointmentDate(e.target.value);
+                                if (fieldErrors.appointmentDate) setFieldErrors((prev) => ({ ...prev, appointmentDate: "" }));
+                              }}
+                              className={cn("h-8 text-xs font-mono", fieldErrors.appointmentDate && "border-rose-500")}
+                            />
+                            {fieldErrors.appointmentDate && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.appointmentDate}</p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Completion Date
+                            </Label>
+                            <Input
+                              type="date"
+                              value={formIssueDate}
+                              onChange={(e) => setFormIssueDate(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -2539,13 +2566,24 @@ export function FollowUpWorkspace({
                             </Label>
                             <select
                               value={formInjazPaymentStatus}
-                              onChange={(e) => setFormInjazPaymentStatus(e.target.value)}
-                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                              onChange={(e) => {
+                                setFormInjazPaymentStatus(e.target.value);
+                                if (fieldErrors.injazPaymentStatus) setFieldErrors((prev) => ({ ...prev, injazPaymentStatus: "" }));
+                              }}
+                              className={cn(
+                                "w-full h-8 px-2.5 text-xs rounded-md border bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                fieldErrors.injazPaymentStatus
+                                  ? "border-rose-500 ring-1 ring-rose-500/20"
+                                  : "border-slate-200 dark:border-zinc-800"
+                              )}
                             >
-                              <option value="Paid">Paid</option>
+                              <option value="Paid">Paid (Required for Completion)</option>
                               <option value="Printed">Printed</option>
                               <option value="Unpaid">Unpaid</option>
                             </select>
+                            {fieldErrors.injazPaymentStatus && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">{fieldErrors.injazPaymentStatus}</p>
+                            )}
                           </div>
                           <div>
                             <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
@@ -2563,6 +2601,7 @@ export function FollowUpWorkspace({
                               <option value="MEDICAL">MEDICAL</option>
                               <option value="CONTRACT">CONTRACT</option>
                               <option value="READY TO EMBASSY">READY TO EMBASSY</option>
+                              <option value="Completed">Completed</option>
                             </select>
                           </div>
                         </div>
@@ -2631,16 +2670,27 @@ export function FollowUpWorkspace({
                           </div>
                           <div>
                             <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                              Telesign Remark
+                              Completion Date
                             </Label>
                             <Input
-                              type="text"
-                              value={formTeshirRemark}
-                              onChange={(e) => setFormTeshirRemark(e.target.value)}
-                              placeholder="Remarks for Telesign..."
-                              className="h-8 text-xs"
+                              type="date"
+                              value={formIssueDate}
+                              onChange={(e) => setFormIssueDate(e.target.value)}
+                              className="h-8 text-xs font-mono"
                             />
                           </div>
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Telesign Remark
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formTeshirRemark}
+                            onChange={(e) => setFormTeshirRemark(e.target.value)}
+                            placeholder="Remarks for Telesign..."
+                            className="h-8 text-xs"
+                          />
                         </div>
                       </div>
                     )}
@@ -2713,14 +2763,20 @@ export function FollowUpWorkspace({
                             </Label>
                             <select
                               value={formWakalaStatus}
-                              onChange={(e) => setFormWakalaStatus(e.target.value)}
-                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                              onChange={(e) => {
+                                setFormWakalaStatus(e.target.value);
+                                if (fieldErrors.wakalaStatus) setFieldErrors((prev) => ({ ...prev, wakalaStatus: "" }));
+                              }}
+                              className={cn(
+                                "w-full h-8 px-2.5 text-xs rounded-md border bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                fieldErrors.wakalaStatus ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200 dark:border-zinc-800"
+                              )}
                             >
-                              <option value="Paid">Paid</option>
+                              <option value="Paid">Paid (Required for Completion)</option>
                               <option value="Pending">Pending</option>
                             </select>
                             {fieldErrors.wakalaStatus && (
-                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.wakalaStatus}</p>
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">{fieldErrors.wakalaStatus}</p>
                             )}
                           </div>
                         )}
@@ -2748,10 +2804,16 @@ export function FollowUpWorkspace({
                           <Input
                             type="text"
                             value={formTicketNumber}
-                            onChange={(e) => setFormTicketNumber(e.target.value)}
+                            onChange={(e) => {
+                              setFormTicketNumber(e.target.value);
+                              if (fieldErrors.ticketNumber) setFieldErrors((prev) => ({ ...prev, ticketNumber: "" }));
+                            }}
                             placeholder="e.g. ET-071-891230491"
-                            className="h-8 text-xs font-mono"
+                            className={cn("h-8 text-xs font-mono", fieldErrors.ticketNumber && "border-rose-500")}
                           />
+                          {fieldErrors.ticketNumber && (
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.ticketNumber}</p>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -2760,18 +2822,21 @@ export function FollowUpWorkspace({
                             </Label>
                             <select
                               value={formMedical2Status}
-                              onChange={(e) => setFormMedical2Status(e.target.value)}
+                              onChange={(e) => {
+                                setFormMedical2Status(e.target.value);
+                                if (fieldErrors.medical2Status) setFieldErrors((prev) => ({ ...prev, medical2Status: "" }));
+                              }}
                               className={cn(
-                                "w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
-                                fieldErrors.medical2Status && "border-rose-500"
+                                "w-full h-8 px-2.5 text-xs rounded-md border bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                fieldErrors.medical2Status ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200 dark:border-zinc-800"
                               )}
                             >
-                              <option value="FIT">FIT</option>
+                              <option value="FIT">FIT (Required for Departure)</option>
                               <option value="UNFIT">UNFIT</option>
                               <option value="Pending">Pending</option>
                             </select>
                             {fieldErrors.medical2Status && (
-                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.medical2Status}</p>
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">{fieldErrors.medical2Status}</p>
                             )}
                           </div>
                           <div>
@@ -2797,10 +2862,16 @@ export function FollowUpWorkspace({
                             <Input
                               type="text"
                               value={formAirline}
-                              onChange={(e) => setFormAirline(e.target.value)}
+                              onChange={(e) => {
+                                setFormAirline(e.target.value);
+                                if (fieldErrors.airline) setFieldErrors((prev) => ({ ...prev, airline: "" }));
+                              }}
                               placeholder="e.g. Ethiopian Airlines"
-                              className="h-8 text-xs"
+                              className={cn("h-8 text-xs", fieldErrors.airline && "border-rose-500")}
                             />
+                            {fieldErrors.airline && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.airline}</p>
+                            )}
                           </div>
                           <div>
                             <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
@@ -2809,10 +2880,16 @@ export function FollowUpWorkspace({
                             <Input
                               type="text"
                               value={formFlightNumber}
-                              onChange={(e) => setFormFlightNumber(e.target.value)}
+                              onChange={(e) => {
+                                setFormFlightNumber(e.target.value);
+                                if (fieldErrors.flightNumber) setFieldErrors((prev) => ({ ...prev, flightNumber: "" }));
+                              }}
                               placeholder="e.g. ET 402"
-                              className="h-8 text-xs font-mono"
+                              className={cn("h-8 text-xs font-mono", fieldErrors.flightNumber && "border-rose-500")}
                             />
+                            {fieldErrors.flightNumber && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.flightNumber}</p>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -2823,9 +2900,15 @@ export function FollowUpWorkspace({
                             <Input
                               type="date"
                               value={formDepartureDate}
-                              onChange={(e) => setFormDepartureDate(e.target.value)}
-                              className="h-8 text-xs font-mono"
+                              onChange={(e) => {
+                                setFormDepartureDate(e.target.value);
+                                if (fieldErrors.departureDate) setFieldErrors((prev) => ({ ...prev, departureDate: "" }));
+                              }}
+                              className={cn("h-8 text-xs font-mono", fieldErrors.departureDate && "border-rose-500")}
                             />
+                            {fieldErrors.departureDate && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.departureDate}</p>
+                            )}
                           </div>
                           <div>
                             <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">

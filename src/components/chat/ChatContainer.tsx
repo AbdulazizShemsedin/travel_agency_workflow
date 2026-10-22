@@ -33,6 +33,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,16 +111,22 @@ export function ChatContainer() {
   const { user, authUser, roles } = useAuth();
   const currentEmail = (authUser?.email || "").toLowerCase().trim();
 
+  const pathname = usePathname();
+  const isAgentPortalRoute = Boolean(pathname?.startsWith("/agent"));
+
   // Role detection
   // Role detection: strict Foreign Agency check
   const isForeignAgency = React.useMemo(() => {
+    // Anyone accessing the foreign agent portal is operating in the foreign agent context
+    if (isAgentPortalRoute) return true;
+
     const userRoles = (roles || []).map((r) => String(r).toLowerCase().trim());
     const authUserRoles = (authUser?.roles || []).map((r: any) =>
       typeof r === "string" ? r.toLowerCase().trim() : String(r?.role || "").toLowerCase().trim()
     );
     const allRoles = new Set([...userRoles, ...authUserRoles]);
 
-    // Internal staff (Admin, Manager, LMIS, Embassy, Taeshir, etc.) are never foreign agency
+    // Internal staff (Admin, Manager, LMIS, Embassy, Taeshir, etc.) are never foreign agency when on internal routes
     const internalRoles = [
       "administrator",
       "system manager",
@@ -154,7 +161,7 @@ export function ChatContainer() {
       allRoles.has("foreign agent") ||
       Boolean((authUser as any)?.contractor)
     );
-  }, [roles, authUser, currentEmail]);
+  }, [isAgentPortalRoute, roles, authUser, currentEmail]);
 
   // Executive Admin check: strictly Administrator, System Manager, or Admin only
   const isAdmin = React.useMemo(() => {

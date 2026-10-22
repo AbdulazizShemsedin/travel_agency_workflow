@@ -106,9 +106,9 @@ export function AgentLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#09090c] text-slate-900 dark:text-zinc-100 flex flex-col font-sans">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen w-full max-w-full flex flex-col bg-slate-50 dark:bg-[#09090c] text-slate-900 dark:text-zinc-100 font-sans lg:overflow-hidden">
       {/* Top Banner */}
-      <div className="bg-emerald-950 text-emerald-100 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900">
+      <div className="shrink-0 bg-emerald-950 text-emerald-100 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-emerald-900">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="font-semibold tracking-wide">
@@ -178,7 +178,7 @@ export function AgentLayout({
       </div>
 
       {/* Main Agency Header */}
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0d0d11]/95 backdrop-blur-md px-4 sm:px-8">
+      <header className="shrink-0 flex h-16 w-full items-center justify-between border-b border-slate-200/80 dark:border-[#222227] bg-white/95 dark:bg-[#0d0d11]/95 backdrop-blur-md px-4 sm:px-8 z-30">
         <div className="flex items-center gap-6">
           {/* Agency Brand */}
           <Link href="/agent" className="flex items-center gap-3">
@@ -351,23 +351,25 @@ export function AgentLayout({
       )}
 
       {/* Main Page Area */}
-      <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
-        {children}
-      </main>
-
-      {/* Agency Footer */}
-      <footer className="border-t border-slate-200/80 dark:border-[#202026] bg-white dark:bg-[#0c0c0f] py-6 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 dark:text-zinc-500">
-        <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 Applicant Processing System • Foreign Partner Portal</p>
-          <div className="flex items-center gap-4 text-[11px]">
-            <span>90-Day Bilateral Guarantee</span>
-            <span>•</span>
-            <span>Direct Row-Level Selection Lock</span>
-            <span>•</span>
-            <span>Staff Coordination Channel</span>
-          </div>
+      <main className="flex-1 min-h-0 w-full overflow-y-auto p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
+        <div className="w-full max-w-7xl mx-auto space-y-6">
+          {children}
         </div>
-      </footer>
+
+        {/* Agency Footer */}
+        <footer className="mt-12 border-t border-slate-200/80 dark:border-[#202026] py-6 text-xs text-slate-500 dark:text-zinc-500">
+          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p>© 2026 Applicant Processing System • Foreign Partner Portal</p>
+            <div className="flex items-center gap-4 text-[11px]">
+              <span>90-Day Bilateral Guarantee</span>
+              <span>•</span>
+              <span>Direct Row-Level Selection Lock</span>
+              <span>•</span>
+              <span>Staff Coordination Channel</span>
+            </div>
+          </div>
+        </footer>
+      </main>
 
       {/* Sign Out Confirmation Modal */}
       <ConfirmationModal

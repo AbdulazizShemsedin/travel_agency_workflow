@@ -283,7 +283,10 @@ export async function getMyOwedCommissionsV2(): Promise<V2MyOwedCommissionItem[]
 export async function listMyComplaintsV2(status?: string, contractorName?: string): Promise<V2MyComplaintItem[]> {
   const body: Record<string, any> = {};
   if (status) body.status = status;
-  if (contractorName) body.contractor_name = contractorName;
+  if (contractorName) {
+    body.contractor_name = contractorName;
+    body.contractor = contractorName;
+  }
   const result = await requestV2<any>(
     "/api/method/agency_tracking.portal_api.list_my_complaints",
     { method: "POST", body: Object.keys(body).length > 0 ? body : undefined }

@@ -85,6 +85,7 @@ export default function AgentComplaintsPage() {
   } = useQuery<V2MyComplaintItem[]>({
     queryKey: ["agent-my-complaints", effectiveContractor],
     queryFn: () => listMyComplaintsV2(undefined, effectiveContractor || undefined),
+    enabled: Boolean(effectiveContractor),
     retry: false,
   });
 

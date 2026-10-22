@@ -57,8 +57,6 @@ const navItems: NavItemConfig[] = [
   { label: "Complaints", href: "/complaints", icon: AlertCircle, action: "manageComplaints", tourId: "sidebar-nav-complaints" },
   { label: "Reports", href: "/reports", icon: BarChart3, action: "viewReports", tourId: "sidebar-nav-reports" },
   { label: "Finance", href: "/expenses-income", icon: Receipt, action: "viewFinance", tourId: "sidebar-nav-finance" },
-  { label: "Settings", href: "/settings", icon: Settings, action: "viewFinance", tourId: "sidebar-nav-settings" },
-  { label: "Permissions", href: "/permissions", icon: ShieldCheck, action: "manageUsers", tourId: "sidebar-nav-permissions" },
 ];
 
 interface AppSidebarProps {
@@ -381,6 +379,31 @@ export function AppSidebar({
                     ?
                   </kbd>
                 </button>
+
+                <div className="h-px bg-slate-100 dark:bg-[#222227] my-1" />
+
+                {/* Settings & Permissions (inside user dropdown menu) */}
+                {(can("viewFinance") || isAdmin) && (
+                  <Link
+                    href="/settings"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
+                  >
+                    <Settings className="h-3.5 w-3.5 text-slate-400" />
+                    <span>Settings</span>
+                  </Link>
+                )}
+
+                {(can("manageUsers") || isAdmin) && (
+                  <Link
+                    href="/permissions"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#1a1a22] rounded-md transition font-medium cursor-pointer"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-slate-400" />
+                    <span>Permissions</span>
+                  </Link>
+                )}
 
                 <div className="h-px bg-slate-100 dark:bg-[#222227] my-1" />
 
