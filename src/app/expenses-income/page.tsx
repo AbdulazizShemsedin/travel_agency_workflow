@@ -37,6 +37,8 @@ import {
   Square,
   Users,
   RotateCcw,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 import {
   logStageExpenseV2,
@@ -62,6 +64,7 @@ import { listPlacementsV2, V2PlacementRecord } from "@/lib/api/v2/placements";
 import { listApplicantsV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import { FxRateModal } from "@/components/finance/FxRateModal";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +105,8 @@ export default function ExpensesIncomePage() {
     currency: "ETB" as V2SupportedCurrency,
     stageLoggedAt: "",
   });
+  const [applicantSearchQuery, setApplicantSearchQuery] = React.useState<string>("");
+  const [isApplicantDropdownOpen, setIsApplicantDropdownOpen] = React.useState<boolean>(false);
   const [isExporting, setIsExporting] = React.useState<boolean>(false);
 
   // Rejection & Void Dialog States
@@ -196,6 +201,39 @@ export default function ExpensesIncomePage() {
     queryFn: () => listApplicantsV2(),
     staleTime: 60000,
   });
+
+  const selectedApplicantRecord = React.useMemo(() => {
+    if (!formData.applicant) return null;
+    return applicants.find((a) => a.name === formData.applicant) || null;
+  }, [applicants, formData.applicant]);
+
+  const filteredApplicants = React.useMemo(() => {
+    const q = applicantSearchQuery.toLowerCase().trim();
+    if (!q) return applicants.slice(0, 50);
+    return applicants
+      .filter((a) => {
+        const name = (a.full_name || "").toLowerCase();
+        const id = (a.name || "").toLowerCase();
+        const pass = (a.passport_number || "").toLowerCase();
+        return name.includes(q) || id.includes(q) || pass.includes(q);
+      })
+      .slice(0, 50);
+  }, [applicants, applicantSearchQuery]);
+
+  const handleSelectApplicant = (app: V2ApplicantDetails | null) => {
+    if (!app) {
+      setFormData((prev) => ({ ...prev, applicant: "", placement: "" }));
+    } else {
+      const matchedPlc = placements.find((p) => p.applicant === app.name);
+      setFormData((prev) => ({
+        ...prev,
+        applicant: app.name,
+        placement: matchedPlc?.name || "",
+      }));
+    }
+    setIsApplicantDropdownOpen(false);
+    setApplicantSearchQuery("");
+  };
 
   const resolveStaffName = React.useCallback(
     (userId?: string) => {
@@ -346,6 +384,7 @@ export default function ExpensesIncomePage() {
         currency: "ETB",
         stageLoggedAt: "",
       });
+      setApplicantSearchQuery("");
     },
     onError: (err: any) => {
       toast.error("Failed to Log Transaction", {
@@ -1503,35 +1542,118 @@ export default function ExpensesIncomePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="placement" className="text-xs font-semibold">
-                    Linked Placement (Optional)
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="from-applicant" className="text-xs font-semibold">
+                    From Applicant 
                   </Label>
-                  <Input
-                    id="placement"
-                    placeholder="e.g. PLM-00013"
-                    value={formData.placement}
-                    onChange={(e) => setFormData({ ...formData, placement: e.target.value })}
-                    className="h-8 text-xs font-mono"
-                  />
+                  {formData.applicant && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectApplicant(null)}
+                      className="text-[11px] text-slate-400 hover:text-rose-500 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <X className="h-3 w-3" /> Clear
+                    </button>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="applicant" className="text-xs font-semibold">
-                    Linked Applicant (Optional)
-                  </Label>
-                  <Input
-                    id="applicant"
-                    placeholder="e.g. APP-00042"
-                    value={formData.applicant}
-                    onChange={(e) => setFormData({ ...formData, applicant: e.target.value })}
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
+
+                <Popover open={isApplicantDropdownOpen} onOpenChange={setIsApplicantDropdownOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      id="from-applicant"
+                      className={cn(
+                        "w-full h-9 px-3 text-left text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] flex items-center justify-between transition focus:outline-none focus:ring-1 focus:ring-emerald-600 cursor-pointer",
+                        formData.applicant ? "text-slate-900 dark:text-white" : "text-slate-400"
+                      )}
+                    >
+                      {selectedApplicantRecord ? (
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {selectedApplicantRecord.full_name}
+                          </span>
+                          <span className="font-mono text-[11px] text-slate-500 dark:text-zinc-400">
+                            ({selectedApplicantRecord.name})
+                          </span>
+                          {selectedApplicantRecord.passport_number && (
+                            <span className="font-mono text-[10.5px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300">
+                              {selectedApplicantRecord.passport_number}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span>Select candidate by name, APP ID, or passport...</span>
+                      )}
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50 ml-2" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-2 bg-white dark:bg-[#18181f] border border-slate-200 dark:border-zinc-800 shadow-xl rounded-xl z-50"
+                    align="start"
+                  >
+                    <div className="relative mb-2">
+                      <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                      <Input
+                        type="text"
+                        placeholder="Search full name, APP ID, or passport..."
+                        value={applicantSearchQuery}
+                        onChange={(e) => setApplicantSearchQuery(e.target.value)}
+                        className="h-8 pl-8 text-xs bg-slate-50 dark:bg-[#121216] border-slate-200 dark:border-zinc-800"
+                        autoFocus
+                      />
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectApplicant(null)}
+                        className="w-full text-left px-2.5 py-2 hover:bg-slate-100 dark:hover:bg-zinc-800/80 rounded transition text-slate-500 dark:text-zinc-400 text-xs flex items-center justify-between cursor-pointer"
+                      >
+                        <span>(None - General office expense / loan)</span>
+                        {!formData.applicant && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+                      </button>
+
+                      {filteredApplicants.length === 0 ? (
+                        <div className="py-4 text-center text-[11px] text-slate-400">
+                          No applicants found matching &quot;{applicantSearchQuery}&quot;
+                        </div>
+                      ) : (
+                        filteredApplicants.map((app) => {
+                          const isSelected = formData.applicant === app.name;
+                          return (
+                            <button
+                              key={app.name}
+                              type="button"
+                              onClick={() => handleSelectApplicant(app)}
+                              className={cn(
+                                "w-full text-left px-2.5 py-2 hover:bg-slate-100 dark:hover:bg-zinc-800/80 rounded transition flex items-center justify-between gap-2 cursor-pointer",
+                                isSelected && "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-medium"
+                              )}
+                            >
+                              <div className="truncate">
+                                <div className="font-semibold text-slate-900 dark:text-white truncate">
+                                  {app.full_name}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10.5px] text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
+                                  <span>{app.name}</span>
+                                  {app.passport_number && (
+                                    <>
+                                      <span>•</span>
+                                      <span>Passport: {app.passport_number}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {isSelected && <Check className="h-4 w-4 text-emerald-600 shrink-0" />}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Leave placement and applicant blank for general office expenses, loan/advance receipts, or one-off entries.
-              </p>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#222227]">
                 <Button

@@ -589,7 +589,7 @@ export default function DashboardPage() {
               View All
             </Link>
           </div>
-          <CardContent className="p-2.5 space-y-1.5 max-h-[190px] sm:max-h-[210px] overflow-y-auto">
+          <CardContent className="p-2.5 space-y-1.5">
             {realAlerts.length > 0 ? (
               realAlerts.map((alert) => (
                 <div
@@ -647,7 +647,7 @@ export default function DashboardPage() {
               Sidebar Navigation
             </span>
           </div>
-          <CardContent className="p-2 sm:p-2.5 max-h-[190px] sm:max-h-[210px] overflow-y-auto">
+          <CardContent className="p-2 sm:p-2.5">
             <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
               {sidebarQuickActions.map((item) => {
                 const Icon = item.icon;
@@ -681,9 +681,9 @@ export default function DashboardPage() {
               Directory →
             </Link>
           </div>
-          <CardContent className="p-2.5 space-y-1.5 max-h-[190px] sm:max-h-[210px] overflow-y-auto">
+          <CardContent className="p-2.5 space-y-1.5">
             {applicants.length > 0 ? (
-              applicants.slice(0, 6).map((applicant) => (
+              applicants.slice(0, 10).map((applicant) => (
                 <Link
                   key={applicant.name}
                   href={`/applicants/${encodeURIComponent(applicant.name)}`}

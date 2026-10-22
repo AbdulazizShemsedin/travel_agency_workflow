@@ -57,11 +57,19 @@ import {
   stampEmbassyStepV2,
   rejectEmbassyStepV2,
   setVisaIssueDateV2,
+  recordWakalaPaymentV2,
+  setStepRemarksV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
 import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
-import { recordTicketDetailsV2, advancePlacementV2 } from "@/lib/api/v2/placements";
+import {
+  recordTicketDetailsV2,
+  advancePlacementV2,
+  updatePlacementParsedFieldsV2,
+  recordPredepartureMedicalResultV2,
+  setTicketingRemarksV2,
+} from "@/lib/api/v2/placements";
 import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
@@ -106,7 +114,7 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
   ).trim();
   const cleanLaborId = rawLaborId.toUpperCase().startsWith("APP-") ? "" : rawLaborId;
 
-  // Issue date: valid non-empty date
+  // Issue date: valid non-empty date (formatted YYYY-MM-DD)
   const rawIssueDate = (
     row.issueDate ||
     row.lms?.date_completed ||
@@ -114,7 +122,8 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
     (row.lms as any)?.date_completed ||
     ""
   ).trim();
-  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? rawIssueDate : "";
+  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? (rawIssueDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawIssueDate) : "";
+  const lmisRemark = (row.lms as any)?.remarks || "";
 
   const missingFields: string[] = [];
 
@@ -142,7 +151,7 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
       ""
     ).trim();
     const cleanPoliceDate =
-      rawPoliceDate && rawPoliceDate !== "—" ? rawPoliceDate : "";
+      rawPoliceDate && rawPoliceDate !== "—" ? (rawPoliceDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawPoliceDate) : "";
 
     const rawPoliceRemark = (
       (row.lms as any)?.police_ashara_remark ||
@@ -173,6 +182,7 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
         policeAsharaStatus: cleanPoliceStatus || "Pending",
         policeAsharaDate: cleanPoliceDate,
         policeAsharaRemark: rawPoliceRemark,
+        lmisRemark,
       },
     };
   } else {
@@ -198,6 +208,7 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
         laborId: cleanLaborId,
         issueDate: cleanIssueDate,
         cocStatus: cleanCoc || (row.cocStatus === "Not Started" ? "Not Started" : "Pending"),
+        lmisRemark,
       },
     };
   }
@@ -212,12 +223,17 @@ export function checkTaeshirStageRequirements(row: WorkspaceApplicantRow): Stage
     const cleanRef = rawRef && rawRef !== "—" ? rawRef : "";
     if (!cleanRef) missingFields.push("Telesign Reference Number");
 
+    const telesignStatus = row.teshirStatus || (row.injaz as any)?.status || "Pending";
+    const telesignRemark = (row.injaz as any)?.remarks || "";
+
     return {
       isComplete: missingFields.length === 0,
       isPartial: Boolean(cleanRef) && missingFields.length > 0,
       missingFields,
       fieldValues: {
         telesignRef: cleanRef,
+        telesignStatus,
+        telesignRemark,
       },
     };
   } else {
@@ -230,15 +246,30 @@ export function checkTaeshirStageRequirements(row: WorkspaceApplicantRow): Stage
     const cleanInjazId = rawInjazId && rawInjazId !== "—" ? rawInjazId : "";
 
     const rawApptDate = (row.appointmentDate || row.injaz?.appointment_date || "").trim();
-    const cleanApptDate = rawApptDate && rawApptDate !== "—" ? rawApptDate : "";
+    const cleanApptDate = rawApptDate && rawApptDate !== "—" ? (rawApptDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawApptDate) : "";
 
-    const rawPayment = (row.injaz?.injaz_payment_status || "Pending").trim();
+    const paymentVal = (
+      row.injazPayment ||
+      (row.injaz as any)?.injaz_payment_status ||
+      (row.injaz as any)?.payment_status ||
+      "Unpaid"
+    ).trim();
+    const normalizedPayment =
+      paymentVal.toLowerCase() === "paid"
+        ? "Paid"
+        : paymentVal.toLowerCase() === "printed"
+        ? "Printed"
+        : "Unpaid";
+
+    const teshirStatusVal = row.teshirStatus || (row.injaz as any)?.taeshir_status || "INFORMED";
+    const teshirRemarkVal = (row.injaz as any)?.remarks || "";
+    const isCompleted = row.teshirStatus === "Completed" || (row.injaz as any)?.status === "Complete";
 
     if (!cleanInjazId) missingFields.push("Injaz Application ID (E-Number)");
     if (!cleanApptDate) missingFields.push("Appointment Date");
-    if (rawPayment !== "Paid") missingFields.push("Injaz Payment Status (Must be Paid)");
+    if (normalizedPayment !== "Paid") missingFields.push("Injaz Payment Status (Must be Paid)");
 
-    const hasAny = Boolean(cleanInjazId || cleanApptDate || rawPayment === "Paid");
+    const hasAny = Boolean(cleanInjazId || cleanApptDate || normalizedPayment === "Paid");
 
     return {
       isComplete: missingFields.length === 0,
@@ -247,7 +278,10 @@ export function checkTaeshirStageRequirements(row: WorkspaceApplicantRow): Stage
       fieldValues: {
         injazApplicationId: cleanInjazId,
         appointmentDate: cleanApptDate,
-        injazPaymentStatus: rawPayment,
+        injazPaymentStatus: normalizedPayment,
+        teshirStatus: teshirStatusVal,
+        teshirCompleted: isCompleted ? "Completed" : "In Progress",
+        teshirRemark: teshirRemarkVal,
       },
     };
   }
@@ -257,24 +291,33 @@ export function checkEmbassyStageRequirements(row: WorkspaceApplicantRow): Stage
   const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
   const missingFields: string[] = [];
 
-  const rawVisaNumber = (row.visaNumber || row.embassy?.reference_no || "").trim();
+  const rawVisaNumber = (row.visaNumber || row.embassy?.reference_no || (row.plc as any)?.visa_number || "").trim();
   const cleanVisaNumber = rawVisaNumber && rawVisaNumber !== "—" ? rawVisaNumber : "";
 
-  const rawIssueDate = (row.embassy?.date_completed || row.issueDate || "").trim();
-  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? rawIssueDate : "";
+  const rawIssueDate = (row.embassy?.date_completed || row.visaIssueDate || row.issueDate || "").trim();
+  const cleanIssueDate = rawIssueDate && rawIssueDate !== "—" ? (rawIssueDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawIssueDate) : "";
+
+  const rawSubmissionDate = (row.submissionDate || (row.embassy as any)?.date_started || (row.embassy as any)?.submission_date || "").trim();
+  const cleanSubmissionDate = rawSubmissionDate && rawSubmissionDate !== "—" ? (rawSubmissionDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawSubmissionDate) : "";
+
+  const rawDeadline = (row.visaDeadline || (row.plc as any)?.visa_expiry_date || (row.embassy as any)?.visa_deadline || "").trim();
+  const cleanDeadline = rawDeadline && rawDeadline !== "—" ? (rawDeadline.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawDeadline) : "";
+
+  const embassyRemarkVal = (row.embassy as any)?.remarks || "";
 
   if (!cleanVisaNumber) missingFields.push("Visa Number");
   if (!cleanIssueDate) missingFields.push("Visa Issue Date");
 
   let cleanWakala = "Pending";
   if (!isKuwait) {
-    cleanWakala = (row.wakalaStatus || (row.embassy as any)?.wakala_status || "Pending").trim();
+    const rawWakala = (row.wakalaStatus || (row.embassy as any)?.wakala_status || "Pending").trim();
+    cleanWakala = rawWakala.toLowerCase() === "paid" || rawWakala.toLowerCase() === "authorized" ? "Paid" : "Pending";
     if (cleanWakala !== "Paid") {
       missingFields.push("Wakala Payment Status (Must be Paid)");
     }
   }
 
-  const hasAny = Boolean(cleanVisaNumber || cleanIssueDate || (cleanWakala === "Paid"));
+  const hasAny = Boolean(cleanVisaNumber || cleanIssueDate || (cleanWakala === "Paid") || cleanSubmissionDate);
 
   return {
     isComplete: missingFields.length === 0,
@@ -283,7 +326,10 @@ export function checkEmbassyStageRequirements(row: WorkspaceApplicantRow): Stage
     fieldValues: {
       visaNumber: cleanVisaNumber,
       visaIssueDate: cleanIssueDate,
+      submissionDate: cleanSubmissionDate,
+      visaDeadline: cleanDeadline,
       wakalaStatus: cleanWakala,
+      embassyRemark: embassyRemarkVal,
     },
   };
 }
@@ -291,24 +337,30 @@ export function checkEmbassyStageRequirements(row: WorkspaceApplicantRow): Stage
 export function checkDepartureStageRequirements(row: WorkspaceApplicantRow): StageValidationResult {
   const missingFields: string[] = [];
 
-  const rawTicketNo = (row.ticketNumber || (row.ticket as any)?.ticket_number || "").trim();
+  const rawTicketNo = (row.ticketNumber || (row.ticket as any)?.ticket_number || (row.plc as any)?.ticket_number || "").trim();
   const cleanTicketNo = rawTicketNo && rawTicketNo !== "—" ? rawTicketNo : "";
 
-  const rawAirline = (row.airline || (row.ticket as any)?.airline || "").trim();
-  const cleanAirline = rawAirline && rawAirline !== "—" ? rawAirline : "";
+  const rawAirline = (row.airline || (row.ticket as any)?.airline || (row.plc as any)?.airline || "").trim();
+  const cleanAirline = rawAirline && rawAirline !== "—" ? rawAirline : "Ethiopian Airlines";
 
-  const rawFlightNo = (row.flightNumber || (row.ticket as any)?.flight_number || "").trim();
+  const rawFlightNo = (row.flightNumber || (row.ticket as any)?.flight_number || (row.plc as any)?.flight_number || "").trim();
   const cleanFlightNo = rawFlightNo && rawFlightNo !== "—" ? rawFlightNo : "";
 
-  const rawFlightDate = (row.flightDate || (row.ticket as any)?.departure_date || "").trim();
-  const cleanFlightDate = rawFlightDate && rawFlightDate !== "—" ? rawFlightDate : "";
+  const rawFlightDate = (row.flightDate || (row.ticket as any)?.departure_date || (row.plc as any)?.flight_date || "").trim();
+  const cleanFlightDate = rawFlightDate && rawFlightDate !== "—" ? (rawFlightDate.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || rawFlightDate) : "";
+
+  const rawFlightTime = (row.flightTime || (row.ticket as any)?.departure_time || (row.plc as any)?.flight_time || "").trim();
+  const cleanFlightTime = rawFlightTime && rawFlightTime !== "—" ? rawFlightTime : "10:00";
+
+  const med2 = (row.medical2Status || (row.plc as any)?.medical_2_status || "Pending").trim();
+  const depStatus = (row.departureStatus || row.stageStatus || "Pending").trim();
+  const ticketRemark = (row.plc as any)?.ticketing_remarks || (row.ticket as any)?.remarks || "";
 
   if (!cleanTicketNo) missingFields.push("Ticket Number");
-  if (!cleanAirline) missingFields.push("Airline");
-  if (!cleanFlightNo) missingFields.push("Flight Number");
   if (!cleanFlightDate) missingFields.push("Departure Date");
+  if (med2 !== "FIT") missingFields.push("Medical 2 Result (Must be FIT)");
 
-  const hasAny = Boolean(cleanTicketNo || cleanAirline || cleanFlightNo || cleanFlightDate);
+  const hasAny = Boolean(cleanTicketNo || cleanFlightDate || cleanAirline || cleanFlightNo);
 
   return {
     isComplete: missingFields.length === 0,
@@ -319,7 +371,10 @@ export function checkDepartureStageRequirements(row: WorkspaceApplicantRow): Sta
       airline: cleanAirline,
       flightNumber: cleanFlightNo,
       departureDate: cleanFlightDate,
-      departureTime: (row.flightTime || (row.ticket as any)?.departure_time || "").trim(),
+      departureTime: cleanFlightTime,
+      medical2Status: med2,
+      departureStatus: depStatus,
+      ticketRemark,
     },
   };
 }
@@ -543,24 +598,14 @@ function FollowUpExtensionsDropdown({ row }: { row: WorkspaceApplicantRow }) {
           <ExternalLink className="h-3 w-3 opacity-50" />
         </button>
         {!isKuwait && (
-          <>
-            <button
-              type="button"
-              onClick={() => handleSend("Taeshir", "For Taeshir")}
-              className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
-            >
-              <span>For Taeshir</span>
-              <ExternalLink className="h-3 w-3 opacity-50" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSend("Musaned", "For Musaned")}
-              className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
-            >
-              <span>For Musaned</span>
-              <ExternalLink className="h-3 w-3 opacity-50" />
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => handleSend("Taeshir", "For Taeshir")}
+            className="w-full text-left px-2.5 py-1.5 text-xs font-semibold rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-zinc-200 hover:text-emerald-800 dark:hover:text-emerald-400 transition flex items-center justify-between cursor-pointer"
+          >
+            <span>For Taeshir</span>
+            <ExternalLink className="h-3 w-3 opacity-50" />
+          </button>
         )}
       </PopoverContent>
     </Popover>
@@ -791,17 +836,27 @@ export function FollowUpWorkspace({
   const [formPoliceAsharaStatus, setFormPoliceAsharaStatus] = React.useState("Completed");
   const [formPoliceAsharaDate, setFormPoliceAsharaDate] = React.useState("");
   const [formPoliceAsharaRemark, setFormPoliceAsharaRemark] = React.useState("");
+  const [formLmisRemark, setFormLmisRemark] = React.useState("");
   const [formTeshirRef, setFormTeshirRef] = React.useState("");
   const [formAppointmentDate, setFormAppointmentDate] = React.useState("");
   const [formInjazAppId, setFormInjazAppId] = React.useState("");
   const [formInjazPaymentStatus, setFormInjazPaymentStatus] = React.useState("Paid");
+  const [formTeshirStatus, setFormTeshirStatus] = React.useState("INFORMED");
+  const [formTeshirCompleted, setFormTeshirCompleted] = React.useState("In Progress");
+  const [formTeshirRemark, setFormTeshirRemark] = React.useState("");
   const [formVisaNumber, setFormVisaNumber] = React.useState("");
+  const [formSubmissionDate, setFormSubmissionDate] = React.useState("");
+  const [formVisaValidUntil, setFormVisaValidUntil] = React.useState("");
   const [formWakalaStatus, setFormWakalaStatus] = React.useState("Paid");
+  const [formEmbassyRemark, setFormEmbassyRemark] = React.useState("");
   const [formTicketNumber, setFormTicketNumber] = React.useState("");
   const [formAirline, setFormAirline] = React.useState("");
   const [formFlightNumber, setFormFlightNumber] = React.useState("");
   const [formDepartureDate, setFormDepartureDate] = React.useState("");
   const [formDepartureTime, setFormDepartureTime] = React.useState("");
+  const [formMedical2Status, setFormMedical2Status] = React.useState("FIT");
+  const [formDepartureStatus, setFormDepartureStatus] = React.useState("Scheduled");
+  const [formTicketRemark, setFormTicketRemark] = React.useState("");
 
   // Invalidate queries helper
   const handleMutationSuccess = async (message: string) => {
@@ -863,6 +918,7 @@ export function FollowUpWorkspace({
       setFormPoliceAsharaStatus(validation.fieldValues.policeAsharaStatus || "Completed");
       setFormPoliceAsharaDate(validation.fieldValues.policeAsharaDate || new Date().toISOString().split("T")[0]);
       setFormPoliceAsharaRemark(validation.fieldValues.policeAsharaRemark || "");
+      setFormLmisRemark(validation.fieldValues.lmisRemark || "");
       setFieldErrors({});
 
       if (validation.isComplete) {
@@ -927,6 +983,9 @@ export function FollowUpWorkspace({
       setFormAppointmentDate(validation.fieldValues.appointmentDate || new Date().toISOString().split("T")[0]);
       setFormInjazAppId(validation.fieldValues.injazApplicationId || "");
       setFormInjazPaymentStatus(validation.fieldValues.injazPaymentStatus || "Paid");
+      setFormTeshirStatus(validation.fieldValues.teshirStatus || "INFORMED");
+      setFormTeshirCompleted(validation.fieldValues.teshirCompleted || "In Progress");
+      setFormTeshirRemark(validation.fieldValues.teshirRemark || "");
       setFieldErrors({});
 
       if (validation.isComplete) {
@@ -983,7 +1042,10 @@ export function FollowUpWorkspace({
       const validation = checkEmbassyStageRequirements(row);
       setFormVisaNumber(validation.fieldValues.visaNumber || "");
       setFormIssueDate(validation.fieldValues.visaIssueDate || new Date().toISOString().split("T")[0]);
+      setFormSubmissionDate(validation.fieldValues.submissionDate || "");
+      setFormVisaValidUntil(validation.fieldValues.visaDeadline || "");
       setFormWakalaStatus(validation.fieldValues.wakalaStatus || "Paid");
+      setFormEmbassyRemark(validation.fieldValues.embassyRemark || "");
       setFieldErrors({});
 
       if (validation.isComplete) {
@@ -1052,10 +1114,13 @@ export function FollowUpWorkspace({
     if (newStatus === "Departed") {
       const validation = checkDepartureStageRequirements(row);
       setFormTicketNumber(validation.fieldValues.ticketNumber || "");
-      setFormAirline(validation.fieldValues.airline || "");
+      setFormAirline(validation.fieldValues.airline || "Ethiopian Airlines");
       setFormFlightNumber(validation.fieldValues.flightNumber || "");
       setFormDepartureDate(validation.fieldValues.departureDate || new Date().toISOString().split("T")[0]);
-      setFormDepartureTime(validation.fieldValues.departureTime || "00:00");
+      setFormDepartureTime(validation.fieldValues.departureTime || "10:00");
+      setFormMedical2Status(validation.fieldValues.medical2Status || "FIT");
+      setFormDepartureStatus(validation.fieldValues.departureStatus || "Scheduled");
+      setFormTicketRemark(validation.fieldValues.ticketRemark || "");
       setFieldErrors({});
 
       if (validation.isComplete) {
@@ -1159,54 +1224,57 @@ export function FollowUpWorkspace({
     const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
     const errors: Record<string, string> = {};
 
-    if (stage === "LMIS" || stage === "KUWAIT_LMIS") {
-      const trimmedLabor = formLaborId.trim();
-      if (!trimmedLabor) {
-        errors.laborId = "Labor / Reference ID is required.";
-      } else if (trimmedLabor.toUpperCase().startsWith("APP-")) {
-        errors.laborId = "Applicant ID (APP-...) cannot be used as Labor ID.";
+    if (andComplete) {
+      if (stage === "LMIS" || stage === "KUWAIT_LMIS") {
+        const trimmedLabor = formLaborId.trim();
+        if (!trimmedLabor) {
+          errors.laborId = "Labor / Reference ID is required.";
+        } else if (trimmedLabor.toUpperCase().startsWith("APP-")) {
+          errors.laborId = "Applicant ID (APP-...) cannot be used as Labor ID.";
+        }
+
+        if (!formIssueDate) {
+          errors.issueDate = "Completion / Issue date is required.";
+        }
+
+        if (isKuwait) {
+          if (!formPoliceAsharaStatus || formPoliceAsharaStatus === "Pending") {
+            errors.policeAsharaStatus = "Police Ashara must be Scheduled or Completed.";
+          }
+          if (!formPoliceAsharaDate) {
+            errors.policeAsharaDate = "Police Ashara appointment date is required.";
+          }
+          if (formPoliceAsharaStatus === "Failed" && !formPoliceAsharaRemark.trim()) {
+            errors.policeAsharaRemark = "A remark is required when Police Ashara status is Failed.";
+          }
+        } else {
+          if (!formCocStatus || formCocStatus === "Not Started") {
+            errors.cocStatus = "COC status is required for Saudi Arabia corridor.";
+          }
+        }
+      } else if (stage === "TAESHIR") {
+        if (!formInjazAppId.trim()) errors.injazAppId = "Injaz E-Number is required.";
+        if (!formAppointmentDate) errors.appointmentDate = "Appointment Date is required.";
+        if (formInjazPaymentStatus.toLowerCase() !== "paid") errors.injazPaymentStatus = "Payment status must be Paid.";
+      } else if (stage === "TELESIGN") {
+        if (!formTeshirRef.trim()) errors.teshirRef = "Telesign Reference Number is required.";
+      } else if (stage === "EMBASSY" || stage === "KUWAIT_EMBASSY") {
+        if (!formVisaNumber.trim()) errors.visaNumber = "Visa Number is required.";
+        if (!formIssueDate) errors.issueDate = "Visa Issue Date is required.";
+        if (!isKuwait && formWakalaStatus.toLowerCase() !== "paid") errors.wakalaStatus = "Wakala Payment must be Paid.";
+      } else if (stage === "DEPARTURE") {
+        if (!formTicketNumber.trim()) errors.ticketNumber = "Ticket Number is required.";
+        if (!formAirline.trim()) errors.airline = "Airline is required.";
+        if (!formFlightNumber.trim()) errors.flightNumber = "Flight Number is required.";
+        if (!formDepartureDate) errors.departureDate = "Departure Date is required.";
+        if (formMedical2Status !== "FIT") errors.medical2Status = "Medical 2 result must be FIT before departing candidate.";
       }
 
-      if (!formIssueDate) {
-        errors.issueDate = "Completion / Issue date is required.";
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        toast.error("Please fill in all required fields before completing the stage.");
+        return;
       }
-
-      if (isKuwait) {
-        if (!formPoliceAsharaStatus || formPoliceAsharaStatus === "Pending") {
-          errors.policeAsharaStatus = "Police Ashara must be Scheduled or Completed.";
-        }
-        if (!formPoliceAsharaDate) {
-          errors.policeAsharaDate = "Police Ashara appointment date is required.";
-        }
-        if (formPoliceAsharaStatus === "Failed" && !formPoliceAsharaRemark.trim()) {
-          errors.policeAsharaRemark = "A remark is required when Police Ashara status is Failed.";
-        }
-      } else {
-        if (!formCocStatus || formCocStatus === "Not Started") {
-          errors.cocStatus = "COC status is required for Saudi Arabia corridor.";
-        }
-      }
-    } else if (stage === "TAESHIR") {
-      if (!formInjazAppId.trim()) errors.injazAppId = "Injaz E-Number is required.";
-      if (!formAppointmentDate) errors.appointmentDate = "Appointment Date is required.";
-      if (formInjazPaymentStatus !== "Paid") errors.injazPaymentStatus = "Payment status must be Paid.";
-    } else if (stage === "TELESIGN") {
-      if (!formTeshirRef.trim()) errors.teshirRef = "Telesign Reference Number is required.";
-    } else if (stage === "EMBASSY" || stage === "KUWAIT_EMBASSY") {
-      if (!formVisaNumber.trim()) errors.visaNumber = "Visa Number is required.";
-      if (!formIssueDate) errors.issueDate = "Visa Issue Date is required.";
-      if (!isKuwait && formWakalaStatus !== "Paid") errors.wakalaStatus = "Wakala Payment must be Paid.";
-    } else if (stage === "DEPARTURE") {
-      if (!formTicketNumber.trim()) errors.ticketNumber = "Ticket Number is required.";
-      if (!formAirline.trim()) errors.airline = "Airline is required.";
-      if (!formFlightNumber.trim()) errors.flightNumber = "Flight Number is required.";
-      if (!formDepartureDate) errors.departureDate = "Departure Date is required.";
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      toast.error("Please fill in all required fields before completing the stage.");
-      return;
     }
 
     setFieldErrors({});
@@ -1247,6 +1315,9 @@ export function FollowUpWorkspace({
             coc_status: formCocStatus,
           });
         }
+        if (formLmisRemark.trim()) {
+          await setStepRemarksV2(stepName, formLmisRemark.trim());
+        }
         stageDetailsSaved = true;
 
         // 2. If completing stage
@@ -1269,13 +1340,27 @@ export function FollowUpWorkspace({
           )?.name;
         if (!stepName) throw new Error("Te'shir clearance step record not found.");
 
-        await setTaeshirAppointmentV2(stepName, formAppointmentDate, formInjazAppId.trim());
-        if (formInjazPaymentStatus === "Paid") {
-          await recordInjazPaymentV2(stepName, "Paid");
+        if (formAppointmentDate || formInjazAppId.trim()) {
+          await setTaeshirAppointmentV2(stepName, formAppointmentDate, formInjazAppId.trim());
+        }
+        if (formInjazPaymentStatus) {
+          const injazStatus =
+            formInjazPaymentStatus.toLowerCase() === "paid"
+              ? "Paid"
+              : formInjazPaymentStatus.toLowerCase() === "printed"
+              ? "Printed"
+              : "Unpaid";
+          await recordInjazPaymentV2(stepName, injazStatus);
+        }
+        if (formTeshirStatus) {
+          await setTaeshirStatusV2(stepName, formTeshirStatus);
+        }
+        if (formTeshirRemark.trim()) {
+          await setStepRemarksV2(stepName, formTeshirRemark.trim());
         }
         stageDetailsSaved = true;
 
-        if (andComplete) {
+        if (andComplete || formTeshirCompleted === "Completed") {
           await completeClearanceStepV2(stepName);
           await handleMutationSuccess(`Te'shir stage completed for ${row.fullName}`);
           setStageModalState(null);
@@ -1289,13 +1374,19 @@ export function FollowUpWorkspace({
           (row as any).siblingSteps?.find((s: any) => s.step_type?.toLowerCase().includes("telesign"))?.name;
         if (!stepName) throw new Error("Telesign clearance step record not found.");
 
+        if (formTeshirRemark.trim()) {
+          await setStepRemarksV2(stepName, formTeshirRemark.trim());
+        }
         stageDetailsSaved = true;
-        if (andComplete) {
+
+        if (andComplete || formTeshirCompleted === "Completed") {
           await completeClearanceStepV2(stepName, formTeshirRef.trim());
           await handleMutationSuccess(`Telesign stage completed for ${row.fullName}`);
           setStageModalState(null);
         } else {
-          await completeClearanceStepV2(stepName, formTeshirRef.trim());
+          if (formTeshirRef.trim()) {
+            await completeClearanceStepV2(stepName, formTeshirRef.trim());
+          }
           await handleMutationSuccess(`Telesign details saved for ${row.fullName}`);
           setStageModalState(null);
         }
@@ -1307,6 +1398,24 @@ export function FollowUpWorkspace({
 
         if (formIssueDate) {
           await setVisaIssueDateV2(stepName, formIssueDate);
+        }
+        if (!isKuwait && formWakalaStatus) {
+          await recordWakalaPaymentV2(stepName, formWakalaStatus.toLowerCase() === "paid" ? "Paid" : "Pending");
+        }
+        if (formEmbassyRemark.trim()) {
+          await setStepRemarksV2(stepName, formEmbassyRemark.trim());
+        }
+
+        const placementName = row.placementName || row.placementId || row.dsrName;
+        if (placementName) {
+          const parsedFields: any = {};
+          if (formVisaNumber.trim()) parsedFields.visa_number = formVisaNumber.trim();
+          if (formIssueDate) parsedFields.visa_issue_date = formIssueDate;
+          if (formVisaValidUntil) parsedFields.visa_expiry_date = formVisaValidUntil;
+          if (formSubmissionDate) parsedFields.submission_date = formSubmissionDate;
+          if (Object.keys(parsedFields).length > 0) {
+            await updatePlacementParsedFieldsV2(placementName, parsedFields);
+          }
         }
         stageDetailsSaved = true;
 
@@ -1322,10 +1431,24 @@ export function FollowUpWorkspace({
         const placementName = row.placementName || row.placementId || row.dsrName;
         if (!placementName) throw new Error("Placement record not found.");
 
-        await recordTicketDetailsV2(placementName, formTicketNumber.trim(), formDepartureDate);
+        if (formTicketNumber.trim() && formDepartureDate) {
+          await recordTicketDetailsV2(placementName, formTicketNumber.trim(), formDepartureDate, undefined, formDepartureTime || undefined);
+        }
+        if (formMedical2Status) {
+          await recordPredepartureMedicalResultV2(placementName, formMedical2Status as any);
+        }
+        if (formTicketRemark.trim()) {
+          await setTicketingRemarksV2(placementName, formTicketRemark.trim());
+        }
+        if (formAirline.trim() || formFlightNumber.trim()) {
+          await updatePlacementParsedFieldsV2(placementName, {
+            airline: formAirline.trim() || undefined,
+            flight_number: formFlightNumber.trim() || undefined,
+          });
+        }
         stageDetailsSaved = true;
 
-        if (andComplete) {
+        if (andComplete || formDepartureStatus === "Departed") {
           await advancePlacementV2(placementName, "Departed");
           await handleMutationSuccess(`Candidate ${row.fullName} marked as Departed`);
           setStageModalState(null);
@@ -1999,6 +2122,14 @@ export function FollowUpWorkspace({
                               </div>
                             </>
                           )}
+                          {stageModalState.validation.fieldValues.lmisRemark && (
+                            <div className="col-span-2">
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">LMIS Remark:</span>
+                              <span className="text-slate-700 dark:text-zinc-300 text-[11px]">
+                                {stageModalState.validation.fieldValues.lmisRemark}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2024,14 +2155,50 @@ export function FollowUpWorkspace({
                                   {stageModalState.validation.fieldValues.injazPaymentStatus || "Paid"}
                                 </Badge>
                               </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Te&apos;shir Status:</span>
+                                <Badge variant="outline" className="text-blue-700 border-blue-300 dark:border-blue-700 font-semibold">
+                                  {stageModalState.validation.fieldValues.teshirStatus || "INFORMED"}
+                                </Badge>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Te&apos;shir Completed:</span>
+                                <span className="font-semibold text-slate-900 dark:text-white">
+                                  {stageModalState.validation.fieldValues.teshirCompleted || "In Progress"}
+                                </span>
+                              </div>
+                              {stageModalState.validation.fieldValues.teshirRemark && (
+                                <div>
+                                  <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Te&apos;shir Remark:</span>
+                                  <span className="text-slate-700 dark:text-zinc-300 text-[11px]">
+                                    {stageModalState.validation.fieldValues.teshirRemark}
+                                  </span>
+                                </div>
+                              )}
                             </>
                           ) : (
-                            <div>
-                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Telesign Reference:</span>
-                              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                                {stageModalState.validation.fieldValues.telesignRef || "—"}
-                              </span>
-                            </div>
+                            <>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Telesign Reference:</span>
+                                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                                  {stageModalState.validation.fieldValues.telesignRef || "—"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Telesign Status:</span>
+                                <Badge variant="outline" className="text-blue-700 border-blue-300 dark:border-blue-700 font-semibold">
+                                  {stageModalState.validation.fieldValues.telesignStatus || "Pending"}
+                                </Badge>
+                              </div>
+                              {stageModalState.validation.fieldValues.telesignRemark && (
+                                <div className="col-span-2">
+                                  <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Telesign Remark:</span>
+                                  <span className="text-slate-700 dark:text-zinc-300 text-[11px]">
+                                    {stageModalState.validation.fieldValues.telesignRemark}
+                                  </span>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -2050,12 +2217,32 @@ export function FollowUpWorkspace({
                               {stageModalState.validation.fieldValues.visaIssueDate || "—"}
                             </span>
                           </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Embassy Submission Date:</span>
+                            <span className="font-mono text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.submissionDate || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Visa Deadline:</span>
+                            <span className="font-mono text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.visaDeadline || "—"}
+                            </span>
+                          </div>
                           {stageModalState.stage === "EMBASSY" && (
                             <div>
                               <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Wakala Payment:</span>
                               <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
                                 {stageModalState.validation.fieldValues.wakalaStatus || "Paid"}
                               </Badge>
+                            </div>
+                          )}
+                          {stageModalState.validation.fieldValues.embassyRemark && (
+                            <div className="col-span-2">
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Embassy Remark:</span>
+                              <span className="text-slate-700 dark:text-zinc-300 text-[11px]">
+                                {stageModalState.validation.fieldValues.embassyRemark}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -2076,11 +2263,31 @@ export function FollowUpWorkspace({
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Departure Date:</span>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Departure Date & Time:</span>
                             <span className="font-mono text-slate-900 dark:text-white">
-                              {stageModalState.validation.fieldValues.departureDate}
+                              {stageModalState.validation.fieldValues.departureDate} {stageModalState.validation.fieldValues.departureTime ? `at ${stageModalState.validation.fieldValues.departureTime}` : ""}
                             </span>
                           </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Medical 2 Result:</span>
+                            <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
+                              {stageModalState.validation.fieldValues.medical2Status || "FIT"}
+                            </Badge>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Departure Status:</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              {stageModalState.validation.fieldValues.departureStatus || "Scheduled"}
+                            </span>
+                          </div>
+                          {stageModalState.validation.fieldValues.ticketRemark && (
+                            <div className="col-span-2">
+                              <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Ticket Remark:</span>
+                              <span className="text-slate-700 dark:text-zinc-300 text-[11px]">
+                                {stageModalState.validation.fieldValues.ticketRemark}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2272,6 +2479,19 @@ export function FollowUpWorkspace({
                             )}
                           </div>
                         )}
+
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            LMIS Remark
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formLmisRemark}
+                            onChange={(e) => setFormLmisRemark(e.target.value)}
+                            placeholder="Remarks for LMIS clearance..."
+                            className="h-8 text-xs"
+                          />
+                        </div>
                       </div>
                     )}
 
@@ -2312,19 +2532,64 @@ export function FollowUpWorkspace({
                             <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.appointmentDate}</p>
                           )}
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Injaz Payment Status <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <select
+                              value={formInjazPaymentStatus}
+                              onChange={(e) => setFormInjazPaymentStatus(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                            >
+                              <option value="Paid">Paid</option>
+                              <option value="Printed">Printed</option>
+                              <option value="Unpaid">Unpaid</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Te&apos;shir Status
+                            </Label>
+                            <select
+                              value={formTeshirStatus}
+                              onChange={(e) => setFormTeshirStatus(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium"
+                            >
+                              <option value="INFORMED">INFORMED</option>
+                              <option value="RECEIVED">RECEIVED</option>
+                              <option value="SUBMITTED">SUBMITTED</option>
+                              <option value="BIOMETRICS">BIOMETRICS</option>
+                              <option value="MEDICAL">MEDICAL</option>
+                              <option value="CONTRACT">CONTRACT</option>
+                              <option value="READY TO EMBASSY">READY TO EMBASSY</option>
+                            </select>
+                          </div>
+                        </div>
                         <div>
                           <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
-                            Injaz Payment Status <span className="text-rose-500 font-bold">*</span>
+                            Te&apos;shir Completed
                           </Label>
                           <select
-                            value={formInjazPaymentStatus}
-                            onChange={(e) => setFormInjazPaymentStatus(e.target.value)}
-                            className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white"
+                            value={formTeshirCompleted}
+                            onChange={(e) => setFormTeshirCompleted(e.target.value)}
+                            className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium"
                           >
-                            <option value="Paid">Paid</option>
-                            <option value="Printed">Printed</option>
-                            <option value="Unpaid">Unpaid</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
                           </select>
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Te&apos;shir Remark
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formTeshirRemark}
+                            onChange={(e) => setFormTeshirRemark(e.target.value)}
+                            placeholder="Remarks for Te'shir..."
+                            className="h-8 text-xs"
+                          />
                         </div>
                       </div>
                     )}
@@ -2348,6 +2613,34 @@ export function FollowUpWorkspace({
                           {fieldErrors.teshirRef && (
                             <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.teshirRef}</p>
                           )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Telesign Status
+                            </Label>
+                            <select
+                              value={formTeshirStatus}
+                              onChange={(e) => setFormTeshirStatus(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Telesign Remark
+                            </Label>
+                            <Input
+                              type="text"
+                              value={formTeshirRemark}
+                              onChange={(e) => setFormTeshirRemark(e.target.value)}
+                              placeholder="Remarks for Telesign..."
+                              className="h-8 text-xs"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2389,6 +2682,30 @@ export function FollowUpWorkspace({
                             <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.issueDate}</p>
                           )}
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Embassy Submission Date
+                            </Label>
+                            <Input
+                              type="date"
+                              value={formSubmissionDate}
+                              onChange={(e) => setFormSubmissionDate(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Visa Deadline (Valid Until)
+                            </Label>
+                            <Input
+                              type="date"
+                              value={formVisaValidUntil}
+                              onChange={(e) => setFormVisaValidUntil(e.target.value)}
+                              className="h-8 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
                         {stageModalState.stage === "EMBASSY" && (
                           <div>
                             <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
@@ -2407,6 +2724,18 @@ export function FollowUpWorkspace({
                             )}
                           </div>
                         )}
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Embassy Remark
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formEmbassyRemark}
+                            onChange={(e) => setFormEmbassyRemark(e.target.value)}
+                            placeholder="Remarks for Embassy step..."
+                            className="h-8 text-xs"
+                          />
+                        </div>
                       </div>
                     )}
 
@@ -2423,6 +2752,42 @@ export function FollowUpWorkspace({
                             placeholder="e.g. ET-071-891230491"
                             className="h-8 text-xs font-mono"
                           />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Medical 2 Result <span className="text-rose-500 font-bold">*</span>
+                            </Label>
+                            <select
+                              value={formMedical2Status}
+                              onChange={(e) => setFormMedical2Status(e.target.value)}
+                              className={cn(
+                                "w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium",
+                                fieldErrors.medical2Status && "border-rose-500"
+                              )}
+                            >
+                              <option value="FIT">FIT</option>
+                              <option value="UNFIT">UNFIT</option>
+                              <option value="Pending">Pending</option>
+                            </select>
+                            {fieldErrors.medical2Status && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1">{fieldErrors.medical2Status}</p>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                              Departure Status
+                            </Label>
+                            <select
+                              value={formDepartureStatus}
+                              onChange={(e) => setFormDepartureStatus(e.target.value)}
+                              className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium"
+                            >
+                              <option value="Scheduled">Scheduled</option>
+                              <option value="Ticketed">Ticketed</option>
+                              <option value="Departed">Departed</option>
+                            </select>
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -2473,6 +2838,18 @@ export function FollowUpWorkspace({
                               className="h-8 text-xs font-mono"
                             />
                           </div>
+                        </div>
+                        <div>
+                          <Label className="block text-[11px] font-semibold text-slate-700 dark:text-zinc-300 mb-1">
+                            Ticket Remark
+                          </Label>
+                          <Input
+                            type="text"
+                            value={formTicketRemark}
+                            onChange={(e) => setFormTicketRemark(e.target.value)}
+                            placeholder="Remarks for departure / ticketing..."
+                            className="h-8 text-xs"
+                          />
                         </div>
                       </div>
                     )}

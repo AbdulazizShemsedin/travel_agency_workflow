@@ -1231,7 +1231,7 @@ export function ApplicantTable() {
                               type="button"
                               disabled={registerApplicantMutation.isPending && registeringApplicant === applicant.name}
                               onClick={() => registerApplicantMutation.mutate(applicant.name)}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Register this applicant"
                             >
                               {registerApplicantMutation.isPending && registeringApplicant === applicant.name ? (
@@ -1257,7 +1257,7 @@ export function ApplicantTable() {
                                 setMuayenaTargetApplicant(applicant);
                                 setIsMuayenaModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Create Muayena Placement directly with foreign agency"
                             >
                               <Building2 className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
@@ -1288,8 +1288,8 @@ export function ApplicantTable() {
                               }}
                               className={
                                 applicant.medical_status === "UNFIT"
-                                    ? "inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
-                                    : "inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                    ? "hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-400 dark:text-zinc-600 bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 cursor-not-allowed"
+                                    : "hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               }
                               title={applicant.medical_status === "UNFIT" ? "Medically UNFIT -- cannot generate CV" : "Generate bilateral recruitment CV"}
                             >
@@ -1312,7 +1312,7 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
                               title="View or download CV"
                             >
                               <FileText className="h-2.5 w-2.5 text-teal-700 dark:text-teal-400" />
@@ -1325,7 +1325,7 @@ export function ApplicantTable() {
                             <Link
                               href={`/applicants/${encodeURIComponent(applicant.name)}/contractor-doc`}
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-amber-950 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-amber-950 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/80 dark:hover:bg-amber-900 border border-amber-300 dark:border-amber-700 transition cursor-pointer shadow-2xs"
                               title={hasContract ? "View signed bilateral employment contract" : "Generate/Upload bilateral contract"}
                             >
                               <FileText className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
@@ -1346,7 +1346,7 @@ export function ApplicantTable() {
                                 setMed1Expiry("");
                                 setIsMedicalModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
                               title="Record Medical Status (FIT / UNFIT)"
                             >
                               <HeartPulse className="h-2.5 w-2.5 text-rose-500" />
@@ -1363,7 +1363,7 @@ export function ApplicantTable() {
                                 e.stopPropagation();
                                 advanceToProcessingMutation.mutate((applicant as any)._activePlacementName);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-blue-950 dark:text-blue-200 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/80 dark:hover:bg-blue-900 border border-blue-300 dark:border-blue-700 transition cursor-pointer shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                               title="Advance this placement to Processing stage"
                             >
                               {advanceToProcessingMutation.isPending ? (
@@ -1389,7 +1389,7 @@ export function ApplicantTable() {
                                 setTicketingInitialTab("reschedule");
                                 setIsTicketingModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-800 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-slate-800 dark:text-zinc-200 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 transition cursor-pointer shadow-2xs"
                               title="Reschedule Flight"
                             >
                               <RotateCcw className="h-2.5 w-2.5 text-slate-600 dark:text-zinc-400" />
@@ -1410,7 +1410,7 @@ export function ApplicantTable() {
                                 setTicketingInitialTab("medical2");
                                 setIsTicketingModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Verify Pre-Departure Medical 2 and finalize departure"
                             >
                               <HeartPulse className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
@@ -1428,7 +1428,7 @@ export function ApplicantTable() {
                                 setRestartTargetStatus("Draft");
                                 setIsRestartModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-emerald-950 dark:text-emerald-200 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/80 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 transition cursor-pointer shadow-2xs"
                               title="Candidate returned from abroad — restart process to send again"
                             >
                               <RotateCcw className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400" />
@@ -1450,7 +1450,7 @@ export function ApplicantTable() {
                             </PopoverTrigger>
                             <PopoverContent
                               align="end"
-                              className="w-48 p-1.5 shadow-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#16161c] rounded-lg z-50"
+                              className="w-52 p-1.5 shadow-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#16161c] rounded-lg z-50"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex flex-col gap-0.5 text-xs">
@@ -1463,6 +1463,59 @@ export function ApplicantTable() {
                                     <Edit3 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                                     <span>Edit Profile</span>
                                   </Link>
+                                )}
+
+                                {/* Register Applicant (Draft stage) */}
+                                {stage === "Draft" && (
+                                  <button
+                                    type="button"
+                                    disabled={registerApplicantMutation.isPending && registeringApplicant === applicant.name}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      registerApplicantMutation.mutate(applicant.name);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition disabled:opacity-60 cursor-pointer"
+                                  >
+                                    {registerApplicantMutation.isPending && registeringApplicant === applicant.name ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                                    ) : (
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    )}
+                                    <span>Register Applicant</span>
+                                  </button>
+                                )}
+
+                                {/* Generate CV (Registered stage, not yet generated, non-Muayena) */}
+                                {stage === "Registered" &&
+                                  !cvGeneratedSet.has(applicant.name) &&
+                                  can("generateCv") &&
+                                  !(
+                                    applicant.entry_track === "Muayena" ||
+                                    applicant.applicant_type === "Muayena" ||
+                                    Boolean((applicant as any).is_muayena)
+                                  ) && (
+                                  <button
+                                    type="button"
+                                    disabled={isGeneratingCv || generateCvMutation.isPending || applicant.medical_status === "UNFIT"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (applicant.medical_status === "UNFIT") {
+                                        toast.error("Medically UNFIT", {
+                                          description: `${applicant.full_name || applicant.name} is medically UNFIT -- a CV cannot be generated.`,
+                                        });
+                                        return;
+                                      }
+                                      generateCvMutation.mutate(applicant.name);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition disabled:opacity-60 cursor-pointer"
+                                  >
+                                    {isGeneratingCv ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+                                    ) : (
+                                      <FileText className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                                    )}
+                                    <span>{isGeneratingCv ? "Generating CV..." : "Generate CV"}</span>
+                                  </button>
                                 )}
 
                                 {/* View CV (T9: table CV buttons open with ?download=1) */}
@@ -1485,6 +1538,46 @@ export function ApplicantTable() {
                                     <FileText className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                                     <span>{hasContract ? "View Contract" : "Contract Doc"}</span>
                                   </Link>
+                                )}
+
+                                {/* Record Medical (Selected stage) */}
+                                {stage === "Selected" && (applicant as any)._activePlacementName && (!medicalStatus || (medicalStatus !== "FIT" && medicalStatus !== "UNFIT")) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMedicalTargetPlacementName((applicant as any)._activePlacementName);
+                                      setMedicalTargetApplicantName(applicant.full_name || applicant.name);
+                                      setMed1Status("FIT");
+                                      setMed1Date(examDate || "");
+                                      setMed1Expiry("");
+                                      setIsMedicalModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                  >
+                                    <HeartPulse className="h-3.5 w-3.5 text-rose-500" />
+                                    <span>Record Medical (FIT/UNFIT)</span>
+                                  </button>
+                                )}
+
+                                {/* Advance to Processing (Selected stage) */}
+                                {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && medicalStatus === "FIT" && (
+                                  <button
+                                    type="button"
+                                    disabled={advanceToProcessingMutation.isPending}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      advanceToProcessingMutation.mutate((applicant as any)._activePlacementName);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition disabled:opacity-60 cursor-pointer"
+                                  >
+                                    {advanceToProcessingMutation.isPending ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                                    ) : (
+                                      <Clock className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                    )}
+                                    <span>Advance to Processing</span>
+                                  </button>
                                 )}
 
                                 {/* Assign Staff */}
@@ -1540,6 +1633,27 @@ export function ApplicantTable() {
                                   >
                                     <RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-zinc-400" />
                                     <span>Reschedule Flight</span>
+                                  </button>
+                                )}
+
+                                {/* Verify Medical 2 & Depart */}
+                                {stage === "Ticketed" && (applicant as any)._activePlacementName && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const plc = (applicant as any)._activePlacementName
+                                        ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                        : null;
+                                      setTicketingTargetPlacement(plc || null);
+                                      setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                      setTicketingInitialTab("medical2");
+                                      setIsTicketingModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition cursor-pointer"
+                                  >
+                                    <HeartPulse className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>Verify Medical 2 & Depart</span>
                                   </button>
                                 )}
 
