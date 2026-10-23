@@ -437,22 +437,22 @@ export default function AgentWakalaRequestsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                   {isLoading ? (
-                    <tr>
+                    <tr key="loading">
                       <td colSpan={5} className="py-8 text-center text-slate-400">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
                         Loading pending Wakala authorization records...
                       </td>
                     </tr>
                   ) : isError ? (
-                    <tr>
+                    <tr key="error">
                       <td colSpan={5} className="py-8 text-center text-rose-500">
                         <AlertCircle className="h-5 w-5 mx-auto mb-2 text-rose-600" />
                         Failed to load Wakala records: {formatCleanErrorMessage(error)}
                       </td>
                     </tr>
                   ) : filteredRequests.length > 0 ? (
-                    filteredRequests.map((req) => (
-                      <tr key={req.clearance_step_name} className="group hover:bg-slate-100/90 dark:hover:bg-[#15151c]">
+                    filteredRequests.map((req, idx) => (
+                      <tr key={req.clearance_step_name || req.name || `req-${idx}`} className="group hover:bg-slate-100/90 dark:hover:bg-[#15151c]">
                         {/* Candidate Identity - Sticky on Desktop only */}
                         <td className="lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#15151c] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                           <div className="font-bold text-slate-900 dark:text-white text-[11px] sm:text-xs truncate">
@@ -511,7 +511,7 @@ export default function AgentWakalaRequestsPage() {
                       </tr>
                     ))
                   ) : (
-                    <tr>
+                    <tr key="empty">
                       <td colSpan={5} className="py-12 text-center text-slate-400">
                         <CheckCircle2 className="h-8 w-8 text-emerald-600/40 mx-auto mb-2" />
                         Zero unpaid Wakala authorization requests found. All placements are paid or not at Embassy stage.

@@ -1694,16 +1694,10 @@ export function ChatContainer() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    if (isForeignAgency) {
-                      createThreadMutation.mutate();
-                    } else {
-                      setIsNewThreadModalOpen(true);
-                    }
-                  }}
+                  onClick={() => setIsNewThreadModalOpen(true)}
                   className="text-xs h-7 mt-1"
                 >
-                  {isForeignAgency ? "Connect with Staff" : "Start Discussion"}
+                  {isForeignAgency ? "Connect with manager" : "Start Discussion"}
                 </Button>
               </div>
             )}
@@ -2256,24 +2250,16 @@ export function ChatContainer() {
               </div>
               <Button
                 type="button"
-                onClick={() => {
-                  if (isForeignAgency) {
-                    createThreadMutation.mutate();
-                  } else {
-                    setIsNewThreadModalOpen(true);
-                  }
-                }}
+                onClick={() => setIsNewThreadModalOpen(true)}
                 disabled={createThreadMutation.isPending}
                 className="bg-emerald-900 text-white text-xs h-8 font-semibold"
               >
-                {createThreadMutation.isPending ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                ) : isForeignAgency ? (
+                {isForeignAgency ? (
                   <MessageSquare className="mr-1 h-3.5 w-3.5" />
                 ) : (
                   <Plus className="mr-1 h-3.5 w-3.5" />
                 )}
-                {isForeignAgency ? "Connect with Staff" : "Start Conversation"}
+                {isForeignAgency ? "Connect with manager" : "Start Conversation"}
               </Button>
             </div>
           )}
@@ -2326,16 +2312,6 @@ export function ChatContainer() {
                       );
                     })}
                   </select>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/50 text-xs text-emerald-900 dark:text-emerald-300 space-y-1">
-                  <p className="font-semibold flex items-center gap-1.5">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    Authorized Headquarters Channel
-                  </p>
-                  <p className="text-[11px] leading-relaxed">
-                    Foreign partners communicate exclusively with authorized Agency Administrators and Communication Managers. Messages sent here are delivered directly to headquarters management.
-                  </p>
                 </div>
               </div>
             ) : (
