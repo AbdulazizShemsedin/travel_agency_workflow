@@ -73,6 +73,16 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
   const isAgentRoute = pathname?.startsWith("/agent");
   const isLoginRoute = pathname === "/login" || pathname?.startsWith("/login");
   const isForeignAgency = isPureForeignAgency(authUser);
+  const cleanPath = pathname?.replace(/\/$/, "") || "";
+  const isApplicantFormRoute = Boolean(
+    cleanPath === "/applicants/new" ||
+    (cleanPath.endsWith("/edit") && cleanPath.startsWith("/applicants/")) ||
+    (cleanPath.startsWith("/applicants/") &&
+      !cleanPath.endsWith("/follow-up") &&
+      !cleanPath.endsWith("/cv") &&
+      !cleanPath.endsWith("/contractor-doc") &&
+      cleanPath !== "/applicants")
+  );
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -106,7 +116,11 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
           onToggleSidebar={toggleSidebar}
           onMobileMenuToggle={toggleMobileMenu}
         />
-        <main className="flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-3 lg:p-3 xl:p-3.5 2xl:p-4 lg:overflow-hidden animate-in fade-in duration-150">
+        <main
+          className={`flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-3 lg:p-3 xl:p-3.5 2xl:p-4 animate-in fade-in duration-150 ${
+            isApplicantFormRoute ? "min-h-0 overflow-y-auto" : "lg:overflow-hidden"
+          }`}
+        >
           {children}
         </main>
       </div>
