@@ -43,6 +43,16 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2): P
       }
     }
   }
+
+  if (url.includes("up.railway.app") && !url.includes("travel-agency-workflow-three.vercel.app")) {
+    const fallbackUrl = url.replace(/https:\/\/[^/]+/, "https://travel-agency-workflow-three.vercel.app");
+    try {
+      return await fetch(fallbackUrl, init);
+    } catch {
+      // Fall through to throw lastError
+    }
+  }
+
   throw lastError;
 }
 
@@ -108,15 +118,19 @@ export async function GET(
             "Content-Type": contentType,
             "Cache-Control": "private, max-age=3600, stale-while-revalidate=86400",
             "Accept-Ranges": "bytes",
+            "X-Content-Type-Options": "nosniff",
           };
+          const isHtmlOrSvg = contentType.includes("html") || contentType.includes("svg") || contentType.includes("xml");
           const isViewableInline =
-            contentType.includes("pdf") ||
-            contentType.startsWith("image/") ||
-            contentType.startsWith("text/");
+            (contentType.includes("pdf") || contentType.startsWith("image/") || contentType.startsWith("text/plain")) &&
+            !isHtmlOrSvg;
           const urlObj = new URL(req.url);
           const forceDownload = urlObj.searchParams.get("download") === "1";
 
-          if (isViewableInline && !forceDownload) {
+          if (isHtmlOrSvg) {
+            responseHeaders["Content-Security-Policy"] = "sandbox; default-src 'none'";
+            responseHeaders["Content-Disposition"] = "attachment";
+          } else if (isViewableInline && !forceDownload) {
             responseHeaders["Content-Disposition"] = "inline";
           } else {
             const contentDisposition = res.headers.get("content-disposition");

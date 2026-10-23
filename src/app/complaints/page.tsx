@@ -17,6 +17,8 @@ import {
   Building2,
   Filter,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   listUnresolvedComplaintsV2,
@@ -135,6 +137,20 @@ export default function AdminComplaintsPage() {
 
     return list;
   }, [complaints, contractorFilter, sortOrder]);
+
+  // Desktop viewport-fitting pagination state for Complaints
+  const [complaintPage, setComplaintPage] = React.useState<number>(1);
+  const complaintPageSize = 8;
+  const totalComplaintPages = Math.ceil(filteredAndSortedComplaints.length / complaintPageSize) || 1;
+
+  React.useEffect(() => {
+    setComplaintPage(1);
+  }, [activeTab, contractorFilter, sortOrder, statusFilter]);
+
+  const paginatedComplaints = React.useMemo(() => {
+    const start = (complaintPage - 1) * complaintPageSize;
+    return filteredAndSortedComplaints.slice(start, start + complaintPageSize);
+  }, [filteredAndSortedComplaints, complaintPage, complaintPageSize]);
 
   const { data: applicants = [] } = useQuery({
     queryKey: ["applicants-v2-complaints"],
@@ -355,9 +371,9 @@ export default function AdminComplaintsPage() {
   };
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-2.5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Complaints
@@ -388,7 +404,7 @@ export default function AdminComplaintsPage() {
       </div>
 
       {toastMessage && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
+        <div className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 p-3 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span>{toastMessage}</span>
           </div>
@@ -397,7 +413,7 @@ export default function AdminComplaintsPage() {
       )}
 
       {errorMessage && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-900 dark:text-rose-200 flex items-center justify-between">
+        <div className="shrink-0 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/60 p-3 text-xs text-rose-900 dark:text-rose-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span>{errorMessage}</span>
           </div>
@@ -406,7 +422,7 @@ export default function AdminComplaintsPage() {
       )}
 
       {/* Filter & Tabs Toolbar */}
-      <div className="space-y-3 border-b border-slate-200 dark:border-[#222228] pb-3">
+      <div className="shrink-0 space-y-3 border-b border-slate-200 dark:border-[#222228] pb-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -504,7 +520,7 @@ export default function AdminComplaintsPage() {
       </div>
 
       {/* Complaints Table */}
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
+      <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden rounded-xl border border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs">
         {isLoading ? (
           <div className="flex items-center justify-center p-12">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
@@ -523,24 +539,24 @@ export default function AdminComplaintsPage() {
             No complaints found matching your active filters.
           </div>
         ) : (
-          <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden relative">
+          <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden relative flex-1 min-h-0 flex flex-col justify-between">
             <table className="w-full text-left text-xs min-w-[960px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
               <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[10.5px] xl:text-[11px]">
                 <tr>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[7%] truncate">Ticket #</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Partner Agency</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Candidate</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] truncate">Passport</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] truncate">Contact Person</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] truncate">Sponsor Details</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] truncate">Status</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[19%] truncate">Complaint Details</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] truncate">{activeTab === "resolved" ? "Resolution" : "Date"}</th>
-                  <th className="px-2 py-2 border-b border-slate-200 dark:border-[#222227] text-right lg:w-[7%] truncate">Actions</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[7%] whitespace-normal break-words leading-snug">Ticket #</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] whitespace-normal break-words leading-snug">Partner Agency</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] whitespace-normal break-words leading-snug">Candidate</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] whitespace-normal break-words leading-snug">Passport</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] whitespace-normal break-words leading-snug">Contact Person</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[11%] whitespace-normal break-words leading-snug">Sponsor Details</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[8%] whitespace-normal break-words leading-snug">Status</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[19%] whitespace-normal break-words leading-snug">Complaint Details</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] lg:w-[9%] whitespace-normal break-words leading-snug">{activeTab === "resolved" ? "Resolution" : "Date"}</th>
+                  <th className="px-2.5 py-2.5 border-b border-slate-200 dark:border-[#222227] text-right lg:w-[7%] whitespace-normal break-words leading-snug">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-                {filteredAndSortedComplaints.map((c) => {
+                {paginatedComplaints.map((c) => {
                   const details = getComplaintDetails(c);
                   return (
                     <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
@@ -685,6 +701,42 @@ export default function AdminComplaintsPage() {
                 })}
               </tbody>
             </table>
+            {totalComplaintPages > 1 && (
+              <div className="shrink-0 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#14141a]">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Showing <strong className="text-slate-900 dark:text-white">{(complaintPage - 1) * complaintPageSize + 1}</strong> to{" "}
+                  <strong className="text-slate-900 dark:text-white">{Math.min(complaintPage * complaintPageSize, filteredAndSortedComplaints.length)}</strong> of{" "}
+                  <strong className="text-slate-900 dark:text-white">{filteredAndSortedComplaints.length}</strong> complaints
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={complaintPage <= 1}
+                    onClick={() => setComplaintPage((p) => Math.max(1, p - 1))}
+                    className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                  >
+                    <ChevronLeft className="h-3 w-3 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                    {complaintPage} / {totalComplaintPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={complaintPage >= totalComplaintPages}
+                    onClick={() => setComplaintPage((p) => Math.min(totalComplaintPages, p + 1))}
+                    className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                  >
+                    Next
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

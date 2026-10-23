@@ -282,11 +282,11 @@ export function RoleWorkspaceContainer() {
   const headerInfo = getHeaderInfo();
 
   return (
-    <div className="space-y-3.5">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-2.5">
       {/* ------------------------------------------------------------- */}
       {/* Top Header Bar                                                */}
       {/* ------------------------------------------------------------- */}
-      <div>
+      <div className="shrink-0">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400 hover:text-emerald-800 dark:hover:text-emerald-400 transition mb-1"
@@ -320,7 +320,7 @@ export function RoleWorkspaceContainer() {
       {/* Operational Workspace Navigation Tabs                         */}
       {/* ------------------------------------------------------------- */}
       {availableTabs.length > 1 && (
-        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1 overflow-x-auto lg:overflow-x-hidden pb-0.5 border-b border-slate-200 dark:border-[#272730] scrollbar-none">
+        <div data-tour="applicants-workspace-tabs" className="flex items-center gap-1 overflow-x-auto lg:overflow-x-hidden pb-0.5 border-b border-slate-200 dark:border-[#272730] scrollbar-none shrink-0">
           {availableTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -349,11 +349,11 @@ export function RoleWorkspaceContainer() {
       {/* ------------------------------------------------------------- */}
       {/* Active Operational Workspace Rendering                        */}
       {/* ------------------------------------------------------------- */}
-      <div>
+      <div className="flex-1 min-h-0 flex flex-col">
         {activeTab === "directory" && isTabAllowed && <ApplicantTable />}
 
         {activeTab === "follow_up" && isTabAllowed && (
-          <div data-tour="followup-workspace-table">
+          <div data-tour="followup-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <FollowUpWorkspace
               data={workspaceData}
               isLoading={isLoading || isRefetching}
@@ -367,18 +367,20 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "cv" && isTabAllowed && (
-          <CVWorkspace
-            data={workspaceData}
-            isLoading={isLoading || isRefetching}
-            onRefresh={refetch}
-            corridorFilter={corridorFilter}
-            onCorridorChange={setCorridorFilter}
-            availableCorridors={discoveredCorridors}
-          />
+          <div className="w-full h-full min-h-0 flex flex-col">
+            <CVWorkspace
+              data={workspaceData}
+              isLoading={isLoading || isRefetching}
+              onRefresh={refetch}
+              corridorFilter={corridorFilter}
+              onCorridorChange={setCorridorFilter}
+              availableCorridors={discoveredCorridors}
+            />
+          </div>
         )}
 
         {activeTab === "medical" && isTabAllowed && (
-          <div data-tour="medical-workspace-table">
+          <div data-tour="medical-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <MedicalWorkspace
               corridorFilter={corridorFilter}
               onCorridorChange={setCorridorFilter}
@@ -387,7 +389,7 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "lms" && isTabAllowed && (
-          <div data-tour="lmis-workspace-table">
+          <div data-tour="lmis-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <LMISWorkspace
               data={workspaceData}
               isLoading={isLoading || isRefetching}
@@ -400,7 +402,7 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "injaz" && isTabAllowed && (
-          <div data-tour="injaz-workspace-table">
+          <div data-tour="injaz-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <InjazWorkspace
               data={workspaceData}
               isLoading={isLoading || isRefetching}
@@ -413,7 +415,7 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "embassy" && isTabAllowed && (
-          <div data-tour="embassy-workspace-table">
+          <div data-tour="embassy-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <EmbassyWorkspace
               data={workspaceData}
               isLoading={isLoading || isRefetching}
@@ -426,7 +428,7 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "departure" && isTabAllowed && (
-          <div data-tour="departure-workspace-table">
+          <div data-tour="departure-workspace-table" className="w-full h-full min-h-0 flex flex-col">
             <DepartureWorkspace
               data={workspaceData}
               isLoading={isLoading || isRefetching}
@@ -439,7 +441,9 @@ export function RoleWorkspaceContainer() {
         )}
 
         {activeTab === "ban_requests" && isTabAllowed && (
-          <CountryBanRequestsWorkspace onRefresh={refetch} />
+          <div className="w-full h-full min-h-0 flex flex-col">
+            <CountryBanRequestsWorkspace onRefresh={refetch} />
+          </div>
         )}
 
         {!isTabAllowed && (

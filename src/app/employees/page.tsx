@@ -33,6 +33,8 @@ import {
   Undo2,
   Copy,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -216,6 +218,12 @@ export default function EmployeesPage() {
   // Default Role Assignments State
   const [defaultAssignments, setDefaultAssignments] = React.useState<Record<string, string>>({});
   const [hasDefaultRoleChanges, setHasDefaultRoleChanges] = React.useState<boolean>(false);
+  const [defaultAssignmentGroup, setDefaultAssignmentGroup] = React.useState<string>("All");
+
+  // Roles & Permissions Explorer state (Tab 3)
+  const [selectedRoleCategory, setSelectedRoleCategory] = React.useState<string>("All");
+  const [selectedRoleName, setSelectedRoleName] = React.useState<string>("Admin");
+  const [roleListPage, setRoleListPage] = React.useState<number>(1);
   const [isSavingDefaults, setIsSavingDefaults] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -377,6 +385,20 @@ export default function EmployeesPage() {
       return true;
     });
   }, [employees, statusFilter, roleFilter, searchQuery]);
+
+  // Desktop viewport-fitting pagination state for Staff Directory
+  const [staffPage, setStaffPage] = React.useState<number>(1);
+  const staffPageSize = 8;
+  const totalStaffPages = Math.ceil(filteredEmployees.length / staffPageSize) || 1;
+
+  React.useEffect(() => {
+    setStaffPage(1);
+  }, [searchQuery, roleFilter, statusFilter]);
+
+  const paginatedEmployees = React.useMemo(() => {
+    const start = (staffPage - 1) * staffPageSize;
+    return filteredEmployees.slice(start, start + staffPageSize);
+  }, [filteredEmployees, staffPage, staffPageSize]);
 
   // Mutation 1: Create Employee
   const createMutation = useMutation({
@@ -581,11 +603,11 @@ export default function EmployeesPage() {
   };
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-2.5">
       {/* ------------------------------------------------------------- */}
       {/* Page Header                                                   */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -632,7 +654,7 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Current Active Session & Security Notice                      */}
       {/* ------------------------------------------------------------- */}
-      <div className="p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
+      <div className="shrink-0 p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-800 dark:text-emerald-400 font-bold text-sm">
@@ -707,7 +729,7 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Top Navigation Tabs: Staff List, Default Assignments, Role Guide */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#24242e] pb-2 overflow-x-auto">
+      <div className="shrink-0 flex items-center gap-2 border-b border-slate-200 dark:border-[#24242e] pb-2 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("directory")}
@@ -879,17 +901,17 @@ export default function EmployeesPage() {
           <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden">
             <table className="w-full text-left border-collapse text-xs min-w-[760px] lg:min-w-0 lg:table-fixed">
               <thead className="sticky top-0 z-20">
-                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[10.5px] xl:text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2 px-2.5 lg:w-[25%] truncate">Staff Member</th>
-                  <th className="py-2 px-2.5 lg:w-[20%] truncate">Contact</th>
-                  <th className="py-2 px-2.5 lg:w-[25%] truncate">Security Roles</th>
-                  <th className="py-2 px-2.5 lg:w-[10%] truncate">Status</th>
-                  <th className="py-2 px-2.5 lg:w-[10%] truncate">Created Date</th>
-                  {isManagerOrAdmin && <th className="py-2 px-2.5 lg:w-[10%] text-right truncate">Actions</th>}
+                <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[10.5px] xl:text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider leading-snug">
+                  <th className="py-2.5 px-3 lg:w-[25%] whitespace-normal break-words">Staff Member</th>
+                  <th className="py-2.5 px-3 lg:w-[20%] whitespace-normal break-words">Contact</th>
+                  <th className="py-2.5 px-3 lg:w-[25%] whitespace-normal break-words">Security Roles</th>
+                  <th className="py-2.5 px-3 lg:w-[10%] whitespace-normal break-words">Status</th>
+                  <th className="py-2.5 px-3 lg:w-[10%] whitespace-normal break-words">Created Date</th>
+                  {isManagerOrAdmin && <th className="py-2.5 px-3 lg:w-[10%] text-right whitespace-normal break-words">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">
-                {filteredEmployees.map((emp) => {
+                {paginatedEmployees.map((emp) => {
                   const initials = (emp.full_name || emp.first_name || emp.email)
                     .split(/\s+/)
                     .map((w) => w[0])
@@ -1147,6 +1169,42 @@ export default function EmployeesPage() {
                 })}
               </tbody>
             </table>
+            {totalStaffPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#14141a]">
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Showing <strong className="text-slate-900 dark:text-white">{(staffPage - 1) * staffPageSize + 1}</strong> to{" "}
+                  <strong className="text-slate-900 dark:text-white">{Math.min(staffPage * staffPageSize, filteredEmployees.length)}</strong> of{" "}
+                  <strong className="text-slate-900 dark:text-white">{filteredEmployees.length}</strong> employees
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={staffPage <= 1}
+                    onClick={() => setStaffPage((p) => Math.max(1, p - 1))}
+                    className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                  >
+                    <ChevronLeft className="h-3 w-3 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                    {staffPage} / {totalStaffPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={staffPage >= totalStaffPages}
+                    onClick={() => setStaffPage((p) => Math.min(totalStaffPages, p + 1))}
+                    className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                  >
+                    Next
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1157,9 +1215,9 @@ export default function EmployeesPage() {
       {/* Tab 2: Default Role Assignments (Saudi & Kuwait & Ops)        */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "defaults" && (
-        <div className="space-y-6">
-          {/* Header & Quick Action */}
-          <div className="p-4 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex-1 min-h-0 flex flex-col justify-between space-y-4">
+          {/* Header & Corridor Switcher */}
+          <div className="shrink-0 p-3.5 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
@@ -1175,292 +1233,262 @@ export default function EmployeesPage() {
               </div>
               <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl">
                 Choose which employee is automatically assigned to candidates when they reach each stage.
-                When candidates are processed for Saudi Arabia, Saudi specialists (LMIS, Taeshir, Embassy) are assigned.
-                When candidates are processed for Kuwait, Kuwait specialists (LMIS, Telesign, Embassy) are assigned.
               </p>
             </div>
 
-            {isManagerOrAdmin && (
-              <div className="flex items-center gap-2 shrink-0">
-                {hasDefaultRoleChanges && (
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Corridor Group Filter */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1a1a22] p-1 rounded-lg">
+                {[
+                  { id: "All", label: "All (9)" },
+                  { id: "Saudi Corridor", label: "Saudi 🇸🇦 (3)" },
+                  { id: "Kuwait Corridor", label: "Kuwait 🇰🇼 (3)" },
+                  { id: "Operations & Registry", label: "Ops 📋 (3)" },
+                ].map((grp) => (
+                  <button
+                    key={grp.id}
+                    type="button"
+                    onClick={() => setDefaultAssignmentGroup(grp.id)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-semibold rounded-md transition-colors",
+                      defaultAssignmentGroup === grp.id
+                        ? "bg-white dark:bg-[#252530] text-slate-900 dark:text-white shadow-xs font-bold"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                    )}
+                  >
+                    {grp.label}
+                  </button>
+                ))}
+              </div>
+
+              {isManagerOrAdmin && (
+                <>
+                  {hasDefaultRoleChanges && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetDefaultAssignments}
+                      className="text-xs h-8 text-slate-600 dark:text-zinc-300"
+                    >
+                      <Undo2 className="h-3.5 w-3.5 mr-1" />
+                      Reset
+                    </Button>
+                  )}
                   <Button
                     type="button"
-                    variant="outline"
                     size="sm"
-                    onClick={handleResetDefaultAssignments}
-                    className="text-xs h-9 text-slate-600 dark:text-zinc-300"
+                    onClick={handleSaveDefaultAssignments}
+                    disabled={isSavingDefaults}
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-8 shadow-xs"
                   >
-                    <Undo2 className="h-3.5 w-3.5 mr-1" />
-                    Reset
+                    {isSavingDefaults ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-3.5 w-3.5 mr-1.5" />
+                        Save
+                      </>
+                    )}
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleSaveDefaultAssignments}
-                  disabled={isSavingDefaults}
-                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-9 shadow-xs"
-                >
-                  {isSavingDefaults ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-3.5 w-3.5 mr-1.5" />
-                      Save Default Assignments
-                    </>
-                  )}
-                </Button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Corridor Cards Groups */}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+            {/* Group 1: Saudi Corridor Roles */}
+            {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Saudi Corridor") && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🇸🇦</span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                    Saudi Arabia Corridor Specialists
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
+                    const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                    const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                    return (
+                      <div
+                        key={roleConfig.roleName}
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[10px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400">
+                              {roleConfig.roleName}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                        </div>
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                          <select
+                            aria-label={`Select default employee for ${roleConfig.roleName}`}
+                            value={configuredEmail}
+                            disabled={!isManagerOrAdmin}
+                            onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                          >
+                            <option value="">-- Automatic (First with role) --</option>
+                            {employees.map((emp) => {
+                              const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                              const name = emp.full_name || emp.name;
+                              return (
+                                <option key={emp.name} value={emp.name}>
+                                  {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <div className="text-[10.5px]">
+                            {resolved ? (
+                              <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
+                                Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Group 1: Saudi Corridor Roles */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🇸🇦</span>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Saudi Arabia Corridor Specialists
-              </h3>
-              <Badge variant="outline" className="text-[10px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400">
-                Saudi Pipeline
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
-                const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
-                const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
-
-                return (
-                  <div
-                    key={roleConfig.roleName}
-                    className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 flex flex-col justify-between space-y-3 shadow-xs"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">
-                          {roleConfig.label}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400">
-                          {roleConfig.roleName}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        {roleConfig.description}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
-                      <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                        Assigned Employee:
-                      </Label>
-
-                      <select
-                        aria-label={`Select default employee for ${roleConfig.roleName}`}
-                        value={configuredEmail}
-                        disabled={!isManagerOrAdmin}
-                        onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                        className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+            {/* Group 2: Kuwait Corridor Roles */}
+            {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Kuwait Corridor") && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🇰🇼</span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                    Kuwait Corridor Specialists
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
+                    const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                    const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                    return (
+                      <div
+                        key={roleConfig.roleName}
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
                       >
-                        <option value="">-- Automatic (First user with role) --</option>
-                        {employees.map((emp) => {
-                          const hasRole = (emp.roles || []).some(
-                            (r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim()
-                          );
-                          const name = emp.full_name || emp.name;
-                          return (
-                            <option key={emp.name} value={emp.name}>
-                              {hasRole ? `⭐ ${name} (${emp.name}) - Has Role` : `${name} (${emp.name})`}
-                            </option>
-                          );
-                        })}
-                      </select>
-
-                      <div className="text-[11px] pt-1">
-                        {resolved ? (
-                          <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                            <span className="truncate">Will assign: <strong>{resolved.full_name || resolved.name}</strong></span>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[10px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400">
+                              {roleConfig.roleName}
+                            </Badge>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                            <span>No staff member has this role yet</span>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                        </div>
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                          <select
+                            aria-label={`Select default employee for ${roleConfig.roleName}`}
+                            value={configuredEmail}
+                            disabled={!isManagerOrAdmin}
+                            onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                          >
+                            <option value="">-- Automatic (First with role) --</option>
+                            {employees.map((emp) => {
+                              const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                              const name = emp.full_name || emp.name;
+                              return (
+                                <option key={emp.name} value={emp.name}>
+                                  {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <div className="text-[10.5px]">
+                            {resolved ? (
+                              <span className="text-blue-700 dark:text-blue-400 font-medium truncate block">
+                                Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-          {/* Group 2: Kuwait Corridor Roles */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🇰🇼</span>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Kuwait Corridor Specialists
-              </h3>
-              <Badge variant="outline" className="text-[10px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400">
-                Kuwait Pipeline
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
-                const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
-                const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
-
-                return (
-                  <div
-                    key={roleConfig.roleName}
-                    className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 flex flex-col justify-between space-y-3 shadow-xs"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">
-                          {roleConfig.label}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400">
-                          {roleConfig.roleName}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        {roleConfig.description}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
-                      <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                        Assigned Employee:
-                      </Label>
-
-                      <select
-                        aria-label={`Select default employee for ${roleConfig.roleName}`}
-                        value={configuredEmail}
-                        disabled={!isManagerOrAdmin}
-                        onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                        className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+            {/* Group 3: Operations & Registry */}
+            {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Operations & Registry") && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📋</span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                    Operations & Registry Staff
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Operations & Registry").map((roleConfig) => {
+                    const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                    const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                    return (
+                      <div
+                        key={roleConfig.roleName}
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
                       >
-                        <option value="">-- Automatic (First user with role) --</option>
-                        {employees.map((emp) => {
-                          const hasRole = (emp.roles || []).some(
-                            (r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim()
-                          );
-                          const name = emp.full_name || emp.name;
-                          return (
-                            <option key={emp.name} value={emp.name}>
-                              {hasRole ? `⭐ ${name} (${emp.name}) - Has Role` : `${name} (${emp.name})`}
-                            </option>
-                          );
-                        })}
-                      </select>
-
-                      <div className="text-[11px] pt-1">
-                        {resolved ? (
-                          <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                            <span className="truncate">Will assign: <strong>{resolved.full_name || resolved.name}</strong></span>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[10px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300">
+                              {roleConfig.roleName}
+                            </Badge>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                            <span>No staff member has this role yet</span>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                        </div>
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                          <select
+                            aria-label={`Select default employee for ${roleConfig.roleName}`}
+                            value={configuredEmail}
+                            disabled={!isManagerOrAdmin}
+                            onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                          >
+                            <option value="">-- Automatic (First with role) --</option>
+                            {employees.map((emp) => {
+                              const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                              const name = emp.full_name || emp.name;
+                              return (
+                                <option key={emp.name} value={emp.name}>
+                                  {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <div className="text-[10.5px]">
+                            {resolved ? (
+                              <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
+                                Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Group 3: Operations & Registry Staff */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">📋</span>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Operations & Registry Staff
-              </h3>
-              <Badge variant="outline" className="text-[10px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300">
-                Shared Agency Operations
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Operations & Registry").map((roleConfig) => {
-                const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
-                const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
-
-                return (
-                  <div
-                    key={roleConfig.roleName}
-                    className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 flex flex-col justify-between space-y-3 shadow-xs"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">
-                          {roleConfig.label}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300">
-                          {roleConfig.roleName}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        {roleConfig.description}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
-                      <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-300">
-                        Assigned Employee:
-                      </Label>
-
-                      <select
-                        aria-label={`Select default employee for ${roleConfig.roleName}`}
-                        value={configuredEmail}
-                        disabled={!isManagerOrAdmin}
-                        onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                        className="w-full h-8.5 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-                      >
-                        <option value="">-- Automatic (First user with role) --</option>
-                        {employees.map((emp) => {
-                          const hasRole = (emp.roles || []).some(
-                            (r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim()
-                          );
-                          const name = emp.full_name || emp.name;
-                          return (
-                            <option key={emp.name} value={emp.name}>
-                              {hasRole ? `⭐ ${name} (${emp.name}) - Has Role` : `${name} (${emp.name})`}
-                            </option>
-                          );
-                        })}
-                      </select>
-
-                      <div className="text-[11px] pt-1">
-                        {resolved ? (
-                          <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-400 font-medium">
-                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
-                            <span className="truncate">Will assign: <strong>{resolved.full_name || resolved.name}</strong></span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                            <span>No staff member has this role yet</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2226,79 +2254,263 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Role Architecture Reference Guide                             */}
       {/* ------------------------------------------------------------- */}
-      {(activeTab === "guide" || showRoleDocs) && (
-        <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-[#22222b]">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-              Role Permissions & Responsibilities Guide
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Role permissions strictly enforced throughout the operational workflow.
-            </p>
-          </div>
+      {/* Tab 3: Roles & Permissions Master-Detail Explorer             */}
+      {/* ------------------------------------------------------------- */}
+      {(activeTab === "guide" || showRoleDocs) && (() => {
+        const filteredRoles = CANONICAL_V2_ROLES.filter(
+          (r) => selectedRoleCategory === "All" || r.category === selectedRoleCategory
+        );
+        const rolesPerPage = 5;
+        const totalRolePages = Math.max(1, Math.ceil(filteredRoles.length / rolesPerPage));
+        const paginatedRoles = filteredRoles.slice((roleListPage - 1) * rolesPerPage, roleListPage * rolesPerPage);
+        const currentRole =
+          CANONICAL_V2_ROLES.find((r) => r.name === selectedRoleName) ||
+          filteredRoles[0] ||
+          CANONICAL_V2_ROLES[0];
+        const staffWithRole = employees.filter((e) =>
+          (e.roles || []).some((r) => r.toLowerCase().trim() === currentRole.name.toLowerCase().trim())
+        );
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {CANONICAL_V2_ROLES.map((role) => (
-              <div
-                key={role.name}
-                className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 flex flex-col justify-between space-y-3 shadow-xs"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-sm text-slate-900 dark:text-white">
-                      {role.name}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] px-1.5 py-0 font-medium",
-                        role.category === "Core & Admin" &&
-                          "border-teal-300 text-teal-800 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-950/20",
-                        role.category === "Intake & Registry" &&
-                          "border-blue-300 text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
-                        role.category === "Clearance Pipeline" &&
-                          "border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20",
-                        role.category === "Operations & Finance" &&
-                          "border-amber-300 text-amber-800 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
-                      )}
-                    >
-                      {role.category}
-                    </Badge>
+        return (
+          <div className="flex-1 min-h-0 flex flex-col justify-between space-y-3">
+            {/* Header info bar */}
+            <div className="shrink-0 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                  Role Permissions & Responsibilities Guide
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  16 authoritative security roles strictly enforced throughout the operational workflow.
+                </p>
+              </div>
+            </div>
+
+            {/* Master-Detail Split Pane */}
+            <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
+              {/* Left Pane: Category Filter + Compact Selectable Role List */}
+              <div className="w-full lg:w-[35%] xl:w-[32%] shrink-0 flex flex-col justify-between rounded-xl border border-slate-200/80 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3 shadow-xs">
+                <div className="space-y-2 flex-1 min-h-0 flex flex-col">
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 shrink-0">
+                    {["All", "Core & Admin", "Intake & Registry", "Clearance Pipeline", "Operations & Finance"].map((cat) => {
+                      const count = cat === "All" ? CANONICAL_V2_ROLES.length : CANONICAL_V2_ROLES.filter((r) => r.category === cat).length;
+                      const shortLabel =
+                        cat === "Core & Admin"
+                          ? "Admin"
+                          : cat === "Intake & Registry"
+                          ? "Intake"
+                          : cat === "Clearance Pipeline"
+                          ? "Pipeline"
+                          : cat === "Operations & Finance"
+                          ? "Finance"
+                          : "All";
+                      const isCatActive = selectedRoleCategory === cat;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setSelectedRoleCategory(cat);
+                            setRoleListPage(1);
+                            const matches = cat === "All" ? CANONICAL_V2_ROLES : CANONICAL_V2_ROLES.filter((r) => r.category === cat);
+                            if (matches.length > 0 && !matches.some((m) => m.name === selectedRoleName)) {
+                              setSelectedRoleName(matches[0].name);
+                            }
+                          }}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[11px] font-semibold transition whitespace-nowrap",
+                            isCatActive
+                              ? "bg-emerald-900 text-white dark:bg-emerald-700 shadow-2xs font-bold"
+                              : "bg-slate-100 dark:bg-[#1c1c24] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#252530]"
+                          )}
+                        >
+                          {shortLabel} ({count})
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <p className="text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
-                    {role.description}
-                  </p>
-
-                  <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#181820] text-[11px] text-slate-700 dark:text-zinc-300">
-                    <span className="font-semibold text-slate-900 dark:text-white block mb-0.5">
-                      Authority:
-                    </span>
-                    {role.permissionsSummary}
+                  {/* Role List Buttons */}
+                  <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
+                    {paginatedRoles.map((role) => {
+                      const isSelected = currentRole.name === role.name;
+                      const staffCount = employees.filter((e) =>
+                        (e.roles || []).some((r) => r.toLowerCase().trim() === role.name.toLowerCase().trim())
+                      ).length;
+                      return (
+                        <button
+                          key={role.name}
+                          type="button"
+                          onClick={() => setSelectedRoleName(role.name)}
+                          className={cn(
+                            "w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 cursor-pointer",
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 shadow-xs"
+                              : "border-slate-200/70 dark:border-[#22222b] bg-white dark:bg-[#15151b] hover:bg-slate-50 dark:hover:bg-[#1a1a22] text-slate-800 dark:text-zinc-200"
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs truncate leading-snug">{role.name}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate mt-0.5">{role.category}</p>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "text-[10px] font-mono px-1.5 py-0.5 rounded-md border",
+                                staffCount > 0
+                                  ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                                  : "bg-slate-100 dark:bg-[#202028] text-slate-400 border-slate-200 dark:border-[#2a2a35]"
+                              )}
+                            >
+                              {staffCount} staff
+                            </span>
+                            <ChevronRight
+                              className={cn("h-3.5 w-3.5", isSelected ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400")}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
-                  <span className="text-[10px] font-semibold text-slate-400 block mb-1">
-                    Access Surface:
-                  </span>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {role.accessSurface.map((surface) => (
-                      <span
-                        key={surface}
-                        className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-[#1a1a22] text-slate-600 dark:text-zinc-400 border border-slate-200 dark:border-[#272732]"
+                {/* Compact Pagination Bar */}
+                {totalRolePages > 1 && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-[#1e1e24] flex items-center justify-between text-xs shrink-0">
+                    <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
+                      Page {roleListPage} of {totalRolePages}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={roleListPage <= 1}
+                        onClick={() => setRoleListPage((p) => Math.max(1, p - 1))}
+                        className="h-6.5 px-2 text-[11px] rounded-lg"
                       >
-                        {surface}
-                      </span>
-                    ))}
+                        Prev
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={roleListPage >= totalRolePages}
+                        onClick={() => setRoleListPage((p) => Math.min(totalRolePages, p + 1))}
+                        className="h-6.5 px-2 text-[11px] rounded-lg"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Pane: Role Detail Inspector */}
+              <div className="flex-1 min-h-0 flex flex-col justify-between rounded-xl border border-slate-200/80 dark:border-[#24242e] bg-white dark:bg-[#121216] p-4 xl:p-5 shadow-xs overflow-hidden">
+                <div className="space-y-3.5">
+                  {/* Role Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 dark:border-[#1e1e24] pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-9 w-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold shrink-0">
+                        <Shield className="h-4.5 w-4.5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                            {currentRole.name}
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] px-2 py-0.5 font-medium",
+                              currentRole.category === "Core & Admin" && "border-teal-300 text-teal-800 dark:text-teal-400 bg-teal-50/50 dark:bg-teal-950/20",
+                              currentRole.category === "Intake & Registry" && "border-blue-300 text-blue-700 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/20",
+                              currentRole.category === "Clearance Pipeline" && "border-emerald-300 text-emerald-800 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20",
+                              currentRole.category === "Operations & Finance" && "border-amber-300 text-amber-800 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                            )}
+                          >
+                            {currentRole.category}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">Authoritative Canonical Security Role</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scope & Purpose */}
+                  <div className="space-y-1">
+                    <h4 className="text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">Role Purpose & Scope</h4>
+                    <p className="text-xs xl:text-[13px] text-slate-700 dark:text-zinc-300 leading-relaxed">
+                      {currentRole.description}
+                    </p>
+                  </div>
+
+                  {/* Operational Authority */}
+                  <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>Enforced Operational Authority</span>
+                    </div>
+                    <p className="text-xs text-emerald-950/90 dark:text-emerald-200/90 leading-relaxed">
+                      {currentRole.permissionsSummary}
+                    </p>
+                  </div>
+
+                  {/* Access Surface Badges */}
+                  <div className="space-y-1.5">
+                    <h4 className="text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">Authorized Access Surface</h4>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {currentRole.accessSurface.map((surface) => (
+                        <span
+                          key={surface}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-mono bg-slate-100 dark:bg-[#1a1a22] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-[#272732]"
+                        >
+                          {surface}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Staff Assigned */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10.5px] uppercase font-bold text-slate-400 tracking-wider">
+                        Staff Assigned to this Role ({staffWithRole.length})
+                      </h4>
+                    </div>
+                    {staffWithRole.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {staffWithRole.slice(0, 4).map((emp) => (
+                          <div
+                            key={emp.name}
+                            className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-[#16161c] border border-slate-100 dark:border-[#202028]"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                                {emp.full_name || emp.name}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-mono truncate">{emp.email}</p>
+                            </div>
+                            <Badge variant={emp.enabled === 1 ? "success" : "neutral"} className="text-[9px] px-1.5 py-0 shrink-0">
+                              {emp.enabled === 1 ? "Active" : "Disabled"}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic bg-slate-50/70 dark:bg-[#141418] p-2.5 rounded-lg border border-slate-100 dark:border-[#1c1c22]">
+                        No staff member currently holds this role. Assign it via the Staff Directory tab.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

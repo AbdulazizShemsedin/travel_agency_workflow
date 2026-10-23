@@ -165,6 +165,18 @@ export default function AgentWakalaRequestsPage() {
     });
   }, [wakalaRequests, searchTerm]);
 
+  const [wakalaPage, setWakalaPage] = React.useState(1);
+  const pageSize = 8;
+  const totalWakalaPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const paginatedRequests = React.useMemo(() => {
+    const start = (wakalaPage - 1) * pageSize;
+    return filteredRequests.slice(start, start + pageSize);
+  }, [filteredRequests, wakalaPage]);
+
+  React.useEffect(() => {
+    setWakalaPage(1);
+  }, [searchTerm]);
+
 
   // Real Browser Web Push Registration via V2 Backend API
   const handleEnablePush = async () => {
@@ -451,7 +463,7 @@ export default function AgentWakalaRequestsPage() {
                       </td>
                     </tr>
                   ) : filteredRequests.length > 0 ? (
-                    filteredRequests.map((req, idx) => (
+                    paginatedRequests.map((req, idx) => (
                       <tr key={req.clearance_step_name || req.name || `req-${idx}`} className="group hover:bg-slate-100/90 dark:hover:bg-[#15151c]">
                         {/* Candidate Identity - Sticky on Desktop only */}
                         <td className="lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#15151c] py-2 px-2.5 sm:py-2.5 sm:px-3.5 border-b border-r border-slate-300 dark:border-[#202028] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
@@ -521,6 +533,40 @@ export default function AgentWakalaRequestsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Desktop Compact Pagination */}
+            {filteredRequests.length > pageSize && (
+              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-[#1d1d24] bg-slate-50/50 dark:bg-[#121216] text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(filteredRequests.length, (wakalaPage - 1) * pageSize + 1)}–{Math.min(filteredRequests.length, wakalaPage * pageSize)} of {filteredRequests.length} requests
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={wakalaPage <= 1}
+                    onClick={() => setWakalaPage((p) => Math.max(1, p - 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <span className="font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                    {wakalaPage} / {totalWakalaPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={wakalaPage >= totalWakalaPages}
+                    onClick={() => setWakalaPage((p) => Math.min(totalWakalaPages, p + 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

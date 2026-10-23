@@ -33,6 +33,7 @@ import {
   setTimeZoneV2,
 } from "@/lib/api/v2/finance";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { cn } from "@/lib/utils";
 
 const COMMON_TIMEZONES = [
   { value: "Africa/Addis_Ababa", label: "Africa/Addis_Ababa (EAT, UTC+3)" },
@@ -79,6 +80,7 @@ export default function SettingsPage() {
   const [selectedTimeZone, setSelectedTimeZone] = React.useState<string>("");
   const [logoUploading, setLogoUploading] = React.useState(false);
   const [stampUploading, setStampUploading] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<"company" | "banking" | "branding" | "timezone">("company");
 
   React.useEffect(() => {
     if (companySettings) {
@@ -189,9 +191,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-4 pb-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-[#222228] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 dark:border-[#222228] pb-3">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
             <Settings className="h-5 w-5 text-emerald-800 dark:text-emerald-400" />
@@ -202,7 +204,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {canManageCompany && (
+        {canManageCompany && (settingsTab === "company" || settingsTab === "banking") && (
           <Button
             type="button"
             onClick={handleSaveCompanyAndBank}
@@ -220,8 +222,68 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Settings Sub-Tab Navigation Bar */}
+      <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-[#15151a] border border-slate-200/80 dark:border-[#222227] w-fit overflow-x-auto">
+        {canManageCompany && (
+          <>
+            <button
+              type="button"
+              onClick={() => setSettingsTab("company")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                settingsTab === "company"
+                  ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+              )}
+            >
+              <Building2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Company Identity</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsTab("banking")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                settingsTab === "banking"
+                  ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+              )}
+            >
+              <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Bank Details</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsTab("branding")}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+                settingsTab === "branding"
+                  ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+              )}
+            >
+              <ImageIcon className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Logo & Stamps</span>
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setSettingsTab("timezone")}
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer",
+            settingsTab === "timezone"
+              ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+              : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+          )}
+        >
+          <Globe className="h-3.5 w-3.5 text-emerald-600" />
+          <span>Operating Timezone</span>
+        </button>
+      </div>
+
       {/* Non-Admin / Non-Finance Notice */}
-      {!canManageCompany && (
+      {!canManageCompany && settingsTab !== "timezone" && (
         <Card className="border-slate-200 dark:border-[#222228] bg-slate-50/50 dark:bg-[#121217]">
           <CardContent className="p-6 text-center space-y-2">
             <ShieldAlert className="h-8 w-8 text-slate-400 mx-auto" />
@@ -236,17 +298,17 @@ export default function SettingsPage() {
       )}
 
       {/* Company & Bank Settings Section (Admin & Finance Manager) */}
-      {canManageCompany && (
+      {canManageCompany && settingsTab !== "timezone" && (
         <>
           {isLoadingSettings ? (
             <div className="flex h-48 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Card 1: Company Card */}
-              <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#1d1d24]">
+            <div className="max-w-4xl">
+              {settingsTab === "company" && (
+                <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
+                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#1d1d24]">
                   <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
                     Company Identity
@@ -315,9 +377,11 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Card 2: Bank Details Card */}
-              <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
+              {settingsTab === "banking" && (
+                <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
                 <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#1d1d24]">
                   <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <CreditCard className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
@@ -425,9 +489,11 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Card 3: Logo & Stamp Graphics Upload Tiles (N16) */}
-              <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs lg:col-span-2">
+              {settingsTab === "branding" && (
+                <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs lg:col-span-2">
                 <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#1d1d24]">
                   <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <ImageIcon className="h-4 w-4 text-emerald-800 dark:text-emerald-400" />
@@ -585,13 +651,15 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+              )}
             </div>
           )}
         </>
       )}
 
       {/* Card 4: Operating Time Zone (Admin Only for Edit) */}
-      <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
+      {settingsTab === "timezone" && (
+        <Card className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#1d1d24]">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
@@ -655,6 +723,7 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

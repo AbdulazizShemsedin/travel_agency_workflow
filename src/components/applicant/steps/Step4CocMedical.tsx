@@ -396,6 +396,24 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
             </div>
           </div>
 
+          {/* 4. Labour ID (Optional) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="labour_id" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                Labour ID <span className="text-slate-400 font-normal">(Optional)</span>
+              </Label>
+              <Input
+                id="labour_id"
+                placeholder="e.g. LBR-998844"
+                {...register("labour_id")}
+                className={errors.labour_id ? "border-rose-500 focus-visible:ring-rose-500/20" : ""}
+              />
+              {errors.labour_id && (
+                <p className="text-xs text-rose-600">{errors.labour_id.message}</p>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="medical_remarks" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">

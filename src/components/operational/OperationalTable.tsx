@@ -402,11 +402,11 @@ export function OperationalTable<T extends Record<string, any> = any>({
   };
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200/80 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs overflow-hidden">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between rounded-xl border border-slate-200/80 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs overflow-hidden">
       {/* ------------------------------------------------------------- */}
       {/* Table Action Bar                                              */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col gap-2.5 p-2.5 sm:px-4 sm:py-2.5 border-b border-slate-100 dark:border-[#222227] sm:flex-row sm:items-center sm:justify-between bg-slate-50/50 dark:bg-[#15151a]">
+      <div className="shrink-0 flex flex-col gap-2.5 p-2.5 sm:px-4 sm:py-2.5 border-b border-slate-100 dark:border-[#222227] sm:flex-row sm:items-center sm:justify-between bg-slate-50/50 dark:bg-[#15151a]">
         <div>
           <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
             {title}
@@ -607,10 +607,10 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+      <div className="relative flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
         <table className="w-full min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730] lg:table-fixed">
           {/* Sticky Header */}
-          <thead className="sticky top-0 z-30 text-[10px] xl:text-[10.5px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730]">
+          <thead className="sticky top-0 z-30 text-[10px] xl:text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730] leading-snug">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id} className="border-b border-slate-300 dark:border-[#272730]">
                 {headerGroup.headers.map((header, colIdx) => {
@@ -638,7 +638,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                         ...(isNameCol ? { left: 0 } : {}),
                       }}
                       className={cn(
-                        "py-1 px-1 xl:px-1.5 select-none border-r border-slate-300 dark:border-[#272730] leading-tight truncate min-w-0",
+                        "py-1.5 xl:py-2 px-1.5 xl:px-2 select-none border-r border-slate-300 dark:border-[#272730] leading-snug whitespace-normal break-words min-w-0",
                         isNameCol &&
                           "lg:sticky lg:left-0 lg:z-30 bg-slate-100 dark:bg-[#181820] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                         align === "center" && "text-center",
@@ -770,7 +770,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
                             ...(isNameCol ? { left: 0 } : {}),
                           }}
                           className={cn(
-                            "py-1 px-1 xl:px-1.5 text-slate-800 dark:text-zinc-200 text-[10px] xl:text-[10.5px] border-r border-b border-slate-200 dark:border-[#22222a] truncate min-w-0",
+                            "py-1.5 xl:py-2 px-1.5 xl:px-2 text-slate-800 dark:text-zinc-200 text-xs xl:text-[12.5px] border-r border-b border-slate-200 dark:border-[#22222a] truncate min-w-0",
                             isStickyCol && "lg:sticky lg:z-20",
                             isNameCol && "lg:left-0 lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] border-r border-slate-300 dark:border-[#272730]",
                             isNameCol && (
@@ -799,7 +799,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Pagination Footer with Direct UI Page Size Buttons            */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#222227] bg-slate-50/80 dark:bg-[#15151a] text-xs text-slate-500 dark:text-zinc-400">
+      <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#222227] bg-slate-50/80 dark:bg-[#15151a] text-xs text-slate-500 dark:text-zinc-400">
         <div className="flex flex-wrap items-center gap-4">
           <span>
             Showing <strong className="text-slate-800 dark:text-white">{totalEntries === 0 ? 0 : startIndex + 1}</strong> to{" "}
@@ -809,12 +809,12 @@ export function OperationalTable<T extends Record<string, any> = any>({
             of <strong className="text-slate-800 dark:text-white">{totalEntries}</strong> entries
           </span>
 
-          {/* Direct Clickable Page Size Buttons (10, 25, 50, 100) */}
+          {/* Direct Clickable Page Size Buttons (10, 15, 25, 50) */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
               Show:
             </span>
-            {[10, 25, 50, 100].map((size) => {
+            {[10, 15, 25, 50].map((size) => {
               const isCurrent = table.getState().pagination.pageSize === size;
               return (
                 <button

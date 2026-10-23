@@ -109,6 +109,24 @@ export default function NotificationsPage() {
     else if (activeTab === "tasks") refetchTodos();
   };
 
+  // Desktop pagination for Needs Attention tab (5 alerts per page to fit viewport)
+  const [alertPage, setAlertPage] = React.useState(1);
+  const alertsPerPage = 5;
+  const totalAlertPages = Math.max(1, Math.ceil(alerts.length / alertsPerPage));
+  const paginatedAlerts = React.useMemo(() => {
+    const start = (alertPage - 1) * alertsPerPage;
+    return alerts.slice(start, start + alertsPerPage);
+  }, [alerts, alertPage]);
+
+  // Desktop pagination for My Tasks tab (5 tasks per page to fit viewport)
+  const [todoPage, setTodoPage] = React.useState(1);
+  const todosPerPage = 5;
+  const totalTodoPages = Math.max(1, Math.ceil(myTodos.length / todosPerPage));
+  const paginatedTodos = React.useMemo(() => {
+    const start = (todoPage - 1) * todosPerPage;
+    return myTodos.slice(start, start + todosPerPage);
+  }, [myTodos, todoPage]);
+
   const isCurrentRefetching =
     activeTab === "attention"
       ? isRefetchingAlerts
@@ -291,7 +309,7 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {alerts.map((alert, idx) => {
+              {paginatedAlerts.map((alert, idx) => {
                 const meta = resolveAlertMeta(alert);
                 const displayTitle = stripRecordIds(alert.title || "Compliance Alert");
                 const displayBody = stripRecordIds(alert.body || alert.description || "");
@@ -343,6 +361,38 @@ export default function NotificationsPage() {
                   </Card>
                 );
               })}
+
+              {/* Desktop Compact Pagination for Alerts */}
+              {alerts.length > alertsPerPage && (
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#1e1e24] text-xs">
+                  <span className="text-slate-500 font-mono">
+                    Showing {Math.min(alerts.length, (alertPage - 1) * alertsPerPage + 1)}–{Math.min(alerts.length, alertPage * alertsPerPage)} of {alerts.length} alerts
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAlertPage((p) => Math.max(1, p - 1))}
+                      disabled={alertPage <= 1}
+                      className="h-7 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                      {alertPage} / {totalAlertPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAlertPage((p) => Math.min(totalAlertPages, p + 1))}
+                      disabled={alertPage >= totalAlertPages}
+                      className="h-7 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -468,7 +518,7 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {myTodos.map((todo) => {
+              {paginatedTodos.map((todo) => {
                 const displayDesc = stripRecordIds(todo.description || "Operational Duty");
 
                 return (
@@ -508,6 +558,38 @@ export default function NotificationsPage() {
                   </Card>
                 );
               })}
+
+              {/* Desktop Compact Pagination for Tasks */}
+              {myTodos.length > todosPerPage && (
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-[#1e1e24] text-xs">
+                  <span className="text-slate-500 font-mono">
+                    Showing {Math.min(myTodos.length, (todoPage - 1) * todosPerPage + 1)}–{Math.min(myTodos.length, todoPage * todosPerPage)} of {myTodos.length} tasks
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTodoPage((p) => Math.max(1, p - 1))}
+                      disabled={todoPage <= 1}
+                      className="h-7 text-xs"
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                      {todoPage} / {totalTodoPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTodoPage((p) => Math.min(totalTodoPages, p + 1))}
+                      disabled={todoPage >= totalTodoPages}
+                      className="h-7 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

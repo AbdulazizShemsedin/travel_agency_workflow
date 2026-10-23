@@ -24,6 +24,9 @@ import {
   Coins,
   ShieldAlert,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -42,6 +45,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 import { isAdminUser } from "@/lib/auth/permissions";
 
@@ -62,6 +66,7 @@ export default function ContractorsPage() {
   const [editingContractor, setEditingContractor] = React.useState<V2ContractorItem | null>(null);
   const [credentialsContractor, setCredentialsContractor] = React.useState<V2ContractorItem | null>(null);
   const [rateMatrixContractor, setRateMatrixContractor] = React.useState<V2ContractorItem | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = React.useState<string | null>(null);
 
   // Add Form State
   const [formData, setFormData] = React.useState({
@@ -143,6 +148,20 @@ export default function ContractorsPage() {
       return true;
     });
   }, [contractors, selectedCountry, searchQuery]);
+
+  // Desktop viewport-fitting pagination state for Contractors
+  const [contractorPage, setContractorPage] = React.useState<number>(1);
+  const contractorPageSize = 8;
+  const totalContractorPages = Math.ceil(filteredContractors.length / contractorPageSize) || 1;
+
+  React.useEffect(() => {
+    setContractorPage(1);
+  }, [selectedCountry, searchQuery]);
+
+  const paginatedContractors = React.useMemo(() => {
+    const start = (contractorPage - 1) * contractorPageSize;
+    return filteredContractors.slice(start, start + contractorPageSize);
+  }, [filteredContractors, contractorPage, contractorPageSize]);
 
   // Mutation 1: Add Contractor
   const addContractorMutation = useMutation({
@@ -456,20 +475,20 @@ export default function ContractorsPage() {
         ) : (
           <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
             <table className="w-full min-w-[750px] lg:min-w-0 text-left text-xs lg:table-fixed">
-              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[10.5px] xl:text-[11px]">
+              <thead className="sticky top-0 z-20 border-b border-slate-100 dark:border-[#222227] bg-slate-50/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold text-[10.5px] xl:text-[11px] leading-snug">
                 <tr>
-                  <th className="px-2.5 py-2 lg:w-[12%] truncate">Agency ID</th>
-                  <th className="px-2.5 py-2 lg:w-[22%] truncate">Agency Name</th>
-                  <th className="px-2.5 py-2 lg:w-[12%] truncate">Country</th>
-                  <th className="px-2.5 py-2 lg:w-[20%] truncate">User Account</th>
-                  <th className="px-2.5 py-2 lg:w-[18%] truncate">Phone & Contact</th>
-                  <th className="px-2.5 py-2 lg:w-[8%] text-center truncate">Status</th>
-                  <th className="px-2.5 py-2 lg:w-[8%] text-right truncate">Actions</th>
+                  <th className="px-2.5 py-2.5 lg:w-[12%] 2xl:w-[11%] whitespace-normal break-words">Agency ID</th>
+                  <th className="px-2.5 py-2.5 lg:w-[22%] 2xl:w-[20%] whitespace-normal break-words">Agency Name</th>
+                  <th className="px-2.5 py-2.5 lg:w-[11%] 2xl:w-[10%] whitespace-normal break-words">Country</th>
+                  <th className="px-2.5 py-2.5 lg:w-[20%] 2xl:w-[18%] whitespace-normal break-words">User Account</th>
+                  <th className="px-2.5 py-2.5 lg:w-[18%] 2xl:w-[16%] whitespace-normal break-words">Phone & Contact</th>
+                  <th className="px-2.5 py-2.5 lg:w-[9%] 2xl:w-[8%] text-center whitespace-normal break-words">Status</th>
+                  <th className="px-2.5 py-2.5 lg:w-[8%] 2xl:w-[17%] text-right whitespace-normal break-words">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
                 {filteredContractors.length > 0 ? (
-                  filteredContractors.map((c) => {
+                  paginatedContractors.map((c) => {
                   const portalUser = c.user || c.user_email || c.email;
                   return (
                     <tr key={c.name} className="hover:bg-slate-50/80 dark:hover:bg-[#16161c]/80 transition">
@@ -502,7 +521,8 @@ export default function ContractorsPage() {
                         <Badge variant="success">Active</Badge>
                       </td>
                       <td className="px-3 py-2 lg:px-4 lg:py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        {/* 1. Large screens with ample horizontal space (2xl): Inline Action Buttons */}
+                        <div className="hidden 2xl:flex items-center justify-end gap-1.5">
                           <Button
                             type="button"
                             variant="outline"
@@ -537,6 +557,66 @@ export default function ContractorsPage() {
                             Credentials
                           </Button>
                         </div>
+
+                        {/* 2. Narrower desktop viewports (< 2xl): Compact Vertical Three-Dot Menu */}
+                        <div className="flex 2xl:hidden items-center justify-end">
+                          <Popover
+                            open={openActionMenuId === c.name}
+                            onOpenChange={(isOpen) => setOpenActionMenuId(isOpen ? c.name : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label="Agency actions"
+                                className="h-7 w-7 p-0 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f27] text-slate-600 dark:text-zinc-300"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              align="end"
+                              className="w-44 p-1.5 shadow-xl border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#121216] rounded-xl z-50"
+                            >
+                              <div className="flex flex-col gap-0.5 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    setRateMatrixContractor(c);
+                                  }}
+                                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                >
+                                  <Coins className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                  <span>Rates</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    handleOpenEdit(c);
+                                  }}
+                                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c24] transition-colors cursor-pointer"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    handleOpenCredentials(c);
+                                  }}
+                                  className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-300 transition-colors cursor-pointer"
+                                >
+                                  <KeyRound className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                  <span>Credentials</span>
+                                </button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -552,6 +632,42 @@ export default function ContractorsPage() {
               )}
             </tbody>
           </table>
+          {totalContractorPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#24242e] bg-slate-50/50 dark:bg-[#14141a]">
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Showing <strong className="text-slate-900 dark:text-white">{(contractorPage - 1) * contractorPageSize + 1}</strong> to{" "}
+                <strong className="text-slate-900 dark:text-white">{Math.min(contractorPage * contractorPageSize, filteredContractors.length)}</strong> of{" "}
+                <strong className="text-slate-900 dark:text-white">{filteredContractors.length}</strong> agencies
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={contractorPage <= 1}
+                  onClick={() => setContractorPage((p) => Math.max(1, p - 1))}
+                  className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                >
+                  <ChevronLeft className="h-3 w-3 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                  {contractorPage} / {totalContractorPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={contractorPage >= totalContractorPages}
+                  onClick={() => setContractorPage((p) => Math.min(totalContractorPages, p + 1))}
+                  className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                >
+                  Next
+                  <ChevronRight className="h-3 w-3 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

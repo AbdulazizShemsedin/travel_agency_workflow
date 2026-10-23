@@ -119,6 +119,18 @@ export default function AgencyReplacementsPage() {
     });
   }, [replacements, searchTerm]);
 
+  const [replacementPage, setReplacementPage] = React.useState(1);
+  const pageSize = 8;
+  const totalReplacementPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const paginatedReplacements = React.useMemo(() => {
+    const start = (replacementPage - 1) * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, replacementPage]);
+
+  React.useEffect(() => {
+    setReplacementPage(1);
+  }, [searchTerm]);
+
   return (
     <AgentLayout
       activeContractor={activeContractor}
@@ -218,7 +230,7 @@ export default function AgencyReplacementsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1f1f26]">
-                  {filteredItems.map((item) => {
+                  {paginatedReplacements.map((item) => {
                     const isWaived = Boolean(item.replacement_waived);
                     return (
                       <tr
@@ -342,6 +354,40 @@ export default function AgencyReplacementsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Desktop Compact Pagination */}
+            {filteredItems.length > pageSize && (
+              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-[#1d1d24] bg-slate-50/50 dark:bg-[#121216] text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(filteredItems.length, (replacementPage - 1) * pageSize + 1)}–{Math.min(filteredItems.length, replacementPage * pageSize)} of {filteredItems.length} cases
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={replacementPage <= 1}
+                    onClick={() => setReplacementPage((p) => Math.max(1, p - 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <span className="font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                    {replacementPage} / {totalReplacementPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={replacementPage >= totalReplacementPages}
+                    onClick={() => setReplacementPage((p) => Math.min(totalReplacementPages, p + 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

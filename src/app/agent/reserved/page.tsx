@@ -110,6 +110,18 @@ export default function MyReservedCandidatesPage() {
     });
   }, [reservedCandidates, searchTerm]);
 
+  const [reservedPage, setReservedPage] = React.useState(1);
+  const pageSize = 8;
+  const totalReservedPages = Math.max(1, Math.ceil(filteredCandidates.length / pageSize));
+  const paginatedCandidates = React.useMemo(() => {
+    const start = (reservedPage - 1) * pageSize;
+    return filteredCandidates.slice(start, start + pageSize);
+  }, [filteredCandidates, reservedPage]);
+
+  React.useEffect(() => {
+    setReservedPage(1);
+  }, [searchTerm]);
+
   return (
     <AgentLayout
       activeContractor={activeContractor}
@@ -216,7 +228,8 @@ export default function MyReservedCandidatesPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto lg:overflow-hidden relative">
+            <>
+              <div className="overflow-x-auto lg:overflow-hidden relative">
               <table className="w-full text-left text-xs min-w-[780px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
                 <thead className="bg-slate-100 dark:bg-[#16161b] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
@@ -231,7 +244,7 @@ export default function MyReservedCandidatesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-                  {filteredCandidates.map((c) => {
+                  {paginatedCandidates.map((c) => {
                     const candidateNameDisplay = c.full_name || c.applicant_name || c.applicant || "Candidate";
                     const candidateForModal = {
                       ...c,
@@ -371,6 +384,41 @@ export default function MyReservedCandidatesPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Desktop Compact Pagination */}
+            {filteredCandidates.length > pageSize && (
+              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-[#1d1d24] bg-slate-50/50 dark:bg-[#121216] text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(filteredCandidates.length, (reservedPage - 1) * pageSize + 1)}–{Math.min(filteredCandidates.length, reservedPage * pageSize)} of {filteredCandidates.length} applicants
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={reservedPage <= 1}
+                    onClick={() => setReservedPage((p) => Math.max(1, p - 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <span className="font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                    {reservedPage} / {totalReservedPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={reservedPage >= totalReservedPages}
+                    onClick={() => setReservedPage((p) => Math.min(totalReservedPages, p + 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       </div>

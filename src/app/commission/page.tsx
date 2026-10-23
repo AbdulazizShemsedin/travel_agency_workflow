@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Info,
   ChevronRight,
+  ChevronLeft,
   Check,
   FolderOpen,
   RotateCcw,
@@ -453,6 +454,20 @@ export default function AdminCommissionPage() {
       );
     });
   }, [owedCommissions, searchQuery, getCandidateName]);
+
+  // Desktop viewport-fitting pagination state for Unbatched Commissions
+  const [owedPage, setOwedPage] = React.useState<number>(1);
+  const owedPageSize = 8;
+  const totalOwedPages = Math.ceil(filteredOwed.length / owedPageSize) || 1;
+
+  React.useEffect(() => {
+    setOwedPage(1);
+  }, [selectedContractor, selectedCountry, searchQuery]);
+
+  const paginatedOwed = React.useMemo(() => {
+    const start = (owedPage - 1) * owedPageSize;
+    return filteredOwed.slice(start, start + owedPageSize);
+  }, [filteredOwed, owedPage, owedPageSize]);
 
   // Existing commission transactions by placement
   const commissionTxPlacementSet = React.useMemo(() => {
@@ -1399,13 +1414,13 @@ export default function AdminCommissionPage() {
                           )}
                         </button>
                       </th>
-                      <th className="py-2.5 px-3">Transaction ID</th>
-                      <th className="py-2.5 px-3">Candidate / Applicant</th>
-                      <th className="py-2.5 px-3">Agency Contractor</th>
-                      <th className="py-2.5 px-3">Corridor</th>
-                      <th className="py-2.5 px-3">Departure Date</th>
-                      <th className="py-2.5 px-3">Commission Amount</th>
-                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Transaction ID</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Candidate / Applicant</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Agency Contractor</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Corridor</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Departure Date</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Commission Amount</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -1417,7 +1432,7 @@ export default function AdminCommissionPage() {
                         </td>
                       </tr>
                     ) : filteredOwed.length > 0 ? (
-                      filteredOwed.map((item) => {
+                      paginatedOwed.map((item) => {
                         const txId = item.transaction_name || item.name;
                         const isSelected = selectedTxNames.includes(txId);
                         return (
@@ -1478,6 +1493,42 @@ export default function AdminCommissionPage() {
                     )}
                   </tbody>
                 </table>
+                {totalOwedPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#202028] bg-slate-50/50 dark:bg-[#14141a]">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
+                      Showing <strong className="text-slate-900 dark:text-white">{(owedPage - 1) * owedPageSize + 1}</strong> to{" "}
+                      <strong className="text-slate-900 dark:text-white">{Math.min(owedPage * owedPageSize, filteredOwed.length)}</strong> of{" "}
+                      <strong className="text-slate-900 dark:text-white">{filteredOwed.length}</strong> commissions
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={owedPage <= 1}
+                        onClick={() => setOwedPage((p) => Math.max(1, p - 1))}
+                        className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                      >
+                        <ChevronLeft className="h-3 w-3 mr-1" />
+                        Previous
+                      </Button>
+                      <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                        {owedPage} / {totalOwedPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={owedPage >= totalOwedPages}
+                        onClick={() => setOwedPage((p) => Math.min(totalOwedPages, p + 1))}
+                        className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                      >
+                        Next
+                        <ChevronRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1518,12 +1569,12 @@ export default function AdminCommissionPage() {
                   <table className="w-full text-xs text-left lg:table-fixed">
                     <thead className="bg-slate-50 dark:bg-[#181820] text-slate-500 font-semibold uppercase tracking-wider sticky top-0 border-b border-slate-100 dark:border-[#202028]">
                       <tr>
-                        <th className="py-2.5 px-3">Placement</th>
-                        <th className="py-2.5 px-3">Candidate</th>
-                        <th className="py-2.5 px-3">Contractor</th>
-                        <th className="py-2.5 px-3">Destination</th>
-                        <th className="py-2.5 px-3">Departure Date</th>
-                        <th className="py-2.5 px-3 text-right">Action</th>
+                        <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Placement</th>
+                        <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Candidate</th>
+                        <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Contractor</th>
+                        <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Destination</th>
+                        <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Departure Date</th>
+                        <th className="py-2.5 px-3 text-right whitespace-normal break-words leading-snug">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -1992,12 +2043,12 @@ export default function AdminCommissionPage() {
                           <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
                             <tr>
                               <th className="py-2 px-3 w-8"></th>
-                              <th className="py-2 px-3">Item Row</th>
-                              <th className="py-2 px-3">Transaction</th>
-                              <th className="py-2 px-3">Candidate / Applicant</th>
-                              <th className="py-2 px-3">Commission Amount</th>
-                              <th className="py-2 px-3">Item Status</th>
-                              <th className="py-2 px-3 text-right">Actions</th>
+                              <th className="py-2 px-3 whitespace-normal break-words leading-snug">Item Row</th>
+                              <th className="py-2 px-3 whitespace-normal break-words leading-snug">Transaction</th>
+                              <th className="py-2 px-3 whitespace-normal break-words leading-snug">Candidate / Applicant</th>
+                              <th className="py-2 px-3 whitespace-normal break-words leading-snug">Commission Amount</th>
+                              <th className="py-2 px-3 whitespace-normal break-words leading-snug">Item Status</th>
+                              <th className="py-2 px-3 text-right whitespace-normal break-words leading-snug">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">

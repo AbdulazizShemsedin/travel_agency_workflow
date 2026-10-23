@@ -258,6 +258,19 @@ export default function AgentDiscoveryPage() {
       });
   }, [candidates, locallyRemovedIds, searchTerm, destinationCountry, jobApplied, religion, medicalStatus, placeOfBirth, skinColor, experience]);
 
+  // Desktop pagination for candidate discovery (9 per page in grid, 8 per page in table)
+  const [candidatePage, setCandidatePage] = React.useState(1);
+  const candidatePageSize = viewMode === "grid" ? 9 : 8;
+  const totalCandidatePages = Math.max(1, Math.ceil(visibleCandidates.length / candidatePageSize));
+  const paginatedCandidates = React.useMemo(() => {
+    const start = (candidatePage - 1) * candidatePageSize;
+    return visibleCandidates.slice(start, start + candidatePageSize);
+  }, [visibleCandidates, candidatePage, candidatePageSize]);
+
+  React.useEffect(() => {
+    setCandidatePage(1);
+  }, [searchTerm, destinationCountry, jobApplied, religion, medicalStatus, placeOfBirth, skinColor, experience, viewMode]);
+
   // Selection Mutation
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
@@ -657,7 +670,7 @@ export default function AgentDiscoveryPage() {
             {viewMode === "grid" ? (
               /* Responsive Candidate Grid: ~3 cards per row on larger screens, 1 per row on mobile */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {visibleCandidates.map((candidate) => (
+                {paginatedCandidates.map((candidate) => (
                   <CandidateCard
                     key={candidate.name}
                     candidate={candidate}
@@ -685,7 +698,7 @@ export default function AgentDiscoveryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#222227]">
-                      {visibleCandidates.map((candidate) => (
+                      {paginatedCandidates.map((candidate) => (
                         <tr key={candidate.name} className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition">
                           {/* Candidate Identity - Sticky on Desktop only */}
                           <td className="lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
@@ -798,6 +811,40 @@ export default function AgentDiscoveryPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Desktop Compact Page Navigation */}
+            {visibleCandidates.length > candidatePageSize && (
+              <div className="flex items-center justify-between px-4 py-2 border border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121216] text-xs text-slate-500 rounded-xl shadow-2xs">
+                <span>
+                  Showing {Math.min(visibleCandidates.length, (candidatePage - 1) * candidatePageSize + 1)}–{Math.min(visibleCandidates.length, candidatePage * candidatePageSize)} of {visibleCandidates.length} candidates
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={candidatePage <= 1}
+                    onClick={() => setCandidatePage((p) => Math.max(1, p - 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <span className="font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                    {candidatePage} / {totalCandidatePages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={candidatePage >= totalCandidatePages}
+                    onClick={() => setCandidatePage((p) => Math.min(totalCandidatePages, p + 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
             )}

@@ -26,6 +26,7 @@ import {
   Layers,
   Award,
   ChevronRight,
+  ChevronLeft,
   ExternalLink,
   ShieldCheck,
   Search,
@@ -370,6 +371,20 @@ export default function ReportsPage() {
       );
     });
   }, [allTransactions, txnSearchQuery]);
+
+  // Desktop viewport-fitting pagination state for Financial Transactions
+  const [txnPage, setTxnPage] = React.useState<number>(1);
+  const txnPageSize = 10;
+  const totalTxnPages = Math.ceil(filteredTransactions.length / txnPageSize) || 1;
+
+  React.useEffect(() => {
+    setTxnPage(1);
+  }, [dateParams, txnStatusFilter, txnTypeFilter, txnSearchQuery]);
+
+  const paginatedTransactions = React.useMemo(() => {
+    const start = (txnPage - 1) * txnPageSize;
+    return filteredTransactions.slice(start, start + txnPageSize);
+  }, [filteredTransactions, txnPage, txnPageSize]);
 
   const transactionMetrics = React.useMemo(() => {
     let totalExpenseBirr = 0;
@@ -850,11 +865,11 @@ export default function ReportsPage() {
                 <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-y border-slate-100 dark:border-[#20202a]">
                     <tr>
-                      <th className="py-2.5 px-3">Officer</th>
-                      <th className="py-2.5 px-3">CVs Created</th>
-                      <th className="py-2.5 px-3">Clearances Issued</th>
-                      <th className="py-2.5 px-3">Tickets Booked</th>
-                      <th className="py-2.5 px-3">Departures Confirmed</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Officer</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">CVs Created</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Clearances Issued</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Tickets Booked</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Departures Confirmed</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -919,11 +934,11 @@ export default function ReportsPage() {
                 <table className="w-full text-xs text-left lg:table-fixed">
                   <thead className="text-[11px] text-slate-400 bg-red-50/50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-950/40">
                     <tr>
-                      <th className="py-2.5 px-3">Placement ID</th>
-                      <th className="py-2.5 px-3">Candidate</th>
-                      <th className="py-2.5 px-3">Corridor</th>
-                      <th className="py-2.5 px-3">Current Status</th>
-                      <th className="py-2.5 px-3">Age (Days)</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Placement ID</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Candidate</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Corridor</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Current Status</th>
+                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Age (Days)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -1506,18 +1521,18 @@ export default function ReportsPage() {
                     <table className="w-full text-xs text-left lg:table-fixed">
                       <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#20202a]">
                         <tr>
-                          <th className="py-2.5 px-3 font-semibold">Transaction</th>
-                          <th className="py-2.5 px-3 font-semibold">Type</th>
-                          <th className="py-2.5 px-3 font-semibold">Description & Stage</th>
-                          <th className="py-2.5 px-3 font-semibold">Candidate / Placement</th>
-                          <th className="py-2.5 px-3 font-semibold text-right">Amount (Original)</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Transaction</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Type</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Description & Stage</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Candidate / Placement</th>
+                          <th className="py-2.5 px-3 font-semibold text-right whitespace-normal break-words leading-snug">Amount (Original)</th>
                           {isBirrConversionEnabled && (
-                            <th className="py-2.5 px-3 font-semibold text-right">Amount (ETB)</th>
+                            <th className="py-2.5 px-3 font-semibold text-right whitespace-normal break-words leading-snug">Amount (ETB)</th>
                           )}
-                          <th className="py-2.5 px-3 font-semibold text-center">Status</th>
-                          <th className="py-2.5 px-3 font-semibold">Logged By</th>
-                          <th className="py-2.5 px-3 font-semibold">Approval / Audit</th>
-                          <th className="py-2.5 px-3 font-semibold text-center">Action</th>
+                          <th className="py-2.5 px-3 font-semibold text-center whitespace-normal break-words leading-snug">Status</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Logged By</th>
+                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Approval / Audit</th>
+                          <th className="py-2.5 px-3 font-semibold text-center whitespace-normal break-words leading-snug">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -1529,7 +1544,7 @@ export default function ReportsPage() {
                             </td>
                           </tr>
                         ) : filteredTransactions.length > 0 ? (
-                          filteredTransactions.map((t: any) => {
+                          paginatedTransactions.map((t: any) => {
                             const isExpense = t.transaction_type === "Expense";
                             const origCurr = t.currency_original || t.currency || "ETB";
                             const origAmt = Number(t.amount_original || t.amount || 0);
@@ -1690,6 +1705,42 @@ export default function ReportsPage() {
                         )}
                       </tbody>
                     </table>
+                    {totalTxnPages > 1 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#20202a] bg-slate-50/50 dark:bg-[#14141a]">
+                        <p className="text-xs text-slate-500 dark:text-zinc-400">
+                          Showing <strong className="text-slate-900 dark:text-white">{(txnPage - 1) * txnPageSize + 1}</strong> to{" "}
+                          <strong className="text-slate-900 dark:text-white">{Math.min(txnPage * txnPageSize, filteredTransactions.length)}</strong> of{" "}
+                          <strong className="text-slate-900 dark:text-white">{filteredTransactions.length}</strong> transactions
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={txnPage <= 1}
+                            onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
+                            className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                          >
+                            <ChevronLeft className="h-3 w-3 mr-1" />
+                            Previous
+                          </Button>
+                          <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                            {txnPage} / {totalTxnPages}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={txnPage >= totalTxnPages}
+                            onClick={() => setTxnPage((p) => Math.min(totalTxnPages, p + 1))}
+                            className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                          >
+                            Next
+                            <ChevronRight className="h-3 w-3 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

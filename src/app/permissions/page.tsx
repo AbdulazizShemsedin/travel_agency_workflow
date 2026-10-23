@@ -75,6 +75,26 @@ export default function PermissionsPage() {
     return map;
   }, [permissions, searchTerm]);
 
+  const areasList = React.useMemo(() => {
+    return Array.from(groupedPermissions.keys());
+  }, [groupedPermissions]);
+
+  const [activeArea, setActiveArea] = React.useState<string>("All");
+
+  React.useEffect(() => {
+    if (activeArea !== "All" && !groupedPermissions.has(activeArea)) {
+      setActiveArea("All");
+    }
+  }, [groupedPermissions, activeArea]);
+
+  const displayedEntries = React.useMemo(() => {
+    if (activeArea === "All") {
+      return Array.from(groupedPermissions.entries());
+    }
+    const items = groupedPermissions.get(activeArea);
+    return items ? [[activeArea, items] as [string, V2PermissionTableRow[]]] : [];
+  }, [groupedPermissions, activeArea]);
+
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] space-y-3">
@@ -154,6 +174,37 @@ export default function PermissionsPage() {
         )}
       </div>
 
+      {/* Area Filter Navigation Tabs */}
+      {areasList.length > 1 && (
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-[#15151a] border border-slate-200/80 dark:border-[#222227] w-fit overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveArea("All")}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              activeArea === "All"
+                ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+                : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+            }`}
+          >
+            All Areas
+          </button>
+          {areasList.map((area) => (
+            <button
+              key={area}
+              type="button"
+              onClick={() => setActiveArea(area)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                activeArea === area
+                  ? "bg-white dark:bg-[#1e1e24] text-slate-900 dark:text-white shadow-xs font-bold"
+                  : "text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white"
+              }`}
+            >
+              {area}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
@@ -166,7 +217,7 @@ export default function PermissionsPage() {
           error={error}
           onRetry={() => refetch()}
         />
-      ) : groupedPermissions.size === 0 ? (
+      ) : displayedEntries.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-[#222227] p-12 text-center bg-white/50 dark:bg-[#121216]/50">
           <Layers className="h-8 w-8 text-slate-400 mx-auto mb-2" />
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
@@ -178,7 +229,7 @@ export default function PermissionsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {Array.from(groupedPermissions.entries()).map(([area, items]) => (
+          {displayedEntries.map(([area, items]) => (
             <Card
               key={area}
               className="border-slate-200/80 dark:border-[#222228] bg-white dark:bg-[#121217] shadow-xs overflow-hidden"
@@ -199,8 +250,8 @@ export default function PermissionsPage() {
                   <table className="w-full text-left text-xs lg:table-fixed">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-[#1d1d24] text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
-                        <th className="px-4 py-2.5 w-1/2">Action / Capability</th>
-                        <th className="px-4 py-2.5 w-1/2">Permitted Roles</th>
+                        <th className="px-4 py-2.5 w-1/2 whitespace-normal break-words leading-snug">Action / Capability</th>
+                        <th className="px-4 py-2.5 w-1/2 whitespace-normal break-words leading-snug">Permitted Roles</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">

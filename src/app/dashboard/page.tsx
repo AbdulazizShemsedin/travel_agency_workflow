@@ -15,6 +15,7 @@ import {
   UserCheck,
   PlusCircle,
   ChevronRight,
+  ChevronLeft,
   Activity,
   Check,
   FileText,
@@ -310,6 +311,31 @@ export default function DashboardPage() {
     return list.sort((a, b) => a.days - b.days);
   }, [applicantRows]);
 
+  // Desktop viewport-fitting pagination state for variable datasets
+  const [alertsPage, setAlertsPage] = React.useState(1);
+  const alertsPerPage = 5;
+  const totalAlertPages = Math.ceil(realAlerts.length / alertsPerPage) || 1;
+  const paginatedAlerts = React.useMemo(() => {
+    const start = (alertsPage - 1) * alertsPerPage;
+    return realAlerts.slice(start, start + alertsPerPage);
+  }, [realAlerts, alertsPage]);
+
+  React.useEffect(() => {
+    if (alertsPage > totalAlertPages) setAlertsPage(1);
+  }, [totalAlertPages, alertsPage]);
+
+  const [recentApplicantsPage, setRecentApplicantsPage] = React.useState(1);
+  const applicantsPerPage = 5;
+  const totalApplicantPages = Math.ceil(applicants.length / applicantsPerPage) || 1;
+  const paginatedApplicants = React.useMemo(() => {
+    const start = (recentApplicantsPage - 1) * applicantsPerPage;
+    return applicants.slice(start, start + applicantsPerPage);
+  }, [applicants, recentApplicantsPage]);
+
+  React.useEffect(() => {
+    if (recentApplicantsPage > totalApplicantPages) setRecentApplicantsPage(1);
+  }, [totalApplicantPages, recentApplicantsPage]);
+
   // Pipeline stages with exact real counts from backend
   const pipelineStages = [
     {
@@ -393,9 +419,9 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="w-full flex flex-col gap-2.5 sm:gap-3 min-h-0">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-1.5 lg:gap-2">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#222227] pb-2 shrink-0">
+      <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#222227] pb-1.5 shrink-0">
         <div>
           <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
             Dashboard
@@ -404,7 +430,7 @@ export default function DashboardPage() {
         {canRegister && (
           <div className="flex items-center gap-2">
             <Link href="/applicants/new">
-              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs h-8 px-3 rounded-lg transition-colors">
+              <Button className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-medium text-xs shadow-xs h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg transition-colors">
                 <PlusCircle className="mr-1.5 h-3.5 w-3.5" />
                 Add Applicant
               </Button>
@@ -414,24 +440,24 @@ export default function DashboardPage() {
       </div>
 
       {/* 1. Top Stat Metric Cards (Clickable redirection) */}
-      <div data-tour="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 shrink-0">
+      <div data-tour="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-2.5 shrink-0">
         <Card
           onClick={() => router.push("/applicants")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Total Applicants
             </span>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <Users className="h-4 w-4" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <Users className="h-3.5 w-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : (
               totalCount.toLocaleString()
             )}
@@ -442,19 +468,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=In Progress")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate">
               In Progress
             </span>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
-              <Clock className="h-4 w-4" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
+              <Clock className="h-3.5 w-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : (
               inProgressCount.toLocaleString()
             )}
@@ -465,19 +491,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=Completed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Completed
             </span>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <CheckCircle2 className="h-4 w-4" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <CheckCircle2 className="h-3.5 w-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : (
               completedCount.toLocaleString()
             )}
@@ -488,19 +514,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=Departed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2.5 sm:p-3 flex flex-col justify-between"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Departed
             </span>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <Plane className="h-4 w-4" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <Plane className="h-3.5 w-3.5" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white font-mono tracking-tight mt-1 leading-none">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
             {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
             ) : (
               departedCount.toLocaleString()
             )}
@@ -510,39 +536,39 @@ export default function DashboardPage() {
 
       {/* 2. Pipeline Overview Section (Single Compact Row on Desktop) */}
       <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl overflow-hidden shrink-0">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] py-1.5 px-3 bg-slate-50/50 dark:bg-[#141418]">
-          <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] py-1 px-3 bg-slate-50/50 dark:bg-[#141418]">
+          <span className="text-xs font-bold text-slate-900 dark:text-white">
             Pipeline Overview
           </span>
-          <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline flex items-center gap-1">
+          <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline flex items-center gap-1">
             View All Directory <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
-        <div className="p-2 sm:p-2.5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <div className="p-1.5 sm:p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 lg:gap-2">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`rounded-lg border p-2 transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between h-[84px] select-none group ${stage.color}`}
+                className={`rounded-lg border p-1.5 transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between h-[70px] select-none group ${stage.color}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className={`flex h-4 w-4 items-center justify-center rounded-full text-white text-[9px] font-bold ${stage.accent}`}>
+                  <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-full text-white text-[8px] font-bold ${stage.accent}`}>
                     {stage.step}
                   </span>
-                  <span className="font-mono text-sm font-bold text-slate-900 dark:text-zinc-100 leading-none">
+                  <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-zinc-100 leading-none">
                     {stage.count}
                   </span>
                 </div>
 
                 <div className="my-auto py-0.5">
-                  <h4 className="text-[11px] font-bold leading-tight text-slate-800 dark:text-zinc-200 truncate">
+                  <h4 className="text-[10px] sm:text-[11px] font-bold leading-tight text-slate-800 dark:text-zinc-200 truncate">
                     {stage.badge}
                   </h4>
-                  <p className="text-[9px] font-medium text-slate-500 dark:text-zinc-400 truncate">
+                  <p className="text-[8.5px] font-medium text-slate-500 dark:text-zinc-400 truncate">
                     {stage.title}
                   </p>
                 </div>
@@ -558,7 +584,7 @@ export default function DashboardPage() {
                             router.push(sub.link);
                           }
                         }}
-                        className={`flex items-center justify-between px-1 py-0.5 rounded text-[8px] font-semibold border ${sub.color}`}
+                        className={`flex items-center justify-between px-1 py-0.2 rounded text-[8px] font-semibold border ${sub.color}`}
                       >
                         <span>{sub.name}</span>
                         <span className="font-mono font-bold">{sub.count}</span>
@@ -566,7 +592,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between pt-0.5 border-t border-slate-200/60 dark:border-zinc-800/60 text-[9px] text-slate-400 dark:text-zinc-500 font-medium">
+                  <div className="flex items-center justify-between pt-0.5 border-t border-slate-200/60 dark:border-zinc-800/60 text-[8.5px] text-slate-400 dark:text-zinc-500 font-medium">
                     <span>Candidates</span>
                     <ArrowRight className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                   </div>
@@ -578,48 +604,80 @@ export default function DashboardPage() {
       </Card>
 
       {/* 3. Three-Column Bottom Grid: Expiry Alerts, Action Items, & Recent Applicants */}
-      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+      <div data-tour="dashboard-operational-tasks" className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-2 lg:gap-2.5">
         {/* Panel 1: Document Expiry Warnings */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
-            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-              Document Expiry Warnings
-            </span>
-            <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-              View All
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                Document Expiry
+              </span>
+              {realAlerts.length > 0 && (
+                <span className="text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1.5 py-0.2 rounded-full border border-rose-200 dark:border-rose-800">
+                  {realAlerts.length}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {totalAlertPages > 1 && (
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                  <button
+                    type="button"
+                    disabled={alertsPage <= 1}
+                    onClick={() => setAlertsPage((p) => Math.max(1, p - 1))}
+                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#202028] disabled:opacity-30 cursor-pointer"
+                    aria-label="Previous alert page"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </button>
+                  <span>{alertsPage}/{totalAlertPages}</span>
+                  <button
+                    type="button"
+                    disabled={alertsPage >= totalAlertPages}
+                    onClick={() => setAlertsPage((p) => Math.min(totalAlertPages, p + 1))}
+                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#202028] disabled:opacity-30 cursor-pointer"
+                    aria-label="Next alert page"
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+                View All
+              </Link>
+            </div>
           </div>
-          <CardContent className="p-2.5 space-y-1.5">
-            {realAlerts.length > 0 ? (
-              realAlerts.map((alert) => (
+          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between gap-1.5">
+            {paginatedAlerts.length > 0 ? (
+              paginatedAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22]"
+                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 xl:p-2.5 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22]"
                 >
                   <div className="space-y-0.5 min-w-0 flex-1 pr-2">
                     <div className="flex items-center gap-1.5">
-                      <span className={`inline-flex items-center rounded px-1 py-0.2 text-[8px] font-black uppercase tracking-wider ${
+                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] xl:text-[9.5px] font-black uppercase tracking-wider ${
                         alert.severity === "URGENT"
                           ? "bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
                           : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
                       }`}>
                         {alert.severity}
                       </span>
-                      <span className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                      <span className="font-bold text-slate-900 dark:text-white text-xs xl:text-[13px] truncate">
                         {alert.message}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-zinc-400 truncate">
-                      <span>{alert.name}</span>
+                    <div className="text-[11px] xl:text-xs text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+                      <span className="font-medium text-slate-700 dark:text-zinc-300">{alert.name}</span>
                       {alert.passportNumber ? <span className="font-mono"> • {alert.passportNumber}</span> : null}
-                      {alert.expiryDate ? <span className="font-mono text-rose-600 dark:text-rose-400"> • {alert.expiryDate}</span> : null}
+                      {alert.expiryDate ? <span className="font-mono text-rose-600 dark:text-rose-400 font-semibold"> • {alert.expiryDate}</span> : null}
                     </div>
                   </div>
                   <Link href={`/applicants/${encodeURIComponent(alert.applicantName)}`}>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-6 text-[10px] px-2 font-semibold border-slate-300 dark:border-[#26262d] hover:bg-white dark:hover:bg-[#1f1f26]"
+                      className="h-6.5 xl:h-7 text-[11px] px-2.5 font-semibold border-slate-300 dark:border-[#26262d] hover:bg-white dark:hover:bg-[#1f1f26]"
                     >
                       View
                     </Button>
@@ -627,16 +685,16 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="font-medium">All candidate documents are valid.</span>
+              <div className="flex items-center gap-2.5 p-3 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
+                <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="font-medium text-xs xl:text-sm">All candidate documents are valid.</span>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Panel 2: Quick Actions (Exact match to Sidebar options) */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
@@ -644,25 +702,25 @@ export default function DashboardPage() {
               </span>
             </div>
             <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-              Sidebar Navigation
+              Navigation
             </span>
           </div>
-          <CardContent className="p-2 sm:p-2.5">
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 xl:gap-2.5 h-full content-between">
               {sidebarQuickActions.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="group flex items-center gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
+                    className="group flex items-center gap-2 xl:gap-2.5 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 xl:p-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
                   >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
-                      <Icon className="h-3.5 w-3.5" />
+                    <div className="flex h-7 w-7 xl:h-8 xl:w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
+                      <Icon className="h-3.5 w-3.5 xl:h-4 xl:w-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.label}</p>
-                      <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">{item.desc}</p>
+                      <p className="text-xs xl:text-[13px] font-bold text-slate-900 dark:text-white truncate leading-tight">{item.label}</p>
+                      <p className="text-[10px] xl:text-[11px] text-slate-500 dark:text-zinc-400 truncate leading-tight mt-0.5">{item.desc}</p>
                     </div>
                   </Link>
                 );
@@ -672,32 +730,64 @@ export default function DashboardPage() {
         </Card>
 
         {/* Panel 3: Live Recent Applicants Stream */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
-            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-              Recent Applicants
-            </span>
-            <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
-              Directory →
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                Recent Applicants
+              </span>
+              {applicants.length > 0 && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  ({applicants.length})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {totalApplicantPages > 1 && (
+                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                  <button
+                    type="button"
+                    disabled={recentApplicantsPage <= 1}
+                    onClick={() => setRecentApplicantsPage((p) => Math.max(1, p - 1))}
+                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#202028] disabled:opacity-30 cursor-pointer"
+                    aria-label="Previous applicant page"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </button>
+                  <span>{recentApplicantsPage}/{totalApplicantPages}</span>
+                  <button
+                    type="button"
+                    disabled={recentApplicantsPage >= totalApplicantPages}
+                    onClick={() => setRecentApplicantsPage((p) => Math.min(totalApplicantPages, p + 1))}
+                    className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#202028] disabled:opacity-30 cursor-pointer"
+                    aria-label="Next applicant page"
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline">
+                Directory →
+              </Link>
+            </div>
           </div>
-          <CardContent className="p-2.5 space-y-1.5">
-            {applicants.length > 0 ? (
-              applicants.slice(0, 10).map((applicant) => (
+          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between gap-1.5">
+            {paginatedApplicants.length > 0 ? (
+              paginatedApplicants.map((applicant) => (
                 <Link
                   key={applicant.name}
                   href={`/applicants/${encodeURIComponent(applicant.name)}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22] cursor-pointer"
+                  className="flex items-center justify-between rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 xl:p-2.5 text-xs transition-colors hover:bg-slate-100 dark:hover:bg-[#1a1a22] cursor-pointer"
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 font-bold text-[10px] text-emerald-900 dark:text-emerald-300 uppercase border border-emerald-200/60 dark:border-emerald-800/60">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                    <div className="flex h-7 w-7 xl:h-8 xl:w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 font-bold text-[10px] xl:text-xs text-emerald-900 dark:text-emerald-300 uppercase border border-emerald-200/60 dark:border-emerald-800/60">
                       {applicant.first_name?.[0] || "A"}
                     </div>
                     <div className="min-w-0 flex-1 space-y-0.5">
-                      <p className="font-bold text-slate-900 dark:text-white text-xs truncate">
+                      <p className="font-bold text-slate-900 dark:text-white text-xs xl:text-[13px] truncate leading-tight">
                         {applicant.full_name || `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || applicant.name}
                       </p>
-                      <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                      <p className="text-[11px] xl:text-xs text-slate-500 dark:text-zinc-400 truncate leading-tight mt-0.5">
                         <span className="font-mono">{applicant.passport_number || "No Passport"}</span>
                         {applicant.destination_country && <span> • {applicant.destination_country}</span>}
                       </p>
@@ -705,17 +795,17 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge variant="default" className="text-[9px] py-0.2 px-1.5 font-medium">
+                    <Badge variant="default" className="text-[9.5px] xl:text-[10px] py-0.5 px-2 font-semibold">
                       {applicant.applicant_state || applicant.status || "Draft"}
                     </Badge>
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
+                    <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                   </div>
                 </Link>
               ))
             ) : (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
-                <Users className="h-4 w-4 text-slate-400 shrink-0" />
-                <span className="font-medium">No applicants registered yet.</span>
+              <div className="flex items-center gap-2.5 p-3 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
+                <Users className="h-4.5 w-4.5 text-slate-400 shrink-0" />
+                <span className="font-medium text-xs xl:text-sm">No applicants registered yet.</span>
               </div>
             )}
           </CardContent>

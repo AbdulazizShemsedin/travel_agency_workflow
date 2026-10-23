@@ -116,6 +116,18 @@ export default function AgentComplaintsPage() {
     });
   }, [tabFilteredComplaints, sortOrder]);
 
+  const [complaintPage, setComplaintPage] = React.useState(1);
+  const pageSize = 8;
+  const totalComplaintPages = Math.max(1, Math.ceil(sortedComplaints.length / pageSize));
+  const paginatedComplaints = React.useMemo(() => {
+    const start = (complaintPage - 1) * pageSize;
+    return sortedComplaints.slice(start, start + pageSize);
+  }, [sortedComplaints, complaintPage]);
+
+  React.useEffect(() => {
+    setComplaintPage(1);
+  }, [activeTab, sortOrder]);
+
   const openCount = React.useMemo(() => {
     return allComplaints.filter((c) => c.status !== "Resolved" && c.status !== "Closed").length;
   }, [allComplaints]);
@@ -318,7 +330,8 @@ export default function AgentComplaintsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto lg:overflow-hidden relative">
+            <>
+              <div className="overflow-x-auto max-h-[calc(100vh-270px)] min-h-[300px] overflow-y-auto lg:overflow-hidden relative">
               <table className="w-full text-left text-xs min-w-[800px] lg:min-w-0 border-separate border-spacing-0 lg:table-fixed">
                 <thead className="sticky top-0 z-20 bg-slate-100/95 dark:bg-[#16161b]/95 backdrop-blur-xs text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-semibold text-[11px]">
                   <tr>
@@ -333,7 +346,7 @@ export default function AgentComplaintsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#202026]">
-                  {sortedComplaints.map((c) => {
+                  {paginatedComplaints.map((c) => {
                     const displayNo = c.display_no ? `#${c.display_no}` : shortRef(c.name);
                     const candidateName = c.full_name || "—";
                     const passportNumber = c.passport_number || "—";
@@ -412,6 +425,41 @@ export default function AgentComplaintsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Desktop Compact Pagination */}
+            {sortedComplaints.length > pageSize && (
+              <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-[#1d1d24] bg-slate-50/50 dark:bg-[#121216] text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(sortedComplaints.length, (complaintPage - 1) * pageSize + 1)}–{Math.min(sortedComplaints.length, complaintPage * pageSize)} of {sortedComplaints.length} complaints
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={complaintPage <= 1}
+                    onClick={() => setComplaintPage((p) => Math.max(1, p - 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Prev
+                  </Button>
+                  <span className="font-semibold text-slate-700 dark:text-zinc-300 px-1">
+                    {complaintPage} / {totalComplaintPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={complaintPage >= totalComplaintPages}
+                    onClick={() => setComplaintPage((p) => Math.min(totalComplaintPages, p + 1))}
+                    className="h-6 px-2 text-[11px]"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 

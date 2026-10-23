@@ -778,10 +778,10 @@ export function ApplicantTable() {
   const rowOffset = (currentPage - 1) * pageSize;
 
   return (
-    <div className="space-y-4">
+    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-2.5">
       {/* Floating Batch Action Banner when items are selected */}
       {selectedRows.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-emerald-900 dark:bg-emerald-950 text-white p-3.5 shadow-md border border-emerald-800 dark:border-emerald-700 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-emerald-900 dark:bg-emerald-950 text-white p-3 shadow-md border border-emerald-800 dark:border-emerald-700 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-emerald-950">
               {selectedRows.size}
@@ -825,7 +825,7 @@ export function ApplicantTable() {
       )}
 
       {/* Header Controls: Search, Stage Filter */}
-      <div data-tour="applicants-filter-bar" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div data-tour="applicants-filter-bar" className="shrink-0 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <Input
@@ -913,8 +913,8 @@ export function ApplicantTable() {
       </div>
 
       {/* Table Container */}
-      <div data-tour="applicants-table" className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs">
-        <div className="w-full max-w-full min-w-0 overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+      <div data-tour="applicants-table" className="flex-1 min-h-0 flex flex-col justify-between rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs overflow-hidden">
+        <div className="flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name | Passport | Stage Status | Contract Date | Contract No |
@@ -923,10 +923,10 @@ export function ApplicantTable() {
             Total: 16 columns
           */}
           <table className="w-full min-w-[960px] lg:min-w-0 text-left text-xs border-collapse lg:table-fixed">
-            <thead className="sticky top-0 z-30 border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[10px] xl:text-[11px] leading-tight">
+            <thead className="sticky top-0 z-30 border-b border-slate-200 dark:border-[#272730] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 uppercase tracking-wider font-bold text-[10px] xl:text-[11px] leading-snug">
               <tr>
                 {/* Col 1: Checkbox */}
-                <th className="px-1 py-1.5 w-7 lg:w-[2.5%] bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
+                <th className="px-1 py-2 w-7 lg:w-[2.5%] bg-slate-100 dark:bg-[#181820] text-center border-r border-slate-200 dark:border-[#272730]">
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
@@ -939,51 +939,51 @@ export function ApplicantTable() {
                 </th>
 
                 {/* Col 2: Row number */}
-                <th className="px-1 py-1.5 w-8 lg:w-[2.5%] text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
+                <th className="px-1 py-2 w-8 lg:w-[2.5%] text-center bg-slate-100 dark:bg-[#181820] border-r border-slate-200 dark:border-[#272730]">No</th>
 
                 {/* Col 3: Name */}
-                <th className="px-1.5 py-1.5 lg:w-[13%] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold border-r border-slate-300 dark:border-[#272730] truncate">
+                <th className="px-2 py-2 lg:w-[13%] bg-slate-100 dark:bg-[#181820] text-slate-700 dark:text-zinc-300 font-bold border-r border-slate-300 dark:border-[#272730] whitespace-normal break-words">
                   Full Name
                 </th>
 
                 {/* Col 4: Passport */}
-                <th className="px-1 py-1.5 lg:w-[8%] border-r border-slate-200 dark:border-[#272730] truncate">Passport No.</th>
+                <th className="px-1.5 py-2 lg:w-[7.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Passport No.</th>
 
                 {/* Col 5: Stage Status */}
-                <th className="px-1 py-1.5 lg:w-[9.5%] border-r border-slate-200 dark:border-[#272730] truncate">Stage Status</th>
+                <th className="px-1.5 py-2 lg:w-[10%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words text-center">Stage Status</th>
 
                 {/* Col 6: Contract Date */}
-                <th className="px-1 py-1.5 lg:w-[7%] border-r border-slate-200 dark:border-[#272730] truncate">Contract Date</th>
+                <th className="px-1.5 py-2 lg:w-[6.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Contract Date</th>
 
                 {/* Col 7: Sponsor Name */}
-                <th className="px-1 py-1.5 lg:w-[8%] border-r border-slate-200 dark:border-[#272730] truncate">Sponsor Name</th>
+                <th className="px-1.5 py-2 lg:w-[8.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Sponsor Name</th>
 
                 {/* Col 8: Medical Status */}
-                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Medical Status</th>
+                <th className="px-1 py-2 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words text-center">Medical Status</th>
 
                 {/* Col 9: Exam Date */}
-                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Exam Date</th>
+                <th className="px-1 py-2 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Exam Date</th>
 
                 {/* Col 10: Exam Remaining */}
-                <th className="px-1 py-1.5 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] truncate">Exam Remaining</th>
+                <th className="px-1.5 py-2 lg:w-[6.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Exam Remaining</th>
 
                 {/* Col 11: Te'shir */}
-                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Te&apos;shir</th>
+                <th className="px-1 py-2 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Te&apos;shir</th>
 
                 {/* Col 12: Injaz */}
-                <th className="px-1 py-1.5 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] truncate">Injaz</th>
+                <th className="px-1 py-2 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Injaz</th>
 
                 {/* Col 13: Wokala Status */}
-                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Wokala Status</th>
+                <th className="px-1 py-2 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Wokala Status</th>
 
                 {/* Col 14: Embassy */}
-                <th className="px-1 py-1.5 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] truncate">Embassy</th>
+                <th className="px-1 py-2 lg:w-[5%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Embassy</th>
 
                 {/* Col 15: Embassy Expire Date */}
-                <th className="px-1 py-1.5 lg:w-[5.5%] border-r border-slate-200 dark:border-[#272730] truncate">Embassy Exp. Date</th>
+                <th className="px-1.5 py-2 lg:w-[6%] border-r border-slate-200 dark:border-[#272730] whitespace-normal break-words">Embassy Exp. Date</th>
 
                 {/* Col 16: Actions */}
-                <th className="px-1.5 py-1.5 lg:w-[7.5%] text-right truncate">Actions</th>
+                <th className="px-2 py-2 lg:w-[6%] text-right whitespace-normal break-words">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-slate-700 dark:text-slate-300">
@@ -1069,44 +1069,44 @@ export function ApplicantTable() {
                     >
                       {/* Col 1: Checkbox — separate from No, stops row-click propagation */}
                       <td
-                        className="px-1 py-1 text-center border-r border-slate-100 dark:border-[#1e1e26]"
+                        className="px-1 py-2 xl:py-2.5 text-center border-r border-slate-100 dark:border-[#1e1e26]"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
-                          className="h-3 w-3 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700 cursor-pointer"
                           checked={isSelected}
                           onChange={(e) => handleToggleRow(applicant.name, e as unknown as React.MouseEvent)}
                         />
                       </td>
 
                       {/* Col 2: Row number */}
-                      <td className="px-1 py-1 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-[10px] xl:text-[11px] border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-2 xl:py-2.5 text-center font-mono font-semibold text-slate-500 dark:text-slate-400 text-xs xl:text-[13px] border-r border-slate-100 dark:border-[#1e1e26]">
                         {rowOffset + idx + 1}
                       </td>
 
                       {/* Col 3: Name */}
                       <td
                         className={cn(
-                          "px-1.5 py-1 border-r border-slate-200 dark:border-[#272730] truncate min-w-0",
+                          "px-2 py-2 xl:py-2.5 border-r border-slate-200 dark:border-[#272730] truncate min-w-0",
                           isSelected
                             ? "!bg-emerald-100 dark:!bg-[#183428]"
                             : "bg-white group-even:bg-slate-50 dark:bg-[#121216] dark:group-even:bg-[#16161c] group-hover:!bg-slate-100 dark:group-hover:!bg-[#1c2433]"
                         )}
                       >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[9px] font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex h-6 w-6 xl:h-7 xl:w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] xl:text-xs font-bold text-emerald-900 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                             {applicant.first_name?.[0] || "A"}
                           </div>
-                          <div className="min-w-0 flex items-center gap-1 truncate">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100 text-[11px] uppercase truncate">
+                          <div className="min-w-0 flex items-center gap-1.5 truncate">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 text-xs xl:text-[13px] uppercase truncate">
                               {applicant.full_name ||
                                 `${applicant.first_name} ${applicant.last_name}`}
                             </span>
                             {(applicant.entry_track === "Muayena" ||
                               applicant.applicant_type === "Muayena" ||
                               Boolean((applicant as any).is_muayena)) && (
-                              <span className="px-1 py-0 rounded text-[8px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                              <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
                                 M
                               </span>
                             )}
@@ -1115,19 +1115,19 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 4: Passport No */}
-                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[10.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1.5 py-2 xl:py-2.5 font-mono text-slate-700 dark:text-slate-300 text-xs xl:text-[12.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {applicant.passport_number || "—"}
                       </td>
 
                       {/* Col 5: Stage Status */}
-                      <td className="px-1 py-1 text-center truncate border-r border-slate-100 dark:border-[#1e1e26]">
-                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.2 px-1 text-[9px] truncate max-w-full inline-block", badge.className)}>
-                          {stage === "Processing" ? "Processing (LMIS and Teashir)" : stage}
+                      <td className="px-1.5 py-2 xl:py-2.5 text-center truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                        <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-2 text-[9.5px] xl:text-[10px] font-semibold inline-block max-w-full leading-tight", badge.className)}>
+                          {stage === "Processing" ? "Processing (LMIS / Teashir)" : stage}
                         </Badge>
                       </td>
 
                       {/* Contract Date */}
-                      <td className="px-1 py-1 font-mono text-slate-700 dark:text-slate-300 text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1.5 py-2 xl:py-2.5 font-mono text-slate-700 dark:text-slate-300 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {contractDate ? (
                           <span className="font-semibold text-slate-800 dark:text-zinc-200">
                             {new Date(contractDate).toLocaleDateString("en-GB", {
@@ -1142,7 +1142,7 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Col 7: Sponsor Name */}
-                      <td className="px-1 py-1 text-[10.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1.5 py-2 xl:py-2.5 text-xs xl:text-[12.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {sponsorName ? (
                           <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-full block" title={sponsorName}>
                             {sponsorName}
@@ -1153,14 +1153,14 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Medical Status */}
-                      <td className="px-1 py-1 text-center text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-2 xl:py-2.5 text-center text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         <span className={medicalClass}>
                           {medicalStatus || "—"}
                         </span>
                       </td>
 
                       {/* Exam Date */}
-                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1 py-2 xl:py-2.5 font-mono text-slate-600 dark:text-slate-400 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {examDate
                           ? new Date(examDate).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -1171,11 +1171,11 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Exam Remaining */}
-                      <td className="px-1 py-1 font-mono text-[10px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1.5 py-2 xl:py-2.5 font-mono text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {examExpiry ? (
                           <span
                             className={cn(
-                              "font-semibold text-[9.5px]",
+                              "font-semibold text-[10.5px] xl:text-[11px]",
                               new Date(examExpiry) > new Date()
                                 ? "text-emerald-700 dark:text-emerald-400"
                                 : "text-rose-600 dark:text-rose-400"
@@ -1189,27 +1189,27 @@ export function ApplicantTable() {
                       </td>
 
                       {/* Te'shir */}
-                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
+                      <td className={cn("px-1 py-2 xl:py-2.5 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(teshirStatus))}>
                         {stepStatusLabel(teshirStatus)}
                       </td>
 
                       {/* Injaz */}
-                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
+                      <td className={cn("px-1 py-2 xl:py-2.5 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(injazStatus))}>
                         {stepStatusLabel(injazStatus)}
                       </td>
 
                       {/* Wokala Status */}
-                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
+                      <td className={cn("px-1 py-2 xl:py-2.5 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(wakalaStatus))}>
                         {stepStatusLabel(wakalaStatus)}
                       </td>
 
                       {/* Embassy */}
-                      <td className={cn("px-1 py-1 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
+                      <td className={cn("px-1 py-2 xl:py-2.5 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]", stepStatusClass(embassyStatus))}>
                         {stepStatusLabel(embassyStatus)}
                       </td>
 
                       {/* Embassy Expire Date */}
-                      <td className="px-1 py-1 font-mono text-slate-600 dark:text-slate-400 text-[9.5px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
+                      <td className="px-1.5 py-2 xl:py-2.5 font-mono text-slate-600 dark:text-slate-400 text-xs xl:text-[12px] truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         {embassyExpiry
                           ? new Date(embassyExpiry).toLocaleDateString("en-GB", {
                               day: "2-digit",
@@ -1221,7 +1221,7 @@ export function ApplicantTable() {
 
                       {/* Actions */}
                       <td
-                        className="px-1 py-1 text-right truncate"
+                        className="px-1.5 py-2 xl:py-2.5 text-right truncate"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end gap-1 truncate">
@@ -1739,7 +1739,7 @@ export function ApplicantTable() {
         </div>
 
         {/* Pagination Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+        <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-[#121216]">
           <div className="flex items-center gap-3">
             <div>
               Showing{" "}
@@ -1753,32 +1753,32 @@ export function ApplicantTable() {
               of <span className="font-semibold text-slate-900 dark:text-white">{filteredApplicants.length}</span> entries
             </div>
 
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
-              Show:
-            </span>
-            {[10, 25, 50, 100].map((size) => {
-              const isCurrent = pageSize === size;
-              return (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => {
-                    setPageSize(size);
-                    setCurrentPage(1);
-                  }}
-                  className={cn(
-                    "h-6 px-2 text-xs font-bold rounded transition-all border",
-                    isCurrent
-                      ? "bg-emerald-900 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-700 shadow-xs"
-                      : "bg-white dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-[#25252e]"
-                  )}
-                >
-                  {size}
-                </button>
-              );
-            })}
-          </div>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
+                Show:
+              </span>
+              {[10, 15, 25, 50].map((size) => {
+                const isCurrent = pageSize === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => {
+                      setPageSize(size);
+                      setCurrentPage(1);
+                    }}
+                    className={cn(
+                      "h-6 px-2 text-xs font-bold rounded transition-all border",
+                      isCurrent
+                        ? "bg-emerald-900 dark:bg-emerald-700 text-white border-emerald-900 dark:border-emerald-700 shadow-xs"
+                        : "bg-white dark:bg-[#1a1a20] text-slate-700 dark:text-zinc-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-[#25252e]"
+                    )}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">

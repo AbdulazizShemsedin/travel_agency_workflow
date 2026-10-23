@@ -351,13 +351,13 @@ export function AgentLayout({
       )}
 
       {/* Main Page Area */}
-      <main className="flex-1 min-h-0 w-full overflow-y-auto p-4 sm:p-6 lg:p-8 animate-in fade-in duration-200">
-        <div className="w-full max-w-7xl mx-auto space-y-6">
+      <main className="flex-1 min-h-0 w-full overflow-y-auto lg:overflow-hidden flex flex-col justify-between p-4 sm:p-6 lg:p-4 animate-in fade-in duration-200">
+        <div className="w-full max-w-7xl mx-auto space-y-4 lg:space-y-3 flex-1 min-h-0 flex flex-col">
           {children}
         </div>
 
         {/* Agency Footer */}
-        <footer className="mt-12 border-t border-slate-200/80 dark:border-[#202026] py-6 text-xs text-slate-500 dark:text-zinc-500">
+        <footer className="mt-8 lg:mt-2 border-t border-slate-200/80 dark:border-[#202026] py-3 lg:py-1.5 text-xs text-slate-500 dark:text-zinc-500 shrink-0">
           <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
             <p>© 2026 Applicant Processing System • Foreign Partner Portal</p>
             <div className="flex items-center gap-4 text-[11px]">
