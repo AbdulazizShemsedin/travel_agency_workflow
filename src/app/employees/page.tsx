@@ -48,6 +48,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   listEmployeesV2,
@@ -603,24 +608,24 @@ export default function EmployeesPage() {
   };
 
   return (
-    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-2.5">
+    <div className="w-full h-full min-h-0 flex flex-col justify-start gap-2">
       {/* ------------------------------------------------------------- */}
       {/* Page Header                                                   */}
       {/* ------------------------------------------------------------- */}
-      <div className="shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="shrink-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
               Employee & Staff Management
             </h1>
             <Badge
               variant="outline"
-              className="text-[11px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+              className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
             >
               STAFF DIRECTORY
             </Badge>
           </div>
-          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
             Manage staff accounts and permissions.
           </p>
         </div>
@@ -632,7 +637,7 @@ export default function EmployeesPage() {
             size="sm"
             onClick={() => refetch()}
             disabled={isLoading || isRefetching}
-            className="text-xs h-9"
+            className="text-xs h-8"
           >
             <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefetching && "animate-spin text-emerald-600")} />
             Refresh
@@ -642,7 +647,7 @@ export default function EmployeesPage() {
             <Button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-9 shadow-xs"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-8 shadow-xs"
             >
               <UserPlus className="mr-1.5 h-3.5 w-3.5" />
               Add Employee
@@ -654,10 +659,10 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Current Active Session & Security Notice                      */}
       {/* ------------------------------------------------------------- */}
-      <div className="shrink-0 p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-800 dark:text-emerald-400 font-bold text-sm">
+      <div className="shrink-0 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#121216] shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-800 dark:text-emerald-400 font-bold text-[10px] shrink-0">
               {(authUser?.full_name || "Staff")
                 .split(/\s+/)
                 .map((n: string) => n[0])
@@ -665,63 +670,49 @@ export default function EmployeesPage() {
                 .join("")
                 .toUpperCase()}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  {authUser?.full_name || "Agency Staff"}
-                </h3>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-mono border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400"
-                >
-                  Active Session
-                </Badge>
-              </div>
-              <p className="text-xs font-mono text-slate-500 dark:text-zinc-400 mt-0.5">
-                Email: <strong>{authUser?.email || "Unknown"}</strong>
-              </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                {authUser?.full_name || "Agency Staff"}
+              </span>
+              <Badge
+                variant="outline"
+                className="text-[9px] font-mono px-1.5 py-0 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400"
+              >
+                Active Session
+              </Badge>
+              <span className="text-[10.5px] font-mono text-slate-500 dark:text-zinc-400">
+                ({authUser?.email || "Unknown"})
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-col items-start sm:items-end gap-1.5 max-w-xl">
-            <div className="flex items-center justify-between w-full sm:justify-end gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
-                Your Roles:
-              </span>
-              {Array.isArray(roles) && roles.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllSessionRoles((prev) => !prev)}
-                  className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 hover:underline cursor-pointer"
-                >
-                  {showAllSessionRoles ? "Show less" : `+${roles.length - 4} more`}
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
-              {Array.isArray(roles) && roles.length > 0 ? (
-                (showAllSessionRoles ? roles : roles.slice(0, 4)).map((role: string) => (
-                  <Badge
-                    key={role}
-                    variant="outline"
-                    className="text-[10px] font-semibold bg-slate-100 dark:bg-[#181822] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#282835]"
-                  >
-                    <ShieldCheck className="h-3 w-3 mr-1 text-emerald-600" />
-                    {role}
-                  </Badge>
-                ))
-              ) : (
-                <span className="text-xs text-slate-400">Standard Access</span>
-              )}
-              {Array.isArray(roles) && roles.length > 4 && !showAllSessionRoles && (
+          <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
+            <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 mr-0.5">
+              Roles:
+            </span>
+            {Array.isArray(roles) && roles.length > 0 ? (
+              (showAllSessionRoles ? roles : roles.slice(0, 4)).map((role: string) => (
                 <Badge
+                  key={role}
                   variant="outline"
-                  className="text-[10px] font-semibold bg-slate-100 dark:bg-[#181822] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#282835]"
+                  className="text-[9px] px-1.5 py-0 font-medium bg-slate-100 dark:bg-[#181822] text-slate-800 dark:text-zinc-200 border-slate-200 dark:border-[#282835]"
                 >
-                  +{roles.length - 4} more
+                  <ShieldCheck className="h-2.5 w-2.5 mr-1 text-emerald-600" />
+                  {role}
                 </Badge>
-              )}
-            </div>
+              ))
+            ) : (
+              <span className="text-xs text-slate-400">Standard Access</span>
+            )}
+            {Array.isArray(roles) && roles.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setShowAllSessionRoles((prev) => !prev)}
+                className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 hover:text-emerald-950 dark:hover:text-emerald-300 hover:underline cursor-pointer ml-1"
+              >
+                {showAllSessionRoles ? "Show less" : `+${roles.length - 4} more`}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -729,18 +720,18 @@ export default function EmployeesPage() {
       {/* ------------------------------------------------------------- */}
       {/* Top Navigation Tabs: Staff List, Default Assignments, Role Guide */}
       {/* ------------------------------------------------------------- */}
-      <div className="shrink-0 flex items-center gap-2 border-b border-slate-200 dark:border-[#24242e] pb-2 overflow-x-auto">
+      <div className="shrink-0 flex items-center gap-1.5 border-b border-slate-200 dark:border-[#24242e] pb-1.5 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("directory")}
           className={cn(
-            "flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors shrink-0",
+            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors shrink-0",
             activeTab === "directory"
               ? "bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
               : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-[#181822]"
           )}
         >
-          <Users className="h-4 w-4" />
+          <Users className="h-3.5 w-3.5" />
           <span>Staff List</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             {employees.length}
@@ -752,13 +743,13 @@ export default function EmployeesPage() {
           data-tour="employees-default-roles-tab"
           onClick={() => setActiveTab("defaults")}
           className={cn(
-            "flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors shrink-0",
+            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors shrink-0",
             activeTab === "defaults"
               ? "bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
               : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-[#181822]"
           )}
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <SlidersHorizontal className="h-3.5 w-3.5" />
           <span>Default Assignments</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             Saudi & Kuwait
@@ -769,13 +760,13 @@ export default function EmployeesPage() {
           type="button"
           onClick={() => setActiveTab("guide")}
           className={cn(
-            "flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-colors shrink-0",
+            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors shrink-0",
             activeTab === "guide"
               ? "bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
               : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-[#181822]"
           )}
         >
-          <Shield className="h-4 w-4" />
+          <Shield className="h-3.5 w-3.5" />
           <span>Roles & Permissions</span>
           <Badge variant="outline" className="text-[10px] ml-1 px-1.5 py-0 font-mono">
             {CANONICAL_V2_ROLES.length} Roles
@@ -787,11 +778,11 @@ export default function EmployeesPage() {
       {/* Tab 1: Staff Directory View                                   */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "directory" && (
-        <div className="space-y-3.5">
+        <div className="space-y-2">
           {/* Search & Filter Toolbar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs">
-        <div className="flex items-center gap-2.5 flex-1 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-2xs">
+        <div className="flex items-center gap-2 flex-1 flex-wrap">
+          <div className="relative flex-1 min-w-[180px] max-w-md">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-slate-400" />
             <Input
               id="staff_search_query_no_autofill"
@@ -846,7 +837,7 @@ export default function EmployeesPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between md:justify-end gap-3 text-xs text-slate-500 dark:text-zinc-400">
+        <div className="flex items-center justify-between md:justify-end gap-2.5 text-xs text-slate-500 dark:text-zinc-400">
           <span>
             Showing <strong>{filteredEmployees.length}</strong> of {employees.length} employees
           </span>
@@ -855,7 +846,7 @@ export default function EmployeesPage() {
             variant="ghost"
             size="sm"
             onClick={() => setActiveTab("guide")}
-            className="text-xs h-8 text-slate-600 dark:text-zinc-300 hover:text-slate-900"
+            className="text-xs h-7.5 text-slate-600 dark:text-zinc-300 hover:text-slate-900"
           >
             <SlidersHorizontal className="h-3 w-3 mr-1" />
             Role Guide
@@ -902,12 +893,12 @@ export default function EmployeesPage() {
             <table className="w-full text-left border-collapse text-xs min-w-[760px] lg:min-w-0 lg:table-fixed">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[10.5px] xl:text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider leading-snug">
-                  <th className="py-2.5 px-3 lg:w-[25%] whitespace-normal break-words">Staff Member</th>
-                  <th className="py-2.5 px-3 lg:w-[20%] whitespace-normal break-words">Contact</th>
-                  <th className="py-2.5 px-3 lg:w-[25%] whitespace-normal break-words">Security Roles</th>
-                  <th className="py-2.5 px-3 lg:w-[10%] whitespace-normal break-words">Status</th>
-                  <th className="py-2.5 px-3 lg:w-[10%] whitespace-normal break-words">Created Date</th>
-                  {isManagerOrAdmin && <th className="py-2.5 px-3 lg:w-[10%] text-right whitespace-normal break-words">Actions</th>}
+                  <th className="py-2 px-3 lg:w-[23%] whitespace-normal break-words">Staff Member</th>
+                  <th className="py-2 px-3 lg:w-[18%] whitespace-normal break-words">Contact</th>
+                  <th className="py-2 px-3 lg:w-[24%] whitespace-normal break-words">Security Roles</th>
+                  <th className="py-2 px-3 lg:w-[10%] whitespace-normal break-words">Status</th>
+                  <th className="py-2 px-3 lg:w-[10%] whitespace-normal break-words">Created Date</th>
+                  {isManagerOrAdmin && <th className="py-2 px-3 lg:w-[110px] text-right whitespace-nowrap">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">
@@ -1067,99 +1058,109 @@ export default function EmployeesPage() {
 
                         return (
                           <td className="py-2 px-3 text-right">
-                            <div className="inline-flex items-center gap-1">
+                            <div className="flex items-center justify-end gap-1">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenEditEmployee(emp)}
-                                className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-blue-600"
+                                className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-blue-600 shrink-0 font-medium"
                                 title="Edit Employee Profile"
                               >
                                 <Pencil className="h-3 w-3 mr-1 text-blue-600" />
                                 Edit
                               </Button>
 
-                              {canChangeRoles && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleOpenEditRoles(emp)}
-                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-emerald-600"
-                                  title="Edit Security Roles"
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    aria-label="Staff actions"
+                                    className="h-7 w-7 p-0 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f27] text-slate-600 dark:text-zinc-300 shrink-0"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="end"
+                                  className="w-48 p-1.5 shadow-xl border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#121216] rounded-xl z-50"
                                 >
-                                  <Shield className="h-3 w-3 mr-1 text-emerald-600" />
-                                  Roles
-                                </Button>
-                              )}
+                                  <div className="flex flex-col gap-0.5 text-xs">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditEmployee(emp)}
+                                      className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c24] transition-colors cursor-pointer"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                      <span>Edit Profile</span>
+                                    </button>
 
-                              {canResetPassword && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleOpenResetPassword(emp)}
-                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-amber-600"
-                                  title="Reset Password"
-                                >
-                                  <KeyRound className="h-3 w-3 mr-1 text-amber-600" />
-                                  Password
-                                </Button>
-                              )}
+                                    {canChangeRoles && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditRoles(emp)}
+                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                                      >
+                                        <Shield className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                        <span>Security Roles</span>
+                                      </button>
+                                    )}
 
-                              {canToggleStatus && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    if (emp.enabled === 1) {
-                                      setEmployeeToDeactivate(emp);
-                                    } else {
-                                      toggleStatusMutation.mutate({
-                                        email: emp.email,
-                                        enabled: true,
-                                      });
-                                    }
-                                  }}
-                                  disabled={toggleStatusMutation.isPending}
-                                  className={cn(
-                                    "h-7 px-2 text-[11px]",
-                                    emp.enabled === 1
-                                      ? "text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                                      : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-                                  )}
-                                  title={emp.enabled === 1 ? "Deactivate Account" : "Activate Account"}
-                                >
-                                  {emp.enabled === 1 ? (
-                                    <>
-                                      <UserX className="h-3 w-3 mr-1" />
-                                      Disable
-                                    </>
-                                  ) : (
-                                    <>
-                                      <UserCheck className="h-3 w-3 mr-1" />
-                                      Enable
-                                    </>
-                                  )}
-                                </Button>
-                              )}
+                                    {canResetPassword && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenResetPassword(emp)}
+                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-300 transition-colors cursor-pointer"
+                                      >
+                                        <KeyRound className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                        <span>Reset Password</span>
+                                      </button>
+                                    )}
 
-                              {canDelete && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setEmployeeToDelete(emp)}
-                                  disabled={deleteMutation.isPending}
-                                  className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                                  title="Delete Employee Account"
-                                >
-                                  <Trash2 className="h-3 w-3 mr-1" />
-                                  Delete
-                                </Button>
-                              )}
+                                    {canToggleStatus && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (emp.enabled === 1) {
+                                            setEmployeeToDeactivate(emp);
+                                          } else {
+                                            toggleStatusMutation.mutate({
+                                              email: emp.email,
+                                              enabled: true,
+                                            });
+                                          }
+                                        }}
+                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c24] transition-colors cursor-pointer"
+                                      >
+                                        {emp.enabled === 1 ? (
+                                          <>
+                                            <UserX className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                            <span>Deactivate</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <UserCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                            <span>Activate</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+
+                                    {canDelete && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setEmployeeToDelete(emp)}
+                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                                        <span>Delete Employee</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </div>
                           </td>
                         );
@@ -1215,30 +1216,30 @@ export default function EmployeesPage() {
       {/* Tab 2: Default Role Assignments (Saudi & Kuwait & Ops)        */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "defaults" && (
-        <div className="flex-1 min-h-0 flex flex-col justify-between space-y-4">
+        <div className="flex-1 min-h-0 flex flex-col justify-start space-y-2.5">
           {/* Header & Corridor Switcher */}
-          <div className="shrink-0 p-3.5 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="space-y-1">
+          <div className="shrink-0 p-2 sm:p-2.5 rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div className="space-y-0.5">
               <div className="flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
                   Default Stage & Corridor Assignments
                 </h2>
                 <Badge
                   variant="outline"
-                  className="text-[10px] uppercase font-bold border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400"
+                  className="text-[9.5px] uppercase font-bold border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 px-1.5 py-0"
                 >
                   Corridor Engine
                 </Badge>
               </div>
-              <p className="text-xs text-slate-500 dark:text-zinc-400 max-w-2xl">
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-2xl leading-tight">
                 Choose which employee is automatically assigned to candidates when they reach each stage.
               </p>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               {/* Corridor Group Filter */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1a1a22] p-1 rounded-lg">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1a1a22] p-0.5 rounded-lg">
                 {[
                   { id: "All", label: "All (9)" },
                   { id: "Saudi Corridor", label: "Saudi 🇸🇦 (3)" },
@@ -1250,7 +1251,7 @@ export default function EmployeesPage() {
                     type="button"
                     onClick={() => setDefaultAssignmentGroup(grp.id)}
                     className={cn(
-                      "px-2.5 py-1 text-xs font-semibold rounded-md transition-colors",
+                      "px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors",
                       defaultAssignmentGroup === grp.id
                         ? "bg-white dark:bg-[#252530] text-slate-900 dark:text-white shadow-xs font-bold"
                         : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
@@ -1269,9 +1270,9 @@ export default function EmployeesPage() {
                       variant="outline"
                       size="sm"
                       onClick={handleResetDefaultAssignments}
-                      className="text-xs h-8 text-slate-600 dark:text-zinc-300"
+                      className="text-xs h-7 px-2 text-slate-600 dark:text-zinc-300"
                     >
-                      <Undo2 className="h-3.5 w-3.5 mr-1" />
+                      <Undo2 className="h-3 w-3 mr-1" />
                       Reset
                     </Button>
                   )}
@@ -1280,16 +1281,16 @@ export default function EmployeesPage() {
                     size="sm"
                     onClick={handleSaveDefaultAssignments}
                     disabled={isSavingDefaults}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-8 shadow-xs"
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs font-semibold h-7 px-2.5 shadow-xs"
                   >
                     {isSavingDefaults ? (
                       <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                         Saving...
                       </>
                     ) : (
                       <>
-                        <Save className="h-3.5 w-3.5 mr-1.5" />
+                        <Save className="h-3 w-3 mr-1" />
                         Save
                       </>
                     )}
@@ -1299,42 +1300,42 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          {/* Corridor Cards Groups */}
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+          {/* Corridor Cards Groups - Compact Bounded Layout without Scrollbar */}
+          <div className="flex-1 min-h-0 flex flex-col justify-start space-y-2 pr-0.5">
             {/* Group 1: Saudi Corridor Roles */}
             {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Saudi Corridor") && (
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🇸🇦</span>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm">🇸🇦</span>
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
                     Saudi Arabia Corridor Specialists
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
                   {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
                     const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
                     const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
                     return (
                       <div
                         key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[10px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[9.5px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 shrink-0 px-1 py-0">
                               {roleConfig.roleName}
                             </Badge>
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
                         </div>
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
                           <select
                             aria-label={`Select default employee for ${roleConfig.roleName}`}
                             value={configuredEmail}
                             disabled={!isManagerOrAdmin}
                             onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
                           >
                             <option value="">-- Automatic (First with role) --</option>
                             {employees.map((emp) => {
@@ -1347,7 +1348,7 @@ export default function EmployeesPage() {
                               );
                             })}
                           </select>
-                          <div className="text-[10.5px]">
+                          <div className="text-[10px] leading-tight">
                             {resolved ? (
                               <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
                                 Will assign: <strong>{resolved.full_name || resolved.name}</strong>
@@ -1366,38 +1367,38 @@ export default function EmployeesPage() {
 
             {/* Group 2: Kuwait Corridor Roles */}
             {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Kuwait Corridor") && (
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🇰🇼</span>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm">🇰🇼</span>
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
                     Kuwait Corridor Specialists
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
                   {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
                     const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
                     const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
                     return (
                       <div
                         key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[10px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[9.5px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400 shrink-0 px-1 py-0">
                               {roleConfig.roleName}
                             </Badge>
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
                         </div>
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
                           <select
                             aria-label={`Select default employee for ${roleConfig.roleName}`}
                             value={configuredEmail}
                             disabled={!isManagerOrAdmin}
                             onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
                           >
                             <option value="">-- Automatic (First with role) --</option>
                             {employees.map((emp) => {
@@ -1410,7 +1411,7 @@ export default function EmployeesPage() {
                               );
                             })}
                           </select>
-                          <div className="text-[10.5px]">
+                          <div className="text-[10px] leading-tight">
                             {resolved ? (
                               <span className="text-blue-700 dark:text-blue-400 font-medium truncate block">
                                 Will assign: <strong>{resolved.full_name || resolved.name}</strong>
@@ -1429,38 +1430,38 @@ export default function EmployeesPage() {
 
             {/* Group 3: Operations & Registry */}
             {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Operations & Registry") && (
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📋</span>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm">📋</span>
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
                     Operations & Registry Staff
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
                   {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Operations & Registry").map((roleConfig) => {
                     const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
                     const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
                     return (
                       <div
                         key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-3.5 flex flex-col justify-between space-y-2.5 shadow-xs"
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[10px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[9.5px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300 shrink-0 px-1 py-0">
                               {roleConfig.roleName}
                             </Badge>
                           </div>
-                          <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{roleConfig.description}</p>
+                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
                         </div>
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-[#1e1e24]">
+                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
                           <select
                             aria-label={`Select default employee for ${roleConfig.roleName}`}
                             value={configuredEmail}
                             disabled={!isManagerOrAdmin}
                             onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-8 px-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
                           >
                             <option value="">-- Automatic (First with role) --</option>
                             {employees.map((emp) => {
@@ -1473,7 +1474,7 @@ export default function EmployeesPage() {
                               );
                             })}
                           </select>
-                          <div className="text-[10.5px]">
+                          <div className="text-[10px] leading-tight">
                             {resolved ? (
                               <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
                                 Will assign: <strong>{resolved.full_name || resolved.name}</strong>

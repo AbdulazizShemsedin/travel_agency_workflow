@@ -419,7 +419,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="w-full h-full min-h-0 flex flex-col justify-between gap-1.5 lg:gap-2">
+    <div className="w-full h-full min-h-0 flex flex-col justify-start gap-2.5 lg:gap-3">
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#222227] pb-1.5 shrink-0">
         <div>
@@ -604,9 +604,9 @@ export default function DashboardPage() {
       </Card>
 
       {/* 3. Three-Column Bottom Grid: Expiry Alerts, Action Items, & Recent Applicants */}
-      <div data-tour="dashboard-operational-tasks" className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-2 lg:gap-2.5">
+      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 lg:gap-3 items-start">
         {/* Panel 1: Document Expiry Warnings */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
@@ -647,7 +647,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between gap-1.5">
+          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start gap-2">
             {paginatedAlerts.length > 0 ? (
               paginatedAlerts.map((alert) => (
                 <div
@@ -694,7 +694,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Panel 2: Quick Actions (Exact match to Sidebar options) */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
@@ -705,8 +705,8 @@ export default function DashboardPage() {
               Navigation
             </span>
           </div>
-          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between">
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 xl:gap-2.5 h-full content-between">
+          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 content-start">
               {sidebarQuickActions.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -730,7 +730,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Panel 3: Live Recent Applicants Stream */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col h-full min-h-0 overflow-hidden">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
           <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
@@ -771,7 +771,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <CardContent className="p-2 sm:p-2.5 xl:p-3 flex-1 min-h-0 flex flex-col justify-between gap-1.5">
+          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start gap-2">
             {paginatedApplicants.length > 0 ? (
               paginatedApplicants.map((applicant) => (
                 <Link

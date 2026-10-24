@@ -28,7 +28,9 @@ import {
   User,
   Check,
   X,
+  Lock,
 } from "lucide-react";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   BaseApplicantFormValues,
   stage1DraftSchema,
@@ -71,6 +73,7 @@ import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { parseMRZText, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
 import { PLACE_OF_BIRTH_OPTIONS } from "@/components/agent/CandidateFilters";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +95,7 @@ interface ApplicantRegistrationFormProps {
   existingApplicantId?: string;
   lockedIdentityFields?: boolean;
   onSuccessRedirect?: (applicantId: string) => void;
+  readOnly?: boolean;
 }
 
 type MediaTabType = "photo" | "full_size" | "passport" | "video";
@@ -166,9 +170,18 @@ export function ApplicantRegistrationForm({
   existingApplicantId,
   lockedIdentityFields = false,
   onSuccessRedirect,
+  readOnly: readOnlyProp,
 }: ApplicantRegistrationFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { authUser, can, roles } = useAuth();
+
+  const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
+  const isManagerOrAdmin = userRoles.some((r) =>
+    ["administrator", "system manager", "admin", "manager", "operations manager", "operation manager"].includes(r)
+  );
+  const canRegisterOrEdit = Boolean(can("registerApplicant") || isManagerOrAdmin);
+  const isFormReadOnly = Boolean(readOnlyProp || (existingApplicantId && !canRegisterOrEdit));
 
   const [draftApplicantId, setDraftApplicantId] = React.useState<string | null>(
     existingApplicantId || (initialData as any)?.name || (initialData as any)?.applicant_id || null
@@ -1009,6 +1022,7 @@ export function ApplicantRegistrationForm({
       coc_status: data.coc_status || "",
       college_certificate: data.college_certificate || "",
       original_id_scan: data.original_id_scan || "",
+      labor_id: (data.labor_id || data.labour_id || "").trim() || (existingApplicantId ? "" : undefined),
     };
 
     // Do not include experience_video in save payloads per Oct 21 backend requirement
@@ -1366,6 +1380,26 @@ export function ApplicantRegistrationForm({
           </span>
         </div>
       </div>
+
+      {/* Read-Only Notice for staff with view-only permissions */}
+      {isFormReadOnly && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-800/80 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 flex items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+              <Lock className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+            </div>
+            <div>
+              <span className="font-bold">Read-Only View</span>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/80 mt-0.5">
+                Your role has view permissions for this applicant profile. Editing and registration actions are restricted to Registrars and Administrators.
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="border-amber-400 text-amber-800 dark:border-amber-700 dark:text-amber-300 bg-amber-100/50 text-[10px] font-mono shrink-0">
+            VIEW ONLY
+          </Badge>
+        </div>
+      )}
 
       {/* 1. STANDARD VS MUAYENA DEPLOYMENT TRACK SELECTION (Previous UI Feature restored) */}
       <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] shadow-xs overflow-hidden">
@@ -2667,26 +2701,10 @@ export function ApplicantRegistrationForm({
                 </Label>
                 <Input
                   placeholder="Biometric ID"
+                  disabled={isFormReadOnly}
                   {...register("biometric_id")}
                   className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
                 />
-              </div>
-
-              <div className="space-y-1.5" id="field-labor_id">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Labor ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
-                <Input
-                  placeholder="Ministry Labor ID"
-                  {...register("labor_id")}
-                  className={cn(
-                    "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
-                    getFieldClass("labor_id")
-                  )}
-                />
-                {errors.labor_id && (
-                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.labor_id.message}</p>
-                )}
               </div>
 
               <div className="space-y-1.5" id="field-leaving_town">
@@ -3086,10 +3104,11 @@ export function ApplicantRegistrationForm({
               <Label className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
                 Medical Fitness Result <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
-              {renderClearBtn("medical_status")}
+              {!isFormReadOnly && renderClearBtn("medical_status")}
             </div>
             <select
               {...register("medical_status")}
+              disabled={isFormReadOnly}
               className={cn(
                 "w-full h-8 rounded border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-2 py-0.5 text-xs text-slate-900 dark:text-zinc-200 font-medium",
                 getFieldClass("medical_status")
@@ -3109,6 +3128,7 @@ export function ApplicantRegistrationForm({
             </Label>
             <Input
               type="date"
+              disabled={isFormReadOnly}
               {...register("medical_expiry_date")}
               className={cn(
                 "text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
@@ -3118,6 +3138,33 @@ export function ApplicantRegistrationForm({
             {errors.medical_expiry_date && (
               <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.medical_expiry_date.message}</p>
             )}
+          </div>
+        </div>
+
+        {/* Optional Labour ID immediately following Medical Status and Medical Date */}
+        <div className="pt-2.5 border-t border-slate-200/60 dark:border-[#26262d]/60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1" id="field-labor_id">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="field_input_labor_id" className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                  Labour ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {!isFormReadOnly && renderClearBtn("labor_id")}
+              </div>
+              <Input
+                id="field_input_labor_id"
+                placeholder="e.g., LBR-998844"
+                disabled={isFormReadOnly}
+                {...register("labor_id")}
+                className={cn(
+                  "text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("labor_id")
+                )}
+              />
+              {errors.labor_id && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.labor_id.message}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -3137,57 +3184,68 @@ export function ApplicantRegistrationForm({
         </div>
 
         <div className="flex items-center gap-3 ml-auto">
-          {/* Save as Draft Button (for new or draft records) */}
-          {!existingApplicantId && (
-            <Button
-              type="button"
-              onClick={() => saveDraftMutation.mutate()}
-              disabled={isSaving || registerMutation.isPending}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
-            >
-              {saveDraftMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Draft...
-                </>
-              ) : (
-                <>
-                  <Bookmark className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Save as Draft
-                </>
+          {isFormReadOnly ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-[#26262d] bg-slate-50 dark:bg-[#16161b]">
+                <Lock className="h-3.5 w-3.5 text-amber-600" />
+                Read-Only (Registrar / Admin required to edit)
+              </span>
+            </div>
+          ) : (
+            <>
+              {/* Save as Draft Button (for new or draft records) */}
+              {!existingApplicantId && (
+                <Button
+                  type="button"
+                  onClick={() => saveDraftMutation.mutate()}
+                  disabled={isSaving || registerMutation.isPending}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
+                >
+                  {saveDraftMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving Draft...
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Save as Draft
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
-          )}
 
-          {/* Save Changes Button (when editing an existing applicant) */}
-          {existingApplicantId && (
-            <Button
-              type="button"
-              onClick={() => saveChangesMutation.mutate()}
-              disabled={isSaving}
-              className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
-            >
-              {saveChangesMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Updating...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Update Profile
-                </>
+              {/* Save Changes Button (when editing an existing applicant) */}
+              {existingApplicantId && (
+                <Button
+                  type="button"
+                  onClick={() => saveChangesMutation.mutate()}
+                  disabled={isSaving}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
+                >
+                  {saveChangesMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-1.5 h-3.5 w-3.5 text-emerald-200" /> Update Profile
+                    </>
+                  )}
+                </Button>
               )}
-            </Button>
-          )}
 
-          {/* Register Applicant Button (promotes to Registered via backend gate) */}
-          {applicantState !== "Registered" && applicantState !== "CV Generated" && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsConfirmRegisterOpen(true)}
-              disabled={registerMutation.isPending || isSaving || watch("medical_status") === "UNFIT"}
-              className="border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold"
-            >
-              <FileCheck2 className="mr-1.5 h-3.5 w-3.5" /> Register Applicant
-            </Button>
+              {/* Register Applicant Button (promotes to Registered via backend gate) */}
+              {applicantState !== "Registered" && applicantState !== "CV Generated" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsConfirmRegisterOpen(true)}
+                  disabled={registerMutation.isPending || isSaving || watch("medical_status") === "UNFIT"}
+                  className="border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold"
+                >
+                  <FileCheck2 className="mr-1.5 h-3.5 w-3.5" /> Register Applicant
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -3201,7 +3259,7 @@ export function ApplicantRegistrationForm({
               Paste Passport Code
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Paste the 2 lines of code printed at the very bottom of the candidate's passport photo page.
+              Paste the 2 lines of code printed at the very bottom of the candidate&apos;s passport photo page.
             </DialogDescription>
           </DialogHeader>
 
@@ -3316,6 +3374,14 @@ export function ApplicantRegistrationForm({
                 {watch("medical_status")}
               </span>
             </div>
+            {watch("labor_id") && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-zinc-400">Labour ID:</span>
+                <span className="font-mono text-slate-900 dark:text-zinc-200">
+                  {watch("labor_id")}
+                </span>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="mt-4 gap-2 sm:gap-0">

@@ -101,6 +101,8 @@ const FUNNEL_COLORS = [
   "#047857", // Departed
 ];
 
+export const SYSTEM_INCEPTION_DATE = "2026-01-01";
+
 export default function ReportsPage() {
   const { authUser, roles, can } = useAuth();
   const router = useRouter();
@@ -126,7 +128,8 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = React.useState<ReportTab>(() => {
     return isManagerOrAdmin ? "operations" : "transactions";
   });
-  const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "custom">("yearly");
+
+  const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "all" | "custom">("yearly");
   const [fromDate, setFromDate] = React.useState<string>("2026-01-01");
   const [toDate, setToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
   const [isExportingXlsx, setIsExportingXlsx] = React.useState<boolean>(false);
@@ -136,9 +139,9 @@ export default function ReportsPage() {
   const [txnStatusFilter, setTxnStatusFilter] = React.useState<string>("All");
   const [txnTypeFilter, setTxnTypeFilter] = React.useState<string>("All");
 
-  // Quick Preset Helper (Daily, Weekly, Monthly, Yearly)
+  // Quick Preset Helper (Daily, Weekly, Monthly, Yearly, All-time)
   const setPreset = React.useCallback((preset: "daily" | "weekly" | "monthly" | "yearly" | "all") => {
-    setActivePeriod(preset === "all" ? "custom" : preset);
+    setActivePeriod(preset);
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
     setToDate(todayStr);
@@ -154,14 +157,16 @@ export default function ReportsPage() {
       setFromDate(d.toISOString().split("T")[0]);
     } else if (preset === "yearly") {
       setFromDate(`${today.getFullYear()}-01-01`);
+    } else if (preset === "all") {
+      setFromDate(SYSTEM_INCEPTION_DATE);
     } else {
-      setFromDate("2025-01-01");
+      setFromDate(SYSTEM_INCEPTION_DATE);
     }
   }, []);
 
-  // Sync with ?period= from sidebar navigation links
+  // Sync with ?period= from navigation links
   React.useEffect(() => {
-    if (periodParam === "daily" || periodParam === "weekly" || periodParam === "monthly" || periodParam === "yearly") {
+    if (periodParam === "daily" || periodParam === "weekly" || periodParam === "monthly" || periodParam === "yearly" || periodParam === "all") {
       setPreset(periodParam);
       if (periodParam === "daily" && isManagerOrAdmin) {
         setActiveTab("daily_work");
@@ -299,7 +304,7 @@ export default function ReportsPage() {
     return [];
   }, [activeComplaints, complaintAging]);
 
-  // 6. Financial Overview (Admin only)
+  // 6. Financial Overview (Admin & Finance Manager - Authoritative Backend Aggregates)
   const {
     data: financialOverview,
     isLoading: isFinancialLoading,
@@ -307,7 +312,7 @@ export default function ReportsPage() {
   } = useQuery<V2FinancialOverviewReport>({
     queryKey: ["report_financial_overview", dateParams],
     queryFn: () => getFinancialOverviewV2(dateParams),
-    enabled: Boolean(activeTab === "financial" && isAdmin),
+    enabled: Boolean(isAdminOrFinance && (activeTab === "financial" || activeTab === "transactions")),
     staleTime: 60000,
   });
 
@@ -335,12 +340,12 @@ export default function ReportsPage() {
     staleTime: 60000,
   });
 
-  // All Transactions Ledger (Admin / Finance Manager)
+  // All Transactions Ledger (Admin / Finance Manager - bounded pagination up to 500 with authoritative total)
   const {
-    data: allTransactions = [],
+    data: txnResult,
     isLoading: isTransactionsLoading,
     refetch: refetchTransactions,
-  } = useQuery<V2TransactionRecord[]>({
+  } = useQuery<{ data: V2TransactionRecord[]; total_count: number } | V2TransactionRecord[]>({
     queryKey: ["report_all_transactions", dateParams, txnStatusFilter, txnTypeFilter],
     queryFn: () =>
       listTransactionsV2({
@@ -348,16 +353,29 @@ export default function ReportsPage() {
         toDate: toDate || undefined,
         status: txnStatusFilter !== "All" ? txnStatusFilter : undefined,
         transactionType: txnTypeFilter !== "All" ? txnTypeFilter : undefined,
-        limitPageLength: 200,
+        limitPageLength: 500,
+        withTotal: 1,
       }),
     enabled: Boolean(activeTab === "transactions" && isAdminOrFinance),
     staleTime: 30000,
   });
 
+  const allTransactions: V2TransactionRecord[] = React.useMemo(() => {
+    if (!txnResult) return [];
+    if (Array.isArray(txnResult)) return txnResult;
+    return txnResult.data || [];
+  }, [txnResult]);
+
+  const totalTxnCount = React.useMemo(() => {
+    if (!txnResult) return 0;
+    if (Array.isArray(txnResult)) return txnResult.length;
+    return Number(txnResult.total_count ?? allTransactions.length);
+  }, [txnResult, allTransactions.length]);
+
   const filteredTransactions = React.useMemo(() => {
     if (!txnSearchQuery.trim()) return allTransactions;
     const q = txnSearchQuery.toLowerCase();
-    return allTransactions.filter((t: any) => {
+    return allTransactions.filter((t) => {
       return (
         t.name?.toLowerCase().includes(q) ||
         t.description?.toLowerCase().includes(q) ||
@@ -387,6 +405,37 @@ export default function ReportsPage() {
   }, [filteredTransactions, txnPage, txnPageSize]);
 
   const transactionMetrics = React.useMemo(() => {
+    // When no specific filter is active, read backend aggregate totals from financialOverview if available
+    const isUnfiltered = txnStatusFilter === "All" && txnTypeFilter === "All" && !txnSearchQuery.trim();
+
+    if (isUnfiltered && financialOverview) {
+      const expenseByCurr: Record<string, number> = {};
+      const incomeByCurr: Record<string, number> = {};
+
+      if (financialOverview.by_currency && typeof financialOverview.by_currency === "object") {
+        Object.entries(financialOverview.by_currency).forEach(([curr, data]) => {
+          if (data && typeof data === "object") {
+            const entry = data as { expense?: number | string; income?: number | string };
+            if (Number(entry.expense)) expenseByCurr[curr] = Number(entry.expense);
+            if (Number(entry.income)) incomeByCurr[curr] = Number(entry.income);
+          }
+        });
+      }
+
+      const totalExpenseBirr = Number(financialOverview.totals_birr?.expense ?? financialOverview.total_expenses_etb ?? 0);
+      const totalIncomeBirr = Number(financialOverview.totals_birr?.income ?? financialOverview.total_income_etb ?? 0);
+      const netBalanceBirr = Number(financialOverview.net_balance_etb ?? (totalIncomeBirr - totalExpenseBirr));
+
+      return {
+        totalCount: totalTxnCount,
+        totalExpenseBirr,
+        totalIncomeBirr,
+        netBalanceBirr,
+        expenseByCurr,
+        incomeByCurr,
+      };
+    }
+
     let totalExpenseBirr = 0;
     let totalIncomeBirr = 0;
     const expenseByCurr: Record<string, number> = {};
@@ -408,14 +457,14 @@ export default function ReportsPage() {
     const netBalanceBirr = totalIncomeBirr - totalExpenseBirr;
 
     return {
-      totalCount: allTransactions.length,
+      totalCount: totalTxnCount || allTransactions.length,
       totalExpenseBirr,
       totalIncomeBirr,
       netBalanceBirr,
       expenseByCurr,
       incomeByCurr,
     };
-  }, [allTransactions]);
+  }, [allTransactions, financialOverview, totalTxnCount, txnStatusFilter, txnTypeFilter, txnSearchQuery]);
 
   // Handle Backend Spreadsheet Export (.xlsx or .csv fallback)
   const handleExportXlsx = async () => {
@@ -543,20 +592,26 @@ export default function ReportsPage() {
             <Input
               type="date"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setActivePeriod("custom");
+              }}
               className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
             />
             <span className="text-slate-400 text-xs">to</span>
             <Input
               type="date"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setActivePeriod("custom");
+              }}
               className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
             />
           </div>
 
           <div className="flex items-center gap-1 p-0.5 rounded-lg border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
-            {(["daily", "weekly", "monthly", "yearly"] as const).map((p) => (
+            {(["daily", "weekly", "monthly", "yearly", "all"] as const).map((p) => (
               <Button
                 key={p}
                 type="button"
@@ -564,13 +619,13 @@ export default function ReportsPage() {
                 size="sm"
                 onClick={() => setPreset(p)}
                 className={cn(
-                  "text-[11px] h-7 px-2.5 capitalize font-medium",
+                  "text-[11px] h-7 px-2.5 font-medium",
                   activePeriod === p
                     ? "bg-emerald-900 text-white dark:bg-emerald-700 shadow-xs"
                     : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
-                {p}
+                {p === "all" ? "All-time" : p.charAt(0).toUpperCase() + p.slice(1)}
               </Button>
             ))}
           </div>
