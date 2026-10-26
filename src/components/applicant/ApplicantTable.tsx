@@ -51,6 +51,7 @@ import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { extractRoleName } from "@/lib/auth/permissions";
+import { isRoleReadOnly } from "@/lib/auth/v2Roles";
 import { cn } from "@/lib/utils";
 
 // Live backend truth: the Applicant's own `status` stays at the intake lifecycle stop
@@ -240,9 +241,13 @@ export function ApplicantTable() {
   const canCreateMuayena = React.useMemo(() => {
     if (!authUser?.roles) return false;
     const roleNames = authUser.roles.map(extractRoleName);
-    return roleNames.some((r) =>
-      ["admin", "manager", "system manager", "administrator", "registrar", "contract parser"].includes(r)
+    const hasAdminOrManager = roleNames.some((r) =>
+      ["admin", "manager", "system manager", "administrator"].includes(r)
     );
+    if (hasAdminOrManager) return true;
+    const isRegistrar = roleNames.includes("registrar") && !isRoleReadOnly(authUser as any, "Registrar");
+    const isContractParser = roleNames.includes("contract parser") && !isRoleReadOnly(authUser as any, "Contract Parser");
+    return isRegistrar || isContractParser;
   }, [authUser]);
 
   // Sync stage filter if URL parameter changes
@@ -2090,6 +2095,8 @@ export function ApplicantTable() {
             muayenaTargetApplicant.name
           }
           destinationCountry={muayenaTargetApplicant.destination_country}
+          muayenaAgency={muayenaTargetApplicant.muayena_agency}
+          passportNumber={muayenaTargetApplicant.passport_number}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["applicants"] });
             queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });

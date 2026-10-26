@@ -118,6 +118,7 @@ export const baseApplicantSchema = z.object({
   // Stage 1: Mandatory for Draft (Draft Floor)
   applicant_type: z.enum(APPLICANT_TYPE_OPTIONS).default("Standard"),
   entry_track: z.enum(APPLICANT_TYPE_OPTIONS).optional(),
+  muayena_agency: optionalString,
   application_number: optionalString,
   first_name: z.string().trim().default(""),
   middle_name: optionalString,
@@ -506,6 +507,16 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
   })
   .superRefine((data: any, ctx: z.RefinementCtx) => {
     const isMuayena = data.applicant_type === "Muayena" || data.entry_track === "Muayena";
+
+    if (isMuayena) {
+      if (!data.muayena_agency || !String(data.muayena_agency).trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A Muayena worker is registered with their agency: pick the agency.",
+          path: ["muayena_agency"],
+        });
+      }
+    }
 
     // For Standard applicants: CV generation fields and salary are mandatory
     if (!isMuayena) {

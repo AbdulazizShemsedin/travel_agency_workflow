@@ -15,11 +15,16 @@ import {
   Film,
   Video,
   Eye,
+  Briefcase,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { restartApplicantV2, cancelApplicantV2, getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { isRoleReadOnly } from "@/lib/auth/v2Roles";
+import { extractRoleName } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -280,6 +285,28 @@ export default function ApplicantDetailPage() {
     },
   });
 
+  const { authUser, roles, hasRole, isReadOnly } = useAuth();
+  const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
+
+  const canCreateMuayena = React.useMemo(() => {
+    if (!authUser && roles.length === 0) return false;
+    const isSuper = Boolean(
+      hasRole("Admin") ||
+      hasRole("Manager") ||
+      hasRole("System Manager") ||
+      (authUser?.roles || []).some(
+        (r) =>
+          r.toLowerCase() === "admin" ||
+          r.toLowerCase() === "manager" ||
+          r.toLowerCase() === "system manager"
+      )
+    );
+    if (isSuper) return true;
+    if (hasRole("Registrar") && !isReadOnly("Registrar")) return true;
+    if (hasRole("Contract Parser") && !isReadOnly("Contract Parser")) return true;
+    return false;
+  }, [authUser, roles, hasRole, isReadOnly]);
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -369,6 +396,17 @@ export default function ApplicantDetailPage() {
                   </Badge>
                 )}
               </div>
+              {isMuayena && applicant.muayena_agency && (
+                <>
+                  <span className="text-slate-300 dark:text-zinc-700">•</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 dark:text-zinc-500 font-medium">Agency:</span>
+                    <strong className="text-slate-900 dark:text-white font-semibold">
+                      {applicant.muayena_agency}
+                    </strong>
+                  </div>
+                </>
+              )}
               {currentStage === "Cancelled" && (
                 <>
                   <span className="text-slate-300 dark:text-zinc-700">•</span>
@@ -390,6 +428,19 @@ export default function ApplicantDetailPage() {
 
           {/* Action Column: Resume / Cancel / Undo Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Make Case (Muayena) Button */}
+            {isMuayena && !activePlacement && canCreateMuayena && currentStage !== "Cancelled" && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsMuayenaModalOpen(true)}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-xs gap-1.5"
+              >
+                <Briefcase className="h-3.5 w-3.5" />
+                Make Case (Muayena)
+              </Button>
+            )}
+
             {/* Play Interview Video Button (when candidate video exists) */}
             {candidateVideoUrl && (
               <Button
@@ -738,6 +789,22 @@ export default function ApplicantDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Make Case (Muayena) Modal */}
+      {isMuayenaModalOpen && (
+        <MuayenaPlacementModal
+          isOpen={isMuayenaModalOpen}
+          onClose={() => setIsMuayenaModalOpen(false)}
+          applicantId={applicant.name}
+          applicantName={fullName}
+          destinationCountry={applicant.destination_country || ""}
+          muayenaAgency={applicant.muayena_agency}
+          passportNumber={applicant.passport_number}
+          onSuccess={() => {
+            refetchAll();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -30,6 +30,7 @@ export interface V2CreateApplicantPayload {
   nationality: string;
   entry_track: "Standard" | "Muayena";
   destination_country?: string;
+  muayena_agency?: string;
   [key: string]: any;
 }
 
@@ -42,6 +43,7 @@ export interface V2ApplicantDetails {
   gender: string;
   nationality: string;
   entry_track?: "Standard" | "Muayena";
+  muayena_agency?: string;
   status?: V2ApplicantLifecycleStatus | string;
   applicant_state?: string;
   destination_country?: string;
@@ -184,6 +186,15 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     const normalizedTrack = String(rawTrack).trim().toLowerCase() === "muayena" ? "Muayena" : "Standard";
     result.entry_track = normalizedTrack;
     result.applicant_type = normalizedTrack;
+  }
+
+  // 0.2 Muayena Agency Handling (only Muayena workers carry muayena_agency)
+  if (result.entry_track === "Muayena" || result.applicant_type === "Muayena") {
+    if (result.muayena_agency) {
+      result.muayena_agency = String(result.muayena_agency).trim();
+    }
+  } else {
+    delete result.muayena_agency;
   }
 
   // 1. Target Job / Position / Occupation

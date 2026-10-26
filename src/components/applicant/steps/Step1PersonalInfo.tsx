@@ -2,10 +2,12 @@
 
 import * as React from "react";
 import { UseFormReturn } from "react-hook-form";
-import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste } from "lucide-react";
+import { Camera, DollarSign, Image as ImageIcon, Loader2, ScanLine, CheckCircle2, FileText, UploadCloud, ShieldCheck, AlertTriangle, Globe2, Trash2, ClipboardPaste, Building2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { BaseApplicantFormValues, GENDER_OPTIONS, RELIGION_OPTIONS, MARITAL_STATUS_OPTIONS, DESTINATION_COUNTRY_OPTIONS } from "@/lib/validations/applicant.schema";
 import { uploadFileV2, parsePassportFileV2 } from "@/lib/api/v2";
 import { listApplicantsV2, checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
+import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { parseMRZText } from "@/lib/utils/mrzScanner";
 import { PLACE_OF_BIRTH_OPTIONS } from "@/components/agent/CandidateFilters";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -58,6 +60,23 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
   const [customOtherCountry, setCustomOtherCountry] = React.useState<string>(
     !isKnownPredefinedCountry && currentDestCountry !== "Other" ? currentDestCountry : ""
   );
+
+  const isMuayena = watch("entry_track") === "Muayena" || watch("applicant_type") === "Muayena";
+  const { data: contractors = [] } = useQuery({
+    queryKey: ["foreign-contractors-registered", currentDestCountry],
+    queryFn: () => listContractorsV2(currentDestCountry ? { country: currentDestCountry } : undefined),
+    staleTime: 60_000,
+  });
+
+  const prevDestCountryRef = React.useRef(currentDestCountry);
+  React.useEffect(() => {
+    if (prevDestCountryRef.current && prevDestCountryRef.current !== currentDestCountry) {
+      if (isMuayena && !locked) {
+        setValue("muayena_agency", "", { shouldDirty: true, shouldValidate: true });
+      }
+    }
+    prevDestCountryRef.current = currentDestCountry;
+  }, [currentDestCountry, isMuayena, locked, setValue]);
 
   // Live duplicate-passport + immediate validation
   const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
@@ -854,7 +873,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
           <CardContent className="space-y-5">
             {/* Corridor & Deployment Type Configuration Card */}
             <div className="rounded-xl border border-slate-200 dark:border-[#26262d] bg-slate-50/70 dark:bg-[#16161b] p-4 space-y-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className={cn("grid grid-cols-1 gap-4", isMuayena ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
                 {/* 1. Target Destination Country */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -962,6 +981,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                       onClick={() => {
                         setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
                         setValue("entry_track" as any, "Standard", { shouldDirty: true, shouldValidate: true });
+                        setValue("muayena_agency", "", { shouldDirty: true, shouldValidate: true });
                         if (watch("contact_person_name") === "Muayena") {
                           setValue("contact_person_name", "", { shouldDirty: true });
                           setValue("emergency_relationship", "", { shouldDirty: true });
@@ -999,6 +1019,40 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     </button>
                   </div>
                 </div>
+
+                {/* 3. Muayena Foreign Agency Picker (Shown only for Muayena Track) */}
+                {isMuayena && (
+                  <div className="space-y-1.5 flex flex-col justify-between" id="field-muayena_agency">
+                    <div>
+                      <Label htmlFor="muayena_agency" className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Muayena Foreign Agency <span className="text-rose-500">*</span>
+                      </Label>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Select destination partner agency in {currentDestCountry}.
+                      </p>
+                    </div>
+                    <select
+                      id="muayena_agency"
+                      {...register("muayena_agency")}
+                      disabled={locked}
+                      className={cn(
+                        "w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                        errors.muayena_agency ? "border-rose-500 ring-1 ring-rose-500" : ""
+                      )}
+                    >
+                      <option value="">Select Agency ({currentDestCountry})...</option>
+                      {contractors.map((c) => (
+                        <option key={c.name} value={c.name}>
+                          {c.company_name || c.name} {c.country ? `(${c.country})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.muayena_agency && (
+                      <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">{errors.muayena_agency.message}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

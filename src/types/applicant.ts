@@ -219,6 +219,8 @@ export interface InjazClearance {
 export interface Applicant {
   name: string;
   applicant_type?: "Standard" | "Muayena";
+  entry_track?: "Standard" | "Muayena";
+  muayena_agency?: string;
   first_name: string;
   middle_name?: string;
   last_name: string;

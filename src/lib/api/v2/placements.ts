@@ -70,7 +70,7 @@ export interface V2PlacementRecord {
  */
 export async function createMuayenaPlacementV2(
   applicantName: string,
-  contractorName: string,
+  contractorName?: string,
   fileUrl?: string
 ): Promise<{ name?: string; placement_name?: string; message?: string; [key: string]: any }> {
   return requestV2(
@@ -79,7 +79,7 @@ export async function createMuayenaPlacementV2(
       method: "POST",
       body: {
         applicant_name: applicantName,
-        contractor_name: contractorName,
+        ...(contractorName ? { contractor_name: contractorName } : {}),
         ...(fileUrl ? { file_url: fileUrl } : {}),
       },
     }

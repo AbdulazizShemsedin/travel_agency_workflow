@@ -29,6 +29,7 @@ import {
   Check,
   X,
   Lock,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
@@ -258,6 +259,7 @@ export function ApplicantRegistrationForm({
         Boolean((initialData as any)?.is_muayena)
           ? "Muayena"
           : "Standard",
+      muayena_agency: (initialData as any)?.muayena_agency || (initialData as any)?.active_placement?.contractor || "",
       destination_country: initialData?.destination_country || "Saudi Arabia",
       application_number:
         (initialData as any)?.application_number ||
@@ -1414,6 +1416,29 @@ export function ApplicantRegistrationForm({
   const isMuayena = currentApplicantType === "Muayena";
   const currentDestCountry = watch("destination_country") || "Saudi Arabia";
 
+  const hasActiveCase = Boolean(
+    (initialData as any)?.active_placement ||
+    (initialData as any)?.placement ||
+    ((initialData as any)?.status && !["Draft", "Registered", "CV Generated", "Cancelled"].includes((initialData as any).status))
+  );
+
+  const prevDestCountryRef = React.useRef(currentDestCountry);
+  React.useEffect(() => {
+    if (prevDestCountryRef.current && prevDestCountryRef.current !== currentDestCountry) {
+      if (isMuayena && !hasActiveCase) {
+        setValue("muayena_agency", "", { shouldDirty: true, shouldValidate: true });
+      }
+    }
+    prevDestCountryRef.current = currentDestCountry;
+  }, [currentDestCountry, isMuayena, hasActiveCase, setValue]);
+
+  const destinationContractors = React.useMemo(() => {
+    return contractors.filter((c) => {
+      if (!currentDestCountry) return true;
+      return !c.country || c.country.trim().toLowerCase() === currentDestCountry.trim().toLowerCase();
+    });
+  }, [contractors, currentDestCountry]);
+
   // Determine current preview file based on selected media tab
   const getMediaPreview = () => {
     switch (activeMediaTab) {
@@ -1487,7 +1512,7 @@ export function ApplicantRegistrationForm({
       {/* 1. STANDARD VS MUAYENA DEPLOYMENT TRACK SELECTION (Previous UI Feature restored) */}
       <Card className="border border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#15151a] shadow-xs overflow-hidden">
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+          <div className={cn("grid grid-cols-1 gap-6 items-start", isMuayena ? "md:grid-cols-3" : "md:grid-cols-2")}>
             {/* Deployment Type Toggle */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -1509,6 +1534,7 @@ export function ApplicantRegistrationForm({
                   onClick={() => {
                     setValue("applicant_type", "Standard", { shouldDirty: true, shouldValidate: true });
                     setValue("entry_track" as any, "Standard", { shouldDirty: true, shouldValidate: true });
+                    setValue("muayena_agency", "", { shouldDirty: true });
                     if (watch("relative_name") === "Muayena") {
                       setValue("relative_name", "");
                       setValue("relative_kinship", "Mother");
@@ -1584,6 +1610,43 @@ export function ApplicantRegistrationForm({
                   : " International Corridor: Standard visa and contract processing pipeline."}
               </p>
             </div>
+
+            {/* Muayena Foreign Agency Picker (Shown only for Muayena Track) */}
+            {isMuayena && (
+              <div className="space-y-1.5" id="field-muayena_agency">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-emerald-700" />
+                    Muayena Foreign Agency <span className="text-rose-500">*</span>
+                  </Label>
+                  {!hasActiveCase && renderClearBtn("muayena_agency")}
+                </div>
+                <select
+                  {...register("muayena_agency")}
+                  disabled={hasActiveCase || isFormReadOnly}
+                  className={cn(
+                    "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                    hasActiveCase ? "cursor-not-allowed opacity-75 bg-slate-100 dark:bg-[#1f1f26]" : "",
+                    getFieldClass("muayena_agency")
+                  )}
+                >
+                  <option value="">Select Agency ({currentDestCountry})...</option>
+                  {destinationContractors.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.company_name || c.name} {c.country ? `(${c.country})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {errors.muayena_agency && (
+                  <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.muayena_agency.message}</p>
+                )}
+                <p className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 pt-0.5">
+                  {hasActiveCase
+                    ? "Case already active for this candidate. The allocated agency is locked."
+                    : `Allocated partner agency in ${currentDestCountry} who will manage this direct placement.`}
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

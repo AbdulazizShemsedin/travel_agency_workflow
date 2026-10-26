@@ -738,3 +738,6 @@ export function formatCleanErrorMessage(rawError: unknown): string {
 
   return text;
 }
+
+export const formatApiError = formatCleanErrorMessage;
+

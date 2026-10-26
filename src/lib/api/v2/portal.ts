@@ -366,3 +366,37 @@ export async function listReplacementsOwedV2(
   return [];
 }
 
+export interface V2MyMuayenaWorkerItem {
+  applicant: string;
+  full_name: string;
+  passport_number: string;
+  target_job?: string;
+  destination_country?: string;
+  registered_on?: string;
+  waiting_for: "contract" | string;
+  [key: string]: any;
+}
+
+/**
+ * Lists Muayena workers allocated to the foreign agency upon registration, waiting for contract creation.
+ * POST /api/method/agency_tracking.portal_api.list_my_muayena_workers
+ */
+export async function listMyMuayenaWorkersV2(
+  contractorName?: string
+): Promise<V2MyMuayenaWorkerItem[]> {
+  const body: Record<string, any> = {};
+  if (contractorName) body.contractor_name = contractorName;
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.portal_api.list_my_muayena_workers",
+    {
+      method: "POST",
+      body: Object.keys(body).length > 0 ? body : undefined,
+    }
+  );
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray(result.data)) return result.data;
+  if (result && Array.isArray(result.message)) return result.message;
+  return [];
+}
+
+
