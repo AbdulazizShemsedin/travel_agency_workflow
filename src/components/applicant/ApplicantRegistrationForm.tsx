@@ -71,7 +71,6 @@ import {
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { parseMRZText, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
-import { PLACE_OF_BIRTH_OPTIONS } from "@/components/agent/CandidateFilters";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -394,7 +393,6 @@ export function ApplicantRegistrationForm({
   });
 
   const { register, watch, setValue, getValues, setError, clearErrors, reset, formState: { errors } } = form;
-  const watchPlaceOfBirth = watch("place_of_birth");
 
   // Track highlighted field for auto-scrolling & visual emphasis
   const [highlightedField, setHighlightedField] = React.useState<string | null>(null);
@@ -2021,24 +2019,17 @@ export function ApplicantRegistrationForm({
                 </Label>
                 {renderClearBtn("place_of_birth")}
               </div>
-              <select
+              <Input
+                placeholder="e.g. ADDIS ABABA"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("place_of_birth")}
                 className={cn(
-                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("place_of_birth")
                 )}
-              >
-                <option value="">Select Place of Birth...</option>
-                {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-                {watchPlaceOfBirth &&
-                  !PLACE_OF_BIRTH_OPTIONS.includes(watchPlaceOfBirth.toUpperCase().trim() as any) && (
-                    <option value={watchPlaceOfBirth}>{watchPlaceOfBirth}</option>
-                  )}
-              </select>
+              />
               {errors.place_of_birth && (
                 <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.place_of_birth.message}</p>
               )}
@@ -2384,13 +2375,15 @@ export function ApplicantRegistrationForm({
               </select>
             </div>
 
-            {/* National ID | Sponsor Arabic */}
+            {/* Sponsor National ID | Sponsor Arabic */}
             <div className="space-y-1.5" id="field-national_id">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                National ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                Sponsor National ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
-                placeholder="Fayda / FAN National ID"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 {...register("national_id")}
                 className={cn(
                   "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",

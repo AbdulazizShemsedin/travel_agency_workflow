@@ -187,23 +187,86 @@ export function exportToPrintPDF<T extends Record<string, any>>(
 
 export interface BackendSpreadsheetDownloadResult {
   filename: string;
-  format: "xlsx" | "csv";
+  format: "xlsx" | "csv" | "pdf";
 }
 
 /**
- * Downloads a spreadsheet binary/stream returned by Frappe backend (e.g. export_commissions_xlsx).
- * Handles the backend's dual .xlsx / .csv fallback format:
- * 1. Checks if the blob is binary XLSX (magic bytes PK\x03\x04 or openxml mime).
- * 2. Checks if the blob is CSV text. If CSV, ensures a UTF-8 BOM (\uFEFF) is present
+ * Downloads a raw binary blob exactly as received from the backend,
+ * extracting filename from Content-Disposition if present, without
+ * performing any CSV conversions, BOM additions, or text re-wrapping.
+ */
+export function downloadDirectBlob(
+  blob: Blob,
+  fallbackBaseName = "report_export",
+  defaultExt?: string
+): string {
+  const serverFilename = (blob as any)?.filename as string | undefined;
+  let filename = serverFilename || fallbackBaseName;
+
+  if (defaultExt) {
+    const ext = defaultExt.startsWith(".") ? defaultExt : `.${defaultExt}`;
+    if (!filename.toLowerCase().endsWith(ext.toLowerCase())) {
+      filename = `${filename}${ext}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  return filename;
+}
+
+/**
+ * Downloads a spreadsheet or document stream returned by Frappe backend.
+ * 1. Detects PDF (MIME, filename, or %PDF magic bytes) and saves without CSV alteration.
+ * 2. Checks if the blob is binary XLSX (magic bytes PK\x03\x04 or openxml mime).
+ * 3. Checks if the blob is CSV text. If CSV, ensures a UTF-8 BOM (\uFEFF) is present
  *    so Microsoft Excel opens it seamlessly without character corruption or format warnings.
- * 3. Extracts or aligns the file extension to match the true format (.xlsx vs .csv),
+ * 4. Extracts or aligns the file extension to match the true format (.xlsx vs .csv vs .pdf),
  *    preventing Microsoft Excel's "file format and extension don't match / corrupted" error.
  */
 export async function downloadBackendSpreadsheet(
   blob: Blob,
   fallbackBaseName = "commissions_report"
 ): Promise<BackendSpreadsheetDownloadResult> {
-  // 1. Detect format by checking ZIP / OpenXML magic bytes
+  const serverFilename = (blob as any)?.filename as string | undefined;
+
+  // 1. Check if the blob is a PDF
+  let isPdf = false;
+  if (blob.type.includes("pdf") || serverFilename?.toLowerCase().endsWith(".pdf")) {
+    isPdf = true;
+  } else {
+    try {
+      const slice = await blob.slice(0, 4).arrayBuffer();
+      const bytes = new Uint8Array(slice);
+      if (
+        bytes.length >= 4 &&
+        bytes[0] === 0x25 && // %
+        bytes[1] === 0x50 && // P
+        bytes[2] === 0x44 && // D
+        bytes[3] === 0x46    // F
+      ) {
+        isPdf = true;
+      }
+    } catch {
+      isPdf = false;
+    }
+  }
+
+  if (isPdf) {
+    const filename = downloadDirectBlob(blob, fallbackBaseName, ".pdf");
+    return { filename, format: "pdf" };
+  }
+
+  // 2. Detect format by checking ZIP / OpenXML magic bytes
   let isXlsx = false;
   try {
     const slice = await blob.slice(0, 4).arrayBuffer();
@@ -226,18 +289,17 @@ export async function downloadBackendSpreadsheet(
   const format: "xlsx" | "csv" = isXlsx ? "xlsx" : "csv";
   const expectedExt = `.${format}`;
 
-  // 2. Resolve target filename
-  const serverFilename = (blob as any)?.filename as string | undefined;
+  // 3. Resolve target filename
   let filename: string;
   if (serverFilename) {
-    const base = serverFilename.replace(/\.(xlsx|csv|txt)$/i, "");
+    const base = serverFilename.replace(/\.(xlsx|csv|txt|pdf)$/i, "");
     filename = `${base}${expectedExt}`;
   } else {
-    const base = fallbackBaseName.replace(/\.(xlsx|csv|txt)$/i, "");
+    const base = fallbackBaseName.replace(/\.(xlsx|csv|txt|pdf)$/i, "");
     filename = `${base}${expectedExt}`;
   }
 
-  // 3. For CSV, ensure UTF-8 BOM (\uFEFF) is present for flawless Microsoft Excel rendering
+  // 4. For CSV, ensure UTF-8 BOM (\uFEFF) is present for flawless Microsoft Excel rendering
   let finalBlob = blob;
   if (!isXlsx) {
     try {
@@ -256,7 +318,7 @@ export async function downloadBackendSpreadsheet(
     }
   }
 
-  // 4. Trigger browser download
+  // 5. Trigger browser download
   if (typeof window !== "undefined") {
     const url = window.URL.createObjectURL(finalBlob);
     const link = document.createElement("a");

@@ -77,8 +77,8 @@ import {
   V2WorkersByYearResponse,
   V2WorkersByYearRow,
 } from "@/lib/api/v2/reports";
+import { downloadBackendSpreadsheet, downloadDirectBlob } from "@/lib/utils/reportExport";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
-import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import {
   listUnresolvedComplaintsV2,
   listNewComplaintsV2,
@@ -672,16 +672,16 @@ export default function ReportsPage() {
 
     try {
       const blob = await exportWorkersByYearV2(workersParams, format);
-      const fallback = `Applicant_List_Report_${workersBasis}_${
+      const fallback = `Workers_${workersBasis.toLowerCase()}_${
         workersPeriodMode === "all"
-          ? "All_Time"
+          ? "all_time"
           : workersPeriodMode === "custom"
-          ? `${workersFromDate}_to_${workersToDate}`
-          : `${workersYearType}_${workersYear}`
+          ? `${workersFromDate}_${workersToDate}`
+          : `${workersYearType.toLowerCase().replace(/\s+/g, "_")}_${workersYear}`
       }`;
-      const res = await downloadBackendSpreadsheet(blob, fallback);
+      const filename = downloadDirectBlob(blob, fallback, `.${format}`);
       toast.success(`${format.toUpperCase()} Export Complete`, {
-        description: `Exported ${res.filename}.`,
+        description: `Exported ${filename}.`,
       });
     } catch (err: any) {
       toast.error("Export Failed", {

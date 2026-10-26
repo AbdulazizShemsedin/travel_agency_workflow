@@ -46,15 +46,24 @@ export interface V2TransactionRecord {
 
 export interface V2OwedCommissionItem {
   name: string;
+  transaction?: string;
   transaction_name?: string;
+  placement?: string;
   applicant?: string;
   applicant_name?: string;
   full_name?: string;
+  passport_number?: string;
+  target_job?: string;
   contractor?: string;
   contractor_name?: string;
   amount: number;
+  amount_original?: number;
   currency: V2SupportedCurrency;
+  currency_original?: V2SupportedCurrency;
+  write_off_original?: number;
+  net_amount_original?: number;
   accrual_date?: string;
+  creation?: string;
   destination_country?: string;
   status?: string;
   [key: string]: any;
@@ -67,13 +76,31 @@ export interface V2CommissionBatchItem {
   placement?: string;
   applicant?: string;
   applicant_name?: string;
+  full_name?: string;
+  passport_number?: string;
   amount: number;
   amount_original?: number;
   amount_birr?: number;
   currency: string;
+  status?: "Pending" | "Paid" | "Released" | string;
   payment_reference?: string;
   settled?: number | boolean;
   settlement_date?: string;
+  bank_statement_line?: string;
+  write_off_original?: number;
+  net_amount_original?: number;
+  [key: string]: any;
+}
+
+export interface V2CommissionWriteOffRow {
+  name: string;
+  amount_original: number;
+  currency_original: string;
+  reason: string;
+  write_off_date?: string;
+  status: "Approved" | "Voided" | string;
+  commission_batch_request?: string | null;
+  commission_transaction?: string;
   [key: string]: any;
 }
 
@@ -84,12 +111,14 @@ export interface V2CommissionBatchWriteOff {
   amount_birr?: number;
   reason?: string;
   transaction?: string;
+  commission_transaction?: string;
   write_off_date?: string;
   write_off_amount?: number;
   write_off_amount_original?: number;
   write_off_amount_birr?: number;
   write_off_reason?: string;
   write_off_transaction?: string;
+  status?: string;
   [key: string]: any;
 }
 
@@ -782,6 +811,114 @@ export async function triggerEarlyCommissionAccrualV2(
       body: { placement_name: placementName },
     }
   );
+}
+
+/**
+ * Adds workers' commissions to an existing Commission Batch Request.
+ * Authoritative Backend Endpoint: finance_api.add_workers_to_batch (New October 2026)
+ * Roles: Finance Manager, Admin
+ * Accepts workers who are owed, not on any batch, in the batch's currency, and not waiting for an exchange rate.
+ * Write-offs come with them, and batch total, balance, and invoice update.
+ */
+export async function addWorkersToBatchV2(
+  batchName: string,
+  commissionNames: string[]
+): Promise<V2CommissionBatch> {
+  const result = await requestV2<V2CommissionBatch | { message?: V2CommissionBatch }>(
+    "/api/method/agency_tracking.finance_api.add_workers_to_batch",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        commission_names: Array.isArray(commissionNames) ? JSON.stringify(commissionNames) : commissionNames,
+      },
+    }
+  );
+  const batch = (result && "name" in result) ? result : (result as any)?.message || result;
+  return batch as V2CommissionBatch;
+}
+
+/**
+ * Takes workers off an existing Commission Batch Request.
+ * Authoritative Backend Endpoint: finance_api.remove_workers_from_batch (New October 2026)
+ * Roles: Finance Manager, Admin
+ * Removed worker returns to owed list with their write-offs. A paid worker cannot be removed.
+ * Returns { released_items, affected_batches }.
+ */
+export async function removeWorkersFromBatchV2(
+  batchName: string,
+  commissionNames: string[]
+): Promise<{ released_items: string[]; affected_batches: string[]; [key: string]: any }> {
+  const result = await requestV2<{
+    released_items?: string[];
+    affected_batches?: string[];
+    message?: any;
+    [key: string]: any;
+  }>(
+    "/api/method/agency_tracking.finance_api.remove_workers_from_batch",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        commission_names: Array.isArray(commissionNames) ? JSON.stringify(commissionNames) : commissionNames,
+      },
+    }
+  );
+  const payload = result?.message || result;
+  return {
+    released_items: Array.isArray(payload.released_items) ? payload.released_items : [],
+    affected_batches: Array.isArray(payload.affected_batches) ? payload.affected_batches : [],
+    ...payload,
+  };
+}
+
+/**
+ * Writes off an agreed expense/discount on one worker's commission.
+ * Authoritative Backend Endpoint: finance_api.write_off_commission (New October 2026)
+ * Roles: Finance Manager, Admin
+ * commission: worker's commission row name (from get_owed_commissions) or batch item transaction.
+ * Amount is in the commission's own currency. Reason required. Date today or earlier (never future).
+ */
+export async function writeOffCommissionV2(
+  commission: string,
+  writeOffAmount: number,
+  writeOffReason: string,
+  writeOffDate?: string
+): Promise<V2CommissionWriteOffRow> {
+  const result = await requestV2<V2CommissionWriteOffRow | { message?: V2CommissionWriteOffRow }>(
+    "/api/method/agency_tracking.finance_api.write_off_commission",
+    {
+      method: "POST",
+      body: {
+        commission,
+        write_off_amount: writeOffAmount,
+        write_off_reason: writeOffReason,
+        ...(writeOffDate ? { write_off_date: writeOffDate } : {}),
+      },
+    }
+  );
+  const row = (result && "name" in result) ? result : (result as any)?.message || result;
+  return row as V2CommissionWriteOffRow;
+}
+
+/**
+ * Lists the write-offs recorded on a single worker's commission.
+ * Authoritative Backend Endpoint: finance_api.list_commission_write_offs (New October 2026)
+ * Returns rows with: { amount_original, currency_original, reason, write_off_date, status, commission_batch_request, name }
+ */
+export async function listCommissionWriteOffsV2(
+  commission: string
+): Promise<V2CommissionWriteOffRow[]> {
+  const res = await requestV2<V2CommissionWriteOffRow[] | { message?: V2CommissionWriteOffRow[] }>(
+    "/api/method/agency_tracking.finance_api.list_commission_write_offs",
+    {
+      method: "POST",
+      body: { commission },
+    }
+  );
+  if (Array.isArray(res)) return res;
+  if (res && Array.isArray((res as any).message)) return (res as any).message;
+  return [];
 }
 
 /**

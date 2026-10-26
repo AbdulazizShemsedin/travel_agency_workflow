@@ -68,9 +68,15 @@ import {
   listBatchWriteOffsV2,
   releaseUnpaidItemsV2,
   triggerEarlyCommissionAccrualV2,
+  addWorkersToBatchV2,
+  removeWorkersFromBatchV2,
+  writeOffCommissionV2,
+  listCommissionWriteOffsV2,
+  voidTransactionV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
   V2CommissionBatchItem,
+  V2CommissionWriteOffRow,
   V2SupportedCurrency,
 } from "@/lib/api/v2/finance";
 import {
@@ -171,6 +177,31 @@ export default function AdminCommissionPage() {
   const [writeOffReasonInput, setWriteOffReasonInput] = React.useState<string>("");
   const [writeOffDateInput, setWriteOffDateInput] = React.useState<string>(new Date().toISOString().split("T")[0]);
   const [isSubmittingWriteOff, setIsSubmittingWriteOff] = React.useState<boolean>(false);
+
+  // Single-Worker Write-off State (Section 0.-7)
+  const [isWorkerWriteOffModalOpen, setIsWorkerWriteOffModalOpen] = React.useState<boolean>(false);
+  const [activeWorkerCommission, setActiveWorkerCommission] = React.useState<{
+    id: string;
+    name: string;
+    currency: string;
+    maxAmount: number;
+    candidateName: string;
+  } | null>(null);
+  const [workerWriteOffAmount, setWorkerWriteOffAmount] = React.useState<string>("");
+  const [workerWriteOffReason, setWorkerWriteOffReason] = React.useState<string>("");
+  const [workerWriteOffDate, setWorkerWriteOffDate] = React.useState<string>(
+    () => new Date().toISOString().split("T")[0]
+  );
+  const [isSubmittingWorkerWriteOff, setIsSubmittingWorkerWriteOff] = React.useState<boolean>(false);
+  const [workerWriteOffsList, setWorkerWriteOffsList] = React.useState<V2CommissionWriteOffRow[]>([]);
+  const [isLoadingWorkerWriteOffs, setIsLoadingWorkerWriteOffs] = React.useState<boolean>(false);
+  const [voidingWriteOffName, setVoidingWriteOffName] = React.useState<string | null>(null);
+
+  // Add/Remove Workers on Existing Batch State (Section 0.-10)
+  const [isAddWorkersModalOpen, setIsAddWorkersModalOpen] = React.useState<boolean>(false);
+  const [selectedAddWorkerNames, setSelectedAddWorkerNames] = React.useState<string[]>([]);
+  const [isSubmittingAddWorkers, setIsSubmittingAddWorkers] = React.useState<boolean>(false);
+  const [isRemovingWorkers, setIsRemovingWorkers] = React.useState<boolean>(false);
 
   // Releasing Unpaid Items State
   const [isReleasingItems, setIsReleasingItems] = React.useState<boolean>(false);
@@ -569,11 +600,18 @@ export default function AdminCommissionPage() {
     }
   };
 
-  // Selected Owed Totals
+  // Selected Owed Totals (using net_amount_original per Section 0.-7)
   const selectedOwedTotalAmount = React.useMemo(() => {
     return filteredOwed
       .filter((item) => selectedTxNames.includes(item.transaction_name || item.name))
-      .reduce((sum, item) => sum + (Number(item.commission_amount || item.amount) || 0), 0);
+      .reduce((sum, item) => {
+        const netAmt =
+          item.net_amount_original !== undefined
+            ? Number(item.net_amount_original)
+            : (Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0) -
+              (Number(item.write_off_original) || 0);
+        return sum + (Number(netAmt) || 0);
+      }, 0);
   }, [filteredOwed, selectedTxNames]);
 
   // =========================================================================
@@ -1000,6 +1038,224 @@ export default function AdminCommissionPage() {
       });
     } finally {
       setIsReleasingItems(false);
+    }
+  };
+
+  // =========================================================================
+  // WORKER-LEVEL WRITE-OFF HANDLERS (Section 0.-7)
+  // =========================================================================
+  const openWorkerWriteOffModal = async (info: {
+    id: string;
+    name: string;
+    currency: string;
+    maxAmount: number;
+    candidateName: string;
+  }) => {
+    setActiveWorkerCommission(info);
+    setWorkerWriteOffAmount("");
+    setWorkerWriteOffReason("");
+    setWorkerWriteOffDate(new Date().toISOString().split("T")[0]);
+    setIsWorkerWriteOffModalOpen(true);
+    setIsLoadingWorkerWriteOffs(true);
+    try {
+      const history = await listCommissionWriteOffsV2(info.id);
+      setWorkerWriteOffsList(history);
+    } catch {
+      setWorkerWriteOffsList([]);
+    } finally {
+      setIsLoadingWorkerWriteOffs(false);
+    }
+  };
+
+  const handleRecordWorkerWriteOff = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here. Please contact your administrator.",
+      });
+      return;
+    }
+    if (!activeWorkerCommission) return;
+    const amt = Number(workerWriteOffAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast.error("Invalid Amount", {
+        description: "Please enter a positive write-off amount.",
+      });
+      return;
+    }
+    if (amt > activeWorkerCommission.maxAmount) {
+      toast.error("Amount Exceeded", {
+        description: `Write-off amount cannot exceed remaining commission (${activeWorkerCommission.maxAmount.toLocaleString()} ${activeWorkerCommission.currency}).`,
+      });
+      return;
+    }
+    if (!workerWriteOffReason.trim()) {
+      toast.error("Reason Required", {
+        description: "Please provide a reason for this worker write-off.",
+      });
+      return;
+    }
+
+    setIsSubmittingWorkerWriteOff(true);
+    try {
+      await writeOffCommissionV2(
+        activeWorkerCommission.id,
+        amt,
+        workerWriteOffReason.trim(),
+        workerWriteOffDate || undefined
+      );
+      toast.success("Write-off Recorded", {
+        description: `Successfully recorded write-off of ${amt.toLocaleString()} ${activeWorkerCommission.currency} for ${activeWorkerCommission.candidateName}.`,
+      });
+      setIsWorkerWriteOffModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      if (selectedBatchName) {
+        await loadBatchDetails(selectedBatchName);
+      }
+    } catch (err: any) {
+      toast.error("Write-off Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsSubmittingWorkerWriteOff(false);
+    }
+  };
+
+  const handleVoidWorkerWriteOff = async (writeOffName: string) => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here. Please contact your administrator.",
+      });
+      return;
+    }
+    const reason = window.prompt("Enter reason for voiding this write-off:");
+    if (!reason || !reason.trim()) return;
+
+    setVoidingWriteOffName(writeOffName);
+    try {
+      await voidTransactionV2(writeOffName, reason.trim());
+      toast.success("Write-off Voided", {
+        description: "The write-off has been voided and no longer counts against the commission.",
+      });
+      if (activeWorkerCommission) {
+        const history = await listCommissionWriteOffsV2(activeWorkerCommission.id);
+        setWorkerWriteOffsList(history);
+      }
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      if (selectedBatchName) {
+        await loadBatchDetails(selectedBatchName);
+      }
+    } catch (err: any) {
+      toast.error("Void Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setVoidingWriteOffName(null);
+    }
+  };
+
+  // =========================================================================
+  // ADD & REMOVE WORKERS ON BATCH HANDLERS (Section 0.-10)
+  // =========================================================================
+  const { data: batchOwedWorkers = [], isLoading: isBatchOwedLoading } = useQuery({
+    queryKey: [
+      "v2_owed_commissions_for_batch_add",
+      activeBatch?.contractor,
+      activeBatch?.destination_country,
+      activeBatch?.currency,
+    ],
+    queryFn: () =>
+      getOwedCommissionsV2(
+        activeBatch?.contractor,
+        activeBatch?.destination_country || undefined,
+        "oldest",
+        activeBatch?.currency as V2SupportedCurrency
+      ),
+    enabled: Boolean(isAddWorkersModalOpen && activeBatch?.name),
+    staleTime: 10000,
+  });
+
+  const eligibleAddWorkers = React.useMemo(() => {
+    if (!activeBatch) return [];
+    const activeItemKeys = new Set(
+      (activeBatch.items || [])
+        .filter((it: any) => it.status !== "Released")
+        .map((it: any) => String(it.transaction || it.transaction_name || it.name).toLowerCase())
+    );
+    return batchOwedWorkers.filter((item) => {
+      const commKey = String(item.transaction_name || item.transaction || item.name).toLowerCase();
+      const notInBatch = !activeItemKeys.has(commKey) && !activeItemKeys.has(String(item.name).toLowerCase());
+      const notAwaitingFx = !item.awaiting_fx_rate;
+      return notInBatch && notAwaitingFx;
+    });
+  }, [batchOwedWorkers, activeBatch]);
+
+  const handleAddWorkersToBatch = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here. Please contact your administrator.",
+      });
+      return;
+    }
+    if (!activeBatch || selectedAddWorkerNames.length === 0) return;
+    setIsSubmittingAddWorkers(true);
+    try {
+      await addWorkersToBatchV2(activeBatch.name, selectedAddWorkerNames);
+      toast.success("Workers Added to Batch", {
+        description: `Successfully added ${selectedAddWorkerNames.length} worker(s) to ${activeBatch.title || activeBatch.name}.`,
+      });
+      setIsAddWorkersModalOpen(false);
+      setSelectedAddWorkerNames([]);
+      await loadBatchDetails(activeBatch.name);
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Failed to Add Workers", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsSubmittingAddWorkers(false);
+    }
+  };
+
+  const handleRemoveWorkersFromBatch = async (commissionNames: string[]) => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here. Please contact your administrator.",
+      });
+      return;
+    }
+    if (!activeBatch || commissionNames.length === 0) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to remove ${commissionNames.length} worker(s) from this batch? They will return to the owed list with their write-offs.`
+      )
+    ) {
+      return;
+    }
+    setIsRemovingWorkers(true);
+    try {
+      const res = await removeWorkersFromBatchV2(activeBatch.name, commissionNames);
+      toast.success("Workers Removed", {
+        description: `Released ${res.released_items?.length || commissionNames.length} worker(s) back to owed commissions.`,
+      });
+      setSelectedItemRowNames((prev) => prev.filter((id) => !commissionNames.includes(id)));
+      await loadBatchDetails(activeBatch.name);
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Failed to Remove Workers", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsRemovingWorkers(false);
     }
   };
 
@@ -1474,12 +1730,13 @@ export default function AdminCommissionPage() {
                       <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Departure Date</th>
                       <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Commission Amount</th>
                       <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Status</th>
+                      <th className="py-2.5 px-3 text-right whitespace-normal break-words leading-snug">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                     {isOwedLoading ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-400">
+                        <td colSpan={9} className="py-8 text-center text-slate-400">
                           <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
                           Loading unbatched commissions...
                         </td>
@@ -1521,10 +1778,32 @@ export default function AdminCommissionPage() {
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">
-                              {(
-                                Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0
-                              ).toLocaleString()}{" "}
-                              {item.currency_original || item.currency || "SAR"}
+                              {Number(item.write_off_original || 0) > 0 ? (
+                                <div>
+                                  <span>
+                                    {(
+                                      Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0
+                                    ).toLocaleString()}{" "}
+                                    {item.currency_original || item.currency || "SAR"}
+                                  </span>
+                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                                    −{Number(item.write_off_original).toLocaleString()} written off · {(
+                                      item.net_amount_original !== undefined
+                                        ? Number(item.net_amount_original)
+                                        : (Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0) -
+                                          Number(item.write_off_original)
+                                    ).toLocaleString()}{" "}
+                                    to collect
+                                  </div>
+                                </div>
+                              ) : (
+                                <span>
+                                  {(
+                                    Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0
+                                  ).toLocaleString()}{" "}
+                                  {item.currency_original || item.currency || "SAR"}
+                                </span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3">
                               <Badge
@@ -1534,12 +1813,43 @@ export default function AdminCommissionPage() {
                                 {item.status || "Approved"}
                               </Badge>
                             </td>
+                            <td className="py-2.5 px-3 text-right">
+                              {isFinanceManagerOrAdmin && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isFinanceReadOnly}
+                                  title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                                  onClick={() => {
+                                    const commId = item.name;
+                                    const cand = getCandidateName(item);
+                                    const curr = item.currency_original || item.currency || "SAR";
+                                    const net =
+                                      item.net_amount_original !== undefined
+                                        ? Number(item.net_amount_original)
+                                        : (Number(item.amount_original ?? item.commission_amount ?? item.amount) || 0) -
+                                          (Number(item.write_off_original) || 0);
+                                    openWorkerWriteOffModal({
+                                      id: commId,
+                                      name: item.name,
+                                      currency: curr,
+                                      maxAmount: net,
+                                      candidateName: cand,
+                                    });
+                                  }}
+                                  className="h-6 px-2 text-[11px] font-medium border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-900/50 dark:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Write off
+                                </Button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
                     ) : (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <td colSpan={9} className="py-12 text-center text-slate-400">
                           No unbatched commissions for this agency in {selectedCountry || "any corridor"}.
                         </td>
                       </tr>
@@ -1925,6 +2235,24 @@ export default function AdminCommissionPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Written Off" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isFinanceReadOnly}
+                            title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                            onClick={() => {
+                              setSelectedAddWorkerNames([]);
+                              setIsAddWorkersModalOpen(true);
+                            }}
+                            className="text-xs h-7.5 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-semibold"
+                          >
+                            <Layers className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
+                            Add Workers
+                          </Button>
+                        )}
+
                         <Button
                           type="button"
                           variant="outline"
@@ -2065,9 +2393,30 @@ export default function AdminCommissionPage() {
                               type="button"
                               variant="outline"
                               size="sm"
+                              disabled={isRemovingWorkers || isFinanceReadOnly}
+                              title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
+                              onClick={() => {
+                                const selectedTransactions = (activeBatch.items || [])
+                                  .filter((it: any) => selectedItemRowNames.includes(it.name) && it.status !== "Paid" && it.status !== "Released")
+                                  .map((it: any) => it.transaction || it.name);
+                                handleRemoveWorkersFromBatch(selectedTransactions);
+                              }}
+                              className="h-7 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-semibold"
+                            >
+                              {isRemovingWorkers ? (
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                              ) : (
+                                <Trash2 className="h-3 w-3 mr-1" />
+                              )}
+                              Remove {selectedItemRowNames.length} Workers
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
                               disabled={isReleasingItems}
                               onClick={() => handleReleaseUnpaidItems()}
-                              className="h-7 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                              className="h-7 text-xs border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800"
                             >
                               {isReleasingItems ? (
                                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -2082,7 +2431,7 @@ export default function AdminCommissionPage() {
                               disabled={isSettlingItems || isFinanceReadOnly}
                               title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                               onClick={() => handleSettleBatchItems()}
-                              className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                               Settle {selectedItemRowNames.length} Selected Items
@@ -2108,7 +2457,9 @@ export default function AdminCommissionPage() {
                           <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
                             {(activeBatch.items || []).length > 0 ? (
                               activeBatch.items!.map((it: any, idx: number) => {
-                                const isPending = it.status !== "Paid";
+                                const isPaid = it.status === "Paid";
+                                const isReleased = it.status === "Released";
+                                const isPending = !isPaid && !isReleased;
                                 const isSelected = selectedItemRowNames.includes(it.name);
                                 return (
                                   <tr key={it.name || it.transaction} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
@@ -2141,22 +2492,30 @@ export default function AdminCommissionPage() {
                                     <td className="py-2 px-3 font-semibold text-slate-900 dark:text-white">
                                       {getCandidateName(it)}
                                     </td>
-                                    <td className="py-2 px-3 font-bold">{it.amount ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}</td>
+                                    <td className="py-2 px-3 font-bold">
+                                      {it.amount
+                                        ? `${Number(it.amount_original ?? it.amount).toLocaleString()} ${it.currency || activeBatch.currency || "SAR"}`
+                                        : "—"}
+                                    </td>
                                     <td className="py-2 px-3">
                                       <Badge
                                         variant="outline"
                                         className={cn(
                                           "text-[10px]",
-                                          it.status === "Paid"
-                                            ? "border-emerald-300 text-emerald-800 bg-emerald-50"
-                                            : "border-amber-300 text-amber-800 bg-amber-50"
+                                          isPaid
+                                            ? "border-emerald-300 text-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                            : isReleased
+                                            ? "border-slate-300 text-slate-500 bg-slate-100 dark:bg-zinc-800 dark:text-zinc-400"
+                                            : "border-amber-300 text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"
                                         )}
                                       >
-                                        {it.status || "Pending"}
+                                        {isReleased ? "Released" : isPaid ? "Paid" : "Pending"}
                                       </Badge>
                                     </td>
                                     <td className="py-2 px-3 text-right">
-                                      {it.status === "Paid" ? (
+                                      {isReleased ? (
+                                        <span className="text-[10px] text-slate-400 italic">History</span>
+                                      ) : isPaid ? (
                                         <Button
                                           type="button"
                                           variant="ghost"
@@ -2170,18 +2529,58 @@ export default function AdminCommissionPage() {
                                           Unmark Paid
                                         </Button>
                                       ) : (
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          disabled={isSettlingItems || isFinanceReadOnly}
-                                          title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
-                                          onClick={() => handleSettleBatchItems([it.name])}
-                                          className="h-6 px-2 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                          <Check className="h-3 w-3 mr-1" />
-                                          Mark Paid
-                                        </Button>
+                                        <div className="flex items-center justify-end gap-1">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={isSettlingItems || isFinanceReadOnly}
+                                            title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
+                                            onClick={() => handleSettleBatchItems([it.name])}
+                                            className="h-6 px-2 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                          >
+                                            <Check className="h-3 w-3 mr-1" />
+                                            Mark Paid
+                                          </Button>
+                                          {isFinanceManagerOrAdmin && (
+                                            <>
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={isFinanceReadOnly}
+                                                title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                                                onClick={() => {
+                                                  const commId = it.transaction || it.name;
+                                                  const cand = getCandidateName(it);
+                                                  const curr = it.currency || activeBatch.currency || "SAR";
+                                                  const net = Number(it.amount_original ?? it.amount ?? 0);
+                                                  openWorkerWriteOffModal({
+                                                    id: commId,
+                                                    name: it.name,
+                                                    currency: curr,
+                                                    maxAmount: net,
+                                                    candidateName: cand,
+                                                  });
+                                                }}
+                                                className="h-6 px-1.5 text-[10px] border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-900/50 dark:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
+                                                Write off
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={isRemovingWorkers || isFinanceReadOnly}
+                                                title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                                                onClick={() => handleRemoveWorkersFromBatch([it.transaction || it.name])}
+                                                className="h-6 px-1.5 text-[10px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
+                                                Remove
+                                              </Button>
+                                            </>
+                                          )}
+                                        </div>
                                       )}
                                     </td>
                                   </tr>
@@ -2565,6 +2964,14 @@ export default function AdminCommissionPage() {
                               const woAmt = Number(wo?.amount_original ?? wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0);
                               const woReason = wo?.reason || wo?.write_off_reason || "Negotiated discount / bad debt write-off";
                               const woTxn = wo?.transaction || wo?.write_off_transaction;
+                              const isWorkerSpecific = Boolean(wo?.commission_transaction);
+                              const matchedItem = isWorkerSpecific
+                                ? activeBatch.items?.find((it: any) => it.transaction === wo.commission_transaction || it.name === wo.commission_transaction)
+                                : null;
+                              const workerLabel = isWorkerSpecific
+                                ? (matchedItem ? getCandidateName(matchedItem) : getCandidateName(wo.commission_transaction))
+                                : null;
+
                               return (
                                 <div
                                   key={wo?.name || idx}
@@ -2573,6 +2980,15 @@ export default function AdminCommissionPage() {
                                   <div className="flex items-center justify-between">
                                     <span className="text-[10px] text-slate-500 dark:text-zinc-400">
                                       {woDate ? new Date(woDate).toLocaleDateString() : "Recorded"}
+                                      {workerLabel ? (
+                                        <span className="ml-1.5 font-semibold text-slate-700 dark:text-zinc-200">
+                                          • {workerLabel}
+                                        </span>
+                                      ) : (
+                                        <span className="ml-1.5 text-slate-400 font-normal">
+                                          • Batch write-off
+                                        </span>
+                                      )}
                                       {woTxn && (
                                         <span className="ml-1.5 font-mono text-[9.5px] text-slate-400 font-semibold">
                                           ({shortRef(woTxn)})
@@ -3232,6 +3648,288 @@ export default function AdminCommissionPage() {
             >
               {isSubmittingWriteOff && <Loader2 className="h-3 w-3 animate-spin" />}
               Confirm Write-Off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Worker-Level Write-Off Modal (Section 0.-7) */}
+      <Dialog open={isWorkerWriteOffModalOpen} onOpenChange={setIsWorkerWriteOffModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-amber-800 dark:text-amber-400">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Write Off on Worker Commission
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
+              Record an agreed expense or deduction on {activeWorkerCommission?.candidateName || "this worker"}&apos;s commission.
+              Amount is in the commission&apos;s own currency ({activeWorkerCommission?.currency}). It cannot exceed the remaining commission.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="p-2.5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400">Worker</span>
+                <p className="font-semibold text-slate-900 dark:text-white">{activeWorkerCommission?.candidateName}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400">Remaining to Collect</span>
+                <p className="font-bold text-amber-900 dark:text-amber-300">
+                  {(activeWorkerCommission?.maxAmount || 0).toLocaleString()} {activeWorkerCommission?.currency}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Write-Off Amount ({activeWorkerCommission?.currency}) *</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  max={activeWorkerCommission?.maxAmount}
+                  placeholder="e.g. 100"
+                  value={workerWriteOffAmount}
+                  onChange={(e) => setWorkerWriteOffAmount(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Write-Off Date *</Label>
+                <Input
+                  type="date"
+                  max={new Date().toISOString().split("T")[0]}
+                  value={workerWriteOffDate}
+                  onChange={(e) => setWorkerWriteOffDate(e.target.value)}
+                  className="h-8 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Reason / Justification *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Flight delay expense deducted by partner agency"
+                value={workerWriteOffReason}
+                onChange={(e) => setWorkerWriteOffReason(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Previous write-offs history on this worker */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-[#26262f]">
+              <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                Write-off History for Worker
+              </div>
+              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                {isLoadingWorkerWriteOffs ? (
+                  <p className="text-center py-3 text-slate-400">Loading write-offs...</p>
+                ) : workerWriteOffsList.length > 0 ? (
+                  workerWriteOffsList.map((wo) => {
+                    const isVoided = wo.status === "Voided";
+                    return (
+                      <div
+                        key={wo.name}
+                        className={cn(
+                          "rounded-lg border p-2 text-xs flex items-center justify-between gap-2",
+                          isVoided
+                            ? "bg-slate-100 dark:bg-zinc-800/50 border-slate-200 line-through opacity-60"
+                            : "bg-slate-50 dark:bg-[#16161b] border-slate-200 dark:border-[#26262d]"
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 dark:text-white truncate">
+                            {Number(wo.amount_original).toLocaleString()} {wo.currency_original || activeWorkerCommission?.currency}
+                            <span className="ml-2 font-normal text-[11px] text-slate-500">
+                              {wo.write_off_date ? new Date(wo.write_off_date).toLocaleDateString() : ""}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-slate-600 dark:text-zinc-400 truncate">{wo.reason}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[9px]",
+                              isVoided ? "border-slate-300 text-slate-500" : "border-emerald-300 text-emerald-800 bg-emerald-50"
+                            )}
+                          >
+                            {wo.status}
+                          </Badge>
+                          {!isVoided && isFinanceManagerOrAdmin && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={voidingWriteOffName === wo.name || isFinanceReadOnly}
+                              title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                              onClick={() => handleVoidWorkerWriteOff(wo.name)}
+                              className="h-6 px-1.5 text-[10px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {voidingWriteOffName === wo.name ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Void"
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-center py-2 text-slate-400 text-xs">No previous write-offs on this worker.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingWorkerWriteOff}
+              onClick={() => setIsWorkerWriteOffModalOpen(false)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isSubmittingWorkerWriteOff || isFinanceReadOnly}
+              title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+              onClick={handleRecordWorkerWriteOff}
+              className="text-xs h-8 bg-amber-700 hover:bg-amber-800 text-white font-semibold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmittingWorkerWriteOff && <Loader2 className="h-3 w-3 animate-spin" />}
+              Record Write-off
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Workers to Batch Modal (Section 0.-10) */}
+      <Dialog open={isAddWorkersModalOpen} onOpenChange={setIsAddWorkersModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+              <Layers className="h-5 w-5 text-emerald-600" />
+              Add Workers to Existing Batch ({activeBatch?.name ? shortRef(activeBatch.name) : "Batch"})
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
+              Select owed workers from <strong>{activeBatch?.contractor_name || activeBatch?.contractor}</strong> ({activeBatch?.destination_country}) in <strong>{activeBatch?.currency}</strong> to add into this invoice batch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-slate-500">
+                Eligible unbatched workers: <strong>{eligibleAddWorkers.length}</strong>
+              </span>
+              <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                Selected: {selectedAddWorkerNames.length} worker(s)
+              </span>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-[#26262f] divide-y divide-slate-100 dark:divide-[#202028]">
+              {isBatchOwedLoading ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-600 mb-2" />
+                  Loading eligible workers...
+                </div>
+              ) : eligibleAddWorkers.length > 0 ? (
+                eligibleAddWorkers.map((w) => {
+                  const commId = w.transaction_name || w.name;
+                  const isSelected = selectedAddWorkerNames.includes(commId);
+                  const candName = getCandidateName(w);
+                  const netAmt =
+                    w.net_amount_original !== undefined
+                      ? Number(w.net_amount_original)
+                      : (Number(w.amount_original ?? w.commission_amount ?? w.amount) || 0) -
+                        (Number(w.write_off_original) || 0);
+
+                  return (
+                    <div
+                      key={commId}
+                      onClick={() => {
+                        setSelectedAddWorkerNames((prev) =>
+                          prev.includes(commId) ? prev.filter((id) => id !== commId) : [...prev, commId]
+                        );
+                      }}
+                      className={cn(
+                        "p-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors text-xs",
+                        isSelected ? "bg-emerald-50/60 dark:bg-emerald-950/20" : "hover:bg-slate-50 dark:hover:bg-[#16161c]"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <button type="button" className="shrink-0">
+                          {isSelected ? (
+                            <CheckSquare className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Square className="h-4 w-4 text-slate-300" />
+                          )}
+                        </button>
+                        <div className="min-w-0 truncate">
+                          <p className="font-semibold text-slate-900 dark:text-white truncate">{candName}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            Ref #{shortRef(commId)} • Departed: {w.departure_date ? new Date(w.departure_date).toLocaleDateString() : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-slate-900 dark:text-white">
+                          {netAmt.toLocaleString()} {w.currency_original || activeBatch?.currency}
+                        </p>
+                        {Number(w.write_off_original || 0) > 0 && (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                            −{Number(w.write_off_original).toLocaleString()} written off
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  No eligible unbatched workers in {activeBatch?.currency} for this agency.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmittingAddWorkers}
+              onClick={() => setIsAddWorkersModalOpen(false)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedAddWorkerNames.length === 0 || isSubmittingAddWorkers || isFinanceReadOnly}
+              title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+              onClick={handleAddWorkersToBatch}
+              className="text-xs h-8 bg-emerald-900 hover:bg-emerald-950 text-white font-semibold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmittingAddWorkers ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Adding Workers...
+                </>
+              ) : (
+                `Add ${selectedAddWorkerNames.length} Worker(s) to Batch`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
