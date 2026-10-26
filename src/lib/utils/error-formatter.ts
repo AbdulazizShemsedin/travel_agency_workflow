@@ -511,11 +511,11 @@ export function formatCleanErrorMessage(rawError: unknown): string {
 
   // 7. Permission & Authorization Errors
   if (
-    /Not permitted|Permission denied|Insufficient permissions|User does not have role|not authorized|403 Forbidden|Forbidden|PermissionError/i.test(
+    /Not permitted|Permission denied|Insufficient permissions|User does not have role|not authorized|403 Forbidden|Forbidden|PermissionError|read-only access/i.test(
       text
     )
   ) {
-    return "You do not have permission to do this. Please contact your administrator.";
+    return "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.";
   }
 
   // 8. Session Expiration & Authentication
@@ -551,9 +551,10 @@ export function formatCleanErrorMessage(rawError: unknown): string {
   if (/Document has been modified after you have opened it|TimestampMismatchError/i.test(text)) {
     return "This record or session was updated concurrently. Please refresh the page or try signing in again.";
   }
-  if (/HTTP 417|status code 417/i.test(text)) {
+  if (/^(?:HTTP\s*417|status code 417)\.?$/i.test(text.trim())) {
     return "Please check the entered information and try again.";
   }
+  text = text.replace(/^(?:HTTP\s*417|status code 417):?\s*/i, "");
   if (/HTTP 422|status code 422/i.test(text)) {
     return "Please check the entered information and try again.";
   }

@@ -60,29 +60,40 @@ export function Step2EducationExperience({
 
   const handleVideoFileSelect = async (file: File) => {
     try {
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (!["mp4", "webm", "mov"].includes(ext)) {
+        toast.error("Unsupported Video Format", {
+          description: "Only MP4, WEBM, and MOV video files are supported.",
+        });
+        return;
+      }
+
+      if (file.size > 500 * 1024 * 1024) {
+        toast.error("Video Too Large", {
+          description: `The video is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The limit is 500 MB.`,
+        });
+        return;
+      }
+
       setIsUploadingVideo(true);
       const activeApplicantName = ((watch("name" as any) || (form.getValues() as any)?.name) || "") as string;
 
-      if (activeApplicantName) {
-        // Direct storage upload per Oct 21 backend requirement
-        const uploadMeta = await startVideoUploadV2(activeApplicantName, file.name, file.size);
-        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-        await finishVideoUploadV2(activeApplicantName, uploadMeta.key);
-        const playUrl = uploadMeta.upload_url.split("?")[0];
-        setValue("video_url" as any, playUrl, { shouldDirty: true });
-        setValue("intro_video" as any, playUrl, { shouldDirty: true });
-        setValue("video" as any, playUrl, { shouldDirty: true });
-        toast.success("Candidate video uploaded successfully via direct storage!");
-      } else {
-        const res = await uploadFileV2(file, false, "Applicant");
-        const url = res.file_url || (res as any).message?.file_url;
-        if (url) {
-          setValue("video_url" as any, url, { shouldDirty: true });
-          setValue("intro_video" as any, url, { shouldDirty: true });
-          setValue("video" as any, url, { shouldDirty: true });
-          toast.success("Candidate video uploaded successfully!");
-        }
+      if (!activeApplicantName) {
+        toast.error("Draft Candidate Record Required", {
+          description: "Please save the candidate draft before uploading a candidate video. Videos up to 500 MB upload directly to applicant storage.",
+        });
+        return;
       }
+
+      // Direct storage upload per Oct 21 backend requirement
+      const uploadMeta = await startVideoUploadV2(activeApplicantName, file.name, file.size);
+      await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+      await finishVideoUploadV2(activeApplicantName, uploadMeta.key);
+      const playUrl = uploadMeta.upload_url.split("?")[0];
+      setValue("video_url" as any, playUrl, { shouldDirty: true });
+      setValue("intro_video" as any, playUrl, { shouldDirty: true });
+      setValue("video" as any, playUrl, { shouldDirty: true });
+      toast.success("Candidate video uploaded successfully via direct storage!");
     } catch (err: any) {
       toast.error("Video upload failed", { description: err?.message || "Could not upload the video. Please check your connection and try again." });
     } finally {

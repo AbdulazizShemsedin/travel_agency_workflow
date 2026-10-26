@@ -92,6 +92,13 @@ export const CANONICAL_V2_ROLES: CanonicalRoleDefinition[] = [
     permissionsSummary: "Full read/write on Applicants, Placements, Clearance Steps, Reports, Staff Accounts, Approvals, and Finance.",
     accessSurface: ["Applicants", "Placements", "Reports", "Approvals", "Finance", "Staff Management"],
   },
+  {
+    name: "Manager",
+    category: "Core & Admin",
+    description: "Senior agency manager overseeing candidate operations, clearances, approvals, exceptions, and reporting.",
+    permissionsSummary: "Full operational read/write across Placements, Clearance Steps, Reports, Approvals, Staff Roster, and Operations.",
+    accessSurface: ["Applicants", "Placements", "Reports", "Approvals", "Clearance Steps", "Operations"],
+  },
 
   // 2. Intake & Registry
   {
@@ -270,12 +277,15 @@ export default function EmployeesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = React.useState<boolean>(false);
   const [employeeToEdit, setEmployeeToEdit] = React.useState<V2EmployeeRecord | null>(null);
   const [editInfoForm, setEditInfoForm] = React.useState({
+    email: "",
     first_name: "",
     last_name: "",
     phone: "",
   });
   const [selectedForRoles, setSelectedForRoles] = React.useState<V2EmployeeRecord | null>(null);
   const [editingRoles, setEditingRoles] = React.useState<string[]>([]);
+  const [roleAccessModes, setRoleAccessModes] = React.useState<Record<string, "read_write" | "read_only">>({});
+  const [addRoleAccessModes, setAddRoleAccessModes] = React.useState<Record<string, "read_write" | "read_only">>({});
   const [selectedForPassword, setSelectedForPassword] = React.useState<V2EmployeeRecord | null>(null);
   const [employeeToDeactivate, setEmployeeToDeactivate] = React.useState<V2EmployeeRecord | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = React.useState<V2EmployeeRecord | null>(null);
@@ -434,13 +444,14 @@ export default function EmployeesPage() {
 
   // Mutation 1.5: Update Employee Profile Info
   const updateInfoMutation = useMutation({
-    mutationFn: (payload: { email: string; first_name: string; last_name?: string; phone?: string }) =>
+    mutationFn: (payload: { email: string; new_email?: string; first_name: string; last_name?: string; phone?: string }) =>
       updateEmployeeInfoV2(payload),
-    onSuccess: (_, variables) => {
+    onSuccess: (res, variables) => {
       queryClient.invalidateQueries({ queryKey: ["v2_employees_directory"] });
       setEmployeeToEdit(null);
+      const displayEmail = res?.email || variables.new_email || variables.email;
       toast.success("Employee profile updated successfully!", {
-        description: `Updated profile details for ${variables.email}.`,
+        description: `Updated profile details for ${displayEmail}.`,
       });
     },
     onError: (err: any) => {
@@ -553,23 +564,52 @@ export default function EmployeesPage() {
   const handleOpenEditEmployee = (emp: V2EmployeeRecord) => {
     setEmployeeToEdit(emp);
     setEditInfoForm({
+      email: emp.email || emp.name,
       first_name: emp.first_name || "",
       last_name: emp.last_name || "",
       phone: emp.phone || emp.mobile_no || "",
     });
   };
 
+  const isDuplicateEditEmail = React.useMemo(() => {
+    if (!employeeToEdit) return false;
+    const currentEmail = employeeToEdit.email.toLowerCase().trim();
+    const typed = editInfoForm.email.toLowerCase().trim();
+    if (!typed || typed === currentEmail) return false;
+    return employees.some(
+      (emp) =>
+        (emp.email.toLowerCase() === typed || emp.name.toLowerCase() === typed) &&
+        emp.email.toLowerCase() !== currentEmail &&
+        emp.name.toLowerCase() !== currentEmail
+    );
+  }, [editInfoForm.email, employeeToEdit, employees]);
+
   const handleOpenEditRoles = (emp: V2EmployeeRecord) => {
     setSelectedForRoles(emp);
+    const accessModes: Record<string, "read_write" | "read_only"> = {};
+    const readOnlySet = new Set((emp.read_only_roles || []).map((r) => r.toLowerCase().trim()));
     const normalized = emp.roles
       .map((r) => {
-        const lower = r.trim().toLowerCase();
-        if (lower === "administrator" || lower === "system manager" || lower === "manager") {
-          return "Admin";
+        const isView = r.endsWith(" (View)");
+        const baseName = isView ? r.replace(" (View)", "").trim() : r.trim();
+        const lower = baseName.toLowerCase();
+        let targetCanonical = baseName;
+        if (lower === "administrator" || lower === "system manager") {
+          targetCanonical = "Admin";
+        } else if (lower === "manager") {
+          targetCanonical = "Manager";
         }
-        return r;
+        if (targetCanonical === "Admin" || targetCanonical === "Manager") {
+          accessModes[targetCanonical] = "read_write";
+        } else if (isView || readOnlySet.has(baseName.toLowerCase())) {
+          accessModes[targetCanonical] = "read_only";
+        } else {
+          accessModes[targetCanonical] = "read_write";
+        }
+        return targetCanonical;
       })
       .filter((r) => r !== "Desk User");
+    setRoleAccessModes(accessModes);
     setEditingRoles(Array.from(new Set(normalized)));
   };
 
@@ -964,9 +1004,14 @@ export default function EmployeesPage() {
                           {displayRoles.length > 0 ? (
                             <>
                               {(expandedRoleEmpIds[emp.name] ? displayRoles : displayRoles.slice(0, 3)).map((role) => {
-                                const isCore = role === "Admin";
-                                const isPipeline = ["Clearance Officer", "Saudi LMIS", "Saudi Taeshir", "Saudi Embassy", "Kuwait LMIS", "Kuwait Telesign", "Kuwait Embassy"].includes(role);
-                                const isFinance = ["Finance Manager", "Complaint Manager", "Communication Manager", "Ticketer"].includes(role);
+                                const isViewSuffix = role.endsWith(" (View)");
+                                const cleanRole = isViewSuffix ? role.replace(" (View)", "").trim() : role.trim();
+                                const isReadOnly = isViewSuffix || (emp.read_only_roles || []).some(
+                                  (ro) => ro.toLowerCase().trim() === cleanRole.toLowerCase().trim()
+                                );
+                                const isCore = cleanRole === "Admin" || cleanRole === "Manager";
+                                const isPipeline = ["Clearance Officer", "Saudi LMIS", "Saudi Taeshir", "Saudi Embassy", "Kuwait LMIS", "Kuwait Telesign", "Kuwait Embassy"].includes(cleanRole);
+                                const isFinance = ["Finance Manager", "Complaint Manager", "Communication Manager", "Ticketer"].includes(cleanRole);
 
                                 return (
                                   <Badge
@@ -974,13 +1019,14 @@ export default function EmployeesPage() {
                                     variant="outline"
                                     className={cn(
                                       "text-[10px] px-1.5 py-0 font-medium",
-                                      isCore && "bg-teal-50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-400 border-teal-200 dark:border-teal-800",
-                                      isPipeline && "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
-                                      isFinance && "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-                                      !isCore && !isPipeline && !isFinance && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+                                      isReadOnly && "border-amber-400 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border-dashed",
+                                      !isReadOnly && isCore && "bg-teal-50 dark:bg-teal-950/30 text-teal-800 dark:text-teal-400 border-teal-200 dark:border-teal-800",
+                                      !isReadOnly && isPipeline && "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+                                      !isReadOnly && isFinance && "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+                                      !isReadOnly && !isCore && !isPipeline && !isFinance && "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800"
                                     )}
                                   >
-                                    {role}
+                                    {cleanRole}{isReadOnly ? " (read only)" : ""}
                                   </Badge>
                                 );
                               })}
@@ -1300,168 +1346,297 @@ export default function EmployeesPage() {
             </div>
           </div>
 
-          {/* Corridor Cards Groups - Compact Bounded Layout without Scrollbar */}
-          <div className="flex-1 min-h-0 flex flex-col justify-start space-y-2 pr-0.5">
-            {/* Group 1: Saudi Corridor Roles */}
-            {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Saudi Corridor") && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">🇸🇦</span>
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
-                    Saudi Arabia Corridor Specialists
-                  </h3>
+          {/* Corridor Cards Groups - Responsive Layout Fitting Desktop Screens */}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+            {/* When All is selected, show Saudi & Kuwait side-by-side on desktop */}
+            {defaultAssignmentGroup === "All" ? (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                {/* Saudi Corridor Roles */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">🇸🇦</span>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                      Saudi Arabia Corridor Specialists
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
+                      const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                      const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                      return (
+                        <div
+                          key={roleConfig.roleName}
+                          className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 flex flex-col justify-between gap-1 shadow-2xs"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate" title={roleConfig.label}>{roleConfig.label}</span>
+                              <Badge variant="outline" className="text-[9px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 shrink-0 px-1 py-0">
+                                {roleConfig.roleName}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate" title={roleConfig.description}>{roleConfig.description}</p>
+                          </div>
+                          <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-[#1e1e24]">
+                            <select
+                              aria-label={`Select default employee for ${roleConfig.roleName}`}
+                              value={configuredEmail}
+                              disabled={!isManagerOrAdmin}
+                              onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                              className="w-full h-6.5 px-1.5 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            >
+                              <option value="">-- Automatic (First with role) --</option>
+                              {employees.map((emp) => {
+                                const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                                const name = emp.full_name || emp.name;
+                                return (
+                                  <option key={emp.name} value={emp.name}>
+                                    {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <div className="text-[9.5px] leading-tight">
+                              {resolved ? (
+                                <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
+                                  Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                                </span>
+                              ) : (
+                                <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
-                  {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
-                    const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
-                    const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
-                    return (
-                      <div
-                        key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[9.5px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 shrink-0 px-1 py-0">
-                              {roleConfig.roleName}
-                            </Badge>
+
+                {/* Kuwait Corridor Roles */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">🇰🇼</span>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                      Kuwait Corridor Specialists
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
+                      const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                      const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                      return (
+                        <div
+                          key={roleConfig.roleName}
+                          className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 flex flex-col justify-between gap-1 shadow-2xs"
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate" title={roleConfig.label}>{roleConfig.label}</span>
+                              <Badge variant="outline" className="text-[9px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400 shrink-0 px-1 py-0">
+                                {roleConfig.roleName}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate" title={roleConfig.description}>{roleConfig.description}</p>
                           </div>
-                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
-                        </div>
-                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
-                          <select
-                            aria-label={`Select default employee for ${roleConfig.roleName}`}
-                            value={configuredEmail}
-                            disabled={!isManagerOrAdmin}
-                            onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
-                          >
-                            <option value="">-- Automatic (First with role) --</option>
-                            {employees.map((emp) => {
-                              const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
-                              const name = emp.full_name || emp.name;
-                              return (
-                                <option key={emp.name} value={emp.name}>
-                                  {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <div className="text-[10px] leading-tight">
-                            {resolved ? (
-                              <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
-                                Will assign: <strong>{resolved.full_name || resolved.name}</strong>
-                              </span>
-                            ) : (
-                              <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
-                            )}
+                          <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-[#1e1e24]">
+                            <select
+                              aria-label={`Select default employee for ${roleConfig.roleName}`}
+                              value={configuredEmail}
+                              disabled={!isManagerOrAdmin}
+                              onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                              className="w-full h-6.5 px-1.5 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            >
+                              <option value="">-- Automatic (First with role) --</option>
+                              {employees.map((emp) => {
+                                const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                                const name = emp.full_name || emp.name;
+                                return (
+                                  <option key={emp.name} value={emp.name}>
+                                    {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <div className="text-[9.5px] leading-tight">
+                              {resolved ? (
+                                <span className="text-blue-700 dark:text-blue-400 font-medium truncate block">
+                                  Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                                </span>
+                              ) : (
+                                <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            )}
-
-            {/* Group 2: Kuwait Corridor Roles */}
-            {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Kuwait Corridor") && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">🇰🇼</span>
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
-                    Kuwait Corridor Specialists
-                  </h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
-                  {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
-                    const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
-                    const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
-                    return (
-                      <div
-                        key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[9.5px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400 shrink-0 px-1 py-0">
-                              {roleConfig.roleName}
-                            </Badge>
-                          </div>
-                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
-                        </div>
-                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
-                          <select
-                            aria-label={`Select default employee for ${roleConfig.roleName}`}
-                            value={configuredEmail}
-                            disabled={!isManagerOrAdmin}
-                            onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+            ) : (
+              <>
+                {/* Specific Group: Saudi Corridor */}
+                {defaultAssignmentGroup === "Saudi Corridor" && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs">🇸🇦</span>
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                        Saudi Arabia Corridor Specialists
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Saudi Corridor").map((roleConfig) => {
+                        const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                        const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                        return (
+                          <div
+                            key={roleConfig.roleName}
+                            className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 flex flex-col justify-between gap-1 shadow-2xs"
                           >
-                            <option value="">-- Automatic (First with role) --</option>
-                            {employees.map((emp) => {
-                              const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
-                              const name = emp.full_name || emp.name;
-                              return (
-                                <option key={emp.name} value={emp.name}>
-                                  {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <div className="text-[10px] leading-tight">
-                            {resolved ? (
-                              <span className="text-blue-700 dark:text-blue-400 font-medium truncate block">
-                                Will assign: <strong>{resolved.full_name || resolved.name}</strong>
-                              </span>
-                            ) : (
-                              <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
-                            )}
+                            <div className="space-y-0.5">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white truncate" title={roleConfig.label}>{roleConfig.label}</span>
+                                <Badge variant="outline" className="text-[9px] font-mono border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-400 shrink-0 px-1 py-0">
+                                  {roleConfig.roleName}
+                                </Badge>
+                              </div>
+                              <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate" title={roleConfig.description}>{roleConfig.description}</p>
+                            </div>
+                            <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-[#1e1e24]">
+                              <select
+                                aria-label={`Select default employee for ${roleConfig.roleName}`}
+                                value={configuredEmail}
+                                disabled={!isManagerOrAdmin}
+                                onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                                className="w-full h-6.5 px-1.5 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                              >
+                                <option value="">-- Automatic (First with role) --</option>
+                                {employees.map((emp) => {
+                                  const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                                  const name = emp.full_name || emp.name;
+                                  return (
+                                    <option key={emp.name} value={emp.name}>
+                                      {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <div className="text-[9.5px] leading-tight">
+                                {resolved ? (
+                                  <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
+                                    Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Specific Group: Kuwait Corridor */}
+                {defaultAssignmentGroup === "Kuwait Corridor" && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs">🇰🇼</span>
+                      <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                        Kuwait Corridor Specialists
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Kuwait Corridor").map((roleConfig) => {
+                        const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
+                        const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
+                        return (
+                          <div
+                            key={roleConfig.roleName}
+                            className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 flex flex-col justify-between gap-1 shadow-2xs"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white truncate" title={roleConfig.label}>{roleConfig.label}</span>
+                                <Badge variant="outline" className="text-[9px] font-mono border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-400 shrink-0 px-1 py-0">
+                                  {roleConfig.roleName}
+                                </Badge>
+                              </div>
+                              <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate" title={roleConfig.description}>{roleConfig.description}</p>
+                            </div>
+                            <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-[#1e1e24]">
+                              <select
+                                aria-label={`Select default employee for ${roleConfig.roleName}`}
+                                value={configuredEmail}
+                                disabled={!isManagerOrAdmin}
+                                onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
+                                className="w-full h-6.5 px-1.5 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                              >
+                                <option value="">-- Automatic (First with role) --</option>
+                                {employees.map((emp) => {
+                                  const hasRole = (emp.roles || []).some((r) => r.toLowerCase().trim() === roleConfig.roleName.toLowerCase().trim());
+                                  const name = emp.full_name || emp.name;
+                                  return (
+                                    <option key={emp.name} value={emp.name}>
+                                      {hasRole ? `⭐ ${name} - Has Role` : `${name}`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <div className="text-[9.5px] leading-tight">
+                                {resolved ? (
+                                  <span className="text-blue-700 dark:text-blue-400 font-medium truncate block">
+                                    Will assign: <strong>{resolved.full_name || resolved.name}</strong>
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 dark:text-amber-400 block">No staff has this role</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* Group 3: Operations & Registry */}
+            {/* Group 3: Operations & Registry (shown when All or Operations is selected) */}
             {(defaultAssignmentGroup === "All" || defaultAssignmentGroup === "Operations & Registry") && (
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm">📋</span>
+                  <span className="text-xs">📋</span>
                   <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
                     Operations & Registry Staff
                   </h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
                   {CORRIDOR_ROLE_DEFINITIONS.filter((r) => r.category === "Operations & Registry").map((roleConfig) => {
                     const configuredEmail = defaultAssignments[roleConfig.roleName] || "";
                     const resolved = resolveDefaultEmployeeForRole(roleConfig.roleName, employees, defaultAssignments);
                     return (
                       <div
                         key={roleConfig.roleName}
-                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 sm:p-2.5 flex flex-col justify-between gap-1 shadow-2xs"
+                        className="rounded-xl border border-slate-200 dark:border-[#24242e] bg-white dark:bg-[#121216] p-2 flex flex-col justify-between gap-1 shadow-2xs"
                       >
                         <div className="space-y-0.5">
                           <div className="flex items-center justify-between gap-1.5">
-                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">{roleConfig.label}</span>
-                            <Badge variant="outline" className="text-[9.5px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300 shrink-0 px-1 py-0">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate" title={roleConfig.label}>{roleConfig.label}</span>
+                            <Badge variant="outline" className="text-[9px] font-mono border-slate-300 text-slate-700 dark:border-zinc-700 dark:text-zinc-300 shrink-0 px-1 py-0">
                               {roleConfig.roleName}
                             </Badge>
                           </div>
-                          <p className="text-[10.5px] text-slate-500 dark:text-zinc-400 line-clamp-1">{roleConfig.description}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate" title={roleConfig.description}>{roleConfig.description}</p>
                         </div>
-                        <div className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-[#1e1e24]">
+                        <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-[#1e1e24]">
                           <select
                             aria-label={`Select default employee for ${roleConfig.roleName}`}
                             value={configuredEmail}
                             disabled={!isManagerOrAdmin}
                             onChange={(e) => handleAssignmentChange(roleConfig.roleName, e.target.value)}
-                            className="w-full h-7 px-2 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
+                            className="w-full h-6.5 px-1.5 text-[11px] rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200"
                           >
                             <option value="">-- Automatic (First with role) --</option>
                             {employees.map((emp) => {
@@ -1474,7 +1649,7 @@ export default function EmployeesPage() {
                               );
                             })}
                           </select>
-                          <div className="text-[10px] leading-tight">
+                          <div className="text-[9.5px] leading-tight">
                             {resolved ? (
                               <span className="text-emerald-800 dark:text-emerald-400 font-medium truncate block">
                                 Will assign: <strong>{resolved.full_name || resolved.name}</strong>
@@ -1540,8 +1715,12 @@ export default function EmployeesPage() {
                 return;
               }
               const { confirmPassword: _, ...empPayload } = addForm;
+              const formattedRoles = addForm.roles.map((r) =>
+                addRoleAccessModes[r] === "read_only" && r !== "Admin" && r !== "Manager" ? `${r} (View)` : r
+              );
               createMutation.mutate({
                 ...empPayload,
+                roles: formattedRoles,
                 email: normalizedEmail,
               });
             }}
@@ -1709,7 +1888,7 @@ export default function EmployeesPage() {
                         onChange={() => handleToggleAddRole(role.name)}
                         className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                       />
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 flex-1">
                         <div className="font-bold flex items-center gap-1.5">
                           {role.name}
                           <span className="text-[9px] font-normal text-slate-400">
@@ -1719,6 +1898,34 @@ export default function EmployeesPage() {
                         <p className="text-[10px] text-slate-500 dark:text-zinc-400 leading-tight">
                           {role.description}
                         </p>
+                        {isSelected && role.name !== "Admin" && role.name !== "Manager" && (
+                          <div className="flex items-center gap-1 pt-1 text-[10px]" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setAddRoleAccessModes((prev) => ({ ...prev, [role.name]: "read_write" }))}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded transition text-[10px]",
+                                (addRoleAccessModes[role.name] || "read_write") === "read_write"
+                                  ? "bg-emerald-700 text-white font-semibold"
+                                  : "bg-slate-200 dark:bg-[#252530] text-slate-600 dark:text-zinc-400"
+                              )}
+                            >
+                              Read & write
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAddRoleAccessModes((prev) => ({ ...prev, [role.name]: "read_only" }))}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded transition text-[10px]",
+                                addRoleAccessModes[role.name] === "read_only"
+                                  ? "bg-amber-600 text-white font-semibold"
+                                  : "bg-slate-200 dark:bg-[#252530] text-slate-600 dark:text-zinc-400"
+                              )}
+                            >
+                              Read only
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </label>
                   );
@@ -1802,8 +2009,19 @@ export default function EmployeesPage() {
                   toast.error("First name is required");
                   return;
                 }
+                const newEmail = editInfoForm.email.trim().toLowerCase();
+                if (!newEmail || !newEmail.includes("@")) {
+                  toast.error("A valid email address is required");
+                  return;
+                }
+                if (isDuplicateEditEmail) {
+                  toast.error(`Email "${newEmail}" is already used by another employee.`);
+                  return;
+                }
+                const currentEmail = employeeToEdit.email.trim().toLowerCase();
                 updateInfoMutation.mutate({
                   email: employeeToEdit.email,
+                  new_email: newEmail !== currentEmail ? newEmail : undefined,
                   first_name: editInfoForm.first_name,
                   last_name: editInfoForm.last_name,
                   phone: editInfoForm.phone,
@@ -1812,15 +2030,36 @@ export default function EmployeesPage() {
               className="space-y-4 py-3"
             >
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                  Email Address (System Identifier)
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                    Email Address (Login Identifier) <span className="text-rose-500">*</span>
+                  </Label>
+                  {isDuplicateEditEmail && (
+                    <span className="text-[10px] text-rose-500 font-medium">Already in use</span>
+                  )}
+                </div>
                 <Input
                   type="email"
-                  value={employeeToEdit.email}
-                  disabled
-                  className="bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-not-allowed text-xs h-9 font-mono"
+                  required
+                  value={editInfoForm.email}
+                  disabled={isFirstAdminAccount(employeeToEdit)}
+                  onChange={(e) => setEditInfoForm((prev) => ({ ...prev, email: e.target.value }))}
+                  className={cn(
+                    "text-xs h-9 font-mono",
+                    isFirstAdminAccount(employeeToEdit) && "bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 cursor-not-allowed",
+                    isDuplicateEditEmail && "border-rose-400 focus-visible:ring-rose-400"
+                  )}
+                  placeholder="employee@agency.et"
                 />
+                {isFirstAdminAccount(employeeToEdit) ? (
+                  <p className="text-[10px] text-slate-400">
+                    Root Administrator login identifier cannot be modified.
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-400">
+                    Changing this updates the user&apos;s login identifier and Frappe user record.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1875,7 +2114,12 @@ export default function EmployeesPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={updateInfoMutation.isPending || !editInfoForm.first_name.trim()}
+                  disabled={
+                    updateInfoMutation.isPending ||
+                    !editInfoForm.first_name.trim() ||
+                    !editInfoForm.email.trim() ||
+                    isDuplicateEditEmail
+                  }
                   className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 shadow-xs"
                 >
                   {updateInfoMutation.isPending ? (
@@ -1884,7 +2128,7 @@ export default function EmployeesPage() {
                       Saving Changes...
                     </>
                   ) : (
-                    "Save Profile"
+                    "Save Changes"
                   )}
                 </Button>
               </DialogFooter>
@@ -1951,7 +2195,7 @@ export default function EmployeesPage() {
                         }}
                         className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                       />
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 flex-1">
                         <div className="font-bold flex items-center gap-1">
                           {role.name}
                           {isSelfAdminProtected && (
@@ -1963,6 +2207,34 @@ export default function EmployeesPage() {
                         <p className="text-[10px] text-slate-500 dark:text-zinc-400 leading-tight font-normal">
                           {role.description}
                         </p>
+                        {isSelected && role.name !== "Admin" && role.name !== "Manager" && (
+                          <div className="flex items-center gap-1 pt-1 text-[10px]" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setRoleAccessModes((prev) => ({ ...prev, [role.name]: "read_write" }))}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded transition text-[10px]",
+                                (roleAccessModes[role.name] || "read_write") === "read_write"
+                                  ? "bg-emerald-700 text-white font-semibold"
+                                  : "bg-slate-200 dark:bg-[#252530] text-slate-600 dark:text-zinc-400"
+                              )}
+                            >
+                              Read & write
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRoleAccessModes((prev) => ({ ...prev, [role.name]: "read_only" }))}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded transition text-[10px]",
+                                roleAccessModes[role.name] === "read_only"
+                                  ? "bg-amber-600 text-white font-semibold"
+                                  : "bg-slate-200 dark:bg-[#252530] text-slate-600 dark:text-zinc-400"
+                              )}
+                            >
+                              Read only
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </label>
                   );
@@ -1982,12 +2254,15 @@ export default function EmployeesPage() {
               <Button
                 type="button"
                 disabled={updateRolesMutation.isPending}
-                onClick={() =>
+                onClick={() => {
+                  const formattedRoles = editingRoles.map((r) =>
+                    roleAccessModes[r] === "read_only" && r !== "Admin" && r !== "Manager" ? `${r} (View)` : r
+                  );
                   updateRolesMutation.mutate({
                     email: selectedForRoles.email,
-                    roles: editingRoles,
-                  })
-                }
+                    roles: formattedRoles,
+                  });
+                }}
                 className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold h-9 shadow-xs"
               >
                 {updateRolesMutation.isPending ? (

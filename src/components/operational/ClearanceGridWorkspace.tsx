@@ -461,7 +461,7 @@ export function ClearanceGridWorkspace({
       )}
 
       {/* Main Excel Grid Table Container */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto lg:overflow-hidden shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto shadow-xs">
         {isColsLoading || isRowsLoading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
             <Loader2 className="h-6 w-6 animate-spin text-emerald-800 dark:text-emerald-400" />

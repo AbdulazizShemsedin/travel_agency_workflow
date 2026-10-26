@@ -477,7 +477,7 @@ export function ContractorRateMatrixModal({
 
           {/* Rates Table */}
           <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-[#22222a] bg-white dark:bg-[#121217]">
-            <div className="overflow-x-auto lg:overflow-hidden">
+            <div className="overflow-x-auto">
               <table className="w-full text-xs text-left lg:table-fixed">
                 <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#202028]">
                   <tr>

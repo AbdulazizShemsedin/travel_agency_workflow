@@ -21,6 +21,7 @@ export interface V2CurrentUserResponse {
   user: string;
   full_name: string;
   roles: string[];
+  read_only_roles?: string[];
   contractor?: string | null;
   is_internal_staff?: boolean;
 }
@@ -113,9 +114,45 @@ export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
     user: data.user,
     full_name: data.full_name || data.user,
     roles: normalizedRoles,
+    read_only_roles: Array.isArray(data.read_only_roles) ? data.read_only_roles : [],
     contractor: data.contractor || null,
     is_internal_staff: typeof data.is_internal_staff === "boolean" ? data.is_internal_staff : undefined,
   };
+}
+
+export interface V2AssignableRole {
+  role: string;
+  can_be_read_only: boolean;
+}
+
+/**
+ * Returns assignable app-specific roles with access mode capabilities.
+ * Authoritative Backend Endpoint: auth_api.get_assignable_roles(with_access=1)
+ */
+export async function getAssignableRolesWithAccessV2(): Promise<V2AssignableRole[]> {
+  const result = await requestV2<any>(
+    "/api/method/agency_tracking.auth_api.get_assignable_roles",
+    {
+      method: "POST",
+      body: { with_access: 1 },
+    }
+  );
+  const payload = (result && "message" in result && (result as any).message) ? (result as any).message : result;
+  if (Array.isArray(payload)) {
+    return payload.map((item: any) => {
+      if (typeof item === "string") {
+        return {
+          role: item,
+          can_be_read_only: !["Manager", "Admin", "Administrator", "System Manager"].includes(item),
+        };
+      }
+      return {
+        role: item.role || item.name || String(item),
+        can_be_read_only: Boolean(item.can_be_read_only),
+      };
+    });
+  }
+  return [];
 }
 
 /**

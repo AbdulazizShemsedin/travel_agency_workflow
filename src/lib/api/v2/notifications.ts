@@ -111,6 +111,7 @@ export interface V2SentNotificationsResponse {
 
 export interface V2LiveAlertItem {
   name: string;
+  alert_key?: string;
   title: string;
   body?: string;
   description?: string;
@@ -210,6 +211,46 @@ export async function getLiveAlertsV2(): Promise<V2LiveAlertsResponse> {
     alerts,
     unread_count,
   };
+}
+
+/**
+ * Marks a list of alerts as read for the signed-in user.
+ * POST /api/method/agency_tracking.notification_api.mark_alerts_read
+ */
+export async function markAlertsReadV2(
+  alertKeys: string[]
+): Promise<{ status: string; updated?: number }> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.notification_api.mark_alerts_read",
+    {
+      method: "POST",
+      body: {
+        alert_keys: alertKeys,
+      },
+    }
+  );
+  return res?.message || res;
+}
+
+/**
+ * Sets the state of a single alert ("Dismissed", "Read", or "Unread") for the signed-in user.
+ * POST /api/method/agency_tracking.notification_api.set_alert_state
+ */
+export async function setAlertStateV2(
+  alertKey: string,
+  state: "Dismissed" | "Read" | "Unread"
+): Promise<{ status: string }> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.notification_api.set_alert_state",
+    {
+      method: "POST",
+      body: {
+        alert_key: alertKey,
+        state,
+      },
+    }
+  );
+  return res?.message || res;
 }
 
 /**

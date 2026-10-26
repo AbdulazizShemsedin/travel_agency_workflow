@@ -914,7 +914,7 @@ export function ApplicantTable() {
 
       {/* Table Container */}
       <div data-tour="applicants-table" className="flex-1 min-h-0 flex flex-col justify-between rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs overflow-hidden">
-        <div className="flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+        <div className="flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto touch-pan-x">
           {/*
             Column order:
             ✓ (checkbox) | No | Name | Passport | Stage Status | Contract Date | Contract No |

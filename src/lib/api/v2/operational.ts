@@ -242,7 +242,7 @@ export async function fetchOperationalWorkspaceDataV2(
         continue;
       }
 
-      if (["lms", "injaz", "wakala", "embassy", "departure"].includes(streamType) && !plc) {
+      if (["lms", "injaz", "wakala", "embassy", "departure"].includes(streamType) && (!plc || plc.status === "Requested" || plc.status === "Cancelled")) {
         continue;
       }
 

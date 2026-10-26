@@ -12,7 +12,7 @@ export default function AgentChatPage() {
       activeContractor={activeContractor}
       onContractorChange={setActiveContractor}
     >
-      <div className="max-w-7xl mx-auto space-y-4">
+      <div className="w-full h-full min-h-0 flex-1 flex flex-col">
         <ChatContainer />
       </div>
     </AgentLayout>

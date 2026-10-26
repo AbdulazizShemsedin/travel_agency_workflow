@@ -295,7 +295,7 @@ export function CandidateDetailModal({
             <div className="rounded-xl border border-slate-100 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-3">
               <span className="text-[11px] font-medium text-slate-500 dark:text-zinc-400">Place of Birth</span>
               <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 truncate">
-                {candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}
+                {candidate.place_of_birth || "—"}
               </p>
             </div>
 

@@ -303,8 +303,8 @@ export default function AgentDiscoveryPage() {
       }
 
       const successToastMsg = replacementFor
-        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}. State advanced to Selected.`
-        : `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved successfully. State advanced to Selected.`;
+        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}. Request sent. Waiting for the agency office to confirm she is available.`
+        : `✓ Request sent for ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""}. Waiting for the agency office to confirm she is available.`;
 
       setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
@@ -318,7 +318,7 @@ export default function AgentDiscoveryPage() {
       setUndoState({
         candidate,
         placementName,
-        message: `Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} reserved. Click Undo within 7 seconds to reverse.`,
+        message: `Request sent for ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""}. Click Undo within 7 seconds to cancel request.`,
       });
       undoTimeoutRef.current = setTimeout(() => {
         setUndoState(null);
@@ -908,7 +908,7 @@ export default function AgentDiscoveryPage() {
               <ShieldCheck className="h-5 w-5" /> Select This Applicant?
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Selecting this applicant reserves them for your agency. They will not be available to other agencies.
+              Selecting this applicant sends a request to the agency office to confirm availability for your agency.
             </DialogDescription>
           </DialogHeader>
 

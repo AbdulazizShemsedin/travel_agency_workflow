@@ -24,6 +24,7 @@ export interface V2EmployeeRecord {
   user_type: string;
   creation: string;
   roles: string[];
+  read_only_roles?: string[];
 }
 
 export interface CreateEmployeePayload {
@@ -43,6 +44,7 @@ export interface UpdateEmployeeRolesPayload {
 
 export interface UpdateEmployeeInfoPayload {
   email: string;
+  new_email?: string;
   first_name: string;
   last_name?: string | null;
   phone?: string | null;
@@ -95,6 +97,7 @@ export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
     user_type: "System User",
     creation: u.creation || "",
     roles: normalizeAndDeduplicateRoles(u.roles),
+    read_only_roles: Array.isArray(u.read_only_roles) ? u.read_only_roles : [],
   }));
 }
 
@@ -239,19 +242,45 @@ export async function deleteEmployeeV2(userEmail: string): Promise<DeleteEmploye
 }
 
 /**
- * Updates an employee's personal profile information (name, phone) on the User record.
- * Uses native frappe.client.set_value RPC per AGENTS.md Rule 7.
+ * Renames an employee user account identifier (email) via native frappe.client.rename_doc RPC.
+ */
+export async function renameEmployeeV2(oldEmail: string, newEmail: string): Promise<string> {
+  const oldDocName = resolveFrappeUserDocName(oldEmail);
+  const newDocName = newEmail.trim().toLowerCase();
+  const res = await requestV2<any>("/api/method/frappe.client.rename_doc", {
+    method: "POST",
+    body: {
+      doctype: "User",
+      old_name: oldDocName,
+      new_name: newDocName,
+      merge: 0,
+    },
+  });
+  return res?.message || newDocName;
+}
+
+/**
+ * Updates an employee's personal profile information (email, name, phone) on the User record.
+ * Handles document renaming if email changes, and uses native frappe.client.set_value RPC per AGENTS.md Rule 7.
  */
 export async function updateEmployeeInfoV2(
   payload: UpdateEmployeeInfoPayload
-): Promise<void> {
-  const email = payload.email.trim().toLowerCase();
+): Promise<{ email: string }> {
+  let targetEmail = payload.email.trim().toLowerCase();
+  const newEmail = payload.new_email?.trim().toLowerCase();
+
+  if (newEmail && newEmail !== targetEmail) {
+    await renameEmployeeV2(targetEmail, newEmail);
+    targetEmail = newEmail;
+  }
+
   await requestV2("/api/method/frappe.client.set_value", {
     method: "POST",
     body: {
       doctype: "User",
-      name: email,
+      name: targetEmail,
       fieldname: {
+        email: targetEmail,
         first_name: payload.first_name.trim(),
         last_name: (payload.last_name || "").trim(),
         phone: (payload.phone || "").trim(),
@@ -259,6 +288,8 @@ export async function updateEmployeeInfoV2(
       },
     },
   });
+
+  return { email: targetEmail };
 }
 
 /**

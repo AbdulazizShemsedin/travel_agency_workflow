@@ -28,8 +28,24 @@ export interface V2AuthUser {
   user: string; // email or username
   full_name: string;
   roles: string[];
+  read_only_roles?: string[];
   contractor?: string | null;
   is_internal_staff?: boolean;
+}
+
+export function isRoleReadOnly(user: V2AuthUser | null | undefined, targetRole: string): boolean {
+  if (!user || !Array.isArray(user.read_only_roles)) return false;
+  const usernameLower = (user.user || "").toLowerCase().trim();
+  if (usernameLower === "administrator") return false;
+  const normRoles = (user.roles || []).map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
+  if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "manager" || r === "administrator")) {
+    return false;
+  }
+  const targetLower = targetRole.trim().toLowerCase();
+  if (targetLower === "admin" || targetLower === "manager" || targetLower === "system manager" || targetLower === "administrator") {
+    return false;
+  }
+  return user.read_only_roles.some((r) => r.trim().toLowerCase() === targetLower);
 }
 
 const ADMIN_OVERRIDE_ROLES = new Set([
@@ -37,6 +53,7 @@ const ADMIN_OVERRIDE_ROLES = new Set([
   "administrator",
   "system manager",
   "agency admin",
+  "manager",
 ]);
 
 /**

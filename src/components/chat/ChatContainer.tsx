@@ -1316,7 +1316,7 @@ export function ChatContainer() {
   const selectedParties = selectedThread ? getThreadParties(selectedThread, messages) : null;
 
   return (
-    <div className="h-[calc(100dvh-56px)] lg:h-[calc(100vh-120px)] w-full min-w-0 max-w-full -m-3 sm:m-0 flex flex-col rounded-none lg:rounded-2xl border-0 lg:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none lg:shadow-sm">
+    <div className="h-[calc(100dvh-56px)] lg:h-full lg:min-h-0 flex-1 w-full min-w-0 max-w-full -m-3 sm:m-0 flex flex-col rounded-none lg:rounded-2xl border-0 lg:border border-slate-200 dark:border-[#272730] bg-white dark:bg-[#101014] overflow-hidden shadow-none lg:shadow-sm">
       {/* ------------------------------------------------------------- */}
       {/* Mobile & Tablet Header (Thread List)                          */}
       {/* ------------------------------------------------------------- */}

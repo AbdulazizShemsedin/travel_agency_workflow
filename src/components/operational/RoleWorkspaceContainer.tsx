@@ -15,12 +15,14 @@ import {
   ClipboardList,
   ArrowLeft,
   HeartPulse,
+  Inbox,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { OperationalStreamType } from "@/types/workspace";
 import { fetchOperationalWorkspaceDataV2 } from "@/lib/api/v2/operational";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
+import { listSelectionRequestsV2 } from "@/lib/api/v2/placements";
 import { FollowUpWorkspace } from "./workspaces/FollowUpWorkspace";
 import { CVWorkspace } from "./workspaces/CVWorkspace";
 import { MedicalWorkspace } from "./workspaces/MedicalWorkspace";
@@ -29,6 +31,7 @@ import { InjazWorkspace } from "./workspaces/InjazWorkspace";
 import { EmbassyWorkspace } from "./workspaces/EmbassyWorkspace";
 import { DepartureWorkspace } from "./workspaces/DepartureWorkspace";
 import { CountryBanRequestsWorkspace } from "./workspaces/CountryBanRequestsWorkspace";
+import { SelectionRequestsWorkspace } from "./workspaces/SelectionRequestsWorkspace";
 import { ApplicantTable } from "@/components/applicant/ApplicantTable";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -63,6 +66,7 @@ export function RoleWorkspaceContainer() {
   const allTabsConfig = [
     { id: "directory", label: "Applicant List", icon: Users, desc: "All Candidates" },
     { id: "follow_up", label: "Follow-up", icon: ClipboardList, desc: "Milestones & Progress" },
+    { id: "selection_requests", label: "Selection Requests", icon: Inbox, desc: "Pending Agency Selections & Unavailable Pool" },
     { id: "cv", label: "CV", icon: FileSpreadsheet, desc: "Candidate Profiles & Bio" },
     { id: "medical", label: "Medical Clearance", icon: HeartPulse, desc: "FIT / UNFIT Determinations" },
     { id: "lms", label: "LMIS Clearance", icon: FileCheck2, desc: "Ministry & COC" },
@@ -93,7 +97,12 @@ export function RoleWorkspaceContainer() {
     const allowed: string[] = ["directory", "follow_up"]; // All internal staff can access the Applicant List directory & Follow-up
     let prefTab = "directory";
 
-    // 0. CV Candidate Table: strictly restricted to user with "cv" role or Admin
+    // 0. Selection Requests: accessible to registrars, managers, and admins
+    if (hasRoleKeyword(["registrar", "manager", "admin", "system manager"])) {
+      allowed.push("selection_requests");
+    }
+
+    // 0.1 CV Candidate Table: strictly restricted to user with "cv" role or Admin
     if (hasRoleKeyword(["cv"])) {
       allowed.push("cv");
       if (prefTab === "directory") prefTab = "cv";
@@ -190,6 +199,15 @@ export function RoleWorkspaceContainer() {
     queryFn: listEmployeeRosterV2,
   });
 
+  // Fetch pending selection requests count for badge
+  const canAccessSelectionRequests = availableTabs.some((t) => t.id === "selection_requests");
+  const { data: selectionRequests = [] } = useQuery({
+    queryKey: ["v2_selection_requests_count"],
+    queryFn: listSelectionRequestsV2,
+    enabled: canAccessSelectionRequests,
+    staleTime: 30000,
+  });
+
   // Fetch live workspace data for active operational stream
   const isOperationalTab = activeTab === "follow_up" || activeTab === "cv" || activeTab === "lms" || activeTab === "injaz" || activeTab === "embassy" || activeTab === "departure";
   const isTabAllowed = availableTabs.some((t) => t.id === activeTab);
@@ -273,6 +291,12 @@ export function RoleWorkspaceContainer() {
         subtitle: "Review and approve country ban exception requests.",
       };
     }
+    if (activeTab === "selection_requests") {
+      return {
+        title: "Selection Requests",
+        subtitle: "Review agency candidate selection requests and manage unavailable pool.",
+      };
+    }
     return {
       title: "Applicants",
       subtitle: "Applicant directory and lifecycle management.",
@@ -340,6 +364,11 @@ export function RoleWorkspaceContainer() {
               >
                 <Icon className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-emerald-700 dark:text-emerald-400" : "text-slate-400")} />
                 <span>{tab.label}</span>
+                {tab.id === "selection_requests" && selectionRequests.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse">
+                    {selectionRequests.length}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -351,6 +380,12 @@ export function RoleWorkspaceContainer() {
       {/* ------------------------------------------------------------- */}
       <div className="flex-1 min-h-0 flex flex-col">
         {activeTab === "directory" && isTabAllowed && <ApplicantTable />}
+
+        {activeTab === "selection_requests" && isTabAllowed && (
+          <div className="w-full h-full min-h-0 flex flex-col">
+            <SelectionRequestsWorkspace onRefreshParent={refetch} />
+          </div>
+        )}
 
         {activeTab === "follow_up" && isTabAllowed && (
           <div data-tour="followup-workspace-table" className="w-full h-full min-h-0 flex flex-col">

@@ -22,6 +22,7 @@ import {
   Square,
   ExternalLink,
   ShieldCheck,
+  ShieldAlert,
   AlertCircle,
   Loader2,
   Building2,
@@ -101,13 +102,17 @@ type CommissionTab =
 
 export default function AdminCommissionPage() {
   const queryClient = useQueryClient();
-  const { roles, user: currentUserName } = useAuth();
-  const userRoles = Array.isArray(roles) ? roles.map(String) : [];
+  const { roles, user: currentUserName, isReadOnly } = useAuth();
+  const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
+  const isAdminOrManager = userRoles.some((r) =>
+    ["administrator", "system manager", "admin", "manager"].includes(r)
+  );
+  const isFinanceReadOnly = !isAdminOrManager && (isReadOnly("Finance Manager") || isReadOnly());
   const isFinanceManagerOrAdmin = userRoles.some((r) =>
-    ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
+    ["administrator", "system manager", "admin", "manager", "finance manager"].includes(r)
   );
   const isAdminUser = userRoles.some((r) =>
-    ["Administrator", "System Manager", "Admin"].includes(r)
+    ["administrator", "system manager", "admin", "manager"].includes(r)
   );
 
   // Birr conversion switch (false on this system)
@@ -659,6 +664,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 1: Create Commission Batch
   const handleCreateBatch = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     if (!selectedContractor) {
       toast.error("Partner Agency Required", {
         description: "Please select a partner agency first.",
@@ -756,6 +767,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 5: Settle Matched Items or Selected Items
   const handleSettleBatchItems = async (itemsToSettle?: string[]) => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     const items = itemsToSettle || selectedItemRowNames;
     if (items.length === 0) {
       toast.error("No Items Selected", {
@@ -787,6 +804,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 5b: Unmark Paid (Undo batch items settlement)
   const handleUnsettleBatchItems = async (itemNames: string[]) => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     if (!itemNames || itemNames.length === 0) return;
     setIsSettlingItems(true);
     try {
@@ -810,6 +833,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 6: Full Batch Settlement
   const handleSettleEntireBatch = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     if (!activeBatch?.name) return;
     if (!settlementReference.trim()) {
       toast.error("Settlement Reference Required", {
@@ -838,6 +867,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 7: Update Batch Advance Amount
   const handleRecordAdvance = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     if (!activeBatch?.name) return;
     const amount = Number(advanceAmountInput);
     if (isNaN(amount) || amount < 0) {
@@ -892,6 +927,12 @@ export default function AdminCommissionPage() {
 
   // ACTION: Write-Off Batch
   const handleWriteOffBatch = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     const batchName = activeBatch?.name || selectedBatchName;
     if (!batchName) {
       toast.error("No Batch Selected", { description: "Please select a commission batch to write off." });
@@ -986,6 +1027,12 @@ export default function AdminCommissionPage() {
 
   // ACTION 9: Save Contractor Batch Configuration
   const handleSaveContractorConfig = async () => {
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access here, or do not have permission to perform this action. Please contact your administrator.",
+      });
+      return;
+    }
     const targetContractor = configContractorName || selectedContractor;
     if (!targetContractor) {
       toast.error("Contractor Required", {
@@ -1043,18 +1090,23 @@ export default function AdminCommissionPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-3.5">
       {/* ------------------------------------------------------------------- */}
       {/* Top Header Bar                                                      */}
       {/* ------------------------------------------------------------------- */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-0.5">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
               Commission Batches & Foreign Agency Settlement
             </h1>
           </div>
-
+          {isFinanceReadOnly && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 mt-2">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>You have read-only access to Commission Batches. Creating batches, recording advances, settling items, and writing off balances are view-only.</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -1123,8 +1175,8 @@ export default function AdminCommissionPage() {
       {/* ------------------------------------------------------------------- */}
       {/* Global Filter & Scope Bar                                           */}
       {/* ------------------------------------------------------------------- */}
-      <div className="p-4 rounded-xl border border-slate-200 dark:border-[#262632] bg-white dark:bg-[#121217] shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+      <div className="p-2.5 sm:p-3 rounded-xl border border-slate-200 dark:border-[#262632] bg-white dark:bg-[#121217] shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
           <div>
             <label className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 block mb-1">
               Partner Agency / Contractor
@@ -1382,9 +1434,10 @@ export default function AdminCommissionPage() {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={filteredOwed.length === 0 || isCreatingBatch}
+                    disabled={filteredOwed.length === 0 || isCreatingBatch || isFinanceReadOnly}
+                    title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                     onClick={() => setIsBatchConfirmOpen(true)}
-                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+                    className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreatingBatch ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1685,8 +1738,8 @@ export default function AdminCommissionPage() {
                 <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center justify-between">
                   <span>Showing <strong>{filteredBatches.length}</strong> batches</span>
                   {selectedBatchName && (
-                    <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
-                      Selected: #{shortRef(selectedBatchName)}
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
+                      Selected: {activeBatch?.title || activeBatch?.contractor_name || "Active Batch"}
                     </span>
                   )}
                 </div>
@@ -1727,10 +1780,10 @@ export default function AdminCommissionPage() {
                     >
                       <div className="flex items-center justify-between gap-1">
                         <span className={cn(
-                          "font-mono font-bold text-xs",
+                          "font-semibold text-xs truncate max-w-[170px]",
                           isCurrentActive ? "text-emerald-900 dark:text-emerald-300" : "text-slate-900 dark:text-white"
                         )}>
-                          #{shortRef(batch.name)}
+                          {batch.title || `${batch.contractor_name || batch.contractor} (${batch.creation ? new Date(batch.creation).toLocaleDateString() : ""})`}
                         </span>
                         <Badge
                           variant="outline"
@@ -1813,7 +1866,7 @@ export default function AdminCommissionPage() {
           </div>
 
           {/* Right Column: Selected Batch Workspace */}
-          <div className="flex-1 w-full space-y-4 min-w-0">
+          <div className="flex-1 w-full space-y-3 min-w-0 lg:max-h-[calc(100vh-175px)] lg:overflow-y-auto pr-1">
             {!activeBatch ? (
               <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                 <CardContent className="py-16 text-center space-y-3">
@@ -1835,22 +1888,22 @@ export default function AdminCommissionPage() {
                       }}
                       className="bg-emerald-900 hover:bg-emerald-950 text-white text-xs h-8 mt-2"
                     >
-                      Select First Batch (#{shortRef(filteredBatches[0].name)})
+                      Select First Batch ({filteredBatches[0].title || filteredBatches[0].contractor_name || filteredBatches[0].contractor})
                     </Button>
                   )}
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* 1. Header & Summary Card */}
                 <Card className="border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/20 dark:bg-emerald-950/10">
-                  <CardHeader className="pb-3 border-b border-emerald-100 dark:border-emerald-900/30">
+                  <CardHeader className="py-2.5 px-3 border-b border-emerald-100 dark:border-emerald-900/30">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
                           <Receipt className="h-4 w-4 text-emerald-600" />
-                          <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
-                            Batch: <span className="font-mono text-emerald-800 dark:text-emerald-400">#{shortRef(activeBatch.name)}</span>
+                          <CardTitle className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                            Batch: <span className="text-emerald-800 dark:text-emerald-400">{activeBatch.title || `${activeBatch.contractor_name || activeBatch.contractor} (${activeBatch.creation ? new Date(activeBatch.creation).toLocaleDateString() : ""})`}</span>
                           </CardTitle>
                           <Badge
                             variant="outline"
@@ -1866,7 +1919,7 @@ export default function AdminCommissionPage() {
                             {activeBatch.status === "Settled" ? "Paid" : activeBatch.status === "Partially Settled" ? "Partly Paid" : "Unpaid"}
                           </Badge>
                         </div>
-                        <CardDescription className="text-xs mt-1">
+                        <CardDescription className="text-[11px] mt-0.5">
                           Contractor: <strong>{activeBatch.contractor_name || activeBatch.contractor}</strong> • Corridor: <strong>{activeBatch.destination_country || selectedCountry}</strong> • Created: <strong>{activeBatch.creation ? new Date(activeBatch.creation).toLocaleDateString() : "—"}</strong>
                         </CardDescription>
                       </div>
@@ -1878,7 +1931,7 @@ export default function AdminCommissionPage() {
                           size="sm"
                           disabled={isDownloadingPdf}
                           onClick={() => handleDownloadInvoicePdf(activeBatch.name)}
-                          className="text-xs h-8 bg-white dark:bg-[#121217]"
+                          className="text-xs h-7.5 bg-white dark:bg-[#121217]"
                         >
                           <Download className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
                           Download Invoice PDF
@@ -1893,7 +1946,7 @@ export default function AdminCommissionPage() {
                               setAdvanceConfirmStep(false);
                               setIsAdvanceModalOpen(true);
                             }}
-                            className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
+                            className="text-xs h-7.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-xs"
                           >
                             <CreditCard className="h-3.5 w-3.5 mr-1.5" />
                             Update Advance
@@ -1913,7 +1966,7 @@ export default function AdminCommissionPage() {
                               setWriteOffAmountInput(String(rem || ""));
                               setIsWriteOffModalOpen(true);
                             }}
-                            className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                            className="h-7.5 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
                           >
                             <AlertTriangle className="h-3.5 w-3.5 mr-1" />
                             Write Off
@@ -1923,7 +1976,7 @@ export default function AdminCommissionPage() {
                     </div>
 
                     {/* Financial Status Summary Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white dark:bg-[#121216] border border-emerald-200/80 dark:border-emerald-900/40 text-xs mt-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 sm:p-2.5 rounded-xl bg-white dark:bg-[#121216] border border-emerald-200/80 dark:border-emerald-900/40 text-xs mt-2">
                       <div>
                         <span className="text-[10px] uppercase font-bold text-slate-400">Total Invoice</span>
                         <p className="font-bold text-slate-900 dark:text-white mt-0.5">
@@ -2026,9 +2079,10 @@ export default function AdminCommissionPage() {
                             <Button
                               type="button"
                               size="sm"
-                              disabled={isSettlingItems}
+                              disabled={isSettlingItems || isFinanceReadOnly}
+                              title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                               onClick={() => handleSettleBatchItems()}
-                              className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white"
+                              className="h-7 text-xs bg-emerald-900 hover:bg-emerald-950 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                               Settle {selectedItemRowNames.length} Selected Items
@@ -2107,10 +2161,10 @@ export default function AdminCommissionPage() {
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          disabled={isSettlingItems}
+                                          disabled={isSettlingItems || isFinanceReadOnly}
+                                          title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                                           onClick={() => handleUnsettleBatchItems([it.name])}
-                                          className="h-6 px-2 text-[11px] text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                                          title="Unmark as Paid (reopen item)"
+                                          className="h-6 px-2 text-[11px] text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                           <RotateCcw className="h-3 w-3 mr-1" />
                                           Unmark Paid
@@ -2120,10 +2174,10 @@ export default function AdminCommissionPage() {
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          disabled={isSettlingItems}
+                                          disabled={isSettlingItems || isFinanceReadOnly}
+                                          title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                                           onClick={() => handleSettleBatchItems([it.name])}
-                                          className="h-6 px-2 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                                          title="Mark this item as Paid"
+                                          className="h-6 px-2 text-[11px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                           <Check className="h-3 w-3 mr-1" />
                                           Mark Paid
@@ -2285,9 +2339,10 @@ export default function AdminCommissionPage() {
                           <Button
                             type="button"
                             size="sm"
-                            disabled={!settlementReference.trim() || isSettlingWholeBatch}
+                            disabled={!settlementReference.trim() || isSettlingWholeBatch || isFinanceReadOnly}
+                            title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                             onClick={() => setIsSettleBatchConfirmOpen(true)}
-                            className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs"
+                            className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isSettlingWholeBatch ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -2304,15 +2359,15 @@ export default function AdminCommissionPage() {
 
                 {/* SECTION 4: Partial Payments & Advances */}
                 {(batchWorkspaceView === "all" || batchWorkspaceView === "partial") && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
                     {/* Advance Updating Card */}
-                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                        <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+                      <CardHeader className="py-2.5 px-3 border-b border-slate-100 dark:border-[#202028]">
+                        <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
                           <CreditCard className="h-4 w-4 text-amber-600" />
                           Update Requested Advance
                         </CardTitle>
-                        <CardDescription className="text-xs text-slate-500">
+                        <CardDescription className="text-[11px] text-slate-500 line-clamp-2">
                           Set requested contractor advance. Pass 0 to clear. Prints as an addition on the batch invoice PDF total.
                         </CardDescription>
                       </CardHeader>
@@ -2386,23 +2441,23 @@ export default function AdminCommissionPage() {
                     </Card>
 
                     {/* Settle Specific Candidate Items Card */}
-                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+                      <CardHeader className="py-2.5 px-3 border-b border-slate-100 dark:border-[#202028]">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                             Settle Specific Candidate Items
                           </CardTitle>
                           {selectedItemRowNames.length > 0 && (
-                            <span className="text-xs font-bold text-emerald-700">
+                            <span className="text-[11px] font-bold text-emerald-700">
                               {selectedItemRowNames.length} selected
                             </span>
                           )}
                         </div>
                       </CardHeader>
 
-                      <CardContent className="p-4 space-y-3 text-xs">
-                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                      <CardContent className="p-3 space-y-2.5 text-xs flex-1 flex flex-col justify-between">
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                           {(activeBatch.items || [])
                             .filter((it: any) => it.status !== "Paid")
                             .map((it: any) => {
@@ -2418,28 +2473,28 @@ export default function AdminCommissionPage() {
                                     )
                                   }
                                   className={cn(
-                                    "p-2 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-colors",
+                                    "p-1.5 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-colors",
                                     isSelected
                                       ? "bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30"
                                       : "border-slate-200 dark:border-[#222228] hover:bg-slate-50"
                                   )}
                                 >
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0">
                                     {isSelected ? (
-                                      <CheckSquare className="h-4 w-4 text-emerald-600" />
+                                      <CheckSquare className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                                     ) : (
-                                      <Square className="h-4 w-4 text-slate-300" />
+                                      <Square className="h-3.5 w-3.5 text-slate-300 shrink-0" />
                                     )}
-                                    <div>
-                                      <p className="font-semibold text-slate-900 dark:text-white">
+                                    <div className="min-w-0 truncate">
+                                      <p className="font-semibold text-slate-900 dark:text-white truncate">
                                         {getCandidateName(it)}
                                       </p>
-                                      <p className="text-[10px] font-mono text-slate-400">
+                                      <p className="text-[10px] font-mono text-slate-400 truncate">
                                         {it.transaction || it.name}
                                       </p>
                                     </div>
                                   </div>
-                                  <span className="font-bold text-slate-800 dark:text-zinc-200">
+                                  <span className="font-bold text-slate-800 dark:text-zinc-200 shrink-0 ml-1">
                                     {it.amount ? `${Number(it.amount).toLocaleString()} ${it.currency || "SAR"}` : "—"}
                                   </span>
                                 </div>
@@ -2447,7 +2502,7 @@ export default function AdminCommissionPage() {
                             })}
 
                           {(activeBatch.items || []).filter((it: any) => it.status !== "Paid").length === 0 && (
-                            <p className="text-center py-6 text-slate-400 text-xs">
+                            <p className="text-center py-5 text-slate-400 text-xs">
                               All items in this batch are already marked as Paid.
                             </p>
                           )}
@@ -2458,7 +2513,7 @@ export default function AdminCommissionPage() {
                           size="sm"
                           disabled={selectedItemRowNames.length === 0 || isSettlingItems}
                           onClick={() => handleSettleBatchItems()}
-                          className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs"
+                          className="w-full h-8 bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs mt-1"
                         >
                           {isSettlingItems ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -2471,18 +2526,19 @@ export default function AdminCommissionPage() {
                     </Card>
 
                     {/* Write-Off Card */}
-                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] lg:col-span-2">
-                      <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                    <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+                      <CardHeader className="py-2.5 px-3 border-b border-slate-100 dark:border-[#202028]">
+                        <div className="flex items-center justify-between flex-wrap gap-1.5">
+                          <CardTitle className="text-xs sm:text-sm font-bold flex items-center gap-1.5 text-slate-900 dark:text-white">
                             <AlertTriangle className="h-4 w-4 text-rose-600" />
-                            Write Off Batch Balance (Bad Debt Discharge)
+                            Write Off Batch Balance
                           </CardTitle>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off"}
+                            disabled={activeBatch.status === "Settled" || activeBatch.status === "Written Off" || isFinanceReadOnly}
+                            title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
                             onClick={() => {
                               const rem =
                                 activeBatch.balance_due_original ??
@@ -2491,47 +2547,53 @@ export default function AdminCommissionPage() {
                               setWriteOffAmountInput(String(rem || ""));
                               setIsWriteOffModalOpen(true);
                             }}
-                            className="h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                            className="h-7 px-2 text-[11px] border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                            <AlertTriangle className="h-3 w-3 mr-1" />
                             Write Off Batch
                           </Button>
                         </div>
                       </CardHeader>
-                      {(activeBatch.write_offs && activeBatch.write_offs.length > 0) && (
-                        <CardContent className="pt-3 space-y-2 text-xs">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
-                            Write-Off History
-                          </div>
-                          {activeBatch.write_offs.map((wo: any, idx: number) => {
-                            const woDate = wo?.write_off_date || wo?.creation || wo?.creation_date;
-                            const woAmt = Number(wo?.amount_original ?? wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0);
-                            const woReason = wo?.reason || wo?.write_off_reason || "Negotiated discount / bad debt write-off";
-                            const woTxn = wo?.transaction || wo?.write_off_transaction;
-                            return (
-                              <div
-                                key={wo?.name || idx}
-                                className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2.5 space-y-0.5"
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">
-                                    {woDate ? new Date(woDate).toLocaleDateString() : "Recorded"}
-                                    {woTxn && (
-                                      <span className="ml-2 font-mono text-[10px] text-slate-400 font-semibold">
-                                        ({shortRef(woTxn)})
-                                      </span>
-                                    )}
-                                  </span>
-                                  <span className="font-mono font-bold text-rose-700 dark:text-rose-400">
-                                    -{woAmt.toLocaleString()} {activeBatch.currency}
-                                  </span>
+                      <CardContent className="p-3 space-y-2 text-xs flex-1 flex flex-col">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                          Write-Off History
+                        </div>
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 flex-1">
+                          {(activeBatch.write_offs && activeBatch.write_offs.length > 0) ? (
+                            activeBatch.write_offs.map((wo: any, idx: number) => {
+                              const woDate = wo?.write_off_date || wo?.creation || wo?.creation_date;
+                              const woAmt = Number(wo?.amount_original ?? wo?.write_off_amount_original ?? wo?.write_off_amount ?? 0);
+                              const woReason = wo?.reason || wo?.write_off_reason || "Negotiated discount / bad debt write-off";
+                              const woTxn = wo?.transaction || wo?.write_off_transaction;
+                              return (
+                                <div
+                                  key={wo?.name || idx}
+                                  className="rounded-lg border border-slate-100 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 space-y-0.5"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-slate-500 dark:text-zinc-400">
+                                      {woDate ? new Date(woDate).toLocaleDateString() : "Recorded"}
+                                      {woTxn && (
+                                        <span className="ml-1.5 font-mono text-[9.5px] text-slate-400 font-semibold">
+                                          ({shortRef(woTxn)})
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="font-mono font-bold text-rose-700 dark:text-rose-400 text-xs">
+                                      -{woAmt.toLocaleString()} {activeBatch.currency}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10.5px] text-slate-600 dark:text-zinc-300 leading-snug">{woReason}</p>
                                 </div>
-                                <p className="text-[11px] text-slate-600 dark:text-zinc-300">{woReason}</p>
-                              </div>
-                            );
-                          })}
-                        </CardContent>
-                      )}
+                              );
+                            })
+                          ) : (
+                            <p className="text-center py-5 text-slate-400 text-xs">
+                              No write-offs recorded for this batch.
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
                     </Card>
                   </div>
                 )}
@@ -2560,7 +2622,8 @@ export default function AdminCommissionPage() {
                 <Button
                   type="button"
                   size="sm"
-                  disabled={isSavingConfig}
+                  disabled={isSavingConfig || isFinanceReadOnly}
+                  title={isFinanceReadOnly ? "Read-only access: configuration modification disabled" : undefined}
                   onClick={handleSaveContractorConfig}
                   className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
                 >
@@ -3037,7 +3100,7 @@ export default function AdminCommissionPage() {
             </div>
 
             <p className="text-[11px] text-slate-500">
-              A Commission Batch Request (CBR-#####) will be created with status <strong>Draft</strong>.
+              A Commission Batch will be created with status <strong>Draft</strong>.
             </p>
           </div>
 

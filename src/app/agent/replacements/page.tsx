@@ -51,6 +51,7 @@ export default function AgencyReplacementsPage() {
   const defaultContractor =
     agencyContext?.contractor?.name || authUser?.contractor || "";
   const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
+  const [activeTab, setActiveTab] = React.useState<"active" | "removed">("active");
   const [searchTerm, setSearchTerm] = React.useState("");
 
   // Waive dialog state
@@ -64,6 +65,12 @@ export default function AgencyReplacementsPage() {
     }
   }, [defaultContractor, activeContractor]);
 
+  React.useEffect(() => {
+    if (!isManagerOrAdmin && activeTab === "removed") {
+      setActiveTab("active");
+    }
+  }, [isManagerOrAdmin, activeTab]);
+
   const effectiveContractor =
     agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
 
@@ -75,8 +82,12 @@ export default function AgencyReplacementsPage() {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["agency-replacements-owed", effectiveContractor],
-    queryFn: () => listReplacementsOwedV2(effectiveContractor || undefined),
+    queryKey: ["agency-replacements-owed", effectiveContractor, activeTab],
+    queryFn: () =>
+      listReplacementsOwedV2(
+        effectiveContractor || undefined,
+        activeTab === "removed" ? 1 : 0
+      ),
     enabled: Boolean(isAgencyUser || effectiveContractor || isManagerOrAdmin),
     retry: false,
   });
@@ -171,6 +182,42 @@ export default function AgencyReplacementsPage() {
           </div>
         </div>
 
+        {/* Tab switcher: Active vs Removed */}
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-[#222227] pb-3">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("active");
+              setReplacementPage(1);
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+              activeTab === "active"
+                ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
+                : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
+            }`}
+          >
+            <Repeat className="h-3.5 w-3.5" />
+            <span>Active Owed</span>
+          </button>
+          {isManagerOrAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("removed");
+                setReplacementPage(1);
+              }}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                activeTab === "removed"
+                  ? "bg-slate-900 text-white dark:bg-zinc-100 dark:text-slate-900 shadow-xs"
+                  : "bg-slate-100 dark:bg-[#18181f] text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-[#22222b]"
+              }`}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              <span>Removed / Waived</span>
+            </button>
+          )}
+        </div>
+
         {/* Search */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 max-w-md">
@@ -185,7 +232,8 @@ export default function AgencyReplacementsPage() {
           </div>
           {replacements.length > 0 && (
             <Badge variant="outline" className="text-xs text-slate-600 dark:text-zinc-300">
-              {filteredItems.length} {filteredItems.length === 1 ? "case" : "cases"} waiting
+              {filteredItems.length} {filteredItems.length === 1 ? "case" : "cases"}{" "}
+              {activeTab === "removed" ? "removed" : "waiting"}
             </Badge>
           )}
         </div>
@@ -208,10 +256,12 @@ export default function AgencyReplacementsPage() {
               <CheckCircle2 className="h-6 w-6" />
             </div>
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
-              No replacements are owed.
+              {activeTab === "removed" ? "No removed replacements." : "No replacements are owed."}
             </h3>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
-              There are currently no departed candidates returned within 90 days requiring a replacement.
+              {activeTab === "removed"
+                ? "There are currently no waived or removed replacement cases on record."
+                : "There are currently no departed candidates returned within 90 days requiring a replacement."}
             </p>
           </div>
         ) : (
@@ -223,9 +273,19 @@ export default function AgencyReplacementsPage() {
                     <th className="px-4 py-3.5">Candidate</th>
                     <th className="px-4 py-3.5">Job</th>
                     <th className="px-4 py-3.5">Sponsor / Employer</th>
-                    <th className="px-4 py-3.5">Departed</th>
-                    <th className="px-4 py-3.5">Returned On</th>
-                    <th className="px-4 py-3.5">Waiting</th>
+                    {activeTab === "active" ? (
+                      <>
+                        <th className="px-4 py-3.5">Departed</th>
+                        <th className="px-4 py-3.5">Returned On</th>
+                        <th className="px-4 py-3.5">Waiting</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-4 py-3.5">Returned On</th>
+                        <th className="px-4 py-3.5">Waived Reason</th>
+                        <th className="px-4 py-3.5">Waived By</th>
+                      </>
+                    )}
                     <th className="px-4 py-3.5 text-right">Action</th>
                   </tr>
                 </thead>
@@ -236,7 +296,7 @@ export default function AgencyReplacementsPage() {
                       <tr
                         key={item.name}
                         className={`hover:bg-slate-50/50 dark:hover:bg-[#17171d]/60 transition-colors ${
-                          isWaived ? "opacity-60 bg-slate-50/40 dark:bg-[#101014]" : ""
+                          isWaived || activeTab === "removed" ? "opacity-75 bg-slate-50/40 dark:bg-[#101014]" : ""
                         }`}
                       >
                         {/* Candidate Identity (Full Name + Passport Number) */}
@@ -261,56 +321,73 @@ export default function AgencyReplacementsPage() {
                           <span>{item.sponsor_name || item.employer_name || "—"}</span>
                         </td>
 
-                        {/* Departed On */}
-                        <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-400 whitespace-nowrap">
-                          {item.departed_on ? item.departed_on.split(" ")[0] : "—"}
-                        </td>
+                        {activeTab === "active" ? (
+                          <>
+                            {/* Departed On */}
+                            <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-400 whitespace-nowrap">
+                              {item.departed_on ? item.departed_on.split(" ")[0] : "—"}
+                            </td>
 
-                        {/* Returned On */}
-                        <td className="px-4 py-3.5 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-rose-600 dark:text-rose-400">
+                            {/* Returned On */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-rose-600 dark:text-rose-400">
+                                  {item.flight_outcome_date || "—"}
+                                </span>
+                                {item.flight_outcome_reason && (
+                                  <span className="text-[10px] text-slate-400 max-w-[180px] truncate" title={item.flight_outcome_reason}>
+                                    {item.flight_outcome_reason}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Days Waiting */}
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <Badge
+                                variant="neutral"
+                                className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px]"
+                              >
+                                <Clock className="mr-1 h-3 w-3" />
+                                {item.days_waiting != null ? `${item.days_waiting} days` : "Pending"}
+                              </Badge>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            {/* Returned On */}
+                            <td className="px-4 py-3.5 whitespace-nowrap text-slate-600 dark:text-zinc-400">
                               {item.flight_outcome_date || "—"}
-                            </span>
-                            {item.flight_outcome_reason && (
-                              <span className="text-[10px] text-slate-400 max-w-[180px] truncate" title={item.flight_outcome_reason}>
-                                {item.flight_outcome_reason}
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                            </td>
 
-                        {/* Days Waiting */}
-                        <td className="px-4 py-3.5 whitespace-nowrap">
-                          <Badge
-                            variant="neutral"
-                            className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px]"
-                          >
-                            <Clock className="mr-1 h-3 w-3" />
-                            {item.days_waiting != null ? `${item.days_waiting} days` : "Pending"}
-                          </Badge>
-                        </td>
+                            {/* Waived Reason */}
+                            <td className="px-4 py-3.5 text-slate-700 dark:text-zinc-300">
+                              <span className="font-medium">{item.replacement_waived_reason || "Waived without reason"}</span>
+                            </td>
+
+                            {/* Waived By */}
+                            <td className="px-4 py-3.5 text-slate-500 dark:text-zinc-400 whitespace-nowrap font-mono text-[11px]">
+                              {item.replacement_waived_by || "Staff"}
+                            </td>
+                          </>
+                        )}
 
                         {/* Actions */}
                         <td className="px-4 py-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
-                            {isWaived ? (
-                              <>
-                                <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-300">
-                                  Waived
-                                </Badge>
-                                {isManagerOrAdmin && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => undoWaiveMutation.mutate(item.name)}
-                                    disabled={undoWaiveMutation.isPending}
-                                    className="h-7 px-2 text-[11px] text-slate-600 dark:text-zinc-300"
-                                  >
-                                    Put Back
-                                  </Button>
-                                )}
-                              </>
+                            {activeTab === "removed" || isWaived ? (
+                              isManagerOrAdmin ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => undoWaiveMutation.mutate(item.name)}
+                                  disabled={undoWaiveMutation.isPending}
+                                  className="h-7 px-2.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                                >
+                                  <Repeat className="mr-1 h-3 w-3" />
+                                  Put Back
+                                </Button>
+                              ) : null
                             ) : (
                               <>
                                 <Link

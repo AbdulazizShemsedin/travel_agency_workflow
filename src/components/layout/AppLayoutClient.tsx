@@ -116,11 +116,7 @@ export function AppLayoutClient({ children }: AppLayoutClientProps) {
           onToggleSidebar={toggleSidebar}
           onMobileMenuToggle={toggleMobileMenu}
         />
-        <main
-          className={`flex-1 min-w-0 w-full max-w-full p-2.5 sm:p-3 lg:p-3 xl:p-3.5 2xl:p-4 animate-in fade-in duration-150 ${
-            isApplicantFormRoute ? "min-h-0 overflow-y-auto" : "lg:overflow-hidden"
-          }`}
-        >
+        <main className="flex-1 min-h-0 min-w-0 w-full max-w-full overflow-y-auto p-2.5 sm:p-3 lg:p-3 xl:p-3.5 2xl:p-4 animate-in fade-in duration-150">
           {children}
         </main>
       </div>

@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 function getFrappeConfig(req: NextRequest) {
   const url =
     process.env.FRAPPE_BASE_URL ||
-    process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://agencytracking-production-4974.up.railway.app";
+    process.env.NEXT_PUBLIC_FRAPPE_URL;
 
   if (!url) {
     return null;
@@ -13,6 +12,10 @@ function getFrappeConfig(req: NextRequest) {
   const userSessionHeaders: Record<string, string> = {
     Accept: "*/*",
   };
+
+  if (url.includes("ngrok")) {
+    userSessionHeaders["ngrok-skip-browser-warning"] = "true";
+  }
 
   const cookie = req.headers.get("cookie");
   const authHeader = req.headers.get("authorization");
@@ -41,15 +44,6 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2): P
       if (attempt < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
       }
-    }
-  }
-
-  if (url.includes("up.railway.app") && !url.includes("travel-agency-workflow-three.vercel.app")) {
-    const fallbackUrl = url.replace(/https:\/\/[^/]+/, "https://travel-agency-workflow-three.vercel.app");
-    try {
-      return await fetch(fallbackUrl, init);
-    } catch {
-      // Fall through to throw lastError
     }
   }
 

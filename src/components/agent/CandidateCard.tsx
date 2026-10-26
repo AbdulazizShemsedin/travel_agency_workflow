@@ -211,7 +211,7 @@ export function CandidateCard({
                   <span className="truncate">
                     Birthplace:{" "}
                     <strong className="text-slate-900 dark:text-white">
-                      {candidate.place_of_birth || candidate.leaving_town || "Ethiopia"}
+                      {candidate.place_of_birth || "—"}
                     </strong>
                   </span>
                 </div>

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { loginUser, logoutUser, getLoggedUser, fetchCurrentUserContext, AuthUser } from "@/lib/api/auth";
 import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction, ROUTE_PERMISSION_MAP } from "@/lib/auth/permissions";
 import { isDemoMode } from "@/lib/config/env";
@@ -13,6 +14,7 @@ interface AuthContextType {
   user: string | null;
   authUser: AuthUser | null;
   roles: string[];
+  read_only_roles: string[];
   agencyContext: AgencyContextResponse | null;
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<AuthUser | null>;
@@ -22,6 +24,7 @@ interface AuthContextType {
   hasAnyRole: (roles: string[]) => boolean;
   hasAllRoles: (roles: string[]) => boolean;
   can: (action: PermissionAction) => boolean;
+  isReadOnly: (role?: string) => boolean;
   demoUserKey?: string;
   switchDemoUser?: (userKey: string) => void;
 }
@@ -30,6 +33,7 @@ const AuthContext = React.createContext<AuthContextType>({
   user: null,
   authUser: null,
   roles: [],
+  read_only_roles: [],
   agencyContext: null,
   isLoading: true,
   login: async () => null,
@@ -39,9 +43,11 @@ const AuthContext = React.createContext<AuthContextType>({
   hasAnyRole: () => false,
   hasAllRoles: () => false,
   can: () => false,
+  isReadOnly: () => false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = React.useState<string | null>(null);
   const [authUser, setAuthUser] = React.useState<AuthUser | null>(null);
   const [agencyContext, setAgencyContext] = React.useState<AgencyContextResponse | null>(null);
@@ -219,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setAuthUser(null);
       setAgencyContext(null);
+      queryClient.clear();
       router.push("/login");
     } finally {
       setIsLoading(false);
@@ -233,6 +240,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userHasAnyRole = React.useCallback((r: string[]) => hasAnyRole(authUser, r), [authUser]);
   const userHasAllRoles = React.useCallback((r: string[]) => hasAllRoles(authUser, r), [authUser]);
   const userCan = React.useCallback((action: PermissionAction) => can(authUser, action), [authUser]);
+  const userIsReadOnly = React.useCallback(
+    (role?: string) => {
+      if (!authUser) return false;
+      const emailLower = (authUser.email || "").toLowerCase().trim();
+      if (emailLower === "administrator") return false;
+      const normRoles = (authUser.roles || []).map((r) => (typeof r === "string" ? r : "").toLowerCase().trim());
+      if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "administrator" || r === "manager")) {
+        return false;
+      }
+      if (role) {
+        const target = role.toLowerCase().trim();
+        if (target === "admin" || target === "manager" || target === "system manager" || target === "administrator") {
+          return false;
+        }
+        const ro = authUser.read_only_roles || [];
+        return ro.some((r) => r.toLowerCase().trim() === target);
+      }
+      return (authUser.read_only_roles || []).length > 0;
+    },
+    [authUser]
+  );
 
   // Prevent protected pages from mounting and triggering unauthenticated API cascades during initialization
   if (isLoading && pathname !== "/login" && !pathname?.startsWith("/login")) {
@@ -252,6 +280,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         authUser,
         roles: authUser?.roles || EMPTY_ROLES,
+        read_only_roles: authUser?.read_only_roles || EMPTY_ROLES,
         agencyContext,
         isLoading,
         login,
@@ -261,6 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasAnyRole: userHasAnyRole,
         hasAllRoles: userHasAllRoles,
         can: userCan,
+        isReadOnly: userIsReadOnly,
         demoUserKey,
         switchDemoUser,
       }}

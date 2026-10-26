@@ -131,46 +131,6 @@ export async function createContractorV2(
     }
   );
 
-  const contractorName = result?.name || payload.contractor_name || payload.company_name;
-  const userEmail = result?.user || payload.user_email || payload.email;
-
-  // Persist telephone & notes on Contractor and phone & mobile_no on User so phone info appears when editing
-  try {
-    const contractorUpdates: Record<string, any> = {};
-    if (payload.phone) contractorUpdates.telephone = payload.phone;
-    if (payload.telephone) contractorUpdates.telephone = payload.telephone;
-    if (payload.notes) contractorUpdates.notes = payload.notes;
-
-    if (contractorName && Object.keys(contractorUpdates).length > 0) {
-      await requestV2("/api/method/frappe.client.set_value", {
-        method: "POST",
-        body: {
-          doctype: "Contractor",
-          name: contractorName,
-          fieldname: contractorUpdates,
-        },
-      });
-    }
-
-    if (userEmail && (payload.phone || payload.whatsapp || payload.contact_person)) {
-      const userUpdates: Record<string, any> = {};
-      if (payload.phone) userUpdates.phone = payload.phone;
-      if (payload.whatsapp) userUpdates.mobile_no = payload.whatsapp;
-      if (payload.contact_person) userUpdates.first_name = payload.contact_person;
-
-      await requestV2("/api/method/frappe.client.set_value", {
-        method: "POST",
-        body: {
-          doctype: "User",
-          name: userEmail,
-          fieldname: userUpdates,
-        },
-      });
-    }
-  } catch (extraErr) {
-    console.warn("[createContractorV2] Warning updating extra contact info:", extraErr);
-  }
-
   return result;
 }
 
@@ -259,7 +219,7 @@ export async function updateContractorBatchConfigV2(
     body.batch_mode = config.batch_mode;
   }
   if (config.batch_threshold !== undefined) {
-    body.batch_threshold = config.batch_threshold;
+    body.batch_threshold = Math.max(1, parseInt(String(config.batch_threshold), 10) || 10);
   }
 
   const res = await requestV2(
@@ -324,7 +284,6 @@ export async function getCommissionRatesV2(
  * Authoritative Backend Endpoint: contractor_api.set_commission_rates
  * Roles: Manager, Admin, Finance Manager, Registrar, System Manager
  * Note: This is a full replacement, not a merge. Always send the complete desired table.
- * Falls back to persisting via frappe.client.save on Contractor DocType if the endpoint is not yet enabled on the server.
  */
 function normalizeRateCurrency(currency: string | undefined, country: string): string {
   const allowed = ["SAR", "KWD", "USD", "ETB", "AED", "QAR"];

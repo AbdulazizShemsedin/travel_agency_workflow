@@ -16,6 +16,7 @@
 import { requestV2 } from "./client";
 
 export type V2PlacementStatus =
+  | "Requested"
   | "Selected"
   | "Processing"
   | "Stamped"
@@ -305,7 +306,7 @@ export async function recordTicketDetailsV2(
         ticket_number: ticketNumber,
         flight_date: flightDate,
         currency: "ETB",
-        ...(ticketCost !== undefined ? { ticket_cost: ticketCost } : {}),
+        ...(ticketCost !== undefined && Number(ticketCost) > 0 ? { ticket_cost: Number(ticketCost) } : {}),
         ...(flightTime !== undefined ? { flight_time: flightTime } : {}),
       },
     }
@@ -689,6 +690,102 @@ export async function setTicketingRemarksV2(
       body: {
         placement_name: placementName,
         remarks,
+      },
+    }
+  );
+}
+
+export interface V2SelectionRequestItem {
+  name: string; // placement internal ID (for API calls; never shown)
+  full_name?: string;
+  passport_number?: string;
+  ref_no?: string;
+  agency_name?: string;
+  destination_country?: string;
+  requested_on?: string;
+  applicant?: string;
+  is_free_replacement?: number | boolean;
+  exchange_for?: string;
+  [key: string]: any;
+}
+
+/**
+ * Lists cases waiting for staff confirmation, oldest first.
+ * Authoritative Backend Endpoint: placement_api.list_selection_requests
+ * Roles: Registrar, Manager, Admin
+ */
+export async function listSelectionRequestsV2(): Promise<V2SelectionRequestItem[]> {
+  const result = await requestV2<V2SelectionRequestItem[] | { message: V2SelectionRequestItem[] }>(
+    "/api/method/agency_tracking.placement_api.list_selection_requests",
+    {
+      method: "POST",
+      body: {},
+    }
+  );
+
+  if (Array.isArray(result)) return result;
+  if (result && Array.isArray((result as any).message)) return (result as any).message;
+  return [];
+}
+
+/**
+ * Confirms candidate selection. The placement status moves to Selected.
+ * Authoritative Backend Endpoint: placement_api.approve_selection_request
+ * Roles: Registrar, Manager, Admin
+ */
+export async function approveSelectionRequestV2(
+  placementName: string,
+  remarks?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.approve_selection_request",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        ...(remarks ? { remarks } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Denies candidate selection. The placement is Cancelled and the candidate leaves every agency's pool.
+ * Authoritative Backend Endpoint: placement_api.deny_selection_request
+ * Roles: Registrar, Manager, Admin
+ */
+export async function denySelectionRequestV2(
+  placementName: string,
+  reason: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.deny_selection_request",
+    {
+      method: "POST",
+      body: {
+        placement_name: placementName,
+        reason,
+      },
+    }
+  );
+}
+
+/**
+ * Puts an unavailable candidate back into the agency pool.
+ * Authoritative Backend Endpoint: placement_api.make_applicant_available
+ * Roles: Registrar, Manager, Admin
+ */
+export async function makeApplicantAvailableV2(
+  applicantName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.placement_api.make_applicant_available",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        ...(reason ? { reason } : {}),
       },
     }
   );

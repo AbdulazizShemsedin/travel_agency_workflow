@@ -586,7 +586,7 @@ export default function CandidateCvPreviewPage() {
                 <tbody>
                   <tr className="border-b border-black">
                     <td className="w-1/4 py-1 px-2 font-bold border-r border-black">Ref No.</td>
-                    <td className="w-1/2 py-1 px-2 font-mono font-bold text-center text-[#002f6c]">{applicant.ref_no || applicant.reference_number || ""}</td>
+                    <td className="w-1/2 py-1 px-2 font-mono font-bold text-center text-[#002f6c]">{applicant.ref_no || "—"}</td>
                     <td className="w-1/4 py-1 px-2 text-right font-arabic border-l border-black" dir="rtl"></td>
                   </tr>
                   <tr className="border-b border-black">

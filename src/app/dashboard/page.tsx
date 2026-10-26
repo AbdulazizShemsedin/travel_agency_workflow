@@ -419,7 +419,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="w-full h-full min-h-0 flex flex-col justify-start gap-2.5 lg:gap-3">
+    <div className="w-full min-h-0 flex flex-col gap-3 lg:gap-3.5 xl:gap-4 pb-2">
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#222227] pb-1.5 shrink-0">
         <div>
@@ -439,25 +439,25 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* 1. Top Stat Metric Cards (Clickable redirection) */}
-      <div data-tour="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-2.5 shrink-0">
+      {/* 1. Top Stat Metric Cards (Clickable redirection) - Largest Tier */}
+      <div data-tour="dashboard-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 lg:gap-3 xl:gap-3.5 shrink-0">
         <Card
           onClick={() => router.push("/applicants")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-3 sm:p-3.5 lg:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[102px] lg:min-h-[112px] xl:min-h-[120px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-xs lg:text-[13px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Total Applicants
             </span>
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <Users className="h-3.5 w-3.5" />
+            <div className="flex h-7.5 w-7.5 lg:h-8.5 lg:w-8.5 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <Users className="h-4 w-4 lg:h-4.5 lg:w-4.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
+          <div className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none pt-1">
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
               totalCount.toLocaleString()
             )}
@@ -468,19 +468,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=In Progress")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-blue-300 dark:hover:border-blue-700 transition-all select-none group p-3 sm:p-3.5 lg:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[102px] lg:min-h-[112px] xl:min-h-[120px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate">
+            <span className="text-xs lg:text-[13px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate">
               In Progress
             </span>
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
-              <Clock className="h-3.5 w-3.5" />
+            <div className="flex h-7.5 w-7.5 lg:h-8.5 lg:w-8.5 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
+              <Clock className="h-4 w-4 lg:h-4.5 lg:w-4.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
+          <div className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none pt-1">
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
               inProgressCount.toLocaleString()
             )}
@@ -491,19 +491,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=Completed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-3 sm:p-3.5 lg:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[102px] lg:min-h-[112px] xl:min-h-[120px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-xs lg:text-[13px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Completed
             </span>
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+            <div className="flex h-7.5 w-7.5 lg:h-8.5 lg:w-8.5 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <CheckCircle2 className="h-4 w-4 lg:h-4.5 lg:w-4.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
+          <div className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none pt-1">
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
               completedCount.toLocaleString()
             )}
@@ -514,19 +514,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/applicants?status=Departed")}
           role="button"
           tabIndex={0}
-          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-2 lg:p-2.5 flex flex-col justify-between h-[68px] lg:h-[72px]"
+          className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl cursor-pointer hover:shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 transition-all select-none group p-3 sm:p-3.5 lg:p-4 flex flex-col justify-between min-h-[92px] sm:min-h-[102px] lg:min-h-[112px] xl:min-h-[120px]"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+            <span className="text-xs lg:text-[13px] font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
               Departed
             </span>
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-              <Plane className="h-3.5 w-3.5" />
+            <div className="flex h-7.5 w-7.5 lg:h-8.5 lg:w-8.5 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+              <Plane className="h-4 w-4 lg:h-4.5 lg:w-4.5" />
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none">
+          <div className="text-2xl sm:text-3xl lg:text-3xl xl:text-4xl font-black text-slate-900 dark:text-white font-mono tracking-tight leading-none pt-1">
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
             ) : (
               departedCount.toLocaleString()
             )}
@@ -534,47 +534,47 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 2. Pipeline Overview Section (Single Compact Row on Desktop) */}
+      {/* 2. Pipeline Overview Section - Bigger than bottom sections, smaller than top 4 stat cards */}
       <Card data-tour="dashboard-pipeline" className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl overflow-hidden shrink-0">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] py-1 px-3 bg-slate-50/50 dark:bg-[#141418]">
-          <span className="text-xs font-bold text-slate-900 dark:text-white">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#222227] py-2 px-3.5 sm:px-4 bg-slate-50/50 dark:bg-[#141418]">
+          <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             Pipeline Overview
           </span>
-          <Link href="/applicants" className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline flex items-center gap-1">
+          <Link href="/applicants" className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 hover:underline flex items-center gap-1">
             View All Directory <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
 
-        <div className="p-1.5 sm:p-2">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 lg:gap-2">
+        <div className="p-2 sm:p-2.5 lg:p-3 xl:p-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 lg:gap-2.5 xl:gap-3">
             {pipelineStages.map((stage) => (
               <div
                 key={stage.step}
                 onClick={() => router.push(stage.link)}
                 role="button"
                 tabIndex={0}
-                className={`rounded-lg border p-1.5 transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between h-[70px] select-none group ${stage.color}`}
+                className={`rounded-lg border p-2 sm:p-2.5 lg:p-3 transition-all hover:shadow-xs cursor-pointer flex flex-col justify-between min-h-[88px] sm:min-h-[92px] lg:min-h-[98px] xl:min-h-[102px] select-none group ${stage.color}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className={`flex h-3.5 w-3.5 items-center justify-center rounded-full text-white text-[8px] font-bold ${stage.accent}`}>
+                  <span className={`flex h-4.5 w-4.5 sm:h-5 sm:w-5 items-center justify-center rounded-full text-white text-[9px] sm:text-[10px] font-bold ${stage.accent}`}>
                     {stage.step}
                   </span>
-                  <span className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-zinc-100 leading-none">
+                  <span className="font-mono text-sm sm:text-base font-bold text-slate-900 dark:text-zinc-100 leading-none">
                     {stage.count}
                   </span>
                 </div>
 
-                <div className="my-auto py-0.5">
-                  <h4 className="text-[10px] sm:text-[11px] font-bold leading-tight text-slate-800 dark:text-zinc-200 truncate">
+                <div className="my-auto py-1">
+                  <h4 className="text-xs xl:text-[12.5px] font-bold leading-tight text-slate-800 dark:text-zinc-200 truncate">
                     {stage.badge}
                   </h4>
-                  <p className="text-[8.5px] font-medium text-slate-500 dark:text-zinc-400 truncate">
+                  <p className="text-[10px] xl:text-[10.5px] font-medium text-slate-500 dark:text-zinc-400 truncate mt-0.5">
                     {stage.title}
                   </p>
                 </div>
 
                 {stage.isParent && stage.subBranches ? (
-                  <div className="grid grid-cols-2 gap-1 pt-0.5 border-t border-emerald-200/80 dark:border-emerald-800/80">
+                  <div className="grid grid-cols-2 gap-1 pt-1 border-t border-emerald-200/80 dark:border-emerald-800/80">
                     {stage.subBranches.map((sub: any) => (
                       <div
                         key={sub.name}
@@ -584,7 +584,7 @@ export default function DashboardPage() {
                             router.push(sub.link);
                           }
                         }}
-                        className={`flex items-center justify-between px-1 py-0.2 rounded text-[8px] font-semibold border ${sub.color}`}
+                        className={`flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] xl:text-[9px] font-semibold border ${sub.color}`}
                       >
                         <span>{sub.name}</span>
                         <span className="font-mono font-bold">{sub.count}</span>
@@ -592,7 +592,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between pt-0.5 border-t border-slate-200/60 dark:border-zinc-800/60 text-[8.5px] text-slate-400 dark:text-zinc-500 font-medium">
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-zinc-800/60 text-[9px] xl:text-[9.5px] text-slate-400 dark:text-zinc-500 font-medium">
                     <span>Candidates</span>
                     <ArrowRight className="h-2.5 w-2.5 text-emerald-700 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                   </div>
@@ -604,10 +604,10 @@ export default function DashboardPage() {
       </Card>
 
       {/* 3. Three-Column Bottom Grid: Expiry Alerts, Action Items, & Recent Applicants */}
-      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 lg:gap-3 items-start">
+      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 lg:gap-3 xl:gap-3.5 items-stretch">
         {/* Panel 1: Document Expiry Warnings */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                 Document Expiry
@@ -647,7 +647,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start gap-2">
+          <CardContent className="p-2.5 sm:p-3 xl:p-3.5 flex flex-col justify-start flex-1 gap-2">
             {paginatedAlerts.length > 0 ? (
               paginatedAlerts.map((alert) => (
                 <div
@@ -685,8 +685,8 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="flex items-center gap-2.5 p-3 rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
-                <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div className="flex items-center gap-3 p-4 my-auto rounded-lg border border-dashed border-slate-200 dark:border-[#26262d] bg-slate-50/50 dark:bg-[#16161b] text-xs text-slate-500 dark:text-zinc-400">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="font-medium text-xs xl:text-sm">All candidate documents are valid.</span>
               </div>
             )}
@@ -694,8 +694,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* Panel 2: Quick Actions (Exact match to Sidebar options) */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                 Quick Actions
@@ -705,18 +705,18 @@ export default function DashboardPage() {
               Navigation
             </span>
           </div>
-          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start">
+          <CardContent className="p-2.5 sm:p-3 xl:p-3.5 flex flex-col justify-start flex-1">
             <div className="grid grid-cols-2 gap-2 sm:gap-2.5 content-start">
-              {sidebarQuickActions.map((item) => {
+              {sidebarQuickActions.slice(0, 4).map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="group flex items-center gap-2 xl:gap-2.5 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-1.5 sm:p-2 xl:p-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
+                    className="group flex items-center gap-2 xl:gap-2.5 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 xl:p-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
                   >
-                    <div className="flex h-7 w-7 xl:h-8 xl:w-8 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
-                      <Icon className="h-3.5 w-3.5 xl:h-4 xl:w-4" />
+                    <div className="flex h-7.5 w-7.5 xl:h-8.5 xl:w-8.5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
+                      <Icon className="h-4 w-4 xl:h-4.5 xl:w-4.5" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs xl:text-[13px] font-bold text-slate-900 dark:text-white truncate leading-tight">{item.label}</p>
@@ -730,8 +730,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* Panel 3: Live Recent Applicants Stream */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between py-1.5 px-3 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                 Recent Applicants
@@ -771,7 +771,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <CardContent className="p-2.5 sm:p-3 flex flex-col justify-start gap-2">
+          <CardContent className="p-2.5 sm:p-3 xl:p-3.5 flex flex-col justify-start flex-1 gap-2">
             {paginatedApplicants.length > 0 ? (
               paginatedApplicants.map((applicant) => (
                 <Link

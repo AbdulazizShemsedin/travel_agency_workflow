@@ -607,7 +607,7 @@ export function OperationalTable<T extends Record<string, any> = any>({
       {/* ------------------------------------------------------------- */}
       {/* Compact Excel-Like Table Body with TanStack Table Rendering   */}
       {/* ------------------------------------------------------------- */}
-      <div className="relative flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto lg:overflow-hidden touch-pan-x">
+      <div className="relative flex-1 min-h-0 w-full max-w-full overflow-x-auto overflow-y-auto touch-pan-x">
         <table className="w-full min-w-0 text-left text-xs border-collapse border border-slate-300 dark:border-[#272730] lg:table-fixed">
           {/* Sticky Header */}
           <thead className="sticky top-0 z-30 text-[10px] xl:text-[11px] font-bold text-slate-700 dark:text-zinc-300 uppercase tracking-wider bg-slate-100 dark:bg-[#181820] border-b border-slate-300 dark:border-[#272730] leading-snug">

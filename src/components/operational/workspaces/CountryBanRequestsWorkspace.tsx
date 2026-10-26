@@ -247,7 +247,7 @@ export function CountryBanRequestsWorkspace({ onRefresh }: CountryBanRequestsWor
       </div>
 
       {/* Requests Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto overflow-y-auto lg:overflow-hidden shadow-xs">
+      <div className="rounded-xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto overflow-y-auto shadow-xs">
         {isLoading ? (
           <div className="py-20 text-center">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-800 dark:text-emerald-400 mb-2" />

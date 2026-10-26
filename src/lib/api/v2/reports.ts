@@ -189,15 +189,53 @@ export interface V2ComplaintAgingSummary {
   [key: string]: any;
 }
 
+export interface V2WorkersByYearParams {
+  basis: "Departed" | "Registered" | "Labour ID Issued" | string;
+  year_type?: "Ethiopian Fiscal" | "Gregorian" | "Ethiopian" | string;
+  year?: number | string;
+  from_date?: string;
+  to_date?: string;
+  period?: "all" | string;
+}
+
+export interface V2WorkersByYearRow {
+  passport_number: string;
+  full_name: string;
+  labor_id?: string;
+  destination_country: string;
+  [key: string]: any;
+}
+
+export interface V2WorkersByYearResponse {
+  title: string;
+  period: string;
+  from_date: string;
+  to_date: string;
+  total: number;
+  rows: V2WorkersByYearRow[];
+  [key: string]: any;
+}
+
+export type V2ReportPeriodInput =
+  | string
+  | { from_date?: string; to_date?: string; period?: string };
+
 function parseDates(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
-): { from_date?: string; to_date?: string } {
+): { from_date?: string; to_date?: string; period?: string } {
   if (typeof fromDate === "object" && fromDate !== null) {
+    if (fromDate.period === "all") {
+      return { period: "all" };
+    }
     return {
       ...(fromDate.from_date ? { from_date: fromDate.from_date } : {}),
       ...(fromDate.to_date ? { to_date: fromDate.to_date } : {}),
+      ...(fromDate.period ? { period: fromDate.period } : {}),
     };
+  }
+  if (fromDate === "all") {
+    return { period: "all" };
   }
   return {
     ...(fromDate ? { from_date: fromDate } : {}),
@@ -209,7 +247,7 @@ function parseDates(
  * CVs created, medicals processed, clearances issued, embassies cleared, tickets booked, departures.
  */
 export async function getDailyWorkReportV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2DailyWorkReport> {
   const dates = parseDates(fromDate, toDate);
@@ -226,7 +264,7 @@ export async function getDailyWorkReportV2(
  * Breakdown of activity per individual staff member.
  */
 export async function getStaffPerformanceReportV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2StaffPerformanceItem[]> {
   const dates = parseDates(fromDate, toDate);
@@ -245,7 +283,7 @@ export async function getStaffPerformanceReportV2(
  * Recruitment funnel, SLA turnaround times, and pending overdue dashboard metrics.
  */
 export async function getOperationsSummaryV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2OperationsSummary> {
   const dates = parseDates(fromDate, toDate);
@@ -280,7 +318,7 @@ export async function getPlacementAgingReportV2(): Promise<V2PlacementAgingRepor
  * Income/expense/commission/refund totals + outstanding/settled (Admin only).
  */
 export async function getFinancialOverviewV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2FinancialOverviewReport> {
   const dates = parseDates(fromDate, toDate);
@@ -297,7 +335,7 @@ export async function getFinancialOverviewV2(
  * Approved transaction totals grouped by destination country (Admin only).
  */
 export async function getCostBreakdownReportV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2CostBreakdownReport> {
   const dates = parseDates(fromDate, toDate);
@@ -314,7 +352,7 @@ export async function getCostBreakdownReportV2(
  * Per-employee net expense + approval/rejection rate (Admin only).
  */
 export async function getEmployeeFinancialReportV2(
-  fromDate?: string | { from_date?: string; to_date?: string },
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<V2EmployeeFinancialItem[]> {
   const dates = parseDates(fromDate, toDate);
@@ -358,14 +396,82 @@ export async function getComplaintAgingReportV2(): Promise<V2ComplaintAgingSumma
 }
 
 /**
+ * Workers by Year report.
+ * Authoritative Backend Endpoint: report_api.get_workers_by_year
+ * Roles: Admin, Manager, Finance Manager
+ */
+export async function getWorkersByYearV2(
+  params: V2WorkersByYearParams
+): Promise<V2WorkersByYearResponse> {
+  const body: Record<string, any> = {
+    basis: params.basis,
+  };
+  if (params.period === "all") {
+    body.period = "all";
+  } else if (params.from_date && params.to_date) {
+    body.from_date = params.from_date;
+    body.to_date = params.to_date;
+  } else {
+    body.year_type = params.year_type || "Ethiopian Fiscal";
+    if (params.year !== undefined && params.year !== null) body.year = params.year;
+  }
+
+  return requestV2<V2WorkersByYearResponse>(
+    "/api/method/agency_tracking.report_api.get_workers_by_year",
+    {
+      method: "POST",
+      body,
+    }
+  );
+}
+
+/**
+ * Exports Workers by Year report as a binary .xlsx or .pdf stream.
+ * Authoritative Backend Endpoint: report_api.export_workers_by_year
+ */
+export async function exportWorkersByYearV2(
+  params: V2WorkersByYearParams,
+  fileFormat: "xlsx" | "pdf" = "xlsx"
+): Promise<Blob> {
+  const body: Record<string, any> = {
+    basis: params.basis,
+    file_format: fileFormat,
+  };
+  if (params.period === "all") {
+    body.period = "all";
+  } else if (params.from_date && params.to_date) {
+    body.from_date = params.from_date;
+    body.to_date = params.to_date;
+  } else {
+    body.year_type = params.year_type || "Ethiopian Fiscal";
+    if (params.year !== undefined && params.year !== null) body.year = params.year;
+  }
+
+  return requestV2<Blob>(
+    "/api/method/agency_tracking.report_api.export_workers_by_year",
+    {
+      method: "POST",
+      body,
+      headers: {
+        Accept:
+          fileFormat === "pdf"
+            ? "application/pdf, application/octet-stream, */*"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/json, */*",
+      },
+    }
+  );
+}
+
+/**
  * Exports commission records as a binary .xlsx / .csv stream.
  */
 export async function exportCommissionsXlsxV2(
   contractor?: string,
   destinationCountry?: string,
-  fromDate?: string,
+  fromDate?: V2ReportPeriodInput,
   toDate?: string
 ): Promise<Blob> {
+  const dates = parseDates(fromDate, toDate);
   return requestV2<Blob>(
     "/api/method/agency_tracking.report_api.export_commissions_xlsx",
     {
@@ -373,8 +479,7 @@ export async function exportCommissionsXlsxV2(
       body: {
         ...(contractor ? { contractor } : {}),
         ...(destinationCountry ? { destination_country: destinationCountry } : {}),
-        ...(fromDate ? { from_date: fromDate } : {}),
-        ...(toDate ? { to_date: toDate } : {}),
+        ...dates,
       },
       headers: {
         Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/json, */*",
@@ -390,6 +495,7 @@ export interface V2ExportTransactionsParams {
   applicant?: string;
   from_date?: string;
   to_date?: string;
+  period?: string;
 }
 
 /**
@@ -400,6 +506,12 @@ export interface V2ExportTransactionsParams {
 export async function exportTransactionsXlsxV2(
   params?: V2ExportTransactionsParams
 ): Promise<Blob> {
+  const dates = params?.period === "all" ? { period: "all" } : {
+    ...(params?.from_date ? { from_date: params.from_date } : {}),
+    ...(params?.to_date ? { to_date: params.to_date } : {}),
+    ...(params?.period ? { period: params.period } : {}),
+  };
+
   return requestV2<Blob>(
     "/api/method/agency_tracking.report_api.export_transactions_xlsx",
     {
@@ -409,8 +521,7 @@ export async function exportTransactionsXlsxV2(
         ...(params?.transaction_type ? { transaction_type: params.transaction_type } : {}),
         ...(params?.placement ? { placement: params.placement } : {}),
         ...(params?.applicant ? { applicant: params.applicant } : {}),
-        ...(params?.from_date ? { from_date: params.from_date } : {}),
-        ...(params?.to_date ? { to_date: params.to_date } : {}),
+        ...dates,
       },
       headers: {
         Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv, application/json, */*",

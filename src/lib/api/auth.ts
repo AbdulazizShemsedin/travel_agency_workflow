@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string;
   full_name?: string;
   roles: string[];
+  read_only_roles?: string[];
   enabled?: boolean;
   is_internal_staff?: boolean;
   contractor?: any | null;
@@ -105,6 +106,7 @@ export async function fetchCurrentUserContext(): Promise<AuthUser | null> {
       email: user.user,
       full_name: user.full_name || user.user,
       roles: rawRoles,
+      read_only_roles: Array.isArray(user.read_only_roles) ? user.read_only_roles : [],
       is_internal_staff: isInternalStaff,
       contractor: contractorObj,
       enabled: true,

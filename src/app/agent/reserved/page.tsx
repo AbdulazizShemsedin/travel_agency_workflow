@@ -288,9 +288,19 @@ export default function MyReservedCandidatesPage() {
                         {/* Reservation Status */}
                         <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                           <div className="flex flex-col items-start gap-1">
-                            <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
-                              ✓ Reserved ({c.status || "Selected"})
-                            </Badge>
+                            {(c as any).request_denied === 1 ? (
+                              <Badge className="bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold">
+                                Unavailable. Please select another candidate.
+                              </Badge>
+                            ) : c.status === "Requested" ? (
+                              <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold">
+                                Waiting for confirmation
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
+                                ✓ Reserved ({c.status || "Selected"})
+                              </Badge>
+                            )}
                             {c.exchange_for && (
                               <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[9px] font-medium">
                                 Exchange for {c.exchange_for}
@@ -347,8 +357,18 @@ export default function MyReservedCandidatesPage() {
                               Details
                             </Button>
 
-                            {/* Contract Upload or View Button */}
-                            {c.contract_file ? (
+                            {/* Contract Upload or View Button or Select Another Candidate */}
+                            {(c as any).request_denied === 1 ? (
+                              <Link href="/agent">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 px-2.5 text-xs font-semibold rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white shadow-2xs whitespace-nowrap"
+                                >
+                                  Select Another
+                                </Button>
+                              </Link>
+                            ) : c.contract_file ? (
                               <a
                                 href={c.contract_file}
                                 target="_blank"

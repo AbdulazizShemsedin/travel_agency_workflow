@@ -1017,12 +1017,13 @@ export function ApplicantRegistrationForm({
       passport_issue_place: data.place_of_issue || "ADDIS ABABA",
       passport_expiry_date: data.passport_expiry || "",
       contract_number: data.contract_number || "",
-      exam_date: data.certified_date || data.exam_date || "",
-      certified_date: data.certified_date || data.exam_date || "",
+      exam_date: data.exam_date || data.certified_date || "",
+      certified_date: data.exam_date || data.certified_date || "",
       coc_status: data.coc_status || "",
       college_certificate: data.college_certificate || "",
       original_id_scan: data.original_id_scan || "",
       labor_id: (data.labor_id || data.labour_id || "").trim() || (existingApplicantId ? "" : undefined),
+      national_id: (data.national_id || "").trim() || (existingApplicantId ? "" : undefined),
     };
 
     // Do not include experience_video in save payloads per Oct 21 backend requirement
@@ -1031,10 +1032,61 @@ export function ApplicantRegistrationForm({
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
   };
 
+  const handleVideoUpload = async (file: File) => {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (!["mp4", "webm", "mov"].includes(ext || "")) {
+      toast.error("Invalid Video Format", {
+        description: "Please upload an MP4, WebM, or MOV video file.",
+      });
+      return;
+    }
+    if (file.size > 500 * 1024 * 1024) {
+      toast.error("Video File Too Large", {
+        description: `File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 500 MB limit for applicant videos.`,
+      });
+      return;
+    }
+    const activeTargetId =
+      draftApplicantId ||
+      existingApplicantId ||
+      (initialData as any)?.name ||
+      (initialData as any)?.applicant_id;
+
+    if (!activeTargetId) {
+      toast.error("Draft Candidate Record Required", {
+        description: "Please save the candidate draft before uploading a candidate video.",
+      });
+      return;
+    }
+
+    setIsUploadingMedia(true);
+    try {
+      const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
+      await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+      await finishVideoUploadV2(activeTargetId, uploadMeta.key);
+      const playUrl = uploadMeta.upload_url.split("?")[0];
+      setValue("video_url", playUrl, { shouldDirty: true });
+      setValue("intro_video" as any, playUrl, { shouldDirty: true });
+      setValue("video" as any, playUrl, { shouldDirty: true });
+      toast.success("Candidate video uploaded successfully via direct storage!");
+    } catch (err: any) {
+      toast.error("Video upload failed", {
+        description: err?.message || "Could not upload the video. Please check your connection and try again.",
+      });
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
   // Upload handler for active media tab
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (activeMediaTab === "video") {
+      await handleVideoUpload(file);
+      return;
+    }
 
     setIsUploadingMedia(true);
     try {
@@ -1044,28 +1096,6 @@ export function ApplicantRegistrationForm({
         existingApplicantId ||
         (initialData as any)?.name ||
         (initialData as any)?.applicant_id;
-
-      if (activeMediaTab === "video") {
-        if (activeTargetId) {
-          const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
-          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-          await finishVideoUploadV2(activeTargetId, uploadMeta.key);
-          const playUrl = uploadMeta.upload_url.split("?")[0];
-          setValue("video_url", playUrl, { shouldDirty: true });
-          setValue("intro_video" as any, playUrl, { shouldDirty: true });
-          setValue("video" as any, playUrl, { shouldDirty: true });
-          toast.success("Video interview uploaded successfully via direct storage!");
-        } else {
-          const res = await uploadFileV2(file, false, "Applicant");
-          const url = (res as any)?.message?.file_url || (res as any)?.file_url;
-          if (!url) throw new Error("Upload succeeded but no file URL returned.");
-          setValue("video_url", url, { shouldDirty: true });
-          setValue("intro_video" as any, url, { shouldDirty: true });
-          setValue("video" as any, url, { shouldDirty: true });
-          toast.success("Video interview uploaded successfully!");
-        }
-        return;
-      }
 
       const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
@@ -1149,8 +1179,21 @@ export function ApplicantRegistrationForm({
       }
     },
     onError: (error: unknown) => {
+      const errorMsg = formatCleanErrorMessage(error);
+      const errLower = errorMsg.toLowerCase();
+      if (errLower.includes("national id") || errLower.includes("national_id")) {
+        setError("national_id", { message: errorMsg });
+        scrollToAndHighlightField("national_id");
+      } else if (errLower.includes("labor id") || errLower.includes("labour id") || errLower.includes("labor_id") || errLower.includes("labour_id")) {
+        setError("labor_id" as any, { message: errorMsg });
+        setError("labour_id" as any, { message: errorMsg });
+        scrollToAndHighlightField("labor_id");
+      } else if (errLower.includes("passport number") || errLower.includes("passport_number") || errLower.includes("passport already")) {
+        setError("passport_number", { message: errorMsg });
+        scrollToAndHighlightField("passport_number");
+      }
       toast.error("Could not save applicant", {
-        description: formatCleanErrorMessage(error),
+        description: errorMsg,
       });
     },
   });
@@ -1198,8 +1241,21 @@ export function ApplicantRegistrationForm({
       }
     },
     onError: (err: unknown) => {
+      const errorMsg = formatCleanErrorMessage(err);
+      const errLower = errorMsg.toLowerCase();
+      if (errLower.includes("national id") || errLower.includes("national_id")) {
+        setError("national_id", { message: errorMsg });
+        scrollToAndHighlightField("national_id");
+      } else if (errLower.includes("labor id") || errLower.includes("labour id") || errLower.includes("labor_id") || errLower.includes("labour_id")) {
+        setError("labor_id" as any, { message: errorMsg });
+        setError("labour_id" as any, { message: errorMsg });
+        scrollToAndHighlightField("labor_id");
+      } else if (errLower.includes("passport number") || errLower.includes("passport_number") || errLower.includes("passport already")) {
+        setError("passport_number", { message: errorMsg });
+        scrollToAndHighlightField("passport_number");
+      }
       toast.error("Failed to save changes", {
-        description: formatCleanErrorMessage(err),
+        description: errorMsg,
       });
     },
   });
@@ -1286,10 +1342,19 @@ export function ApplicantRegistrationForm({
     onError: (err: unknown) => {
       const errorMsg = formatCleanErrorMessage(err);
       const errLower = errorMsg.toLowerCase();
-      if (errLower.includes("passport scan")) scrollToAndHighlightField("passport_scan");
+      if (errLower.includes("national id") || errLower.includes("national_id")) {
+        setError("national_id", { message: errorMsg });
+        scrollToAndHighlightField("national_id");
+      } else if (errLower.includes("labor id") || errLower.includes("labour id") || errLower.includes("labor_id") || errLower.includes("labour_id")) {
+        setError("labor_id" as any, { message: errorMsg });
+        setError("labour_id" as any, { message: errorMsg });
+        scrollToAndHighlightField("labor_id");
+      } else if (errLower.includes("passport number") || errLower.includes("passport_number") || errLower.includes("passport already")) {
+        setError("passport_number", { message: errorMsg });
+        scrollToAndHighlightField("passport_number");
+      } else if (errLower.includes("passport scan")) scrollToAndHighlightField("passport_scan");
       else if (errLower.includes("photograph") || errLower.includes("photo")) scrollToAndHighlightField("photograph");
       else if (errLower.includes("phone")) scrollToAndHighlightField("phone_number");
-      else if (errLower.includes("passport number") || errLower.includes("passport")) scrollToAndHighlightField("passport_number");
       else if (errLower.includes("place of birth")) scrollToAndHighlightField("place_of_birth");
       else if (errLower.includes("birth")) scrollToAndHighlightField("date_of_birth");
       else if (errLower.includes("city")) scrollToAndHighlightField("city");
@@ -1298,8 +1363,6 @@ export function ApplicantRegistrationForm({
       else if (errLower.includes("salary")) scrollToAndHighlightField("salary_amount");
       else if (errLower.includes("medical expiry") || errLower.includes("medical expiration")) scrollToAndHighlightField("medical_expiry_date");
       else if (errLower.includes("medical")) scrollToAndHighlightField("medical_status");
-      else if (errLower.includes("national id")) scrollToAndHighlightField("national_id");
-      else if (errLower.includes("labor id") || errLower.includes("labour id")) scrollToAndHighlightField("labor_id");
       else if (errLower.includes("leaving town")) scrollToAndHighlightField("leaving_town");
       else if (errLower.includes("job") || errLower.includes("occupation")) scrollToAndHighlightField("job_applied");
       else if (errLower.includes("education") || errLower.includes("qualification")) scrollToAndHighlightField("qualification");
@@ -1773,22 +1836,26 @@ export function ApplicantRegistrationForm({
             onFileSelect={async (file) => {
               if (activeMediaTab === "passport") {
                 handlePassportAutoScan(file);
+              } else if (activeMediaTab === "video") {
+                await handleVideoUpload(file);
               } else {
                 try {
                   setIsUploadingMedia(true);
-                  const res = await uploadFileV2(file, false, "Applicant");
+                  const isPrivate = false;
+                  const activeTargetId =
+                    draftApplicantId ||
+                    existingApplicantId ||
+                    (initialData as any)?.name ||
+                    (initialData as any)?.applicant_id;
+                  const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
                   const url = res.file_url || (res as any).message?.file_url;
                   if (url) {
                     if (activeMediaTab === "photo") {
-                      setValue("photograph", url);
-                      setValue("photo_passport", url);
-                      setValue("profile_photo_url", url);
+                      setValue("photograph", url, { shouldDirty: true });
+                      setValue("photo_passport", url, { shouldDirty: true });
+                      setValue("profile_photo_url", url, { shouldDirty: true });
                     } else if (activeMediaTab === "full_size") {
-                      setValue("photo_full_body", url);
-                    } else if (activeMediaTab === "video") {
-                      setValue("video_url", url, { shouldDirty: true });
-                      setValue("intro_video" as any, url, { shouldDirty: true });
-                      setValue("video" as any, url, { shouldDirty: true });
+                      setValue("photo_full_body", url, { shouldDirty: true });
                     }
                     toast.success("File uploaded successfully");
                   }
@@ -3141,9 +3208,9 @@ export function ApplicantRegistrationForm({
           </div>
         </div>
 
-        {/* Optional Labour ID immediately following Medical Status and Medical Date */}
+        {/* Optional Labour ID, COC Status, and COC Exam Date immediately following Medical Status and Medical Date */}
         <div className="pt-2.5 border-t border-slate-200/60 dark:border-[#26262d]/60">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <div className="space-y-1" id="field-labor_id">
               <div className="flex items-center justify-between">
                 <Label htmlFor="field_input_labor_id" className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
@@ -3163,6 +3230,54 @@ export function ApplicantRegistrationForm({
               />
               {errors.labor_id && (
                 <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.labor_id.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1" id="field-coc_status">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="field_select_coc_status" className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                  COC Status <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {!isFormReadOnly && renderClearBtn("coc_status")}
+              </div>
+              <select
+                id="field_select_coc_status"
+                disabled={isFormReadOnly}
+                {...register("coc_status")}
+                className={cn(
+                  "select-styled w-full h-8 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-2.5 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                  getFieldClass("coc_status")
+                )}
+              >
+                <option value="">Select COC Status (Optional)...</option>
+                <option value="Not Started">Not Started</option>
+                <option value="Pending">Pending</option>
+                <option value="Issued">Issued</option>
+              </select>
+              {errors.coc_status && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.coc_status.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1" id="field-exam_date">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="field_input_exam_date" className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
+                  COC Exam Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {!isFormReadOnly && renderClearBtn("exam_date")}
+              </div>
+              <Input
+                id="field_input_exam_date"
+                type="date"
+                disabled={isFormReadOnly}
+                {...register("exam_date")}
+                className={cn(
+                  "text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("exam_date")
+                )}
+              />
+              {errors.exam_date && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.exam_date.message}</p>
               )}
             </div>
           </div>

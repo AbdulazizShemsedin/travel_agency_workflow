@@ -382,11 +382,28 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.phone_number = phoneVal;
   }
 
-  // 9. Labor ID
+  // 9. Labor ID & National ID
   const laborIdVal = result.labor_id || result.labour_id;
   if (laborIdVal) {
-    result.labor_id = laborIdVal;
-    result.labour_id = laborIdVal;
+    const cleanLabor = String(laborIdVal).trim();
+    result.labor_id = cleanLabor;
+    result.labour_id = cleanLabor;
+  }
+  if (result.national_id !== undefined && result.national_id !== null) {
+    result.national_id = String(result.national_id).trim();
+  }
+
+  // 9.1 COC Status & Exam Date
+  const examDateVal = result.exam_date || result.certified_date;
+  if (examDateVal) {
+    const cleanDate = String(examDateVal).trim();
+    result.exam_date = cleanDate;
+    result.certified_date = cleanDate;
+  }
+  if (result.coc_status !== undefined && result.coc_status !== null) {
+    let coc = String(result.coc_status).trim();
+    if (coc === "Passed") coc = "Issued";
+    result.coc_status = coc;
   }
 
   // 10. Emergency Contact Person, Phone & Relationship Aliasing
@@ -453,6 +470,12 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   }
   if (result.medical_issue_date === "" || result.medical_issue_date === null) {
     delete result.medical_issue_date;
+  }
+  if (result.exam_date === "" || result.exam_date === null) {
+    delete result.exam_date;
+  }
+  if (result.certified_date === "" || result.certified_date === null) {
+    delete result.certified_date;
   }
 
   return result as T;
@@ -1259,6 +1282,25 @@ export async function getApplicantMediaUrlV2(
   applicantName: string,
   kind: string = "experience_video"
 ): Promise<{ url: string; expires_in?: number; [key: string]: any }> {
+  try {
+    const res = await requestV2<any>(
+      "/api/method/agency_tracking.applicant_api.get_applicant_media_url",
+      {
+        method: "POST",
+        body: {
+          applicant_name: applicantName,
+          kind,
+        },
+      }
+    );
+    const payload = res?.message || res;
+    if (payload?.url) {
+      return payload;
+    }
+  } catch (err: any) {
+    console.warn("[getApplicantMediaUrlV2] Backend media URL call failed, falling back to static property:", err?.message || err);
+  }
+
   try {
     const applicant = await getApplicantV2(applicantName);
     const mediaUrl =

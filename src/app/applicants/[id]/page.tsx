@@ -17,7 +17,7 @@ import {
   Eye,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
-import { restartApplicantV2, cancelApplicantV2 } from "@/lib/api/v2/applicants";
+import { restartApplicantV2, cancelApplicantV2, getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { Card } from "@/components/ui/card";
@@ -224,6 +224,22 @@ export default function ApplicantDetailPage() {
 
   // Video Modal State
   const [isVideoModalOpen, setIsVideoModalOpen] = React.useState(false);
+
+  const {
+    data: mediaUrlData,
+    isLoading: isMediaLoading,
+    refetch: refetchMediaUrl,
+  } = useQuery({
+    queryKey: ["applicant-media-url", applicant?.name, "experience_video"],
+    queryFn: async () => {
+      if (!applicant?.name) return null;
+      return await getApplicantMediaUrlV2(applicant.name, "experience_video");
+    },
+    enabled: Boolean(isVideoModalOpen && applicant?.name && candidateVideoUrl),
+    staleTime: 1000 * 60 * 90, // 90 min (backend signed URL expires in 2 hours)
+  });
+
+  const activeVideoPlayUrl = mediaUrlData?.url || candidateVideoUrl;
 
   // Restart / Resume Modal State
   const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
@@ -694,15 +710,31 @@ export default function ApplicantDetailPage() {
               </DialogTitle>
             </div>
           </DialogHeader>
-          <div className="p-2 sm:p-4 flex items-center justify-center bg-black">
-            <video
-              src={candidateVideoUrl}
-              controls
-              autoPlay
-              playsInline
-              preload="metadata"
-              className="w-full max-h-[500px] object-contain bg-black rounded-lg"
-            />
+          <div className="p-2 sm:p-4 flex items-center justify-center bg-black min-h-[300px]">
+            {isMediaLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+                <span className="ml-2 text-xs text-slate-300">Loading secure video stream...</span>
+              </div>
+            ) : activeVideoPlayUrl ? (
+              <video
+                key={activeVideoPlayUrl}
+                src={activeVideoPlayUrl}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                onError={() => {
+                  toast.error("Video stream expired or failed to load. Refreshing authorization...");
+                  refetchMediaUrl();
+                }}
+                className="w-full max-h-[500px] object-contain bg-black rounded-lg"
+              />
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-400">
+                No video file is available for this applicant.
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

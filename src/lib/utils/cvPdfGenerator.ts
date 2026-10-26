@@ -63,7 +63,7 @@ export async function generateApplicantCvPdf(applicant: Record<string, any>): Pr
     color: rgb(1, 1, 1),
   });
 
-  page.drawText(applicant.ref_no || applicant.reference_number ? `REF: ${applicant.ref_no || applicant.reference_number}` : "", {
+  page.drawText(applicant.ref_no ? `REF: ${applicant.ref_no}` : "", {
     x: width - 170,
     y: height - 60,
     size: 9,

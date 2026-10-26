@@ -64,6 +64,8 @@ import {
   getEmployeeFinancialReportV2,
   exportCommissionsXlsxV2,
   exportTransactionsXlsxV2,
+  getWorkersByYearV2,
+  exportWorkersByYearV2,
   V2OperationsSummary,
   V2DailyWorkReport,
   V2StaffPerformanceItem,
@@ -72,7 +74,10 @@ import {
   V2FinancialOverviewReport,
   V2CostBreakdownReport,
   V2EmployeeFinancialItem,
+  V2WorkersByYearResponse,
+  V2WorkersByYearRow,
 } from "@/lib/api/v2/reports";
+import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import {
   listUnresolvedComplaintsV2,
@@ -83,25 +88,66 @@ import {
   listTransactionsV2,
   V2TransactionRecord,
 } from "@/lib/api/v2/finance";
+import {
+  listPlacementsV2,
+  V2PlacementRecord,
+} from "@/lib/api/v2/placements";
+import {
+  listMyClearanceStepsV2,
+  V2ClearanceStepItem,
+} from "@/lib/api/v2/clearance";
 import { useBirrConversion } from "@/components/finance/useBirrConversion";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { shortRef, stripRecordIds } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
-type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions";
+type ReportTab = "operations" | "daily_work" | "aging" | "financial" | "transactions" | "workers_by_year";
 
 const FUNNEL_COLORS = [
   "#94a3b8", // Draft
   "#3b82f6", // Registered
   "#0ea5e9", // CV Generated
   "#8b5cf6", // Selected
-  "#6366f1", // Processing
+  "#f59e0b", // LMIS
+  "#06b6d4", // Taeshir
   "#10b981", // Stamped
-  "#059669", // Ticketed
-  "#047857", // Departed
+  "#6366f1", // Ticketed
+  "#059669", // Departed
 ];
 
 export const SYSTEM_INCEPTION_DATE = "2026-01-01";
+
+/**
+ * Computes current year dynamically according to calendar semantics:
+ * - Gregorian: calendar year (e.g. 2026)
+ * - Ethiopian Fiscal: begins Hamle 1 (July 8). For year Y: on/after July 8 -> Y - 7 (e.g. 2019 in Oct 2026); before -> Y - 8.
+ * - Ethiopian: begins Meskerem 1 (Sept 11). For year Y: on/after Sept 11 -> Y - 7 (e.g. 2019 in Oct 2026); before -> Y - 8.
+ */
+export function getCurrentYearForType(
+  yearType: "Ethiopian Fiscal" | "Gregorian" | "Ethiopian",
+  date: Date = new Date()
+): number {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0 = Jan, 6 = Jul, 8 = Sep, 11 = Dec
+  const day = date.getDate();
+
+  if (yearType === "Gregorian") {
+    return year;
+  }
+  if (yearType === "Ethiopian Fiscal") {
+    if (month > 6 || (month === 6 && day >= 8)) {
+      return year - 7;
+    }
+    return year - 8;
+  }
+  if (yearType === "Ethiopian") {
+    if (month > 8 || (month === 8 && day >= 11)) {
+      return year - 7;
+    }
+    return year - 8;
+  }
+  return year;
+}
 
 export default function ReportsPage() {
   const { authUser, roles, can } = useAuth();
@@ -126,7 +172,7 @@ export default function ReportsPage() {
 
   // All hooks must come before any conditional returns - tab determination based on authoritative RBAC
   const [activeTab, setActiveTab] = React.useState<ReportTab>(() => {
-    return isManagerOrAdmin ? "operations" : "transactions";
+    return (isManagerOrAdmin || isAdminOrFinance) ? "workers_by_year" : "transactions";
   });
 
   const [activePeriod, setActivePeriod] = React.useState<"daily" | "weekly" | "monthly" | "yearly" | "all" | "custom">("yearly");
@@ -158,7 +204,9 @@ export default function ReportsPage() {
     } else if (preset === "yearly") {
       setFromDate(`${today.getFullYear()}-01-01`);
     } else if (preset === "all") {
-      setFromDate(SYSTEM_INCEPTION_DATE);
+      // Backend contract: period "all" counts everything up to today without hardcoded dates
+      setFromDate("");
+      setToDate("");
     } else {
       setFromDate(SYSTEM_INCEPTION_DATE);
     }
@@ -176,14 +224,22 @@ export default function ReportsPage() {
 
   // If user does not have Manager/Admin privileges and is on a manager tab, redirect to transactions
   React.useEffect(() => {
-    if (userRoles.length > 0 && !isManagerOrAdmin) {
-      if (["operations", "daily_work", "aging"].includes(activeTab)) {
+    if (userRoles.length > 0) {
+      if (!isManagerOrAdmin && ["operations", "daily_work", "aging"].includes(activeTab)) {
+        setActiveTab("transactions");
+      }
+      if (!isManagerOrAdmin && !isAdminOrFinance && activeTab === "workers_by_year") {
         setActiveTab("transactions");
       }
     }
-  }, [isManagerOrAdmin, userRoles.length, activeTab]);
+  }, [isManagerOrAdmin, isAdminOrFinance, userRoles.length, activeTab]);
 
-  const dateParams = React.useMemo(() => ({ from_date: fromDate, to_date: toDate }), [fromDate, toDate]);
+  const dateParams = React.useMemo(() => {
+    if (activePeriod === "all") {
+      return { period: "all" as const };
+    }
+    return { from_date: fromDate, to_date: toDate };
+  }, [activePeriod, fromDate, toDate]);
 
   // 1. Operations Summary & Funnel (Manager & Admin only)
   const {
@@ -303,6 +359,50 @@ export default function ReportsPage() {
 
     return [];
   }, [activeComplaints, complaintAging]);
+
+  // Query all placements to enrich placement aging table with Candidate, Corridor, Foreign Agency, and Sponsor
+  const {
+    data: allPlacements = [],
+  } = useQuery<V2PlacementRecord[]>({
+    queryKey: ["report_all_placements"],
+    queryFn: () => listPlacementsV2(undefined, 250),
+    enabled: Boolean(isManagerOrAdmin && (activeTab === "operations" || activeTab === "aging")),
+    staleTime: 60000,
+  });
+
+  // Query clearance steps to break down Processing into LMIS and Taeshir on the pipeline funnel graph
+  const {
+    data: allClearanceSteps = [],
+  } = useQuery<V2ClearanceStepItem[]>({
+    queryKey: ["report_all_clearance_steps"],
+    queryFn: () => listMyClearanceStepsV2(),
+    enabled: Boolean(isManagerOrAdmin && activeTab === "operations"),
+    staleTime: 60000,
+  });
+
+  const placementsMap = React.useMemo(() => {
+    const map = new Map<string, V2PlacementRecord>();
+    allPlacements.forEach((p) => {
+      if (p.name) map.set(p.name, p);
+    });
+    return map;
+  }, [allPlacements]);
+
+  const criticalPlacementsEnriched = React.useMemo(() => {
+    const rawList = placementAging?.critical_not_departed || [];
+    return rawList.map((row) => {
+      const p = placementsMap.get(row.name);
+      return {
+        name: row.name,
+        candidate_name: p?.full_name || row.full_name || p?.applicant || row.applicant || "—",
+        corridor: p?.destination_country || row.destination_country || "—",
+        contractor_name: p?.contractor_name || p?.contractor || row.contractor || "—",
+        sponsor: p?.employer_name || p?.sponsor_name || (p as any)?.sponsor || "—",
+        status: row.status || p?.status || "Processing",
+        age_days: row.age_days ?? 0,
+      };
+    });
+  }, [placementAging, placementsMap]);
 
   // 6. Financial Overview (Admin & Finance Manager - Authoritative Backend Aggregates)
   const {
@@ -470,8 +570,13 @@ export default function ReportsPage() {
   const handleExportXlsx = async () => {
     setIsExportingXlsx(true);
     try {
-      const blob = await exportCommissionsXlsxV2(undefined, undefined, fromDate, toDate);
-      const fallback = `Commissions_Export_${fromDate}_to_${toDate}`;
+      const blob = await exportCommissionsXlsxV2(
+        undefined,
+        undefined,
+        activePeriod === "all" ? { period: "all" } : fromDate,
+        activePeriod === "all" ? undefined : toDate
+      );
+      const fallback = activePeriod === "all" ? "Commissions_Export_All_Time" : `Commissions_Export_${fromDate}_to_${toDate}`;
       const res = await downloadBackendSpreadsheet(blob, fallback);
       toast.success("Spreadsheet Downloaded", {
         description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
@@ -490,11 +595,10 @@ export default function ReportsPage() {
     setIsExportingTransactionsXlsx(true);
     try {
       const blob = await exportTransactionsXlsxV2({
-        from_date: fromDate,
-        to_date: toDate,
+        ...(activePeriod === "all" ? { period: "all" } : { from_date: fromDate, to_date: toDate }),
         status: statusFilter,
       });
-      const fallback = `Transactions_Export_${statusFilter || "All"}_${fromDate}_to_${toDate}`;
+      const fallback = activePeriod === "all" ? `Transactions_Export_${statusFilter || "All"}_All_Time` : `Transactions_Export_${statusFilter || "All"}_${fromDate}_to_${toDate}`;
       const res = await downloadBackendSpreadsheet(blob, fallback);
       toast.success("Transactions Spreadsheet Downloaded", {
         description: `Exported as ${res.filename} (${res.format.toUpperCase()}).`,
@@ -508,21 +612,144 @@ export default function ReportsPage() {
     }
   };
 
-  // Funnel Data Transformation
+  // Workers by Year State & Handlers
+  const [workersBasis, setWorkersBasis] = React.useState<"Departed" | "Registered" | "Labour ID Issued">("Departed");
+  const [workersPeriodMode, setWorkersPeriodMode] = React.useState<"year" | "custom" | "all">("year");
+  const [workersYearType, setWorkersYearType] = React.useState<"Ethiopian Fiscal" | "Gregorian" | "Ethiopian">("Ethiopian Fiscal");
+  const [workersYear, setWorkersYear] = React.useState<string>(() => String(getCurrentYearForType("Ethiopian Fiscal")));
+  const [workersFromDate, setWorkersFromDate] = React.useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-01-01`;
+  });
+  const [workersToDate, setWorkersToDate] = React.useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [isExportingWorkersXlsx, setIsExportingWorkersXlsx] = React.useState<boolean>(false);
+  const [isExportingWorkersPdf, setIsExportingWorkersPdf] = React.useState<boolean>(false);
+
+  const handleWorkersYearTypeChange = (newType: "Ethiopian Fiscal" | "Gregorian" | "Ethiopian") => {
+    setWorkersYearType(newType);
+    setWorkersYear(String(getCurrentYearForType(newType)));
+  };
+
+  const workersParams = React.useMemo(() => {
+    if (workersPeriodMode === "all") {
+      return {
+        basis: workersBasis,
+        period: "all",
+      };
+    }
+    if (workersPeriodMode === "custom") {
+      const from_date = workersFromDate || "2026-01-01";
+      const to_date = workersToDate || new Date().toISOString().split("T")[0];
+      return {
+        basis: workersBasis,
+        from_date,
+        to_date,
+        year_type: workersYearType,
+      };
+    }
+    return {
+      basis: workersBasis,
+      year_type: workersYearType,
+      year: parseInt(workersYear, 10) || workersYear,
+    };
+  }, [workersBasis, workersPeriodMode, workersFromDate, workersToDate, workersYearType, workersYear]);
+
+  const {
+    data: workersByYearData,
+    isLoading: isWorkersLoading,
+    error: workersError,
+    refetch: refetchWorkers,
+  } = useQuery<V2WorkersByYearResponse>({
+    queryKey: ["report_workers_by_year", workersParams],
+    queryFn: () => getWorkersByYearV2(workersParams),
+    enabled: Boolean((isManagerOrAdmin || isAdminOrFinance) && activeTab === "workers_by_year"),
+    staleTime: 60000,
+  });
+
+  const handleExportWorkers = async (format: "xlsx" | "pdf") => {
+    if (format === "xlsx") setIsExportingWorkersXlsx(true);
+    else setIsExportingWorkersPdf(true);
+
+    try {
+      const blob = await exportWorkersByYearV2(workersParams, format);
+      const fallback = `Applicant_List_Report_${workersBasis}_${
+        workersPeriodMode === "all"
+          ? "All_Time"
+          : workersPeriodMode === "custom"
+          ? `${workersFromDate}_to_${workersToDate}`
+          : `${workersYearType}_${workersYear}`
+      }`;
+      const res = await downloadBackendSpreadsheet(blob, fallback);
+      toast.success(`${format.toUpperCase()} Export Complete`, {
+        description: `Exported ${res.filename}.`,
+      });
+    } catch (err: any) {
+      toast.error("Export Failed", {
+        description: err?.message || `Failed to export Workers by Year ${format.toUpperCase()}.`,
+      });
+    } finally {
+      if (format === "xlsx") setIsExportingWorkersXlsx(false);
+      else setIsExportingWorkersPdf(false);
+    }
+  };
+
+  // Funnel Data Transformation (Applicant + Placement Funnels + LMIS & Taeshir Breakdown)
   const funnelChartData = React.useMemo(() => {
-    if (!opsSummary?.applicant_funnel) return [];
-    const f = opsSummary.applicant_funnel;
+    if (!opsSummary) return [];
+    const af = opsSummary.applicant_funnel || {};
+    const pf = opsSummary.placement_funnel || {};
+
+    // Calculate LMIS and Taeshir candidate counts during the Processing stage
+    let lmisCount = 0;
+    let taeshirCount = 0;
+
+    const processingPlacements = allPlacements.filter((p) => p.status === "Processing");
+    if (processingPlacements.length > 0 && allClearanceSteps.length > 0) {
+      processingPlacements.forEach((p) => {
+        const steps = allClearanceSteps.filter((s) => s.placement === p.name);
+        const lmisStep = steps.find((s) => s.step_type?.toLowerCase().includes("lmis"));
+        const taeshirStep = steps.find(
+          (s) =>
+            s.step_type?.toLowerCase().includes("taeshir") ||
+            s.step_type?.toLowerCase().includes("injaz") ||
+            s.step_type?.toLowerCase().includes("telesign")
+        );
+
+        const isLmisIssued = lmisStep && (lmisStep.status === "Issued" || lmisStep.status === "Complete");
+        if (!isLmisIssued) {
+          lmisCount++;
+        }
+        if (isLmisIssued) {
+          taeshirCount++;
+        } else if (taeshirStep && (taeshirStep.status === "In Progress" || taeshirStep.status === "Pending")) {
+          // If both are concurrent in this corridor
+          taeshirCount++;
+        }
+      });
+    }
+
+    // Graceful fallback: If clearance steps are still loading or unassigned,
+    // ensure both LMIS and Taeshir reflect the processing candidates from placement_funnel
+    const processingTotal = pf.Processing || 0;
+    if (processingTotal > 0 && lmisCount === 0 && taeshirCount === 0) {
+      lmisCount = processingTotal;
+      taeshirCount = processingTotal;
+    } else if (processingTotal > 0 && lmisCount === 0) {
+      lmisCount = processingTotal;
+    }
+
     return [
-      { stage: "Draft", count: f.Draft || 0 },
-      { stage: "Registered", count: f.Registered || 0 },
-      { stage: "CV Generated", count: f["CV Generated"] || 0 },
-      { stage: "Selected", count: f.Selected || 0 },
-      { stage: "Processing (LMIS and Teashir)", count: f.Processing || 0 },
-      { stage: "Stamped", count: f.Stamped || 0 },
-      { stage: "Ticketed", count: f.Ticketed || 0 },
-      { stage: "Departed", count: f.Departed || 0 },
+      { stage: "Draft", count: af.Draft || 0 },
+      { stage: "Registered", count: af.Registered || 0 },
+      { stage: "CV Generated", count: af["CV Generated"] || 0 },
+      { stage: "Selected", count: pf.Selected || 0 },
+      { stage: "LMIS", count: lmisCount },
+      { stage: "Taeshir", count: taeshirCount },
+      { stage: "Stamped", count: pf.Stamped || 0 },
+      { stage: "Ticketed", count: pf.Ticketed || 0 },
+      { stage: "Departed", count: pf.Departed || 0 },
     ];
-  }, [opsSummary]);
+  }, [opsSummary, allPlacements, allClearanceSteps]);
 
   // Cost by Country Transformation
   const costByCountryData = React.useMemo(() => {
@@ -557,7 +784,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 flex flex-col h-full min-h-0">
       {/* ------------------------------------------------------------- */}
       {/* Top Header & Export Controls                                  */}
       {/* ------------------------------------------------------------- */}
@@ -585,89 +812,120 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        {/* Global Date Range Filter & XLSX Export Action */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
-            <Calendar className="h-3.5 w-3.5 text-slate-400 ml-1.5" />
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
-                setActivePeriod("custom");
-              }}
-              className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
-            />
-            <span className="text-slate-400 text-xs">to</span>
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
-                setActivePeriod("custom");
-              }}
-              className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
-            />
-          </div>
+        {/* Global Date Range Filter & XLSX Export Action (Hidden on Applicant list report) */}
+        {activeTab !== "workers_by_year" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
+              <Calendar className="h-3.5 w-3.5 text-slate-400 ml-1.5" />
+              {activePeriod === "all" ? (
+                <span className="text-xs font-semibold px-2 text-emerald-800 dark:text-emerald-400">
+                  All-time (counts all records up to today)
+                </span>
+              ) : (
+                <>
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => {
+                      setFromDate(e.target.value);
+                      setActivePeriod("custom");
+                    }}
+                    className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
+                  />
+                  <span className="text-slate-400 text-xs">to</span>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => {
+                      setToDate(e.target.value);
+                      setActivePeriod("custom");
+                    }}
+                    className="h-7 w-32 text-xs border-0 bg-transparent px-1 focus-visible:ring-0"
+                  />
+                </>
+              )}
+            </div>
 
-          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
-            {(["daily", "weekly", "monthly", "yearly", "all"] as const).map((p) => (
-              <Button
-                key={p}
-                type="button"
-                variant={activePeriod === p ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setPreset(p)}
-                className={cn(
-                  "text-[11px] h-7 px-2.5 font-medium",
-                  activePeriod === p
-                    ? "bg-emerald-900 text-white dark:bg-emerald-700 shadow-xs"
-                    : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
-                )}
-              >
-                {p === "all" ? "All-time" : p.charAt(0).toUpperCase() + p.slice(1)}
-              </Button>
-            ))}
-          </div>
+            <div className="flex items-center gap-1 p-0.5 rounded-lg border border-slate-200 dark:border-[#272732] bg-white dark:bg-[#121217]">
+              {(["daily", "weekly", "monthly", "yearly", "all"] as const).map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  variant={activePeriod === p ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPreset(p)}
+                  className={cn(
+                    "text-[11px] h-7 px-2.5 font-medium",
+                    activePeriod === p
+                      ? "bg-emerald-900 text-white dark:bg-emerald-700 shadow-xs"
+                      : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
+                  )}
+                >
+                  {p === "all" ? "All-time" : p.charAt(0).toUpperCase() + p.slice(1)}
+                </Button>
+              ))}
+            </div>
 
-          <div className="flex items-center gap-2">
-            {isManagerOrAdmin && (
-              <Button
-                type="button"
-                size="sm"
-                data-tour="reports-export-xlsx"
-                disabled={isExportingXlsx}
-                onClick={handleExportXlsx}
-                className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
-                title="Export commissions spreadsheet (Excel / CSV)"
-              >
-                <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
-                {isExportingXlsx ? "Exporting..." : "Export Commissions (.xlsx)"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {isManagerOrAdmin && (
+                <Button
+                  type="button"
+                  size="sm"
+                  data-tour="reports-export-xlsx"
+                  disabled={isExportingXlsx}
+                  onClick={handleExportXlsx}
+                  className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs h-8 font-semibold shadow-xs"
+                  title="Export commissions spreadsheet (Excel / CSV)"
+                >
+                  <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" />
+                  {isExportingXlsx ? "Exporting..." : "Export Commissions (.xlsx)"}
+                </Button>
+              )}
 
-            {isAdminOrFinance && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isExportingTransactionsXlsx}
-                onClick={() => handleExportTransactionsXlsx(undefined)}
-                className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
-                title="Export all transactions (Expense/Income/Commission) with rich formatting to Excel (.xlsx)"
-              >
-                <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
-                {isExportingTransactionsXlsx ? "Exporting..." : "Export Transactions (.xlsx)"}
-              </Button>
-            )}
+              {isAdminOrFinance && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingTransactionsXlsx}
+                  onClick={() => handleExportTransactionsXlsx(undefined)}
+                  className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
+                  title="Export all transactions (Expense/Income/Commission) with rich formatting to Excel (.xlsx)"
+                >
+                  <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                  {isExportingTransactionsXlsx ? "Exporting..." : "Export Transactions (.xlsx)"}
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ------------------------------------------------------------- */}
       {/* Primary Report Navigation Tabs                                */}
       {/* ------------------------------------------------------------- */}
       <div data-tour="reports-tabs" className="flex items-center gap-2 border-b border-slate-200 dark:border-[#202028] pb-2 overflow-x-auto">
+        {(isManagerOrAdmin || isAdminOrFinance) && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("workers_by_year")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap",
+              activeTab === "workers_by_year"
+                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-[#181820]"
+            )}
+          >
+            <Users className="h-3.5 w-3.5" />
+            Applicant list report
+            {workersByYearData?.total != null && activeTab === "workers_by_year" ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-700 text-white text-[10px] font-bold">
+                {workersByYearData.total}
+              </span>
+            ) : null}
+          </button>
+        )}
+
         {isManagerOrAdmin && (
           <button
             type="button"
@@ -757,8 +1015,220 @@ export default function ReportsPage() {
             ) : null}
           </button>
         )}
-
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* SECTION 1: APPLICANT LIST REPORT (WORKERS BY YEAR)            */}
+      {/* ------------------------------------------------------------- */}
+      {activeTab === "workers_by_year" && (isManagerOrAdmin || isAdminOrFinance) && (
+        <div className="space-y-4">
+          <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+            <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Users className="h-4 w-4 text-emerald-600" />
+                    Applicant list report
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    {workersByYearData?.period
+                      ? workersByYearData.period
+                      : "Candidate placement volumes filtered by registration, labour clearance, or departure year."}
+                  </CardDescription>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isExportingWorkersXlsx || !workersByYearData?.rows?.length}
+                    onClick={() => handleExportWorkers("xlsx")}
+                    className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
+                  >
+                    <FileSpreadsheet className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                    {isExportingWorkersXlsx ? "Exporting..." : "Excel (.xlsx)"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isExportingWorkersPdf || !workersByYearData?.rows?.length}
+                    onClick={() => handleExportWorkers("pdf")}
+                    className="text-xs h-8 border-slate-300 dark:border-[#2a2a35] font-semibold"
+                  >
+                    <Download className="mr-1.5 h-3.5 w-3.5 text-rose-600" />
+                    {isExportingWorkersPdf ? "Exporting..." : "PDF (.pdf)"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Controls bar */}
+              <div className="pt-3 flex flex-wrap items-center gap-3 text-xs">
+                {/* Basis */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600 dark:text-zinc-400">Basis:</span>
+                  <select
+                    value={workersBasis}
+                    onChange={(e) => setWorkersBasis(e.target.value as any)}
+                    className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2e2e38] bg-transparent text-xs text-slate-900 dark:text-white"
+                  >
+                    <option value="Departed" className="dark:bg-[#121217]">Departed (by departure date)</option>
+                    <option value="Registered" className="dark:bg-[#121217]">Registered (first registration)</option>
+                    <option value="Labour ID Issued" className="dark:bg-[#121217]">Labour ID Issued (LMIS step completed)</option>
+                  </select>
+                </div>
+
+                {/* Period Mode Selector */}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600 dark:text-zinc-400">Period:</span>
+                  <select
+                    value={workersPeriodMode}
+                    onChange={(e) => setWorkersPeriodMode(e.target.value as any)}
+                    className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2e2e38] bg-transparent text-xs text-slate-900 dark:text-white font-medium"
+                  >
+                    <option value="year" className="dark:bg-[#121217]">By Calendar Year</option>
+                    <option value="custom" className="dark:bg-[#121217]">Custom Date Range</option>
+                    <option value="all" className="dark:bg-[#121217]">All Time (Up to Today)</option>
+                  </select>
+                </div>
+
+                {workersPeriodMode === "year" && (
+                  <>
+                    {/* Year Type */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-600 dark:text-zinc-400">Calendar:</span>
+                      <select
+                        value={workersYearType}
+                        onChange={(e) => handleWorkersYearTypeChange(e.target.value as any)}
+                        className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2e2e38] bg-transparent text-xs text-slate-900 dark:text-white"
+                      >
+                        <option value="Ethiopian Fiscal" className="dark:bg-[#121217]">Ethiopian Fiscal (8 Jul - 7 Jul)</option>
+                        <option value="Gregorian" className="dark:bg-[#121217]">Gregorian (Jan - Dec)</option>
+                        <option value="Ethiopian" className="dark:bg-[#121217]">Ethiopian (11 Sep - 10 Sep)</option>
+                      </select>
+                    </div>
+
+                    {/* Year Input */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-600 dark:text-zinc-400">Year:</span>
+                      <Input
+                        type="number"
+                        value={workersYear}
+                        onChange={(e) => setWorkersYear(e.target.value)}
+                        placeholder={String(getCurrentYearForType(workersYearType))}
+                        className="h-8 w-24 text-xs font-mono"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {workersPeriodMode === "custom" && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-slate-600 dark:text-zinc-400">Range:</span>
+                    <Input
+                      type="date"
+                      value={workersFromDate}
+                      onChange={(e) => setWorkersFromDate(e.target.value)}
+                      className="h-8 w-32 text-xs"
+                    />
+                    <span className="text-slate-400">to</span>
+                    <Input
+                      type="date"
+                      value={workersToDate}
+                      onChange={(e) => setWorkersToDate(e.target.value)}
+                      className="h-8 w-32 text-xs"
+                    />
+                  </div>
+                )}
+
+                {workersPeriodMode === "all" && (
+                  <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">
+                    Counts all recorded placements up to today.
+                  </span>
+                )}
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => refetchWorkers()}
+                  className="h-8 px-2.5 text-xs text-slate-700 dark:text-zinc-300"
+                >
+                  <RefreshCw className={cn("h-3 w-3 mr-1", isWorkersLoading && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              {workersError ? (
+                <div className="p-6 text-center text-xs text-rose-600 dark:text-rose-400 space-y-1">
+                  <AlertCircle className="h-6 w-6 mx-auto mb-1 text-rose-500" />
+                  <p className="font-semibold">Unable to Load Applicant List Report</p>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    {formatCleanErrorMessage(workersError)}
+                  </p>
+                </div>
+              ) : isWorkersLoading ? (
+                <div className="p-12 text-center text-xs text-slate-400 space-y-2">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-600" />
+                  <p>Calculating applicant list statistics...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="px-4 py-2 bg-slate-50/50 dark:bg-[#15151c] border-b border-slate-100 dark:border-[#202028] flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">
+                      Period: <strong className="text-slate-800 dark:text-zinc-200">{workersByYearData?.period || "—"}</strong>
+                    </span>
+                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      Total: {workersByYearData?.total ?? 0} Workers
+                    </Badge>
+                  </div>
+                  <table className="w-full text-xs text-left">
+                    <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#181820] border-b border-slate-100 dark:border-[#202028]">
+                      <tr>
+                        <th className="py-2.5 px-4 font-semibold">#</th>
+                        <th className="py-2.5 px-4 font-semibold">Passport Number</th>
+                        <th className="py-2.5 px-4 font-semibold">Full Name</th>
+                        <th className="py-2.5 px-4 font-semibold">Labour ID</th>
+                        <th className="py-2.5 px-4 font-semibold">Destination Country</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
+                      {workersByYearData?.rows && workersByYearData.rows.length > 0 ? (
+                        workersByYearData.rows.map((row, idx) => (
+                          <tr key={`${row.passport_number}_${idx}`} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
+                            <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2.5 px-4 font-mono font-bold text-slate-900 dark:text-white">{row.passport_number || "—"}</td>
+                            <td className="py-2.5 px-4 font-medium text-slate-800 dark:text-zinc-200">{row.full_name || "—"}</td>
+                            <td className="py-2.5 px-4 font-mono text-slate-600 dark:text-zinc-400">{row.labor_id || "—"}</td>
+                            <td className="py-2.5 px-4">
+                              <Badge variant="outline" className="text-[10px] font-semibold border-slate-200 dark:border-[#2b2b36]">
+                                {row.destination_country || "—"}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-slate-400">
+                            <Users className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto mb-2" />
+                            <p className="font-semibold text-slate-600 dark:text-zinc-400">No applicants recorded for this basis and period</p>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Try selecting another year, calendar type, or changing basis.
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ------------------------------------------------------------- */}
       {/* TAB 1: EXECUTIVE OPERATIONS SUMMARY & FUNNEL                  */}
@@ -850,11 +1320,15 @@ export default function ReportsPage() {
             <CardContent>
               <div className="h-72 w-full pt-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={funnelChartData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                    <XAxis dataKey="stage" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 11 }} />
+                  <BarChart data={funnelChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                    <XAxis dataKey="stage" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={45} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "#1e1e24", border: "1px solid #333", borderRadius: "8px", fontSize: "12px", color: "#fff" }}
+                      formatter={(value: any, name: any, item: any) => [
+                        `${value} candidate${Number(value) === 1 ? "" : "s"}`,
+                        item?.payload?.stage || "Count",
+                      ]}
                     />
                     <Bar dataKey="count" fill="#047857" radius={[4, 4, 0, 0]}>
                       {funnelChartData.map((entry, index) => (
@@ -985,33 +1459,37 @@ export default function ReportsPage() {
             </CardHeader>
 
             <CardContent>
-              <div className="overflow-x-auto lg:overflow-hidden">
+              <div className="overflow-x-auto lg:overflow-x-hidden max-h-[380px] overflow-y-auto">
                 <table className="w-full text-xs text-left lg:table-fixed">
-                  <thead className="text-[11px] text-slate-400 bg-red-50/50 dark:bg-red-950/20 border-y border-red-100 dark:border-red-950/40">
+                  <thead className="sticky top-0 z-10 text-[11px] text-slate-400 bg-red-50 dark:bg-red-950/40 border-y border-red-100 dark:border-red-950/40 backdrop-blur-xs">
                     <tr>
-                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Placement ID</th>
-                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Candidate</th>
-                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Corridor</th>
-                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Current Status</th>
-                      <th className="py-2.5 px-3 whitespace-normal break-words leading-snug">Age (Days)</th>
+                      <th className="py-2.5 px-3 w-[12%] whitespace-normal break-words leading-snug">Placement ID</th>
+                      <th className="py-2.5 px-3 w-[20%] whitespace-normal break-words leading-snug">Candidate</th>
+                      <th className="py-2.5 px-3 w-[14%] whitespace-normal break-words leading-snug">Corridor</th>
+                      <th className="py-2.5 px-3 w-[18%] whitespace-normal break-words leading-snug">Foreign Agency</th>
+                      <th className="py-2.5 px-3 w-[16%] whitespace-normal break-words leading-snug">Sponsor</th>
+                      <th className="py-2.5 px-3 w-[10%] text-center whitespace-normal break-words leading-snug">Current Status</th>
+                      <th className="py-2.5 px-3 w-[10%] text-right whitespace-normal break-words leading-snug">Age (Days)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                    {(placementAging?.critical_not_departed || []).length > 0 ? (
-                      placementAging!.critical_not_departed.map((row) => (
-                        <tr key={row.name} className="hover:bg-red-50/30">
-                          <td className="py-2.5 px-3 font-mono font-bold">{row.name}</td>
-                          <td className="py-2.5 px-3 font-semibold">{row.full_name || row.applicant}</td>
-                          <td className="py-2.5 px-3">{row.destination_country}</td>
-                          <td className="py-2.5 px-3">
+                    {criticalPlacementsEnriched.length > 0 ? (
+                      criticalPlacementsEnriched.map((row) => (
+                        <tr key={row.name} className="hover:bg-red-50/30 dark:hover:bg-red-950/20 transition-colors">
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-white truncate">{row.name}</td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-zinc-100 truncate">{row.candidate_name}</td>
+                          <td className="py-2.5 px-3 truncate">{row.corridor}</td>
+                          <td className="py-2.5 px-3 truncate text-slate-600 dark:text-zinc-400">{row.contractor_name}</td>
+                          <td className="py-2.5 px-3 truncate text-slate-600 dark:text-zinc-400">{row.sponsor}</td>
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
                             <Badge variant="outline" className="text-[10px]">{row.status}</Badge>
                           </td>
-                          <td className="py-2.5 px-3 font-bold text-red-600">{row.age_days}d</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-red-600 whitespace-nowrap">{row.age_days}d</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400">
+                        <td colSpan={7} className="py-6 text-center text-slate-400">
                           Zero critical overdue placements detected.
                         </td>
                       </tr>
@@ -1365,19 +1843,19 @@ export default function ReportsPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-3 flex flex-col flex-1 min-h-0">
               {/* Quick Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-4 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <CardContent className="p-3 space-y-0.5">
+                    <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Total Transactions
                     </span>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                      <span className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
                         {transactionMetrics.totalCount}
                       </span>
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="text-[9.5px]">
                         In Date Window
                       </Badge>
                     </div>
@@ -1385,24 +1863,24 @@ export default function ReportsPage() {
                 </Card>
 
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-4 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <CardContent className="p-3 space-y-0.5">
+                    <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Approved Expenses
                     </span>
                     {isBirrConversionEnabled ? (
-                      <span className="text-2xl font-bold text-red-600 dark:text-red-400">
+                      <span className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">
                         ETB {transactionMetrics.totalExpenseBirr.toLocaleString()}
                       </span>
                     ) : (
                       <div className="space-y-0.5">
                         {Object.keys(transactionMetrics.expenseByCurr).length > 0 ? (
                           Object.entries(transactionMetrics.expenseByCurr).map(([c, amt]) => (
-                            <div key={c} className="text-lg font-bold text-red-600 dark:text-red-400">
+                            <div key={c} className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400">
                               {c} {amt.toLocaleString()}
                             </div>
                           ))
                         ) : (
-                          <span className="text-2xl font-bold text-red-600 dark:text-red-400">0</span>
+                          <span className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">0</span>
                         )}
                       </div>
                     )}
@@ -1410,24 +1888,24 @@ export default function ReportsPage() {
                 </Card>
 
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-4 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <CardContent className="p-3 space-y-0.5">
+                    <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Approved Income
                     </span>
                     {isBirrConversionEnabled ? (
-                      <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">
+                      <span className="text-xl sm:text-2xl font-bold text-emerald-800 dark:text-emerald-400">
                         ETB {transactionMetrics.totalIncomeBirr.toLocaleString()}
                       </span>
                     ) : (
                       <div className="space-y-0.5">
                         {Object.keys(transactionMetrics.incomeByCurr).length > 0 ? (
                           Object.entries(transactionMetrics.incomeByCurr).map(([c, amt]) => (
-                            <div key={c} className="text-lg font-bold text-emerald-800 dark:text-emerald-400">
+                            <div key={c} className="text-base sm:text-lg font-bold text-emerald-800 dark:text-emerald-400">
                               {c} {amt.toLocaleString()}
                             </div>
                           ))
                         ) : (
-                          <span className="text-2xl font-bold text-emerald-800 dark:text-emerald-400">0</span>
+                          <span className="text-xl sm:text-2xl font-bold text-emerald-800 dark:text-emerald-400">0</span>
                         )}
                       </div>
                     )}
@@ -1435,15 +1913,15 @@ export default function ReportsPage() {
                 </Card>
 
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardContent className="p-4 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                  <CardContent className="p-3 space-y-0.5">
+                    <span className="text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider block">
                       Net Balance
                     </span>
                     {isBirrConversionEnabled ? (
                       <div className="flex items-baseline justify-between">
                         <span
                           className={cn(
-                            "text-2xl font-bold",
+                            "text-xl sm:text-2xl font-bold",
                             transactionMetrics.netBalanceBirr >= 0
                               ? "text-emerald-800 dark:text-emerald-400"
                               : "text-red-600 dark:text-red-400"
@@ -1461,7 +1939,7 @@ export default function ReportsPage() {
                               <div
                                 key={c}
                                 className={cn(
-                                  "text-lg font-bold",
+                                  "text-base sm:text-lg font-bold",
                                   net >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
                                 )}
                               >
@@ -1470,7 +1948,7 @@ export default function ReportsPage() {
                             );
                           })
                         ) : (
-                          <span className="text-2xl font-bold text-slate-400">0</span>
+                          <span className="text-xl sm:text-2xl font-bold text-slate-400">0</span>
                         )}
                       </div>
                     )}
@@ -1479,8 +1957,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Transactions Master Table */}
-              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col flex-1 min-h-0 shadow-xs">
+                <CardHeader className="pb-2.5 pt-3 border-b border-slate-100 dark:border-[#202028] shrink-0">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -1519,7 +1997,7 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Filter Toolbar */}
-                  <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2.5">
                     {/* Search Input */}
                     <div className="relative w-full sm:w-72">
                       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -1571,23 +2049,23 @@ export default function ReportsPage() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto lg:overflow-hidden">
+                <CardContent className="p-0 flex flex-col flex-1 min-h-0">
+                  <div className="flex-1 min-h-[220px] max-h-[calc(100vh-390px)] overflow-y-auto overflow-x-auto lg:overflow-x-hidden">
                     <table className="w-full text-xs text-left lg:table-fixed">
-                      <thead className="text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#20202a]">
+                      <thead className="sticky top-0 z-10 text-[11px] text-slate-400 bg-slate-50 dark:bg-[#171720] border-b border-slate-100 dark:border-[#20202a] backdrop-blur-xs">
                         <tr>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Transaction</th>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Type</th>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Description & Stage</th>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Candidate / Placement</th>
-                          <th className="py-2.5 px-3 font-semibold text-right whitespace-normal break-words leading-snug">Amount (Original)</th>
+                          <th className="py-2.5 px-3 w-[11%] font-semibold whitespace-normal break-words leading-snug">Transaction</th>
+                          <th className="py-2.5 px-3 w-[8%] font-semibold whitespace-normal break-words leading-snug">Type</th>
+                          <th className="py-2.5 px-3 w-[22%] font-semibold whitespace-normal break-words leading-snug">Description & Stage</th>
+                          <th className="py-2.5 px-3 w-[14%] font-semibold whitespace-normal break-words leading-snug">Candidate / Placement</th>
+                          <th className="py-2.5 px-3 w-[11%] font-semibold text-right whitespace-normal break-words leading-snug">Amount (Original)</th>
                           {isBirrConversionEnabled && (
-                            <th className="py-2.5 px-3 font-semibold text-right whitespace-normal break-words leading-snug">Amount (ETB)</th>
+                            <th className="py-2.5 px-3 w-[11%] font-semibold text-right whitespace-normal break-words leading-snug">Amount (ETB)</th>
                           )}
-                          <th className="py-2.5 px-3 font-semibold text-center whitespace-normal break-words leading-snug">Status</th>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Logged By</th>
-                          <th className="py-2.5 px-3 font-semibold whitespace-normal break-words leading-snug">Approval / Audit</th>
-                          <th className="py-2.5 px-3 font-semibold text-center whitespace-normal break-words leading-snug">Action</th>
+                          <th className="py-2.5 px-3 w-[8%] font-semibold text-center whitespace-normal break-words leading-snug">Status</th>
+                          <th className="py-2.5 px-3 w-[8%] font-semibold whitespace-normal break-words leading-snug">Logged By</th>
+                          <th className="py-2.5 px-3 w-[11%] font-semibold whitespace-normal break-words leading-snug">Approval / Audit</th>
+                          <th className="py-2.5 px-3 w-[7%] font-semibold text-center whitespace-normal break-words leading-snug">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
@@ -1760,43 +2238,43 @@ export default function ReportsPage() {
                         )}
                       </tbody>
                     </table>
-                    {totalTxnPages > 1 && (
-                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#20202a] bg-slate-50/50 dark:bg-[#14141a]">
-                        <p className="text-xs text-slate-500 dark:text-zinc-400">
-                          Showing <strong className="text-slate-900 dark:text-white">{(txnPage - 1) * txnPageSize + 1}</strong> to{" "}
-                          <strong className="text-slate-900 dark:text-white">{Math.min(txnPage * txnPageSize, filteredTransactions.length)}</strong> of{" "}
-                          <strong className="text-slate-900 dark:text-white">{filteredTransactions.length}</strong> transactions
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={txnPage <= 1}
-                            onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
-                            className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
-                          >
-                            <ChevronLeft className="h-3 w-3 mr-1" />
-                            Previous
-                          </Button>
-                          <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
-                            {txnPage} / {totalTxnPages}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={txnPage >= totalTxnPages}
-                            onClick={() => setTxnPage((p) => Math.min(totalTxnPages, p + 1))}
-                            className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
-                          >
-                            Next
-                            <ChevronRight className="h-3 w-3 ml-1" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
                   </div>
+                  {totalTxnPages > 1 && (
+                    <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-2 border-t border-slate-200 dark:border-[#20202a] bg-slate-50/50 dark:bg-[#14141a]">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400">
+                        Showing <strong className="text-slate-900 dark:text-white">{(txnPage - 1) * txnPageSize + 1}</strong> to{" "}
+                        <strong className="text-slate-900 dark:text-white">{Math.min(txnPage * txnPageSize, filteredTransactions.length)}</strong> of{" "}
+                        <strong className="text-slate-900 dark:text-white">{filteredTransactions.length}</strong> transactions
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={txnPage <= 1}
+                          onClick={() => setTxnPage((p) => Math.max(1, p - 1))}
+                          className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                        >
+                          <ChevronLeft className="h-3 w-3 mr-1" />
+                          Previous
+                        </Button>
+                        <span className="text-xs text-slate-600 dark:text-zinc-400 px-2 font-mono">
+                          {txnPage} / {totalTxnPages}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={txnPage >= totalTxnPages}
+                          onClick={() => setTxnPage((p) => Math.min(totalTxnPages, p + 1))}
+                          className="h-7 px-2.5 text-xs rounded-lg border-slate-200 dark:border-[#2a2a35]"
+                        >
+                          Next
+                          <ChevronRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   AlertTriangle,
@@ -19,13 +19,19 @@ import {
   FileText,
   User,
   HeartPulse,
+  CheckCheck,
+  Check,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   getSentNotificationsV2,
   getLiveAlertsV2,
+  markAlertsReadV2,
+  setAlertStateV2,
   V2SentNotificationItem,
   V2LiveAlertItem,
 } from "@/lib/api/v2/notifications";
@@ -103,10 +109,63 @@ export default function NotificationsPage() {
     refetchInterval: 30000,
   });
 
+  const queryClient = useQueryClient();
+  const [isActionPending, setIsActionPending] = React.useState(false);
+
   const handleRefresh = () => {
     if (activeTab === "attention") refetchAlerts();
     else if (activeTab === "sent") refetchSent();
     else if (activeTab === "tasks") refetchTodos();
+  };
+
+  const handleMarkAllRead = async () => {
+    const keys = alerts.map((a) => a.alert_key || a.name).filter(Boolean);
+    if (keys.length === 0) return;
+    setIsActionPending(true);
+    try {
+      await markAlertsReadV2(keys);
+      toast.success("All alerts marked as read");
+      queryClient.invalidateQueries({ queryKey: ["v2_live_alerts"] });
+      refetchAlerts();
+    } catch (err: any) {
+      toast.error("Failed to mark alerts as read", {
+        description: err?.message || "An error occurred",
+      });
+    } finally {
+      setIsActionPending(false);
+    }
+  };
+
+  const handleDismissAlert = async (alert: V2LiveAlertItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const key = alert.alert_key || alert.name;
+    if (!key) return;
+    try {
+      await setAlertStateV2(key, "Dismissed");
+      toast.success("Alert dismissed");
+      queryClient.invalidateQueries({ queryKey: ["v2_live_alerts"] });
+      refetchAlerts();
+    } catch (err: any) {
+      toast.error("Failed to dismiss alert", {
+        description: err?.message || "An error occurred",
+      });
+    }
+  };
+
+  const handleMarkSingleRead = async (alert: V2LiveAlertItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const key = alert.alert_key || alert.name;
+    if (!key) return;
+    try {
+      await setAlertStateV2(key, "Read");
+      toast.success("Alert marked as read");
+      queryClient.invalidateQueries({ queryKey: ["v2_live_alerts"] });
+      refetchAlerts();
+    } catch (err: any) {
+      toast.error("Failed to update alert", {
+        description: err?.message || "An error occurred",
+      });
+    }
   };
 
   // Desktop pagination for Needs Attention tab (5 alerts per page to fit viewport)
@@ -210,6 +269,18 @@ export default function NotificationsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {activeTab === "attention" && !isAgency && unreadAlertsCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleMarkAllRead}
+              disabled={isActionPending || isCurrentRefetching}
+              className="text-xs border-slate-200 dark:border-[#26262d] bg-white dark:bg-[#141418] text-slate-700 dark:text-zinc-300 hover:text-emerald-600"
+            >
+              <CheckCheck className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+              Mark all read
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -314,10 +385,15 @@ export default function NotificationsPage() {
                 const displayTitle = stripRecordIds(alert.title || "Compliance Alert");
                 const displayBody = stripRecordIds(alert.body || alert.description || "");
 
+                const isUnread = !alert.read && !alert.dismissed;
+
                 return (
                   <Card
-                    key={alert.name || idx}
-                    className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]"
+                    key={alert.name || alert.alert_key || idx}
+                    className={cn(
+                      "border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-4 transition hover:border-slate-300 dark:hover:border-[#2c2c35]",
+                      isUnread && "border-l-4 border-l-emerald-500"
+                    )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
@@ -329,6 +405,9 @@ export default function NotificationsPage() {
                             <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                               {displayTitle}
                             </h4>
+                            {isUnread && (
+                              <span className="h-2 w-2 rounded-full bg-emerald-500" title="Unread alert" />
+                            )}
                             {alert.applicant_name && (
                               <Badge variant="outline" className="text-[10px] font-mono py-0">
                                 {alert.applicant_name}
@@ -348,15 +427,37 @@ export default function NotificationsPage() {
                         </div>
                       </div>
 
-                      {meta.href && (
-                        <Link
-                          href={meta.href}
-                          className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition"
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {meta.href && (
+                          <Link
+                            href={meta.href}
+                            className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 transition"
+                          >
+                            <span>{meta.label}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        )}
+                        {isUnread && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleMarkSingleRead(alert, e)}
+                            title="Mark as read"
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleDismissAlert(alert, e)}
+                          title="Dismiss alert"
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
                         >
-                          <span>{meta.label}</span>
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      )}
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 );

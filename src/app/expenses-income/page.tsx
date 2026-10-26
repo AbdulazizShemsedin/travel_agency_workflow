@@ -17,6 +17,7 @@ import {
   DollarSign,
   Inbox,
   ShieldCheck,
+  ShieldAlert,
   Check,
   Ban,
   AlertOctagon,
@@ -49,6 +50,8 @@ import {
   uploadBankStatementV2,
   manuallyMatchLineV2,
   unmatchLineV2,
+  listStatementLinesV2,
+  V2StatementLine,
   listCommissionBatchesV2,
   getCommissionBatchV2,
   settleBatchItemsV2,
@@ -82,11 +85,15 @@ type ActiveTab = "ledger" | "reconciliation";
 
 export default function ExpensesIncomePage() {
   const queryClient = useQueryClient();
-  const { roles } = useAuth();
-  const userRoles = Array.isArray(roles) ? roles.map(String) : [];
-  const isFinanceManagerOrAdmin = userRoles.some((r) =>
-    ["Administrator", "System Manager", "Admin", "Finance Manager"].includes(r)
+  const { roles, isReadOnly } = useAuth();
+  const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
+  const isAdminOrManager = userRoles.some((r) =>
+    ["administrator", "system manager", "admin", "manager"].includes(r)
   );
+  const isFinanceManagerOrAdmin = userRoles.some((r) =>
+    ["administrator", "system manager", "admin", "manager", "finance manager"].includes(r)
+  );
+  const isFinanceReadOnly = !isAdminOrManager && (isReadOnly("Finance Manager") || isReadOnly());
 
   // Birr conversion switch (false on this system)
   const { isBirrConversionEnabled } = useBirrConversion();
@@ -157,6 +164,33 @@ export default function ExpensesIncomePage() {
     staleTime: 30000,
     enabled: isFinanceManagerOrAdmin,
   });
+
+  // Bank Statement Lines State & Queries
+  const [statementMatchStatusFilter, setStatementMatchStatusFilter] = React.useState<string>("Unmatched");
+  const {
+    data: statementLinesData,
+    isLoading: isLoadingStatementLines,
+    refetch: refetchStatementLines,
+  } = useQuery({
+    queryKey: ["v2_statement_lines", statementMatchStatusFilter],
+    queryFn: () =>
+      listStatementLinesV2({
+        match_status: statementMatchStatusFilter === "All" ? undefined : (statementMatchStatusFilter as any),
+        limit_page_length: 100,
+        with_total: 1,
+      }),
+    enabled: isFinanceManagerOrAdmin,
+    staleTime: 15000,
+  });
+  const statementLines = statementLinesData?.lines || [];
+
+  const { data: unmatchedLinesData, refetch: refetchUnmatchedLines } = useQuery({
+    queryKey: ["v2_unmatched_statement_lines_picker"],
+    queryFn: () => listStatementLinesV2({ match_status: "Unmatched", limit_page_length: 100 }),
+    enabled: isFinanceManagerOrAdmin,
+    staleTime: 15000,
+  });
+  const unmatchedPickerLines = unmatchedLinesData?.lines || [];
 
   // 1. Fetch Financial Overview Ledger
   const {
@@ -494,6 +528,8 @@ export default function ExpensesIncomePage() {
       });
       queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
       queryClient.invalidateQueries({ queryKey: ["v2_pending_approval_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_statement_lines"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_unmatched_statement_lines_picker"] });
       setStatementFile(null);
     } catch (err: any) {
       toast.error("Reconciliation Failed", {
@@ -508,7 +544,7 @@ export default function ExpensesIncomePage() {
   const handleManualMatch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualLineName.trim() || !manualBatchName.trim()) {
-      toast.error("Statement Line ID and Batch ID are required.");
+      toast.error("Please pick an unmatched statement line and a target batch.");
       return;
     }
 
@@ -516,9 +552,11 @@ export default function ExpensesIncomePage() {
     try {
       const matchRes = await manuallyMatchLineV2(manualLineName.trim(), manualBatchName.trim());
       toast.success("Line Matched Successfully", {
-        description: matchRes.message || `Matched line ${manualLineName} to batch ${manualBatchName}.`,
+        description: matchRes.message || "Matched statement line to target batch.",
       });
       queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_statement_lines"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_unmatched_statement_lines_picker"] });
       setManualLineName("");
       setManualBatchName("");
     } catch (err: any) {
@@ -535,7 +573,7 @@ export default function ExpensesIncomePage() {
   const handleUnmatchLine = async (lineName?: string) => {
     const targetLine = (lineName || manualLineName).trim();
     if (!targetLine) {
-      toast.error("Statement Line Identifier required to unmatch.");
+      toast.error("Statement Line required to unmatch.");
       return;
     }
 
@@ -543,10 +581,12 @@ export default function ExpensesIncomePage() {
     try {
       const res = await unmatchLineV2(targetLine);
       toast.success("Line Unmatched Successfully", {
-        description: res.message || `Statement line ${targetLine} unmatched from batch.`,
+        description: res.message || "Statement line unmatched from batch.",
       });
       queryClient.invalidateQueries({ queryKey: ["v2_financial_overview_expenses_income"] });
       queryClient.invalidateQueries({ queryKey: ["v2_pending_approval_queue"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_statement_lines"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_unmatched_statement_lines_picker"] });
       setManualLineName("");
     } catch (err: any) {
       toast.error("Unmatch Failed", {
@@ -700,6 +740,13 @@ export default function ExpensesIncomePage() {
           </p>
         </div>
 
+        {isFinanceReadOnly && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>You have read-only access to Finance records. Logging transactions, bank statement auto-matching, and batch settlements are view-only.</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -748,8 +795,10 @@ export default function ExpensesIncomePage() {
 
           <Button
             type="button"
+            disabled={isFinanceReadOnly}
+            title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
             onClick={() => setIsAddModalOpen(true)}
-            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs h-8 shadow-xs"
+            className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white font-semibold text-xs h-8 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Log Income / Expense
           </Button>
@@ -917,7 +966,7 @@ export default function ExpensesIncomePage() {
       {/* TAB 3: BANK STATEMENT RECONCILIATION (P2-02 CORE)              */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "reconciliation" && (
-        <div className="space-y-6">
+        <div className="flex-1 min-h-0 lg:max-h-[calc(100vh-175px)] lg:overflow-y-auto pr-1 space-y-3.5">
           {!isFinanceManagerOrAdmin ? (
             <div className="p-8 rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-xs text-amber-900 dark:text-amber-300 space-y-2">
               <div className="flex items-center gap-2">
@@ -929,29 +978,30 @@ export default function ExpensesIncomePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-3.5">
               {/* Reconciliation Upload & Overview Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
                 {/* Panel 1: CSV Upload Dropzone */}
-                <Card className="lg:col-span-2 border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+                  <CardHeader className="py-2.5 px-3.5 border-b border-slate-100 dark:border-[#202028]">
                     <div className="flex items-center gap-2">
                       <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
                       <div>
                         <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
                           Bank Statement Auto-Matching
                         </CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
+                        <CardDescription className="text-[11px] mt-0.5">
                           Upload CSV to auto-match commission batches.
                         </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-4">
-                    <form onSubmit={handleUploadBankStatement} className="space-y-4">
+                  <CardContent className="p-3 sm:p-3.5 space-y-2.5">
+                    <form onSubmit={handleUploadBankStatement} className="space-y-2.5">
                       <PremiumDropzone
                         id="bank_statement_csv"
-                        variant="spreadsheet"
+                        variant="compact"
+                        className="py-2 px-3"
                         value={statementFile}
                         fileName={statementFile?.name}
                         fileSize={statementFile?.size}
@@ -963,38 +1013,32 @@ export default function ExpensesIncomePage() {
                         onRemove={() => setStatementFile(null)}
                       />
 
-                      <div className="space-y-1">
-                        <Label htmlFor="statement_account_currency" className="text-xs font-semibold">
-                          Account Currency <span className="text-rose-500">*</span>
-                        </Label>
-                        <select
-                          id="statement_account_currency"
-                          value={statementCurrency}
-                          onChange={(e) => setStatementCurrency(e.target.value as V2SupportedCurrency)}
-                          className="w-full sm:w-48 h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
-                        >
-                          <option value="ETB">ETB (Ethiopian Birr)</option>
-                          <option value="USD">USD (US Dollar)</option>
-                          <option value="SAR">SAR (Saudi Riyal)</option>
-                          <option value="AED">AED (UAE Dirham)</option>
-                          <option value="KWD">KWD (Kuwaiti Dinar)</option>
-                          <option value="QAR">QAR (Qatari Riyal)</option>
-                        </select>
-                        <p className="text-[10px] text-slate-400">
-                          Account currency used for line reconciliation
-                        </p>
-                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5 pt-1">
+                        <div className="space-y-1">
+                          <Label htmlFor="statement_account_currency" className="text-xs font-semibold">
+                            Account Currency <span className="text-rose-500">*</span>
+                          </Label>
+                          <select
+                            id="statement_account_currency"
+                            value={statementCurrency}
+                            onChange={(e) => setStatementCurrency(e.target.value as V2SupportedCurrency)}
+                            className="w-full sm:w-44 h-7.5 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
+                          >
+                            <option value="ETB">ETB (Ethiopian Birr)</option>
+                            <option value="USD">USD (US Dollar)</option>
+                            <option value="SAR">SAR (Saudi Riyal)</option>
+                            <option value="AED">AED (UAE Dirham)</option>
+                            <option value="KWD">KWD (Kuwaiti Dinar)</option>
+                            <option value="QAR">QAR (Qatari Riyal)</option>
+                          </select>
+                        </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <HelpCircle className="h-3 w-3" />
-                          Auto-matched by amount and reference.
-                        </span>
                         <Button
                           type="submit"
                           size="sm"
-                          disabled={!statementFile || isUploadingStatement}
-                          className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-8 shadow-xs"
+                          disabled={!statementFile || isUploadingStatement || isFinanceReadOnly}
+                          title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
+                          className="bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-7.5 px-3 shadow-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isUploadingStatement ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1004,11 +1048,16 @@ export default function ExpensesIncomePage() {
                           Process & Auto-Match
                         </Button>
                       </div>
+
+                      <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <HelpCircle className="h-3 w-3" />
+                        Auto-matched by amount and reference against unsettled batches.
+                      </p>
                     </form>
 
                     {/* Server Outcome Banner */}
                     {reconciliationResult && (
-                      <div className="mt-4 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
+                      <div className="mt-2.5 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-emerald-950 dark:text-emerald-200 flex items-center gap-1.5">
                             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -1034,34 +1083,45 @@ export default function ExpensesIncomePage() {
                 </Card>
 
                 {/* Panel 2: Direct Line Matching Form */}
-                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                  <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
+                <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216] flex flex-col justify-between">
+                  <CardHeader className="py-2.5 px-3.5 border-b border-slate-100 dark:border-[#202028]">
                     <div className="flex items-center gap-2">
                       <Link2 className="h-4 w-4 text-emerald-600" />
                       <div>
                         <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
                           Direct Line Matching
                         </CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
-                          Quick link an ambiguous statement line to a batch.
+                        <CardDescription className="text-[11px] mt-0.5">
+                          Pick an unmatched statement line and link directly to a batch.
                         </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-4 space-y-3.5">
-                    <form onSubmit={handleManualMatch} className="space-y-3.5">
+                  <CardContent className="p-3 sm:p-3.5 space-y-2.5">
+                    <form onSubmit={handleManualMatch} className="space-y-2.5">
                       <div className="space-y-1">
-                        <Label htmlFor="line_id" className="text-xs font-semibold">
-                          Statement Line Identifier <span className="text-rose-500">*</span>
-                        </Label>
-                        <Input
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="line_id" className="text-xs font-semibold">
+                            Pick Unmatched Bank Line <span className="text-rose-500">*</span>
+                          </Label>
+                          <span className="text-[10px] text-slate-400">
+                            {unmatchedPickerLines.length} unmatched
+                          </span>
+                        </div>
+                        <select
                           id="line_id"
-                          placeholder="e.g. STMT-LINE-00014"
                           value={manualLineName}
                           onChange={(e) => setManualLineName(e.target.value)}
                           required
-                          className="h-8 text-xs font-mono"
-                        />
+                          className="w-full h-7.5 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
+                        >
+                          <option value="">-- Choose Unmatched Bank Line --</option>
+                          {unmatchedPickerLines.map((l) => (
+                            <option key={l.name} value={l.name}>
+                              {l.statement_date ? new Date(l.statement_date).toLocaleDateString() : "No Date"} · Ref: {l.reference || "None"} · {Number(l.amount).toLocaleString()} {l.currency}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="space-y-1">
@@ -1073,27 +1133,27 @@ export default function ExpensesIncomePage() {
                           value={manualBatchName}
                           onChange={(e) => setManualBatchName(e.target.value)}
                           required
-                          className="w-full h-8 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono"
+                          className="w-full h-7.5 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs"
                         >
                           <option value="">-- Select Target Batch --</option>
                           {availableBatches.map((b) => (
                             <option key={b.name} value={b.name}>
-                              {b.name} • {b.contractor_name || b.contractor} ({b.creation ? new Date(b.creation).toLocaleDateString() : ""}) - {Number(b.total_amount_original ?? b.total_amount ?? 0).toLocaleString()} {b.currency} [{b.status}]
+                              {b.title || `${b.contractor_name || b.contractor} (${b.creation ? new Date(b.creation).toLocaleDateString() : ""})`} • {Number(b.total_amount_original ?? b.total_amount ?? 0).toLocaleString()} {b.currency} [{b.status}]
                             </option>
                           ))}
                         </select>
                       </div>
 
                       <p className="text-[10px] text-slate-400 leading-relaxed">
-                        Matches statement line directly to target batch.
+                        Matches selected statement line directly to target batch.
                       </p>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 pt-1">
                         <Button
                           type="submit"
                           size="sm"
                           disabled={!manualLineName.trim() || !manualBatchName.trim() || isManualMatching || isUnmatching}
-                          className="flex-1 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 text-white font-semibold text-xs h-8 shadow-xs"
+                          className="flex-1 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 text-white font-semibold text-xs h-7.5 shadow-xs"
                         >
                           {isManualMatching ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1108,7 +1168,7 @@ export default function ExpensesIncomePage() {
                           size="sm"
                           disabled={!manualLineName.trim() || isManualMatching || isUnmatching}
                           onClick={() => handleUnmatchLine()}
-                          className="h-8 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                          className="h-7.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                           title="Undo match for this statement line"
                         >
                           {isUnmatching ? (
@@ -1124,17 +1184,164 @@ export default function ExpensesIncomePage() {
                 </Card>
               </div>
 
+              {/* Panel 2.5: Bank Statement Lines List */}
+              <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
+                <CardHeader className="py-2.5 px-3.5 border-b border-slate-100 dark:border-[#202028]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                      <div>
+                        <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
+                          Bank Statement Lines
+                        </CardTitle>
+                        <CardDescription className="text-[11px] mt-0.5">
+                          View uploaded bank transactions, verify matching, or unmatch linked entries.
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-[#2a2a35] p-0.5 text-xs bg-slate-50 dark:bg-[#16161c]">
+                        {(["Unmatched", "Matched", "Manually Matched", "All"] as const).map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => setStatementMatchStatusFilter(status)}
+                            className={cn(
+                              "px-2.5 py-1 rounded-md font-medium transition text-[11px]",
+                              statementMatchStatusFilter === status
+                                ? "bg-white dark:bg-[#202028] text-slate-900 dark:text-white shadow-xs font-semibold"
+                                : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            )}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchStatementLines()}
+                        disabled={isLoadingStatementLines}
+                        className="h-7 text-xs border-slate-200 dark:border-[#2a2a35]"
+                      >
+                        <RefreshCw className={cn("h-3 w-3", isLoadingStatementLines && "animate-spin text-emerald-600")} />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {isLoadingStatementLines ? (
+                    <div className="flex items-center justify-center p-8 text-xs text-slate-400 gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                      <span>Loading statement lines...</span>
+                    </div>
+                  ) : statementLines.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      No statement lines found for {statementMatchStatusFilter} filter.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-50 dark:bg-[#16161c] text-slate-600 dark:text-zinc-400 font-semibold text-[11px] border-b border-slate-100 dark:border-[#202028]">
+                          <tr>
+                            <th className="px-3 py-2">Date</th>
+                            <th className="px-3 py-2">Reference</th>
+                            <th className="px-3 py-2">Amount</th>
+                            <th className="px-3 py-2">Status</th>
+                            <th className="px-3 py-2">Uploaded On</th>
+                            <th className="px-3 py-2">Matched Batch</th>
+                            <th className="px-3 py-2 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#202028]">
+                          {statementLines.map((line) => {
+                            const isLineMatched = line.match_status === "Matched" || line.match_status === "Manually Matched";
+                            return (
+                              <tr key={line.name} className="hover:bg-slate-50/50 dark:hover:bg-[#181820]">
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-zinc-300">
+                                  {line.statement_date ? new Date(line.statement_date).toLocaleDateString() : "—"}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-[11px] text-slate-800 dark:text-zinc-200">
+                                  {line.reference || "—"}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap font-semibold text-slate-900 dark:text-white">
+                                  {Number(line.amount).toLocaleString()} {line.currency}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px]",
+                                      isLineMatched
+                                        ? "border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40"
+                                        : "border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-950/40"
+                                    )}
+                                  >
+                                    {line.match_status}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap text-slate-500 dark:text-zinc-400 text-[11px]">
+                                  {line.uploaded_on ? new Date(line.uploaded_on).toLocaleDateString() : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-zinc-300">
+                                  {line.batch_title ? (
+                                    <span>{line.batch_title} {line.contractor ? `(${line.contractor})` : ""}</span>
+                                  ) : isLineMatched ? (
+                                    <span>{line.contractor || "Matched Batch"}</span>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {isLineMatched ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleUnmatchLine(line.name)}
+                                      disabled={isUnmatching}
+                                      className="h-6 px-2 text-[10px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                                    >
+                                      Unmatch
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setManualLineName(line.name);
+                                        const el = document.getElementById("line_id");
+                                        el?.scrollIntoView({ behavior: "smooth" });
+                                      }}
+                                      className="h-6 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                                    >
+                                      Select to Match
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Panel 3: Multi-Applicant Batch Settlement & Expense Entry */}
               <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-[#202028]">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <CardHeader className="py-2.5 px-3.5 border-b border-slate-100 dark:border-[#202028]">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-emerald-600" />
                       <div>
                         <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">
                           Manual Matching: Select Applicants from Batch & Settle
                         </CardTitle>
-                        <CardDescription className="text-xs mt-0.5">
+                        <CardDescription className="text-[11px] mt-0.5">
                           Select applicants, enter deposit, and settle batch.
                         </CardDescription>
                       </div>
@@ -1147,7 +1354,7 @@ export default function ExpensesIncomePage() {
                           setSelectedBatchId(val);
                           if (val) handleLoadBatch(val);
                         }}
-                        className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono min-w-[260px] max-w-md"
+                        className="h-7.5 px-2 rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-transparent text-xs font-mono min-w-[240px] max-w-md"
                       >
                         <option value="">-- Select Active Batch --</option>
                         {availableBatches.map((b) => (
@@ -1162,7 +1369,7 @@ export default function ExpensesIncomePage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pt-4 space-y-4">
+                <CardContent className="p-3 sm:p-3.5 space-y-3">
                   {loadedBatch ? (
                     <div className="space-y-4">
                       {/* Batch Header Bar */}
@@ -1383,8 +1590,9 @@ export default function ExpensesIncomePage() {
                           <Button
                             type="submit"
                             size="sm"
-                            disabled={selectedApplicantItemNames.length === 0 || isSettlingBatchItems}
-                            className="w-full sm:w-auto bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-8 px-4 shadow-xs"
+                            disabled={selectedApplicantItemNames.length === 0 || isSettlingBatchItems || isFinanceReadOnly}
+                            title={isFinanceReadOnly ? "You have read-only access here, or do not have permission to perform this action. Please contact your administrator." : undefined}
+                            className="w-full sm:w-auto bg-emerald-900 hover:bg-emerald-950 text-white font-semibold text-xs h-8 px-4 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isSettlingBatchItems ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -1397,8 +1605,8 @@ export default function ExpensesIncomePage() {
                       </form>
                     </div>
                   ) : (
-                    <div className="p-8 text-center border border-dashed border-slate-200 dark:border-[#262632] rounded-xl space-y-2">
-                      <Users className="h-8 w-8 text-slate-300 dark:text-zinc-600 mx-auto" />
+                    <div className="py-5 px-3 text-center border border-dashed border-slate-200 dark:border-[#262632] rounded-xl space-y-1.5">
+                      <Users className="h-6 w-6 text-slate-300 dark:text-zinc-600 mx-auto" />
                       <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                         No Commission Batch Loaded
                       </h4>
@@ -1412,13 +1620,13 @@ export default function ExpensesIncomePage() {
 
               {/* Format Guide & System Compliance Card */}
               <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
-                <CardHeader className="pb-3">
+                <CardHeader className="py-2.5 px-3.5 border-b border-slate-100 dark:border-[#202028]">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-emerald-600" />
                     Reconciliation Specifications & CSV Requirements
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-xs text-slate-600 dark:text-zinc-300 space-y-2">
+                <CardContent className="p-3 text-xs text-slate-600 dark:text-zinc-300 space-y-1.5">
                   <p>
                     <strong>CSV Columns:</strong> Date (YYYY-MM-DD), Reference (wire code or transaction detail), Amount (number in ETB).
                   </p>

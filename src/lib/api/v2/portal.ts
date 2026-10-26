@@ -334,16 +334,25 @@ export interface V2ReplacementOwedItem {
   days_waiting?: number;
   contractor?: string;
   contractor_name?: string;
+  replacement_waived?: number | boolean;
+  replacement_waived_reason?: string;
+  replacement_waived_by?: string;
+  replacement_waived_at?: string;
   [key: string]: any;
 }
 
 /**
  * Lists candidates who returned and are owed replacements without new commission.
- * POST /api/method/agency_tracking.portal_api.list_replacements_owed (New 2026-10-12)
+ * When removed=1 is passed, returns removed/waived replacement cases.
+ * POST /api/method/agency_tracking.portal_api.list_replacements_owed
  */
-export async function listReplacementsOwedV2(contractorName?: string): Promise<V2ReplacementOwedItem[]> {
+export async function listReplacementsOwedV2(
+  contractorName?: string,
+  removed?: number
+): Promise<V2ReplacementOwedItem[]> {
   const body: Record<string, any> = {};
   if (contractorName) body.contractor_name = contractorName;
+  if (removed !== undefined) body.removed = removed;
   const result = await requestV2<any>(
     "/api/method/agency_tracking.portal_api.list_replacements_owed",
     {

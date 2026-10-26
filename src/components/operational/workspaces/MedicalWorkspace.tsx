@@ -133,7 +133,7 @@ export function MedicalWorkspace({
 
     const records: MergedMedicalRecord[] = [];
     for (const plc of placements) {
-      if (plc.status === "Cancelled") continue;
+      if (plc.status === "Cancelled" || plc.status === "Requested") continue;
 
       const app = plc.applicant ? appMap.get(plc.applicant.toLowerCase().trim()) : undefined;
       const fullName = (
@@ -485,7 +485,7 @@ export function MedicalWorkspace({
       </div>
 
       {/* Main Table Container */}
-      <div className="rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto lg:overflow-hidden shadow-xs">
+      <div className="rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto shadow-xs">
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-2 text-slate-400">
             <HeartPulse className="h-6 w-6 animate-pulse text-emerald-600" />

@@ -329,7 +329,7 @@ export async function requestV2<T = any>(
       } else if (response.status === 401) {
         errorMsg = "Your session has expired. Please sign in again.";
       } else if (response.status === 403) {
-        errorMsg = "Permission denied: Your assigned role does not have authorization for this operation.";
+        errorMsg = "You have read-only access here, or your assigned role does not have authorization for this operation.";
       } else if (response.status === 404) {
         errorMsg = "The requested record was not found.";
       } else if (response.status === 409) {

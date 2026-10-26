@@ -63,7 +63,8 @@ export interface V2ParsedVisaData {
 }
 
 /**
- * Uploads a file via standard Frappe multipart endpoint to generate a file_url.
+ * Uploads a file using the direct storage flow (upload_guard.start_upload -> PUT -> finish_upload)
+ * with graceful fallback to multipart /api/method/upload_file when storage is unconfigured.
  */
 export async function uploadFileV2(
   file: File,
@@ -71,6 +72,76 @@ export async function uploadFileV2(
   doctype?: string,
   docname?: string
 ): Promise<V2FileUploadResponse> {
+  // Step 1: Direct storage upload flow (bypasses proxy 4.5MB limit for files up to 20MB)
+  try {
+    const startRes = await requestV2<any>(
+      "/api/method/agency_tracking.upload_guard.start_upload",
+      {
+        method: "POST",
+        body: {
+          filename: file.name,
+          size: file.size,
+          is_private: isPrivate ? 1 : 0,
+          ...(doctype && docname ? { doctype: doctype.trim(), docname: docname.trim() } : {}),
+        },
+      }
+    );
+    const startPayload = (startRes && "message" in startRes && startRes.message) ? startRes.message : startRes;
+
+    if (startPayload?.upload_url && startPayload?.key) {
+      // Step 2: PUT directly to Cloudflare R2 / storage
+      const putHeaders: Record<string, string> = {
+        ...(startPayload.headers || {}),
+      };
+      const putRes = await fetch(startPayload.upload_url, {
+        method: startPayload.method || "PUT",
+        headers: putHeaders,
+        body: file,
+      });
+
+      if (!putRes.ok) {
+        throw new Error(`Direct storage upload failed with status ${putRes.status}`);
+      }
+
+      // Step 3: Finish upload
+      const finishRes = await requestV2<any>(
+        "/api/method/agency_tracking.upload_guard.finish_upload",
+        {
+          method: "POST",
+          body: {
+            key: startPayload.key,
+          },
+        }
+      );
+      const finishPayload = (finishRes && "message" in finishRes && finishRes.message) ? finishRes.message : finishRes;
+      if (finishPayload?.file_url) {
+        return {
+          file_url: finishPayload.file_url,
+          file_name: finishPayload.file_name || file.name,
+          name: finishPayload.name || finishPayload.file_url,
+        };
+      }
+    }
+  } catch (err: any) {
+    const msg = String(err?.message || "");
+    const isR2NotConfigured = err?.status === 417 || msg.includes("Cloudflare R2 is not configured");
+    const isMethodMissing = err?.status === 404 || msg.includes("upload_guard");
+
+    if (isR2NotConfigured || isMethodMissing) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        throw new ApiV2Error(
+          `Cloudflare R2 direct storage is not configured on this environment (HTTP 417). The file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 4.5 MB server proxy limit and cannot be uploaded via the legacy fallback. Please configure Cloudflare R2 storage or upload a file under 4.5 MB.`,
+          417
+        );
+      }
+      console.warn("[Upload] Direct upload unavailable (R2 unconfigured/unsupported), using legacy upload_file fallback for small file:", msg);
+    } else {
+      // Honest error propagation for file size, MIME kind, or backend permission rejections
+      throw err;
+    }
+  }
+
+  // Fallback path: standard multipart upload_file
   const formData = new FormData();
   formData.append("file", file);
   formData.append("is_private", isPrivate ? "1" : "0");

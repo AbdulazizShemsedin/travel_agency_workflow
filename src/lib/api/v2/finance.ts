@@ -462,54 +462,42 @@ export async function listTransactionsV2(
 }
 
 /**
- * Lists Commission Batch Requests from the system.
+ * Lists Commission Batches from the system using authoritative endpoint.
+ * Authoritative Backend Endpoint: finance_api.list_commission_batches (New October 2026)
+ * Roles: Finance Manager / Admin
  */
 export async function listCommissionBatchesV2(
-  filters?: Record<string, any>
+  filters?: {
+    contractor?: string;
+    status?: string;
+    destination_country?: string;
+    [key: string]: any;
+  }
 ): Promise<V2CommissionBatch[]> {
-  const result = await requestV2<any[]>("/api/method/frappe.client.get_list", {
-    method: "POST",
-    body: {
-      doctype: "Commission Batch Request",
-      fields: JSON.stringify([
-        "name",
-        "title",
-        "contractor",
-        "destination_country",
-        "currency",
-        "status",
-        "advance_amount",
-        "advance_reference",
-        "advance_received_on",
-        "balance_due_birr",
-        "settled_on",
-        "settlement_reference",
-        "owner",
-        "creation",
-        "modified",
-      ]),
-      filters: filters ? JSON.stringify(filters) : undefined,
-      order_by: "creation desc",
-      limit_page_length: 50,
-    },
-  });
-  if (!Array.isArray(result)) return [];
-  return result.map((b: any) => {
-    // Virtual fields (total_amount_original, total_amount_birr, advance_amount_birr, etc.)
-    // are not permitted in frappe.client.get_list. The full doc (with virtuals) is fetched
-    // separately via getCommissionBatchV2 when a batch is selected.
-    // For the list view, approximate total from real DB columns:
-    //   balance_due_birr + advance_amount = total_amount_birr (from docs: balance_due_birr = total − advance)
-    const advanceAmt = Number(b.advance_amount ?? 0) || 0;
-    const balanceDue = Number(b.balance_due_birr ?? 0) || 0;
-    const derivedTotal = advanceAmt + balanceDue;
-    return {
+  try {
+    const res = await requestV2<any>(
+      "/api/method/agency_tracking.finance_api.list_commission_batches",
+      {
+        method: "POST",
+        body: {
+          ...(filters?.contractor ? { contractor: filters.contractor } : {}),
+          ...(filters?.status ? { status: filters.status } : {}),
+          ...(filters?.destination_country ? { destination_country: filters.destination_country } : {}),
+        },
+      }
+    );
+    const payload = (res && "message" in res && (res as any).message) ? (res as any).message : res;
+    const rawList = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.batches)) ? payload.batches : [];
+    return rawList.map((b: any) => ({
       ...b,
       contractor_name: b.contractor_name || b.contractor,
-      total_amount: derivedTotal,
+      total_amount: b.total_amount_birr ?? b.total_amount ?? 0,
       currency: b.currency || "ETB",
-    };
-  });
+    }));
+  } catch (err: any) {
+    // Honest error propagation
+    throw err;
+  }
 }
 
 /**
@@ -853,6 +841,67 @@ export async function unmatchLineV2(
       },
     }
   );
+}
+
+/**
+ * Bank statement line representing reconciled or unreconciled bank transactions.
+ * Supported contract fields:
+ * - statement_date, reference, amount, currency, match_status, uploaded_on
+ * - contractor and batch_title (when matched)
+ * The internal line `name` is only used for programmatic RPC identification, never displayed as raw text.
+ */
+export interface V2StatementLine {
+  name: string;
+  statement_date?: string;
+  reference?: string;
+  amount: number;
+  currency: string;
+  match_status: "Unmatched" | "Matched" | "Manually Matched" | string;
+  uploaded_on?: string;
+  contractor?: string;
+  batch_title?: string;
+}
+
+
+export interface V2ListStatementLinesParams {
+  match_status?: "Unmatched" | "Matched" | "Manually Matched" | string;
+  limit_start?: number;
+  limit_page_length?: number;
+  with_total?: number;
+}
+
+/**
+ * Lists bank statement lines with status and details.
+ * Authoritative Backend Endpoint: reconciliation_api.list_statement_lines (New October 2026, item B1)
+ * Roles: Finance Manager / Admin
+ */
+export async function listStatementLinesV2(
+  params?: V2ListStatementLinesParams
+): Promise<{ lines: V2StatementLine[]; total_count?: number }> {
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.reconciliation_api.list_statement_lines",
+    {
+      method: "POST",
+      body: params || {},
+    }
+  );
+  const payload = (res && "message" in res && (res as any).message) ? (res as any).message : res;
+  if (Array.isArray(payload)) {
+    return { lines: payload, total_count: payload.length };
+  }
+  if (payload && Array.isArray(payload.lines)) {
+    return {
+      lines: payload.lines,
+      total_count: payload.total_count ?? payload.lines.length,
+    };
+  }
+  if (payload && Array.isArray(payload.data)) {
+    return {
+      lines: payload.data,
+      total_count: payload.total_count ?? payload.data.length,
+    };
+  }
+  return { lines: [], total_count: 0 };
 }
 
 /**

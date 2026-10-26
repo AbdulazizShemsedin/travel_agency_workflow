@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 function getFrappeConfig(req: NextRequest, methodPath = "") {
   const url =
     process.env.FRAPPE_BASE_URL ||
-    process.env.NEXT_PUBLIC_FRAPPE_URL ||
-    "https://agencytracking-production-4974.up.railway.app";
+    process.env.NEXT_PUBLIC_FRAPPE_URL;
 
   if (!url) {
     return null;
@@ -14,6 +13,11 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   const headers: Record<string, string> = {
     Accept: clientAccept || "application/json",
   };
+
+  // Skip ngrok browser warning interstitial page when using temporary ngrok tunnel
+  if (url.includes("ngrok")) {
+    headers["ngrok-skip-browser-warning"] = "true";
+  }
 
   const cookie = req.headers.get("cookie");
   const authHeader = req.headers.get("authorization");
@@ -58,19 +62,6 @@ async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 2, ti
       }
     } finally {
       clearTimeout(timer);
-    }
-  }
-
-  // If a direct connection to a Railway backend times out or is blocked by local ISP/firewall,
-  // seamlessly fall back to the live deployed Vercel gateway which connects to Railway in iad1.
-  if (url.includes("up.railway.app") && !url.includes("travel-agency-workflow-three.vercel.app")) {
-    const fallbackUrl = url.replace(/https:\/\/[^/]+/, "https://travel-agency-workflow-three.vercel.app");
-    try {
-      console.warn(`[PROXY CONNECTION FALLBACK] Direct Railway connection failed (${lastError?.code || lastError?.message}). Falling back to deployed gateway: ${fallbackUrl}`);
-      const fallbackRes = await fetch(fallbackUrl, init);
-      return fallbackRes;
-    } catch (fallbackErr) {
-      console.error("[PROXY FALLBACK ERROR]", fallbackErr);
     }
   }
 
