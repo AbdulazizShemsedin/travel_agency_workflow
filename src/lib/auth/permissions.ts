@@ -12,6 +12,7 @@ export type PermissionAction =
   | "manageComplaints"
   | "viewReports"
   | "manageContractors"
+  | "manageSelectionRequests"
   | "accessAgentPortal"
   | "manageCommunication"
   | "manageTicketing"
@@ -243,6 +244,11 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
   ],
   manageContractors: [
     "Admin",
+  ],
+  manageSelectionRequests: [
+    "Admin",
+    "Registrar",
+    "Manager",
   ],
   accessAgentPortal: [
     "Foreign Agency",

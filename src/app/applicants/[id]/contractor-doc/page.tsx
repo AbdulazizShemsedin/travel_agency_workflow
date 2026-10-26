@@ -138,6 +138,18 @@ export default function PlacementDocumentCenterPage() {
       toast.error("No file selected", { description: "Please choose a contract document first." });
       return;
     }
+    if (activePlacement?.status === "Requested") {
+      toast.error("Awaiting Internal Confirmation", {
+        description: "Your selection request is awaiting review by the agency office. Contracts cannot be uploaded until approved.",
+      });
+      return;
+    }
+    if ((activePlacement as any)?.request_denied === 1) {
+      toast.error("Candidate Unavailable", {
+        description: "This candidate is unavailable. Please select another candidate.",
+      });
+      return;
+    }
     if (!activePlacement && !previewOnly) {
       toast.error("No Active Placement", {
         description: "Candidate must be Selected with an active Placement record before attaching contracts.",
@@ -679,42 +691,71 @@ export default function PlacementDocumentCenterPage() {
               </CardHeader>
 
               <CardContent className="px-3 pb-2.5 pt-0 space-y-2">
-                <PremiumDropzone
-                  id="contract-doc-dropzone"
-                  variant="compact"
-                  value={contractFile || contractPreviewUrl}
-                  fileName={contractFile?.name}
-                  fileSize={contractFile?.size}
-                  isLoading={isContractUploading}
-                  loadingText="Uploading & extracting contract info..."
-                  label="Employment Contract Document"
-                  description="PDF or image"
-                  onFileSelect={(file) => {
-                    setContractFile(file);
-                    setContractPreviewUrl(URL.createObjectURL(file));
-                  }}
-                  onRemove={() => {
-                    setContractFile(null);
-                    setContractPreviewUrl("");
-                  }}
-                />
-
-                {contractFile && (
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <Button
-                      type="button"
-                      disabled={!contractFile || isContractUploading}
-                      onClick={() => handleUploadContract(false)}
-                      className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-7.5 shadow-xs"
-                    >
-                      {isContractUploading ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
-                      ) : (
-                        <FileCheck2 className="h-3 w-3 mr-1.5" />
-                      )}
-                      Extract contract info
-                    </Button>
+                {(activePlacement as any)?.request_denied === 1 ? (
+                  <div className="p-4 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200 text-xs space-y-2">
+                    <div className="flex items-center gap-2 font-bold text-sm text-rose-800 dark:text-rose-300">
+                      <AlertCircle className="h-4 w-4 text-rose-600" />
+                      Unavailable. Please select another candidate.
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-zinc-300">
+                      This selection request was not confirmed. Please return to the candidate pool to select another candidate.
+                    </p>
+                    <Link href="/agent">
+                      <Button size="sm" className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs h-7.5 px-3 font-semibold">
+                        Return to Candidate Pool
+                      </Button>
+                    </Link>
                   </div>
+                ) : activePlacement?.status === "Requested" ? (
+                  <div className="p-4 rounded-xl border border-amber-300 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs space-y-2">
+                    <div className="flex items-center gap-2 font-bold text-sm text-amber-800 dark:text-amber-300">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      Awaiting Internal Confirmation
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-zinc-300 leading-relaxed">
+                      Your request is awaiting review by the agency office. Contract uploading and processing are unavailable until the selection request is approved by internal staff.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <PremiumDropzone
+                      id="contract-doc-dropzone"
+                      variant="compact"
+                      value={contractFile || contractPreviewUrl}
+                      fileName={contractFile?.name}
+                      fileSize={contractFile?.size}
+                      isLoading={isContractUploading}
+                      loadingText="Uploading & extracting contract info..."
+                      label="Employment Contract Document"
+                      description="PDF or image"
+                      onFileSelect={(file) => {
+                        setContractFile(file);
+                        setContractPreviewUrl(URL.createObjectURL(file));
+                      }}
+                      onRemove={() => {
+                        setContractFile(null);
+                        setContractPreviewUrl("");
+                      }}
+                    />
+
+                    {contractFile && (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <Button
+                          type="button"
+                          disabled={!contractFile || isContractUploading}
+                          onClick={() => handleUploadContract(false)}
+                          className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-7.5 shadow-xs"
+                        >
+                          {isContractUploading ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                          ) : (
+                            <FileCheck2 className="h-3 w-3 mr-1.5" />
+                          )}
+                          Extract contract info
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

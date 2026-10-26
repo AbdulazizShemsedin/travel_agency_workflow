@@ -742,6 +742,7 @@ export default function ReportsPage() {
       { stage: "Draft", count: af.Draft || 0 },
       { stage: "Registered", count: af.Registered || 0 },
       { stage: "CV Generated", count: af["CV Generated"] || 0 },
+      { stage: "Requested", count: pf.Requested || 0 },
       { stage: "Selected", count: pf.Selected || 0 },
       { stage: "LMIS", count: lmisCount },
       { stage: "Taeshir", count: taeshirCount },

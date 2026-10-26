@@ -293,9 +293,14 @@ export default function MyReservedCandidatesPage() {
                                 Unavailable. Please select another candidate.
                               </Badge>
                             ) : c.status === "Requested" ? (
-                              <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold">
-                                Waiting for confirmation
-                              </Badge>
+                              <div className="flex flex-col items-start gap-0.5">
+                                <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold">
+                                  Awaiting internal confirmation
+                                </Badge>
+                                <span className="text-[9px] text-slate-500 dark:text-zinc-400">
+                                  Your request is awaiting review by the agency office.
+                                </span>
+                              </div>
                             ) : (
                               <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
                                 ✓ Reserved ({c.status || "Selected"})
@@ -368,6 +373,10 @@ export default function MyReservedCandidatesPage() {
                                   Select Another
                                 </Button>
                               </Link>
+                            ) : c.status === "Requested" ? (
+                              <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-2.5 py-1">
+                                Awaiting Confirmation
+                              </span>
                             ) : c.contract_file ? (
                               <a
                                 href={c.contract_file}

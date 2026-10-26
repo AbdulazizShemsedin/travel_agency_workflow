@@ -9,7 +9,7 @@
 
 import { requestV2 } from "./client";
 import { listApplicantsV2 } from "./applicants";
-import { listPlacementsV2 } from "./placements";
+import { listPlacementsV2, listSelectionRequestsV2 } from "./placements";
 import { listUnresolvedComplaintsV2 } from "./complaints";
 import { listMyClearanceStepsV2 } from "./clearance";
 import { listMyWakalaRequestsV2 } from "./portal";
@@ -269,15 +269,35 @@ export async function getComplianceNotificationsV2(authUser?: AuthUser | null): 
     const canAccessClearance = authUser
       ? hasPermission(authUser, "manageClearances") || hasPermission(authUser, "manageTicketing")
       : false;
+    const canManageSelectionRequests = authUser
+      ? hasPermission(authUser, "manageSelectionRequests") || hasPermission(authUser, "registerApplicant")
+      : false;
 
-    const [applicants, placements, complaints, clearanceSteps] = await Promise.all([
+    const [applicants, placements, complaints, clearanceSteps, selectionRequests] = await Promise.all([
       listApplicantsV2().catch(() => []),
       listPlacementsV2().catch(() => []),
       canManageComplaints ? listUnresolvedComplaintsV2().catch(() => []) : Promise.resolve([]),
       canAccessClearance ? listMyClearanceStepsV2().catch(() => []) : Promise.resolve([]),
+      canManageSelectionRequests ? listSelectionRequestsV2().catch(() => []) : Promise.resolve([]),
     ]);
 
     const now = new Date();
+
+    // 0. Pending Foreign Agency Selection Requests (Notifies Registrars, Managers, Admins)
+    for (const req of selectionRequests) {
+      notifications.push({
+        id: `selection-request-${req.name}`,
+        title: `Selection Request: ${req.full_name || "Candidate"}`,
+        description: `${req.agency_name || "Agency"} requested ${req.full_name || "Candidate"}${req.passport_number ? ` (${req.passport_number})` : ""} for ${req.destination_country || "abroad"}.${req.is_free_replacement ? " (Replacement)" : ""}`,
+        category: "workflow",
+        severity: "warning",
+        timestamp: req.requested_on ? req.requested_on.split("T")[0] : "Pending Review",
+        applicant_id: req.applicant,
+        applicant_name: req.full_name,
+        action_url: "/selection-requests",
+        action_label: "Review Request",
+      });
+    }
 
     // 1. WATCHDOG 1: medical_expiry_watchdog (14, 10, 7, 3, 1 days before Applicant.medical_expiry_date)
     for (const app of applicants) {
@@ -495,13 +515,39 @@ export async function getForeignAgencyNotificationsV2(contractorName?: string): 
       });
     }
 
-    // 2. Reserved candidates awaiting bilateral contract upload
+    // 2. Reserved candidates awaiting bilateral contract upload or internal confirmation
     for (const plc of placements) {
-      if (plc.status === "Selected" || !plc.contract_signed_date) {
+      if ((plc as any).request_denied === 1) {
+        notifications.push({
+          id: `agency-denied-${plc.name}`,
+          title: `Candidate Unavailable: ${plc.applicant_name || plc.applicant}`,
+          description: "Unavailable. Please select another candidate from the candidate pool.",
+          category: "workflow",
+          severity: "warning",
+          timestamp: "Unavailable",
+          applicant_id: plc.applicant,
+          applicant_name: plc.applicant_name,
+          action_url: "/agent",
+          action_label: "Select Another",
+        });
+      } else if (plc.status === "Requested") {
+        notifications.push({
+          id: `agency-requested-${plc.name}`,
+          title: `Selection Request Pending: ${plc.applicant_name || plc.applicant}`,
+          description: "Your selection request is awaiting review by the agency office.",
+          category: "workflow",
+          severity: "info",
+          timestamp: "Awaiting Confirmation",
+          applicant_id: plc.applicant,
+          applicant_name: plc.applicant_name,
+          action_url: "/agent/reserved",
+          action_label: "View Status",
+        });
+      } else if (plc.status === "Selected" && !plc.contract_signed_date) {
         notifications.push({
           id: `agency-contract-${plc.name}`,
           title: `Contract Upload Required: ${plc.applicant_name || plc.applicant}`,
-          description: `Placement ${plc.name} for ${plc.applicant_name || plc.applicant} is awaiting bilateral employment contract upload to advance to corridor clearance.`,
+          description: `Placement ${plc.name} for ${plc.applicant_name || plc.applicant} is confirmed. Bilateral employment contract upload required to advance to corridor clearance.`,
           category: "workflow",
           severity: "warning",
           timestamp: plc.selection_date || "Pending Upload",

@@ -403,9 +403,9 @@ export function CandidateDetailModal({
 
           {isAlreadyReserved ? (
             <div className="flex items-center gap-2">
-              <Badge className="bg-emerald-800 text-white font-semibold text-xs px-3 py-1.5 rounded-xl shadow-xs">
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Allocated to Your Agency
+              <Badge className="bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 font-semibold text-xs px-3 py-1.5 rounded-xl shadow-xs">
+                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                {(candidate as any)?.status === "Requested" ? "Awaiting Internal Confirmation" : "Allocated to Your Agency"}
               </Badge>
             </div>
           ) : (
@@ -418,12 +418,12 @@ export function CandidateDetailModal({
               {isSelecting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Reserving Candidate...
+                  Sending Request...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Select & Reserve Candidate
+                  Request Candidate Selection
                 </>
               )}
             </Button>

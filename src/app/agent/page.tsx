@@ -29,7 +29,7 @@ import {
   V2PortalCandidate,
   ApiV2Error,
 } from "@/lib/api/v2";
-import { reverseLastStepV2 } from "@/lib/api/v2/undo";
+import { getUndoableStepV2, reverseLastStepV2 } from "@/lib/api/v2/undo";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { CandidateCard } from "@/components/agent/CandidateCard";
@@ -71,7 +71,12 @@ export default function AgentDiscoveryPage() {
   const replacementName = searchParams.get("replacement_name");
 
   const queryClient = useQueryClient();
-  const { authUser, agencyContext } = useAuth();
+  const { authUser, agencyContext, roles } = useAuth();
+
+  const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
+  const isInternalStaff = userRoles.some((r) =>
+    ["administrator", "system manager", "admin", "manager", "operations manager", "operation manager", "registrar"].includes(r)
+  );
 
   const resolveContractorString = (c: any): string => {
     if (!c) return "";
@@ -302,9 +307,11 @@ export default function AgentDiscoveryPage() {
         setSelectedCandidateForDetail(null);
       }
 
-      const successToastMsg = replacementFor
-        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}. Request sent. Waiting for the agency office to confirm she is available.`
-        : `✓ Request sent for ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""}. Waiting for the agency office to confirm she is available.`;
+      const successToastMsg = !isInternalStaff
+        ? "Request sent. Waiting for the agency office to confirm she is available."
+        : replacementFor
+        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}.`
+        : `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected.`;
 
       setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
@@ -318,7 +325,9 @@ export default function AgentDiscoveryPage() {
       setUndoState({
         candidate,
         placementName,
-        message: `Request sent for ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""}. Click Undo within 7 seconds to cancel request.`,
+        message: !isInternalStaff
+          ? `Request sent for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`
+          : `Candidate ${candidate.full_name} selected. Click Undo within 7 seconds to cancel.`,
       });
       undoTimeoutRef.current = setTimeout(() => {
         setUndoState(null);
@@ -362,13 +371,25 @@ export default function AgentDiscoveryPage() {
     }
   };
 
-  // Undo mutation: reverses the last step (Selected -> unselect) via reversal.reverse_last_step
+  // Undo mutation: reverses the last step via reversal.get_undoable_step & reversal.reverse_last_step
   const undoMutation = useMutation({
     mutationFn: async (placementName: string) => {
       if (!placementName) {
         throw new ApiV2Error("Unable to undo: no placement identifier returned from the backend.", 400);
       }
-      return await reverseLastStepV2("Placement", placementName, "Selected", "Agency unselected candidate");
+      const stepInfo = await getUndoableStepV2("Placement", placementName);
+      if (!stepInfo || !stepInfo.available) {
+        throw new ApiV2Error(
+          stepInfo?.blocked || "Cannot undo: this request is no longer eligible for reversal.",
+          400
+        );
+      }
+      return await reverseLastStepV2(
+        "Placement",
+        placementName,
+        stepInfo.from_status,
+        "Agency unselected candidate"
+      );
     },
     onSuccess: (res, placementName) => {
       if (undoTimeoutRef.current) {
@@ -905,10 +926,12 @@ export default function AgentDiscoveryPage() {
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-              <ShieldCheck className="h-5 w-5" /> Select This Applicant?
+              <ShieldCheck className="h-5 w-5" /> {isInternalStaff ? "Select This Applicant?" : "Request Candidate Selection"}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Selecting this applicant sends a request to the agency office to confirm availability for your agency.
+              {isInternalStaff
+                ? "Selecting this applicant directly assigns them to the agency."
+                : "Requesting this applicant sends a selection request to the agency office to confirm she is available."}
             </DialogDescription>
           </DialogHeader>
 
@@ -989,12 +1012,12 @@ export default function AgentDiscoveryPage() {
               {selectingCandidateId !== null ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Selecting...
+                  {isInternalStaff ? "Selecting..." : "Sending Request..."}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Select Applicant
+                  {isInternalStaff ? "Select Applicant" : "Request Selection"}
                 </>
               )}
             </Button>

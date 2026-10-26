@@ -220,8 +220,9 @@ export function ApplicantRegistrationForm({
   // Dialog state
   const [isConfirmRegisterOpen, setIsConfirmRegisterOpen] = React.useState(false);
 
-  // Live duplicate passport feedback
+  // Live duplicate passport & national ID feedback
   const [passportConflict, setPassportConflict] = React.useState<string | null>(null);
+  const [nationalIdConflict, setNationalIdConflict] = React.useState<string | null>(null);
 
   // Registered Foreign Contractor Agents query
   const { data: contractors = [] } = useQuery({
@@ -767,6 +768,24 @@ export function ApplicantRegistrationForm({
     } else {
       setPassportConflict(null);
       clearErrors("passport_number");
+    }
+  };
+
+  // Live duplicate national ID check
+  const handleNationalIdBlur = async () => {
+    const nId = (getValues("national_id") || "").trim();
+    if (!nId || nId.length < 4) {
+      setNationalIdConflict(null);
+      clearErrors("national_id");
+      return;
+    }
+    const res = await checkApplicantUniquenessV2("national_id", nId, existingApplicantId);
+    if (res.isConflict && res.message) {
+      setNationalIdConflict(res.message);
+      setError("national_id", { type: "manual", message: res.message });
+    } else {
+      setNationalIdConflict(null);
+      clearErrors("national_id");
     }
   };
 
@@ -1911,7 +1930,7 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            {/* Row 2: Full Name | Active ? */}
+            {/* Row 2: Full Name | National ID & Status Checkbox */}
             <div className="space-y-1.5" id="field-full_name">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
@@ -1934,18 +1953,40 @@ export function ApplicantRegistrationForm({
               />
             </div>
 
-            <div className="space-y-1.5 flex flex-col justify-center">
-              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 mb-2">
-                Status <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-              </Label>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  {...register("is_active")}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-                />
-                <span>Active ?</span>
-              </label>
+            <div className="space-y-1.5" id="field-national_id">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+                  National ID (Fayda / FAN) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                </Label>
+                {(nationalIdConflict || errors.national_id) && (
+                  <span className="text-[11px] text-rose-600 font-medium">
+                    {nationalIdConflict || errors.national_id?.message}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <Input
+                    placeholder="e.g. FAN-123456789 or 12-digit National ID"
+                    {...register("national_id")}
+                    onBlur={handleNationalIdBlur}
+                    className={cn(
+                      "text-xs font-mono border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                      getFieldClass("national_id")
+                    )}
+                  />
+                </div>
+                <div className="shrink-0 flex items-center pt-0.5" id="checkbox-is_active">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300 select-none">
+                    <input
+                      type="checkbox"
+                      {...register("is_active")}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                    />
+                    <span>Active ?</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {/* Row 3: Passport No. | Passport Type */}
@@ -2376,7 +2417,7 @@ export function ApplicantRegistrationForm({
             </div>
 
             {/* Sponsor National ID | Sponsor Arabic */}
-            <div className="space-y-1.5" id="field-national_id">
+            <div className="space-y-1.5" id="field-sponsor_id">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                 Sponsor National ID <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
@@ -2384,14 +2425,14 @@ export function ApplicantRegistrationForm({
                 autoComplete="off"
                 data-lpignore="true"
                 data-form-type="other"
-                {...register("national_id")}
+                {...register("sponsor_id")}
                 className={cn(
                   "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
-                  getFieldClass("national_id")
+                  getFieldClass("sponsor_id")
                 )}
               />
-              {errors.national_id && (
-                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.national_id.message}</p>
+              {errors.sponsor_id && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.sponsor_id.message}</p>
               )}
             </div>
 

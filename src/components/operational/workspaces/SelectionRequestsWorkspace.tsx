@@ -19,6 +19,8 @@ import {
   Building2,
   Globe,
   Tag,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   listSelectionRequestsV2,
@@ -114,14 +116,26 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
         description: `${approvingItem.full_name || "Candidate"} is now Selected and queued for medical clearance.`,
       });
       queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_list"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setApprovingItem(null);
       setApprovalRemarks("");
       onRefreshParent?.();
     } catch (err: any) {
-      toast.error("Approval Failed", {
-        description: err?.message || "Could not approve selection request. Please try again.",
-      });
+      const errMsg = err?.message || "";
+      if (errMsg.toLowerCase().includes("already decided") || errMsg.toLowerCase().includes("already")) {
+        toast.error("Request Already Decided", {
+          description: errMsg || "This selection request was already decided. Refreshing current requests...",
+        });
+        refetchRequests();
+        queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+        setApprovingItem(null);
+      } else {
+        toast.error("Approval Failed", {
+          description: errMsg || "Could not approve selection request. Please try again.",
+        });
+      }
     } finally {
       setIsApproving(false);
     }
@@ -136,7 +150,8 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
       return;
     }
     if (!denyingItem) return;
-    if (!denialReason.trim()) {
+    const cleanReason = denialReason.trim();
+    if (!cleanReason) {
       toast.error("Denial Reason Required", {
         description: "Please specify why this candidate is unavailable.",
       });
@@ -145,19 +160,31 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
 
     setIsDenying(true);
     try {
-      await denySelectionRequestV2(denyingItem.name, denialReason.trim());
+      await denySelectionRequestV2(denyingItem.name, cleanReason);
       toast.success("Request Denied", {
         description: `${denyingItem.full_name || "Candidate"} marked unavailable and agency notified.`,
       });
       queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_list"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
       queryClient.invalidateQueries({ queryKey: ["v2_unavailable_applicants_list"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setDenyingItem(null);
       setDenialReason("");
       onRefreshParent?.();
     } catch (err: any) {
-      toast.error("Denial Failed", {
-        description: err?.message || "Could not deny selection request.",
-      });
+      const errMsg = err?.message || "";
+      if (errMsg.toLowerCase().includes("already decided") || errMsg.toLowerCase().includes("already")) {
+        toast.error("Request Already Decided", {
+          description: errMsg || "This selection request was already decided. Refreshing current requests...",
+        });
+        refetchRequests();
+        queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+        setDenyingItem(null);
+      } else {
+        toast.error("Denial Failed", {
+          description: errMsg || "Could not deny selection request.",
+        });
+      }
     } finally {
       setIsDenying(false);
     }
@@ -179,6 +206,8 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
       });
       queryClient.invalidateQueries({ queryKey: ["v2_unavailable_applicants_list"] });
       queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_list"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
       setPuttingBackApplicant(null);
       setPutBackReason("");
     } catch (err: any) {
@@ -216,6 +245,28 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
         (a as any).unavailable_reason?.toLowerCase().includes(q)
     );
   }, [unavailableApplicants, searchQuery]);
+
+  // Desktop Compact Pagination
+  const [requestsPage, setRequestsPage] = React.useState(1);
+  const [unavailablePage, setUnavailablePage] = React.useState(1);
+  const pageSize = 8;
+
+  React.useEffect(() => {
+    setRequestsPage(1);
+    setUnavailablePage(1);
+  }, [searchQuery, subTab]);
+
+  const totalRequestsPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const paginatedRequests = React.useMemo(() => {
+    const start = (requestsPage - 1) * pageSize;
+    return filteredRequests.slice(start, start + pageSize);
+  }, [filteredRequests, requestsPage]);
+
+  const totalUnavailablePages = Math.max(1, Math.ceil(filteredUnavailable.length / pageSize));
+  const paginatedUnavailable = React.useMemo(() => {
+    const start = (unavailablePage - 1) * pageSize;
+    return filteredUnavailable.slice(start, start + pageSize);
+  }, [filteredUnavailable, unavailablePage]);
 
   return (
     <div className="w-full h-full min-h-0 flex flex-col space-y-3">
@@ -337,7 +388,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                  {filteredRequests.map((req) => (
+                  {paginatedRequests.map((req) => (
                     <tr key={req.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
                         {req.ref_no || "—"}
@@ -362,7 +413,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                       <td className="py-2.5 px-3">
                         {req.is_free_replacement ? (
                           <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-medium border-0">
-                            Replacement {req.exchange_for ? `for ${req.exchange_for}` : ""}
+                            {req.exchange_for ? `Replacement for ${req.exchange_for_worker_name || req.exchange_for}` : "Free Replacement"}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] border-slate-200 dark:border-[#2b2b36] text-slate-600">
@@ -408,6 +459,34 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                 </tbody>
               </table>
             )}
+            {filteredRequests.length > pageSize && (
+              <div className="py-2 px-3 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161e] flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(filteredRequests.length, (requestsPage - 1) * pageSize + 1)} - {Math.min(filteredRequests.length, requestsPage * pageSize)} of {filteredRequests.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={requestsPage <= 1}
+                    onClick={() => setRequestsPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="px-2 text-[11px] font-medium">Page {requestsPage} of {totalRequestsPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={requestsPage >= totalRequestsPages}
+                    onClick={() => setRequestsPage((p) => Math.min(totalRequestsPages, p + 1))}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* UNAVAILABLE CANDIDATES TABLE */
@@ -442,7 +521,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                  {filteredUnavailable.map((app) => (
+                  {paginatedUnavailable.map((app) => (
                     <tr key={app.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
                         {app.ref_no || "—"}
@@ -481,6 +560,34 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                   ))}
                 </tbody>
               </table>
+            )}
+            {filteredUnavailable.length > pageSize && (
+              <div className="py-2 px-3 border-t border-slate-100 dark:border-[#202028] bg-slate-50/50 dark:bg-[#16161e] flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  Showing {Math.min(filteredUnavailable.length, (unavailablePage - 1) * pageSize + 1)} - {Math.min(filteredUnavailable.length, unavailablePage * pageSize)} of {filteredUnavailable.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={unavailablePage <= 1}
+                    onClick={() => setUnavailablePage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="px-2 text-[11px] font-medium">Page {unavailablePage} of {totalUnavailablePages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={unavailablePage >= totalUnavailablePages}
+                    onClick={() => setUnavailablePage((p) => Math.min(totalUnavailablePages, p + 1))}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}

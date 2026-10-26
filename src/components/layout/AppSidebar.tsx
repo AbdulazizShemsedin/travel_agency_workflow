@@ -25,7 +25,10 @@ import {
   ChevronUp,
   ShieldCheck,
   Settings,
+  Inbox,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { listSelectionRequestsV2 } from "@/lib/api/v2/placements";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +53,7 @@ interface NavItemConfig {
 const navItems: NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard", tourId: "sidebar-nav-dashboard" },
   { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants", tourId: "sidebar-nav-applicants" },
+  { label: "Selection Requests", href: "/selection-requests", icon: Inbox, action: "manageSelectionRequests", tourId: "sidebar-nav-selection-requests" },
   { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication", tourId: "sidebar-nav-chat" },
   { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers", tourId: "sidebar-nav-employees" },
   { label: "Foreign Agencies", href: "/contractors", icon: Building2, action: "manageContractors", tourId: "sidebar-nav-contractors" },
@@ -114,6 +118,17 @@ export function AppSidebar({
     !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
   const canAccessAgentPortal =
     (isAdmin && can("accessAgentPortal")) || isForeignAgency;
+  const canManageSelectionRequests = can("manageSelectionRequests");
+
+  // Real backend count for pending selection requests badge
+  const { data: selectionRequests = [] } = useQuery({
+    queryKey: ["v2_selection_requests_count"],
+    queryFn: listSelectionRequestsV2,
+    enabled: Boolean(user && canManageSelectionRequests),
+    staleTime: 30000,
+  });
+  const selectionRequestsCount = selectionRequests.length;
+
   const showLabels = isMobileOpen || !isCollapsed;
 
   return (
@@ -217,7 +232,18 @@ export function AppSidebar({
                       isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"
                     )}
                   />
-                  {showLabels && <span>{item.label}</span>}
+                  {showLabels && <span className="truncate">{item.label}</span>}
+                  {item.href === "/selection-requests" && selectionRequestsCount > 0 && (
+                    <span
+                      className={cn(
+                        "ml-auto px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white animate-pulse shrink-0",
+                        !showLabels && "absolute top-1 right-1 px-1 py-0 text-[9px]"
+                      )}
+                      title={`${selectionRequestsCount} pending selection requests`}
+                    >
+                      {selectionRequestsCount}
+                    </span>
+                  )}
                 </Link>
               </React.Fragment>
             );

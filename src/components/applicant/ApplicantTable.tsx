@@ -63,7 +63,7 @@ function resolveApplicantStage(app: any, plc: any): string {
   if (ownStatus === "Cancelled") return "Cancelled";
   if (plc && plc.status) {
     if (String(plc.status) === "Cancelled") return "Cancelled";
-    if (["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
+    if (["Requested", "Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
       return String(plc.status);
     }
   }
@@ -84,6 +84,12 @@ function getStageBadgeVariant(stage: string): {
         variant: "neutral",
         dotColor: "bg-teal-600",
         className: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800",
+      };
+    case "Requested":
+      return {
+        variant: "warning",
+        dotColor: "bg-amber-500",
+        className: "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
       };
     case "Selected":
       return { variant: "info", dotColor: "bg-blue-600" };
@@ -667,6 +673,7 @@ export function ApplicantTable() {
       Draft: 0,
       Registered: 0,
       "CV Generated": 0,
+      Requested: 0,
       Selected: 0,
       Processing: 0,
       Stamped: 0,
@@ -856,6 +863,7 @@ export function ApplicantTable() {
                 ...(selectedTrack !== "Muayena"
                   ? [
                       { value: "CV Generated", label: `CV Generated (${stageCounts["CV Generated"]})` },
+                      { value: "Requested", label: `Requested (${stageCounts.Requested || 0})` },
                       { value: "Selected", label: `Selected (${stageCounts.Selected})` },
                     ]
                   : []),

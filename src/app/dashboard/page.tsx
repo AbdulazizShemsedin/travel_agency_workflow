@@ -51,7 +51,7 @@ function resolveApplicantStage(app: any, plc: any): string {
   if (ownStatus === "Cancelled") return "Cancelled";
   if (plc && plc.status) {
     if (String(plc.status) === "Cancelled") return "Cancelled";
-    if (["Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
+    if (["Requested", "Selected", "Processing", "Stamped", "Ticketed", "Departed"].includes(String(plc.status))) {
       return String(plc.status);
     }
   }
@@ -177,6 +177,9 @@ export default function DashboardPage() {
   ).length;
   const cvCount = applicantRows.filter((a) =>
     ["Registered", "CV Generated"].includes(String(a.status || a.applicant_state))
+  ).length;
+  const requestedCount = applicantRows.filter(
+    (a) => (a.status || a.applicant_state) === "Requested"
   ).length;
   const selectedCount = applicantRows.filter(
     (a) => (a.status || a.applicant_state) === "Selected"
@@ -358,6 +361,15 @@ export default function DashboardPage() {
     },
     {
       step: 3,
+      title: "Requested",
+      count: requestedCount,
+      badge: "Selection Request",
+      color: "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-300 hover:border-amber-400 dark:hover:border-amber-700",
+      accent: "bg-amber-600",
+      link: "/selection-requests",
+    },
+    {
+      step: 4,
       title: "Selected",
       count: selectedCount,
       badge: "Selected",
@@ -366,7 +378,7 @@ export default function DashboardPage() {
       link: "/applicants?status=Selected",
     },
     {
-      step: 4,
+      step: 5,
       title: "Processing (LMIS and Teashir)",
       count: processingCount,
       badge: "Parallel Streams",
@@ -390,7 +402,7 @@ export default function DashboardPage() {
       link: "/applicants?status=Processing",
     },
     {
-      step: 5,
+      step: 6,
       title: "Embassy Stamp",
       count: stampedCount,
       badge: "Visa Issued",
@@ -399,7 +411,7 @@ export default function DashboardPage() {
       link: "/applicants?status=Stamped",
     },
     {
-      step: 6,
+      step: 7,
       title: "Ticket Booked",
       count: ticketedCount,
       badge: "Flight Ticket",
@@ -408,7 +420,7 @@ export default function DashboardPage() {
       link: "/applicants?status=Ticketed",
     },
     {
-      step: 7,
+      step: 8,
       title: "Travel Completed",
       count: departedCount,
       badge: "Departed",
