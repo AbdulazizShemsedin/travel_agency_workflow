@@ -170,7 +170,7 @@ export function sendApplicantToExtension(
       return 25;
     })(),
     religion: rawApp.religion || "",
-    placeOfBirth: rawApp.place_of_birth || rawApp.leaving_town || rawApp.placeOfBirth || rawApp.city || "Addis Ababa",
+    placeOfBirth: rawApp.place_of_birth || rawApp.placeOfBirth || "",
     leavingTown: rawApp.leaving_town || rawApp.leavingTown || rawApp.city || "",
     maritalStatus: rawApp.marital_status || rawApp.maritalStatus || "Single",
     nationality: rawApp.nationality || rawApp.country || "Ethiopia",

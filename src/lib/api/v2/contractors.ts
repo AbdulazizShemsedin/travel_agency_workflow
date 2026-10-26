@@ -6,7 +6,7 @@
  * - POST /api/method/agency_tracking.contractor_api.create_contractor
  */
 
-import { requestV2 } from "./client";
+import { requestV2, ApiV2Error } from "./client";
 
 export interface V2ContractorCommissionRate {
   name?: string;
@@ -117,15 +117,19 @@ export async function listContractorsV2(
 export async function createContractorV2(
   payload: V2CreateContractorPayload
 ): Promise<{ name?: string; contractor_name?: string; company_name?: string; message?: string; [key: string]: any }> {
+  if (!payload.country || !payload.country.trim()) {
+    throw new ApiV2Error("Destination country is required to register a foreign agency.", 400);
+  }
+
   const result = await requestV2<any>(
     "/api/method/agency_tracking.contractor_api.create_contractor",
     {
       method: "POST",
       body: {
-        contractor_name: payload.contractor_name || payload.company_name || "New Agency",
-        country: payload.country || "Saudi Arabia",
-        user_email: payload.user_email || payload.email || `agency_${Date.now()}@agency.com`,
-        user_first_name: payload.user_first_name || payload.contact_person || "Agency Contact",
+        contractor_name: payload.contractor_name || payload.company_name,
+        country: payload.country.trim(),
+        user_email: payload.user_email || payload.email,
+        user_first_name: payload.user_first_name || payload.contact_person,
         ...(payload.communication_manager ? { communication_manager: payload.communication_manager } : {}),
       },
     }

@@ -373,7 +373,7 @@ export default function MyReservedCandidatesPage() {
                                   Select Another
                                 </Button>
                               </Link>
-                            ) : c.status === "Requested" ? (
+                            ) : c.status === "Requested" || (!c.contract_file && c.status !== "Selected" && c.status !== "Clearance" && c.status !== "Processing" && c.status !== "Stamped" && c.status !== "Ticketed" && c.status !== "Departed") ? (
                               <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-2.5 py-1">
                                 Awaiting Confirmation
                               </span>

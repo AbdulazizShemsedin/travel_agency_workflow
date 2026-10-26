@@ -331,13 +331,6 @@ export function DepartureWorkspace({
     if (!placementName) return;
     try {
       if (status === "Departed") {
-        const med2 =
-          (row.departure as any)?.medical_2_result ||
-          (row.departure as any)?.medical_2_status;
-        if (med2 === "UNFIT" || med2 === "Fail" || med2 === "Failed") {
-          toast.error("Cannot mark Departed: Pre-departure Medical 2 is UNFIT/Failed.");
-          return;
-        }
         await advancePlacementV2(placementName, "Departed");
         toast.success(`Placement marked Departed for ${row.fullName}!`);
       }
@@ -386,9 +379,6 @@ export function DepartureWorkspace({
         if (modalRescheduleCause === "Internal" && (!modalRescheduleCost || Number(modalRescheduleCost) <= 0)) {
           errors.rescheduleCost = "Internal reschedule requires penalty cost > 0.";
         }
-      }
-      if (modalDepartureStatus === "Departed" && modalMedical2Result !== "Pass") {
-        errors.medical2 = "Pre-departure Medical 2 check must be Pass before marking Departed.";
       }
       if (Object.keys(errors).length > 0) {
         setModalFieldErrors(errors);
@@ -446,11 +436,6 @@ export function DepartureWorkspace({
 
       // 4. Record Departure Gate
       if (modalDepartureStatus === "Departed") {
-        if (modalMedical2Result !== "Pass") {
-          throw new Error(
-            "Cannot complete Departure: Pre-departure Medical 2 check must be recorded and passed (Pass)."
-          );
-        }
         await advancePlacementV2(placementName, "Departed");
       }
     },
@@ -1063,11 +1048,7 @@ export function DepartureWorkspace({
                     onChange={(e) => {
                       const nextRes = e.target.value as any;
                       setModalMedical2Result(nextRes);
-                      if (modalDepartureStatus === "Departed" && nextRes !== "Pass") {
-                        setModalFieldError("medical2", "Pre-departure Medical 2 check must be Pass before marking Departed.");
-                      } else {
-                        clearModalFieldError("medical2");
-                      }
+                      clearModalFieldError("medical2");
                     }}
                     className={cn(
                       "h-9 w-full mt-1 px-3 text-xs bg-white dark:bg-[#1a1a20] border border-slate-200 dark:border-[#2c2c36] rounded-md font-semibold text-slate-900 dark:text-white",
@@ -1119,11 +1100,7 @@ export function DepartureWorkspace({
                     onChange={(e) => {
                       const nextDep = e.target.value as any;
                       setModalDepartureStatus(nextDep);
-                      if (nextDep === "Departed" && modalMedical2Result !== "Pass") {
-                        setModalFieldError("medical2", "Pre-departure Medical 2 check must be Pass before marking Departed.");
-                      } else {
-                        clearModalFieldError("medical2");
-                      }
+                      clearModalFieldError("medical2");
                       if (nextDep === "Rescheduled" && !modalRescheduleDate) {
                         setModalFieldError("rescheduleDate", "Reschedule date is required.");
                       } else {

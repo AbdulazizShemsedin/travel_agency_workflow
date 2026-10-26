@@ -1207,3 +1207,49 @@ export async function getPermissionTableV2(): Promise<V2PermissionTableRow[]> {
   if (payload && Array.isArray(payload.data)) return payload.data;
   return [];
 }
+
+/**
+ * Cancels an entire Commission Batch Request (invoice).
+ * Authoritative Backend Endpoint: finance_api.cancel_commission_batch (New October 2026, Section 8)
+ * Roles: Finance Manager, Admin
+ * The backend moves workers back to the owed list and cancels the batch while preserving history.
+ * Refused if any worker is marked paid or batch-level write-offs exist.
+ */
+export async function cancelCommissionBatchV2(
+  batchName: string,
+  reason: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.cancel_commission_batch",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        reason,
+      },
+    }
+  );
+}
+
+/**
+ * Undoes cancellation of an entire Commission Batch Request.
+ * Authoritative Backend Endpoint: finance_api.undo_cancel_commission_batch (New October 2026, Section 8.3)
+ * Roles: Finance Manager, Admin
+ * Restores the same workers to the batch if still eligible.
+ */
+export async function undoCancelCommissionBatchV2(
+  batchName: string,
+  reason?: string
+): Promise<{ message?: string; [key: string]: any }> {
+  return requestV2(
+    "/api/method/agency_tracking.finance_api.undo_cancel_commission_batch",
+    {
+      method: "POST",
+      body: {
+        batch_name: batchName,
+        ...(reason ? { reason } : {}),
+      },
+    }
+  );
+}
+

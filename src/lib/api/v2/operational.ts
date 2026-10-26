@@ -506,7 +506,7 @@ export async function fetchOperationalWorkspaceDataV2(
           if (isDone) return "Completed";
           return rawTaeshir || injazStep?.status || "—";
         })(),
-        medical2Status: (plc as any)?.medical_2_status || (applicant as any).medical_2_status || (plc?.status === "Departed" || plc?.status === "Ticketed" ? "FIT" : "—"),
+        medical2Status: (plc as any)?.medical_2_status || (applicant as any)?.medical_2_status || "—",
         departureStatus:
           plc?.status === "Departed" || (plc as any)?.departure_status === "Departed"
             ? "Departed"

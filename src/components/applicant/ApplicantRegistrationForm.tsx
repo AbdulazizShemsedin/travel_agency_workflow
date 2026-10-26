@@ -820,7 +820,10 @@ export function ApplicantRegistrationForm({
       setValue("place_of_issue", parsed.place_of_issue.toUpperCase());
     }
     if (parsed.place_of_birth) {
-      setValue("place_of_birth", parsed.place_of_birth.toUpperCase().trim());
+      const currentPob = getValues("place_of_birth");
+      if (!currentPob || !currentPob.trim()) {
+        setValue("place_of_birth", parsed.place_of_birth.toUpperCase().trim());
+      }
     }
     if (parsed.gender) {
       const g = parsed.gender.toLowerCase();

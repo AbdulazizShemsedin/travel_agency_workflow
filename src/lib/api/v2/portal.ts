@@ -128,7 +128,7 @@ export async function listPortalCandidatesV2(
       monthly_salary: cand.salary_amount || cand.monthly_salary || "",
       medical_status: cand.medical_status === "FIT" ? "FIT" : "",
       medical_issue_date: cand.medical_issue_date || (cand as any)?.medical_date || "",
-      place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || cand.leaving_town || "",
+      place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || "",
       age: computedAge || cand.age,
       photo_passport:
         cand.photo_passport ||

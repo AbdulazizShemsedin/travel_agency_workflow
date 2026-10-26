@@ -36,6 +36,7 @@ import {
   Check,
   FolderOpen,
   RotateCcw,
+  Ban,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,8 @@ import {
   writeOffCommissionV2,
   listCommissionWriteOffsV2,
   voidTransactionV2,
+  cancelCommissionBatchV2,
+  undoCancelCommissionBatchV2,
   V2OwedCommissionItem,
   V2CommissionBatch,
   V2CommissionBatchItem,
@@ -644,10 +647,12 @@ export default function AdminCommissionPage() {
           : batchStatusFilter === "Partly Paid"
           ? b.status === "Partially Settled"
           : batchStatusFilter === "Unpaid"
-          ? b.status !== "Settled" && b.status !== "Partially Settled"
+          ? b.status !== "Settled" && b.status !== "Partially Settled" && b.status !== "Cancelled"
+          : batchStatusFilter === "Cancelled"
+          ? b.status === "Cancelled"
           : b.status === batchStatusFilter;
       const matchUnsettled = showUnsettledOnly
-        ? b.status !== "Settled" && b.status !== "Written Off"
+        ? b.status !== "Settled" && b.status !== "Written Off" && b.status !== "Cancelled"
         : true;
       const matchSearch = searchQuery.trim()
         ? b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -658,7 +663,7 @@ export default function AdminCommissionPage() {
   }, [commissionBatches, selectedContractor, selectedCountry, batchStatusFilter, showUnsettledOnly, searchQuery]);
 
   const totalUnsettledBatchesCount = React.useMemo(() => {
-    return commissionBatches.filter((b) => b.status !== "Settled" && b.status !== "Written Off").length;
+    return commissionBatches.filter((b) => b.status !== "Settled" && b.status !== "Written Off" && b.status !== "Cancelled").length;
   }, [commissionBatches]);
 
   // =========================================================================
@@ -1259,6 +1264,78 @@ export default function AdminCommissionPage() {
     }
   };
 
+  // ACTION 7.5: Cancel Commission Batch (Invoice) & Undo Cancel
+  const [isCancelBatchModalOpen, setIsCancelBatchModalOpen] = React.useState(false);
+  const [cancelBatchReason, setCancelBatchReason] = React.useState("");
+  const [isCancellingBatch, setIsCancellingBatch] = React.useState(false);
+  const [isUndoingCancelBatch, setIsUndoingCancelBatch] = React.useState(false);
+
+  const handleCancelBatch = async () => {
+    if (!activeBatch) return;
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access to Commission Batches.",
+      });
+      return;
+    }
+    if (!cancelBatchReason.trim()) {
+      toast.error("Reason Required", {
+        description: "Please explain why this invoice batch is being cancelled.",
+      });
+      return;
+    }
+
+    setIsCancellingBatch(true);
+    try {
+      await cancelCommissionBatchV2(activeBatch.name, cancelBatchReason.trim());
+      toast.success("Invoice Cancelled", {
+        description: `Batch ${shortRef(activeBatch.name)} has been cancelled. Workers returned to owed pool.`,
+      });
+      setIsCancelBatchModalOpen(false);
+      setCancelBatchReason("");
+      await loadBatchDetails(activeBatch.name);
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Cancellation Refused", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsCancellingBatch(false);
+    }
+  };
+
+  const handleUndoCancelBatch = async () => {
+    if (!activeBatch) return;
+    if (isFinanceReadOnly) {
+      toast.error("Permission Denied", {
+        description: "You have read-only access to Commission Batches.",
+      });
+      return;
+    }
+
+    setIsUndoingCancelBatch(true);
+    try {
+      await undoCancelCommissionBatchV2(activeBatch.name);
+      toast.success("Cancellation Undone", {
+        description: `Batch ${shortRef(activeBatch.name)} has been restored.`,
+      });
+      await loadBatchDetails(activeBatch.name);
+      queryClient.invalidateQueries({ queryKey: ["v2_owed_commissions"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_commission_batches_list"] });
+      refetchOwed();
+      refetchBatches();
+    } catch (err: any) {
+      toast.error("Undo Cancel Failed", {
+        description: formatCleanErrorMessage(err),
+      });
+    } finally {
+      setIsUndoingCancelBatch(false);
+    }
+  };
+
   // ACTION 8: Export Commissions Spreadsheet (.xlsx or .csv fallback)
   const handleExportCommissionsXlsx = async () => {
     setIsExportingXlsx(true);
@@ -1369,7 +1446,7 @@ export default function AdminCommissionPage() {
           {activeBatch && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
               <span>Active:</span>
-              <strong className="font-mono">{activeBatch.name}</strong>
+              <strong className="font-mono">{shortRef(activeBatch.name)}</strong>
               <button
                 type="button"
                 onClick={() => {
@@ -1567,7 +1644,7 @@ export default function AdminCommissionPage() {
             {filteredBatches.length}
           </Badge>
           {activeBatch && (
-            <span className="text-[10px] font-mono opacity-80">• {activeBatch.name}</span>
+            <span className="text-[10px] font-mono opacity-80">• {shortRef(activeBatch.name)}</span>
           )}
         </button>
 
@@ -2028,7 +2105,7 @@ export default function AdminCommissionPage() {
 
                 {/* Status Pills */}
                 <div className="flex items-center gap-1 flex-wrap">
-                  {["All", "Paid", "Partly Paid", "Unpaid"].map((st) => (
+                  {["All", "Paid", "Partly Paid", "Unpaid", "Cancelled"].map((st) => (
                     <button
                       key={st}
                       type="button"
@@ -2223,10 +2300,12 @@ export default function AdminCommissionPage() {
                                 ? "border-emerald-400 text-emerald-800 bg-emerald-100 dark:bg-emerald-900"
                                 : activeBatch.status === "Partially Settled"
                                 ? "border-amber-400 text-amber-800 bg-amber-100 dark:bg-amber-900"
+                                : activeBatch.status === "Cancelled"
+                                ? "border-rose-400 text-rose-800 bg-rose-100 dark:bg-rose-950/60"
                                 : "border-slate-300 text-slate-700 bg-slate-100 dark:bg-[#1f1f26] dark:text-zinc-300"
                             )}
                           >
-                            {activeBatch.status === "Settled" ? "Paid" : activeBatch.status === "Partially Settled" ? "Partly Paid" : "Unpaid"}
+                            {activeBatch.status === "Settled" ? "Paid" : activeBatch.status === "Partially Settled" ? "Partly Paid" : activeBatch.status === "Cancelled" ? "Cancelled" : "Unpaid"}
                           </Badge>
                         </div>
                         <CardDescription className="text-[11px] mt-0.5">
@@ -2235,7 +2314,7 @@ export default function AdminCommissionPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Written Off" && (
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Cancelled" && activeBatch.status !== "Written Off" && (
                           <Button
                             type="button"
                             variant="outline"
@@ -2265,7 +2344,7 @@ export default function AdminCommissionPage() {
                           Download Invoice PDF
                         </Button>
 
-                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && (
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Cancelled" && (
                           <Button
                             type="button"
                             size="sm"
@@ -2281,7 +2360,7 @@ export default function AdminCommissionPage() {
                           </Button>
                         )}
 
-                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Written Off" && (
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Settled" && activeBatch.status !== "Written Off" && activeBatch.status !== "Cancelled" && (
                           <Button
                             type="button"
                             variant="outline"
@@ -2300,8 +2379,54 @@ export default function AdminCommissionPage() {
                             Write Off
                           </Button>
                         )}
+
+                        {isFinanceManagerOrAdmin && activeBatch.status !== "Cancelled" && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isFinanceReadOnly}
+                            title={isFinanceReadOnly ? "You have read-only access here." : undefined}
+                            onClick={() => {
+                              setCancelBatchReason("");
+                              setIsCancelBatchModalOpen(true);
+                            }}
+                            className="h-7.5 text-xs border-rose-300 dark:border-rose-900 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold"
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-1" />
+                            Cancel Invoice
+                          </Button>
+                        )}
                       </div>
                     </div>
+
+                    {activeBatch.status === "Cancelled" && (
+                      <div className="p-3 mt-2 rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200 text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                        <div>
+                          <div className="font-bold flex items-center gap-1.5 text-rose-800 dark:text-rose-300">
+                            <AlertTriangle className="h-4 w-4 text-rose-600" />
+                            <span>This Commission Invoice is Cancelled</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-slate-600 dark:text-zinc-300">
+                            Reason: <strong>{activeBatch.cancellation_reason || activeBatch.reason || "Cancelled by staff"}</strong>
+                            {activeBatch.cancelled_by && <span> • Cancelled by: <strong>{activeBatch.cancelled_by}</strong></span>}
+                            {activeBatch.cancelled_on && <span> ({new Date(activeBatch.cancelled_on).toLocaleDateString()})</span>}
+                          </p>
+                        </div>
+                        {isFinanceManagerOrAdmin && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isUndoingCancelBatch || isFinanceReadOnly}
+                            onClick={handleUndoCancelBatch}
+                            className="bg-emerald-800 hover:bg-emerald-900 text-white font-semibold text-xs h-7.5 px-3 shrink-0"
+                          >
+                            {isUndoingCancelBatch ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCcw className="h-3 w-3 mr-1" />}
+                            Undo Cancel
+                          </Button>
+                        )}
+                      </div>
+                    )}
 
                     {/* Financial Status Summary Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 sm:p-2.5 rounded-xl bg-white dark:bg-[#121216] border border-emerald-200/80 dark:border-emerald-900/40 text-xs mt-2">
@@ -2387,7 +2512,7 @@ export default function AdminCommissionPage() {
                           Batch Candidates & Items ({activeBatch.items?.length || 0})
                         </CardTitle>
 
-                        {selectedItemRowNames.length > 0 && (
+                        {selectedItemRowNames.length > 0 && activeBatch.status !== "Cancelled" && (
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"
@@ -2464,7 +2589,7 @@ export default function AdminCommissionPage() {
                                 return (
                                   <tr key={it.name || it.transaction} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
                                     <td className="py-2 px-3">
-                                      {isPending && (
+                                      {isPending && activeBatch.status !== "Cancelled" && (
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -2513,7 +2638,9 @@ export default function AdminCommissionPage() {
                                       </Badge>
                                     </td>
                                     <td className="py-2 px-3 text-right">
-                                      {isReleased ? (
+                                      {activeBatch.status === "Cancelled" ? (
+                                        <span className="text-[10px] text-slate-400 italic">Batch Cancelled</span>
+                                      ) : isReleased ? (
                                         <span className="text-[10px] text-slate-400 italic">History</span>
                                       ) : isPaid ? (
                                         <Button
@@ -3930,6 +4057,67 @@ export default function AdminCommissionPage() {
               ) : (
                 `Add ${selectedAddWorkerNames.length} Worker(s) to Batch`
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Commission Batch Modal (Section 8) */}
+      <Dialog open={isCancelBatchModalOpen} onOpenChange={setIsCancelBatchModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <Ban className="h-5 w-5" />
+              Cancel Invoice ({activeBatch ? shortRef(activeBatch.name) : "Batch"})
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400">
+              Cancelling this batch returns all unbatched workers to the owed commissions pool. The batch will be marked <strong>Cancelled</strong> and archived with your explanation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 text-[11px] space-y-1">
+              <p className="font-semibold">Backend Restrictions:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-zinc-400">
+                <li>Cannot cancel if any worker is marked paid (unmark payment first).</li>
+                <li>Cannot cancel if batch-level write-offs exist (void write-off first).</li>
+              </ul>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                Cancellation Reason <span className="text-rose-500">*</span>
+              </Label>
+              <textarea
+                value={cancelBatchReason}
+                onChange={(e) => setCancelBatchReason(e.target.value)}
+                placeholder="Explain why this invoice is being cancelled..."
+                rows={3}
+                className="w-full mt-1.5 px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#141418] text-slate-900 dark:text-white focus:outline-hidden focus:ring-1 focus:ring-rose-500"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isCancellingBatch}
+              onClick={() => setIsCancelBatchModalOpen(false)}
+              className="text-xs h-8"
+            >
+              Keep Invoice
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!cancelBatchReason.trim() || isCancellingBatch || isFinanceReadOnly}
+              onClick={handleCancelBatch}
+              className="text-xs h-8 bg-rose-700 hover:bg-rose-800 text-white font-semibold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCancellingBatch && <Loader2 className="h-3 w-3 animate-spin" />}
+              Confirm Cancellation
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -235,7 +235,10 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
     }
     const placeOfBirth = d.place_of_birth || d.birth_place;
     if (placeOfBirth) {
-      setValue("place_of_birth", String(placeOfBirth).toUpperCase().trim(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      const currentPob = getValues("place_of_birth");
+      if (!currentPob || !currentPob.trim()) {
+        setValue("place_of_birth", String(placeOfBirth).toUpperCase().trim(), { shouldDirty: true, shouldValidate: true, shouldTouch: true });
+      }
     }
 
     setOcrSuccessData({
