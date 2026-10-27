@@ -77,19 +77,32 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
 
   // 1. Fetch Selection Requests
   const {
-    data: requests = [],
+    data: rawRequests = [],
     isLoading: isRequestsLoading,
     error: requestsError,
     refetch: refetchRequests,
   } = useQuery<V2SelectionRequestItem[]>({
     queryKey: ["v2_selection_requests_list"],
     queryFn: listSelectionRequestsV2,
-    staleTime: 15000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  const requests = React.useMemo(() => {
+    if (Array.isArray(rawRequests)) return rawRequests;
+    if (rawRequests && typeof rawRequests === "object") {
+      if (Array.isArray((rawRequests as any).data)) return (rawRequests as any).data;
+      if (Array.isArray((rawRequests as any).message)) return (rawRequests as any).message;
+      if (Array.isArray((rawRequests as any).rows)) return (rawRequests as any).rows;
+      if (Array.isArray((rawRequests as any).requests)) return (rawRequests as any).requests;
+    }
+    return [];
+  }, [rawRequests]);
 
   // 2. Fetch Unavailable Applicants
   const {
-    data: unavailableApplicants = [],
+    data: rawUnavailable = [],
     isLoading: isUnavailableLoading,
     error: unavailableError,
     refetch: refetchUnavailable,
@@ -97,8 +110,19 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
     queryKey: ["v2_unavailable_applicants_list"],
     queryFn: () => listApplicantsV2({ unavailable: 1 } as any),
     enabled: subTab === "unavailable",
-    staleTime: 15000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  const unavailableApplicants = React.useMemo(() => {
+    if (Array.isArray(rawUnavailable)) return rawUnavailable;
+    if (rawUnavailable && typeof rawUnavailable === "object") {
+      if (Array.isArray((rawUnavailable as any).data)) return (rawUnavailable as any).data;
+      if (Array.isArray((rawUnavailable as any).message)) return (rawUnavailable as any).message;
+    }
+    return [];
+  }, [rawUnavailable]);
 
   // Actions
   const handleApproveConfirm = async () => {
@@ -257,12 +281,24 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
   }, [searchQuery, subTab]);
 
   const totalRequestsPages = Math.max(1, Math.ceil(filteredRequests.length / pageSize));
+  const totalUnavailablePages = Math.max(1, Math.ceil(filteredUnavailable.length / pageSize));
+
+  React.useEffect(() => {
+    if (requestsPage > totalRequestsPages) {
+      setRequestsPage(totalRequestsPages);
+    }
+  }, [requestsPage, totalRequestsPages]);
+
+  React.useEffect(() => {
+    if (unavailablePage > totalUnavailablePages) {
+      setUnavailablePage(totalUnavailablePages);
+    }
+  }, [unavailablePage, totalUnavailablePages]);
   const paginatedRequests = React.useMemo(() => {
     const start = (requestsPage - 1) * pageSize;
     return filteredRequests.slice(start, start + pageSize);
   }, [filteredRequests, requestsPage]);
 
-  const totalUnavailablePages = Math.max(1, Math.ceil(filteredUnavailable.length / pageSize));
   const paginatedUnavailable = React.useMemo(() => {
     const start = (unavailablePage - 1) * pageSize;
     return filteredUnavailable.slice(start, start + pageSize);
@@ -336,8 +372,12 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
             variant="outline"
             size="sm"
             onClick={() => {
-              if (subTab === "pending") refetchRequests();
-              else refetchUnavailable();
+              if (subTab === "pending") {
+                refetchRequests();
+                queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+              } else {
+                refetchUnavailable();
+              }
             }}
             className="h-8 px-2.5 text-xs"
           >
@@ -357,10 +397,22 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
           /* PENDING SELECTION REQUESTS TABLE */
           <div className="flex-1 min-h-0 overflow-auto">
             {requestsError ? (
-              <div className="p-12 text-center text-xs text-rose-600 dark:text-rose-400 space-y-1">
+              <div className="p-12 text-center text-xs text-rose-600 dark:text-rose-400 space-y-3">
                 <AlertCircle className="h-8 w-8 mx-auto text-rose-500 mb-2" />
-                <p className="font-bold text-sm">Error Loading Selection Requests</p>
-                <p className="text-[11px] text-slate-500">{(requestsError as any)?.message || "Server refused request."}</p>
+                <div className="space-y-1">
+                  <p className="font-bold text-sm">Error Loading Selection Requests</p>
+                  <p className="text-[11px] text-slate-500">{(requestsError as any)?.message || "Server refused request."}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchRequests()}
+                  className="inline-flex items-center gap-1.5 h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Retry</span>
+                </Button>
               </div>
             ) : isRequestsLoading ? (
               <div className="p-16 text-center text-xs text-slate-400 space-y-2">
@@ -413,7 +465,11 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                       <td className="py-2.5 px-3">
                         {req.is_free_replacement ? (
                           <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-medium border-0">
-                            {req.exchange_for ? `Replacement for ${req.exchange_for_worker_name || req.exchange_for}` : "Free Replacement"}
+                            {req.exchange_for_worker_name
+                              ? `Replacement for ${req.exchange_for_worker_name}`
+                              : req.exchange_for && !req.exchange_for.startsWith("PLM-") && !req.exchange_for.startsWith("APP-")
+                              ? `Replacement for ${req.exchange_for}`
+                              : "Replacement Candidate"}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] border-slate-200 dark:border-[#2b2b36] text-slate-600">
@@ -492,10 +548,22 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
           /* UNAVAILABLE CANDIDATES TABLE */
           <div className="flex-1 min-h-0 overflow-auto">
             {unavailableError ? (
-              <div className="p-12 text-center text-xs text-rose-600 dark:text-rose-400 space-y-1">
+              <div className="p-12 text-center text-xs text-rose-600 dark:text-rose-400 space-y-3">
                 <AlertCircle className="h-8 w-8 mx-auto text-rose-500 mb-2" />
-                <p className="font-bold text-sm">Error Loading Unavailable Candidates</p>
-                <p className="text-[11px] text-slate-500">{(unavailableError as any)?.message || "Server refused request."}</p>
+                <div className="space-y-1">
+                  <p className="font-bold text-sm">Error Loading Unavailable Candidates</p>
+                  <p className="text-[11px] text-slate-500">{(unavailableError as any)?.message || "Server refused request."}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchUnavailable()}
+                  className="inline-flex items-center gap-1.5 h-8 text-xs border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span>Retry</span>
+                </Button>
               </div>
             ) : isUnavailableLoading ? (
               <div className="p-16 text-center text-xs text-slate-400 space-y-2">

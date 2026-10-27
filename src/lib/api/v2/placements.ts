@@ -715,7 +715,7 @@ export interface V2SelectionRequestItem {
  * Roles: Registrar, Manager, Admin
  */
 export async function listSelectionRequestsV2(): Promise<V2SelectionRequestItem[]> {
-  const result = await requestV2<V2SelectionRequestItem[] | { message: V2SelectionRequestItem[] }>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.placement_api.list_selection_requests",
     {
       method: "POST",
@@ -724,8 +724,25 @@ export async function listSelectionRequestsV2(): Promise<V2SelectionRequestItem[
   );
 
   if (Array.isArray(result)) return result;
-  if (result && Array.isArray((result as any).message)) return (result as any).message;
-  return [];
+  if (result && typeof result === "object") {
+    if (Array.isArray(result.message)) return result.message;
+    if (Array.isArray(result.data)) return result.data;
+    if (Array.isArray(result.rows)) return result.rows;
+    if (Array.isArray(result.requests)) return result.requests;
+    if (result.message && typeof result.message === "object") {
+      if (Array.isArray(result.message.data)) return result.message.data;
+      if (Array.isArray(result.message.rows)) return result.message.rows;
+      if (Array.isArray(result.message.requests)) return result.message.requests;
+    }
+  }
+  if (result === null || result === undefined) return [];
+  throw new ApiV2Error(
+    "Unexpected response format received from selection requests endpoint.",
+    500,
+    "InvalidPayloadError",
+    undefined,
+    result
+  );
 }
 
 /**

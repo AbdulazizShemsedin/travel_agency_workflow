@@ -26,7 +26,10 @@ import {
   ShieldCheck,
   Settings,
   History,
+  Inbox,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { listSelectionRequestsV2 } from "@/lib/api/v2/placements";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +54,7 @@ interface NavItemConfig {
 const navItems: NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard", tourId: "sidebar-nav-dashboard" },
   { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants", tourId: "sidebar-nav-applicants" },
+  { label: "Selection Requests", href: "/selection-requests", icon: Inbox, action: "manageSelectionRequests", tourId: "sidebar-nav-selection-requests" },
   { label: "Past Records", href: "/past-records", icon: History, action: "viewApplicants", tourId: "sidebar-nav-past-records" },
   { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication", tourId: "sidebar-nav-chat" },
   { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers", tourId: "sidebar-nav-employees" },
@@ -116,6 +120,21 @@ export function AppSidebar({
     !isForeignAgency && (Boolean(user) ? can("registerApplicant") : false);
   const canAccessAgentPortal =
     (isAdmin && can("accessAgentPortal")) || isForeignAgency;
+
+  const canManageRequests =
+    !isForeignAgency && (Boolean(user) ? can("manageSelectionRequests") : false);
+  const { data: rawSelectionRequests = [] } = useQuery({
+    queryKey: ["v2_selection_requests_count"],
+    queryFn: listSelectionRequestsV2,
+    enabled: canManageRequests,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+  const pendingRequestsCount = Array.isArray(rawSelectionRequests)
+    ? rawSelectionRequests.length
+    : Array.isArray((rawSelectionRequests as any)?.data)
+    ? (rawSelectionRequests as any).data.length
+    : 0;
 
   const showLabels = isMobileOpen || !isCollapsed;
 
@@ -207,7 +226,7 @@ export function AppSidebar({
                   data-tour={item.tourId}
                   title={!showLabels ? item.label : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors relative",
                     isActive
                       ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-300 font-semibold border-l-4 border-emerald-800 dark:border-emerald-500 rounded-l-none"
                       : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white",
@@ -220,7 +239,15 @@ export function AppSidebar({
                       isActive ? "text-emerald-800 dark:text-emerald-400" : "text-slate-400"
                     )}
                   />
-                  {showLabels && <span className="truncate">{item.label}</span>}
+                  {showLabels && <span className="truncate flex-1">{item.label}</span>}
+                  {showLabels && item.href === "/selection-requests" && pendingRequestsCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold shrink-0">
+                      {pendingRequestsCount}
+                    </span>
+                  )}
+                  {!showLabels && item.href === "/selection-requests" && pendingRequestsCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-[#0d0d10]" />
+                  )}
                 </Link>
               </React.Fragment>
             );

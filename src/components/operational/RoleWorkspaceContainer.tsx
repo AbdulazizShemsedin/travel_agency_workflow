@@ -201,12 +201,18 @@ export function RoleWorkspaceContainer() {
 
   // Fetch pending selection requests count for badge
   const canAccessSelectionRequests = availableTabs.some((t) => t.id === "selection_requests");
-  const { data: selectionRequests = [] } = useQuery({
+  const { data: rawSelectionRequests = [] } = useQuery({
     queryKey: ["v2_selection_requests_count"],
     queryFn: listSelectionRequestsV2,
     enabled: canAccessSelectionRequests,
-    staleTime: 30000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
+  const selectionRequests = React.useMemo(() => {
+    if (Array.isArray(rawSelectionRequests)) return rawSelectionRequests;
+    if (rawSelectionRequests && Array.isArray((rawSelectionRequests as any)?.data)) return (rawSelectionRequests as any).data;
+    return [];
+  }, [rawSelectionRequests]);
 
   // Fetch live workspace data for active operational stream
   const isOperationalTab = activeTab === "follow_up" || activeTab === "cv" || activeTab === "lms" || activeTab === "injaz" || activeTab === "embassy" || activeTab === "departure";

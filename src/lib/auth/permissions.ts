@@ -342,6 +342,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, PermissionAction> = {
   "/dashboard": "viewDashboard",
   "/applicants": "viewApplicants",
   "/applicants/new": "registerApplicant",
+  "/selection-requests": "manageSelectionRequests",
   "/chat": "manageCommunication",
   "/employees": "manageUsers",
   "/contractors": "manageContractors",
