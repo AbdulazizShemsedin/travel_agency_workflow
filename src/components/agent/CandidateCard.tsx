@@ -310,7 +310,7 @@ export function CandidateCard({
             ) : (
               <>
                 <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Select Candidate
+                Request Selection
               </>
             )}
           </Button>

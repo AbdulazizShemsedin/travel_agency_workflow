@@ -809,12 +809,12 @@ export function OperationalTable<T extends Record<string, any> = any>({
             of <strong className="text-slate-800 dark:text-white">{totalEntries}</strong> entries
           </span>
 
-          {/* Direct Clickable Page Size Buttons (10, 15, 25, 50) */}
+          {/* Direct Clickable Page Size Buttons (10, 15, 25, 50, 100) */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
               Show:
             </span>
-            {[10, 15, 25, 50].map((size) => {
+            {[10, 15, 25, 50, 100].map((size) => {
               const isCurrent = table.getState().pagination.pageSize === size;
               return (
                 <button

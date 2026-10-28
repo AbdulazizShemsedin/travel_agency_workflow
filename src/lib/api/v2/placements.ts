@@ -13,7 +13,7 @@
  * - POST /api/method/agency_tracking.placement_api.record_reschedule
  */
 
-import { requestV2 } from "./client";
+import { requestV2, ApiV2Error } from "./client";
 
 export type V2PlacementStatus =
   | "Requested"

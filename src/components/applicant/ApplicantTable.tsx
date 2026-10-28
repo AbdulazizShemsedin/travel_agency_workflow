@@ -1770,7 +1770,7 @@ export function ApplicantTable() {
               <span className="text-xs text-slate-500 dark:text-zinc-400 font-medium mr-1">
                 Show:
               </span>
-              {[10, 15, 25, 50].map((size) => {
+              {[10, 15, 25, 50, 100].map((size) => {
                 const isCurrent = pageSize === size;
                 return (
                   <button

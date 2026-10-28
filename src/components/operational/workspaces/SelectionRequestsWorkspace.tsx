@@ -89,7 +89,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
     refetchOnWindowFocus: true,
   });
 
-  const requests = React.useMemo(() => {
+  const requests = React.useMemo<V2SelectionRequestItem[]>(() => {
     if (Array.isArray(rawRequests)) return rawRequests;
     if (rawRequests && typeof rawRequests === "object") {
       if (Array.isArray((rawRequests as any).data)) return (rawRequests as any).data;
@@ -115,7 +115,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
     refetchOnWindowFocus: true,
   });
 
-  const unavailableApplicants = React.useMemo(() => {
+  const unavailableApplicants = React.useMemo<V2ApplicantDetails[]>(() => {
     if (Array.isArray(rawUnavailable)) return rawUnavailable;
     if (rawUnavailable && typeof rawUnavailable === "object") {
       if (Array.isArray((rawUnavailable as any).data)) return (rawUnavailable as any).data;
@@ -244,11 +244,11 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
   };
 
   // Filtered lists
-  const filteredRequests = React.useMemo(() => {
+  const filteredRequests = React.useMemo<V2SelectionRequestItem[]>(() => {
     if (!searchQuery.trim()) return requests;
     const q = searchQuery.toLowerCase().trim();
     return requests.filter(
-      (r) =>
+      (r: V2SelectionRequestItem) =>
         r.full_name?.toLowerCase().includes(q) ||
         r.passport_number?.toLowerCase().includes(q) ||
         r.ref_no?.toLowerCase().includes(q) ||
@@ -257,11 +257,11 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
     );
   }, [requests, searchQuery]);
 
-  const filteredUnavailable = React.useMemo(() => {
+  const filteredUnavailable = React.useMemo<V2ApplicantDetails[]>(() => {
     if (!searchQuery.trim()) return unavailableApplicants;
     const q = searchQuery.toLowerCase().trim();
     return unavailableApplicants.filter(
-      (a) =>
+      (a: V2ApplicantDetails) =>
         a.full_name?.toLowerCase().includes(q) ||
         a.passport_number?.toLowerCase().includes(q) ||
         a.ref_no?.toLowerCase().includes(q) ||
@@ -440,7 +440,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                  {paginatedRequests.map((req) => (
+                  {paginatedRequests.map((req: V2SelectionRequestItem) => (
                     <tr key={req.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
                         {req.ref_no || "—"}
@@ -589,7 +589,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-[#1c1c24]">
-                  {paginatedUnavailable.map((app) => (
+                  {paginatedUnavailable.map((app: V2ApplicantDetails) => (
                     <tr key={app.name} className="hover:bg-slate-50 dark:hover:bg-[#15151c]">
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-800 dark:text-emerald-400">
                         {app.ref_no || "—"}

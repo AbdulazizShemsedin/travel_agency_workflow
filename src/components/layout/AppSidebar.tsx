@@ -134,6 +134,12 @@ export function AppSidebar({
     ? rawSelectionRequests.length
     : Array.isArray((rawSelectionRequests as any)?.data)
     ? (rawSelectionRequests as any).data.length
+    : Array.isArray((rawSelectionRequests as any)?.message)
+    ? (rawSelectionRequests as any).message.length
+    : Array.isArray((rawSelectionRequests as any)?.rows)
+    ? (rawSelectionRequests as any).rows.length
+    : Array.isArray((rawSelectionRequests as any)?.requests)
+    ? (rawSelectionRequests as any).requests.length
     : 0;
 
   const showLabels = isMobileOpen || !isCollapsed;

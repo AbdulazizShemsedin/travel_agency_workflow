@@ -1213,6 +1213,14 @@ export function FollowUpWorkspace({
         const placementName = row.placementName || row.placementId || row.dsrName;
         if (!placementName) throw new Error("Placement record not found.");
 
+        const currentStatus = (row.rawPlacement?.status || row.stage || "").toLowerCase();
+        if (currentStatus === "stamped") {
+          try {
+            await advancePlacementV2(placementName, "Ticketed");
+          } catch (advTicketErr) {
+            console.warn("Could not auto-advance to Ticketed before Departed:", advTicketErr);
+          }
+        }
         await advancePlacementV2(placementName, "Departed");
         await handleMutationSuccess(`Candidate ${row.fullName} marked as Departed`);
         setStageModalState(null);
@@ -1426,7 +1434,6 @@ export function FollowUpWorkspace({
           if (formVisaNumber.trim()) parsedFields.visa_number = formVisaNumber.trim();
           if (formIssueDate) parsedFields.visa_issue_date = formIssueDate;
           if (formVisaValidUntil) parsedFields.visa_expiry_date = formVisaValidUntil;
-          if (formSubmissionDate) parsedFields.submission_date = formSubmissionDate;
           if (Object.keys(parsedFields).length > 0) {
             await updatePlacementParsedFieldsV2(placementName, parsedFields);
           }
@@ -1451,18 +1458,24 @@ export function FollowUpWorkspace({
         if (formMedical2Status) {
           await recordPredepartureMedicalResultV2(placementName, formMedical2Status as any);
         }
-        if (formTicketRemark.trim()) {
-          await setTicketingRemarksV2(placementName, formTicketRemark.trim());
-        }
-        if (formAirline.trim() || formFlightNumber.trim()) {
-          await updatePlacementParsedFieldsV2(placementName, {
-            airline: formAirline.trim() || undefined,
-            flight_number: formFlightNumber.trim() || undefined,
-          });
+        const ticketingRemarkParts: string[] = [];
+        if (formAirline.trim()) ticketingRemarkParts.push(`Airline: ${formAirline.trim()}`);
+        if (formFlightNumber.trim()) ticketingRemarkParts.push(`Flight: ${formFlightNumber.trim()}`);
+        if (formTicketRemark.trim()) ticketingRemarkParts.push(formTicketRemark.trim());
+        if (ticketingRemarkParts.length > 0) {
+          await setTicketingRemarksV2(placementName, ticketingRemarkParts.join(" | "));
         }
         stageDetailsSaved = true;
 
         if (andComplete || formDepartureStatus === "Departed") {
+          const currentStatus = (row.rawPlacement?.status || row.stage || "").toLowerCase();
+          if (currentStatus === "stamped") {
+            try {
+              await advancePlacementV2(placementName, "Ticketed");
+            } catch (advTicketErr) {
+              console.warn("Could not auto-advance to Ticketed before Departed:", advTicketErr);
+            }
+          }
           await advancePlacementV2(placementName, "Departed");
           await handleMutationSuccess(`Candidate ${row.fullName} marked as Departed`);
           setStageModalState(null);

@@ -187,6 +187,7 @@ export async function selectCandidateV2(
   }
   if (replacementFor) {
     body.replacement_for = replacementFor;
+    body.free_replacement_for_complaint = replacementFor;
   }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.portal_api.select_candidate",

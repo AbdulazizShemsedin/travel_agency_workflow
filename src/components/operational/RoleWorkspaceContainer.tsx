@@ -210,7 +210,12 @@ export function RoleWorkspaceContainer() {
   });
   const selectionRequests = React.useMemo(() => {
     if (Array.isArray(rawSelectionRequests)) return rawSelectionRequests;
-    if (rawSelectionRequests && Array.isArray((rawSelectionRequests as any)?.data)) return (rawSelectionRequests as any).data;
+    if (rawSelectionRequests && typeof rawSelectionRequests === "object") {
+      if (Array.isArray((rawSelectionRequests as any).data)) return (rawSelectionRequests as any).data;
+      if (Array.isArray((rawSelectionRequests as any).message)) return (rawSelectionRequests as any).message;
+      if (Array.isArray((rawSelectionRequests as any).rows)) return (rawSelectionRequests as any).rows;
+      if (Array.isArray((rawSelectionRequests as any).requests)) return (rawSelectionRequests as any).requests;
+    }
     return [];
   }, [rawSelectionRequests]);
 

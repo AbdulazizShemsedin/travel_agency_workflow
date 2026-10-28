@@ -929,16 +929,16 @@ export default function EmployeesPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto overflow-y-auto lg:overflow-hidden">
-            <table className="w-full text-left border-collapse text-xs min-w-[760px] lg:min-w-0 lg:table-fixed">
+          <div className="overflow-x-auto overflow-y-auto">
+            <table className="w-full text-left border-collapse text-xs min-w-[940px]">
               <thead className="sticky top-0 z-20">
                 <tr className="border-b border-slate-200 dark:border-[#1f1f27] bg-slate-50/95 dark:bg-[#17171e]/95 backdrop-blur-xs text-[10.5px] xl:text-[11px] font-bold text-slate-600 dark:text-zinc-400 uppercase tracking-wider leading-snug">
-                  <th className="py-2 px-3 lg:w-[23%] whitespace-normal break-words">Staff Member</th>
-                  <th className="py-2 px-3 lg:w-[18%] whitespace-normal break-words">Contact</th>
-                  <th className="py-2 px-3 lg:w-[24%] whitespace-normal break-words">Security Roles</th>
-                  <th className="py-2 px-3 lg:w-[10%] whitespace-normal break-words">Status</th>
-                  <th className="py-2 px-3 lg:w-[10%] whitespace-normal break-words">Created Date</th>
-                  {isManagerOrAdmin && <th className="py-2 px-3 lg:w-[110px] text-right whitespace-nowrap">Actions</th>}
+                  <th className="py-2 px-3 whitespace-nowrap">Staff Member</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Contact</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Security Roles</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Status</th>
+                  <th className="py-2 px-3 whitespace-nowrap">Created Date</th>
+                  {isManagerOrAdmin && <th className="py-2 px-3 text-right whitespace-nowrap">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a22]">
@@ -1096,15 +1096,15 @@ export default function EmployeesPage() {
                           );
                         }
 
-                        // First Administrator protections
-                        const canChangeRoles = isActualAdmin && !empIsFirstAdmin;
-                        const canResetPassword = isActualAdmin && (!empIsFirstAdmin || currentIsFirstAdmin);
-                        const canToggleStatus = isActualAdmin && !empIsFirstAdmin && !isSelf;
-                        const canDelete = isActualAdmin && !empIsFirstAdmin && !isSelf;
+                        // Permissions: Managers and Admins can manage staff; first admin and self protected
+                        const canChangeRoles = !empIsFirstAdmin && (isActualAdmin || !empIsAdmin);
+                        const canResetPassword = !empIsFirstAdmin || currentIsFirstAdmin;
+                        const canToggleStatus = !empIsFirstAdmin && !isSelf && (isActualAdmin || !empIsAdmin);
+                        const canDelete = !empIsFirstAdmin && !isSelf && (isActualAdmin || !empIsAdmin);
 
                         return (
                           <td className="py-2 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="inline-flex items-center justify-end gap-1 flex-nowrap">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1117,96 +1117,86 @@ export default function EmployeesPage() {
                                 Edit
                               </Button>
 
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    aria-label="Staff actions"
-                                    className="h-7 w-7 p-0 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1f1f27] text-slate-600 dark:text-zinc-300 shrink-0"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  align="end"
-                                  className="w-48 p-1.5 shadow-xl border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#121216] rounded-xl z-50"
+                              {canChangeRoles && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenEditRoles(emp)}
+                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-emerald-600 hover:border-emerald-300 dark:hover:border-emerald-800 shrink-0 font-medium"
+                                  title="Edit Security Roles"
                                 >
-                                  <div className="flex flex-col gap-0.5 text-xs">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditEmployee(emp)}
-                                      className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c24] transition-colors cursor-pointer"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                                      <span>Edit Profile</span>
-                                    </button>
+                                  <Shield className="h-3 w-3 mr-1 text-emerald-600" />
+                                  Roles
+                                </Button>
+                              )}
 
-                                    {canChangeRoles && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenEditRoles(emp)}
-                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors cursor-pointer"
-                                      >
-                                        <Shield className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                                        <span>Security Roles</span>
-                                      </button>
-                                    )}
+                              {canResetPassword && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenResetPassword(emp)}
+                                  className="h-7 px-2 text-[11px] text-slate-700 dark:text-zinc-300 hover:text-amber-600 hover:border-amber-300 dark:hover:border-amber-800 shrink-0 font-medium"
+                                  title="Reset Password"
+                                >
+                                  <KeyRound className="h-3 w-3 mr-1 text-amber-600" />
+                                  Password
+                                </Button>
+                              )}
 
-                                    {canResetPassword && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenResetPassword(emp)}
-                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-800 dark:hover:text-amber-300 transition-colors cursor-pointer"
-                                      >
-                                        <KeyRound className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                                        <span>Reset Password</span>
-                                      </button>
-                                    )}
+                              {canToggleStatus && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (emp.enabled === 1) {
+                                      setEmployeeToDeactivate(emp);
+                                    } else {
+                                      toggleStatusMutation.mutate({
+                                        email: emp.email,
+                                        enabled: true,
+                                      });
+                                    }
+                                  }}
+                                  disabled={toggleStatusMutation.isPending}
+                                  className={cn(
+                                    "h-7 px-2 text-[11px] font-medium shrink-0",
+                                    emp.enabled === 1
+                                      ? "text-amber-600 hover:bg-amber-50 hover:border-amber-300 dark:hover:bg-amber-950/20"
+                                      : "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/20"
+                                  )}
+                                  title={emp.enabled === 1 ? "Deactivate Account" : "Activate Account"}
+                                >
+                                  {emp.enabled === 1 ? (
+                                    <>
+                                      <UserX className="h-3 w-3 mr-1 text-amber-500" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="h-3 w-3 mr-1 text-emerald-600" />
+                                      Activate
+                                    </>
+                                  )}
+                                </Button>
+                              )}
 
-                                    {canToggleStatus && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (emp.enabled === 1) {
-                                            setEmployeeToDeactivate(emp);
-                                          } else {
-                                            toggleStatusMutation.mutate({
-                                              email: emp.email,
-                                              enabled: true,
-                                            });
-                                          }
-                                        }}
-                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c24] transition-colors cursor-pointer"
-                                      >
-                                        {emp.enabled === 1 ? (
-                                          <>
-                                            <UserX className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                                            <span>Deactivate</span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <UserCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                                            <span>Activate</span>
-                                          </>
-                                        )}
-                                      </button>
-                                    )}
-
-                                    {canDelete && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setEmployeeToDelete(emp)}
-                                        className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                                        <span>Delete Employee</span>
-                                      </button>
-                                    )}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
+                              {canDelete && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEmployeeToDelete(emp)}
+                                  disabled={deleteMutation.isPending}
+                                  className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 hover:border-rose-300 dark:hover:bg-rose-950/20 font-medium shrink-0"
+                                  title="Delete Employee Account"
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1 text-rose-600" />
+                                  Delete
+                                </Button>
+                              )}
                             </div>
                           </td>
                         );

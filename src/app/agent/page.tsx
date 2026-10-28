@@ -307,7 +307,8 @@ export default function AgentDiscoveryPage() {
         setSelectedCandidateForDetail(null);
       }
 
-      const successToastMsg = !isInternalStaff
+      const isRequested = (res as any)?.status === "Requested" || !isInternalStaff;
+      const successToastMsg = isRequested
         ? "Request sent. Waiting for the agency office to confirm she is available."
         : replacementFor
         ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}.`
@@ -325,7 +326,7 @@ export default function AgentDiscoveryPage() {
       setUndoState({
         candidate,
         placementName,
-        message: !isInternalStaff
+        message: isRequested
           ? `Request sent for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`
           : `Candidate ${candidate.full_name} selected. Click Undo within 7 seconds to cancel.`,
       });
@@ -338,6 +339,9 @@ export default function AgentDiscoveryPage() {
       queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_list"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+      queryClient.invalidateQueries({ queryKey: ["selection-requests"] });
     },
     onError: (err: ApiV2Error | any, candidate) => {
       setSelectingCandidateId(null);
@@ -411,6 +415,9 @@ export default function AgentDiscoveryPage() {
       queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
       queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_list"] });
+      queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
+      queryClient.invalidateQueries({ queryKey: ["selection-requests"] });
     },
     onError: (err: ApiV2Error | any) => {
       setConflictToast(
@@ -823,7 +830,7 @@ export default function AgentDiscoveryPage() {
                                 {selectingCandidateId === candidate.name ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  "Select"
+                                  "Request Selection"
                                 )}
                               </Button>
                             </div>
@@ -926,12 +933,10 @@ export default function AgentDiscoveryPage() {
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-              <ShieldCheck className="h-5 w-5" /> {isInternalStaff ? "Select This Applicant?" : "Request Candidate Selection"}
+              <ShieldCheck className="h-5 w-5" /> Request Applicant Selection
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              {isInternalStaff
-                ? "Selecting this applicant directly assigns them to the agency."
-                : "Requesting this applicant sends a selection request to the agency office to confirm she is available."}
+              Your request will be sent to the agency office for review. The applicant will be reserved for your agency while the request is pending. The applicant can proceed to the next stage only after the agency office confirms availability.
             </DialogDescription>
           </DialogHeader>
 
@@ -988,7 +993,7 @@ export default function AgentDiscoveryPage() {
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
-                <Undo2 className="h-3 w-3" /> You will have 7 seconds to undo after selecting.
+                <Undo2 className="h-3 w-3" /> You will have 7 seconds to undo after requesting.
               </p>
             </div>
           )}
@@ -1012,12 +1017,12 @@ export default function AgentDiscoveryPage() {
               {selectingCandidateId !== null ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isInternalStaff ? "Selecting..." : "Sending Request..."}
+                  Sending Request...
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  {isInternalStaff ? "Select Applicant" : "Request Selection"}
+                  Request Applicant Selection
                 </>
               )}
             </Button>

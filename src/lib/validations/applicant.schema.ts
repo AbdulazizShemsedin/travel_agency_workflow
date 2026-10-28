@@ -18,6 +18,7 @@ export const GENDER_OPTIONS = ["Male", "Female"] as const;
 
 export const RELIGION_OPTIONS = [
   "Muslim",
+  "Non-muslim",
   "Orthodox",
   "Protestant",
   "Catholic",
@@ -44,7 +45,14 @@ export const EDUCATION_OPTIONS = [
   "Other",
 ] as const;
 
-export const COC_STATUS_OPTIONS = ["Pending", "Issued", "Not Started"] as const;
+export const COC_STATUS_OPTIONS = [
+  "No COC",
+  "On process",
+  "Have COC",
+  "Pending",
+  "Issued",
+  "Not Started",
+] as const;
 
 export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 
@@ -230,8 +238,8 @@ export const baseApplicantSchema = z.object({
     if (Number.isNaN(num) || num < 0) return 0;
     return num;
   }, z.number().min(0).max(50).optional().nullable()),
-  english_level: optionalString,
-  arabic_level: optionalString,
+  english_level: optionalString.default("None"),
+  arabic_level: optionalString.default("None"),
   experience_country: optionalString,
   experience_period: optionalString,
   skill_cleaning: z.union([z.boolean(), z.string(), z.number()]).default(1),
@@ -395,18 +403,13 @@ export const stage2RegistrationSchema = stage1DraftBaseSchema
       errorMap: () => ({ message: "Please select a Marital Status" }),
     }),
 
-    phone_number: z
-      .string({ required_error: "Primary Phone Number is required for registration" })
-      .trim()
-      .min(9, "Phone Number must be at least 9 digits")
-      .max(18, "Phone Number cannot exceed 18 digits")
-      .regex(PHONE_REGEX, "Please enter a valid Phone Number (e.g. +251911223344)"),
+    phone_number: optionalString
+      .refine(
+        (val) => !val || (val.length >= 9 && val.length <= 18 && PHONE_REGEX.test(val)),
+        "Please enter a valid Phone Number (e.g. +251911223344)"
+      ),
 
-    city: z
-      .string({ required_error: "City is required for registration" })
-      .trim()
-      .min(2, "City is required (e.g. Addis Ababa)")
-      .max(60),
+    city: optionalString,
 
     country: z
       .string({ required_error: "Country is required for registration" })

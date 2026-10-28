@@ -364,13 +364,13 @@ export function ApplicantRegistrationForm({
           ? initialData.english_level
           : initialData?.english_level === "Poor" || initialData?.english_level === "Fair"
           ? "Basic"
-          : "",
+          : "None",
       arabic_level:
         initialData?.arabic_level && ["None", "Basic", "Good", "Fluent"].includes(initialData.arabic_level)
           ? initialData.arabic_level
           : initialData?.arabic_level === "Poor" || initialData?.arabic_level === "Fair"
           ? "Basic"
-          : "",
+          : "None",
       experience_country: initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? initialData.experience_country : "",
       works_in: (initialData as any)?.works_in || "",
       height: initialData?.height || "",
@@ -1074,23 +1074,32 @@ export function ApplicantRegistrationForm({
       (initialData as any)?.name ||
       (initialData as any)?.applicant_id;
 
-    if (!activeTargetId) {
-      toast.error("Draft Candidate Record Required", {
-        description: "Please save the candidate draft before uploading a candidate video.",
-      });
-      return;
-    }
-
     setIsUploadingMedia(true);
     try {
-      const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
-      await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-      await finishVideoUploadV2(activeTargetId, uploadMeta.key);
-      const playUrl = uploadMeta.upload_url.split("?")[0];
-      setValue("video_url", playUrl, { shouldDirty: true });
-      setValue("intro_video" as any, playUrl, { shouldDirty: true });
-      setValue("video" as any, playUrl, { shouldDirty: true });
-      toast.success("Candidate video uploaded successfully via direct storage!");
+      if (activeTargetId) {
+        try {
+          const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
+          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+          await finishVideoUploadV2(activeTargetId, uploadMeta.key);
+          const playUrl = uploadMeta.upload_url.split("?")[0];
+          setValue("video_url", playUrl, { shouldDirty: true });
+          setValue("intro_video" as any, playUrl, { shouldDirty: true });
+          setValue("video" as any, playUrl, { shouldDirty: true });
+          toast.success("Candidate video uploaded successfully!");
+          return;
+        } catch (videoUploadErr) {
+          console.warn("Direct video upload protocol failed, falling back to uploadFileV2:", videoUploadErr);
+        }
+      }
+
+      // If no activeTargetId or direct protocol failed, upload directly via uploadFileV2
+      const res = await uploadFileV2(file, false, "Applicant", activeTargetId || undefined);
+      const url = (res as any)?.message?.file_url || (res as any)?.file_url;
+      if (!url) throw new Error("Upload succeeded but no file URL returned.");
+      setValue("video_url", url, { shouldDirty: true });
+      setValue("intro_video" as any, url, { shouldDirty: true });
+      setValue("video" as any, url, { shouldDirty: true });
+      toast.success("Candidate video uploaded successfully!");
     } catch (err: any) {
       toast.error("Video upload failed", {
         description: err?.message || "Could not upload the video. Please check your connection and try again.",
@@ -2194,7 +2203,7 @@ export function ApplicantRegistrationForm({
 
             <div className="space-y-1.5" id="field-phone_number">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                Phone No. <span className="text-rose-500 font-bold ml-0.5">*</span>
+                Phone No. <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. +251911223344"
@@ -2315,7 +2324,7 @@ export function ApplicantRegistrationForm({
               )}
             </div>
 
-            {/* Row 9: Qualification | City */}
+            {/* Row 9: Qualification | Region */}
             <div className="space-y-1.5" id="field-qualification">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
@@ -2342,9 +2351,27 @@ export function ApplicantRegistrationForm({
               )}
             </div>
 
+            <div className="space-y-1.5" id="field-region">
+              <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                Region <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+              </Label>
+              <Input
+                placeholder="e.g. Oromia"
+                {...register("region")}
+                className={cn(
+                  "text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
+                  getFieldClass("region")
+                )}
+              />
+              {errors.region && (
+                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.region.message}</p>
+              )}
+            </div>
+
+            {/* Row 10: City */}
             <div className="space-y-1.5" id="field-city">
               <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                City <span className="text-rose-500 font-bold ml-0.5">*</span>
+                City <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
               </Label>
               <Input
                 placeholder="e.g. Addis Ababa"
@@ -2738,16 +2765,6 @@ export function ApplicantRegistrationForm({
         {isOtherInfoOpen && (
           <div className="p-6 border-t border-slate-200 dark:border-[#26262d] space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Region <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
-                <Input
-                  placeholder="e.g. Oromia"
-                  {...register("region")}
-                  className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
-                />
-              </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
@@ -2893,10 +2910,10 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Second Contact Name (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  Second Contact Name <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
-                  placeholder="Secondary contact / broker name"
+                  placeholder="Secondary contact name"
                   {...register("second_contact_name")}
                   className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
                 />
@@ -2904,7 +2921,7 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Second Contact Phone (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  Second Contact Phone <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   placeholder="e.g. +251..."
@@ -2918,44 +2935,14 @@ export function ApplicantRegistrationForm({
 
               <div className="space-y-1.5 md:col-span-2">
                 <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                  Second Contact Address (Broker / Delala) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
+                  Second Contact Address <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
-                  placeholder="Broker / Delala address"
+                  placeholder="Second contact address"
                   {...register("second_contact_address")}
                   className="text-xs border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]"
                 />
               </div>
-            </div>
-
-            {/* Checkbox Group: Photos (2) | Is(f)Filed | Relative ID Card */}
-            <div className="pt-3 border-t border-slate-100 dark:border-[#26262d] flex flex-wrap items-center gap-6">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  {...register("photos_2")}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-                />
-                <span>Photos (2) <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  {...register("is_filed")}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-                />
-                <span>IsIDFiled <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  {...register("relative_id_card")}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-                />
-                <span>Relative ID Card <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span></span>
-              </label>
             </div>
           </div>
         )}
@@ -3350,34 +3337,12 @@ export function ApplicantRegistrationForm({
                 )}
               >
                 <option value="">Select COC Status (Optional)...</option>
-                <option value="Not Started">Not Started</option>
-                <option value="Pending">Pending</option>
-                <option value="Issued">Issued</option>
+                <option value="No COC">No COC</option>
+                <option value="On process">On process</option>
+                <option value="Have COC">Have COC</option>
               </select>
               {errors.coc_status && (
                 <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.coc_status.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-1" id="field-exam_date">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="field_input_exam_date" className="text-[11px] font-semibold text-slate-600 dark:text-zinc-400">
-                  COC Exam Date <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
-                </Label>
-                {!isFormReadOnly && renderClearBtn("exam_date")}
-              </div>
-              <Input
-                id="field_input_exam_date"
-                type="date"
-                disabled={isFormReadOnly}
-                {...register("exam_date")}
-                className={cn(
-                  "text-xs h-8 border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
-                  getFieldClass("exam_date")
-                )}
-              />
-              {errors.exam_date && (
-                <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.exam_date.message}</p>
               )}
             </div>
           </div>
