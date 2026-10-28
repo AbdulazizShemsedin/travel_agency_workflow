@@ -862,3 +862,22 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   - **OnBlur Input Guard**: In `ApplicantFollowUpWorkspace.tsx` appointment date `onBlur`, guarded comparisons against `"—"` so placeholder dashes are never evaluated as active dates.
 - **Verification**: Clean TypeScript compilation (`npx tsc --noEmit`, exit code 0, 0 errors across the entire codebase). Zero mock data or mock fallbacks. No automated browser sessions initiated.
 
+## 27. Handoff Updates: Non-Muslim Choice, Optional City/Phone, Scanned POB Auto-Fill & Staged Video Protocol (2026-10-28)
+- **Religion Dropdown & Filter Enhancement (Section 0.-18)**:
+  - Added `"Non-Muslim"` choice in `RELIGION_OPTIONS` (`src/lib/validations/applicant.schema.ts`), `ApplicantReligion` union type (`src/types/applicant.ts`), and `RELIGIONS` filter in `src/components/agent/CandidateFilters.tsx` directly after Muslim.
+  - Normalized in `normalizeApplicantFields` (`src/lib/api/v2/applicants.ts`) preserving `"Non-Muslim"` on save and retrieval.
+- **Intake City & Phone Optional Fields (Section 0.-19)**:
+  - Dropped required checks and asterisks on `phone` and `city` in `Step1PersonalInfo.tsx` and `ApplicantRegistrationForm.tsx`.
+  - Format checks remain active when a value is provided, but empty values pass without blocking draft saves, profile updates, or registration.
+- **Scanned Place of Birth Auto-Fill & Unrestricted Town Typing (Sections 0.-13 & 0.-20)**:
+  - Replaced rigid `<select>` dropdowns in `Step1PersonalInfo.tsx` with uppercase `<Input list="pob_options...">` elements paired with `<datalist>` suggestions from `PLACE_OF_BIRTH_OPTIONS`, allowing intake of any Ethiopian town or woreda (e.g. `LOMA`, `ANGECHA`).
+  - In `ApplicantRegistrationForm.tsx`, added `pobMissingFromScan` indicator displaying `"Not read from the passport. Please type it."` in amber below the Place of Birth field whenever a passport scan returns without `place_of_birth`, clearing automatically once typed or extracted.
+- **Staged Video Upload on New Registration (Section 0.-17)**:
+  - Updated `startVideoUploadV2` and `finishVideoUploadV2` in `src/lib/api/v2/applicants.ts` to support staging without `applicantName`, omitting `applicant_name` when unprovided.
+  - Added `video_key?: string` to `V2CreateApplicantPayload`, `baseApplicantSchema`, and `normalizeApplicantFields`.
+  - In `ApplicantRegistrationForm.tsx` and `Step2EducationExperience.tsx`, wired the video upload flow so that when staging before applicant creation, the video is uploaded directly via the pre-signed S3/R2 URL and confirmed with `finishVideoUploadV2(undefined, key)`, setting `video_key` in payload without requiring a saved Draft first.
+- **Human-Friendly Record References (Section 0.-3 & 3.1)**:
+  - Audited and sanitized commission batch references in `src/app/commission/page.tsx` to display company name, title, or `shortRef(batch.name)` (`#19`) rather than raw DocType identifiers (`CBR-00019`).
+- **Build & Conformance Verification**:
+  - Full TypeScript type check completed with 0 errors (`npx tsc --noEmit`).
+  - Next.js production build compiled cleanly across all 30 routes (`npm run build`).

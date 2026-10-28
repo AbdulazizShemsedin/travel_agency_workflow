@@ -1200,26 +1200,22 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                     </Label>
                     <span className="text-[10px] text-slate-400 font-normal">Optional / Auto-extracted</span>
                   </div>
-                  <select
+                  <Input
                     id="place_of_birth"
+                    list="pob_options_list_1"
+                    placeholder="e.g. ADDIS ABABA, LOMA, ANGECHA"
                     {...register("place_of_birth")}
                     disabled={locked}
                     className={cn(
-                      "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                      "w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs uppercase text-slate-900 dark:text-zinc-200",
                       errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500" : ""
                     )}
-                  >
-                    <option value="">Select Place of Birth...</option>
+                  />
+                  <datalist id="pob_options_list_1">
                     {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                      <option key={opt} value={opt} />
                     ))}
-                    {watchPlaceOfBirth &&
-                      !PLACE_OF_BIRTH_OPTIONS.includes(watchPlaceOfBirth.toUpperCase().trim() as any) && (
-                        <option value={watchPlaceOfBirth}>{watchPlaceOfBirth}</option>
-                      )}
-                  </select>
+                  </datalist>
                   {errors.place_of_birth && (
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
                   )}
@@ -1340,7 +1336,7 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="phone_number" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                  Phone Number <span className="text-rose-500">*</span>
+                  Phone Number <span className="text-slate-400 dark:text-zinc-500 font-normal text-[11px] ml-1">(Optional)</span>
                 </Label>
                 <Input
                   id="phone_number"
@@ -1418,28 +1414,27 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-                    Place of Birth <span className="text-rose-500">*</span>
-                  </Label>
-                  <select
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="place_of_birth" className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                      Place of Birth
+                    </Label>
+                    <span className="text-[10px] text-slate-400 font-normal">Optional / Auto-extracted</span>
+                  </div>
+                  <Input
                     id="place_of_birth"
+                    list="pob_options_list_2"
+                    placeholder="e.g. ADDIS ABABA, LOMA, ANGECHA"
                     {...register("place_of_birth")}
                     className={cn(
-                      "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
+                      "w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs uppercase text-slate-900 dark:text-zinc-200",
                       errors.place_of_birth ? "border-rose-500 ring-1 ring-rose-500" : ""
                     )}
-                  >
-                    <option value="">Select Place of Birth...</option>
+                  />
+                  <datalist id="pob_options_list_2">
                     {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                      <option key={opt} value={opt} />
                     ))}
-                    {watchPlaceOfBirth &&
-                      !PLACE_OF_BIRTH_OPTIONS.includes(watchPlaceOfBirth.toUpperCase().trim() as any) && (
-                        <option value={watchPlaceOfBirth}>{watchPlaceOfBirth}</option>
-                      )}
-                  </select>
+                  </datalist>
                   {errors.place_of_birth && (
                     <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 font-medium">{errors.place_of_birth.message}</p>
                   )}

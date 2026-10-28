@@ -18,7 +18,7 @@ export const GENDER_OPTIONS = ["Male", "Female"] as const;
 
 export const RELIGION_OPTIONS = [
   "Muslim",
-  "Non-muslim",
+  "Non-Muslim",
   "Orthodox",
   "Protestant",
   "Catholic",
@@ -201,6 +201,7 @@ export const baseApplicantSchema = z.object({
   video_url: optionalString,
   intro_video: optionalString,
   video: optionalString,
+  video_key: optionalString,
 
   // Second Contact Person (Delala / Broker)
   second_contact_name: optionalString,

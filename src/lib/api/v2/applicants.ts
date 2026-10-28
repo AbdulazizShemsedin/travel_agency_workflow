@@ -31,6 +31,7 @@ export interface V2CreateApplicantPayload {
   entry_track: "Standard" | "Muayena";
   destination_country?: string;
   muayena_agency?: string;
+  video_key?: string;
   [key: string]: any;
 }
 
@@ -231,8 +232,13 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   }
 
   // 2.1 Religion (frontend default: Islam; Frappe Select compatibility: Muslim)
+  if (result.video_key) {
+    result.video_key = String(result.video_key).trim();
+  }
+
   if (result.religion) {
     const rel = String(result.religion).trim();
+    if (rel.toLowerCase() === "non-muslim") result.religion = "Non-Muslim";
     if (rel.toLowerCase() === "islam") {
       result.religion = "Muslim";
     }
@@ -1254,36 +1260,43 @@ export async function checkApplicantUniquenessV2(
  * 4. getApplicantMediaUrlV2(applicantName, kind) -> temporary signed 2-hr expiring URL
  */
 export async function startVideoUploadV2(
-  applicantName: string,
-  filename: string,
-  sizeBytes: number
+  applicantName?: string | null,
+  filename?: string,
+  sizeBytes?: number
 ): Promise<{ upload_url: string; headers?: Record<string, string>; key: string; [key: string]: any }> {
+  const body: Record<string, any> = {
+    filename,
+    size: sizeBytes,
+  };
+  if (applicantName) {
+    body.applicant_name = applicantName;
+  }
   const res = await requestV2<any>(
     "/api/method/agency_tracking.applicant_api.start_video_upload",
     {
       method: "POST",
-      body: {
-        applicant_name: applicantName,
-        filename,
-        size: sizeBytes,
-      },
+      body,
     }
   );
   return res?.message || res;
 }
 
 export async function finishVideoUploadV2(
-  applicantName: string,
-  key: string
+  applicantName?: string | null,
+  key?: string
 ): Promise<any> {
+  const body: Record<string, any> = {};
+  if (key) {
+    body.key = key;
+  }
+  if (applicantName) {
+    body.applicant_name = applicantName;
+  }
   const res = await requestV2<any>(
     "/api/method/agency_tracking.applicant_api.finish_video_upload",
     {
       method: "POST",
-      body: {
-        applicant_name: applicantName,
-        key,
-      },
+      body,
     }
   );
   return res?.message || res;

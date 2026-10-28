@@ -90,6 +90,7 @@ export function CandidateFilters({
   const RELIGIONS = [
     { value: "All Religions", label: "Religion (All)", icon: <Heart className="h-3.5 w-3.5 text-slate-400" /> },
     { value: "Muslim", label: "Muslim" },
+    { value: "Non-Muslim", label: "Non-Muslim" },
     { value: "Orthodox", label: "Orthodox" },
     { value: "Protestant", label: "Protestant" },
     { value: "Catholic", label: "Catholic" },

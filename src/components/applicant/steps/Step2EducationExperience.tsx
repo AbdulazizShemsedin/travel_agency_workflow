@@ -92,6 +92,22 @@ export function Step2EducationExperience({
         } catch (directErr) {
           console.warn("Direct S3 upload failed, falling back to uploadFileV2:", directErr);
         }
+      } else {
+        // Section 0.-17: Stage video upload for new applicant before save
+        try {
+          const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
+          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+          await finishVideoUploadV2(undefined, uploadMeta.key);
+          setValue("video_key" as any, uploadMeta.key, { shouldDirty: true });
+          const playUrl = uploadMeta.upload_url.split("?")[0];
+          setValue("video_url" as any, playUrl, { shouldDirty: true });
+          setValue("intro_video" as any, playUrl, { shouldDirty: true });
+          setValue("video" as any, playUrl, { shouldDirty: true });
+          toast.success("Candidate video staged successfully! Will be attached upon saving.");
+          return;
+        } catch (stagedErr) {
+          console.warn("Staged video upload failed, falling back to uploadFileV2:", stagedErr);
+        }
       }
 
       const res = await uploadFileV2(file, false, "Applicant", activeApplicantName || undefined);

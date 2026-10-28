@@ -226,7 +226,7 @@ export interface Applicant {
   last_name: string;
   full_name: string;
   gender: "Male" | "Female" | "";
-  religion: "Muslim" | "Orthodox" | "Protestant" | "Catholic" | "Other" | "";
+  religion: "Muslim" | "Non-Muslim" | "Orthodox" | "Protestant" | "Catholic" | "Other" | "";
   marital_status: "Single" | "Married" | "Divorced" | "Widowed" | "";
   children: number;
   nationality: string;

@@ -757,7 +757,7 @@ export default function AdminCommissionPage() {
       setCreateBatchAdvance("");
       setIncludeUnpaidPrevious(false);
       toast.success("Commission Batch Created", {
-        description: `Successfully created batch ${batch.name}.`,
+        description: `Successfully created batch ${batch.title || shortRef(batch.name)}.`,
       });
       refetchOwed();
       refetchBatches();
@@ -893,7 +893,7 @@ export default function AdminCommissionPage() {
     try {
       await settleBatchV2(activeBatch.name, settlementReference.trim());
       toast.success("Batch Settled Successfully", {
-        description: `${activeBatch.name} marked as Settled. Reference: ${settlementReference.trim()}.`,
+        description: `${activeBatch.title || shortRef(activeBatch.name)} marked as Settled. Reference: ${settlementReference.trim()}.`,
       });
       setSettlementReference("");
       await loadBatchDetails(activeBatch.name);
@@ -934,8 +934,8 @@ export default function AdminCommissionPage() {
       setAdvanceAmountInput("");
       toast.success("Batch Advance Updated", {
         description: amount === 0
-          ? `Cleared advance on batch ${activeBatch.name}.`
-          : `Set requested advance to ${amount.toLocaleString()} ${activeBatch.currency || "ETB"} for batch ${activeBatch.name}.`,
+          ? `Cleared advance on batch ${activeBatch.title || shortRef(activeBatch.name)}.`
+          : `Set requested advance to ${amount.toLocaleString()} ${activeBatch.currency || "ETB"} for batch ${activeBatch.title || shortRef(activeBatch.name)}.`,
       });
       refetchBatches();
       await loadBatchDetails(activeBatch.name);
@@ -1210,7 +1210,7 @@ export default function AdminCommissionPage() {
     try {
       await addWorkersToBatchV2(activeBatch.name, selectedAddWorkerNames);
       toast.success("Workers Added to Batch", {
-        description: `Successfully added ${selectedAddWorkerNames.length} worker(s) to ${activeBatch.title || activeBatch.name}.`,
+        description: `Successfully added ${selectedAddWorkerNames.length} worker(s) to ${activeBatch.title || shortRef(activeBatch.name)}.`,
       });
       setIsAddWorkersModalOpen(false);
       setSelectedAddWorkerNames([]);
@@ -3528,7 +3528,7 @@ export default function AdminCommissionPage() {
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
               {activeBatch ? (
                 <span>
-                  This will mark all items in batch <strong>{activeBatch.name}</strong> as Paid and
+                  This will mark all items in batch <strong>{activeBatch.title || shortRef(activeBatch.name)}</strong> as Paid and
                   finalize settlement with reference <strong>{settlementReference}</strong> for a total
                   of <strong>{(Number(activeBatch.total_amount_original ?? activeBatch.total_amount) || 0).toLocaleString()} {activeBatch.currency || "ETB"}</strong>.
                 </span>

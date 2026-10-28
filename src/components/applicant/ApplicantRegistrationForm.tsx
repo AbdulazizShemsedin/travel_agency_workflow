@@ -72,6 +72,7 @@ import {
 import { checkApplicantUniquenessV2 } from "@/lib/api/v2/applicants";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { parseMRZText, ParsedPassportMRZ } from "@/lib/utils/mrzScanner";
+import { PLACE_OF_BIRTH_OPTIONS } from "@/components/agent/CandidateFilters";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,7 @@ export function ApplicantRegistrationForm({
   const [isMrzDialogOpen, setIsMrzDialogOpen] = React.useState(false);
   const [mrzInputText, setMrzInputText] = React.useState("");
   const [ocrSuccessData, setOcrSuccessData] = React.useState<ParsedPassportMRZ | null>(null);
+  const [pobMissingFromScan, setPobMissingFromScan] = React.useState(false);
   const isOcrCancelledRef = React.useRef(false);
   const activeOcrToastIdRef = React.useRef<string | number | null>(null);
   const [isSponsorAddrReadOnly, setIsSponsorAddrReadOnly] = React.useState(true);
@@ -826,6 +828,12 @@ export function ApplicantRegistrationForm({
       if (!currentPob || !currentPob.trim()) {
         setValue("place_of_birth", parsed.place_of_birth.toUpperCase().trim());
       }
+      setPobMissingFromScan(false);
+    } else {
+      const currentPob = getValues("place_of_birth");
+      if (!currentPob || !currentPob.trim()) {
+        setPobMissingFromScan(true);
+      }
     }
     if (parsed.gender) {
       const g = parsed.gender.toLowerCase();
@@ -1048,6 +1056,10 @@ export function ApplicantRegistrationForm({
       national_id: (data.national_id || "").trim() || (existingApplicantId ? "" : undefined),
     };
 
+    if ((data as any).video_key || getValues("video_key" as any)) {
+      rawPayload.video_key = (data as any).video_key || getValues("video_key" as any);
+    }
+
     // Do not include experience_video in save payloads per Oct 21 backend requirement
     delete (rawPayload as any).experience_video;
 
@@ -1090,9 +1102,25 @@ export function ApplicantRegistrationForm({
         } catch (videoUploadErr) {
           console.warn("Direct video upload protocol failed, falling back to uploadFileV2:", videoUploadErr);
         }
+      } else {
+        // Section 0.-17: Stage video upload for new applicant before save
+        try {
+          const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
+          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+          await finishVideoUploadV2(undefined, uploadMeta.key);
+          setValue("video_key" as any, uploadMeta.key, { shouldDirty: true });
+          const playUrl = uploadMeta.upload_url.split("?")[0];
+          setValue("video_url", playUrl, { shouldDirty: true });
+          setValue("intro_video" as any, playUrl, { shouldDirty: true });
+          setValue("video" as any, playUrl, { shouldDirty: true });
+          toast.success("Candidate video staged successfully! Will be attached upon saving.");
+          return;
+        } catch (stagedErr) {
+          console.warn("Staged video upload failed, falling back to uploadFileV2:", stagedErr);
+        }
       }
 
-      // If no activeTargetId or direct protocol failed, upload directly via uploadFileV2
+      // If direct/staged protocol failed, upload directly via uploadFileV2
       const res = await uploadFileV2(file, false, "Applicant", activeTargetId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
@@ -2136,16 +2164,31 @@ export function ApplicantRegistrationForm({
                 {renderClearBtn("place_of_birth")}
               </div>
               <Input
-                placeholder="e.g. ADDIS ABABA"
+                placeholder="e.g. ADDIS ABABA, LOMA, ANGECHA"
+                list="pob_options_reg"
                 autoComplete="off"
                 data-lpignore="true"
                 data-form-type="other"
-                {...register("place_of_birth")}
+                {...register("place_of_birth", {
+                  onChange: (e) => {
+                    if (e.target.value) setPobMissingFromScan(false);
+                  },
+                })}
                 className={cn(
                   "text-xs uppercase border-slate-300 dark:border-[#2b2b35] dark:bg-[#121215]",
                   getFieldClass("place_of_birth")
                 )}
               />
+              <datalist id="pob_options_reg">
+                {PLACE_OF_BIRTH_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt} />
+                ))}
+              </datalist>
+              {pobMissingFromScan && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  Not read from the passport. Please type it.
+                </p>
+              )}
               {errors.place_of_birth && (
                 <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.place_of_birth.message}</p>
               )}
