@@ -173,18 +173,13 @@ export async function getCandidateDetailV2(applicantName: string): Promise<any> 
  * Selects a candidate (creates an atomic, row-locked Placement).
  * replacement_for: placement ID of the returned worker if this selection is a replacement.
  */
-export async function selectCandidateV2(
+export async function requestCandidateSelectionV2(
   applicantName: string,
-  replacementFor?: string,
-  contractorName?: string
+  replacementFor?: string
 ): Promise<V2SelectCandidateResponse> {
   const body: Record<string, any> = {
     applicant_name: applicantName,
   };
-  if (contractorName) {
-    body.contractor_name = contractorName;
-    body.contractor = contractorName;
-  }
   if (replacementFor) {
     body.replacement_for = replacementFor;
     body.free_replacement_for_complaint = replacementFor;
@@ -199,8 +194,55 @@ export async function selectCandidateV2(
 }
 
 /**
- * Lists pending Musaned Wakala authorization requests for the current foreign agency.
+ * Directly selects a candidate for an agency by internal staff (Manager or Admin only).
+ * Per backend contract 0.-23, passing `contractor_name` from an authorized staff account
+ * bypasses the "Requested" review step and transitions the candidate directly to "Selected".
+ * Endpoint: POST /api/method/agency_tracking.portal_api.select_candidate
  */
+export async function selectCandidateDirectlyV2(
+  applicantName: string,
+  contractorName: string
+): Promise<V2SelectCandidateResponse> {
+  if (!contractorName || !contractorName.trim()) {
+    throw new Error("Contractor/Agency name is required for direct staff selection.");
+  }
+  const body: Record<string, any> = {
+    applicant_name: applicantName,
+    contractor_name: contractorName.trim(),
+    contractor: contractorName.trim(),
+  };
+  return requestV2<V2SelectCandidateResponse>(
+    "/api/method/agency_tracking.portal_api.select_candidate",
+    {
+      method: "POST",
+      body,
+    }
+  );
+}
+
+/**
+ * General selection wrapper preserving backwards compatibility.
+ * When contractorName is supplied (by Manager/Admin), executes direct selection.
+ * Otherwise submits an agency selection request awaiting staff approval.
+ */
+export async function selectCandidateV2(
+  applicantName: string,
+  replacementForOrContractor?: string,
+  contractorName?: string
+): Promise<V2SelectCandidateResponse> {
+  if (contractorName) {
+    return selectCandidateDirectlyV2(applicantName, contractorName);
+  }
+  if (
+    replacementForOrContractor &&
+    !replacementForOrContractor.startsWith("PLM-") &&
+    !replacementForOrContractor.startsWith("APP-")
+  ) {
+    return selectCandidateDirectlyV2(applicantName, replacementForOrContractor);
+  }
+  return requestCandidateSelectionV2(applicantName, replacementForOrContractor);
+}
+
 export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V2WakalaRequestItem[]> {
   const body: Record<string, any> = {};
   if (contractorName) {

@@ -389,7 +389,7 @@ export async function resetEmployeePasswordApiV2(
     "/api/method/agency_tracking.employee_api.reset_employee_password",
     {
       method: "POST",
-      body: { email, new_password: newPassword },
+      body: { email: (email || "").trim().toLowerCase(), new_password: newPassword },
     }
   );
 }

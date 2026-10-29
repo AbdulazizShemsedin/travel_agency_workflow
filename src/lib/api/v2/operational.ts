@@ -18,6 +18,7 @@ import { toClientCocStatus } from "@/lib/validations/applicant.schema";
 import { listApplicantsV2, V2ApplicantDetails } from "./applicants";
 import { listPlacementsV2, V2PlacementRecord } from "./placements";
 import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
+import { resolveEffectiveMedical } from "./medical";
 import type { WorkspaceApplicantRow, OperationalStreamType } from "@/types/workspace";
 
 function calculateAge(dobStr?: string): number | string {
@@ -391,14 +392,8 @@ export async function fetchOperationalWorkspaceDataV2(
           ? embassyStep || lmsStep
           : undefined;
 
-      const rawApplicantMed = (applicant.medical_status || "").toUpperCase().trim();
-      const rawPlcMed = ((plc as any)?.medical_selected_status || "").toUpperCase().trim();
-      const resolvedMedical =
-        rawApplicantMed === "FIT" || rawPlcMed === "FIT"
-          ? "FIT"
-          : rawApplicantMed === "UNFIT" || rawPlcMed === "UNFIT"
-          ? "UNFIT"
-          : applicant.medical_status || (plc as any)?.medical_selected_status || "Pending";
+      const effMed = resolveEffectiveMedical(applicant, plc);
+      const resolvedMedical = effMed.status;
 
       const row: WorkspaceApplicantRow = {
         applicantId: applicant.name,
@@ -414,6 +409,7 @@ export async function fetchOperationalWorkspaceDataV2(
         passportNumber: applicant.passport_number || "—",
         phone: applicant.phone || applicant.phone_number || undefined,
         medicalStatus: resolvedMedical,
+        medicalCurrent: (applicant as any).medical_current || (plc as any)?.medical_current || undefined,
         medicalDate,
         medicalExpiryDate,
         jobApplied: applicant.target_job || applicant.job_applied || "Housemaid",

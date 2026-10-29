@@ -1,3 +1,4 @@
+import type { V2MedicalCurrent } from "@/lib/api/v2/medical";
 import * as React from "react";
 
 export interface OperationalColumn<T = any> {
@@ -66,6 +67,7 @@ export interface WorkspaceApplicantRow {
   passportNumber: string;
   phone?: string;
   medicalStatus?: string;
+  medicalCurrent?: V2MedicalCurrent;
   medicalDate?: string;
   medicalExpiryDate?: string;
   jobApplied?: string;

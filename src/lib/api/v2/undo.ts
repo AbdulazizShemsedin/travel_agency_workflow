@@ -11,7 +11,7 @@ export interface UndoableStepInfo {
   available: boolean;
   from_status?: string;
   to_status?: string;
-  blocked?: string;
+  blocked?: string | null;
 }
 
 export interface ReverseLastStepResult {

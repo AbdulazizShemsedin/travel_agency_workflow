@@ -351,24 +351,10 @@ export function AgentLayout({
       )}
 
       {/* Main Page Area */}
-      <main className="flex-1 min-h-0 w-full overflow-y-auto flex flex-col justify-between p-3 sm:p-4 lg:p-4 animate-in fade-in duration-200">
-        <div className="w-full max-w-7xl mx-auto space-y-3 lg:space-y-3 flex-1 min-h-0 flex flex-col">
+      <main className="flex-1 min-h-0 w-full overflow-y-auto p-3 sm:p-4 lg:p-4 animate-in fade-in duration-200">
+        <div className="w-full max-w-7xl mx-auto space-y-3 lg:space-y-3 flex flex-col">
           {children}
         </div>
-
-        {/* Agency Footer */}
-        <footer className="mt-4 lg:mt-2 border-t border-slate-200/80 dark:border-[#202026] py-2 lg:py-1.5 text-xs text-slate-500 dark:text-zinc-500 shrink-0">
-          <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p>© 2026 Applicant Processing System • Foreign Partner Portal</p>
-            <div className="flex items-center gap-4 text-[11px]">
-              <span>90-Day Bilateral Guarantee</span>
-              <span>•</span>
-              <span>Direct Row-Level Selection Lock</span>
-              <span>•</span>
-              <span>Staff Coordination Channel</span>
-            </div>
-          </div>
-        </footer>
       </main>
 
       {/* Sign Out Confirmation Modal */}

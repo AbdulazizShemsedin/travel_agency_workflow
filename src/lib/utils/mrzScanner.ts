@@ -16,6 +16,7 @@ export interface ParsedPassportMRZ {
   passport_expiry_date?: string;
   passport_issue_date?: string;
   place_of_issue?: string;
+  place_of_birth?: string;
   raw_mrz?: string;
   [key: string]: any;
 }

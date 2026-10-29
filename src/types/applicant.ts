@@ -1,3 +1,5 @@
+import type { V2MedicalCurrent } from "@/lib/api/v2/medical";
+export type { V2MedicalCurrent } from "@/lib/api/v2/medical";
 // Canonical 10-state progression + Cancelled
 // Authoritative source: backend-contract/doctypes/Applicant.json field "applicant_state"
 export type ApplicantState =
@@ -268,6 +270,7 @@ export interface Applicant {
   exam_date?: string;
   exam_remaining_days?: number;
   medical_status?: "FIT" | "UNFIT" | "Pending" | "";
+  medical_current?: V2MedicalCurrent;
   medical_expiry_date?: string;
   medical_remaining_days?: number;
 

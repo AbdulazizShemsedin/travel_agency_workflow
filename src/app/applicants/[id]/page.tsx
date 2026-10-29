@@ -16,12 +16,15 @@ import {
   Video,
   Eye,
   Briefcase,
+  Building2,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { restartApplicantV2, cancelApplicantV2, getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
+import { SelectForAgencyModal } from "@/components/applicant/SelectForAgencyModal";
+import { MedicalBadge } from "@/components/ui/MedicalBadge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isRoleReadOnly } from "@/lib/auth/v2Roles";
 import { extractRoleName } from "@/lib/auth/permissions";
@@ -287,6 +290,22 @@ export default function ApplicantDetailPage() {
 
   const { authUser, roles, hasRole, isReadOnly } = useAuth();
   const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
+  const [isSelectAgencyModalOpen, setIsSelectAgencyModalOpen] = React.useState(false);
+
+  const isManagerOrAdmin = React.useMemo(() => {
+    const r = authUser?.roles || [];
+    return r.some((role) =>
+      ["Admin", "Manager", "System Manager", "Administrator"].includes(role)
+    );
+  }, [authUser]);
+
+  const canSelectForAgency = React.useMemo(() => {
+    if (!isManagerOrAdmin) return false;
+    if (isMuayena) return false;
+    if (activePlacement) return false;
+    if (currentStage === "Cancelled") return false;
+    return currentStage === "CV Generated" || currentStage === "Registered";
+  }, [isManagerOrAdmin, isMuayena, activePlacement, currentStage]);
 
   const canCreateMuayena = React.useMemo(() => {
     if (!authUser && roles.length === 0) return false;
@@ -428,6 +447,19 @@ export default function ApplicantDetailPage() {
 
           {/* Action Column: Resume / Cancel / Undo Buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Select for an Agency Button (0.-23: Staff direct selection with no request step) */}
+            {canSelectForAgency && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsSelectAgencyModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs gap-1.5"
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Select for an Agency
+              </Button>
+            )}
+
             {/* Make Case (Muayena) Button */}
             {isMuayena && !activePlacement && canCreateMuayena && currentStage !== "Cancelled" && (
               <Button
@@ -789,6 +821,16 @@ export default function ApplicantDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Select for an Agency Modal (0.-23) */}
+      {isSelectAgencyModalOpen && (
+        <SelectForAgencyModal
+          isOpen={isSelectAgencyModalOpen}
+          onClose={() => setIsSelectAgencyModalOpen(false)}
+          applicant={applicant}
+          onSuccess={refetchAll}
+        />
+      )}
 
       {/* Make Case (Muayena) Modal */}
       {isMuayenaModalOpen && (

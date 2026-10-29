@@ -397,7 +397,7 @@ export function ApplicantRegistrationForm({
       skill_sewing: Number(initialData?.skill_sewing) ? 1 : 0,
 
       // Medical gate
-      medical_status: initialData?.medical_status || "Pending",
+      medical_status: initialData?.medical_status || "",
       medical_issue_date: initialData?.medical_issue_date || "",
       medical_expiry_date: initialData?.medical_expiry_date || "",
     },
@@ -917,7 +917,7 @@ export function ApplicantRegistrationForm({
               passport_expiry: serverParsed.passport_expiry || serverParsed.passport_expiry_date || "",
               passport_issue_date: serverParsed.passport_issue_date || "",
               place_of_issue: serverParsed.place_of_issue || "Addis Ababa",
-              place_of_birth: serverParsed.place_of_birth || serverParsed.birth_place || "",
+              place_of_birth: serverParsed.place_of_birth || serverParsed.birth_place || (serverParsed as any).visual_zone?.place_of_birth || (serverParsed as any).visual_zone?.birth_place || "",
               needs_passport_review: Boolean(serverParsed.needs_passport_review),
             };
           }

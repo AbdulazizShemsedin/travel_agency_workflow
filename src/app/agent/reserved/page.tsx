@@ -337,7 +337,7 @@ export default function MyReservedCandidatesPage() {
                         <tr
                           key={c.name}
                           onClick={() => setSelectedCandidateForDetail(candidateForModal)}
-                          className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition cursor-pointer"
+                          className="group bg-white dark:bg-[#121216] hover:bg-slate-50 dark:hover:bg-[#16161c] transition cursor-pointer"
                           title="Click to view full candidate details"
                         >
                           {/* Candidate Identity - Sticky on Desktop only */}
@@ -368,22 +368,22 @@ export default function MyReservedCandidatesPage() {
                           {/* Reservation Status */}
                           <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                             <div className="flex flex-col items-start gap-1">
-                              {(c as any).request_denied === 1 ? (
+                              {(c as any).request_denied === 1 || (c.status === "Cancelled" && (c as any).denied) ? (
                                 <Badge className="bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold">
                                   Unavailable. Please select another candidate.
                                 </Badge>
                               ) : c.status === "Requested" ? (
                                 <div className="flex flex-col items-start gap-0.5">
                                   <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold">
-                                    Waiting for confirmation
+                                    Selection request under review
                                   </Badge>
                                   <span className="text-[9px] text-slate-500 dark:text-zinc-400">
-                                    Request sent. Waiting for agency office to confirm.
+                                    Waiting for internal staff confirmation.
                                   </span>
                                 </div>
                               ) : (
                                 <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
-                                  ✓ Reserved ({c.status || "Selected"})
+                                  ✓ Selected ({c.status || "Selected"})
                                 </Badge>
                               )}
                               {c.exchange_for && (
@@ -443,7 +443,7 @@ export default function MyReservedCandidatesPage() {
                               </Button>
 
                               {/* Contract Upload or View Button or Select Another Candidate */}
-                              {(c as any).request_denied === 1 ? (
+                              {(c as any).request_denied === 1 || (c.status === "Cancelled" && (c as any).denied) ? (
                                 <Link href="/agent">
                                   <Button
                                     type="button"
@@ -453,7 +453,7 @@ export default function MyReservedCandidatesPage() {
                                     Browse Candidates
                                   </Button>
                                 </Link>
-                              ) : c.status === "Requested" || (!c.contract_file && c.status !== "Selected" && c.status !== "Clearance" && c.status !== "Processing" && c.status !== "Stamped" && c.status !== "Ticketed" && c.status !== "Departed") ? (
+                              ) : c.status === "Requested" ? (
                                 <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-2.5 py-1">
                                   Waiting for confirmation
                                 </span>
@@ -473,8 +473,8 @@ export default function MyReservedCandidatesPage() {
                                     View Contract
                                   </Button>
                                 </a>
-                              ) : (
-                                <Link href={`/applicants/${encodeURIComponent(c.name)}/contractor-doc`}>
+                              ) : c.status === "Selected" ? (
+                                <Link href={`/applicants/${encodeURIComponent(c.applicant || c.name)}/contractor-doc`}>
                                   <Button
                                     type="button"
                                     size="sm"
@@ -484,7 +484,7 @@ export default function MyReservedCandidatesPage() {
                                     Upload Contract
                                   </Button>
                                 </Link>
-                              )}
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -589,7 +589,7 @@ export default function MyReservedCandidatesPage() {
                           <tr
                             key={w.applicant || w.passport_number}
                             onClick={() => setSelectedCandidateForDetail(modalItem)}
-                            className="group hover:bg-slate-100/90 dark:hover:bg-[#16161c] transition cursor-pointer"
+                            className="group bg-white dark:bg-[#121216] hover:bg-slate-50 dark:hover:bg-[#16161c] transition cursor-pointer"
                             title="Click to view full worker details"
                           >
                             <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227]">

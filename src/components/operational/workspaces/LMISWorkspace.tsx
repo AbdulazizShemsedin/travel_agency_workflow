@@ -62,6 +62,7 @@ import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { MedicalBadge } from "@/components/ui/MedicalBadge";
 
 interface LMISWorkspaceProps {
   data: WorkspaceApplicantRow[];
@@ -749,34 +750,13 @@ export function LMISWorkspace({
       width: "90px",
       align: "center",
       isReadOnly: true,
-      cell: (row) => {
-        const raw = (row.medicalStatus || "").toUpperCase().trim();
-        const isFit =
-          raw === "FIT" ||
-          raw === "PASSED" ||
-          (raw.includes("FIT") && !raw.includes("UNFIT"));
-        const isUnfit = raw === "UNFIT" || raw === "FAILED";
-
-        if (isFit) {
-          return (
-            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-bold text-[10px]">
-              FIT
-            </Badge>
-          );
-        }
-        if (isUnfit) {
-          return (
-            <Badge className="bg-rose-600 hover:bg-rose-600 text-white font-bold text-[10px]">
-              UNFIT
-            </Badge>
-          );
-        }
-        return (
-          <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold text-[10px] border border-amber-300 dark:border-amber-700">
-            Pending
-          </Badge>
-        );
-      },
+      cell: (row) => (
+        <MedicalBadge
+          medicalCurrent={row.medicalCurrent}
+          fallbackStatus={row.medicalStatus}
+          size="sm"
+        />
+      ),
     },
     {
       id: "status",

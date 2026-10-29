@@ -881,3 +881,19 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
 - **Build & Conformance Verification**:
   - Full TypeScript type check completed with 0 errors (`npx tsc --noEmit`).
   - Next.js production build compiled cleanly across all 30 routes (`npm run build`).
+
+
+## 28. Foreign Agency Selection Request Workflow & Medical Status Audit (2026-10-29)
+- **Foreign Agency Selection Request Isolation**: Fixed selection request workflow in `/agent/page.tsx` and `src/lib/api/v2/portal.ts` (`requestCandidateSelectionV2`). Foreign agencies requesting selection now strictly omit `contractor_name`, ensuring the backend records the placement in status `Requested` instead of prematurely entering `Selected`.
+- **Foreign Agency Portal Reserved Candidates UI**: Updated `/agent/reserved/page.tsx` to display `"Selection request under review"` badge and `"Waiting for internal staff confirmation"` sub-caption when status is `Requested`. Gated "Upload Contract" action to only display when candidate has reached `Selected` state (`status === "Selected" && !contract_file`).
+- **Internal Staff Approval & Denial Queue**: Confirmed `/selection-requests` (`SelectionRequestsWorkspace.tsx`) lists pending `Requested` placements using `listSelectionRequestsV2`. On approve, placement transitions to `Selected`. On denial, records `request_denied = 1` and staff denial reason; agency view displays `"Unavailable. Please select another candidate."` without leaking internal staff notes. Expanded React Query cache invalidation to keep agency, staff, and pipeline views synchronized.
+- **Staff Direct Selection for Agency (0.-23)**: Preserved and fixed direct Manager/Admin selection workflow via `selectCandidateDirectlyV2` (`src/components/applicant/SelectForAgencyModal.tsx`). Explicitly passes `contractor_name` so internal staff can assign candidates directly to an agency without an agency request step.
+- **Hierarchical Medical Precedence Resolution**: Implemented `resolveEffectiveMedical` in `src/lib/api/v2/medical.ts` strictly adhering to the 4-tier precedence:
+  1. Most recent stage with `FIT` or `UNFIT` determines current result (Pre-departure Medical 2 > Selection Medical > Registration Medical).
+  2. `Pending` or empty stages are skipped when checking for completed results.
+  3. If no stage has completed result, registration medical status is used.
+  4. Expired `FIT` result displays `FIT (expired)`.
+  5. Distinguishes genuine `Pending` from missing/unloaded data (`""`).
+  6. Direct authoritative support for backend `medical_current` (0.-22).
+- **Applicant Table Column Audit**: Audited all 16 columns of `ApplicantTable.tsx`. Integrated `resolveEffectiveMedical` across columns 8 (Medical Status), 9 (Exam Date), and 10 (Exam Remaining). Fixed registration form default from `"Pending"` to `""`.
+- **Automated Persistent Regression Test Suite**: Created `tests/selection-and-medical.test.ts` (16 unit and integration test assertions across 2 test suites) running via `npm test` (`npx tsx --test`). Verified 16/16 tests passing, clean TypeScript check (`npx tsc --noEmit`), and full Next.js production build (`npm run build`, 30/30 static and dynamic routes compiled in 9.2s).

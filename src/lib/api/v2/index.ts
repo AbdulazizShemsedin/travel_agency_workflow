@@ -25,4 +25,4 @@ export * from "./clearance_grid";
 export * from "./settings";
 export * from "./undo";
 export * from "./pastRecords";
-
+export * from "./medical";

@@ -24,7 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
-  selectCandidateV2,
+  requestCandidateSelectionV2,
   listContractorsV2,
   V2PortalCandidate,
   ApiV2Error,
@@ -280,22 +280,9 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
-      let targetContractor = effectiveContractor;
-      if (!targetContractor) {
-        try {
-          const fetched = await listContractorsV2();
-          if (Array.isArray(fetched) && fetched.length > 0) {
-            targetContractor = resolveContractorString(fetched[0].name || fetched[0].contractor_name);
-            setActiveContractor(targetContractor);
-          }
-        } catch {
-          // Ignore
-        }
-      }
-      return await selectCandidateV2(
+      return await requestCandidateSelectionV2(
         candidate.name,
-        replacementFor || undefined,
-        targetContractor || undefined
+        replacementFor || undefined
       );
     },
     onSuccess: (res, candidate) => {
@@ -307,12 +294,8 @@ export default function AgentDiscoveryPage() {
         setSelectedCandidateForDetail(null);
       }
 
-      const isRequested = (res as any)?.status === "Requested" || !isInternalStaff;
-      const successToastMsg = isRequested
-        ? "Request sent. Waiting for the agency office to confirm she is available."
-        : replacementFor
-        ? `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected as replacement for ${replacementName || "returned worker"}.`
-        : `✓ Candidate ${candidate.full_name}${candidate.passport_number ? ` (${candidate.passport_number})` : ""} selected.`;
+      // Agency selection requests are recorded in status "Requested" awaiting staff confirmation
+      const successToastMsg = "Request sent. Waiting for the agency office to confirm she is available.";
 
       setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
@@ -326,9 +309,7 @@ export default function AgentDiscoveryPage() {
       setUndoState({
         candidate,
         placementName,
-        message: isRequested
-          ? `Request sent for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`
-          : `Candidate ${candidate.full_name} selected. Click Undo within 7 seconds to cancel.`,
+        message: `Request sent for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`,
       });
       undoTimeoutRef.current = setTimeout(() => {
         setUndoState(null);

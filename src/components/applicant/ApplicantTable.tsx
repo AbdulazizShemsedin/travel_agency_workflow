@@ -32,6 +32,8 @@ import { generateCvV2 } from "@/lib/api/v2/cv";
 import { recordSelectedMedicalResultV2, clearSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
 import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
+import { SelectForAgencyModal } from "@/components/applicant/SelectForAgencyModal";
+import { MedicalBadge } from "@/components/ui/MedicalBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,7 @@ import { AssignEmployeeModal } from "./AssignEmployeeModal";
 import { SimpleSelect } from "@/components/ui/select";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { extractRoleName } from "@/lib/auth/permissions";
+import { resolveEffectiveMedical } from "@/lib/api/v2/medical";
 import { isRoleReadOnly } from "@/lib/auth/v2Roles";
 import { cn } from "@/lib/utils";
 
@@ -169,7 +172,7 @@ export function ApplicantTable() {
   const queryClient = useQueryClient();
   const urlFilter = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter") || "";
 
-  const { authUser, can } = useAuth();
+  const { authUser, roles = [], can } = useAuth();
 
   // Derive corridor restriction from user roles
   const corridorRestriction = React.useMemo(() => {
@@ -236,6 +239,8 @@ export function ApplicantTable() {
 
   // ── Muayena Placement Modal State ─────────────────────────────────────────
   const [isMuayenaModalOpen, setIsMuayenaModalOpen] = React.useState(false);
+  const [isSelectAgencyModalOpen, setIsSelectAgencyModalOpen] = React.useState(false);
+  const [selectAgencyTargetApplicant, setSelectAgencyTargetApplicant] = React.useState<any>(null);
   const [muayenaTargetApplicant, setMuayenaTargetApplicant] = React.useState<any | null>(null);
 
   const canCreateMuayena = React.useMemo(() => {
@@ -263,7 +268,7 @@ export function ApplicantTable() {
   const [assignTargetIds, setAssignTargetIds] = React.useState<string[]>([]);
   const [assignTargetNames, setAssignTargetNames] = React.useState<string[]>([]);
 
-  const { data: applicants = [], isLoading } = useQuery<V2ApplicantDetails[]>({
+  const { data: applicants = [], isLoading, refetch: refetchApplicants } = useQuery<V2ApplicantDetails[]>({
     queryKey: ["applicants"],
     queryFn: () => listApplicantsV2(),
     enabled: Boolean(authUser),
@@ -523,6 +528,10 @@ export function ApplicantTable() {
         ["medical_selected_status", "medical_selected_status"],
         ["medical_selected_examination_date", "medical_selected_examination_date"],
         ["medical_selected_expiry_date", "medical_selected_expiry_date"],
+        ["medical_2_status", "medical_2_status"],
+        ["medical_2_examination_date", "medical_2_examination_date"],
+        ["medical_2_date", "medical_2_date"],
+        ["medical_current", "medical_current"],
         ["contract_file_url", "contract_file_url"],
       ] as const;
       for (const [src, dst] of mergeKeys) {
@@ -1038,17 +1047,20 @@ export function ApplicantTable() {
                     null;
                   const hasContract = Boolean(contractNo || contractFileUrl);
 
-                  const medicalStatus = (applicant as any).medical_selected_status || null;
-                  const examDate = (applicant as any).medical_selected_examination_date || null;
-                  const examExpiry = (applicant as any).medical_selected_expiry_date || null;
-
-                  // Clearance steps for this applicant's active placement
+                  // Active placement reference
                   const plcName = String(
                     (applicant as any)._activePlacementName ||
                     (applicant as any).active_placement ||
                     ""
                   ).toLowerCase().trim();
+                  const plcRecord = plcName ? placementByName.get(plcName) : undefined;
                   const clrSteps = plcName ? (clearanceByPlacement.get(plcName) || {}) : {};
+
+                  // Authoritative hierarchical medical resolution
+                  const effectiveMedical = resolveEffectiveMedical(applicant, plcRecord);
+                  const medicalStatus = effectiveMedical.status;
+                  const examDate = effectiveMedical.examDate;
+                  const examExpiry = effectiveMedical.expiryDate;
 
                   const teshirStatus = (clrSteps as any).teshir?.status || null;
                   const injazStatus = (clrSteps as any).injaz?.status || null;
@@ -1062,12 +1074,16 @@ export function ApplicantTable() {
                     (clrSteps as any).embassy?.appointment_date ||
                     null;
 
-                  // Medical status colour
+                  // Medical status colour & styling
                   const medicalClass =
-                    medicalStatus === "FIT"
-                      ? "text-emerald-700 dark:text-emerald-400 font-bold"
-                      : medicalStatus === "UNFIT"
+                    effectiveMedical.rawStatus === "FIT"
+                      ? effectiveMedical.isExpired
+                        ? "text-amber-700 dark:text-amber-400 font-bold"
+                        : "text-emerald-700 dark:text-emerald-400 font-bold"
+                      : effectiveMedical.rawStatus === "UNFIT"
                       ? "text-rose-600 dark:text-rose-400 font-bold"
+                      : effectiveMedical.rawStatus === "Pending"
+                      ? "text-blue-600 dark:text-blue-400 font-semibold"
                       : "text-slate-400";
 
                   return (
@@ -1608,6 +1624,36 @@ export function ApplicantTable() {
                                   </button>
                                 )}
 
+                                {/* Select for an Agency (0.-23: Staff direct selection with no request step) */}
+                                {Boolean(
+                                  roles.some((r) =>
+                                    ["Admin", "Manager", "System Manager", "Administrator"].includes(r)
+                                  ) &&
+                                  !(
+                                    applicant.entry_track === "Muayena" ||
+                                    applicant.applicant_type === "Muayena" ||
+                                    Boolean((applicant as any).is_muayena)
+                                  ) &&
+                                  !(applicant as any)._activePlacementName &&
+                                  stage !== "Cancelled" &&
+                                  (stage === "CV Generated" ||
+                                    stage === "Waiting to be Selected" ||
+                                    stage === "Registered")
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectAgencyTargetApplicant(applicant);
+                                      setIsSelectAgencyModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                                  >
+                                    <Building2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                    <span>Select for an Agency</span>
+                                  </button>
+                                )}
+
                                 {/* Create Muayena Placement */}
                                 {Boolean(
                                   (applicant.entry_track === "Muayena" || applicant.applicant_type === "Muayena" || Boolean((applicant as any).is_muayena)) &&
@@ -2079,6 +2125,21 @@ export function ApplicantTable() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Select for an Agency Modal (0.-23) */}
+      {isSelectAgencyModalOpen && (
+        <SelectForAgencyModal
+          isOpen={isSelectAgencyModalOpen}
+          onClose={() => {
+            setIsSelectAgencyModalOpen(false);
+            setSelectAgencyTargetApplicant(null);
+          }}
+          applicant={selectAgencyTargetApplicant}
+          onSuccess={() => {
+            refetchApplicants();
+          }}
+        />
+      )}
 
       {/* Muayena Placement Modal */}
       {isMuayenaModalOpen && muayenaTargetApplicant && (

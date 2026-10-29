@@ -729,11 +729,16 @@ export async function listSelectionRequestsV2(): Promise<V2SelectionRequestItem[
     if (Array.isArray(result.data)) return result.data;
     if (Array.isArray(result.rows)) return result.rows;
     if (Array.isArray(result.requests)) return result.requests;
+    if (Array.isArray(result.items)) return result.items;
+    if (Array.isArray(result.placements)) return result.placements;
     if (result.message && typeof result.message === "object") {
       if (Array.isArray(result.message.data)) return result.message.data;
       if (Array.isArray(result.message.rows)) return result.message.rows;
       if (Array.isArray(result.message.requests)) return result.message.requests;
+      if (Array.isArray(result.message.items)) return result.message.items;
+      if (Array.isArray(result.message.placements)) return result.message.placements;
     }
+    if (result.message === null || result.message === undefined) return [];
   }
   if (result === null || result === undefined) return [];
   throw new ApiV2Error(

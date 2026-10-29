@@ -61,6 +61,13 @@ export default function ContractorsPage() {
       return s === "administrator" || s === "system manager" || s === "admin";
     })
   );
+  const canManageCredentials = Boolean(
+    isAdmin ||
+    (roles || []).some((r: any) => {
+      const s = String(r?.role || r?.name || r).toLowerCase().trim();
+      return s === "manager";
+    })
+  );
 
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [editingContractor, setEditingContractor] = React.useState<V2ContractorItem | null>(null);
@@ -1007,11 +1014,28 @@ export default function ContractorsPage() {
                 </div>
               </div>
 
+              {!canManageCredentials && (
+                <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/30 p-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold block">Read-Only Credentials View</span>
+                    Only Administrators and Managers can update portal login passwords. You can view or copy the current credentials below.
+                  </div>
+                </div>
+              )}
+
               <form
                 autoComplete="off"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const targetUser = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email;
+                  if (!canManageCredentials) {
+                    toast.error("Permission Denied", {
+                      description: "Only Administrators and Managers can update agent portal passwords.",
+                    });
+                    return;
+                  }
+                  const rawTarget = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email;
+                  const targetUser = (rawTarget || "").trim().toLowerCase();
                   if (!targetUser || !agentNewPassword.trim() || resetAgentPasswordMutation.isPending) return;
                   if (agentNewPassword !== confirmAgentPassword) {
                     toast.error("Passwords do not match", {
@@ -1030,13 +1054,15 @@ export default function ContractorsPage() {
                   <Label htmlFor="agent_new_pwd" className="text-xs font-semibold">
                     Set Portal Login Password
                   </Label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateRandomPassword}
-                    className="text-[11px] text-amber-600 hover:text-amber-700 font-medium cursor-pointer"
-                  >
-                    Generate Random
-                  </button>
+                  {canManageCredentials && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomPassword}
+                      className="text-[11px] text-amber-600 hover:text-amber-700 font-medium cursor-pointer"
+                    >
+                      Generate Random
+                    </button>
+                  )}
                 </div>
 
                 <div className="relative">
@@ -1049,6 +1075,7 @@ export default function ContractorsPage() {
                     placeholder="Enter or generate password"
                     value={agentNewPassword}
                     onChange={(e) => setAgentNewPassword(e.target.value)}
+                    disabled={!canManageCredentials || resetAgentPasswordMutation.isPending}
                     className="pr-8 font-mono text-xs"
                   />
                   <button
@@ -1074,6 +1101,7 @@ export default function ContractorsPage() {
                       placeholder="Re-enter password to confirm"
                       value={confirmAgentPassword}
                       onChange={(e) => setConfirmAgentPassword(e.target.value)}
+                      disabled={!canManageCredentials || resetAgentPasswordMutation.isPending}
                       className={cn(
                         "pr-8 font-mono text-xs",
                         agentNewPassword && confirmAgentPassword && agentNewPassword !== confirmAgentPassword && "border-rose-500 focus-visible:ring-rose-500"
@@ -1097,12 +1125,14 @@ export default function ContractorsPage() {
                     type="submit"
                     size="sm"
                     disabled={
+                      !canManageCredentials ||
                       !agentNewPassword.trim() ||
                       !confirmAgentPassword.trim() ||
                       agentNewPassword !== confirmAgentPassword ||
                       !(credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email) ||
                       resetAgentPasswordMutation.isPending
                     }
+                    title={!canManageCredentials ? "Only Administrators and Managers can update portal credentials" : undefined}
                     className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
                   >
                     {resetAgentPasswordMutation.isPending ? (

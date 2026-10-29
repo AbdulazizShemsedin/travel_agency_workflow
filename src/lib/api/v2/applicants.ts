@@ -17,6 +17,7 @@
  */
 
 import { requestV2 } from "./client";
+import type { V2MedicalCurrent } from "./medical";
 import {
   toClientCocStatus,
   toBackendCocStatus,
@@ -43,6 +44,7 @@ export interface V2CreateApplicantPayload {
 }
 
 export interface V2ApplicantDetails {
+  medical_current?: V2MedicalCurrent;
   name: string;
   full_name: string;
   first_name?: string;

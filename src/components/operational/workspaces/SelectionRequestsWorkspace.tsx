@@ -143,6 +143,11 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
       queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
       queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
       setApprovingItem(null);
       setApprovalRemarks("");
       onRefreshParent?.();
@@ -192,6 +197,11 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
       queryClient.invalidateQueries({ queryKey: ["v2_selection_requests_count"] });
       queryClient.invalidateQueries({ queryKey: ["v2_unavailable_applicants_list"] });
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-reserved-candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["agency-pipeline"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-available-candidates"] });
       setDenyingItem(null);
       setDenialReason("");
       onRefreshParent?.();

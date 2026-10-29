@@ -544,6 +544,19 @@ export default function PlacementDocumentCenterPage() {
         </div>
       </div>
 
+      {activePlacement?.status === "Requested" && (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3 shadow-xs">
+          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <h4 className="font-bold text-sm">Selection Request Under Review</h4>
+            <p className="text-amber-800 dark:text-amber-300">
+              This candidate was requested for selection and is awaiting review and confirmation by internal agency office staff.
+              Employment contracts and eVisa documents cannot be uploaded until the selection request has been approved.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------- */}
       {/* Navigation Tabs (Contract vs Kuwait Visa)                     */}
       {/* ------------------------------------------------------------- */}
