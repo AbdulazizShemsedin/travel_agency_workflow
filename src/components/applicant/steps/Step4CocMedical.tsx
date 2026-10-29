@@ -5,7 +5,7 @@ import { UseFormReturn } from "react-hook-form";
 import { AlertTriangle, Clock, Award, FileText, Upload, CheckCircle2, Trash2, Loader2, ShieldCheck } from "lucide-react";
 import {
   BaseApplicantFormValues,
-  COC_STATUS_OPTIONS,
+  CLIENT_COC_STATUS_OPTIONS,
   MEDICAL_STATUS_OPTIONS,
   calculateRemainingDays,
   getExpiryBadgeStatus,
@@ -121,7 +121,7 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
                 error={!!errors.coc_status}
               >
                 <option value="">Select COC Status (Optional)</option>
-                {COC_STATUS_OPTIONS.map((status) => (
+                {CLIENT_COC_STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
                     {status}
                   </option>

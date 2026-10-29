@@ -45,14 +45,102 @@ export const EDUCATION_OPTIONS = [
   "Other",
 ] as const;
 
-export const COC_STATUS_OPTIONS = [
+/**
+ * Client-facing COC Status options required by business:
+ * - Have COC
+ * - No COC
+ * - On process
+ */
+export const CLIENT_COC_STATUS_OPTIONS = [
+  "Have COC",
   "No COC",
   "On process",
-  "Have COC",
-  "Pending",
+] as const;
+
+export type ClientCocStatus = (typeof CLIENT_COC_STATUS_OPTIONS)[number];
+
+/**
+ * Backend-accepted COC Status options per Frappe API contract:
+ * - Issued
+ * - Not Started
+ * - Pending
+ */
+export const BACKEND_COC_STATUS_OPTIONS = [
   "Issued",
   "Not Started",
+  "Pending",
 ] as const;
+
+export type BackendCocStatus = (typeof BACKEND_COC_STATUS_OPTIONS)[number];
+
+export const COC_STATUS_OPTIONS = [
+  "Have COC",
+  "No COC",
+  "On process",
+  "Issued",
+  "Not Started",
+  "Pending",
+] as const;
+
+/**
+ * Maps any backend or legacy COC status string to client-facing label:
+ * - Issued / Passed / Certified -> Have COC
+ * - Not Started -> No COC
+ * - Pending / In Training -> On process
+ * - Preserve unknown values (per Requirement 8: do not silently map unknown statuses)
+ */
+export function toClientCocStatus(status?: string | null): ClientCocStatus | "" {
+  if (status === null || status === undefined) return "";
+  const trimmed = String(status).trim();
+  if (!trimmed) return "";
+
+  switch (trimmed) {
+    case "Issued":
+    case "Passed":
+    case "Certified":
+    case "Have COC":
+      return "Have COC";
+    case "Not Started":
+    case "No COC":
+      return "No COC";
+    case "Pending":
+    case "In Training":
+    case "On process":
+      return "On process";
+    default:
+      return trimmed as any;
+  }
+}
+
+/**
+ * Maps client-facing COC status label to backend-accepted value:
+ * - Have COC -> Issued
+ * - No COC -> Not Started
+ * - On process -> Pending
+ * - Preserve unknown values or already-backend values
+ */
+export function toBackendCocStatus(status?: string | null): BackendCocStatus | "" {
+  if (status === null || status === undefined) return "";
+  const trimmed = String(status).trim();
+  if (!trimmed) return "";
+
+  switch (trimmed) {
+    case "Have COC":
+    case "Issued":
+    case "Passed":
+    case "Certified":
+      return "Issued";
+    case "No COC":
+    case "Not Started":
+      return "Not Started";
+    case "On process":
+    case "Pending":
+    case "In Training":
+      return "Pending";
+    default:
+      return trimmed as any;
+  }
+}
 
 export const MEDICAL_STATUS_OPTIONS = ["FIT", "UNFIT", "Pending"] as const;
 
@@ -171,7 +259,7 @@ export const baseApplicantSchema = z.object({
   emergency_contact_name: optionalString,
   emergency_contact_phone: optionalString,
   emergency_relationship: optionalString,
-  coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).default(""),
+  coc_status: z.enum(COC_STATUS_OPTIONS).or(z.literal("")).optional().default(""),
   exam_date: optionalString,
   medical_status: z.enum(MEDICAL_STATUS_OPTIONS).or(z.literal("")).default(""),
   medical_issue_date: optionalString,

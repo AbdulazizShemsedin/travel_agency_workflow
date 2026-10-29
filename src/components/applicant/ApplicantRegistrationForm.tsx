@@ -56,6 +56,11 @@ import {
 } from "date-fns";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  toClientCocStatus,
+  toBackendCocStatus,
+  CLIENT_COC_STATUS_OPTIONS,
+} from "@/lib/validations/applicant.schema";
+import {
   createApplicantV2,
   updateApplicantV2,
   registerApplicantV2,
@@ -355,6 +360,7 @@ export function ApplicantRegistrationForm({
       certified_date: (initialData as any)?.certified_date || initialData?.exam_date || "",
       exam_date: initialData?.exam_date || (initialData as any)?.certified_date || "",
       certificate_no: (initialData as any)?.certificate_no || "",
+      coc_status: toClientCocStatus((initialData as any)?.coc_status || ""),
       training_type: (initialData as any)?.training_type || "",
       photos_2: (initialData as any)?.photos_2 ?? false,
       is_filed: (initialData as any)?.is_filed ?? false,
@@ -732,9 +738,11 @@ export function ApplicantRegistrationForm({
         (initialData as any)?.video ||
         currentFormVideo ||
         "";
+      const resolvedCoc = toClientCocStatus(normalized.coc_status || (initialData as any)?.coc_status || "");
       reset({
         ...getValues(),
         ...normalized,
+        coc_status: resolvedCoc,
         full_name: name,
         video_url: resolvedVideo,
         intro_video: resolvedVideo,
@@ -1049,7 +1057,7 @@ export function ApplicantRegistrationForm({
       contract_number: data.contract_number || "",
       exam_date: data.exam_date || data.certified_date || "",
       certified_date: data.exam_date || data.certified_date || "",
-      coc_status: data.coc_status || "",
+      coc_status: toBackendCocStatus(data.coc_status),
       college_certificate: data.college_certificate || "",
       original_id_scan: data.original_id_scan || "",
       labor_id: (data.labor_id || data.labour_id || "").trim() || (existingApplicantId ? "" : undefined),
@@ -3380,9 +3388,11 @@ export function ApplicantRegistrationForm({
                 )}
               >
                 <option value="">Select COC Status (Optional)...</option>
-                <option value="No COC">No COC</option>
-                <option value="On process">On process</option>
-                <option value="Have COC">Have COC</option>
+                {CLIENT_COC_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
               </select>
               {errors.coc_status && (
                 <p className="text-[11px] font-semibold text-rose-500 mt-0.5">{errors.coc_status.message}</p>

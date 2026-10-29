@@ -70,7 +70,13 @@ import {
   LMIS_REJECTION_REASONS,
   listMyClearanceStepsV2,
 } from "@/lib/api/v2/clearance";
-import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
+import {
+  updateApplicantForLmisV2,
+  updateApplicantV2,
+  toClientCocStatus,
+  toBackendCocStatus,
+  CLIENT_COC_STATUS_OPTIONS,
+} from "@/lib/api/v2/applicants";
 import {
   recordPredepartureMedicalResultV2,
   recordTicketDetailsV2,
@@ -97,7 +103,7 @@ interface ApplicantFollowUpWorkspaceProps {
 
 const TAESHIR_STATUS_OPTIONS = ["INFORMED", "RECEIVED", "READY TO EMBASSY"] as const;
 const INJAZ_PAYMENT_OPTIONS = ["Unpaid", "Printed", "Paid"] as const;
-const COC_STATUS_OPTIONS = ["Not Started", "In Training", "Certified", "Exempt"] as const;
+const COC_STATUS_OPTIONS = CLIENT_COC_STATUS_OPTIONS;
 const DEPARTURE_OUTCOMES = ["Departed", "Local return", "International return"] as const;
 
 export function ApplicantFollowUpWorkspace({
@@ -1320,13 +1326,13 @@ export function ApplicantFollowUpWorkspace({
                           </div>
                         ) : canEditLmis && currentRow.applicantId ? (
                           <select
-                            value={currentRow.cocStatus || "Not Started"}
+                            value={toClientCocStatus(currentRow.cocStatus) || "No COC"}
                             onChange={async (e) => {
                               const val = e.target.value;
                               try {
                                 await updateApplicantForLmisV2({
                                   applicant_name: currentRow.applicantId!,
-                                  coc_status: val,
+                                  coc_status: toBackendCocStatus(val),
                                 });
                                 toast.success(`COC status updated to ${val}`);
                                 setCurrentRow((prev) => (prev ? { ...prev, cocStatus: val } : null));
@@ -1337,7 +1343,8 @@ export function ApplicantFollowUpWorkspace({
                             }}
                             className="w-full h-7 sm:h-7.5 px-2 text-xs border rounded-md bg-white dark:bg-[#16161d] font-medium border-slate-200 dark:border-zinc-700"
                           >
-                            {COC_STATUS_OPTIONS.map((opt) => (
+                            <option value="">Select COC Status (Optional)...</option>
+                            {CLIENT_COC_STATUS_OPTIONS.map((opt) => (
                               <option key={opt} value={opt}>
                                 {opt}
                               </option>
@@ -1345,7 +1352,7 @@ export function ApplicantFollowUpWorkspace({
                           </select>
                         ) : (
                           <div className="h-7 sm:h-7.5 px-2 rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-[#16161d] flex items-center justify-between font-semibold text-slate-800 dark:text-zinc-200">
-                            <span>{currentRow.cocStatus || "Not Started"}</span>
+                            <span>{toClientCocStatus(currentRow.cocStatus) || "No COC"}</span>
                             {!canEditLmis && <Lock className="h-3 w-3 text-slate-400" />}
                           </div>
                         )}
@@ -3494,9 +3501,9 @@ export function ApplicantFollowUpWorkspace({
                     return;
                   }
                 } else {
-                  const coc = (currentRow.cocStatus || "").trim().toLowerCase();
-                  if (!coc || coc === "not started" || coc === "pending") {
-                    toast.error("Saudi LMIS requires a valid COC Status (Issued / Passed) before finalizing.");
+                  const backendCoc = toBackendCocStatus(currentRow.cocStatus);
+                  if (!backendCoc || backendCoc === "Not Started" || backendCoc === "Pending") {
+                    toast.error("Saudi LMIS requires a valid COC Status (Have COC) before finalizing.");
                     return;
                   }
                 }
@@ -3512,7 +3519,7 @@ export function ApplicantFollowUpWorkspace({
                     await updateApplicantForLmisV2({
                       applicant_name: currentRow.applicantId,
                       labor_id: cleanLabor,
-                      coc_status: currentRow.cocStatus,
+                      coc_status: toBackendCocStatus(currentRow.cocStatus),
                     });
                   }
                   await setLmisStatusV2(

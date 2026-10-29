@@ -14,6 +14,7 @@
  */
 
 import { ApiV2Error } from "./client";
+import { toClientCocStatus } from "@/lib/validations/applicant.schema";
 import { listApplicantsV2, V2ApplicantDetails } from "./applicants";
 import { listPlacementsV2, V2PlacementRecord } from "./placements";
 import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
@@ -200,8 +201,10 @@ export async function fetchOperationalWorkspaceDataV2(
         !isSaudi ||
         applicant.coc_status === "Issued" ||
         applicant.coc_status === "Passed" ||
+        applicant.coc_status === "Have COC" ||
         (lmsStep as any)?.coc_status === "Issued" ||
         (lmsStep as any)?.coc_status === "Passed" ||
+        (lmsStep as any)?.coc_status === "Have COC" ||
         Boolean(applicant.exam_date || (lmsStep as any)?.exam_date);
 
       const isLmsFullyCompleted = Boolean(lmsStep && isLmsIssued && hasCocFinished);
@@ -443,7 +446,7 @@ export async function fetchOperationalWorkspaceDataV2(
         nationalId: applicant.national_id || "",
         emergencyContactName: applicant.emergency_contact_name || (applicant as any).relative_name || "",
         emergencyContactPhone: applicant.emergency_contact_phone || (applicant as any).relative_phone || "",
-        cocStatus: isKuwait ? "—" : (applicant.coc_status || "Not Started"),
+        cocStatus: isKuwait ? "—" : (toClientCocStatus(applicant.coc_status) || "No COC"),
         contractDate: contractDate || "—",
         duration: duration || 0,
         medicalRemaining,

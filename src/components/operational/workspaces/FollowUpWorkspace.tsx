@@ -62,7 +62,12 @@ import {
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
-import { updateApplicantForLmisV2 } from "@/lib/api/v2/applicants";
+import {
+  updateApplicantForLmisV2,
+  toClientCocStatus,
+  toBackendCocStatus,
+  CLIENT_COC_STATUS_OPTIONS,
+} from "@/lib/api/v2/applicants";
 import {
   recordTicketDetailsV2,
   advancePlacementV2,
@@ -192,7 +197,8 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
       (row.applicant as any)?.coc_status ||
       ""
     ).trim();
-    const cleanCoc = rawCoc && rawCoc !== "—" && rawCoc !== "Not Started" ? rawCoc : "";
+    const clientCoc = toClientCocStatus(rawCoc);
+    const cleanCoc = clientCoc && clientCoc !== "No COC" ? clientCoc : "";
 
     if (!cleanCoc) {
       missingFields.push("COC Status");
@@ -207,7 +213,7 @@ export function checkLmisStageRequirements(row: WorkspaceApplicantRow): StageVal
       fieldValues: {
         laborId: cleanLaborId,
         issueDate: cleanIssueDate,
-        cocStatus: cleanCoc || (row.cocStatus === "Not Started" ? "Not Started" : "Pending"),
+        cocStatus: clientCoc || (toClientCocStatus(row.cocStatus) === "No COC" ? "No COC" : "On process"),
         lmisRemark,
       },
     };
@@ -832,7 +838,7 @@ export function FollowUpWorkspace({
   // Stage form inputs
   const [formLaborId, setFormLaborId] = React.useState("");
   const [formIssueDate, setFormIssueDate] = React.useState("");
-  const [formCocStatus, setFormCocStatus] = React.useState("Issued");
+  const [formCocStatus, setFormCocStatus] = React.useState("Have COC");
   const [formPoliceAsharaStatus, setFormPoliceAsharaStatus] = React.useState("Completed");
   const [formPoliceAsharaDate, setFormPoliceAsharaDate] = React.useState("");
   const [formPoliceAsharaRemark, setFormPoliceAsharaRemark] = React.useState("");
@@ -914,7 +920,7 @@ export function FollowUpWorkspace({
 
       setFormLaborId(validation.fieldValues.laborId || "");
       setFormIssueDate(validation.fieldValues.issueDate || new Date().toISOString().split("T")[0]);
-      setFormCocStatus(validation.fieldValues.cocStatus || "Issued");
+      setFormCocStatus(toClientCocStatus(validation.fieldValues.cocStatus) || "Have COC");
       setFormPoliceAsharaStatus(validation.fieldValues.policeAsharaStatus || "Completed");
       setFormPoliceAsharaDate(validation.fieldValues.policeAsharaDate || new Date().toISOString().split("T")[0]);
       setFormPoliceAsharaRemark(validation.fieldValues.policeAsharaRemark || "");
@@ -1263,7 +1269,8 @@ export function FollowUpWorkspace({
             errors.policeAsharaRemark = "A remark is required when Police Ashara status is Failed.";
           }
         } else {
-          if (!formCocStatus || formCocStatus === "Not Started") {
+          const backendCoc = toBackendCocStatus(formCocStatus);
+          if (!backendCoc || backendCoc === "Not Started") {
             errors.cocStatus = "COC status is required for Saudi Arabia corridor.";
           }
         }
@@ -1329,7 +1336,7 @@ export function FollowUpWorkspace({
           await updateApplicantForLmisV2({
             applicant_name: row.applicantId,
             labor_id: cleanLabor,
-            coc_status: formCocStatus,
+            coc_status: toBackendCocStatus(formCocStatus),
           });
         }
         if (formLmisRemark.trim()) {
@@ -2129,7 +2136,7 @@ export function FollowUpWorkspace({
                             <div>
                               <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">COC Status:</span>
                               <Badge variant="outline" className="text-emerald-700 border-emerald-300 dark:border-emerald-700 font-semibold">
-                                {stageModalState.validation.fieldValues.cocStatus || "Issued"}
+                                {toClientCocStatus(stageModalState.validation.fieldValues.cocStatus) || "Have COC"}
                               </Badge>
                             </div>
                           )}
@@ -2404,7 +2411,7 @@ export function FollowUpWorkspace({
                               COC Status <span className="text-rose-500 font-bold">*</span>
                             </Label>
                             <select
-                              value={formCocStatus}
+                              value={toClientCocStatus(formCocStatus) || "Have COC"}
                               onChange={(e) => {
                                 setFormCocStatus(e.target.value);
                                 if (fieldErrors.cocStatus) setFieldErrors((prev) => ({ ...prev, cocStatus: "" }));
@@ -2414,11 +2421,11 @@ export function FollowUpWorkspace({
                                 fieldErrors.cocStatus && "border-rose-500"
                               )}
                             >
-                              <option value="Issued">Issued (Certified)</option>
-                              <option value="Certified">Certified</option>
-                              <option value="In Training">In Training</option>
-                              <option value="Pending">Pending</option>
-                              <option value="Exempt">Exempt</option>
+                              {CLIENT_COC_STATUS_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
                             </select>
                             {fieldErrors.cocStatus && (
                               <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-medium">

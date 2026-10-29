@@ -49,7 +49,13 @@ import {
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
 } from "@/lib/api/v2/clearance";
-import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
+import {
+  updateApplicantForLmisV2,
+  updateApplicantV2,
+  toClientCocStatus,
+  toBackendCocStatus,
+  CLIENT_COC_STATUS_OPTIONS,
+} from "@/lib/api/v2/applicants";
 import { updatePlacementForLmisV2 } from "@/lib/api/v2/placements";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
@@ -126,7 +132,7 @@ export function LMISWorkspace({
   const [modalNationalId, setModalNationalId] = React.useState("");
   const [modalEmergencyName, setModalEmergencyName] = React.useState("");
   const [modalEmergencyPhone, setModalEmergencyPhone] = React.useState("");
-  const [modalCocStatus, setModalCocStatus] = React.useState("Not Started");
+  const [modalCocStatus, setModalCocStatus] = React.useState("No COC");
   const [modalEmployee, setModalEmployee] = React.useState("");
   const [modalOtherStatus, setModalOtherStatus] = React.useState("");
   const [modalTakenByAgency, setModalTakenByAgency] = React.useState("");
@@ -206,7 +212,7 @@ export function LMISWorkspace({
         ""
     );
     setModalCocStatus(
-      editingRow.cocStatus || (editingRow.applicant as any)?.coc_status || "Not Started"
+      toClientCocStatus(editingRow.cocStatus || (editingRow.applicant as any)?.coc_status) || "No COC"
     );
     setModalEmployee(lms?.assigned_officer || lms?.employee || "");
     setModalOtherStatus(lms?.lmis_other_status || "");
@@ -411,12 +417,7 @@ export function LMISWorkspace({
         ) || isRowDeparted;
 
       // 1. Scoped narrow LMIS fields (strictly no insurance/lmis payment/coc exam date)
-      const cleanCoc =
-        modalCocStatus === "Passed"
-          ? "Issued"
-          : ["Pending", "Issued", "Not Started"].includes(modalCocStatus)
-          ? modalCocStatus
-          : "Not Started";
+      const cleanCoc = toBackendCocStatus(modalCocStatus);
       const cleanLabor = modalLaborRefNo.trim();
       const safeLabor =
         cleanLabor && !cleanLabor.toUpperCase().startsWith("APP-")
@@ -693,26 +694,26 @@ export function LMISWorkspace({
       editable: true,
       cell: (row) => (
         <ExcelSelect
-          value={row.cocStatus || (row.applicant as any)?.coc_status || "Not Started"}
+          value={toClientCocStatus(row.cocStatus || (row.applicant as any)?.coc_status) || "No COC"}
           disabled={!canEdit}
           options={[
             {
-              value: "Not Started",
-              label: "Not Started",
+              value: "No COC",
+              label: "No COC",
               badgeClass: "bg-slate-100 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300",
             },
             {
-              value: "Pending",
-              label: "Pending",
+              value: "On process",
+              label: "On process",
               badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
             },
             {
-              value: "Issued",
-              label: "Issued",
+              value: "Have COC",
+              label: "Have COC",
               badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
             },
           ]}
-          onSave={(val) => handleUpdateApplicantField(row.applicantId, { coc_status: val })}
+          onSave={(val) => handleUpdateApplicantField(row.applicantId, { coc_status: toBackendCocStatus(val) })}
         />
       ),
     },
@@ -1062,13 +1063,15 @@ export function LMISWorkspace({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">COC Status</Label>
                 <select
-                  value={modalCocStatus}
+                  value={toClientCocStatus(modalCocStatus) || "No COC"}
                   onChange={(e) => setModalCocStatus(e.target.value)}
                   className="w-full h-8 px-2 text-xs border rounded-md bg-white dark:bg-[#15151a] font-medium"
                 >
-                  <option value="Not Started">Not Started</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Issued">Issued</option>
+                  {CLIENT_COC_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
                 </select>
               </div>
 

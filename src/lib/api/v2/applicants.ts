@@ -17,6 +17,13 @@
  */
 
 import { requestV2 } from "./client";
+import {
+  toClientCocStatus,
+  toBackendCocStatus,
+  CLIENT_COC_STATUS_OPTIONS,
+} from "@/lib/validations/applicant.schema";
+
+export { toClientCocStatus, toBackendCocStatus, CLIENT_COC_STATUS_OPTIONS };
 
 export type V2ApplicantLifecycleStatus =
   | "Draft"
@@ -418,9 +425,7 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.certified_date = cleanDate;
   }
   if (result.coc_status !== undefined && result.coc_status !== null) {
-    let coc = String(result.coc_status).trim();
-    if (coc === "Passed") coc = "Issued";
-    result.coc_status = coc;
+    result.coc_status = String(result.coc_status).trim();
   }
 
   // 10. Emergency Contact Person, Phone & Relationship Aliasing
@@ -593,6 +598,9 @@ export async function createApplicantV2(
   payload: V2CreateApplicantPayload
 ): Promise<{ name?: string; message?: string; [key: string]: any }> {
   const cleanPayload = normalizeApplicantFields(payload);
+  if (cleanPayload.coc_status !== undefined) {
+    cleanPayload.coc_status = toBackendCocStatus(cleanPayload.coc_status);
+  }
   const res = await requestV2<{ name?: string; message?: string; [key: string]: any }>(
     "/api/method/agency_tracking.applicant_api.create_applicant",
     {
@@ -628,6 +636,9 @@ export async function getApplicantV2(
   if (result) {
     const normalized = normalizeApplicantFields(result);
     Object.assign(result, normalized);
+    if (result.coc_status !== undefined) {
+      result.coc_status = toClientCocStatus(result.coc_status);
+    }
     if (result.status && !result.applicant_state) {
       result.applicant_state = result.status;
     }
@@ -757,6 +768,9 @@ export async function listApplicantsV2(
   const mapped = rawList.map((item: V2ApplicantDetails) => {
     const normalized = normalizeApplicantFields(item);
     Object.assign(item, normalized);
+    if (item.coc_status !== undefined) {
+      item.coc_status = toClientCocStatus(item.coc_status);
+    }
     if (item.status && !item.applicant_state) {
       item.applicant_state = item.status;
     }
@@ -810,6 +824,9 @@ export async function updateApplicantV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   const cleanFields = extraFields ? normalizeApplicantFields(extraFields) : {};
+  if (cleanFields.coc_status !== undefined) {
+    cleanFields.coc_status = toBackendCocStatus(cleanFields.coc_status);
+  }
   const res = await requestV2<{ message?: string; [key: string]: any }>(
     "/api/method/agency_tracking.applicant_api.update_applicant",
     {
@@ -888,11 +905,9 @@ export async function updateApplicantForLmisV2(
   payload: V2LmisUpdatePayload
 ): Promise<{ message?: string; [key: string]: any }> {
   // Frappe DocType validation strictly allows: "", "Pending", "Issued", "Not Started"
-  let sanitizedCocStatus = payload.coc_status;
-  if (sanitizedCocStatus === "Passed") {
-    sanitizedCocStatus = "Issued";
-  } else if (sanitizedCocStatus && !["Pending", "Issued", "Not Started"].includes(sanitizedCocStatus)) {
-    sanitizedCocStatus = "Not Started";
+  let sanitizedCocStatus: string | undefined = undefined;
+  if (payload.coc_status !== undefined) {
+    sanitizedCocStatus = toBackendCocStatus(payload.coc_status);
   }
 
   // Ensure applicant ID (APP-XXXXX) is never saved into labor_id
