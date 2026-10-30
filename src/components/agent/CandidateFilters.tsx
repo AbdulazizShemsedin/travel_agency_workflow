@@ -101,7 +101,7 @@ export function CandidateFilters({
     { value: "All Medical", label: "Medical (All)", icon: <HeartPulse className="h-3.5 w-3.5 text-slate-400" /> },
     { value: "FIT", label: "FIT (Medically Cleared)" },
     { value: "Pending", label: "In Progress / Pending" },
-    { value: "Not Done", label: "Not Done / None" },
+    { value: "UNFIT", label: "UNFIT (Not Cleared)" },
   ];
 
   const EXPERIENCES = [

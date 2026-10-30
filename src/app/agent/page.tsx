@@ -219,7 +219,7 @@ export default function AgentDiscoveryPage() {
         if (medicalStatus !== "All Medical") {
           const isFit = c.medical_status === "FIT";
           if (medicalStatus === "FIT" && !isFit) return false;
-          if ((medicalStatus === "Pending" || medicalStatus === "Not Done") && isFit) return false;
+          if (medicalStatus === "Pending" && isFit) return false;
         }
 
         // Place of birth filter
@@ -280,8 +280,23 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
+      const targetContractor =
+        effectiveContractor ||
+        resolveContractorString(agencyContext?.contractor?.name) ||
+        resolveContractorString(authUser?.contractor) ||
+        activeContractor ||
+        fallbackContractor;
+
+      if (!targetContractor) {
+        throw new ApiV2Error(
+          "Unable to request selection: your account is not associated with an agency contractor. Please contact your administrator.",
+          400
+        );
+      }
+
       return await requestCandidateSelectionV2(
         candidate.name,
+        targetContractor,
         replacementFor || undefined
       );
     },
@@ -712,17 +727,21 @@ export default function AgentDiscoveryPage() {
                           {/* Candidate Identity - Sticky on Desktop only */}
                           <td className="lg:sticky lg:left-0 lg:z-10 bg-white dark:bg-[#121216] group-hover:bg-slate-100 dark:group-hover:bg-[#16161c] px-3 py-2.5 sm:px-4 sm:py-3.5 border-b border-r border-slate-300 dark:border-[#222227] lg:shadow-[4px_0_8px_-2px_rgba(0,0,0,0.18)] transition-colors">
                             <div className="flex items-center gap-1.5 sm:gap-3">
-                              {candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo ? (
-                                <img
-                                  src={candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo}
-                                  alt={candidate.full_name}
-                                  className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
-                                />
-                              ) : (
-                                <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-[10px] sm:text-xs shrink-0">
-                                  {candidate.full_name?.slice(0, 2) || "CA"}
-                                </div>
-                              )}
+                              {(() => {
+                                const photo = candidate.photo_passport || (candidate as any).photograph || (candidate as any).photo;
+                                const hasPhoto = typeof photo === "string" && photo.trim() && !photo.toLowerCase().includes("dummy");
+                                return hasPhoto ? (
+                                  <img
+                                    src={photo}
+                                    alt={candidate.full_name}
+                                    className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                                  />
+                                ) : (
+                                  <div className="h-7 w-7 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-[10px] sm:text-xs shrink-0">
+                                    {candidate.full_name?.slice(0, 2) || "CA"}
+                                  </div>
+                                );
+                              })()}
                               <div className="min-w-0">
                                 <p className="font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white truncate leading-tight">{candidate.full_name || "Candidate"}</p>
                                 {candidate.passport_number && (
@@ -924,18 +943,22 @@ export default function AgentDiscoveryPage() {
           {candidatePendingConfirm && (
             <div className="space-y-3 rounded-xl border border-slate-200 dark:border-[#22222a] bg-slate-50 dark:bg-[#17171d] p-4 text-xs">
               <div className="flex items-center gap-3">
-                {candidatePendingConfirm.photo_passport ? (
-                  <img
-                    src={candidatePendingConfirm.photo_passport}
-                    alt={candidatePendingConfirm.full_name}
-                    className="h-12 w-12 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-sm shrink-0">
-                    {candidatePendingConfirm.full_name?.slice(0, 2) || "CA"}
-                  </div>
-                )}
+                {(() => {
+                  const photo = candidatePendingConfirm.photo_passport;
+                  const hasPhoto = typeof photo === "string" && photo.trim() && !photo.toLowerCase().includes("dummy");
+                  return hasPhoto ? (
+                    <img
+                      src={photo}
+                      alt={candidatePendingConfirm.full_name}
+                      className="h-12 w-12 rounded-xl object-cover border border-slate-200 dark:border-[#26262f] shrink-0"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center font-bold text-emerald-800 text-sm shrink-0">
+                      {candidatePendingConfirm.full_name?.slice(0, 2) || "CA"}
+                    </div>
+                  );
+                })()}
                 <div className="min-w-0">
                   <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
                     {candidatePendingConfirm.full_name}

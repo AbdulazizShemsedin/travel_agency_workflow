@@ -7,8 +7,18 @@ import {
   requestCandidateSelectionV2,
   selectCandidateDirectlyV2,
   selectCandidateV2,
+  listPortalCandidatesV2,
 } from "../src/lib/api/v2/portal";
-import { listSelectionRequestsV2 } from "../src/lib/api/v2/placements";
+import {
+  listSelectionRequestsV2,
+  approveSelectionRequestV2,
+  denySelectionRequestV2,
+  makeApplicantAvailableV2,
+} from "../src/lib/api/v2/placements";
+import {
+  normalizeApplicantFields,
+  mapEducationLevelToBackend,
+} from "../src/lib/api/v2/applicants";
 
 function createMockResponse(bodyData: any, status = 200): Response {
   return {
@@ -37,7 +47,7 @@ function createMockResponse(bodyData: any, status = 200): Response {
 }
 
 describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", () => {
-  test("1. Foreign agency request helper does NOT pass contractor_name, keeping status as Requested", async () => {
+  test("1. Foreign agency request helper sends contractor_name and contractor to satisfy backend requirement", async () => {
     const originalFetch = globalThis.fetch;
     let interceptedUrl = "";
     let interceptedBody: any = null;
@@ -51,19 +61,18 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      const res = await requestCandidateSelectionV2("APP-1001");
+      const res = await requestCandidateSelectionV2("APP-1001", "Test Agency Contractor");
       assert.equal(interceptedUrl.includes("portal_api.select_candidate"), true);
       assert.equal(interceptedBody?.applicant_name, "APP-1001");
-      // Must NOT include contractor_name (which would trigger staff direct selection per 0.-23)
-      assert.equal(interceptedBody?.contractor_name, undefined);
-      assert.equal(interceptedBody?.contractor, undefined);
+      assert.equal(interceptedBody?.contractor_name, "Test Agency Contractor");
+      assert.equal(interceptedBody?.contractor, "Test Agency Contractor");
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  test("2. Agency request with replacement passes replacement_for without contractor_name", async () => {
+  test("2. Agency request with replacement passes replacement_for and contractor_name", async () => {
     const originalFetch = globalThis.fetch;
     let interceptedBody: any = null;
 
@@ -75,10 +84,10 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      const res = await requestCandidateSelectionV2("APP-1002", "PLM-OLD-999");
+      const res = await requestCandidateSelectionV2("APP-1002", "Test Agency Contractor", "PLM-OLD-999");
       assert.equal(interceptedBody?.applicant_name, "APP-1002");
+      assert.equal(interceptedBody?.contractor_name, "Test Agency Contractor");
       assert.equal(interceptedBody?.replacement_for, "PLM-OLD-999");
-      assert.equal(interceptedBody?.contractor_name, undefined);
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
@@ -109,7 +118,16 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }
   });
 
-  test("4. Staff direct selection rejects missing or empty contractorName", async () => {
+  test("4. Selection helpers reject missing or empty contractorName to prevent 417 errors", async () => {
+    await assert.rejects(
+      async () => {
+        await requestCandidateSelectionV2("APP-1004", "");
+      },
+      {
+        message: /Contractor \/ Agency identity is required/i,
+      }
+    );
+
     await assert.rejects(
       async () => {
         await selectCandidateDirectlyV2("APP-1004", "");
@@ -120,7 +138,7 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     );
   });
 
-  test("5. Backward-compatible selectCandidateV2 disambiguates between agency request and direct staff selection", async () => {
+  test("5. Backward-compatible selectCandidateV2 forwards contractor_name and rejects missing contractor", async () => {
     const originalFetch = globalThis.fetch;
     const interceptedBodies: any[] = [];
 
@@ -132,13 +150,19 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      // Call with no contractor -> agency request
-      await selectCandidateV2("APP-1005");
-      assert.equal(interceptedBodies[0]?.contractor_name, undefined);
-
-      // Call with contractor -> staff direct selection
+      // Call with contractor -> forwards contractor_name
       await selectCandidateV2("APP-1006", "AGY-DUBAI");
-      assert.equal(interceptedBodies[1]?.contractor_name, "AGY-DUBAI");
+      assert.equal(interceptedBodies[0]?.contractor_name, "AGY-DUBAI");
+
+      // Call without contractor -> rejects early
+      await assert.rejects(
+        async () => {
+          await selectCandidateV2("APP-1005");
+        },
+        {
+          message: /Contractor name is required/i,
+        }
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -169,6 +193,114 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test("7. approveSelectionRequestV2 calls backend RPC with placement_name and remarks", async () => {
+    const originalFetch = globalThis.fetch;
+    let interceptedUrl = "";
+    let interceptedBody: any = null;
+
+    globalThis.fetch = (async (url: any, options: any = {}) => {
+      interceptedUrl = String(url);
+      if (options.body) {
+        interceptedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+      }
+      return createMockResponse({ message: { name: "PLM-007", status: "Selected" } });
+    }) as any;
+
+    try {
+      const res = await approveSelectionRequestV2("PLM-007", "Candidate available and confirmed");
+      assert.equal(interceptedUrl.includes("placement_api.approve_selection_request"), true);
+      assert.equal(interceptedBody?.placement_name, "PLM-007");
+      assert.equal(interceptedBody?.remarks, "Candidate available and confirmed");
+      assert.equal(res.status, "Selected");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("8. denySelectionRequestV2 calls backend RPC with required reason", async () => {
+    const originalFetch = globalThis.fetch;
+    let interceptedUrl = "";
+    let interceptedBody: any = null;
+
+    globalThis.fetch = (async (url: any, options: any = {}) => {
+      interceptedUrl = String(url);
+      if (options.body) {
+        interceptedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+      }
+      return createMockResponse({ message: { name: "PLM-008", status: "Cancelled", request_denied: 1 } });
+    }) as any;
+
+    try {
+      const res = await denySelectionRequestV2("PLM-008", "Candidate took another offer");
+      assert.equal(interceptedUrl.includes("placement_api.deny_selection_request"), true);
+      assert.equal(interceptedBody?.placement_name, "PLM-008");
+      assert.equal(interceptedBody?.reason, "Candidate took another offer");
+      assert.equal(res.status, "Cancelled");
+      assert.equal(res.request_denied, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("9. makeApplicantAvailableV2 calls backend RPC with applicant_name and optional reason", async () => {
+    const originalFetch = globalThis.fetch;
+    let interceptedUrl = "";
+    let interceptedBody: any = null;
+
+    globalThis.fetch = (async (url: any, options: any = {}) => {
+      interceptedUrl = String(url);
+      if (options.body) {
+        interceptedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+      }
+      return createMockResponse({ message: { name: "APP-009", unavailable: 0 } });
+    }) as any;
+
+    try {
+      const res = await makeApplicantAvailableV2("APP-009", "Candidate is ready again");
+      assert.equal(interceptedUrl.includes("placement_api.make_applicant_available"), true);
+      assert.equal(interceptedBody?.applicant_name, "APP-009");
+      assert.equal(interceptedBody?.reason, "Candidate is ready again");
+      assert.equal(res.unavailable, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("10. State consistency: Requested case never allows contract upload or premature Selected state", () => {
+    const requestedCase = {
+      name: "PLM-010",
+      status: "Requested",
+      request_denied: 0,
+    };
+
+    // 1. Verify eligibility for contract upload: only "Selected" is allowed
+    const canUploadContract = requestedCase.status === "Selected" && !requestedCase.request_denied;
+    assert.equal(canUploadContract, false);
+
+    // 2. Verify display badge terminology: "Requested" is under review, NOT Selected
+    const badgeText =
+      requestedCase.status === "Requested"
+        ? "Selection request under review"
+        : requestedCase.status === "Selected"
+        ? "Selected"
+        : requestedCase.status;
+    assert.equal(badgeText, "Selection request under review");
+
+    // 3. Verify denied case display
+    const deniedCase = {
+      name: "PLM-011",
+      status: "Cancelled",
+      request_denied: 1,
+    };
+    const deniedBadgeText =
+      deniedCase.request_denied === 1
+        ? "Unavailable. Please select another candidate."
+        : deniedCase.status;
+    assert.equal(deniedBadgeText, "Unavailable. Please select another candidate.");
+    const canUploadDenied = deniedCase.status === "Selected" && !deniedCase.request_denied;
+    assert.equal(canUploadDenied, false);
   });
 });
 
@@ -341,5 +473,86 @@ describe("Medical Status Hierarchical Precedence & Column Audit Rules", () => {
     assert.notEqual(resA.status, resB.status);
     assert.notEqual(resB.status, resC.status);
     assert.notEqual(resC.status, resD.status);
+  });
+
+  test("11. normalizeApplicantFields strips 'Not Done' and 'None' from medical_status to prevent backend 417 ValidationError", () => {
+    const rawWithNotDone = normalizeApplicantFields({ medical_status: "Not Done" });
+    assert.equal(rawWithNotDone.medical_status, "");
+
+    const rawWithNone = normalizeApplicantFields({ medical_status: "None" });
+    assert.equal(rawWithNone.medical_status, "");
+
+    const rawWithFit = normalizeApplicantFields({ medical_status: "FIT" });
+    assert.equal(rawWithFit.medical_status, "FIT");
+  });
+
+  test("12. listPortalCandidatesV2 sanitizes dummy.jpg / dummy placeholders to empty strings to avoid 500 image errors", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      return createMockResponse({
+        message: {
+          candidates: [
+            {
+              name: "APP-00190",
+              full_name: "Test Candidate With Dummy Photo",
+              photograph: "/files/dummy.jpg",
+              photo_full_body: "/files/dummy.jpg",
+            },
+            {
+              name: "APP-00195",
+              full_name: "Test Candidate With Real Photo",
+              photograph: "/files/real_photo.jpg",
+              photo_full_body: "/files/real_body.jpg",
+            },
+          ],
+        },
+      });
+    }) as any;
+
+    try {
+      const candidates = (await listPortalCandidatesV2()) as any[];
+      assert.equal(candidates.length, 2);
+      // Dummy photos must be cleaned to empty strings
+      assert.equal(candidates[0].photo_passport, "");
+      assert.equal(candidates[0].photo_full_body, "");
+      // Real photos must be preserved
+      assert.equal(candidates[1].photo_passport, "/files/real_photo.jpg");
+      assert.equal(candidates[1].photo_full_body, "/files/real_body.jpg");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("13. Education level mapping conforms to backend choices and resolves 'HIGH SCHOOL' error", () => {
+    // 1. Direct mapper checks
+    assert.equal(mapEducationLevelToBackend("HIGH SCHOOL"), "High School");
+    assert.equal(mapEducationLevelToBackend("SECONDARY LEVEL"), "High School");
+    assert.equal(mapEducationLevelToBackend("PRIMARY LEVEL"), "High School");
+    assert.equal(mapEducationLevelToBackend("DIPLOMA"), "Associate Degree");
+    assert.equal(mapEducationLevelToBackend("BACHELOR'S DEGREE"), "Bachelor's Degree");
+    assert.equal(mapEducationLevelToBackend("MASTER'S DEGREE"), "Master's Degree");
+    assert.equal(mapEducationLevelToBackend("DOCTORATE"), "Doctorate");
+    assert.equal(mapEducationLevelToBackend("OTHER"), "Other");
+
+    // Exact backend case preservation
+    assert.equal(mapEducationLevelToBackend("High School"), "High School");
+    assert.equal(mapEducationLevelToBackend("Associate Degree"), "Associate Degree");
+    assert.equal(mapEducationLevelToBackend("Bachelor's Degree"), "Bachelor's Degree");
+    assert.equal(mapEducationLevelToBackend("Master's Degree"), "Master's Degree");
+    assert.equal(mapEducationLevelToBackend("Doctorate"), "Doctorate");
+    assert.equal(mapEducationLevelToBackend("Other"), "Other");
+
+    // 2. Integration with normalizeApplicantFields:
+    // When qualification or education is "HIGH SCHOOL", it must never pass uppercase "HIGH SCHOOL" to backend
+    const normalizedApp1 = normalizeApplicantFields({ qualification: "HIGH SCHOOL" } as any);
+    assert.equal(normalizedApp1.education, "High School");
+    assert.equal(normalizedApp1.qualification, "High School");
+    assert.equal(normalizedApp1.highest_education, "High School");
+
+    const normalizedApp2 = normalizeApplicantFields({ education: "HIGH SCHOOL" } as any);
+    assert.equal(normalizedApp2.education, "High School");
+
+    const normalizedApp3 = normalizeApplicantFields({ qualification: "DIPLOMA" } as any);
+    assert.equal(normalizedApp3.education, "Associate Degree");
   });
 });

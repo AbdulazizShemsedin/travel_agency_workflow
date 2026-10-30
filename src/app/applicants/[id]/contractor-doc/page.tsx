@@ -46,6 +46,7 @@ import {
 import { getApplicantV2, updateApplicantV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import {
   listPlacementsV2,
+  listMyPlacementsV2,
   uploadContractV2,
   uploadPlacementContractV2,
   uploadVisaV2,
@@ -112,8 +113,19 @@ export default function PlacementDocumentCenterPage() {
     queryKey: ["v2_placements_for_doc_center", applicantId],
     queryFn: async () => {
       if (!applicantId) return [];
-      const all = await listPlacementsV2();
-      return all.filter((p) => p.applicant === applicantId);
+      try {
+        const all = await listPlacementsV2();
+        const matched = all.filter((p) => p.applicant === applicantId || p.name === applicantId);
+        if (matched.length > 0) return matched;
+      } catch {
+        // Fallback for foreign agency sessions that receive 403 on staff-only list_placements
+      }
+      try {
+        const myPlacements = await listMyPlacementsV2();
+        return myPlacements.filter((p) => p.applicant === applicantId || p.name === applicantId);
+      } catch {
+        return [];
+      }
     },
     enabled: !!applicantId,
     staleTime: 15000,
@@ -153,6 +165,12 @@ export default function PlacementDocumentCenterPage() {
     if (!activePlacement && !previewOnly) {
       toast.error("No Active Placement", {
         description: "Candidate must be Selected with an active Placement record before attaching contracts.",
+      });
+      return;
+    }
+    if (activePlacement && activePlacement.status !== "Selected" && !previewOnly) {
+      toast.error("Contract Upload Ineligible", {
+        description: `Candidate case is currently in status "${activePlacement.status}". Contracts can only be uploaded after the selection is approved ("Selected").`,
       });
       return;
     }

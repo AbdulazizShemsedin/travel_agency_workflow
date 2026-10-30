@@ -243,7 +243,7 @@ export default function ApplicantDetailPage() {
       if (!applicant?.name) return null;
       return await getApplicantMediaUrlV2(applicant.name, "experience_video");
     },
-    enabled: Boolean(isVideoModalOpen && applicant?.name && candidateVideoUrl),
+    enabled: Boolean(applicant?.name && candidateVideoUrl),
     staleTime: 1000 * 60 * 90, // 90 min (backend signed URL expires in 2 hours)
   });
 
@@ -624,7 +624,7 @@ export default function ApplicantDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <a
-                href={candidateVideoUrl}
+                href={activeVideoPlayUrl || candidateVideoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
@@ -635,14 +635,29 @@ export default function ApplicantDetailPage() {
             </div>
           </div>
           <div className="p-4 sm:p-5 flex flex-col items-center justify-center bg-slate-950">
-            <div className="w-full max-w-2xl rounded-xl overflow-hidden border border-slate-800 shadow-xl bg-black">
-              <video
-                src={candidateVideoUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="w-full max-h-[380px] object-contain bg-black"
-              />
+            <div className="w-full max-w-2xl rounded-xl overflow-hidden border border-slate-800 shadow-xl bg-black min-h-[220px] flex items-center justify-center">
+              {isMediaLoading ? (
+                <div className="flex items-center justify-center py-12 text-slate-400">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-500" />
+                  <span className="ml-2 text-xs font-medium text-slate-300">Loading secure video stream...</span>
+                </div>
+              ) : activeVideoPlayUrl ? (
+                <video
+                  key={activeVideoPlayUrl}
+                  src={activeVideoPlayUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="w-full max-h-[380px] object-contain bg-black"
+                  onError={() => {
+                    refetchMediaUrl();
+                  }}
+                />
+              ) : (
+                <div className="py-12 text-center text-xs text-slate-400">
+                  Video file is processing or unavailable.
+                </div>
+              )}
             </div>
           </div>
         </Card>

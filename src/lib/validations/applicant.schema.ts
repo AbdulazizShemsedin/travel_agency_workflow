@@ -33,16 +33,21 @@ export const MARITAL_STATUS_OPTIONS = [
 ] as const;
 
 export const EDUCATION_OPTIONS = [
-  "SECONDARY LEVEL",
-  "PRIMARY LEVEL",
-  "Primary Level",
-  "Secondary Level",
   "High School",
   "Associate Degree",
   "Bachelor's Degree",
   "Master's Degree",
   "Doctorate",
   "Other",
+  "SECONDARY LEVEL",
+  "PRIMARY LEVEL",
+  "Primary Level",
+  "Secondary Level",
+  "HIGH SCHOOL",
+  "DIPLOMA",
+  "BACHELOR'S DEGREE",
+  "MASTER'S DEGREE",
+  "OTHER",
 ] as const;
 
 /**
@@ -251,7 +256,7 @@ export const baseApplicantSchema = z.object({
   place_of_issue: optionalString.default("ADDIS ABABA"),
   place_of_birth: optionalString,
   job_applied: optionalString.default("HOUSE WORKER"),
-  highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
+  highest_education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("High School"),
   labour_id: optionalString,
   national_id: optionalString,
   contact_person_name: optionalString,
@@ -267,7 +272,7 @@ export const baseApplicantSchema = z.object({
 
   // Canonical Frappe DocType Field Aliases (Required for backend Registered status)
   target_job: optionalString.default("HOUSE WORKER"),
-  education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("SECONDARY LEVEL"),
+  education: z.enum(EDUCATION_OPTIONS).or(z.literal("")).default("High School"),
   salary_amount: optionalNumber(
     z.number({ invalid_type_error: "Please enter a valid salary amount" }).min(0, "Salary amount cannot be negative")
   ),
@@ -352,7 +357,7 @@ export const baseApplicantSchema = z.object({
   registration_date: optionalString,
   is_active: optionalBoolean.default(true),
   passport_type: optionalString.default("Normal"),
-  qualification: optionalString.default("SECONDARY LEVEL"),
+  qualification: optionalString.default("High School"),
   visa_number: optionalString,
   sponsor_name: optionalString,
   sponsor_id: optionalString,

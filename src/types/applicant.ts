@@ -332,6 +332,8 @@ export interface Applicant {
   // CV Record & Contractor Reservation
   cv_record?: string;
   cv_file_url?: string;
+  experience_video?: string | null;
+  video_url?: string | null;
   cv_record_data?: CVRecord;
   locked_contractor?: string | null;
   selected_by?: string | null;

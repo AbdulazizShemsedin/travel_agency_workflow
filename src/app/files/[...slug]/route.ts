@@ -57,6 +57,18 @@ export async function GET(
   const { slug } = await params;
   const rawPath = slug.join("/");
   const encodedPath = slug.map(encodeURIComponent).join("/");
+
+  // Known placeholder/seed artifact URLs that do not exist in storage: return 404 immediately
+  if (rawPath.toLowerCase().includes("dummy")) {
+    return new NextResponse("File Not Found", {
+      status: 404,
+      headers: {
+        "Content-Type": "text/plain",
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  }
+
   const config = getFrappeConfig(req);
 
   if (!config) {
@@ -149,11 +161,26 @@ export async function GET(
     }
 
     if (lastRes) {
-      const errorBody = await lastRes.text().catch(() => "File Not Found");
-      return new NextResponse(errorBody || "File Not Found", { status: lastRes.status });
+      // If the backend returns 500 for a missing file (e.g. Frappe FileNotFoundError / File table without disk file),
+      // do not crash the client with a 500 error; return 404 Not Found so the browser/image component falls back gracefully.
+      const status = lastRes.status >= 500 ? 404 : lastRes.status;
+      const errorBody = status === 404 ? "File Not Found" : await lastRes.text().catch(() => "File Not Found");
+      return new NextResponse(errorBody, {
+        status,
+        headers: {
+          "Content-Type": "text/plain",
+          "Cache-Control": status === 404 ? "public, max-age=300" : "no-cache",
+        },
+      });
     }
 
-    return new NextResponse("File Not Found", { status: 404 });
+    return new NextResponse("File Not Found", {
+      status: 404,
+      headers: {
+        "Content-Type": "text/plain",
+        "Cache-Control": "public, max-age=300",
+      },
+    });
   } catch (err: any) {
     return NextResponse.json(
       {

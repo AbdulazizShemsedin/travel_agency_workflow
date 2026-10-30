@@ -130,17 +130,14 @@ export async function listPortalCandidatesV2(
       medical_issue_date: cand.medical_issue_date || (cand as any)?.medical_date || "",
       place_of_birth: cand.place_of_birth || (cand as any)?.birth_place || "",
       age: computedAge || cand.age,
-      photo_passport:
-        cand.photo_passport ||
-        (cand as any).photograph ||
-        (cand as any).photo ||
-        (cand as any).profile_photo_url ||
-        "",
-      photo_full_body:
-        cand.photo_full_body ||
-        (cand as any).photo_portrait ||
-        (cand as any).full_body_photo ||
-        "",
+      photo_passport: (() => {
+        const raw = cand.photo_passport || (cand as any).photograph || (cand as any).photo || (cand as any).profile_photo_url || "";
+        return typeof raw === "string" && !raw.toLowerCase().includes("dummy") ? raw.trim() : "";
+      })(),
+      photo_full_body: (() => {
+        const raw = cand.photo_full_body || (cand as any).photo_portrait || (cand as any).full_body_photo || "";
+        return typeof raw === "string" && !raw.toLowerCase().includes("dummy") ? raw.trim() : "";
+      })(),
     };
   });
 
@@ -170,19 +167,29 @@ export async function getCandidateDetailV2(applicantName: string): Promise<any> 
 }
 
 /**
- * Selects a candidate (creates an atomic, row-locked Placement).
+ * Requests selection of a candidate by a foreign agency (creates a Placement in status "Requested").
+ * Per backend contract, contractor_name must be supplied. The backend verifies that the contractor
+ * matches the authenticated foreign agency session and records the placement strictly in status
+ * "Requested" awaiting internal staff approval (contract 0.-5).
  * replacement_for: placement ID of the returned worker if this selection is a replacement.
  */
 export async function requestCandidateSelectionV2(
   applicantName: string,
+  contractorName: string,
   replacementFor?: string
 ): Promise<V2SelectCandidateResponse> {
+  const resolvedContractor = (contractorName || "").trim();
+  if (!resolvedContractor) {
+    throw new Error("Contractor / Agency identity is required to request candidate selection.");
+  }
   const body: Record<string, any> = {
     applicant_name: applicantName,
+    contractor_name: resolvedContractor,
+    contractor: resolvedContractor,
   };
-  if (replacementFor) {
-    body.replacement_for = replacementFor;
-    body.free_replacement_for_complaint = replacementFor;
+  if (replacementFor && replacementFor.trim()) {
+    body.replacement_for = replacementFor.trim();
+    body.free_replacement_for_complaint = replacementFor.trim();
   }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.portal_api.select_candidate",
@@ -222,25 +229,25 @@ export async function selectCandidateDirectlyV2(
 
 /**
  * General selection wrapper preserving backwards compatibility.
- * When contractorName is supplied (by Manager/Admin), executes direct selection.
- * Otherwise submits an agency selection request awaiting staff approval.
+ * When contractorName is supplied (or when replacementForOrContractor is an agency name),
+ * forwards contractor_name to portal_api.select_candidate.
  */
 export async function selectCandidateV2(
   applicantName: string,
-  replacementForOrContractor?: string,
+  contractorOrReplacement?: string,
   contractorName?: string
 ): Promise<V2SelectCandidateResponse> {
   if (contractorName) {
     return selectCandidateDirectlyV2(applicantName, contractorName);
   }
   if (
-    replacementForOrContractor &&
-    !replacementForOrContractor.startsWith("PLM-") &&
-    !replacementForOrContractor.startsWith("APP-")
+    contractorOrReplacement &&
+    !contractorOrReplacement.startsWith("PLM-") &&
+    !contractorOrReplacement.startsWith("APP-")
   ) {
-    return selectCandidateDirectlyV2(applicantName, replacementForOrContractor);
+    return requestCandidateSelectionV2(applicantName, contractorOrReplacement);
   }
-  return requestCandidateSelectionV2(applicantName, replacementForOrContractor);
+  throw new Error("Contractor name is required for candidate selection.");
 }
 
 export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V2WakalaRequestItem[]> {

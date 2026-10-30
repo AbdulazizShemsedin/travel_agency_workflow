@@ -158,6 +158,100 @@ export function isExperiencedCountry(country?: string | null): boolean {
   return !nonCountries.includes(trimmed);
 }
 
+export type BackendEducationLevel =
+  | ""
+  | "High School"
+  | "Associate Degree"
+  | "Bachelor's Degree"
+  | "Master's Degree"
+  | "Doctorate"
+  | "Other";
+
+/**
+ * Maps arbitrary or legacy education/qualification strings into Frappe backend's
+ * exact Select options for the `education` field:
+ * "", "High School", "Associate Degree", "Bachelor's Degree", "Master's Degree", "Doctorate", "Other"
+ */
+export function mapEducationLevelToBackend(val?: string | null): BackendEducationLevel {
+  if (!val) return "";
+  const clean = String(val).trim();
+  if (!clean) return "";
+
+  const upper = clean.toUpperCase();
+
+  // High School matches
+  if (
+    upper === "HIGH SCHOOL" ||
+    upper === "SECONDARY LEVEL" ||
+    upper === "PRIMARY LEVEL" ||
+    upper === "ELEMENTARY" ||
+    upper === "MIDDLE SCHOOL"
+  ) {
+    return "High School";
+  }
+
+  // Associate Degree matches
+  if (
+    upper === "ASSOCIATE DEGREE" ||
+    upper === "ASSOCIATE" ||
+    upper === "DIPLOMA" ||
+    upper === "TVET" ||
+    upper === "COLLEGE DIPLOMA"
+  ) {
+    return "Associate Degree";
+  }
+
+  // Bachelor's Degree matches
+  if (
+    upper === "BACHELOR'S DEGREE" ||
+    upper === "BACHELORS DEGREE" ||
+    upper === "BACHELOR" ||
+    upper === "DEGREE" ||
+    upper === "UNIVERSITY DEGREE"
+  ) {
+    return "Bachelor's Degree";
+  }
+
+  // Master's Degree matches
+  if (
+    upper === "MASTER'S DEGREE" ||
+    upper === "MASTERS DEGREE" ||
+    upper === "MASTER" ||
+    upper === "POSTGRADUATE"
+  ) {
+    return "Master's Degree";
+  }
+
+  // Doctorate matches
+  if (
+    upper === "DOCTORATE" ||
+    upper === "DOCTOR" ||
+    upper === "PHD" ||
+    upper === "PH.D"
+  ) {
+    return "Doctorate";
+  }
+
+  // Other matches
+  if (upper === "OTHER" || upper === "NONE" || upper === "NOT SPECIFIED") {
+    return "Other";
+  }
+
+  // Exact case match with allowed options
+  const allowed: readonly BackendEducationLevel[] = [
+    "High School",
+    "Associate Degree",
+    "Bachelor's Degree",
+    "Master's Degree",
+    "Doctorate",
+    "Other",
+  ];
+  const matched = allowed.find((opt) => opt.toLowerCase() === clean.toLowerCase());
+  if (matched) return matched;
+
+  return "Other";
+}
+
 /**
  * Normalizes applicant fields between frontend aliases and Frappe DocType fields.
  * Ensures target_job, education, salary_amount, salary_currency, photograph, etc.
@@ -226,18 +320,14 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
   // 2. Education / Qualification
   const edu = result.qualification || result.education || result.highest_education;
   if (edu) {
-    result.qualification = edu;
-    result.highest_education = edu;
-    // For Frappe DocType Select option compatibility: if SECONDARY LEVEL or PRIMARY LEVEL, map education field to "High School"
-    if (String(edu).toUpperCase() === "SECONDARY LEVEL" || String(edu).toUpperCase() === "PRIMARY LEVEL") {
-      result.education = "High School";
-    } else {
-      result.education = edu;
-    }
+    const canonicalEdu = mapEducationLevelToBackend(edu);
+    result.qualification = canonicalEdu;
+    result.highest_education = canonicalEdu;
+    result.education = canonicalEdu;
   } else if (result.entry_track !== "Muayena" && result.applicant_type !== "Muayena") {
     result.education = "High School";
     result.highest_education = "High School";
-    result.qualification = "SECONDARY LEVEL";
+    result.qualification = "High School";
   }
 
   // 2.1 Religion (frontend default: Islam; Frappe Select compatibility: Muslim)
@@ -485,6 +575,21 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     const compUpper = String(result.complexion).trim().toUpperCase();
     if (["FAIR", "MEDIUM", "DARK"].includes(compUpper)) {
       result.complexion = compUpper;
+    }
+  }
+
+  // 11.1 Sanitize medical_status: backend only accepts "", "Pending", "FIT", "UNFIT"
+  if (result.medical_status !== undefined && result.medical_status !== null) {
+    const medUpper = String(result.medical_status).trim().toUpperCase();
+    if (medUpper === "FIT") {
+      result.medical_status = "FIT";
+    } else if (medUpper === "UNFIT") {
+      result.medical_status = "UNFIT";
+    } else if (medUpper === "PENDING" || medUpper === "IN PROGRESS") {
+      result.medical_status = "Pending";
+    } else {
+      // Map any unrecognized value like "NOT DONE", "NONE", or "" to ""
+      result.medical_status = "";
     }
   }
 

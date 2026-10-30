@@ -67,6 +67,7 @@ import {
   uploadFileV2,
   parsePassportFileV2,
   normalizeApplicantFields,
+  mapEducationLevelToBackend,
   isExperiencedCountry,
   attachVideoToApplicantV2,
   startVideoUploadV2,
@@ -110,13 +111,12 @@ const PASSPORT_TYPE_OPTIONS = ["Normal", "Diplomatic", "Special", "Service"] as 
 const VISA_TYPE_OPTIONS = ["Work", "Visit", "Tourist", "Business", "Other"] as const;
 const LANGUAGE_PROFICIENCY_OPTIONS = ["Select..", "None", "Basic", "Good", "Fluent"] as const;
 const QUALIFICATION_OPTIONS = [
-  "PRIMARY LEVEL",
-  "SECONDARY LEVEL",
-  "HIGH SCHOOL",
-  "DIPLOMA",
-  "BACHELOR'S DEGREE",
-  "MASTER'S DEGREE",
-  "OTHER",
+  "High School",
+  "Associate Degree",
+  "Bachelor's Degree",
+  "Master's Degree",
+  "Doctorate",
+  "Other",
 ] as const;
 const OCCUPATION_OPTIONS = [
   "HOUSE WORKER",
@@ -299,8 +299,9 @@ export function ApplicantRegistrationForm({
       passport_type: (initialData as any)?.passport_type || "Normal",
       job_applied: initialData?.job_applied || initialData?.target_job || "HOUSE WORKER",
       target_job: initialData?.target_job || initialData?.job_applied || "HOUSE WORKER",
-      highest_education: (initialData as any)?.qualification || initialData?.highest_education || initialData?.education || "SECONDARY LEVEL",
-      education: (initialData as any)?.qualification || initialData?.education || initialData?.highest_education || "SECONDARY LEVEL",
+      highest_education: mapEducationLevelToBackend((initialData as any)?.qualification || initialData?.highest_education || initialData?.education) || "High School",
+      education: mapEducationLevelToBackend((initialData as any)?.qualification || initialData?.education || initialData?.highest_education) || "High School",
+      qualification: mapEducationLevelToBackend((initialData as any)?.qualification || initialData?.education || initialData?.highest_education) || "High School",
       monthly_salary: initialData?.monthly_salary || (initialData?.salary_amount ? String(initialData.salary_amount) : (initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? "1200" : "1000")),
       salary_amount: initialData?.salary_amount || (initialData?.monthly_salary ? Number(initialData.monthly_salary) : (initialData?.experience_country && isExperiencedCountry(initialData.experience_country) ? 1200 : 1000)),
       salary_currency: initialData?.salary_currency || "SAR",
@@ -1026,9 +1027,9 @@ export function ApplicantRegistrationForm({
       applicant_type: finalTrack,
       target_job: data.target_job || data.job_applied || "HOUSE WORKER",
       job_applied: data.job_applied || data.target_job || "HOUSE WORKER",
-      education: data.qualification || data.education || data.highest_education || "SECONDARY LEVEL",
-      highest_education: data.qualification || data.highest_education || data.education || "SECONDARY LEVEL",
-      qualification: data.qualification || "SECONDARY LEVEL",
+      education: mapEducationLevelToBackend(data.qualification || data.education || data.highest_education) || "High School",
+      highest_education: mapEducationLevelToBackend(data.qualification || data.highest_education || data.education) || "High School",
+      qualification: mapEducationLevelToBackend(data.qualification || data.education || data.highest_education) || "High School",
       religion: (data.religion as string) === "Islam" ? "Muslim" : data.religion || "Muslim",
       gender: data.gender || "Female",
       marital_status: data.marital_status || "Single",
@@ -2386,7 +2387,7 @@ export function ApplicantRegistrationForm({
               <select
                 {...register("qualification")}
                 className={cn(
-                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200 uppercase",
+                  "select-styled w-full h-9 rounded-md border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-1 text-xs text-slate-900 dark:text-zinc-200",
                   getFieldClass("qualification")
                 )}
               >
@@ -3322,7 +3323,6 @@ export function ApplicantRegistrationForm({
               <option value="">Select Medical Status...</option>
               <option value="FIT">FIT</option>
               <option value="Pending">Pending / In Progress</option>
-              <option value="Not Done">Not Done / None</option>
               <option value="UNFIT">UNFIT</option>
             </select>
           </div>

@@ -16,12 +16,17 @@ import {
   ExternalLink,
   Loader2,
   Phone,
+  Video,
+  Play,
+  EyeOff,
 } from "lucide-react";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { getCandidateDetailV2, getCandidatePhotoUrl } from "@/lib/api/v2/portal";
+import { getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
+import { cn } from "@/lib/utils";
 
 interface CandidateDetailModalProps {
   candidate: PortalAvailableCandidate | null;
@@ -42,6 +47,12 @@ export function CandidateDetailModal({
 }: CandidateDetailModalProps) {
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
+  const [showVideo, setShowVideo] = React.useState(false);
+
+  // Reset showVideo when candidate changes or modal closes
+  React.useEffect(() => {
+    setShowVideo(false);
+  }, [candidate?.name, isOpen]);
 
   // Fetch full live candidate document on demand via sanctioned portal RPC
   const { data: fullApplicant } = useQuery({
@@ -54,6 +65,27 @@ export function CandidateDetailModal({
   const merged = React.useMemo(() => {
     return { ...(candidate || {}), ...(fullApplicant || {}) } as any;
   }, [candidate, fullApplicant]);
+
+  const rawVideoUrl =
+    merged?.experience_video ||
+    (candidate as any)?.experience_video ||
+    (merged as any)?.video_url ||
+    (candidate as any)?.video_url ||
+    (merged as any)?.intro_video ||
+    (candidate as any)?.intro_video ||
+    "";
+  const hasVideo = Boolean(rawVideoUrl && typeof rawVideoUrl === "string" && rawVideoUrl.trim() !== "");
+
+  const { data: mediaUrlData, isLoading: isMediaLoading } = useQuery({
+    queryKey: ["candidate_detail_media_url", candidate?.name],
+    queryFn: async () => {
+      if (!candidate?.name) return null;
+      return await getApplicantMediaUrlV2(candidate.name, "experience_video");
+    },
+    enabled: isOpen && Boolean(candidate?.name && hasVideo),
+    staleTime: 1000 * 60 * 90,
+  });
+  const streamableVideoUrl = mediaUrlData?.url || rawVideoUrl;
 
   if (!isOpen || !candidate) return null;
 
@@ -357,6 +389,90 @@ export function CandidateDetailModal({
               })}
             </div>
           </div>
+
+          {/* Candidate Interview Video (Optional View Option) */}
+          {hasVideo && (
+            <div className="rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-4 space-y-3 transition-all">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 shrink-0">
+                    <Video className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">
+                      Candidate Interview Video
+                    </h5>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Introductory interview & candidate spoken profile.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={showVideo ? "outline" : "default"}
+                    onClick={() => setShowVideo((prev) => !prev)}
+                    className={cn(
+                      "text-xs font-semibold h-8 rounded-xl shadow-2xs transition-all",
+                      !showVideo
+                        ? "bg-emerald-800 hover:bg-emerald-900 text-white"
+                        : "border-slate-200 dark:border-[#26262f] text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1e1e26]"
+                    )}
+                  >
+                    {showVideo ? (
+                      <>
+                        <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                        <span>Hide Video</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-1.5 h-3.5 w-3.5 fill-current" />
+                        <span>Watch Interview Video</span>
+                      </>
+                    )}
+                  </Button>
+
+                  {streamableVideoUrl && (
+                    <a
+                      href={streamableVideoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#1b1b22] text-slate-600 dark:text-zinc-300 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-[#22222a] transition shadow-2xs"
+                      title="Open video in new tab"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {showVideo && (
+                <div className="overflow-hidden rounded-xl bg-black border border-slate-800 p-2 flex items-center justify-center min-h-[180px]">
+                  {isMediaLoading ? (
+                    <div className="flex items-center justify-center py-8 text-slate-400">
+                      <Loader2 className="h-5 w-5 animate-spin text-emerald-500 mr-2" />
+                      <span className="text-xs">Loading secure video stream...</span>
+                    </div>
+                  ) : streamableVideoUrl ? (
+                    <video
+                      key={streamableVideoUrl}
+                      src={streamableVideoUrl}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="w-full max-h-[260px] object-contain rounded-lg bg-black"
+                    />
+                  ) : (
+                    <div className="py-6 text-center text-xs text-slate-400">
+                      Video file is currently unavailable.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Candidate CV Document */}
           <div className="rounded-xl border border-slate-200/80 dark:border-[#22222a] bg-slate-50/70 dark:bg-[#16161b] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

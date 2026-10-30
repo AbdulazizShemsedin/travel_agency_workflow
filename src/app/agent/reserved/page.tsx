@@ -41,7 +41,8 @@ function CandidatePhotoAvatar({
   photoUrl?: string;
 }) {
   const [hasError, setHasError] = React.useState(false);
-  const hasPhoto = Boolean(photoUrl && photoUrl.trim() !== "");
+  const isDummy = typeof photoUrl === "string" && photoUrl.toLowerCase().includes("dummy");
+  const hasPhoto = Boolean(photoUrl && photoUrl.trim() !== "" && !isDummy);
   const src = !hasError && hasPhoto
     ? (photoUrl!.startsWith("http") || photoUrl!.startsWith("/") ? photoUrl! : getCandidatePhotoUrl(applicantId, "photograph"))
     : "";
