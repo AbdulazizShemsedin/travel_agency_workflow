@@ -300,7 +300,7 @@ export function MakeMuayenaCaseModal({
                 <input
                   type="file"
                   id="muayena_contract_file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  accept=".pdf,.docx,.doc,.odt,.rtf,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,image/jpeg,image/png,image/webp"
                   onChange={handleFileChange}
                   disabled={isUploadingFile || isSubmitting}
                   className="hidden"
@@ -338,7 +338,7 @@ export function MakeMuayenaCaseModal({
                         Click to select contract document
                       </p>
                       <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                        PDF, JPG, PNG or WEBP up to 20 MB (Direct Cloud Storage)
+                        PDF, Word (.docx, .doc), or image up to 20 MB (Direct Cloud Storage)
                       </p>
                     </>
                   )}

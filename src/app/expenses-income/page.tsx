@@ -85,7 +85,7 @@ type ActiveTab = "ledger" | "reconciliation";
 
 export default function ExpensesIncomePage() {
   const queryClient = useQueryClient();
-  const { roles, isReadOnly } = useAuth();
+  const { roles, isReadOnly, can } = useAuth();
   const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
   const isAdminOrManager = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager"].includes(r)
@@ -93,7 +93,7 @@ export default function ExpensesIncomePage() {
   const isFinanceManagerOrAdmin = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager", "finance manager"].includes(r)
   );
-  const isFinanceReadOnly = !isAdminOrManager && (isReadOnly("Finance Manager") || isReadOnly());
+  const isFinanceReadOnly = !can("manageFinance");
 
   // Birr conversion switch (false on this system)
   const { isBirrConversionEnabled } = useBirrConversion();

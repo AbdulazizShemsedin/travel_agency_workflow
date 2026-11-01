@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { getApplicantV2, updateApplicantV2, V2ApplicantDetails } from "@/lib/api/v2/applicants";
 import {
+  getPlacementV2,
   listPlacementsV2,
   listMyPlacementsV2,
   uploadContractV2,
@@ -110,28 +111,106 @@ export default function PlacementDocumentCenterPage() {
     isLoading: isPlacementsLoading,
     refetch: refetchPlacements,
   } = useQuery<V2PlacementRecord[]>({
-    queryKey: ["v2_placements_for_doc_center", applicantId],
+    queryKey: ["v2_placements_for_doc_center", applicantId, applicant?.active_placement],
     queryFn: async () => {
       if (!applicantId) return [];
-      try {
-        const all = await listPlacementsV2();
-        const matched = all.filter((p) => p.applicant === applicantId || p.name === applicantId);
-        if (matched.length > 0) return matched;
-      } catch {
-        // Fallback for foreign agency sessions that receive 403 on staff-only list_placements
+
+      const cleanApplicantId = applicantId.trim();
+      const lowerApplicantId = cleanApplicantId.toLowerCase();
+
+      // Priority 1: If applicant document already has active_placement linked, fetch directly
+      const linkedPlacementName = typeof applicant?.active_placement === "string"
+        ? applicant.active_placement.trim()
+        : (applicant?.active_placement as any)?.name?.trim();
+
+      if (linkedPlacementName) {
+        try {
+          const direct = await getPlacementV2(linkedPlacementName);
+          if (direct && direct.name) {
+            return [direct];
+          }
+        } catch {
+          // Fall through
+        }
       }
+
+      // Priority 2: If applicantId is itself a Placement name (e.g. PLM-XXXXX), fetch directly
+      if (cleanApplicantId.toUpperCase().startsWith("PLM-")) {
+        try {
+          const direct = await getPlacementV2(cleanApplicantId);
+          if (direct && direct.name) {
+            return [direct];
+          }
+        } catch {
+          // Fall through
+        }
+      }
+
+      // Priority 3: Server-side filtered query via listPlacementsV2
+      try {
+        const filtered = await listPlacementsV2([{ applicant: cleanApplicantId }]);
+        if (Array.isArray(filtered) && filtered.length > 0) {
+          return filtered;
+        }
+      } catch {
+        // Fall through
+      }
+
+      // Priority 4: Direct list_placements with { applicant: cleanApplicantId } object filter
+      try {
+        const filtered = await listPlacementsV2({ applicant: cleanApplicantId });
+        if (Array.isArray(filtered) && filtered.length > 0) {
+          return filtered;
+        }
+      } catch {
+        // Fall through
+      }
+
+      // Priority 5: Fallback to listMyPlacementsV2 for Foreign Agency
       try {
         const myPlacements = await listMyPlacementsV2();
-        return myPlacements.filter((p) => p.applicant === applicantId || p.name === applicantId);
+        const matched = myPlacements.filter(
+          (p) =>
+            (p.applicant && p.applicant.toLowerCase().trim() === lowerApplicantId) ||
+            (p.name && p.name.toLowerCase().trim() === lowerApplicantId)
+        );
+        if (matched.length > 0) return matched;
       } catch {
-        return [];
+        // Fall through
       }
+
+      // Priority 6: Unfiltered listPlacementsV2 with case-insensitive match
+      try {
+        const all = await listPlacementsV2(undefined, 250);
+        const matched = all.filter(
+          (p) =>
+            (p.applicant && p.applicant.toLowerCase().trim() === lowerApplicantId) ||
+            (p.name && p.name.toLowerCase().trim() === lowerApplicantId)
+        );
+        if (matched.length > 0) return matched;
+      } catch {
+        // Fall through
+      }
+
+      return [];
     },
     enabled: !!applicantId,
     staleTime: 15000,
   });
 
-  const activePlacement = placements.length > 0 ? placements[0] : null;
+  const activePlacement = React.useMemo(() => {
+    if (!placements || placements.length === 0) return null;
+    const linkedName = typeof applicant?.active_placement === "string"
+      ? applicant.active_placement.trim().toLowerCase()
+      : (applicant?.active_placement as any)?.name?.trim()?.toLowerCase();
+    if (linkedName) {
+      const matchedLinked = placements.find((p) => p.name?.toLowerCase().trim() === linkedName);
+      if (matchedLinked) return matchedLinked;
+    }
+    const nonCancelled = placements.find((p) => p.status !== "Cancelled");
+    if (nonCancelled) return nonCancelled;
+    return placements[0];
+  }, [placements, applicant?.active_placement]);
   const destinationCountry = activePlacement?.destination_country || applicant?.destination_country || "Saudi Arabia";
   const isKuwait = destinationCountry === "Kuwait";
 
@@ -144,45 +223,209 @@ export default function PlacementDocumentCenterPage() {
     }
   }, [activePlacement, previewFileUrl]);
 
+  // Helper to extract clean file extension from filename or URL
+  const getFileExtension = React.useCallback((nameOrUrl: string, fallback = "pdf") => {
+    if (!nameOrUrl) return fallback;
+    const clean = nameOrUrl.split("?")[0].split("#")[0];
+    const lastDot = clean.lastIndexOf(".");
+    if (lastDot !== -1 && lastDot < clean.length - 1) {
+      const ext = clean.substring(lastDot + 1).toLowerCase();
+      if (ext.length <= 5) return ext;
+    }
+    return fallback;
+  }, []);
+
+  const currentContractUrl = contractPreviewUrl || previewFileUrl;
+  const currentContractName = (
+    contractFile?.name ||
+    activePlacement?.contract_file?.split("/").pop()?.split("?")[0]?.split("#")[0] ||
+    previewFileUrl.split("/").pop()?.split("?")[0]?.split("#")[0] ||
+    ""
+  ).toLowerCase();
+
+  const isWordContract = React.useMemo(() => {
+    return (
+      currentContractName.endsWith(".docx") ||
+      currentContractName.endsWith(".doc") ||
+      currentContractName.endsWith(".odt") ||
+      currentContractName.endsWith(".rtf") ||
+      currentContractName.endsWith(".txt") ||
+      (contractFile?.type?.includes("wordprocessingml") ?? false) ||
+      (contractFile?.type?.includes("msword") ?? false) ||
+      (contractFile?.type?.includes("opendocument.text") ?? false) ||
+      (contractFile?.type?.includes("rtf") ?? false) ||
+      (contractFile?.type?.includes("text/plain") ?? false)
+    );
+  }, [currentContractName, contractFile]);
+
+  const contractDownloadExt = React.useMemo(() => {
+    if (contractFile?.name) {
+      return getFileExtension(contractFile.name, isWordContract ? "docx" : "pdf");
+    }
+    if (currentContractUrl) {
+      return getFileExtension(currentContractUrl, isWordContract ? "docx" : "pdf");
+    }
+    return isWordContract ? "docx" : "pdf";
+  }, [contractFile, currentContractUrl, isWordContract, getFileExtension]);
+
+  const handleDownloadContract = React.useCallback(() => {
+    const url = contractPreviewUrl || previewFileUrl;
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Contract_${applicantId || "candidate"}.${contractDownloadExt}`;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success("Document downloaded!");
+  }, [contractPreviewUrl, previewFileUrl, applicantId, contractDownloadExt]);
+
+  // Dynamic resolver for target placement ensuring resilience across race conditions,
+  // multi-role access (Registrar/Parser/Foreign Agency), and direct placement linking
+  const resolveTargetPlacement = React.useCallback(async (): Promise<V2PlacementRecord | null> => {
+    // 1. If activePlacement is already set in component state, use it
+    if (activePlacement) return activePlacement;
+
+    const cleanApplicantId = (applicantId || "").trim();
+    const lowerApplicantId = cleanApplicantId.toLowerCase();
+
+    // 2. Check if applicant document has active_placement linked
+    let pName = typeof applicant?.active_placement === "string"
+      ? applicant.active_placement.trim()
+      : (applicant?.active_placement as any)?.name?.trim();
+
+    // 3. If not yet loaded on local applicant, fetch fresh applicant doc
+    if (!pName && cleanApplicantId) {
+      try {
+        const freshApp = await getApplicantV2(cleanApplicantId);
+        pName = typeof freshApp?.active_placement === "string"
+          ? freshApp.active_placement.trim()
+          : (freshApp?.active_placement as any)?.name?.trim();
+      } catch {
+        // Fall through
+      }
+    }
+
+    // 4. If we have a linked placement name, fetch via getPlacementV2
+    if (pName) {
+      try {
+        const direct = await getPlacementV2(pName);
+        if (direct && direct.name) return direct;
+      } catch {
+        // Fall through
+      }
+    }
+
+    // 5. If applicantId is itself a Placement name (e.g. PLM-XXXXX), fetch directly
+    if (cleanApplicantId.toUpperCase().startsWith("PLM-")) {
+      try {
+        const direct = await getPlacementV2(cleanApplicantId);
+        if (direct && direct.name) return direct;
+      } catch {
+        // Fall through
+      }
+    }
+
+    // 6. Server-side filtered query via listPlacementsV2
+    try {
+      const filtered = await listPlacementsV2([{ applicant: cleanApplicantId }]);
+      if (Array.isArray(filtered) && filtered.length > 0) {
+        return filtered.find((p) => p.status !== "Cancelled") || filtered[0];
+      }
+    } catch {
+      // Fall through
+    }
+
+    // 7. Server-side filtered query via listPlacementsV2 with object
+    try {
+      const filtered = await listPlacementsV2({ applicant: cleanApplicantId });
+      if (Array.isArray(filtered) && filtered.length > 0) {
+        return filtered.find((p) => p.status !== "Cancelled") || filtered[0];
+      }
+    } catch {
+      // Fall through
+    }
+
+    // 8. Foreign Agency listMyPlacementsV2
+    try {
+      const myPlacements = await listMyPlacementsV2();
+      const matched = myPlacements.filter(
+        (p) =>
+          (p.applicant && p.applicant.toLowerCase().trim() === lowerApplicantId) ||
+          (p.name && p.name.toLowerCase().trim() === lowerApplicantId)
+      );
+      if (matched.length > 0) {
+        return matched.find((p) => p.status !== "Cancelled") || matched[0];
+      }
+    } catch {
+      // Fall through
+    }
+
+    // 9. Unfiltered listPlacementsV2 fallback
+    try {
+      const all = await listPlacementsV2(undefined, 250);
+      const matched = all.filter(
+        (p) =>
+          (p.applicant && p.applicant.toLowerCase().trim() === lowerApplicantId) ||
+          (p.name && p.name.toLowerCase().trim() === lowerApplicantId)
+      );
+      if (matched.length > 0) {
+        return matched.find((p) => p.status !== "Cancelled") || matched[0];
+      }
+    } catch {
+      // Fall through
+    }
+
+    return null;
+  }, [activePlacement, applicant, applicantId]);
+
   // Upload & Attach Contract Mutation
   const handleUploadContract = async (previewOnly = false) => {
     if (!contractFile) {
       toast.error("No file selected", { description: "Please choose a contract document first." });
       return;
     }
-    if (activePlacement?.status === "Requested") {
-      toast.error("Awaiting Internal Confirmation", {
-        description: "Your selection request is awaiting review by the agency office. Contracts cannot be uploaded until approved.",
-      });
-      return;
-    }
-    if ((activePlacement as any)?.request_denied === 1) {
-      toast.error("Candidate Unavailable", {
-        description: "This candidate is unavailable. Please select another candidate.",
-      });
-      return;
-    }
-    if (!activePlacement && !previewOnly) {
-      toast.error("No Active Placement", {
-        description: "Candidate must be Selected with an active Placement record before attaching contracts.",
-      });
-      return;
-    }
-    if (activePlacement && activePlacement.status !== "Selected" && !previewOnly) {
-      toast.error("Contract Upload Ineligible", {
-        description: `Candidate case is currently in status "${activePlacement.status}". Contracts can only be uploaded after the selection is approved ("Selected").`,
-      });
-      return;
-    }
 
     setIsContractUploading(true);
     try {
+      // Authoritatively resolve target placement before validating status
+      let targetPlacement = activePlacement;
+      if (!targetPlacement && !previewOnly) {
+        targetPlacement = await resolveTargetPlacement();
+      }
+
+      if (targetPlacement?.status === "Requested") {
+        toast.error("Awaiting Internal Confirmation", {
+          description: "Your selection request is awaiting review by the agency office. Contracts cannot be uploaded until approved.",
+        });
+        return;
+      }
+      if ((targetPlacement as any)?.request_denied === 1) {
+        toast.error("Candidate Unavailable", {
+          description: "This candidate is unavailable. Please select another candidate.",
+        });
+        return;
+      }
+      if (!targetPlacement && !previewOnly) {
+        toast.error("No Active Placement", {
+          description: "Candidate must be Selected with an active Placement record before attaching contracts.",
+        });
+        return;
+      }
+      if (targetPlacement && targetPlacement.status === "Cancelled" && !previewOnly) {
+        toast.error("Placement Cancelled", {
+          description: "This placement case has been cancelled. Contracts cannot be attached to cancelled placements.",
+        });
+        return;
+      }
+
       // 1. Upload file via /api/method/upload_file
       const uploadRes = await uploadFileV2(
         contractFile,
         false,
         "Placement",
-        activePlacement?.name
+        targetPlacement?.name
       );
 
       const fileUrl = uploadRes.file_url;
@@ -197,7 +440,7 @@ export default function PlacementDocumentCenterPage() {
         });
       } else {
         // Authoritative upload_contract attachment to Placement
-        const uploadContractRes = await uploadContractV2(activePlacement!.name, fileUrl);
+        const uploadContractRes = await uploadContractV2(targetPlacement!.name, fileUrl);
 
         // Also run OCR extraction immediately so extracted fields populate
         try {
@@ -217,10 +460,12 @@ export default function PlacementDocumentCenterPage() {
         }
 
         toast.success("Contract Attached & Info Extracted", {
-          description: `Contract attached to ${activePlacement!.name}. Review extracted info below and approve to save.`,
+          description: `Contract attached to ${targetPlacement!.name}. Review extracted info below and approve to save.`,
         });
         setContractFile(null);
-        queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+        queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center"] });
+        refetchPlacements();
+        refetchApplicant();
       }
     } catch (err: any) {
       toast.error("Contract Upload Failed", {
@@ -233,14 +478,18 @@ export default function PlacementDocumentCenterPage() {
 
   // Approve Extracted Contract Data (Verifies & saves extracted contract fields without advancing placement stage)
   const handleApproveContractData = async () => {
-    if (!activePlacement) {
+    let targetPlacement = activePlacement;
+    if (!targetPlacement) {
+      targetPlacement = await resolveTargetPlacement();
+    }
+    if (!targetPlacement) {
       toast.error("No active placement record found.");
       return;
     }
 
     const hasContract = Boolean(
-      activePlacement.contract_file ||
-      activePlacement.contract_number ||
+      targetPlacement.contract_file ||
+      targetPlacement.contract_number ||
       contractParseResult?.contract_number ||
       (applicant as any)?.contract_file ||
       (applicant as any)?.contract_number
@@ -255,14 +504,14 @@ export default function PlacementDocumentCenterPage() {
     setIsApprovingContract(true);
     try {
       // 1. Optionally sync medical status if recorded
-      const isFit = activePlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
-      const medDate = activePlacement.medical_selected_examination_date || applicant?.medical_issue_date;
-      if (isFit && medDate && activePlacement.medical_selected_status !== "FIT") {
+      const isFit = targetPlacement.medical_selected_status === "FIT" || applicant?.medical_status === "FIT";
+      const medDate = targetPlacement.medical_selected_examination_date || applicant?.medical_issue_date;
+      if (isFit && medDate && targetPlacement.medical_selected_status !== "FIT") {
         await recordSelectedMedicalResultV2(
-          activePlacement.name,
+          targetPlacement.name,
           "FIT",
           medDate,
-          activePlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
+          targetPlacement.medical_selected_expiry_date || applicant?.medical_expiry_date || undefined
         );
       }
 
@@ -297,19 +546,19 @@ export default function PlacementDocumentCenterPage() {
       if (kuwaitAgencyLicense) payloadToUpdate.kuwait_agency_license = kuwaitAgencyLicense;
 
       if (Object.keys(payloadToUpdate).length > 0) {
-        await updatePlacementParsedFieldsV2(activePlacement.name, payloadToUpdate);
+        await updatePlacementParsedFieldsV2(targetPlacement.name, payloadToUpdate);
       }
 
       // 3. Synchronize extracted sponsor & visa details directly to the Applicant document
       const applicantUpdatePayload: Record<string, any> = {};
-      const visaNum = contractParseResult?.visa_number || activePlacement.visa_number;
-      const sponsorName = employerName || activePlacement.employer_name;
-      const sponsorId = employerId || activePlacement.employer_national_id;
-      const contractNum = contractParseResult?.contract_number || activePlacement.contract_number;
-      const agency = agencyName || activePlacement.saudi_agency_name;
-      const sponsorPhone = (contractParseResult as any)?.sponsor_phone || (contractParseResult as any)?.employer_phone || (activePlacement as any)?.employer_phone;
-      const sponsorAddress = employerAddress || (activePlacement as any)?.employer_address;
-      const sponsorEmail = (contractParseResult as any)?.sponsor_email || (contractParseResult as any)?.employer_email || (activePlacement as any)?.employer_email;
+      const visaNum = contractParseResult?.visa_number || targetPlacement.visa_number;
+      const sponsorName = employerName || targetPlacement.employer_name;
+      const sponsorId = employerId || targetPlacement.employer_national_id;
+      const contractNum = contractParseResult?.contract_number || targetPlacement.contract_number;
+      const agency = agencyName || targetPlacement.saudi_agency_name;
+      const sponsorPhone = (contractParseResult as any)?.sponsor_phone || (contractParseResult as any)?.employer_phone || (targetPlacement as any)?.employer_phone;
+      const sponsorAddress = employerAddress || (targetPlacement as any)?.employer_address;
+      const sponsorEmail = (contractParseResult as any)?.sponsor_email || (contractParseResult as any)?.employer_email || (targetPlacement as any)?.employer_email;
 
       if (visaNum) applicantUpdatePayload.visa_number = visaNum;
       if (sponsorName) applicantUpdatePayload.sponsor_name = sponsorName;
@@ -358,21 +607,33 @@ export default function PlacementDocumentCenterPage() {
       toast.error("No file selected", { description: "Please choose an eVisa document first." });
       return;
     }
-    if (!activePlacement && !previewOnly) {
-      toast.error("No Active Placement", {
-        description: "Candidate must be Selected with an active Placement record before attaching visa documents.",
-      });
-      return;
-    }
 
     setIsVisaUploading(true);
     try {
+      let targetPlacement = activePlacement;
+      if (!targetPlacement && !previewOnly) {
+        targetPlacement = await resolveTargetPlacement();
+      }
+
+      if (!targetPlacement && !previewOnly) {
+        toast.error("No Active Placement", {
+          description: "Candidate must be Selected with an active Placement record before attaching visa documents.",
+        });
+        return;
+      }
+      if (targetPlacement && targetPlacement.status === "Cancelled" && !previewOnly) {
+        toast.error("Placement Cancelled", {
+          description: "This placement case has been cancelled. Visa documents cannot be attached to cancelled placements.",
+        });
+        return;
+      }
+
       // 1. Upload file via /api/method/upload_file
       const uploadRes = await uploadFileV2(
         visaFile,
         false,
         "Placement",
-        activePlacement?.name
+        targetPlacement?.name
       );
 
       const fileUrl = uploadRes.file_url;
@@ -387,7 +648,7 @@ export default function PlacementDocumentCenterPage() {
         });
       } else {
         // Authoritative upload_visa attachment to Placement
-        const res = await uploadVisaV2(activePlacement!.name, fileUrl);
+        const res = await uploadVisaV2(targetPlacement!.name, fileUrl);
         // Also run OCR extraction immediately so extracted fields populate
         try {
           const parsed = await parseVisaFileV2(fileUrl);
@@ -404,10 +665,12 @@ export default function PlacementDocumentCenterPage() {
           }
         }
         toast.success("Kuwait eVisa Successfully Attached to Placement", {
-          description: `Visa attached to ${activePlacement!.name}. Parsed reference and sponsor registered.`,
+          description: `Visa attached to ${targetPlacement!.name}. Parsed reference and sponsor registered.`,
         });
         setVisaFile(null);
-        queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center", applicantId] });
+        queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center"] });
+        refetchPlacements();
+        refetchApplicant();
       }
     } catch (err: any) {
       toast.error("eVisa Upload Failed", {
@@ -690,30 +953,20 @@ export default function PlacementDocumentCenterPage() {
                           win?.focus();
                         }}
                         className="h-6 px-2 text-[11px] border-slate-300 dark:border-[#26262d] font-semibold text-slate-700 dark:text-zinc-300"
-                        title="Print Document"
+                        title="Print / Open Document"
                       >
                         <Printer className="h-3 w-3 mr-1 text-slate-500" />
-                        Print
+                        Print / Open
                       </Button>
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => {
-                          const url = contractPreviewUrl || previewFileUrl;
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `Contract_${applicantId || "candidate"}.pdf`;
-                          a.target = "_blank";
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          toast.success("Document downloaded!");
-                        }}
+                        onClick={handleDownloadContract}
                         className="h-6 px-2 text-[11px] bg-blue-900 hover:bg-blue-950 text-white font-semibold"
-                        title="Save as PDF"
+                        title={`Download (${contractDownloadExt.toUpperCase()})`}
                       >
                         <Download className="h-3 w-3 mr-1" />
-                        Save as PDF
+                        Download ({contractDownloadExt.toUpperCase()})
                       </Button>
                     </div>
                   )}
@@ -725,7 +978,49 @@ export default function PlacementDocumentCenterPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
-                {contractPreviewUrl || previewFileUrl ? (
+                {isWordContract ? (
+                  <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 h-full w-full bg-white dark:bg-[#121216] rounded-lg border border-slate-200 dark:border-[#222228]">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center shadow-xs">
+                      <FileText className="h-8 w-8 text-blue-700 dark:text-blue-400" />
+                    </div>
+                    <div className="space-y-1 max-w-sm">
+                      <p className="text-xs font-bold text-slate-800 dark:text-zinc-100 truncate px-2">
+                        {contractFile?.name || (currentContractUrl ? currentContractUrl.split("/").pop()?.split("?")[0] : "Word Contract Document")}
+                      </p>
+                      <Badge variant="outline" className="text-[10px] uppercase font-mono border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30">
+                        Microsoft Word Document ({contractDownloadExt.toUpperCase()})
+                      </Badge>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 pt-1">
+                        Contract data was automatically extracted by the server parser. Review the extracted fields in the panel on the right.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDownloadContract}
+                        className="text-xs h-7.5 px-3 border-blue-200 dark:border-blue-900/60 text-blue-800 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Download {contractDownloadExt.toUpperCase()}
+                      </Button>
+                      {currentContractUrl && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            window.open(currentContractUrl, "_blank");
+                          }}
+                          className="text-xs h-7.5 px-3 bg-blue-900 hover:bg-blue-950 text-white"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                          Open Document
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : contractPreviewUrl || previewFileUrl ? (
                   <iframe
                     src={contractPreviewUrl || previewFileUrl}
                     title="Contract Document Viewer"
@@ -799,13 +1094,14 @@ export default function PlacementDocumentCenterPage() {
                     <PremiumDropzone
                       id="contract-doc-dropzone"
                       variant="compact"
+                      accept=".pdf, .docx, .doc, .odt, .rtf, .txt, image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/msword, application/vnd.oasis.opendocument.text, application/rtf, text/rtf, text/plain"
                       value={contractFile || contractPreviewUrl}
                       fileName={contractFile?.name}
                       fileSize={contractFile?.size}
                       isLoading={isContractUploading}
                       loadingText="Uploading & extracting contract info..."
                       label="Employment Contract Document"
-                      description="PDF or image"
+                      description="PDF, Word (.docx, .doc), or image (up to 20MB)"
                       onFileSelect={(file) => {
                         setContractFile(file);
                         setContractPreviewUrl(URL.createObjectURL(file));
@@ -820,16 +1116,16 @@ export default function PlacementDocumentCenterPage() {
                       <div className="flex items-center gap-2 pt-0.5">
                         <Button
                           type="button"
-                          disabled={!contractFile || isContractUploading}
+                          disabled={!contractFile || isContractUploading || (isPlacementsLoading && !activePlacement)}
                           onClick={() => handleUploadContract(false)}
                           className="flex-1 bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 text-white text-xs font-semibold h-7.5 shadow-xs"
                         >
-                          {isContractUploading ? (
+                          {isContractUploading || (isPlacementsLoading && !activePlacement) ? (
                             <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
                           ) : (
                             <FileCheck2 className="h-3 w-3 mr-1.5" />
                           )}
-                          Extract contract info
+                          {isPlacementsLoading && !activePlacement ? "Verifying placement..." : "Extract contract info"}
                         </Button>
                       </div>
                     )}

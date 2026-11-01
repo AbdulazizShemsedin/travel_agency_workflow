@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { loginUser, logoutUser, getLoggedUser, fetchCurrentUserContext, AuthUser } from "@/lib/api/auth";
-import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction, ROUTE_PERMISSION_MAP } from "@/lib/auth/permissions";
+import { hasRole, hasAnyRole, hasAllRoles, can, PermissionAction, ROUTE_PERMISSION_MAP, isPureForeignAgency } from "@/lib/auth/permissions";
 import { isDemoMode } from "@/lib/config/env";
 import { DEMO_USERS, DemoUserProfile } from "@/lib/demo/users";
 import { AgencyContextResponse } from "@/types/applicant";
@@ -212,7 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "You do not have permission to access this section. Contact your administrator if you believe this is an error.",
         duration: 5000,
       });
-      router.replace("/dashboard");
+      const fallback = isPureForeignAgency(authUser) ? "/agent" : "/dashboard";
+      router.replace(fallback);
     }
   }, [isLoading, authUser, pathname, router]);
 
@@ -246,18 +247,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const emailLower = (authUser.email || "").toLowerCase().trim();
       if (emailLower === "administrator") return false;
       const normRoles = (authUser.roles || []).map((r) => (typeof r === "string" ? r : "").toLowerCase().trim());
-      if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "administrator" || r === "manager")) {
+      // Admin, Administrator, System Manager hold universal administrative write capabilities
+      if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "administrator")) {
         return false;
       }
+
+      const readOnlySet = new Set(
+        (authUser.read_only_roles || []).map((r) => r.toLowerCase().trim())
+      );
+      (authUser.roles || []).forEach((r) => {
+        const s = String(r).toLowerCase().trim();
+        if (s.endsWith(" (view)")) {
+          readOnlySet.add(s.replace(" (view)", "").trim());
+        }
+      });
+
       if (role) {
-        const target = role.toLowerCase().trim();
+        const target = role.toLowerCase().trim().replace(" (view)", "");
         if (target === "admin" || target === "manager" || target === "system manager" || target === "administrator") {
           return false;
         }
-        const ro = authUser.read_only_roles || [];
-        return ro.some((r) => r.toLowerCase().trim() === target);
+        return readOnlySet.has(target);
       }
-      return (authUser.read_only_roles || []).length > 0;
+
+      // If no specific role was queried, return true ONLY if all assigned business roles are read-only
+      const businessRoles = normRoles.filter(
+        (r) => r !== "admin" && r !== "system manager" && r !== "administrator"
+      );
+      if (businessRoles.length === 0) return false;
+      return businessRoles.every((r) => {
+        const base = r.replace(" (view)", "").trim();
+        return readOnlySet.has(base) || r.endsWith(" (view)");
+      });
     },
     [authUser]
   );

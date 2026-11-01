@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  ShieldAlert,
   Calendar,
   ShieldCheck,
   RefreshCw,
@@ -41,6 +42,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 interface MedicalWorkspaceProps {
   corridorFilter?: string;
@@ -73,6 +75,8 @@ export function MedicalWorkspace({
   onCorridorChange,
 }: MedicalWorkspaceProps) {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const canRecordMedical = can("manageMedical");
 
   const [activeTab, setActiveTab] = React.useState<
     "all" | "medical_1" | "medical_2" | "fit" | "unfit"
@@ -239,6 +243,9 @@ export function MedicalWorkspace({
   // Mutation: Record Medical 1 (Selected Stage)
   const med1Mutation = useMutation({
     mutationFn: async () => {
+      if (!canRecordMedical) {
+        throw new Error("Permission Denied: You do not have permission to record medical results.");
+      }
       if (!selectedRecordForMed1) return;
       await recordSelectedMedicalResultV2(
         selectedRecordForMed1.placementName,
@@ -267,6 +274,9 @@ export function MedicalWorkspace({
   // Mutation: Record Medical 2 (Pre-Departure)
   const med2Mutation = useMutation({
     mutationFn: async () => {
+      if (!canRecordMedical) {
+        throw new Error("Permission Denied: You do not have permission to record medical results.");
+      }
       if (!selectedRecordForMed2) return;
       await recordPredepartureMedicalResultV2(
         selectedRecordForMed2.placementName,
@@ -293,6 +303,9 @@ export function MedicalWorkspace({
   // Mutation: Clear Medical 1 (Selected Stage)
   const clearMed1Mutation = useMutation({
     mutationFn: async (placementName: string) => {
+      if (!canRecordMedical) {
+        throw new Error("Permission Denied: You do not have permission to modify medical results.");
+      }
       await clearSelectedMedicalResultV2(placementName);
     },
     onSuccess: async () => {
@@ -312,6 +325,9 @@ export function MedicalWorkspace({
   // Mutation: Clear Medical 2 (Pre-Departure)
   const clearMed2Mutation = useMutation({
     mutationFn: async (placementName: string) => {
+      if (!canRecordMedical) {
+        throw new Error("Permission Denied: You do not have permission to modify medical results.");
+      }
       await clearPredepartureMedicalResultV2(placementName);
     },
     onSuccess: async () => {
@@ -483,6 +499,13 @@ export function MedicalWorkspace({
           />
         </div>
       </div>
+
+      {!canRecordMedical && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>You have read-only access to the Medical workspace. Recording or modifying medical results is disabled.</span>
+        </div>
+      )}
 
       {/* Main Table Container */}
       <div className="rounded-2xl border border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121217] overflow-x-auto shadow-xs">
@@ -681,7 +704,9 @@ export function MedicalWorkspace({
                               d.setDate(d.getDate() + 90);
                               setMed1ExpiryDate(d.toISOString().split("T")[0]);
                             }}
-                            className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
+                            disabled={!canRecordMedical}
+                            title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : undefined}
+                            className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             FIT
@@ -696,7 +721,9 @@ export function MedicalWorkspace({
                               setMed1Status("UNFIT");
                               setMed1ExamDate(new Date().toISOString().split("T")[0]);
                             }}
-                            className="h-7 px-2 text-[11px] font-semibold text-rose-700 border-rose-300 hover:bg-rose-50"
+                            disabled={!canRecordMedical}
+                            title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : undefined}
+                            className="h-7 px-2 text-[11px] font-semibold text-rose-700 border-rose-300 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <XCircle className="h-3 w-3 mr-1" />
                             UNFIT
@@ -707,14 +734,14 @@ export function MedicalWorkspace({
                               type="button"
                               size="sm"
                               variant="ghost"
-                              disabled={clearMed1Mutation.isPending}
+                              disabled={!canRecordMedical || clearMed1Mutation.isPending}
                               onClick={() => {
                                 if (confirm(`Clear Stage 1 medical result for ${row.fullName}?`)) {
                                   clearMed1Mutation.mutate(row.placementName);
                                 }
                               }}
-                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                              title="Clear recorded medical result"
+                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : "Clear recorded medical result"}
                             >
                               Clear
                             </Button>
@@ -729,7 +756,9 @@ export function MedicalWorkspace({
                               setSelectedRecordForMed2(row);
                               setMed2Status("FIT");
                             }}
-                            className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs"
+                            disabled={!canRecordMedical}
+                            title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : undefined}
+                            className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-800 hover:bg-emerald-900 text-white shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             FIT (M2)
@@ -743,7 +772,9 @@ export function MedicalWorkspace({
                               setSelectedRecordForMed2(row);
                               setMed2Status("UNFIT");
                             }}
-                            className="h-7 px-2 text-[11px] font-semibold text-rose-700 border-rose-300 hover:bg-rose-50"
+                            disabled={!canRecordMedical}
+                            title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : undefined}
+                            className="h-7 px-2 text-[11px] font-semibold text-rose-700 border-rose-300 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <XCircle className="h-3 w-3 mr-1" />
                             UNFIT
@@ -754,14 +785,14 @@ export function MedicalWorkspace({
                               type="button"
                               size="sm"
                               variant="ghost"
-                              disabled={clearMed2Mutation.isPending}
+                              disabled={!canRecordMedical || clearMed2Mutation.isPending}
                               onClick={() => {
                                 if (confirm(`Clear pre-departure medical for ${row.fullName}?`)) {
                                   clearMed2Mutation.mutate(row.placementName);
                                 }
                               }}
-                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                              title="Clear pre-departure medical result"
+                              className="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={!canRecordMedical ? "You have read-only access here, or do not have permission to record medical results." : "Clear pre-departure medical result"}
                             >
                               Clear
                             </Button>
@@ -859,7 +890,7 @@ export function MedicalWorkspace({
             <Button
               type="button"
               size="sm"
-              disabled={med1Mutation.isPending || !med1ExamDate}
+              disabled={!canRecordMedical || med1Mutation.isPending || !med1ExamDate}
               onClick={() => med1Mutation.mutate()}
               className={cn(
                 "h-8 text-xs font-semibold text-white",
@@ -935,7 +966,7 @@ export function MedicalWorkspace({
             <Button
               type="button"
               size="sm"
-              disabled={med2Mutation.isPending}
+              disabled={!canRecordMedical || med2Mutation.isPending}
               onClick={() => med2Mutation.mutate()}
               className={cn(
                 "h-8 text-xs font-semibold text-white",

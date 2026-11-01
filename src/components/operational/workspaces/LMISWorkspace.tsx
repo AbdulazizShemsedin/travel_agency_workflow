@@ -82,7 +82,7 @@ export function LMISWorkspace({
   onCorridorChange,
 }: LMISWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
 
   const authUserV2 = authUser
     ? {
@@ -112,9 +112,9 @@ export function LMISWorkspace({
       ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
     );
 
-  const canEdit =
-    isAdmin ||
-    hasAnyV2Role(authUserV2, ["Saudi LMIS", "Kuwait LMIS", "Clearance Officer"]);
+  const canEdit = can("editLms");
+
+
 
   const isKuwait = Boolean(
     corridorFilter.toLowerCase() === "kuwait" ||

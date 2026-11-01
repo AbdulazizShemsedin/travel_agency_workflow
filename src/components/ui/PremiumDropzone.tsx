@@ -101,7 +101,7 @@ export function PremiumDropzone({
       case "document":
       case "compact":
       default:
-        return ".pdf, image/png, image/jpeg, image/webp";
+        return ".pdf, .docx, .doc, .odt, .rtf, .txt, image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/msword";
     }
   }, [accept, variant]);
 
@@ -372,10 +372,10 @@ export function PremiumDropzone({
       case "spreadsheet":
         return "CSV with date, reference & amount (up to 20MB)";
       case "compact":
-        return "PDF or image (up to 20MB)";
+        return "PDF, Word (.docx, .doc), or image (up to 20MB)";
       case "document":
       default:
-        return "PDF, PNG, JPG or WebP (up to 20MB)";
+        return "PDF, Word (.docx, .doc), or image (up to 20MB)";
     }
   }, [description, variant]);
 

@@ -111,12 +111,12 @@ type CommissionTab =
 
 export default function AdminCommissionPage() {
   const queryClient = useQueryClient();
-  const { roles, user: currentUserName, isReadOnly } = useAuth();
+  const { roles, user: currentUserName, isReadOnly, can } = useAuth();
   const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
   const isAdminOrManager = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager"].includes(r)
   );
-  const isFinanceReadOnly = !isAdminOrManager && (isReadOnly("Finance Manager") || isReadOnly());
+  const isFinanceReadOnly = !can("manageCommission");
   const isFinanceManagerOrAdmin = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager", "finance manager"].includes(r)
   );

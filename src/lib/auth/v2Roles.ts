@@ -5,8 +5,9 @@
  */
 
 export const V2_CUSTOM_ROLES = [
-  "Registrar",
   "Admin",
+  "Manager",
+  "Registrar",
   "Clearance Officer",
   "Ticketer",
   "Complaint Manager",
@@ -20,6 +21,8 @@ export const V2_CUSTOM_ROLES = [
   "Kuwait LMIS",
   "Kuwait Telesign",
   "Kuwait Embassy",
+  "CV",
+  "Medical Officer",
 ] as const;
 
 export type V2CustomRole = (typeof V2_CUSTOM_ROLES)[number];
@@ -34,42 +37,57 @@ export interface V2AuthUser {
 }
 
 export function isRoleReadOnly(user: V2AuthUser | null | undefined, targetRole: string): boolean {
-  if (!user || !Array.isArray(user.read_only_roles)) return false;
+  if (!user) return false;
   const usernameLower = (user.user || "").toLowerCase().trim();
   if (usernameLower === "administrator") return false;
+
   const normRoles = (user.roles || []).map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
-  if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "manager" || r === "administrator")) {
+  // Administrative full-access roles are never read-only
+  if (normRoles.some((r) => r === "admin" || r === "system manager" || r === "administrator")) {
     return false;
   }
-  const targetLower = targetRole.trim().toLowerCase();
-  if (targetLower === "admin" || targetLower === "manager" || targetLower === "system manager" || targetLower === "administrator") {
+
+  const targetLower = targetRole.trim().toLowerCase().replace(" (view)", "");
+  if (targetLower === "admin" || targetLower === "system manager" || targetLower === "administrator") {
     return false;
   }
-  return user.read_only_roles.some((r) => r.trim().toLowerCase() === targetLower);
+
+  // Check read_only_roles array
+  const roSet = new Set((user.read_only_roles || []).map((r) => r.trim().toLowerCase()));
+  if (roSet.has(targetLower)) return true;
+
+  // Check if roles contains role with "(View)" suffix
+  return normRoles.some((r) => r === `${targetLower} (view)`);
 }
 
 const ADMIN_OVERRIDE_ROLES = new Set([
   "admin",
   "administrator",
   "system manager",
-  "agency admin",
-  "manager",
 ]);
 
 /**
- * Checks if user has a specific V2 role (case-insensitive match or Admin/Manager override).
+ * Checks if user has a specific V2 role (case-insensitive match or Admin override).
+ * Note: Foreign Agency is an external contractor identity that cannot be spoofed by Admin.
  */
 export function hasV2Role(user: V2AuthUser | null | undefined, targetRole: V2CustomRole | string): boolean {
   if (!user || !Array.isArray(user.roles)) return false;
+  const cleanTarget = targetRole.trim().toLowerCase().replace(" (view)", "");
+
+  // Foreign Agency cannot be spoofed by administrative role expansion
+  if (cleanTarget === "foreign agency") {
+    return user.roles.some((r) => String(r).trim().toLowerCase() === "foreign agency");
+  }
+
   const usernameLower = (user.user || "").toLowerCase().trim();
   if (usernameLower === "administrator") {
     return true;
   }
-  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
+  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase().replace(" (view)", ""));
   if (normRoles.some((r) => ADMIN_OVERRIDE_ROLES.has(r))) {
     return true;
   }
-  return normRoles.includes(targetRole.trim().toLowerCase());
+  return normRoles.includes(cleanTarget);
 }
 
 /**
@@ -77,16 +95,7 @@ export function hasV2Role(user: V2AuthUser | null | undefined, targetRole: V2Cus
  */
 export function hasAnyV2Role(user: V2AuthUser | null | undefined, targetRoles: (V2CustomRole | string)[]): boolean {
   if (!user || !Array.isArray(user.roles)) return false;
-  const usernameLower = (user.user || "").toLowerCase().trim();
-  if (usernameLower === "administrator") {
-    return true;
-  }
-  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
-  if (normRoles.some((r) => ADMIN_OVERRIDE_ROLES.has(r))) {
-    return true;
-  }
-  const normTargets = targetRoles.map((role) => role.trim().toLowerCase());
-  return normTargets.some((role) => normRoles.includes(role));
+  return targetRoles.some((role) => hasV2Role(user, role));
 }
 
 /**
@@ -94,8 +103,8 @@ export function hasAnyV2Role(user: V2AuthUser | null | undefined, targetRoles: (
  */
 export function isV2ForeignAgency(user: V2AuthUser | null | undefined): boolean {
   if (!user || !Array.isArray(user.roles)) return false;
-  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase());
+  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase().replace(" (view)", ""));
   const isForeign = normRoles.includes("foreign agency");
-  const isAdminOrManager = normRoles.some((r) => ADMIN_OVERRIDE_ROLES.has(r));
-  return isForeign && !isAdminOrManager;
+  const isAdmin = normRoles.some((r) => ADMIN_OVERRIDE_ROLES.has(r));
+  return isForeign && !isAdmin;
 }

@@ -106,7 +106,7 @@ export function InjazWorkspace({
   onCorridorChange,
 }: InjazWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
 
   const authUserV2 = authUser
     ? {
@@ -137,9 +137,9 @@ export function InjazWorkspace({
       ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
     );
 
-  const canEdit =
-    isAdmin ||
-    hasAnyV2Role(authUserV2, ["Saudi Taeshir", "Kuwait Telesign", "Clearance Officer"]);
+  const canEdit = can("editInjaz");
+
+
 
   // Edit Modal State (Triggered ONLY via Action 'Edit' button, not row click)
   const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);

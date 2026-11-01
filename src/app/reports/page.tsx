@@ -412,7 +412,7 @@ export default function ReportsPage() {
   } = useQuery<V2FinancialOverviewReport>({
     queryKey: ["report_financial_overview", dateParams],
     queryFn: () => getFinancialOverviewV2(dateParams),
-    enabled: Boolean(isAdminOrFinance && (activeTab === "financial" || activeTab === "transactions")),
+    enabled: Boolean(isAdmin && (activeTab === "financial" || activeTab === "transactions")),
     staleTime: 60000,
   });
 

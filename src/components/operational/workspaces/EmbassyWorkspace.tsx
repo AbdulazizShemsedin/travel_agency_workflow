@@ -75,7 +75,7 @@ export function EmbassyWorkspace({
   onCorridorChange,
 }: EmbassyWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
 
   const authUserV2 = authUser
     ? {
@@ -102,9 +102,9 @@ export function EmbassyWorkspace({
     (authUserV2?.roles || []).some((r: any) =>
       ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
     );
-  const canEdit =
-    isAdmin ||
-    hasAnyV2Role(authUserV2, ["Saudi Embassy", "Kuwait Embassy", "Clearance Officer"]);
+  const canEdit = can("editEmbassy");
+
+
 
   // Edit Modal State (Triggered ONLY via Action 'Edit' button, not row click)
   const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);

@@ -64,10 +64,8 @@ export function UndoLastStepButton({
 
   const isViewOnlyUser = React.useMemo(() => {
     if (isAdminOrManager) return false;
-    if (isReadOnly()) return true;
-    const ro = authUser?.read_only_roles || [];
-    return ro.length > 0;
-  }, [isAdminOrManager, isReadOnly, authUser]);
+    return isReadOnly();
+  }, [isAdminOrManager, isReadOnly]);
 
   // Rule 0.-24: One call per record shown.
   // Never let an Undo error blank the screen (catch errors and preserve existing page state).

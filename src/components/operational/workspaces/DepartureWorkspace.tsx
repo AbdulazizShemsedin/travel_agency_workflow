@@ -69,7 +69,7 @@ export function DepartureWorkspace({
   onCorridorChange,
 }: DepartureWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles, can } = useAuth();
 
   const authUserV2 = authUser
     ? {
@@ -96,17 +96,7 @@ export function DepartureWorkspace({
     (authUserV2?.roles || []).some((r: any) =>
       ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
     );
-  const canEdit =
-    isAdmin ||
-    hasAnyV2Role(authUserV2, ["Ticketer"] as any) ||
-    (authUserV2?.roles || []).some((r) =>
-      [
-        "ticketing officer",
-        "departure officer",
-        "logistics officer",
-        "medical officer",
-      ].includes(String(r).trim().toLowerCase())
-    );
+  const canEdit = can("manageTicketing");
 
   // Edit Modal State (Triggered ONLY via Action 'Edit' button, not row click)
   const [editingRow, setEditingRow] = React.useState<WorkspaceApplicantRow | null>(null);

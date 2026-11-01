@@ -50,12 +50,12 @@ interface SelectionRequestsWorkspaceProps {
 
 export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequestsWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { isReadOnly, roles } = useAuth();
+  const { isReadOnly, roles, can } = useAuth();
   const userRoles = Array.isArray(roles) ? roles.map((r) => String(r).toLowerCase().trim()) : [];
   const isAdminOrManager = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager"].includes(r)
   );
-  const isRegistrarReadOnly = !isAdminOrManager && (isReadOnly("Registrar") || isReadOnly());
+  const isRegistrarReadOnly = !can("manageSelectionRequests");
 
   const [subTab, setSubTab] = React.useState<"pending" | "unavailable">("pending");
   const [searchQuery, setSearchQuery] = React.useState<string>("");
