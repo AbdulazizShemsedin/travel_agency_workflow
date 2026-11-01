@@ -69,7 +69,14 @@ export default function MyReservedCandidatesPage() {
   const { authUser, agencyContext } = useAuth();
   const isAgencyUser = Boolean(agencyContext?.contractor || authUser?.contractor);
 
-  const defaultContractor = agencyContext?.contractor?.name || authUser?.contractor || "";
+  const resolveContractorString = (val: any): string => {
+    if (!val) return "";
+    if (typeof val === "string") return val.trim();
+    if (typeof val === "object") return (val.name || val.contractor_name || val.company_name || "").trim();
+    return String(val).trim();
+  };
+
+  const defaultContractor = resolveContractorString(agencyContext?.contractor?.name || agencyContext?.contractor || authUser?.contractor);
   const [activeContractor, setActiveContractor] = React.useState(defaultContractor);
   const [selectedCandidateForDetail, setSelectedCandidateForDetail] = React.useState<any | null>(null);
 
@@ -79,7 +86,7 @@ export default function MyReservedCandidatesPage() {
     }
   }, [defaultContractor, activeContractor]);
 
-  const effectiveContractor = agencyContext?.contractor?.name || authUser?.contractor || activeContractor;
+  const effectiveContractor = resolveContractorString(agencyContext?.contractor?.name || agencyContext?.contractor || authUser?.contractor || activeContractor);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [activeTab, setActiveTab] = React.useState<"selected" | "muayena">("selected");
 
@@ -384,7 +391,7 @@ export default function MyReservedCandidatesPage() {
                                 </div>
                               ) : (
                                 <Badge className="bg-emerald-700 text-white font-bold text-[10px]">
-                                  ✓ Selected ({c.status || "Selected"})
+                                  ✓ Selected{c.status && c.status !== "Selected" ? ` (${c.status})` : ""}
                                 </Badge>
                               )}
                               {c.exchange_for && (

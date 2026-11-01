@@ -304,13 +304,15 @@ export default function AgentDiscoveryPage() {
       setSelectingCandidateId(null);
       // Remove candidate immediately from pool
       setLocallyRemovedIds((prev) => [...prev, candidate.name]);
-      setSelectedTodayCount((prev) => prev + 1);
+      if ((res as any)?.status === "Selected") {
+        setSelectedTodayCount((prev) => prev + 1);
+      }
       if (selectedCandidateForDetail?.name === candidate.name) {
         setSelectedCandidateForDetail(null);
       }
 
       // Agency selection requests are recorded in status "Requested" awaiting staff confirmation
-      const successToastMsg = "Request sent. Waiting for the agency office to confirm she is available.";
+      const successToastMsg = "Request sent. Waiting for internal staff approval.";
 
       setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
@@ -936,7 +938,7 @@ export default function AgentDiscoveryPage() {
               <ShieldCheck className="h-5 w-5" /> Request Applicant Selection
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Your request will be sent to the agency office for review. The applicant will be reserved for your agency while the request is pending. The applicant can proceed to the next stage only after the agency office confirms availability.
+              Your request will be sent to internal staff for review and approval. The applicant will be reserved for your agency while the request is pending. The applicant can proceed to the next stage only after internal staff confirms availability and approves the request.
             </DialogDescription>
           </DialogHeader>
 

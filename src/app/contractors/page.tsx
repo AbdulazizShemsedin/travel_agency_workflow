@@ -51,7 +51,10 @@ import { isAdminUser } from "@/lib/auth/permissions";
 
 export default function ContractorsPage() {
   const queryClient = useQueryClient();
-  const { authUser, user, roles } = useAuth();
+  const { authUser, user, roles, isReadOnly } = useAuth();
+  const isContractorReadOnly = Boolean(
+    isReadOnly && (isReadOnly("contractors") || isReadOnly("foreign agency"))
+  );
   const isAdmin = Boolean(
     isAdminUser(authUser) ||
     user === "Administrator" ||
@@ -63,10 +66,11 @@ export default function ContractorsPage() {
   );
   const canManageCredentials = Boolean(
     isAdmin ||
-    (roles || []).some((r: any) => {
-      const s = String(r?.role || r?.name || r).toLowerCase().trim();
-      return s === "manager";
-    })
+    (!isContractorReadOnly &&
+      (roles || []).some((r: any) => {
+        const s = String(r?.role || r?.name || r).toLowerCase().trim();
+        return s === "manager";
+      }))
   );
 
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);

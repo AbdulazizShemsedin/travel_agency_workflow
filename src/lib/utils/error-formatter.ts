@@ -509,6 +509,11 @@ export function formatCleanErrorMessage(rawError: unknown): string {
     return `'${val}' is not a valid choice. Please select from the list.`;
   }
 
+  // 6.5 Server Method / Whitelist Availability
+  if (/is not whitelisted|not whitelisted|Failed to get method|has no attribute/i.test(text)) {
+    return "This action is not available on the current server version. Please contact your administrator.";
+  }
+
   // 7. Permission & Authorization Errors
   if (
     /Not permitted|Permission denied|Insufficient permissions|User does not have role|not authorized|403 Forbidden|Forbidden|PermissionError|read-only access/i.test(

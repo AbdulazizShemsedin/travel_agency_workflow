@@ -29,7 +29,12 @@ import {
   AlertCircle,
   Settings,
   ShieldCheck,
+  ClipboardList,
+  Workflow,
+  Inbox,
+  ListTodo,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   listApplicantsV2,
   listPlacementsV2,
@@ -60,8 +65,21 @@ function resolveApplicantStage(app: any, plc: any): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, authUser, can, roles } = useAuth();
+  const { user, authUser, can, roles, isLoading: isAuthLoading } = useAuth();
   const canRegister = can("registerApplicant");
+
+  const isStrictAdmin = React.useMemo(() => {
+    if (isAuthLoading) return false;
+    const adminRoleSet = new Set(["admin", "administrator", "system manager"]);
+    const userRoles = [
+      ...(Array.isArray(roles) ? roles : []),
+      ...(Array.isArray(authUser?.roles) ? authUser.roles : []),
+    ];
+    return userRoles.some((r: any) => {
+      const s = String(r?.role || r?.name || r || "").toLowerCase().trim();
+      return adminRoleSet.has(s);
+    });
+  }, [isAuthLoading, roles, authUser?.roles]);
 
   const isAdmin = Boolean(
     isAdminUser(authUser) ||
@@ -211,6 +229,46 @@ export default function DashboardPage() {
     const plcName = (a as any).active_placement;
     return Boolean(plcName && clearedPlacementNames.has(plcName));
   }).length;
+
+  const adminQuickShortcuts = React.useMemo(() => [
+    {
+      label: "Follow-up",
+      href: "/applicants?tab=follow_up",
+      icon: ClipboardList,
+      desc: "Operational monitor",
+    },
+    {
+      label: "All Stages",
+      href: "/applicants?tab=directory",
+      icon: Workflow,
+      desc: "Complete pipeline",
+    },
+    {
+      label: "Selection Requests",
+      href: "/applicants?tab=selection_requests",
+      icon: Inbox,
+      desc: "Foreign agency requests",
+      badge: requestedCount > 0 ? requestedCount : null,
+    },
+    {
+      label: "Complaints Desk",
+      href: "/complaints",
+      icon: AlertCircle,
+      desc: "Disputes & resolutions",
+    },
+    {
+      label: "My Tasks",
+      href: "/notifications?tab=tasks",
+      icon: ListTodo,
+      desc: "Pending clearance actions",
+    },
+    {
+      label: "Foreign Agencies",
+      href: "/contractors",
+      icon: Building2,
+      desc: "Partners & agency rates",
+    },
+  ], [requestedCount]);
 
   // Sub-stream breakdown for parallel Processing stage from live clearance steps
   const { lmisActiveCount, injazActiveCount } = React.useMemo(() => {
@@ -615,8 +673,14 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* 3. Three-Column Bottom Grid: Expiry Alerts, Action Items, & Recent Applicants */}
-      <div data-tour="dashboard-operational-tasks" className="grid grid-cols-1 md:grid-cols-3 gap-2.5 lg:gap-3 xl:gap-3.5 items-stretch">
+      {/* 3. Operational Grid: Expiry Alerts, Admin Quick Actions (if admin), & Recent Applicants */}
+      <div
+        data-tour="dashboard-operational-tasks"
+        className={cn(
+          "grid grid-cols-1 gap-2.5 lg:gap-3 xl:gap-3.5 items-stretch",
+          isStrictAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+        )}
+      >
         {/* Panel 1: Document Expiry Warnings */}
         <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
           <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
@@ -705,41 +769,53 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Panel 2: Quick Actions (Exact match to Sidebar options) */}
-        <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
-          <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                Quick Actions
+        {/* Panel 2: Quick Actions (Admin-Only Navigation Launcher) */}
+        {isStrictAdmin && (
+          <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">
+            <div className="flex items-center justify-between py-2 px-3.5 border-b border-slate-100 dark:border-[#222227] bg-slate-50/50 dark:bg-[#141418] shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                  Quick Actions
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                  Admin
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
+                Navigation
               </span>
             </div>
-            <span className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400">
-              Navigation
-            </span>
-          </div>
-          <CardContent className="p-2.5 sm:p-3 xl:p-3.5 flex flex-col justify-start flex-1">
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 content-start">
-              {sidebarQuickActions.slice(0, 4).map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="group flex items-center gap-2 xl:gap-2.5 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 xl:p-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
-                  >
-                    <div className="flex h-7.5 w-7.5 xl:h-8.5 xl:w-8.5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
-                      <Icon className="h-4 w-4 xl:h-4.5 xl:w-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs xl:text-[13px] font-bold text-slate-900 dark:text-white truncate leading-tight">{item.label}</p>
-                      <p className="text-[10px] xl:text-[11px] text-slate-500 dark:text-zinc-400 truncate leading-tight mt-0.5">{item.desc}</p>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+            <CardContent className="p-2.5 sm:p-3 xl:p-3.5 flex flex-col justify-start flex-1">
+              <div className="grid grid-cols-2 gap-2 sm:gap-2.5 content-start">
+                {adminQuickShortcuts.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className="group flex items-center justify-between gap-2 rounded-lg border border-slate-200/80 dark:border-[#26262d] bg-slate-50/60 dark:bg-[#16161b] p-2 xl:p-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:border-emerald-300 dark:hover:border-emerald-800"
+                    >
+                      <div className="flex items-center gap-2 xl:gap-2.5 min-w-0">
+                        <div className="flex h-7.5 w-7.5 xl:h-8.5 xl:w-8.5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 group-hover:scale-105 transition-transform">
+                          <Icon className="h-4 w-4 xl:h-4.5 xl:w-4.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs xl:text-[13px] font-bold text-slate-900 dark:text-white truncate leading-tight">{item.label}</p>
+                          <p className="text-[10px] xl:text-[11px] text-slate-500 dark:text-zinc-400 truncate leading-tight mt-0.5">{item.desc}</p>
+                        </div>
+                      </div>
+                      {typeof item.badge === "number" && item.badge > 0 && (
+                        <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-black rounded-full bg-rose-500 text-white animate-pulse">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Panel 3: Live Recent Applicants Stream */}
         <Card className="border-slate-200/90 dark:border-[#222227] bg-white dark:bg-[#121215] shadow-xs rounded-xl flex flex-col justify-between overflow-hidden">

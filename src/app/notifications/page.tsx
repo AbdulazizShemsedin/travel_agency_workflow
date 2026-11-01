@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
@@ -42,15 +43,24 @@ import { isPureForeignAgency } from "@/lib/auth/permissions";
 import { stripRecordIds, shortRef } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
-export default function NotificationsPage() {
+function NotificationsContent() {
   const { authUser } = useAuth();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get("tab");
   const isAgency = React.useMemo(() => isPureForeignAgency(authUser), [authUser]);
 
   // Three primary tabs: "attention" (Needs attention) | "sent" (Sent to you) | "tasks" (My tasks)
-  const [activeTab, setActiveTab] = React.useState<"attention" | "sent" | "tasks">(
-    isAgency ? "sent" : "attention"
-  );
+  const [activeTab, setActiveTab] = React.useState<"attention" | "sent" | "tasks">(() => {
+    if (tabParam === "tasks" || tabParam === "sent" || tabParam === "attention") return tabParam;
+    return isAgency ? "sent" : "attention";
+  });
   const [sentPage, setSentPage] = React.useState<number>(1);
+
+  React.useEffect(() => {
+    if (tabParam === "tasks" || tabParam === "sent" || tabParam === "attention") {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   React.useEffect(() => {
     if (isAgency && activeTab !== "sent") {
@@ -696,5 +706,13 @@ export default function NotificationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function NotificationsPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-xs text-slate-400">Loading notifications...</div>}>
+      <NotificationsContent />
+    </React.Suspense>
   );
 }

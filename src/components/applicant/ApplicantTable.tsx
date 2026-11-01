@@ -24,9 +24,19 @@ import {
   Ban,
   Building2,
   Edit3,
+  History,
+  RefreshCw,
+  Briefcase,
+  AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
-import { cancelApplicantV2, restartApplicantV2 } from "@/lib/api/v2/applicants";
+import {
+  cancelApplicantV2,
+  restartApplicantV2,
+  restoreApplicantProcessV2,
+  getPreCancellationSnapshot,
+} from "@/lib/api/v2/applicants";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { generateCvV2 } from "@/lib/api/v2/cv";
 import { recordSelectedMedicalResultV2, clearSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
@@ -291,6 +301,15 @@ export function ApplicantTable() {
     retry: false,
   });
 
+  // Build placement map for quick lookup in row rendering and restore snapshot (name → placement record)
+  const placementByName = React.useMemo(() => {
+    const m = new Map<string, any>();
+    for (const p of placementsData) {
+      if (p.name) m.set(String(p.name).toLowerCase().trim(), p);
+    }
+    return m;
+  }, [placementsData]);
+
   // Inline CV generation mutation — called per-row from action button
   const generateCvMutation = useMutation({
     mutationFn: (applicantName: string) => {
@@ -422,7 +441,63 @@ export function ApplicantTable() {
     onError: (err: Error) => toast.error("Cancellation failed", { description: err.message }),
   });
 
-  // Restart Applicant modal & mutation
+  // Restore Process modal & mutation (NEW)
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = React.useState(false);
+  const [restoreTargetApplicant, setRestoreTargetApplicant] = React.useState<any | null>(null);
+  const [restoreReason, setRestoreReason] = React.useState("");
+  const [restoreErrorNotice, setRestoreErrorNotice] = React.useState<string | null>(null);
+
+  const restoreSnapshot = React.useMemo(() => {
+    if (!restoreTargetApplicant) return null;
+    const plc = placementByName.get(String(restoreTargetApplicant.name).toLowerCase().trim()) ||
+      placementByName.get(String((restoreTargetApplicant as any)._activePlacementName || "").toLowerCase().trim());
+    return getPreCancellationSnapshot(restoreTargetApplicant, plc ? [plc] : []);
+  }, [restoreTargetApplicant, placementByName]);
+
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!restoreTargetApplicant) throw new Error("No applicant selected");
+      if (!restoreReason.trim()) throw new Error("A written restoration reason is required.");
+      if (restoreSnapshot?.isMedicalUnfit) {
+        throw new Error(
+          "Cannot restore process with UNFIT medical result. Please perform authorized medical re-examination/correction first."
+        );
+      }
+      return restoreApplicantProcessV2(restoreTargetApplicant.name, restoreReason.trim());
+    },
+    onSuccess: (data) => {
+      setIsRestoreModalOpen(false);
+      setRestoreTargetApplicant(null);
+      setRestoreReason("");
+      setRestoreErrorNotice(null);
+      queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
+      queryClient.invalidateQueries({ queryKey: ["placements"] });
+      toast.success(data?.message || "Applicant process successfully restored to previous state.");
+    },
+    onError: (err: any) => {
+      const msg = err?.message || String(err);
+      const isUnimplemented =
+        err?.statusCode === 501 ||
+        err?.statusCode === 404 ||
+        err?.code === "MethodNotImplemented" ||
+        msg.includes("not yet implemented") ||
+        msg.includes("Failed to get method") ||
+        msg.includes("has no attribute 'restore_applicant'");
+      if (isUnimplemented) {
+        setRestoreErrorNotice(
+          "Backend restoration service ('applicant_api.restore_applicant') is not yet implemented on the server. To resume the applicant's workflow, use 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
+        );
+        toast.info("Backend restoration service pending deployment", {
+          description: "Use 'Restart as New Attempt' to start a new cycle in the meantime."
+        });
+      } else {
+        toast.error("Restoration failed", { description: msg });
+      }
+    },
+  });
+
+  // Restart Applicant modal & mutation (EXISTING)
   const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
   const [restartTargetApplicant, setRestartTargetApplicant] = React.useState<any | null>(null);
   const [restartTargetStatus, setRestartTargetStatus] = React.useState<"Draft" | "Registered">("Draft");
@@ -436,7 +511,7 @@ export function ApplicantTable() {
       setRestartTargetApplicant(null);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
       queryClient.invalidateQueries({ queryKey: ["applicants-placement-join"] });
-      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus}.`);
+      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus} (new cycle).`);
     },
     onError: (err: Error) => toast.error("Restart failed", { description: err.message }),
   });
@@ -487,15 +562,6 @@ export function ApplicantTable() {
     }
     return set;
   }, [clearanceStepsData]);
-
-  // Build placement map for quick lookup in row rendering (name → placement record)
-  const placementByName = React.useMemo(() => {
-    const m = new Map<string, any>();
-    for (const p of placementsData) {
-      if (p.name) m.set(String(p.name).toLowerCase().trim(), p);
-    }
-    return m;
-  }, [placementsData]);
 
   const applicantRows = React.useMemo(() => {
     if (placementsData.length === 0) return applicants;
@@ -1740,21 +1806,37 @@ export function ApplicantTable() {
 
                                 <div className="h-px bg-slate-100 dark:bg-[#252530] my-1" />
 
-                                {/* Cancel Process / Restore Applicant */}
+                                {/* Cancel Process / Restore Applicant / Restart */}
                                 {applicant.applicant_state === "Cancelled" || stage === "Cancelled" ? (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setRestartTargetApplicant(applicant);
-                                      setRestartTargetStatus("Draft");
-                                      setIsRestartModalOpen(true);
-                                    }}
-                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
-                                  >
-                                    <RotateCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                    <span>Restore Applicant</span>
-                                  </button>
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRestoreTargetApplicant(applicant);
+                                        setRestoreReason("");
+                                        setRestoreErrorNotice(null);
+                                        setIsRestoreModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition cursor-pointer"
+                                    >
+                                      <History className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                      <span>Restore Previous Process</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRestartTargetApplicant(applicant);
+                                        setRestartTargetStatus("Draft");
+                                        setIsRestartModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                                    >
+                                      <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+                                      <span>Restart as New Attempt</span>
+                                    </button>
+                                  </>
                                 ) : stage === "Departed" && (applicant as any).flight_outcome === "International return" ? (
                                   <button
                                     type="button"
@@ -1766,7 +1848,7 @@ export function ApplicantTable() {
                                     }}
                                     className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition"
                                   >
-                                    <RotateCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <RefreshCw className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                     <span>Send Again (Restart)</span>
                                   </button>
                                 ) : (
@@ -2058,16 +2140,156 @@ export function ApplicantTable() {
         </DialogContent>
       </Dialog>
 
-      {/* Restart / Restore Applicant Modal */}
-      <Dialog open={isRestartModalOpen} onOpenChange={(open) => { if (!open) setIsRestartModalOpen(false); }}>
-        <DialogContent className="max-w-md">
+      {/* Restore Previous Process Modal (NEW) */}
+      <Dialog open={isRestoreModalOpen} onOpenChange={(open) => { if (!open) { setIsRestoreModalOpen(false); setRestoreErrorNotice(null); } }}>
+        <DialogContent className="max-w-lg bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-700">
-              <RotateCcw className="h-4 w-4" />
-              Restore Cancelled Applicant
+            <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
+              <History className="h-5 w-5" />
+              Restore Previous Process
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Restart recruitment process for <strong>{restartTargetApplicant?.full_name || restartTargetApplicant?.name}</strong>.
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Restores this cancelled workflow back to its exact pre-cancellation operational state in the current cycle.
+              Completed clearance steps and existing attachments are preserved without incrementing cycle number or duplicating records.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Pre-Cancellation Workflow Snapshot Card */}
+          {restoreSnapshot && (
+            <div className="rounded-xl border border-slate-200 dark:border-[#252530] bg-slate-50/80 dark:bg-[#17171d] p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#22222a] pb-2">
+                <span className="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Briefcase className="h-3.5 w-3.5 text-emerald-600" />
+                  Pre-Cancellation Snapshot
+                </span>
+                <Badge variant="outline" className="text-[10px] font-mono">
+                  Cycle {restoreSnapshot.cycleNumber} (Preserved)
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Prev. Applicant Stage</span>
+                  <span className="font-bold text-slate-800 dark:text-zinc-100">{restoreSnapshot.previousApplicantStage}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Prev. Case Status</span>
+                  <span className="font-bold text-slate-800 dark:text-zinc-100">{restoreSnapshot.previousPlacementStatus}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Assigned Agency</span>
+                  <span className="font-medium text-slate-700 dark:text-zinc-300">{restoreSnapshot.contractorName || "None"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Destination Country</span>
+                  <span className="font-medium text-slate-700 dark:text-zinc-300">{restoreSnapshot.destinationCountry || "—"}</span>
+                </div>
+              </div>
+
+              {restoreSnapshot.cancellationReason && (
+                <div className="pt-2 border-t border-slate-200/60 dark:border-[#22222a] text-[11px]">
+                  <span className="text-slate-400 text-[10px] block font-semibold uppercase">Recorded Cancellation Reason</span>
+                  <p className="text-slate-600 dark:text-zinc-400 italic">"{restoreSnapshot.cancellationReason}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Medical UNFIT Warning Guard */}
+          {restoreSnapshot?.isMedicalUnfit && (
+            <div className="rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+              <div>
+                <p className="font-bold">Medical UNFIT Cancellation Guard</p>
+                <p className="text-[11px] mt-0.5 text-rose-700 dark:text-rose-300">
+                  This candidate was cancelled due to an UNFIT medical examination. Restoration cannot occur until the medical fitness is validly re-examined or cleared through the authorized medical workflow.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Backend Readiness Notice */}
+          {restoreErrorNotice && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <div className="space-y-2 flex-1 min-w-0">
+                <p className="font-bold">Backend Service Notice</p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                  {restoreErrorNotice}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const target = restoreTargetApplicant;
+                    setIsRestoreModalOpen(false);
+                    setRestoreErrorNotice(null);
+                    setRestartTargetApplicant(target);
+                    setIsRestartModalOpen(true);
+                  }}
+                  className="h-7 text-xs bg-white dark:bg-zinc-900 border-amber-400 text-amber-900 dark:text-amber-200 hover:bg-amber-100"
+                >
+                  <RefreshCw className="mr-1.5 h-3 w-3" />
+                  Switch to Restart as New Attempt
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Restoration Reason (Mandatory) */}
+          <div className="space-y-1.5 py-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+              <span>Restoration Reason <span className="text-rose-600">*</span></span>
+              <span className="text-[10px] text-slate-400 font-normal">Recorded in audit history</span>
+            </label>
+            <Input
+              value={restoreReason}
+              onChange={(e) => setRestoreReason(e.target.value)}
+              placeholder="e.g. Cancelled by mistake; employer reinstated demand; visa re-authorized..."
+              className="text-xs h-9"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsRestoreModalOpen(false);
+                setRestoreErrorNotice(null);
+              }}
+              disabled={restoreMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
+              disabled={restoreMutation.isPending || !restoreReason.trim() || restoreSnapshot?.isMedicalUnfit}
+              onClick={() => restoreMutation.mutate()}
+            >
+              {restoreMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restoring Process...</>
+              ) : (
+                <><History className="h-3.5 w-3.5 mr-1.5" />Confirm Restoration</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restart as New Attempt Modal (EXISTING) */}
+      <Dialog open={isRestartModalOpen} onOpenChange={(open) => { if (!open) setIsRestartModalOpen(false); }}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
+              <RefreshCw className="h-4 w-4" />
+              Restart as New Attempt (New Cycle)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Initiates a brand new recruitment cycle for <strong>{restartTargetApplicant?.full_name || restartTargetApplicant?.name}</strong>.
+              The applicant cycle number will bump from <strong>Cycle {restartTargetApplicant?.cycle_number || 1}</strong> to <strong>Cycle {Number(restartTargetApplicant?.cycle_number || 1) + 1}</strong>.
+              Previous placement and clearance step records remain archived as historical cancelled records.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -2077,27 +2299,27 @@ export function ApplicantTable() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setRestartTargetStatus("Draft")}
-                className={cn(
-                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
-                  restartTargetStatus === "Draft"
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
-                )}
-              >
-                Draft
-              </button>
-              <button
-                type="button"
                 onClick={() => setRestartTargetStatus("Registered")}
                 className={cn(
                   "flex-1 py-2 rounded-lg text-xs font-bold border transition",
                   restartTargetStatus === "Registered"
-                    ? "bg-emerald-600 text-white border-emerald-600"
+                    ? "bg-emerald-700 text-white border-emerald-700"
                     : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
                 )}
               >
-                Registered
+                Registered (Ready for CV)
+              </button>
+              <button
+                type="button"
+                onClick={() => setRestartTargetStatus("Draft")}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  restartTargetStatus === "Draft"
+                    ? "bg-emerald-700 text-white border-emerald-700"
+                    : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
+                )}
+              >
+                Draft (Editable Intake)
               </button>
             </div>
           </div>
@@ -2108,18 +2330,18 @@ export function ApplicantTable() {
               onClick={() => setIsRestartModalOpen(false)}
               disabled={restartMutation.isPending}
             >
-              Close
+              Cancel
             </Button>
             <Button
               size="sm"
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
               disabled={restartMutation.isPending}
               onClick={() => restartMutation.mutate()}
             >
               {restartMutation.isPending ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restoring...</>
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restarting (New Cycle)...</>
               ) : (
-                <><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Confirm Restore</>
+                <><RefreshCw className="h-3.5 w-3.5 mr-1.5" />Confirm Restart (New Cycle)</>
               )}
             </Button>
           </div>

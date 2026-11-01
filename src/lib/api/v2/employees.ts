@@ -212,14 +212,15 @@ export async function saveUserPasswordRecordV2(userEmail: string, password: stri
 
 /**
  * Resets employee login password.
- * Uses agency_tracking.employee_api.reset_employee_password and persists the password record.
+ * Uses native Frappe RPCs (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md) and persists the password record.
  */
 export async function resetEmployeePasswordV2(
   userEmail: string,
   newPassword: string
 ): Promise<void> {
-  await resetEmployeePasswordApiV2(userEmail, newPassword);
-  await saveUserPasswordRecordV2(userEmail, newPassword);
+  const normalizedEmail = (userEmail || "").trim().toLowerCase();
+  await resetEmployeePasswordApiV2(normalizedEmail, newPassword);
+  await saveUserPasswordRecordV2(normalizedEmail, newPassword);
 }
 
 /**
@@ -379,19 +380,42 @@ export async function updateEmployeeRolesApiV2(
 }
 
 /**
- * Resets an employee's password via employee_api.reset_employee_password.
+ * Resets an employee's password via native Frappe RPC (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md #9)
+ * with graceful fallback to employee_api.reset_employee_password if deployed.
  */
 export async function resetEmployeePasswordApiV2(
   email: string,
   newPassword: string
 ): Promise<void> {
-  await requestV2(
-    "/api/method/agency_tracking.employee_api.reset_employee_password",
-    {
+  const normalizedEmail = (email || "").trim().toLowerCase();
+  const docName = resolveFrappeUserDocName(normalizedEmail);
+
+  // 1. Primary: Use native Frappe client set_value RPC on User doctype (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md #9)
+  try {
+    await requestV2("/api/method/frappe.client.set_value", {
       method: "POST",
-      body: { email: (email || "").trim().toLowerCase(), new_password: newPassword },
+      body: {
+        doctype: "User",
+        name: docName,
+        fieldname: "new_password",
+        value: newPassword.trim(),
+      },
+    });
+    return;
+  } catch (nativeErr: any) {
+    // If native set_value failed, attempt custom RPC endpoint if whitelisted on server
+    try {
+      await requestV2(
+        "/api/method/agency_tracking.employee_api.reset_employee_password",
+        {
+          method: "POST",
+          body: { email: normalizedEmail, new_password: newPassword.trim() },
+        }
+      );
+    } catch {
+      throw nativeErr;
     }
-  );
+  }
 }
 
 /**

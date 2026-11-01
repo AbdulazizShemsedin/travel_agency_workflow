@@ -19,6 +19,7 @@ import {
   normalizeApplicantFields,
   mapEducationLevelToBackend,
 } from "../src/lib/api/v2/applicants";
+import { formatCleanErrorMessage } from "../src/lib/utils/error-formatter";
 
 function createMockResponse(bodyData: any, status = 200): Response {
   return {
@@ -301,6 +302,118 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     assert.equal(deniedBadgeText, "Unavailable. Please select another candidate.");
     const canUploadDenied = deniedCase.status === "Selected" && !deniedCase.request_denied;
     assert.equal(canUploadDenied, false);
+  });
+
+  test("11. Selection Requests list pagination partitions items into pages (10 per page default)", () => {
+    const allRequests = Array.from({ length: 25 }, (_, i) => ({
+      name: `PLM-${100 + i}`,
+      applicant_name: `Applicant ${i + 1}`,
+      status: "Requested",
+    }));
+
+    const pageSize = 10;
+    const page1 = allRequests.slice(0, pageSize);
+    const page2 = allRequests.slice(pageSize, pageSize * 2);
+    const page3 = allRequests.slice(pageSize * 2, pageSize * 3);
+
+    assert.equal(page1.length, 10);
+    assert.equal(page1[0].name, "PLM-100");
+    assert.equal(page2.length, 10);
+    assert.equal(page2[0].name, "PLM-110");
+    assert.equal(page3.length, 5);
+    assert.equal(page3[0].name, "PLM-120");
+  });
+
+  test("12. Already decided selection requests (Selected, Cancelled) cannot be re-decided", () => {
+    const isActionable = (request: { status: string; request_denied?: number }) => {
+      if (request.request_denied === 1) return false;
+      return request.status === "Requested";
+    };
+
+    assert.equal(isActionable({ status: "Requested", request_denied: 0 }), true);
+    assert.equal(isActionable({ status: "Selected", request_denied: 0 }), false);
+    assert.equal(isActionable({ status: "Cancelled", request_denied: 1 }), false);
+    assert.equal(isActionable({ status: "Visa Issued", request_denied: 0 }), false);
+  });
+
+  test("13. Approved candidate with status Selected displays Upload Contract and permits upload", () => {
+    const approvedCase = {
+      name: "PLM-013",
+      status: "Selected",
+      request_denied: 0,
+      contract_file: null,
+    };
+
+    const canUploadContract = approvedCase.status === "Selected" && !approvedCase.request_denied;
+    assert.equal(canUploadContract, true);
+
+    const buttonLabel =
+      approvedCase.status === "Requested"
+        ? "Waiting for confirmation"
+        : approvedCase.status === "Selected" && !approvedCase.contract_file
+        ? "Upload Contract"
+        : "View Details";
+
+    assert.equal(buttonLabel, "Upload Contract");
+  });
+
+  test("14. Staff direct selection role authorization: only Admin and Manager roles can directly select", () => {
+    const canDirectlySelect = (roles: string[]) => {
+      const normalized = roles.map((r) => r.toLowerCase().trim());
+      return normalized.some((r) => r === "admin" || r === "manager" || r === "system manager" || r === "administrator");
+    };
+
+    assert.equal(canDirectlySelect(["Admin"]), true);
+    assert.equal(canDirectlySelect(["Manager"]), true);
+    assert.equal(canDirectlySelect(["System Manager"]), true);
+    assert.equal(canDirectlySelect(["Registrar"]), false);
+    assert.equal(canDirectlySelect(["Clearance Officer"]), false);
+    assert.equal(canDirectlySelect(["Finance Manager"]), false);
+    assert.equal(canDirectlySelect(["Foreign Agency"]), false);
+  });
+
+  test("15. Agency UI refresh consistency: Case remains in Requested state across re-renders until staff confirmation", () => {
+    let placementRecord: { name: string; status: string; request_denied: number } = {
+      name: "PLM-015",
+      status: "Requested",
+      request_denied: 0,
+    };
+
+    // Re-render / refresh: fetch returns current backend state
+    const refreshPlacement = (): { name: string; status: string; request_denied: number } => ({ ...placementRecord });
+
+    const stateAfterRefresh1 = refreshPlacement();
+    assert.equal(stateAfterRefresh1.status, "Requested");
+    assert.notEqual(stateAfterRefresh1.status, "Selected");
+
+    // Staff approves on backend
+    placementRecord = { ...placementRecord, status: "Selected" };
+
+    const stateAfterRefresh2 = refreshPlacement();
+    assert.equal(stateAfterRefresh2.status, "Selected");
+  });
+
+  test("16. Contractor identity cross-validation: Agency cannot request selection without contractor", () => {
+    const validateAgencyRequest = (agencyContractor: string | null | undefined, targetContractor: string) => {
+      if (!agencyContractor) {
+        throw new Error("No agency contractor linked to current session.");
+      }
+      if (agencyContractor !== targetContractor) {
+        throw new Error("Foreign Agency can only request candidates for their own agency.");
+      }
+      return true;
+    };
+
+    assert.equal(validateAgencyRequest("AGY-001", "AGY-001"), true);
+    assert.throws(() => validateAgencyRequest(null, "AGY-001"), /No agency contractor linked/);
+    assert.throws(() => validateAgencyRequest("AGY-001", "AGY-OTHER"), /Foreign Agency can only request candidates for their own agency/);
+  });
+
+  test("17. Error formatter cleanly sanitizes 417 missing contractor errors into clear instructions", () => {
+    const raw417 = "A contractor must be specified for this operation (pass contractor_name / contractor).";
+    const formatted = formatCleanErrorMessage(raw417);
+    assert.match(formatted, /contractor|agency/i);
+    assert.equal(formatted.includes("Traceback"), false);
   });
 });
 

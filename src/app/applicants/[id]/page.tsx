@@ -12,14 +12,24 @@ import {
   RotateCcw,
   Ban,
   AlertTriangle,
+  AlertCircle,
   Film,
   Video,
   Eye,
   Briefcase,
   Building2,
+  History,
+  RefreshCw,
+  Info,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
-import { restartApplicantV2, cancelApplicantV2, getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
+import {
+  restartApplicantV2,
+  cancelApplicantV2,
+  restoreApplicantProcessV2,
+  getPreCancellationSnapshot,
+  getApplicantMediaUrlV2,
+} from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
@@ -249,7 +259,47 @@ export default function ApplicantDetailPage() {
 
   const activeVideoPlayUrl = mediaUrlData?.url || candidateVideoUrl;
 
-  // Restart / Resume Modal State
+  // Pre-cancellation snapshot derivation
+  const preCancellationSnapshot = React.useMemo(() => {
+    return getPreCancellationSnapshot(applicant, placements);
+  }, [applicant, placements]);
+
+  // Restore Process Modal State
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = React.useState(false);
+  const [restoreReason, setRestoreReason] = React.useState("");
+  const [restoreErrorNotice, setRestoreErrorNotice] = React.useState<string | null>(null);
+
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      if (!applicant) throw new Error("No applicant record to restore.");
+      if (!restoreReason.trim()) throw new Error("A written restoration reason is required.");
+      if (preCancellationSnapshot.isMedicalUnfit) {
+        throw new Error(
+          "Cannot restore process with UNFIT medical result. Please perform authorized medical re-examination/correction first."
+        );
+      }
+      return await restoreApplicantProcessV2(applicant.name, restoreReason.trim());
+    },
+    onSuccess: (data) => {
+      setIsRestoreModalOpen(false);
+      setRestoreReason("");
+      setRestoreErrorNotice(null);
+      refetchAll();
+      toast.success(data?.message || "Applicant process successfully restored to previous state.");
+    },
+    onError: (err: any) => {
+      const msg = err?.message || String(err);
+      if (err?.statusCode === 404 || msg.includes("not found") || msg.includes("does not exist") || err?.statusCode === 501) {
+        setRestoreErrorNotice(
+          "Backend Restoration Endpoint ('applicant_api.restore_applicant') is not yet available on the active backend. To resume workflow, internal staff can either 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
+        );
+      } else {
+        toast.error("Restoration failed", { description: msg });
+      }
+    },
+  });
+
+  // Restart as New Attempt Modal State
   const [isRestartModalOpen, setIsRestartModalOpen] = React.useState(false);
   const [restartTargetStatus, setRestartTargetStatus] = React.useState<"Draft" | "Registered">("Registered");
 
@@ -261,7 +311,7 @@ export default function ApplicantDetailPage() {
     onSuccess: (data) => {
       setIsRestartModalOpen(false);
       refetchAll();
-      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus}.`);
+      toast.success(data?.message || `Applicant restarted to ${restartTargetStatus} (new cycle).`);
     },
     onError: (err: any) => {
       toast.error("Restart failed", { description: err?.message || String(err) });
@@ -487,17 +537,33 @@ export default function ApplicantDetailPage() {
               </Button>
             )}
 
-            {/* Resume / Restart Button for Cancelled applicant */}
+            {/* Cancelled Applicant Actions: Restore Previous Process vs Restart as New Attempt */}
             {currentStage === "Cancelled" && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setIsRestartModalOpen(true)}
-                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs shadow-xs gap-1.5"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Resume / Restart Applicant
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setRestoreReason("");
+                    setRestoreErrorNotice(null);
+                    setIsRestoreModalOpen(true);
+                  }}
+                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs shadow-xs gap-1.5"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  Restore Previous Process
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsRestartModalOpen(true)}
+                  className="border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 font-semibold text-xs shadow-xs gap-1.5"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+                  Restart as New Attempt
+                </Button>
+              </div>
             )}
 
             {/* Send Again button for International return */}
@@ -679,19 +745,156 @@ export default function ApplicantDetailPage() {
         }}
       />
 
-      {/* Restart / Resume Modal */}
-      <Dialog open={isRestartModalOpen} onOpenChange={setIsRestartModalOpen}>
-        <DialogContent className="max-w-md">
+      {/* Restore Previous Process Modal (NEW) */}
+      <Dialog open={isRestoreModalOpen} onOpenChange={setIsRestoreModalOpen}>
+        <DialogContent className="max-w-lg bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-              <RotateCcw className="h-4 w-4" />
-              Resume / Restart Applicant
+              <History className="h-5 w-5" />
+              Restore Previous Process
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              Restart recruitment process for <strong>{fullName}</strong>.
-              This restores the applicant and allows regenerating CV and re-entering the placement pipeline.
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Restores this cancelled workflow back to its exact pre-cancellation operational state in the current cycle.
+              Completed clearance steps and existing attachments are preserved without incrementing cycle number or duplicating records.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Pre-Cancellation Workflow Snapshot Card */}
+          <div className="rounded-xl border border-slate-200 dark:border-[#252530] bg-slate-50/80 dark:bg-[#17171d] p-3.5 space-y-2 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-[#22222a] pb-2">
+              <span className="font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                <Briefcase className="h-3.5 w-3.5 text-emerald-600" />
+                Pre-Cancellation Snapshot
+              </span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                Cycle {preCancellationSnapshot.cycleNumber} (Preserved)
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Prev. Applicant Stage</span>
+                <span className="font-bold text-slate-800 dark:text-zinc-100">{preCancellationSnapshot.previousApplicantStage}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Prev. Case Status</span>
+                <span className="font-bold text-slate-800 dark:text-zinc-100">{preCancellationSnapshot.previousPlacementStatus}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Assigned Agency</span>
+                <span className="font-medium text-slate-700 dark:text-zinc-300">{preCancellationSnapshot.contractorName || "None"}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Destination Country</span>
+                <span className="font-medium text-slate-700 dark:text-zinc-300">{preCancellationSnapshot.destinationCountry || "—"}</span>
+              </div>
+            </div>
+
+            {preCancellationSnapshot.cancellationReason && (
+              <div className="pt-2 border-t border-slate-200/60 dark:border-[#22222a] text-[11px]">
+                <span className="text-slate-400 text-[10px] block font-semibold uppercase">Recorded Cancellation Reason</span>
+                <p className="text-slate-600 dark:text-zinc-400 italic">"{preCancellationSnapshot.cancellationReason}"</p>
+              </div>
+            )}
+          </div>
+
+          {/* Medical UNFIT Warning Guard */}
+          {preCancellationSnapshot.isMedicalUnfit && (
+            <div className="rounded-xl border border-rose-300 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs text-rose-800 dark:text-rose-300 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+              <div>
+                <p className="font-bold">Medical UNFIT Cancellation Guard</p>
+                <p className="text-[11px] mt-0.5 text-rose-700 dark:text-rose-300">
+                  This candidate was cancelled due to an UNFIT medical examination. Restoration cannot occur until the medical fitness is validly re-examined or cleared through the authorized medical workflow.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Backend Readiness Notice */}
+          {restoreErrorNotice && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <div className="space-y-2 flex-1 min-w-0">
+                <p className="font-bold">Backend Service Notice</p>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                  {restoreErrorNotice}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setIsRestoreModalOpen(false);
+                    setRestoreErrorNotice(null);
+                    setIsRestartModalOpen(true);
+                  }}
+                  className="h-7 text-xs bg-white dark:bg-zinc-900 border-amber-400 text-amber-900 dark:text-amber-200 hover:bg-amber-100"
+                >
+                  <RefreshCw className="mr-1.5 h-3 w-3" />
+                  Switch to Restart as New Attempt
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Restoration Reason (Mandatory) */}
+          <div className="space-y-1.5 py-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+              <span>Restoration Reason <span className="text-rose-600">*</span></span>
+              <span className="text-[10px] text-slate-400 font-normal">Recorded in audit history</span>
+            </label>
+            <Textarea
+              value={restoreReason}
+              onChange={(e) => setRestoreReason(e.target.value)}
+              placeholder="e.g. Cancelled by mistake; employer reinstated demand; visa re-authorized..."
+              rows={3}
+              className="text-xs resize-none"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsRestoreModalOpen(false);
+                setRestoreErrorNotice(null);
+              }}
+              disabled={restoreMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
+              disabled={restoreMutation.isPending || !restoreReason.trim() || preCancellationSnapshot.isMedicalUnfit}
+              onClick={() => restoreMutation.mutate()}
+            >
+              {restoreMutation.isPending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restoring Process...</>
+              ) : (
+                <><History className="h-3.5 w-3.5 mr-1.5" />Confirm Restoration</>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restart as New Attempt Modal (EXISTING) */}
+      <Dialog open={isRestartModalOpen} onOpenChange={setIsRestartModalOpen}>
+        <DialogContent className="max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
+              <RefreshCw className="h-4 w-4" />
+              Restart as New Attempt (New Cycle)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
+              Initiates a brand new recruitment cycle for <strong>{fullName}</strong>.
+              The applicant cycle number will bump from <strong>Cycle {preCancellationSnapshot.cycleNumber}</strong> to <strong>Cycle {preCancellationSnapshot.cycleNumber + 1}</strong>.
+              Previous placement and clearance step records remain archived as historical cancelled records.
+            </DialogDescription>
+          </DialogHeader>
+
           <div className="space-y-3 py-2">
             <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
               Target Restart Status
@@ -701,28 +904,35 @@ export default function ApplicantDetailPage() {
                 type="button"
                 onClick={() => setRestartTargetStatus("Registered")}
                 className={cn(
-                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  "flex-1 py-2.5 px-3 rounded-lg text-xs font-bold border transition text-left space-y-0.5",
                   restartTargetStatus === "Registered"
                     ? "bg-emerald-700 text-white border-emerald-700"
                     : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
                 )}
               >
-                Registered (Ready for CV)
+                <div className="font-bold">Registered</div>
+                <div className={cn("text-[10px] font-normal", restartTargetStatus === "Registered" ? "text-emerald-100" : "text-slate-500 dark:text-zinc-400")}>
+                  Ready for CV generation
+                </div>
               </button>
               <button
                 type="button"
                 onClick={() => setRestartTargetStatus("Draft")}
                 className={cn(
-                  "flex-1 py-2 rounded-lg text-xs font-bold border transition",
+                  "flex-1 py-2.5 px-3 rounded-lg text-xs font-bold border transition text-left space-y-0.5",
                   restartTargetStatus === "Draft"
                     ? "bg-emerald-700 text-white border-emerald-700"
                     : "bg-white dark:bg-[#1a1a22] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-zinc-300 hover:border-emerald-400"
                 )}
               >
-                Draft (Editable Intake)
+                <div className="font-bold">Draft</div>
+                <div className={cn("text-[10px] font-normal", restartTargetStatus === "Draft" ? "text-emerald-100" : "text-slate-500 dark:text-zinc-400")}>
+                  Editable profile intake
+                </div>
               </button>
             </div>
           </div>
+
           <div className="flex gap-2 justify-end pt-2">
             <Button
               variant="outline"
@@ -734,14 +944,14 @@ export default function ApplicantDetailPage() {
             </Button>
             <Button
               size="sm"
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold"
               disabled={restartMutation.isPending}
               onClick={() => restartMutation.mutate()}
             >
               {restartMutation.isPending ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Resuming...</>
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Restarting (New Cycle)...</>
               ) : (
-                <><RotateCcw className="h-3.5 w-3.5 mr-1.5" />Confirm Resume</>
+                <><RefreshCw className="h-3.5 w-3.5 mr-1.5" />Confirm Restart (New Cycle)</>
               )}
             </Button>
           </div>

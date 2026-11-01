@@ -1065,9 +1065,150 @@ export async function cancelApplicantV2(
   );
 }
 
+export interface V2PreCancellationSnapshot {
+  previousApplicantStage: "Draft" | "Registered" | "CV Generated" | string;
+  previousPlacementStatus: "None" | "Selected" | "Processing" | "Stamped" | "Ticketed" | "Departed" | string;
+  contractorName?: string;
+  destinationCountry?: string;
+  cycleNumber: number;
+  cancellationReason?: string;
+  isMuayena: boolean;
+  hasContract: boolean;
+  hasVisa: boolean;
+  hasTicket: boolean;
+  isDeparted: boolean;
+  isMedicalUnfit: boolean;
+  unfitSource?: "Applicant" | "SelectedMedical" | "PredepartureMedical";
+}
+
 /**
- * Restarts a Cancelled Applicant back to Draft or Registered.
- * Automatically increments cycle_number.
+ * Derives the pre-cancellation workflow snapshot from authoritative applicant and placement records.
+ */
+export function getPreCancellationSnapshot(
+  applicant?: V2ApplicantDetails | null,
+  placements?: any[] | null
+): V2PreCancellationSnapshot {
+  const cycleNumber = Number(applicant?.cycle_number || 1);
+  const isMuayena = Boolean(
+    applicant?.entry_track === "Muayena" ||
+    applicant?.applicant_type === "Muayena" ||
+    (applicant as any)?.is_muayena
+  );
+
+  // Find the primary or most recent placement
+  const placement = placements && placements.length > 0 ? placements[0] : null;
+
+  // Derive previous placement status from archived fields
+  let previousPlacementStatus = "None";
+  const hasContract = Boolean(placement?.contract_file || placement?.contract_number);
+  const hasVisa = Boolean(placement?.visa_file || placement?.visa_number || placement?.visa_reference_number);
+  const hasTicket = Boolean(placement?.ticket_number || placement?.flight_date);
+  const isDeparted = Boolean(placement?.departed_on || placement?.arrival_confirmed);
+
+  if (placement) {
+    if (isDeparted) {
+      previousPlacementStatus = "Departed";
+    } else if (hasTicket) {
+      previousPlacementStatus = "Ticketed";
+    } else if (hasVisa) {
+      previousPlacementStatus = "Stamped";
+    } else if (placement.medical_selected_status === "FIT" || placement.corridor_state || hasContract) {
+      previousPlacementStatus = hasContract ? "Processing" : "Selected";
+    } else if (placement.contractor || placement.contractor_name) {
+      previousPlacementStatus = "Selected";
+    } else {
+      previousPlacementStatus = "Selected";
+    }
+  }
+
+  // Derive previous applicant stage
+  let previousApplicantStage: string = "Registered";
+  if (isMuayena) {
+    previousApplicantStage = placement ? "Selected" : "Registered";
+  } else {
+    const hasCv = Boolean(
+      applicant?.cv_file ||
+      applicant?.cv_url ||
+      applicant?.cv_pdf ||
+      (applicant as any)?.has_cv ||
+      placement
+    );
+    if (hasCv) {
+      previousApplicantStage = "CV Generated";
+    } else if (applicant?.passport_number) {
+      previousApplicantStage = "Registered";
+    } else {
+      previousApplicantStage = "Draft";
+    }
+  }
+
+  // Check UNFIT medical flags across applicant and placement checkpoints
+  let isMedicalUnfit = false;
+  let unfitSource: "Applicant" | "SelectedMedical" | "PredepartureMedical" | undefined;
+  if (applicant?.medical_status === "UNFIT") {
+    isMedicalUnfit = true;
+    unfitSource = "Applicant";
+  } else if (placement?.medical_selected_status === "UNFIT") {
+    isMedicalUnfit = true;
+    unfitSource = "SelectedMedical";
+  } else if (placement?.medical_2_status === "UNFIT") {
+    isMedicalUnfit = true;
+    unfitSource = "PredepartureMedical";
+  }
+
+  const cancellationReason =
+    applicant?.remarks ||
+    (applicant as any)?.cancel_reason ||
+    (applicant as any)?.cancellation_reason ||
+    (placement as any)?.cancel_reason ||
+    (placement as any)?.remarks ||
+    undefined;
+
+  return {
+    previousApplicantStage,
+    previousPlacementStatus,
+    contractorName: placement?.contractor_name || placement?.contractor || applicant?.contractor_name,
+    destinationCountry: placement?.destination_country || applicant?.destination_country,
+    cycleNumber,
+    cancellationReason,
+    isMuayena,
+    hasContract,
+    hasVisa,
+    hasTicket,
+    isDeparted,
+    isMedicalUnfit,
+    unfitSource,
+  };
+}
+
+/**
+ * Restores a Cancelled Applicant process back to its exact pre-cancellation state.
+ * Unlike restart_applicant, this preserves the current cycle_number, unfreezes the original
+ * Placement and linked Clearance Steps without duplicating financial or corridor records.
+ * Endpoint: POST /api/method/agency_tracking.applicant_api.restore_applicant
+ */
+export async function restoreApplicantProcessV2(
+  applicantName: string,
+  reason: string
+): Promise<{ message?: string; applicant?: V2ApplicantDetails; [key: string]: any }> {
+  if (!reason || !reason.trim()) {
+    throw new Error("A written restoration reason is required to restore a cancelled applicant process.");
+  }
+  return requestV2(
+    "/api/method/agency_tracking.applicant_api.restore_applicant",
+    {
+      method: "POST",
+      body: {
+        applicant_name: applicantName,
+        reason: reason.trim(),
+      },
+    }
+  );
+}
+
+/**
+ * Restarts a Cancelled Applicant back to Draft or Registered as a NEW attempt.
+ * Automatically increments cycle_number. Previous Placement and Clearance Steps remain historical.
  */
 export async function restartApplicantV2(
   applicantName: string,

@@ -197,14 +197,23 @@ export default function PlacementDocumentCenterPage() {
         });
       } else {
         // Authoritative upload_contract attachment to Placement
-        await uploadContractV2(activePlacement!.name, fileUrl);
+        const uploadContractRes = await uploadContractV2(activePlacement!.name, fileUrl);
 
         // Also run OCR extraction immediately so extracted fields populate
         try {
           const parsed = await parseContractFileV2(fileUrl, destinationCountry);
-          setContractParseResult(parsed);
+          setContractParseResult({
+            ...parsed,
+            ...(uploadContractRes && typeof uploadContractRes === "object" ? uploadContractRes : {}),
+          });
         } catch {
-          // Non-fatal: OCR parse failed but file is attached
+          // Non-fatal: OCR parse failed but file is attached; propagate placement response if any
+          if (uploadContractRes && typeof uploadContractRes === "object") {
+            setContractParseResult((prev: any) => ({
+              ...prev,
+              ...uploadContractRes,
+            }));
+          }
         }
 
         toast.success("Contract Attached & Info Extracted", {
@@ -264,14 +273,28 @@ export default function PlacementDocumentCenterPage() {
       const agencyName = contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name;
       const contractDate = contractParseResult?.contract_signed_date || contractParseResult?.contract_date;
       const employerAddress = (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address;
+      const salaryAmount = (contractParseResult as any)?.contract_salary_amount || (contractParseResult as any)?.salary_amount;
+      const salaryCurrency = (contractParseResult as any)?.contract_salary_currency || (contractParseResult as any)?.salary_currency;
+      const employmentSite = (contractParseResult as any)?.employment_site;
+      const contractDuration = (contractParseResult as any)?.contract_duration;
+      const kuwaitAgencyName = (contractParseResult as any)?.kuwait_agency_name;
+      const kuwaitAgencyLicense = (contractParseResult as any)?.kuwait_agency_license;
+      const saudiAgencyLicense = (contractParseResult as any)?.saudi_agency_license;
 
       if (contractParseResult?.contract_number) payloadToUpdate.contract_number = contractParseResult.contract_number;
       if (contractParseResult?.visa_number) payloadToUpdate.visa_number = contractParseResult.visa_number;
       if (employerName) payloadToUpdate.employer_name = employerName;
       if (employerId) payloadToUpdate.employer_national_id = employerId;
       if (agencyName) payloadToUpdate.saudi_agency_name = agencyName;
+      if (saudiAgencyLicense) payloadToUpdate.saudi_agency_license = saudiAgencyLicense;
       if (contractDate) payloadToUpdate.contract_signed_date = contractDate;
       if (employerAddress) payloadToUpdate.employer_address = employerAddress;
+      if (salaryAmount) payloadToUpdate.contract_salary_amount = salaryAmount;
+      if (salaryCurrency) payloadToUpdate.contract_salary_currency = salaryCurrency;
+      if (employmentSite) payloadToUpdate.employment_site = employmentSite;
+      if (contractDuration) payloadToUpdate.contract_duration = contractDuration;
+      if (kuwaitAgencyName) payloadToUpdate.kuwait_agency_name = kuwaitAgencyName;
+      if (kuwaitAgencyLicense) payloadToUpdate.kuwait_agency_license = kuwaitAgencyLicense;
 
       if (Object.keys(payloadToUpdate).length > 0) {
         await updatePlacementParsedFieldsV2(activePlacement.name, payloadToUpdate);
@@ -365,6 +388,21 @@ export default function PlacementDocumentCenterPage() {
       } else {
         // Authoritative upload_visa attachment to Placement
         const res = await uploadVisaV2(activePlacement!.name, fileUrl);
+        // Also run OCR extraction immediately so extracted fields populate
+        try {
+          const parsed = await parseVisaFileV2(fileUrl);
+          setVisaParseResult({
+            ...parsed,
+            ...(res && typeof res === "object" ? res : {}),
+          });
+        } catch {
+          if (res && typeof res === "object") {
+            setVisaParseResult((prev: any) => ({
+              ...prev,
+              ...res,
+            }));
+          }
+        }
         toast.success("Kuwait eVisa Successfully Attached to Placement", {
           description: `Visa attached to ${activePlacement!.name}. Parsed reference and sponsor registered.`,
         });
@@ -386,6 +424,8 @@ export default function PlacementDocumentCenterPage() {
     contract_number: "",
     contract_signed_date: "",
     contract_duration: "",
+    contract_salary_amount: "",
+    contract_salary_currency: "",
     visa_number: "",
     visa_type: "",
     visa_issue_date: "",
@@ -405,22 +445,24 @@ export default function PlacementDocumentCenterPage() {
   const handleOpenEditModal = () => {
     if (!activePlacement) return;
     setEditFields({
-      contract_number: activePlacement.contract_number || "",
-      contract_signed_date: activePlacement.contract_signed_date || "",
-      contract_duration: (activePlacement as any).contract_duration || "",
-      visa_number: activePlacement.visa_number || "",
-      visa_type: (activePlacement as any).visa_type || "",
-      visa_issue_date: (activePlacement as any).visa_issue_date || "",
-      visa_expiry_date: (activePlacement as any).visa_expiry_date || "",
-      visa_reference_number: (activePlacement as any).visa_reference_number || "",
-      employer_name: activePlacement.employer_name || "",
-      employer_national_id: activePlacement.employer_national_id || "",
-      employer_address: (activePlacement as any).employer_address || "",
-      saudi_agency_name: (activePlacement as any).saudi_agency_name || "",
-      saudi_agency_license: (activePlacement as any).saudi_agency_license || "",
-      kuwait_agency_name: (activePlacement as any).kuwait_agency_name || "",
-      kuwait_agency_license: (activePlacement as any).kuwait_agency_license || "",
-      employment_site: activePlacement.employment_site || "",
+      contract_number: activePlacement.contract_number || contractParseResult?.contract_number || "",
+      contract_signed_date: activePlacement.contract_signed_date || contractParseResult?.contract_signed_date || contractParseResult?.contract_date || "",
+      contract_duration: (activePlacement as any).contract_duration || (contractParseResult as any)?.contract_duration || "",
+      contract_salary_amount: String((activePlacement as any).contract_salary_amount || (contractParseResult as any)?.contract_salary_amount || (contractParseResult as any)?.salary_amount || ""),
+      contract_salary_currency: (activePlacement as any).contract_salary_currency || (contractParseResult as any)?.contract_salary_currency || (contractParseResult as any)?.salary_currency || (isKuwait ? "KWD" : "SAR"),
+      visa_number: activePlacement.visa_number || contractParseResult?.visa_number || visaParseResult?.visa_number || "",
+      visa_type: (activePlacement as any).visa_type || (contractParseResult as any)?.visa_type || (visaParseResult as any)?.visa_type || "",
+      visa_issue_date: (activePlacement as any).visa_issue_date || (visaParseResult as any)?.visa_issue_date || "",
+      visa_expiry_date: (activePlacement as any).visa_expiry_date || (visaParseResult as any)?.visa_expiry_date || "",
+      visa_reference_number: (activePlacement as any).visa_reference_number || (visaParseResult as any)?.visa_reference_number || "",
+      employer_name: activePlacement.employer_name || contractParseResult?.employer_name || contractParseResult?.sponsor_name || "",
+      employer_national_id: activePlacement.employer_national_id || contractParseResult?.employer_national_id || contractParseResult?.sponsor_id || "",
+      employer_address: (activePlacement as any).employer_address || (contractParseResult as any)?.employer_address || (contractParseResult as any)?.sponsor_address || "",
+      saudi_agency_name: (activePlacement as any).saudi_agency_name || contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name || "",
+      saudi_agency_license: (activePlacement as any).saudi_agency_license || (contractParseResult as any)?.saudi_agency_license || "",
+      kuwait_agency_name: (activePlacement as any).kuwait_agency_name || (contractParseResult as any)?.kuwait_agency_name || (contractParseResult as any)?.contractor_name || "",
+      kuwait_agency_license: (activePlacement as any).kuwait_agency_license || (contractParseResult as any)?.kuwait_agency_license || "",
+      employment_site: activePlacement.employment_site || (contractParseResult as any)?.employment_site || "",
     });
     setIsEditModalOpen(true);
   };
@@ -430,6 +472,11 @@ export default function PlacementDocumentCenterPage() {
     setIsSavingParsedFields(true);
     try {
       await updatePlacementParsedFieldsV2(activePlacement.name, editFields);
+      // Synchronously propagate edits into local parse result so UI cards update immediately
+      setContractParseResult((prev: any) => ({
+        ...prev,
+        ...editFields,
+      }));
       toast.success("Placement Parsed Fields Updated", {
         description: "Permitted contract and visa terms updated successfully.",
       });
@@ -821,15 +868,15 @@ export default function PlacementDocumentCenterPage() {
                   <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                     <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Signed Date</span>
                     <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.contract_signed_date || contractParseResult?.status || "Not Extracted"}
+                      {activePlacement?.contract_signed_date || contractParseResult?.contract_signed_date || contractParseResult?.contract_date || "Not Extracted"}
                     </span>
                   </div>
 
                   <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                     <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Salary</span>
                     <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.contract_salary_amount
-                        ? `${activePlacement.contract_salary_amount} ${activePlacement.contract_salary_currency || "SAR"}`
+                      {(activePlacement?.contract_salary_amount || contractParseResult?.contract_salary_amount || contractParseResult?.salary_amount)
+                        ? `${activePlacement?.contract_salary_amount || contractParseResult?.contract_salary_amount || contractParseResult?.salary_amount} ${activePlacement?.contract_salary_currency || contractParseResult?.contract_salary_currency || contractParseResult?.salary_currency || (isKuwait ? "KWD" : "SAR")}`
                         : "Not Set"}
                     </span>
                   </div>
@@ -837,7 +884,7 @@ export default function PlacementDocumentCenterPage() {
                   <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                     <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer / Sponsor</span>
                     <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.employer_name || contractParseResult?.sponsor_name || "Not Extracted"}
+                      {activePlacement?.employer_name || contractParseResult?.employer_name || contractParseResult?.sponsor_name || "Not Extracted"}
                     </span>
                   </div>
 
@@ -847,7 +894,7 @@ export default function PlacementDocumentCenterPage() {
                     </span>
                     <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
                       {isKuwait
-                        ? activePlacement?.employment_site || "Kuwait"
+                        ? activePlacement?.employment_site || contractParseResult?.employment_site || "Kuwait"
                         : activePlacement?.contract_number || contractParseResult?.contract_number || "Pending"}
                     </span>
                   </div>
@@ -855,23 +902,39 @@ export default function PlacementDocumentCenterPage() {
                   <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                     <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Visa Number</span>
                     <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                      {activePlacement?.visa_number || contractParseResult?.visa_number || "Not Extracted"}
+                      {activePlacement?.visa_number || contractParseResult?.visa_number || visaParseResult?.visa_number || "Not Extracted"}
                     </span>
                   </div>
 
-                  {!isKuwait && (
+                  {!isKuwait ? (
                     <>
                       <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Employer ID</span>
                         <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.employer_national_id || contractParseResult?.sponsor_id || "Not Extracted"}
+                          {activePlacement?.employer_national_id || contractParseResult?.employer_national_id || contractParseResult?.sponsor_id || "Not Extracted"}
                         </span>
                       </div>
 
                       <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Saudi Partner Agency</span>
                         <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.saudi_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
+                          {activePlacement?.saudi_agency_name || contractParseResult?.saudi_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Contract Duration</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
+                          {activePlacement?.contract_duration || contractParseResult?.contract_duration || "2 Years"}
+                        </span>
+                      </div>
+
+                      <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
+                        <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Kuwait Partner Agency</span>
+                        <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
+                          {activePlacement?.kuwait_agency_name || contractParseResult?.kuwait_agency_name || contractParseResult?.contractor_name || "Not Extracted"}
                         </span>
                       </div>
                     </>
@@ -1115,14 +1178,14 @@ export default function PlacementDocumentCenterPage() {
                       <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Name</span>
                         <span className="font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.sponsor_name || visaParseResult?.sponsor_name || "Not Extracted"}
+                          {activePlacement?.employer_name || activePlacement?.sponsor_name || visaParseResult?.sponsor_name || "Not Extracted"}
                         </span>
                       </div>
 
                       <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                         <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Sponsor Civil ID</span>
                         <span className="font-mono font-semibold text-slate-900 dark:text-white truncate block text-[11px]">
-                          {activePlacement?.sponsor_civil_id || visaParseResult?.sponsor_id || "Not Extracted"}
+                          {activePlacement?.employer_national_id || activePlacement?.sponsor_civil_id || visaParseResult?.sponsor_id || "Not Extracted"}
                         </span>
                       </div>
                     </div>
@@ -1270,6 +1333,27 @@ export default function PlacementDocumentCenterPage() {
                 onChange={(e) => setEditFields({ ...editFields, contract_duration: e.target.value })}
                 placeholder="e.g. 2 Years"
                 className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Salary Amount</label>
+              <Input
+                type="number"
+                value={editFields.contract_salary_amount}
+                onChange={(e) => setEditFields({ ...editFields, contract_salary_amount: e.target.value })}
+                placeholder="e.g. 1500"
+                className="h-8 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">Salary Currency</label>
+              <Input
+                value={editFields.contract_salary_currency}
+                onChange={(e) => setEditFields({ ...editFields, contract_salary_currency: e.target.value.toUpperCase() })}
+                placeholder={isKuwait ? "KWD" : "SAR"}
+                className="h-8 text-xs font-mono"
               />
             </div>
 
