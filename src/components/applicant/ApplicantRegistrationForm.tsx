@@ -199,6 +199,8 @@ export function ApplicantRegistrationForm({
   // Active top media tab
   const [activeMediaTab, setActiveMediaTab] = React.useState<MediaTabType>("photo");
   const [isUploadingMedia, setIsUploadingMedia] = React.useState(false);
+  // The bucket is private, so a just-uploaded video previews from the browser's own copy.
+  const [videoPreviewFile, setVideoPreviewFile] = React.useState<File | null>(null);
 
   // Passport Scanner & MRZ dialog states
   const [isScanningOCR, setIsScanningOCR] = React.useState(false);
@@ -1106,6 +1108,7 @@ export function ApplicantRegistrationForm({
           setValue("video_url", playUrl, { shouldDirty: true });
           setValue("intro_video" as any, playUrl, { shouldDirty: true });
           setValue("video" as any, playUrl, { shouldDirty: true });
+          setVideoPreviewFile(file);
           toast.success("Candidate video uploaded successfully!");
           return;
         } catch (videoUploadErr) {
@@ -1122,6 +1125,7 @@ export function ApplicantRegistrationForm({
           setValue("video_url", playUrl, { shouldDirty: true });
           setValue("intro_video" as any, playUrl, { shouldDirty: true });
           setValue("video" as any, playUrl, { shouldDirty: true });
+          setVideoPreviewFile(file);
           toast.success("Candidate video staged successfully! Will be attached upon saving.");
           return;
         } catch (stagedErr) {
@@ -1130,6 +1134,7 @@ export function ApplicantRegistrationForm({
       }
 
       // If direct/staged protocol failed, upload directly via uploadFileV2
+      setVideoPreviewFile(null);
       const res = await uploadFileV2(file, false, "Applicant", activeTargetId || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
@@ -1495,7 +1500,7 @@ export function ApplicantRegistrationForm({
       case "passport":
         return passportValue;
       case "video":
-        return videoValue;
+        return videoPreviewFile || videoValue;
       default:
         return null;
     }
@@ -2005,6 +2010,7 @@ export function ApplicantRegistrationForm({
               } else if (activeMediaTab === "passport") {
                 setValue("passport_scan", "");
               } else if (activeMediaTab === "video") {
+                setVideoPreviewFile(null);
                 setValue("video_url", "", { shouldDirty: true });
                 setValue("intro_video" as any, "", { shouldDirty: true });
                 setValue("video" as any, "", { shouldDirty: true });

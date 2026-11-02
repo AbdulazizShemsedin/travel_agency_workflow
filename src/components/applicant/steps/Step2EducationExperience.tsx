@@ -56,6 +56,8 @@ export function Step2EducationExperience({
   });
 
   const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
+  // The bucket is private, so a just-uploaded video previews from the browser's own copy.
+  const [videoPreviewFile, setVideoPreviewFile] = React.useState<File | null>(null);
   const videoUrl = watch("video_url" as any) || watch("intro_video" as any) || watch("video" as any);
 
   const handleVideoFileSelect = async (file: File) => {
@@ -87,6 +89,7 @@ export function Step2EducationExperience({
           setValue("video_url" as any, playUrl, { shouldDirty: true });
           setValue("intro_video" as any, playUrl, { shouldDirty: true });
           setValue("video" as any, playUrl, { shouldDirty: true });
+          setVideoPreviewFile(file);
           toast.success("Candidate video uploaded successfully!");
           return;
         } catch (directErr) {
@@ -103,6 +106,7 @@ export function Step2EducationExperience({
           setValue("video_url" as any, playUrl, { shouldDirty: true });
           setValue("intro_video" as any, playUrl, { shouldDirty: true });
           setValue("video" as any, playUrl, { shouldDirty: true });
+          setVideoPreviewFile(file);
           toast.success("Candidate video staged successfully! Will be attached upon saving.");
           return;
         } catch (stagedErr) {
@@ -110,6 +114,7 @@ export function Step2EducationExperience({
         }
       }
 
+      setVideoPreviewFile(null);
       const res = await uploadFileV2(file, false, "Applicant", activeApplicantName || undefined);
       const url = (res as any)?.message?.file_url || (res as any)?.file_url;
       if (!url) throw new Error("Upload succeeded but no file URL returned.");
@@ -600,11 +605,12 @@ export function Step2EducationExperience({
                 <PremiumDropzone
                   id="candidate-video-dropzone"
                   variant="video"
-                  value={videoUrl}
+                  value={videoPreviewFile || videoUrl}
                   isLoading={isUploadingVideo}
                   loadingText="Uploading candidate video..."
                   onFileSelect={handleVideoFileSelect}
                   onRemove={() => {
+                    setVideoPreviewFile(null);
                     setValue("video_url" as any, "", { shouldDirty: true });
                     setValue("intro_video" as any, "", { shouldDirty: true });
                     setValue("video" as any, "", { shouldDirty: true });
