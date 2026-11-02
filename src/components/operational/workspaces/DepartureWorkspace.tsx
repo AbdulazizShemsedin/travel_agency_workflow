@@ -109,7 +109,6 @@ export function DepartureWorkspace({
   const [modalFlightDate, setModalFlightDate] = React.useState("");
   const [modalFlightTime, setModalFlightTime] = React.useState("");
   const [modalTicketCost, setModalTicketCost] = React.useState<number | "">("");
-  const [modalTicketCurrency, setModalTicketCurrency] = React.useState("USD");
   const [modalTicketDetails, setModalTicketDetails] = React.useState("");
   const [modalEmployee, setModalEmployee] = React.useState("");
 
@@ -158,7 +157,6 @@ export function DepartureWorkspace({
     setModalFlightDate(tkt?.flight_date || "");
     setModalFlightTime((tkt as any)?.flight_time || (dep as any)?.flight_time || "");
     setModalTicketCost((tkt as any)?.ticket_cost || "");
-    setModalTicketCurrency((tkt as any)?.currency || "USD");
     setModalTicketDetails((tkt as any)?.ticket_details || "");
     setModalEmployee((tkt as any)?.employee || (dep as any)?.employee || "");
 
@@ -254,9 +252,8 @@ export function DepartureWorkspace({
         (row.ticketNumber && row.ticketNumber !== "—"
           ? row.ticketNumber
           : (row.ticket as any)?.ticket_number) || "TKT-PENDING";
-      const fTime = row.flightTime || (row.ticket as any)?.flight_time || "";
-      const combined = fTime.trim() ? `${flightDate.trim()} ${fTime.trim()}` : flightDate.trim();
-      await recordTicketDetailsV2(placementName, tktNo, combined);
+      // The time is its own field; left out, the backend keeps it as it is.
+      await recordTicketDetailsV2(placementName, tktNo, flightDate.trim());
       toast.success("Flight date saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["placements"] });
@@ -282,8 +279,8 @@ export function DepartureWorkspace({
         row.flightDate ||
         (row.ticket as any)?.flight_date ||
         new Date().toISOString().split("T")[0];
-      const combined = flightTime.trim() ? `${fDate.trim()} ${flightTime.trim()}` : fDate.trim();
-      await recordTicketDetailsV2(placementName, tktNo, combined);
+      // Sent empty, the backend takes the time off.
+      await recordTicketDetailsV2(placementName, tktNo, fDate.trim(), undefined, flightTime.trim());
       toast.success("Flight time saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["placements"] });
@@ -377,17 +374,12 @@ export function DepartureWorkspace({
 
       // 1. Record Ticket Details (no airline!)
       if (modalTicketNumber.trim()) {
-        const fullFlightDate = modalFlightDate
-          ? modalFlightTime
-            ? `${modalFlightDate} ${modalFlightTime}`
-            : modalFlightDate
-          : new Date().toISOString().split("T")[0];
-
         await recordTicketDetailsV2(
           placementName,
           modalTicketNumber.trim(),
-          fullFlightDate,
-          typeof modalTicketCost === "number" ? modalTicketCost : undefined
+          modalFlightDate || new Date().toISOString().split("T")[0],
+          typeof modalTicketCost === "number" ? modalTicketCost : undefined,
+          modalFlightTime.trim()
         );
 
         if (modalTicketStatus === "Booked") {
@@ -420,7 +412,10 @@ export function DepartureWorkspace({
           modalRescheduleDate,
           modalRescheduleCause,
           typeof modalRescheduleCost === "number" ? modalRescheduleCost : undefined,
-          modalTicketCurrency
+          undefined,
+          undefined,
+          // A reschedule replaces the flight's time; keep what the time box shows.
+          modalFlightTime.trim()
         );
       }
 
@@ -990,11 +985,11 @@ export function DepartureWorkspace({
 
                 <div>
                   <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
-                    Ticket Cost (USD)
+                    Ticket Cost (ETB)
                   </Label>
                   <Input
                     type="number"
-                    placeholder="e.g. 450"
+                    placeholder="e.g. 45000"
                     value={modalTicketCost}
                     disabled={!canEdit || modalSaveMutation.isPending}
                     onChange={(e) =>
@@ -1161,11 +1156,11 @@ export function DepartureWorkspace({
                     </div>
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
-                        Reschedule Penalty Cost (USD)
+                        Reschedule Penalty Cost (ETB)
                       </Label>
                       <Input
                         type="number"
-                        placeholder="e.g. 50"
+                        placeholder="e.g. 5000"
                         value={modalRescheduleCost}
                         disabled={!canEdit || modalSaveMutation.isPending}
                         onChange={(e) => {
