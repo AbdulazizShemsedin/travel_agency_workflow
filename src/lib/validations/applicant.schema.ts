@@ -65,15 +65,13 @@ export const CLIENT_COC_STATUS_OPTIONS = [
 export type ClientCocStatus = (typeof CLIENT_COC_STATUS_OPTIONS)[number];
 
 /**
- * Backend-accepted COC Status options per Frappe API contract:
- * - Issued
- * - Not Started
- * - Pending
+ * Backend-accepted COC Status options (Applicant.coc_status): the backend now stores the same
+ * three labels the office sees. Old values (Issued / Not Started / Pending) are refused.
  */
 export const BACKEND_COC_STATUS_OPTIONS = [
-  "Issued",
-  "Not Started",
-  "Pending",
+  "Have COC",
+  "No COC",
+  "On process",
 ] as const;
 
 export type BackendCocStatus = (typeof BACKEND_COC_STATUS_OPTIONS)[number];
@@ -134,14 +132,14 @@ export function toBackendCocStatus(status?: string | null): BackendCocStatus | "
     case "Issued":
     case "Passed":
     case "Certified":
-      return "Issued";
+      return "Have COC";
     case "No COC":
     case "Not Started":
-      return "Not Started";
+      return "No COC";
     case "On process":
     case "Pending":
     case "In Training":
-      return "Pending";
+      return "On process";
     default:
       return trimmed as any;
   }

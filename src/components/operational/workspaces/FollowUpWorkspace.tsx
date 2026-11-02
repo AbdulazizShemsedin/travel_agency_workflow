@@ -1270,7 +1270,7 @@ export function FollowUpWorkspace({
           }
         } else {
           const backendCoc = toBackendCocStatus(formCocStatus);
-          if (!backendCoc || backendCoc === "Not Started") {
+          if (!backendCoc || backendCoc === "No COC") {
             errors.cocStatus = "COC status is required for Saudi Arabia corridor.";
           }
         }

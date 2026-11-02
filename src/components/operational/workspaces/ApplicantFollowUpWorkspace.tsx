@@ -3542,7 +3542,7 @@ export function ApplicantFollowUpWorkspace({
                   }
                 } else {
                   const backendCoc = toBackendCocStatus(currentRow.cocStatus);
-                  if (!backendCoc || backendCoc === "Not Started" || backendCoc === "Pending") {
+                  if (!backendCoc || backendCoc === "No COC" || backendCoc === "On process") {
                     toast.error("Saudi LMIS requires a valid COC Status (Have COC) before finalizing.");
                     return;
                   }
