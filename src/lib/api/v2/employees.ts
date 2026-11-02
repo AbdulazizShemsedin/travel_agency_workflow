@@ -81,7 +81,7 @@ function normalizeAndDeduplicateRoles(rawRoles: unknown[]): string[] {
 
 export async function listEmployeeRosterV2(): Promise<V2EmployeeRecord[]> {
   const res = await requestV2<{ message?: any[] } | any[]>(
-    "/api/method/agency_tracking.employee_api.list_employee_roster",
+    "/api/method/agency_tracking.api.employee.read?op=list_employee_roster",
     { method: "POST" }
   );
   const list = Array.isArray(res) ? res : Array.isArray((res as any)?.message) ? (res as any).message : [];
@@ -319,7 +319,7 @@ export interface EmployeeApiRecord {
  */
 export async function listEmployeesApiV2(): Promise<EmployeeApiRecord[]> {
   const result = await requestV2<EmployeeApiRecord[] | { employees?: EmployeeApiRecord[] }>(
-    "/api/method/agency_tracking.employee_api.list_employees",
+    "/api/method/agency_tracking.api.employee.read?op=list_employees",
     { method: "POST" }
   );
   if (Array.isArray(result)) return result;
@@ -340,7 +340,7 @@ export async function createEmployeeApiV2(payload: {
   send_welcome_email?: boolean;
 }): Promise<EmployeeApiRecord> {
   const result = await requestV2<EmployeeApiRecord>(
-    "/api/method/agency_tracking.employee_api.create_employee",
+    "/api/method/agency_tracking.api.employee.write?op=create_employee",
     {
       method: "POST",
       body: {
@@ -369,7 +369,7 @@ export async function updateEmployeeRolesApiV2(
 ): Promise<string[]> {
   const normalizedRoles = normalizeAndDeduplicateRoles(roles);
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.employee_api.update_employee_roles",
+    "/api/method/agency_tracking.api.employee.write?op=update_employee_roles",
     {
       method: "POST",
       body: { email, roles: normalizedRoles },
@@ -406,7 +406,7 @@ export async function resetEmployeePasswordApiV2(
     // If native set_value failed, attempt custom RPC endpoint if whitelisted on server
     try {
       await requestV2(
-        "/api/method/agency_tracking.employee_api.reset_employee_password",
+        "/api/method/agency_tracking.api.employee.write?op=reset_employee_password",
         {
           method: "POST",
           body: { email: normalizedEmail, new_password: newPassword.trim() },
@@ -426,7 +426,7 @@ export async function toggleEmployeeStatusApiV2(
   enabled: boolean
 ): Promise<{ status: string; enabled: boolean }> {
   return requestV2(
-    "/api/method/agency_tracking.employee_api.toggle_employee_status",
+    "/api/method/agency_tracking.api.employee.write?op=toggle_employee_status",
     {
       method: "POST",
       body: { email, enabled },
@@ -448,7 +448,7 @@ export interface DeleteEmployeeResult {
  */
 export async function deleteEmployeeApiV2(email: string): Promise<DeleteEmployeeResult> {
   const res = await requestV2<DeleteEmployeeResult>(
-    "/api/method/agency_tracking.employee_api.delete_employee",
+    "/api/method/agency_tracking.api.employee.write?op=delete_employee",
     { method: "POST", body: { email } }
   );
   return (res as any)?.message || res;

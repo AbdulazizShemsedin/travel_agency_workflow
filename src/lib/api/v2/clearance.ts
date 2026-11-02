@@ -2,14 +2,14 @@
  * V2 Clearance Lifecycle API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.clearance_api.list_my_clearance_steps
- * - POST /api/method/agency_tracking.clearance_api.start_clearance_step
- * - POST /api/method/agency_tracking.clearance_api.complete_clearance_step
- * - POST /api/method/agency_tracking.clearance_api.reassign_clearance_step
- * - POST /api/method/agency_tracking.clearance_api.submit_embassy_step
- * - POST /api/method/agency_tracking.clearance_api.stamp_embassy_step
- * - POST /api/method/agency_tracking.clearance_api.reject_embassy_step
- * - POST /api/method/agency_tracking.chat_engine.get_placement_officers
+ * - POST /api/method/agency_tracking.api.clearance.read?op=list_my_clearance_steps
+ * - POST /api/method/agency_tracking.api.clearance.write?op=start_clearance_step
+ * - POST /api/method/agency_tracking.api.clearance.write?op=complete_clearance_step
+ * - POST /api/method/agency_tracking.api.clearance.write?op=reassign_clearance_step
+ * - POST /api/method/agency_tracking.api.clearance.write?op=submit_embassy_step
+ * - POST /api/method/agency_tracking.api.clearance.write?op=stamp_embassy_step
+ * - POST /api/method/agency_tracking.api.clearance.write?op=reject_embassy_step
+ * - POST /api/method/agency_tracking.api.placement.read?op=get_placement_officers
  */
 
 import { requestV2 } from "./client";
@@ -69,7 +69,7 @@ export type V2ClearanceStep = V2ClearanceStepItem;
 export async function listMyClearanceStepsV2(placement?: string): Promise<V2ClearanceStepItem[]> {
   try {
     const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
-      "/api/method/agency_tracking.clearance_api.list_my_clearance_steps",
+      "/api/method/agency_tracking.api.clearance.read?op=list_my_clearance_steps",
       { method: "POST", body: placement ? { placement } : undefined }
     );
 
@@ -100,7 +100,7 @@ export async function startClearanceStepV2(
   clearanceStepName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.start_clearance_step",
+    "/api/method/agency_tracking.api.clearance.write?op=start_clearance_step",
     {
       method: "POST",
       body: { clearance_step_name: clearanceStepName },
@@ -119,7 +119,7 @@ export async function completeClearanceStepV2(
   dateCompleted?: string
 ): Promise<{ message?: string | V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.complete_clearance_step",
+    "/api/method/agency_tracking.api.clearance.write?op=complete_clearance_step",
     {
       method: "POST",
       body: {
@@ -143,7 +143,7 @@ export async function reopenClearanceStepV2(
   targetStatus: "Pending" | "In Progress" | "Submitted" = "In Progress"
 ): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.reopen_clearance_step",
+    "/api/method/agency_tracking.api.clearance.write?op=reopen_clearance_step",
     {
       method: "POST",
       body: {
@@ -163,7 +163,7 @@ export async function reassignClearanceStepV2(
   newOfficerEmail: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.reassign_clearance_step",
+    "/api/method/agency_tracking.api.clearance.write?op=reassign_clearance_step",
     {
       method: "POST",
       body: {
@@ -185,7 +185,7 @@ export async function submitEmbassyStepV2(
   dateSubmitted?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.submit_embassy_step",
+    "/api/method/agency_tracking.api.clearance.write?op=submit_embassy_step",
     {
       method: "POST",
       body: {
@@ -211,7 +211,7 @@ export async function recordWakalaPaymentV2(
   referenceNo?: string
 ): Promise<{ message?: V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.record_wakala_payment",
+    "/api/method/agency_tracking.api.clearance.write?op=record_wakala_payment",
     {
       method: "POST",
       body: {
@@ -236,7 +236,7 @@ export async function stampEmbassyStepV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.stamp_embassy_step",
+    "/api/method/agency_tracking.api.clearance.write?op=stamp_embassy_step",
     {
       method: "POST",
       body: {
@@ -256,7 +256,7 @@ export async function rejectEmbassyStepV2(
   rejectionRemark: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.reject_embassy_step",
+    "/api/method/agency_tracking.api.clearance.write?op=reject_embassy_step",
     {
       method: "POST",
       body: {
@@ -298,7 +298,7 @@ export async function getPlacementOfficersV2(
   placementName: string
 ): Promise<V2PlacementOfficerItem[]> {
   const result = await requestV2<V2PlacementOfficerItem[] | { officers?: V2PlacementOfficerItem[] }>(
-    "/api/method/agency_tracking.chat_engine.get_placement_officers",
+    "/api/method/agency_tracking.api.placement.read?op=get_placement_officers",
     {
       method: "POST",
       body: { placement_name: placementName },
@@ -320,7 +320,7 @@ export async function assignClearanceStepV2(
   user: string
 ): Promise<{ status?: string; clearance_step?: string; assigned_to?: string; message?: string }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.assign_clearance_step",
+    "/api/method/agency_tracking.api.clearance.write?op=assign_clearance_step",
     {
       method: "POST",
       body: {
@@ -337,7 +337,7 @@ export async function assignClearanceStepV2(
  */
 export async function listAssignedStepsV2(placement?: string): Promise<V2ClearanceStepItem[]> {
   const result = await requestV2<V2ClearanceStepItem[] | { steps?: V2ClearanceStepItem[] }>(
-    "/api/method/agency_tracking.clearance_api.list_assigned_steps",
+    "/api/method/agency_tracking.api.clearance.read?op=list_assigned_steps",
     { method: "POST", body: placement ? { placement } : undefined }
   );
 
@@ -362,7 +362,7 @@ export async function renderInjazPdfV2(
       : target;
 
   return requestV2<Blob>(
-    "/api/method/agency_tracking.clearance_api.render_injaz_pdf",
+    "/api/method/agency_tracking.api.clearance.read?op=render_injaz_pdf",
     {
       method: "POST",
       body,
@@ -388,7 +388,7 @@ export async function setTaeshirAppointmentV2(
     : null;
 
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.set_taeshir_appointment",
+    "/api/method/agency_tracking.api.clearance.write?op=set_taeshir_appointment",
     {
       method: "POST",
       body: {
@@ -410,7 +410,7 @@ export async function rescheduleTaeshirAppointmentV2(
   cause: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.reschedule_taeshir_appointment",
+    "/api/method/agency_tracking.api.clearance.write?op=reschedule_taeshir_appointment",
     {
       method: "POST",
       body: {
@@ -445,7 +445,7 @@ export async function recordInjazPaymentV2(
   }
 
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.record_injaz_payment",
+    "/api/method/agency_tracking.api.clearance.write?op=record_injaz_payment",
     {
       method: "POST",
       body: {
@@ -472,7 +472,7 @@ export async function forfeitInjazAndRestartV2(
   newInjazApplicationId?: string
 ): Promise<V2ClearanceStepItem> {
   const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
-    "/api/method/agency_tracking.clearance_api.forfeit_injaz_and_restart",
+    "/api/method/agency_tracking.api.clearance.write?op=forfeit_injaz_and_restart",
     {
       method: "POST",
       body: {
@@ -495,7 +495,7 @@ export async function getInjazPaperV2(
   identifier: string
 ): Promise<{ message?: any; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.get_injaz_paper",
+    "/api/method/agency_tracking.api.clearance.read?op=get_injaz_paper",
     {
       method: "POST",
       body: {
@@ -522,7 +522,7 @@ export async function recordPoliceAsharaV2(
   }
 ): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.record_police_ashara",
+    "/api/method/agency_tracking.api.clearance.write?op=record_police_ashara",
     {
       method: "POST",
       body: {
@@ -555,7 +555,7 @@ export async function recordOtherPaymentV2(
   }
 ): Promise<{ message: V2ClearanceStepItem; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.record_other_payment",
+    "/api/method/agency_tracking.api.clearance.write?op=record_other_payment",
     {
       method: "POST",
       body: {
@@ -601,7 +601,7 @@ export async function getClearanceStepDocV2(
 ): Promise<V2ClearanceStepItem | null> {
   try {
     const res = await requestV2<{ message?: V2ClearanceStepItem } | V2ClearanceStepItem>(
-      "/api/method/agency_tracking.clearance_api.get_clearance_step",
+      "/api/method/agency_tracking.api.clearance.read?op=get_clearance_step",
       {
         method: "POST",
         body: {
@@ -629,7 +629,7 @@ export async function listMyTodosV2(
   status: string = "Open"
 ): Promise<V2UserTodoItem[]> {
   const res = await requestV2<{ message: V2UserTodoItem[] }>(
-    "/api/method/agency_tracking.clearance_api.list_my_todos",
+    "/api/method/agency_tracking.api.clearance.read?op=list_my_todos",
     {
       method: "POST",
       body: status !== undefined ? { status } : {},
@@ -712,7 +712,7 @@ export async function setLmisStatusV2(
   if (takenByPhone !== undefined) body.taken_by_phone = takenByPhone;
 
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.set_lmis_status",
+    "/api/method/agency_tracking.api.clearance.write?op=set_lmis_status",
     {
       method: "POST",
       body,
@@ -729,7 +729,7 @@ export async function setTaeshirStatusV2(
   taeshirStatus: "INFORMED" | "RECEIVED" | "READY TO EMBASSY" | string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.set_taeshir_status",
+    "/api/method/agency_tracking.api.clearance.write?op=set_taeshir_status",
     {
       method: "POST",
       body: {
@@ -749,7 +749,7 @@ export async function setVisaIssueDateV2(
   visaIssueDate: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.set_visa_issue_date",
+    "/api/method/agency_tracking.api.clearance.write?op=set_visa_issue_date",
     {
       method: "POST",
       body: {
@@ -769,7 +769,7 @@ export async function undoForfeitInjazV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.undo_forfeit_injaz",
+    "/api/method/agency_tracking.api.clearance.write?op=undo_forfeit_injaz",
     {
       method: "POST",
       body: {
@@ -790,7 +790,7 @@ export async function setStepRemarksV2(
   remarks: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.clearance_api.set_step_remarks",
+    "/api/method/agency_tracking.api.clearance.write?op=set_step_remarks",
     {
       method: "POST",
       body: {

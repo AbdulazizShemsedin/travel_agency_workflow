@@ -2,9 +2,9 @@
  * V2 Foreign Agency Portal API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.portal_api.list_portal_candidates
- * - POST /api/method/agency_tracking.portal_api.select_candidate
- * - POST /api/method/agency_tracking.portal_api.list_my_wakala_requests
+ * - POST /api/method/agency_tracking.api.portal.read?op=list_portal_candidates
+ * - POST /api/method/agency_tracking.api.portal.write?op=select_candidate
+ * - POST /api/method/agency_tracking.api.portal.read?op=list_my_wakala_requests
  */
 
 import { requestV2 } from "./client";
@@ -87,7 +87,7 @@ export async function listPortalCandidatesV2(
   if (withTotal) body.with_total = withTotal;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.list_portal_candidates",
+    "/api/method/agency_tracking.api.portal.read?op=list_portal_candidates",
     { method: "POST", body }
   );
 
@@ -157,7 +157,7 @@ export async function listPortalCandidatesV2(
  */
 export async function getCandidateDetailV2(applicantName: string): Promise<any> {
   const result = await requestV2<{ message?: any } | any>(
-    "/api/method/agency_tracking.portal_api.get_candidate_detail",
+    "/api/method/agency_tracking.api.portal.read?op=get_candidate_detail",
     {
       method: "POST",
       body: { applicant_name: applicantName },
@@ -192,7 +192,7 @@ export async function requestCandidateSelectionV2(
     body.free_replacement_for_complaint = replacementFor.trim();
   }
   return requestV2<V2SelectCandidateResponse>(
-    "/api/method/agency_tracking.portal_api.select_candidate",
+    "/api/method/agency_tracking.api.portal.write?op=select_candidate",
     {
       method: "POST",
       body,
@@ -204,7 +204,7 @@ export async function requestCandidateSelectionV2(
  * Directly selects a candidate for an agency by internal staff (Manager or Admin only).
  * Per backend contract 0.-23, passing `contractor_name` from an authorized staff account
  * bypasses the "Requested" review step and transitions the candidate directly to "Selected".
- * Endpoint: POST /api/method/agency_tracking.portal_api.select_candidate
+ * Endpoint: POST /api/method/agency_tracking.api.portal.write?op=select_candidate
  */
 export async function selectCandidateDirectlyV2(
   applicantName: string,
@@ -219,7 +219,7 @@ export async function selectCandidateDirectlyV2(
     contractor: contractorName.trim(),
   };
   return requestV2<V2SelectCandidateResponse>(
-    "/api/method/agency_tracking.portal_api.select_candidate",
+    "/api/method/agency_tracking.api.portal.write?op=select_candidate",
     {
       method: "POST",
       body,
@@ -257,7 +257,7 @@ export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V
     body.contractor = contractorName;
   }
   const result = await requestV2<V2WakalaRequestItem[] | { requests?: V2WakalaRequestItem[] }>(
-    "/api/method/agency_tracking.portal_api.list_my_wakala_requests",
+    "/api/method/agency_tracking.api.portal.read?op=list_my_wakala_requests",
     {
       method: "POST",
       body: Object.keys(body).length > 0 ? body : undefined,
@@ -281,7 +281,7 @@ export function getCandidatePhotoUrl(
   kind: "photograph" | "photo_full_body" = "photograph"
 ): string {
   if (!applicantName) return "";
-  return `/api/method/agency_tracking.portal_api.get_candidate_photo?applicant_name=${encodeURIComponent(
+  return `/api/method/agency_tracking.api.portal.read?op=get_candidate_photo&applicant_name=${encodeURIComponent(
     applicantName
   )}&kind=${kind}`;
 }
@@ -313,11 +313,11 @@ export interface V2MyComplaintItem {
 
 /**
  * Lists commissions owed to the current agency that are not yet on an invoice.
- * POST /api/method/agency_tracking.portal_api.get_my_owed_commissions
+ * POST /api/method/agency_tracking.api.portal.read?op=get_my_owed_commissions
  */
 export async function getMyOwedCommissionsV2(): Promise<V2MyOwedCommissionItem[]> {
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.get_my_owed_commissions",
+    "/api/method/agency_tracking.api.portal.read?op=get_my_owed_commissions",
     { method: "POST" }
   );
   if (Array.isArray(result)) return result;
@@ -328,7 +328,7 @@ export async function getMyOwedCommissionsV2(): Promise<V2MyOwedCommissionItem[]
 
 /**
  * Lists complaints filed by or associated with the current agency.
- * POST /api/method/agency_tracking.portal_api.list_my_complaints
+ * POST /api/method/agency_tracking.api.portal.read?op=list_my_complaints
  */
 export async function listMyComplaintsV2(status?: string, contractorName?: string): Promise<V2MyComplaintItem[]> {
   const body: Record<string, any> = {};
@@ -338,7 +338,7 @@ export async function listMyComplaintsV2(status?: string, contractorName?: strin
     body.contractor = contractorName;
   }
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.list_my_complaints",
+    "/api/method/agency_tracking.api.portal.read?op=list_my_complaints",
     { method: "POST", body: Object.keys(body).length > 0 ? body : undefined }
   );
   if (Array.isArray(result)) return result;
@@ -349,7 +349,7 @@ export async function listMyComplaintsV2(status?: string, contractorName?: strin
 
 /**
  * Marks Wakala paid on an Embassy clearance step from the agency portal or staff preview.
- * POST /api/method/agency_tracking.portal_api.mark_wakala_paid
+ * POST /api/method/agency_tracking.api.portal.write?op=mark_wakala_paid
  */
 export async function markWakalaPaidV2(
   clearanceStepName: string,
@@ -363,7 +363,7 @@ export async function markWakalaPaidV2(
   if (paidDate) body.paid_date = paidDate;
 
   return await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.mark_wakala_paid",
+    "/api/method/agency_tracking.api.portal.write?op=mark_wakala_paid",
     {
       method: "POST",
       body,
@@ -394,7 +394,7 @@ export interface V2ReplacementOwedItem {
 /**
  * Lists candidates who returned and are owed replacements without new commission.
  * When removed=1 is passed, returns removed/waived replacement cases.
- * POST /api/method/agency_tracking.portal_api.list_replacements_owed
+ * POST /api/method/agency_tracking.api.portal.read?op=list_replacements_owed
  */
 export async function listReplacementsOwedV2(
   contractorName?: string,
@@ -404,7 +404,7 @@ export async function listReplacementsOwedV2(
   if (contractorName) body.contractor_name = contractorName;
   if (removed !== undefined) body.removed = removed;
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.list_replacements_owed",
+    "/api/method/agency_tracking.api.portal.read?op=list_replacements_owed",
     {
       method: "POST",
       body: Object.keys(body).length > 0 ? body : undefined,
@@ -429,7 +429,7 @@ export interface V2MyMuayenaWorkerItem {
 
 /**
  * Lists Muayena workers allocated to the foreign agency upon registration, waiting for contract creation.
- * POST /api/method/agency_tracking.portal_api.list_my_muayena_workers
+ * POST /api/method/agency_tracking.api.portal.read?op=list_my_muayena_workers
  */
 export async function listMyMuayenaWorkersV2(
   contractorName?: string
@@ -437,7 +437,7 @@ export async function listMyMuayenaWorkersV2(
   const body: Record<string, any> = {};
   if (contractorName) body.contractor_name = contractorName;
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.list_my_muayena_workers",
+    "/api/method/agency_tracking.api.portal.read?op=list_my_muayena_workers",
     {
       method: "POST",
       body: Object.keys(body).length > 0 ? body : undefined,

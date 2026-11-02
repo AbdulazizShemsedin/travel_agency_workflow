@@ -2,17 +2,17 @@
  * V2 Applicant Lifecycle API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.applicant_api.create_applicant
- * - POST /api/method/agency_tracking.applicant_api.get_applicant
- * - POST /api/method/agency_tracking.applicant_api.list_applicants
- * - POST /api/method/agency_tracking.applicant_api.register_applicant
- * - POST /api/method/agency_tracking.applicant_api.update_applicant
- * - POST /api/method/agency_tracking.applicant_api.update_applicant_for_lmis
- * - POST /api/method/agency_tracking.applicant_api.cancel_applicant
- * - POST /api/method/agency_tracking.applicant_api.restart_applicant
- * - POST /api/method/agency_tracking.applicant_api.set_country_ban
- * - POST /api/method/agency_tracking.applicant_api.list_country_bans
- * - POST /api/method/agency_tracking.applicant_api.remove_country_ban
+ * - POST /api/method/agency_tracking.api.applicant.write?op=create_applicant
+ * - POST /api/method/agency_tracking.api.applicant.read?op=get_applicant
+ * - POST /api/method/agency_tracking.api.applicant.read?op=list_applicants
+ * - POST /api/method/agency_tracking.api.applicant.write?op=register_applicant
+ * - POST /api/method/agency_tracking.api.applicant.write?op=update_applicant
+ * - POST /api/method/agency_tracking.api.applicant.write?op=update_applicant_for_lmis
+ * - POST /api/method/agency_tracking.api.applicant.write?op=cancel_applicant
+ * - POST /api/method/agency_tracking.api.applicant.write?op=restart_applicant
+ * - POST /api/method/agency_tracking.api.country_ban.write?op=set_country_ban
+ * - POST /api/method/agency_tracking.api.country_ban.read?op=list_country_bans
+ * - POST /api/method/agency_tracking.api.country_ban.write?op=remove_country_ban
  * - POST /api/method/agency_tracking.applicant_api.log_applicant_fee
  */
 
@@ -709,7 +709,7 @@ export async function createApplicantV2(
     cleanPayload.coc_status = toBackendCocStatus(cleanPayload.coc_status);
   }
   const res = await requestV2<{ name?: string; message?: string; [key: string]: any }>(
-    "/api/method/agency_tracking.applicant_api.create_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=create_applicant",
     {
       method: "POST",
       body: cleanPayload,
@@ -732,7 +732,7 @@ export async function getApplicantV2(
   applicantName: string
 ): Promise<V2ApplicantDetails> {
   const result = await requestV2<V2ApplicantDetails>(
-    "/api/method/agency_tracking.applicant_api.get_applicant",
+    "/api/method/agency_tracking.api.applicant.read?op=get_applicant",
     {
       method: "POST",
       body: { applicant_name: applicantName },
@@ -847,7 +847,7 @@ export async function listApplicantsV2(
 
   const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.applicant_api.list_applicants",
+    "/api/method/agency_tracking.api.applicant.read?op=list_applicants",
     {
       method: "POST",
       body: {
@@ -908,7 +908,7 @@ export async function registerApplicantV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.register_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=register_applicant",
     {
       method: "POST",
       body: {
@@ -935,7 +935,7 @@ export async function updateApplicantV2(
     cleanFields.coc_status = toBackendCocStatus(cleanFields.coc_status);
   }
   const res = await requestV2<{ message?: string; [key: string]: any }>(
-    "/api/method/agency_tracking.applicant_api.update_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=update_applicant",
     {
       method: "POST",
       body: {
@@ -996,7 +996,7 @@ export async function updateApplicantForCvV2(
     }
   }
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.update_applicant_for_cv",
+    "/api/method/agency_tracking.api.applicant.write?op=update_applicant_for_cv",
     {
       method: "POST",
       body,
@@ -1037,7 +1037,7 @@ export async function updateApplicantForLmisV2(
   delete (cleanPayload as any).emergency_phone;
 
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.update_applicant_for_lmis",
+    "/api/method/agency_tracking.api.applicant.write?op=update_applicant_for_lmis",
     {
       method: "POST",
       body: cleanPayload,
@@ -1054,7 +1054,7 @@ export async function cancelApplicantV2(
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.cancel_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=cancel_applicant",
     {
       method: "POST",
       body: {
@@ -1217,7 +1217,7 @@ export async function restartApplicantV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.restart_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=restart_applicant",
     {
       method: "POST",
       body: {
@@ -1239,7 +1239,7 @@ export async function setCountryBanV2(
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.set_country_ban",
+    "/api/method/agency_tracking.api.country_ban.write?op=set_country_ban",
     {
       method: "POST",
       body: {
@@ -1260,7 +1260,7 @@ export async function listCountryBansV2(
   activeOnly: number = 1
 ): Promise<V2CountryBanRecord[]> {
   const result = await requestV2<V2CountryBanRecord[] | { bans?: V2CountryBanRecord[] }>(
-    "/api/method/agency_tracking.applicant_api.list_country_bans",
+    "/api/method/agency_tracking.api.country_ban.read?op=list_country_bans",
     {
       method: "POST",
       body: {
@@ -1284,7 +1284,7 @@ export async function removeCountryBanV2(
   liftReason?: string
 ): Promise<{ lifted?: string; status?: string; message?: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.remove_country_ban",
+    "/api/method/agency_tracking.api.country_ban.write?op=remove_country_ban",
     {
       method: "POST",
       body: {
@@ -1324,7 +1324,7 @@ export async function requestCountryBanExceptionV2(
   country?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.request_country_ban_exception",
+    "/api/method/agency_tracking.api.country_ban.write?op=request_country_ban_exception",
     {
       method: "POST",
       body: {
@@ -1350,7 +1350,7 @@ export async function listCountryBanRequestsV2(
   if (applicantName) body.applicant_name = applicantName;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.applicant_api.list_country_ban_requests",
+    "/api/method/agency_tracking.api.country_ban.read?op=list_country_ban_requests",
     {
       method: "POST",
       body,
@@ -1372,7 +1372,7 @@ export async function decideCountryBanRequestV2(
   note?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.decide_country_ban_request",
+    "/api/method/agency_tracking.api.country_ban.write?op=decide_country_ban_request",
     {
       method: "POST",
       body: {
@@ -1394,7 +1394,7 @@ export async function undoCountryBanLiftV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.undo_country_ban_lift",
+    "/api/method/agency_tracking.api.country_ban.write?op=undo_country_ban_lift",
     {
       method: "POST",
       body: {
@@ -1415,7 +1415,7 @@ export async function undoCountryBanDecisionV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.undo_country_ban_decision",
+    "/api/method/agency_tracking.api.country_ban.write?op=undo_country_ban_decision",
     {
       method: "POST",
       body: {
@@ -1535,7 +1535,7 @@ export async function startVideoUploadV2(
     body.applicant_name = applicantName;
   }
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.applicant_api.start_video_upload",
+    "/api/method/agency_tracking.api.applicant.write?op=start_video_upload",
     {
       method: "POST",
       body,
@@ -1556,7 +1556,7 @@ export async function finishVideoUploadV2(
     body.applicant_name = applicantName;
   }
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.applicant_api.finish_video_upload",
+    "/api/method/agency_tracking.api.applicant.write?op=finish_video_upload",
     {
       method: "POST",
       body,
@@ -1571,7 +1571,7 @@ export async function getApplicantMediaUrlV2(
 ): Promise<{ url: string; expires_in?: number; [key: string]: any }> {
   try {
     const res = await requestV2<any>(
-      "/api/method/agency_tracking.applicant_api.get_applicant_media_url",
+      "/api/method/agency_tracking.api.applicant.read?op=get_applicant_media_url",
       {
         method: "POST",
         body: {

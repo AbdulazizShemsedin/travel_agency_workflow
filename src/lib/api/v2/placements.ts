@@ -2,15 +2,15 @@
  * V2 Placement Lifecycle API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.placement_api.create_muayena_placement
- * - POST /api/method/agency_tracking.placement_api.list_placements
- * - POST /api/method/agency_tracking.placement_api.upload_contract
- * - POST /api/method/agency_tracking.placement_api.upload_visa
- * - POST /api/method/agency_tracking.placement_api.record_selected_medical_result
- * - POST /api/method/agency_tracking.placement_api.record_predeparture_medical_result
- * - POST /api/method/agency_tracking.placement_api.advance_placement
- * - POST /api/method/agency_tracking.placement_api.record_ticket_details
- * - POST /api/method/agency_tracking.placement_api.record_reschedule
+ * - POST /api/method/agency_tracking.api.placement.write?op=create_muayena_placement
+ * - POST /api/method/agency_tracking.api.placement.read?op=list_placements
+ * - POST /api/method/agency_tracking.api.placement.write?op=upload_contract
+ * - POST /api/method/agency_tracking.api.placement.write?op=upload_visa
+ * - POST /api/method/agency_tracking.api.placement.write?op=record_selected_medical_result
+ * - POST /api/method/agency_tracking.api.placement.write?op=record_predeparture_medical_result
+ * - POST /api/method/agency_tracking.api.placement.write?op=advance_placement
+ * - POST /api/method/agency_tracking.api.placement.write?op=record_ticket_details
+ * - POST /api/method/agency_tracking.api.placement.write?op=record_reschedule
  */
 
 import { requestV2, ApiV2Error } from "./client";
@@ -74,7 +74,7 @@ export async function createMuayenaPlacementV2(
   fileUrl?: string
 ): Promise<{ name?: string; placement_name?: string; message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.create_muayena_placement",
+    "/api/method/agency_tracking.api.placement.write?op=create_muayena_placement",
     {
       method: "POST",
       body: {
@@ -123,7 +123,7 @@ export async function listPlacementsV2(
 
   const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.placement_api.list_placements",
+    "/api/method/agency_tracking.api.placement.read?op=list_placements",
     {
       method: "POST",
       body: {
@@ -169,7 +169,7 @@ export async function uploadPlacementContractV2(
   contractSignedDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.upload_contract",
+    "/api/method/agency_tracking.api.placement.write?op=upload_contract",
     {
       method: "POST",
       body: {
@@ -201,7 +201,7 @@ export async function uploadPlacementVisaV2(
     });
   }
   return requestV2(
-    "/api/method/agency_tracking.placement_api.upload_visa",
+    "/api/method/agency_tracking.api.placement.write?op=upload_visa",
     {
       method: "POST",
       body: {
@@ -228,7 +228,7 @@ export async function recordSelectedMedicalResultV2(
   expiryDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.record_selected_medical_result",
+    "/api/method/agency_tracking.api.placement.write?op=record_selected_medical_result",
     {
       method: "POST",
       body: {
@@ -251,7 +251,7 @@ export async function recordPredepartureMedicalResultV2(
   examinationDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.record_predeparture_medical_result",
+    "/api/method/agency_tracking.api.placement.write?op=record_predeparture_medical_result",
     {
       method: "POST",
       body: {
@@ -272,7 +272,7 @@ export async function advancePlacementV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.advance_placement",
+    "/api/method/agency_tracking.api.placement.write?op=advance_placement",
     {
       method: "POST",
       body: {
@@ -298,7 +298,7 @@ export async function recordTicketDetailsV2(
   flightTime?: string
 ): Promise<{ message?: string; warning?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.record_ticket_details",
+    "/api/method/agency_tracking.api.placement.write?op=record_ticket_details",
     {
       method: "POST",
       body: {
@@ -329,7 +329,7 @@ export async function recordRescheduleV2(
   flightTime?: string
 ): Promise<{ message?: string; reschedule_transaction?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.record_reschedule",
+    "/api/method/agency_tracking.api.placement.write?op=record_reschedule",
     {
       method: "POST",
       body: {
@@ -363,7 +363,7 @@ export async function updatePlacementForLmisV2(
   }
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.update_placement_for_lmis",
+    "/api/method/agency_tracking.api.placement.write?op=update_placement_for_lmis",
     {
       method: "POST",
       body: {
@@ -386,7 +386,7 @@ export async function recordFlightOutcomeV2(
   reason?: string
 ): Promise<{ message?: string; replacement_owed?: number; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.record_flight_outcome",
+    "/api/method/agency_tracking.api.placement.write?op=record_flight_outcome",
     {
       method: "POST",
       body: {
@@ -408,7 +408,7 @@ export async function undoFlightOutcomeV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.undo_flight_outcome",
+    "/api/method/agency_tracking.api.placement.write?op=undo_flight_outcome",
     {
       method: "POST",
       body: {
@@ -428,7 +428,7 @@ export async function clearPredepartureMedicalResultV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.clear_predeparture_medical_result",
+    "/api/method/agency_tracking.api.placement.write?op=clear_predeparture_medical_result",
     {
       method: "POST",
       body: {
@@ -448,7 +448,7 @@ export async function clearSelectedMedicalResultV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.clear_selected_medical_result",
+    "/api/method/agency_tracking.api.placement.write?op=clear_selected_medical_result",
     {
       method: "POST",
       body: {
@@ -468,7 +468,7 @@ export async function undoRescheduleV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.undo_reschedule",
+    "/api/method/agency_tracking.api.placement.write?op=undo_reschedule",
     {
       method: "POST",
       body: {
@@ -488,7 +488,7 @@ export async function waiveReplacementV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.waive_replacement",
+    "/api/method/agency_tracking.api.placement.write?op=waive_replacement",
     {
       method: "POST",
       body: {
@@ -507,7 +507,7 @@ export async function undoWaiveReplacementV2(
   placementName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.undo_waive_replacement",
+    "/api/method/agency_tracking.api.placement.write?op=undo_waive_replacement",
     {
       method: "POST",
       body: {
@@ -525,7 +525,7 @@ export async function getPlacementV2(
   placementName?: string
 ): Promise<V2PlacementRecord> {
   const result = await requestV2<V2PlacementRecord | { message: V2PlacementRecord }>(
-    "/api/method/agency_tracking.placement_api.get_placement",
+    "/api/method/agency_tracking.api.placement.read?op=get_placement",
     {
       method: "POST",
       body: placementName ? { placement_name: placementName } : {},
@@ -566,7 +566,7 @@ export async function updatePlacementParsedFieldsV2(
   }
 ): Promise<V2PlacementRecord> {
   const result = await requestV2<V2PlacementRecord | { message: V2PlacementRecord }>(
-    "/api/method/agency_tracking.placement_api.update_placement_parsed_fields",
+    "/api/method/agency_tracking.api.placement.write?op=update_placement_parsed_fields",
     {
       method: "POST",
       body: {
@@ -644,7 +644,7 @@ export async function listMyPlacementsV2(
   if (withTotal) body.with_total = withTotal;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.portal_api.list_my_placements",
+    "/api/method/agency_tracking.api.portal.read?op=list_my_placements",
     {
       method: "POST",
       body: Object.keys(body).length > 0 ? body : undefined,
@@ -684,7 +684,7 @@ export async function setTicketingRemarksV2(
   remarks: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.set_ticketing_remarks",
+    "/api/method/agency_tracking.api.placement.write?op=set_ticketing_remarks",
     {
       method: "POST",
       body: {
@@ -716,7 +716,7 @@ export interface V2SelectionRequestItem {
  */
 export async function listSelectionRequestsV2(): Promise<V2SelectionRequestItem[]> {
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.placement_api.list_selection_requests",
+    "/api/method/agency_tracking.api.placement.read?op=list_selection_requests",
     {
       method: "POST",
       body: {},
@@ -760,7 +760,7 @@ export async function approveSelectionRequestV2(
   remarks?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.approve_selection_request",
+    "/api/method/agency_tracking.api.placement.write?op=approve_selection_request",
     {
       method: "POST",
       body: {
@@ -781,7 +781,7 @@ export async function denySelectionRequestV2(
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.deny_selection_request",
+    "/api/method/agency_tracking.api.placement.write?op=deny_selection_request",
     {
       method: "POST",
       body: {
@@ -802,7 +802,7 @@ export async function makeApplicantAvailableV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.placement_api.make_applicant_available",
+    "/api/method/agency_tracking.api.applicant.write?op=make_applicant_available",
     {
       method: "POST",
       body: {

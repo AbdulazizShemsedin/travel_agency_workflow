@@ -2,16 +2,16 @@
  * V2 Management & Admin Reports API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.report_api.get_daily_work_report
- * - POST /api/method/agency_tracking.report_api.get_staff_performance_report
- * - POST /api/method/agency_tracking.report_api.get_operations_summary
- * - POST /api/method/agency_tracking.report_api.get_placement_aging_report
- * - POST /api/method/agency_tracking.report_api.get_financial_overview
- * - POST /api/method/agency_tracking.report_api.get_cost_breakdown_report
- * - POST /api/method/agency_tracking.report_api.get_employee_financial_report
- * - POST /api/method/agency_tracking.report_api.get_pending_approval_queue
- * - POST /api/method/agency_tracking.report_api.get_complaint_aging_report
- * - POST /api/method/agency_tracking.report_api.export_commissions_xlsx
+ * - POST /api/method/agency_tracking.api.report.read?op=get_daily_work_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_staff_performance_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_operations_summary
+ * - POST /api/method/agency_tracking.api.report.read?op=get_placement_aging_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_financial_overview
+ * - POST /api/method/agency_tracking.api.report.read?op=get_cost_breakdown_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_employee_financial_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_pending_approval_queue
+ * - POST /api/method/agency_tracking.api.report.read?op=get_complaint_aging_report
+ * - POST /api/method/agency_tracking.api.report.read?op=export_commissions_xlsx
  */
 
 import { requestV2 } from "./client";
@@ -252,7 +252,7 @@ export async function getDailyWorkReportV2(
 ): Promise<V2DailyWorkReport> {
   const dates = parseDates(fromDate, toDate);
   return requestV2<V2DailyWorkReport>(
-    "/api/method/agency_tracking.report_api.get_daily_work_report",
+    "/api/method/agency_tracking.api.report.read?op=get_daily_work_report",
     {
       method: "POST",
       body: dates,
@@ -269,7 +269,7 @@ export async function getStaffPerformanceReportV2(
 ): Promise<V2StaffPerformanceItem[]> {
   const dates = parseDates(fromDate, toDate);
   const result = await requestV2<V2StaffPerformanceItem[]>(
-    "/api/method/agency_tracking.report_api.get_staff_performance_report",
+    "/api/method/agency_tracking.api.report.read?op=get_staff_performance_report",
     {
       method: "POST",
       body: dates,
@@ -288,7 +288,7 @@ export async function getOperationsSummaryV2(
 ): Promise<V2OperationsSummary> {
   const dates = parseDates(fromDate, toDate);
   return await requestV2<V2OperationsSummary>(
-    "/api/method/agency_tracking.report_api.get_operations_summary",
+    "/api/method/agency_tracking.api.report.read?op=get_operations_summary",
     {
       method: "POST",
       body: dates,
@@ -301,7 +301,7 @@ export async function getOperationsSummaryV2(
  */
 export async function getPlacementAgingReportV2(): Promise<V2PlacementAgingReport> {
   const result = await requestV2<V2PlacementAgingReport>(
-    "/api/method/agency_tracking.report_api.get_placement_aging_report",
+    "/api/method/agency_tracking.api.report.read?op=get_placement_aging_report",
     {
       method: "POST",
       body: {},
@@ -323,7 +323,7 @@ export async function getFinancialOverviewV2(
 ): Promise<V2FinancialOverviewReport> {
   const dates = parseDates(fromDate, toDate);
   return await requestV2<V2FinancialOverviewReport>(
-    "/api/method/agency_tracking.report_api.get_financial_overview",
+    "/api/method/agency_tracking.api.report.read?op=get_financial_overview",
     {
       method: "POST",
       body: dates,
@@ -340,7 +340,7 @@ export async function getCostBreakdownReportV2(
 ): Promise<V2CostBreakdownReport> {
   const dates = parseDates(fromDate, toDate);
   return requestV2<V2CostBreakdownReport>(
-    "/api/method/agency_tracking.report_api.get_cost_breakdown_report",
+    "/api/method/agency_tracking.api.report.read?op=get_cost_breakdown_report",
     {
       method: "POST",
       body: dates,
@@ -357,7 +357,7 @@ export async function getEmployeeFinancialReportV2(
 ): Promise<V2EmployeeFinancialItem[]> {
   const dates = parseDates(fromDate, toDate);
   const result = await requestV2<V2EmployeeFinancialItem[]>(
-    "/api/method/agency_tracking.report_api.get_employee_financial_report",
+    "/api/method/agency_tracking.api.report.read?op=get_employee_financial_report",
     {
       method: "POST",
       body: dates,
@@ -372,7 +372,7 @@ export async function getEmployeeFinancialReportV2(
  */
 export async function getPendingApprovalQueueV2(): Promise<V2PendingApprovalItem[]> {
   const result = await requestV2<V2PendingApprovalItem[]>(
-    "/api/method/agency_tracking.report_api.get_pending_approval_queue",
+    "/api/method/agency_tracking.api.report.read?op=get_pending_approval_queue",
     {
       method: "POST",
       body: {},
@@ -387,7 +387,7 @@ export async function getPendingApprovalQueueV2(): Promise<V2PendingApprovalItem
  */
 export async function getComplaintAgingReportV2(): Promise<V2ComplaintAgingSummary> {
   return requestV2<V2ComplaintAgingSummary>(
-    "/api/method/agency_tracking.report_api.get_complaint_aging_report",
+    "/api/method/agency_tracking.api.report.read?op=get_complaint_aging_report",
     {
       method: "POST",
       body: {},
@@ -417,7 +417,7 @@ export async function getWorkersByYearV2(
   }
 
   return requestV2<V2WorkersByYearResponse>(
-    "/api/method/agency_tracking.report_api.get_workers_by_year",
+    "/api/method/agency_tracking.api.report.read?op=get_workers_by_year",
     {
       method: "POST",
       body,
@@ -448,7 +448,7 @@ export async function exportWorkersByYearV2(
   }
 
   return requestV2<Blob>(
-    "/api/method/agency_tracking.report_api.export_workers_by_year",
+    "/api/method/agency_tracking.api.report.read?op=export_workers_by_year",
     {
       method: "POST",
       body,
@@ -473,7 +473,7 @@ export async function exportCommissionsXlsxV2(
 ): Promise<Blob> {
   const dates = parseDates(fromDate, toDate);
   return requestV2<Blob>(
-    "/api/method/agency_tracking.report_api.export_commissions_xlsx",
+    "/api/method/agency_tracking.api.report.read?op=export_commissions_xlsx",
     {
       method: "POST",
       body: {
@@ -513,7 +513,7 @@ export async function exportTransactionsXlsxV2(
   };
 
   return requestV2<Blob>(
-    "/api/method/agency_tracking.report_api.export_transactions_xlsx",
+    "/api/method/agency_tracking.api.report.read?op=export_transactions_xlsx",
     {
       method: "POST",
       body: {
@@ -539,7 +539,7 @@ export async function exportGroupScheduleBioXlsV2(
   applicants: string[]
 ): Promise<Blob> {
   return requestV2<Blob>(
-    "/api/method/agency_tracking.report_api.export_group_schedule_bio_xlsx",
+    "/api/method/agency_tracking.api.report.read?op=export_group_schedule_bio_xlsx",
     {
       method: "POST",
       body: { applicants },

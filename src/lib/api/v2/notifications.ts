@@ -2,9 +2,9 @@
  * V2 Web Push & Reminders Notification API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.notification_api.subscribe_to_push
- * - POST /api/method/agency_tracking.notification_api.get_push_subscription_status
- * - POST /api/method/agency_tracking.notification_api.trigger_wakala_reminder
+ * - POST /api/method/agency_tracking.api.notification.write?op=subscribe_to_push
+ * - POST /api/method/agency_tracking.api.notification.read?op=get_push_subscription_status
+ * - POST /api/method/agency_tracking.api.notification.write?op=trigger_wakala_reminder
  */
 
 import { requestV2 } from "./client";
@@ -46,7 +46,7 @@ export async function getPushSubscriptionStatusV2(): Promise<V2PushSubscriptionS
     endpoint?: string;
     vapid_public_key?: string;
     enabled?: boolean;
-  }>("/api/method/agency_tracking.notification_api.get_push_subscription_status", {
+  }>("/api/method/agency_tracking.api.notification.read?op=get_push_subscription_status", {
     method: "POST",
   });
 
@@ -67,7 +67,7 @@ export async function subscribeToPushV2(
   auth: string
 ): Promise<{ status?: string; message?: string }> {
   return await requestV2(
-    "/api/method/agency_tracking.notification_api.subscribe_to_push",
+    "/api/method/agency_tracking.api.notification.write?op=subscribe_to_push",
     {
       method: "POST",
       body: {
@@ -86,7 +86,7 @@ export async function triggerWakalaReminderV2(
   clearanceStepName: string
 ): Promise<{ status?: string; message?: string }> {
   return await requestV2(
-    "/api/method/agency_tracking.notification_api.trigger_wakala_reminder",
+    "/api/method/agency_tracking.api.notification.write?op=trigger_wakala_reminder",
     {
       method: "POST",
       body: { clearance_step_name: clearanceStepName },
@@ -139,7 +139,7 @@ export async function unsubscribeFromPushV2(
   endpoint: string
 ): Promise<{ status?: string; message?: string }> {
   return await requestV2(
-    "/api/method/agency_tracking.notification_api.unsubscribe_from_push",
+    "/api/method/agency_tracking.api.notification.write?op=unsubscribe_from_push",
     {
       method: "POST",
       body: { endpoint },
@@ -152,7 +152,7 @@ export async function unsubscribeFromPushV2(
  */
 export async function sendTestPushV2(): Promise<{ status: string; error?: string }> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.notification_api.send_test_push",
+    "/api/method/agency_tracking.api.notification.write?op=send_test_push",
     {
       method: "POST",
     }
@@ -168,7 +168,7 @@ export async function getSentNotificationsV2(
   pageSize: number = 50
 ): Promise<V2SentNotificationsResponse> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.notification_api.get_sent_notifications",
+    "/api/method/agency_tracking.api.notification.read?op=get_sent_notifications",
     {
       method: "POST",
       body: {
@@ -191,7 +191,7 @@ export async function getSentNotificationsV2(
  */
 export async function getLiveAlertsV2(): Promise<V2LiveAlertsResponse> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.notification_api.get_live_alerts",
+    "/api/method/agency_tracking.api.notification.read?op=get_live_alerts",
     {
       method: "POST",
     }
@@ -215,13 +215,13 @@ export async function getLiveAlertsV2(): Promise<V2LiveAlertsResponse> {
 
 /**
  * Marks a list of alerts as read for the signed-in user.
- * POST /api/method/agency_tracking.notification_api.mark_alerts_read
+ * POST /api/method/agency_tracking.api.notification.write?op=mark_alerts_read
  */
 export async function markAlertsReadV2(
   alertKeys: string[]
 ): Promise<{ status: string; updated?: number }> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.notification_api.mark_alerts_read",
+    "/api/method/agency_tracking.api.notification.write?op=mark_alerts_read",
     {
       method: "POST",
       body: {
@@ -234,14 +234,14 @@ export async function markAlertsReadV2(
 
 /**
  * Sets the state of a single alert ("Dismissed", "Read", or "Unread") for the signed-in user.
- * POST /api/method/agency_tracking.notification_api.set_alert_state
+ * POST /api/method/agency_tracking.api.notification.write?op=set_alert_state
  */
 export async function setAlertStateV2(
   alertKey: string,
   state: "Dismissed" | "Read" | "Unread"
 ): Promise<{ status: string }> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.notification_api.set_alert_state",
+    "/api/method/agency_tracking.api.notification.write?op=set_alert_state",
     {
       method: "POST",
       body: {
@@ -571,7 +571,7 @@ export async function getForeignAgencyNotificationsV2(contractorName?: string): 
  */
 export async function getVapidPublicKeyV2(): Promise<string> {
   const result = await requestV2<{ vapid_public_key?: string; message?: { vapid_public_key?: string } }>(
-    "/api/method/agency_tracking.notification_api.get_vapid_public_key",
+    "/api/method/agency_tracking.api.notification.read?op=get_vapid_public_key",
     { method: "GET" }
   );
 
@@ -588,7 +588,7 @@ export async function getVapidPublicKeyV2(): Promise<string> {
  */
 export async function regenerateVapidKeysV2(): Promise<{ vapid_public_key: string; message?: string }> {
   const result = await requestV2<{ vapid_public_key?: string; message?: string }>(
-    "/api/method/agency_tracking.notification_api.regenerate_vapid_keys",
+    "/api/method/agency_tracking.api.notification.write?op=regenerate_vapid_keys",
     { method: "POST" }
   );
 

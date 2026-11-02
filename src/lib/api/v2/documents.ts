@@ -3,9 +3,9 @@
  * 
  * Endpoints:
  * - POST /api/method/upload_file
- * - POST /api/method/agency_tracking.passport_parser.parse_passport_file
- * - POST /api/method/agency_tracking.contract_parser.parse_contract_file
- * - POST /api/method/agency_tracking.contract_parser.parse_visa_file
+ * - POST /api/method/agency_tracking.api.document.write?op=parse_passport_file
+ * - POST /api/method/agency_tracking.api.document.write?op=parse_contract_file
+ * - POST /api/method/agency_tracking.api.document.write?op=parse_visa_file
  */
 
 import { requestV2, ApiV2Error } from "./client";
@@ -75,7 +75,7 @@ export async function uploadFileV2(
   // Step 1: Direct storage upload flow (bypasses proxy 4.5MB limit for files up to 20MB)
   try {
     const startRes = await requestV2<any>(
-      "/api/method/agency_tracking.upload_guard.start_upload",
+      "/api/method/agency_tracking.api.file.write?op=start_upload",
       {
         method: "POST",
         body: {
@@ -105,7 +105,7 @@ export async function uploadFileV2(
 
       // Step 3: Finish upload
       const finishRes = await requestV2<any>(
-        "/api/method/agency_tracking.upload_guard.finish_upload",
+        "/api/method/agency_tracking.api.file.write?op=finish_upload",
         {
           method: "POST",
           body: {
@@ -167,7 +167,7 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
   try {
     // 1. Primary path: Enqueue async background job (OCR.space / backend pipeline)
     const enqueueRes = await requestV2<any>(
-      "/api/method/agency_tracking.passport_parser.enqueue_parse_passport_file",
+      "/api/method/agency_tracking.api.document.write?op=enqueue_parse_passport_file",
       {
         method: "POST",
         body: { file_url: fileUrl },
@@ -181,7 +181,7 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
       for (let i = 0; i < maxAttempts; i++) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const jobStatusRes = await requestV2<any>(
-          "/api/method/agency_tracking.background_jobs.get_job_status",
+          "/api/method/agency_tracking.api.system.read?op=get_job_status",
           {
             method: "POST",
             body: { job_name: jobName },
@@ -214,7 +214,7 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
   // 2. Synchronous fallback if async did not produce rawData
   if (!rawData) {
     const raw = await requestV2<any>(
-      "/api/method/agency_tracking.passport_parser.parse_passport_file",
+      "/api/method/agency_tracking.api.document.write?op=parse_passport_file",
       {
         method: "POST",
         body: { file_url: fileUrl },
@@ -255,7 +255,7 @@ export async function parseContractFileV2(
   destinationCountry?: "Saudi Arabia" | "Kuwait" | string
 ): Promise<V2ParsedContractData> {
   const result = await requestV2<V2ParsedContractData>(
-    "/api/method/agency_tracking.contract_parser.parse_contract_file",
+    "/api/method/agency_tracking.api.document.write?op=parse_contract_file",
     {
       method: "POST",
       body: {
@@ -272,7 +272,7 @@ export async function parseContractFileV2(
  */
 export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData> {
   const result = await requestV2<V2ParsedVisaData>(
-    "/api/method/agency_tracking.contract_parser.parse_visa_file",
+    "/api/method/agency_tracking.api.document.write?op=parse_visa_file",
     {
       method: "POST",
       body: { file_url: fileUrl },

@@ -2,24 +2,24 @@
  * V2 Finance & Commission Lifecycle API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.finance_api.log_stage_expense
- * - POST /api/method/agency_tracking.finance_api.log_stage_income
- * - POST /api/method/agency_tracking.finance_api.approve_transaction
- * - POST /api/method/agency_tracking.finance_api.reject_transaction
- * - POST /api/method/agency_tracking.finance_api.void_transaction
- * - POST /api/method/agency_tracking.finance_api.get_fx_rate
- * - POST /api/method/agency_tracking.finance_api.set_fx_rate
- * - POST /api/method/agency_tracking.finance_api.get_owed_commissions
- * - POST /api/method/agency_tracking.finance_api.create_commission_batch
- * - POST /api/method/agency_tracking.finance_api.get_batch_invoice_pdf
- * - POST /api/method/agency_tracking.finance_api.upload_batch_payment_proof
- * - POST /api/method/agency_tracking.finance_api.settle_batch_items
- * - POST /api/method/agency_tracking.finance_api.settle_batch
- * - POST /api/method/agency_tracking.finance_api.trigger_early_commission_accrual
- * - POST /api/method/agency_tracking.reconciliation_api.upload_bank_statement
- * - POST /api/method/agency_tracking.reconciliation_api.manually_match_line
- * - POST /api/method/agency_tracking.report_api.get_employee_financial_report
- * - POST /api/method/agency_tracking.report_api.get_pending_approval_queue
+ * - POST /api/method/agency_tracking.api.transaction.write?op=log_stage_expense
+ * - POST /api/method/agency_tracking.api.transaction.write?op=log_stage_income
+ * - POST /api/method/agency_tracking.api.transaction.write?op=approve_transaction
+ * - POST /api/method/agency_tracking.api.transaction.write?op=reject_transaction
+ * - POST /api/method/agency_tracking.api.transaction.write?op=void_transaction
+ * - POST /api/method/agency_tracking.api.settings.read?op=get_fx_rate
+ * - POST /api/method/agency_tracking.api.settings.write?op=set_fx_rate
+ * - POST /api/method/agency_tracking.api.transaction.read?op=get_owed_commissions
+ * - POST /api/method/agency_tracking.api.batch.write?op=create_commission_batch
+ * - POST /api/method/agency_tracking.api.batch.read?op=get_batch_invoice_pdf
+ * - POST /api/method/agency_tracking.api.batch.write?op=upload_batch_payment_proof
+ * - POST /api/method/agency_tracking.api.batch.write?op=settle_batch_items
+ * - POST /api/method/agency_tracking.api.batch.write?op=settle_batch
+ * - POST /api/method/agency_tracking.api.transaction.write?op=trigger_early_commission_accrual
+ * - POST /api/method/agency_tracking.api.reconciliation.write?op=upload_bank_statement
+ * - POST /api/method/agency_tracking.api.reconciliation.write?op=manually_match_line
+ * - POST /api/method/agency_tracking.api.report.read?op=get_employee_financial_report
+ * - POST /api/method/agency_tracking.api.report.read?op=get_pending_approval_queue
  */
 
 import { requestV2 } from "./client";
@@ -184,7 +184,7 @@ export async function logStageExpenseV2(
     : undefined;
 
   return requestV2(
-    "/api/method/agency_tracking.finance_api.log_stage_expense",
+    "/api/method/agency_tracking.api.transaction.write?op=log_stage_expense",
     {
       method: "POST",
       body: {
@@ -216,7 +216,7 @@ export async function logStageIncomeV2(
     : undefined;
 
   return requestV2(
-    "/api/method/agency_tracking.finance_api.log_stage_income",
+    "/api/method/agency_tracking.api.transaction.write?op=log_stage_income",
     {
       method: "POST",
       body: {
@@ -238,7 +238,7 @@ export async function approveTransactionV2(
   transactionName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.approve_transaction",
+    "/api/method/agency_tracking.api.transaction.write?op=approve_transaction",
     {
       method: "POST",
       body: { transaction_name: transactionName },
@@ -254,7 +254,7 @@ export async function rejectTransactionV2(
   rejectionReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.reject_transaction",
+    "/api/method/agency_tracking.api.transaction.write?op=reject_transaction",
     {
       method: "POST",
       body: {
@@ -273,7 +273,7 @@ export async function voidTransactionV2(
   voidReason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.void_transaction",
+    "/api/method/agency_tracking.api.transaction.write?op=void_transaction",
     {
       method: "POST",
       body: {
@@ -292,7 +292,7 @@ export async function getFxRateV2(
   asOfDate?: string
 ): Promise<{ rate?: number; currency: string; message?: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.get_fx_rate",
+    "/api/method/agency_tracking.api.settings.read?op=get_fx_rate",
     {
       method: "POST",
       body: {
@@ -312,7 +312,7 @@ export async function setFxRateV2(
   rateDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.set_fx_rate",
+    "/api/method/agency_tracking.api.settings.write?op=set_fx_rate",
     {
       method: "POST",
       body: {
@@ -339,7 +339,7 @@ export async function getOwedCommissionsV2(
   if (currency) body.currency = currency;
 
   const result = await requestV2<V2OwedCommissionItem[] | { items?: V2OwedCommissionItem[] }>(
-    "/api/method/agency_tracking.finance_api.get_owed_commissions",
+    "/api/method/agency_tracking.api.transaction.read?op=get_owed_commissions",
     {
       method: "POST",
       body,
@@ -363,7 +363,7 @@ export async function createCommissionBatchV2(
   includeUnpaidFromPrevious?: boolean
 ): Promise<V2CommissionBatch> {
   const result = await requestV2<V2CommissionBatch | { message: V2CommissionBatch }>(
-    "/api/method/agency_tracking.finance_api.create_commission_batch",
+    "/api/method/agency_tracking.api.batch.write?op=create_commission_batch",
     {
       method: "POST",
       body: {
@@ -397,7 +397,7 @@ export async function getOwedCommissionsByCurrencyV2(
   if (destinationCountry) body.destination_country = destinationCountry;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.finance_api.get_owed_commissions_by_currency",
+    "/api/method/agency_tracking.api.transaction.read?op=get_owed_commissions_by_currency",
     {
       method: "POST",
       body,
@@ -467,7 +467,7 @@ export async function listTransactionsV2(
   if (filters?.withTotal) body.with_total = filters.withTotal;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.finance_api.list_transactions",
+    "/api/method/agency_tracking.api.transaction.read?op=list_transactions",
     {
       method: "POST",
       body,
@@ -505,7 +505,7 @@ export async function listCommissionBatchesV2(
 ): Promise<V2CommissionBatch[]> {
   try {
     const res = await requestV2<any>(
-      "/api/method/agency_tracking.finance_api.list_commission_batches",
+      "/api/method/agency_tracking.api.batch.read?op=list_commission_batches",
       {
         method: "POST",
         body: {
@@ -537,7 +537,7 @@ export async function getCommissionBatchV2(
 ): Promise<V2CommissionBatch | null> {
   try {
     const res = await requestV2<any>(
-      "/api/method/agency_tracking.finance_api.get_commission_batch",
+      "/api/method/agency_tracking.api.batch.read?op=get_commission_batch",
       {
         method: "POST",
         body: { batch_name: batchName },
@@ -584,7 +584,7 @@ export async function getCommissionBatchV2(
  */
 export async function getBatchInvoicePdfV2(batchName: string): Promise<Blob> {
   return requestV2<Blob>(
-    "/api/method/agency_tracking.finance_api.get_batch_invoice_pdf",
+    "/api/method/agency_tracking.api.batch.read?op=get_batch_invoice_pdf",
     {
       method: "POST",
       body: { batch_name: batchName },
@@ -611,7 +611,7 @@ export async function uploadBatchPaymentProofV2(
     unmatched_names?: string[];
     [key: string]: any;
   }>(
-    "/api/method/agency_tracking.finance_api.upload_batch_payment_proof",
+    "/api/method/agency_tracking.api.batch.write?op=upload_batch_payment_proof",
     {
       method: "POST",
       body: {
@@ -636,7 +636,7 @@ export async function settleBatchItemsV2(
   itemNames: string[]
 ): Promise<{ message?: any; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.settle_batch_items",
+    "/api/method/agency_tracking.api.batch.write?op=settle_batch_items",
     {
       method: "POST",
       body: {
@@ -656,7 +656,7 @@ export async function unsettleBatchItemsV2(
   reason?: string
 ): Promise<{ message?: any; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.unsettle_batch_items",
+    "/api/method/agency_tracking.api.batch.write?op=unsettle_batch_items",
     {
       method: "POST",
       body: {
@@ -675,7 +675,7 @@ export async function settleBatchV2(
   settlementReference: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.settle_batch",
+    "/api/method/agency_tracking.api.batch.write?op=settle_batch",
     {
       method: "POST",
       body: {
@@ -696,7 +696,7 @@ export async function undoBatchAdvanceV2(
   batchName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.undo_batch_advance",
+    "/api/method/agency_tracking.api.batch.write?op=undo_batch_advance",
     {
       method: "POST",
       body: { batch_name: batchName },
@@ -718,7 +718,7 @@ export async function writeOffBatchV2(
   writeOffDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.write_off_batch",
+    "/api/method/agency_tracking.api.batch.write?op=write_off_batch",
     {
       method: "POST",
       body: {
@@ -738,12 +738,12 @@ export interface V2MoneySettings {
 
 /**
  * Fetches the system-wide money configuration (whether Birr conversion is enabled).
- * Endpoint: POST /api/method/agency_tracking.finance_api.get_money_settings
+ * Endpoint: POST /api/method/agency_tracking.api.settings.read?op=get_money_settings
  */
 export async function getMoneySettingsV2(): Promise<V2MoneySettings> {
   try {
     const res = await requestV2<V2MoneySettings | { message?: V2MoneySettings }>(
-      "/api/method/agency_tracking.finance_api.get_money_settings",
+      "/api/method/agency_tracking.api.settings.read?op=get_money_settings",
       { method: "POST" }
     );
     const data = res && "birr_conversion" in res ? res : (res as any)?.message;
@@ -759,7 +759,7 @@ export async function getMoneySettingsV2(): Promise<V2MoneySettings> {
 
 /**
  * Dedicated endpoint to retrieve a batch's write-off history.
- * Method: POST /api/method/agency_tracking.finance_api.list_batch_write_offs
+ * Method: POST /api/method/agency_tracking.api.batch.read?op=list_batch_write_offs
  * Param: batch_name
  * Returns: [{ amount_original, amount_birr, reason, transaction, write_off_date }, ...]
  */
@@ -767,7 +767,7 @@ export async function listBatchWriteOffsV2(
   batchName: string
 ): Promise<V2CommissionBatchWriteOff[]> {
   const res = await requestV2<V2CommissionBatchWriteOff[] | { message?: V2CommissionBatchWriteOff[] }>(
-    "/api/method/agency_tracking.finance_api.list_batch_write_offs",
+    "/api/method/agency_tracking.api.batch.read?op=list_batch_write_offs",
     {
       method: "POST",
       body: { batch_name: batchName },
@@ -788,7 +788,7 @@ export async function releaseUnpaidItemsV2(
   itemNames: string[]
 ): Promise<{ message?: string; released_count?: number; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.release_unpaid_items",
+    "/api/method/agency_tracking.api.batch.write?op=release_unpaid_items",
     {
       method: "POST",
       body: {
@@ -805,7 +805,7 @@ export async function triggerEarlyCommissionAccrualV2(
   placementName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.trigger_early_commission_accrual",
+    "/api/method/agency_tracking.api.transaction.write?op=trigger_early_commission_accrual",
     {
       method: "POST",
       body: { placement_name: placementName },
@@ -825,7 +825,7 @@ export async function addWorkersToBatchV2(
   commissionNames: string[]
 ): Promise<V2CommissionBatch> {
   const result = await requestV2<V2CommissionBatch | { message?: V2CommissionBatch }>(
-    "/api/method/agency_tracking.finance_api.add_workers_to_batch",
+    "/api/method/agency_tracking.api.batch.write?op=add_workers_to_batch",
     {
       method: "POST",
       body: {
@@ -855,7 +855,7 @@ export async function removeWorkersFromBatchV2(
     message?: any;
     [key: string]: any;
   }>(
-    "/api/method/agency_tracking.finance_api.remove_workers_from_batch",
+    "/api/method/agency_tracking.api.batch.write?op=remove_workers_from_batch",
     {
       method: "POST",
       body: {
@@ -886,7 +886,7 @@ export async function writeOffCommissionV2(
   writeOffDate?: string
 ): Promise<V2CommissionWriteOffRow> {
   const result = await requestV2<V2CommissionWriteOffRow | { message?: V2CommissionWriteOffRow }>(
-    "/api/method/agency_tracking.finance_api.write_off_commission",
+    "/api/method/agency_tracking.api.transaction.write?op=write_off_commission",
     {
       method: "POST",
       body: {
@@ -910,7 +910,7 @@ export async function listCommissionWriteOffsV2(
   commission: string
 ): Promise<V2CommissionWriteOffRow[]> {
   const res = await requestV2<V2CommissionWriteOffRow[] | { message?: V2CommissionWriteOffRow[] }>(
-    "/api/method/agency_tracking.finance_api.list_commission_write_offs",
+    "/api/method/agency_tracking.api.transaction.read?op=list_commission_write_offs",
     {
       method: "POST",
       body: { commission },
@@ -929,7 +929,7 @@ export async function uploadBankStatementV2(
   currency?: string
 ): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
   return await requestV2(
-    "/api/method/agency_tracking.reconciliation_api.upload_bank_statement",
+    "/api/method/agency_tracking.api.reconciliation.write?op=upload_bank_statement",
     {
       method: "POST",
       body: {
@@ -948,7 +948,7 @@ export async function manuallyMatchLineV2(
   batchName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return await requestV2(
-    "/api/method/agency_tracking.reconciliation_api.manually_match_line",
+    "/api/method/agency_tracking.api.reconciliation.write?op=manually_match_line",
     {
       method: "POST",
       body: {
@@ -969,7 +969,7 @@ export async function unmatchLineV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return await requestV2(
-    "/api/method/agency_tracking.reconciliation_api.unmatch_line",
+    "/api/method/agency_tracking.api.reconciliation.write?op=unmatch_line",
     {
       method: "POST",
       body: {
@@ -1016,7 +1016,7 @@ export async function listStatementLinesV2(
   params?: V2ListStatementLinesParams
 ): Promise<{ lines: V2StatementLine[]; total_count?: number }> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.reconciliation_api.list_statement_lines",
+    "/api/method/agency_tracking.api.reconciliation.read?op=list_statement_lines",
     {
       method: "POST",
       body: params || {},
@@ -1052,7 +1052,7 @@ export async function updateBatchAdvanceV2(
   requestedAdvanceAmount: number
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.update_batch_advance",
+    "/api/method/agency_tracking.api.batch.write?op=update_batch_advance",
     {
       method: "POST",
       body: {
@@ -1076,7 +1076,7 @@ export interface V2FetchFxRatesNowResponse {
 export async function fetchFxRatesNowV2(): Promise<V2FetchFxRatesNowResponse> {
   try {
     const result = await requestV2<V2FetchFxRatesNowResponse | { message: V2FetchFxRatesNowResponse }>(
-      "/api/method/agency_tracking.finance_api.fetch_fx_rates_now",
+      "/api/method/agency_tracking.api.settings.write?op=fetch_fx_rates_now",
       {
         method: "POST",
         body: {},
@@ -1114,7 +1114,7 @@ export async function fetchFxRatesNowV2(): Promise<V2FetchFxRatesNowResponse> {
  */
 export async function getCompanySettingsV2(): Promise<any> {
   const res = await requestV2(
-    "/api/method/agency_tracking.finance_api.get_company_settings",
+    "/api/method/agency_tracking.api.settings.read?op=get_company_settings",
     { method: "POST" }
   );
   return (res && "message" in res && (res as any).message) ? (res as any).message : res;
@@ -1127,7 +1127,7 @@ export async function getCompanySettingsV2(): Promise<any> {
  */
 export async function updateCompanySettingsV2(fields: Record<string, any>): Promise<any> {
   return await requestV2(
-    "/api/method/agency_tracking.finance_api.update_company_settings",
+    "/api/method/agency_tracking.api.settings.write?op=update_company_settings",
     {
       method: "POST",
       body: fields,
@@ -1141,7 +1141,7 @@ export async function updateCompanySettingsV2(fields: Record<string, any>): Prom
  */
 export async function getTimeZoneV2(): Promise<{ time_zone: string; now: string }> {
   const res = await requestV2(
-    "/api/method/agency_tracking.finance_api.get_time_zone",
+    "/api/method/agency_tracking.api.settings.read?op=get_time_zone",
     { method: "POST" }
   );
   return (res && "message" in res && (res as any).message) ? (res as any).message : res;
@@ -1154,7 +1154,7 @@ export async function getTimeZoneV2(): Promise<{ time_zone: string; now: string 
  */
 export async function setTimeZoneV2(timeZone: string): Promise<any> {
   return await requestV2(
-    "/api/method/agency_tracking.finance_api.set_time_zone",
+    "/api/method/agency_tracking.api.settings.write?op=set_time_zone",
     {
       method: "POST",
       body: { time_zone: timeZone },
@@ -1176,7 +1176,7 @@ export async function setCompanyImageV2(
   formData.append("kind", kind);
 
   return await requestV2(
-    "/api/method/agency_tracking.finance_api.set_company_image",
+    "/api/method/agency_tracking.api.settings.write?op=set_company_image",
     {
       method: "POST",
       body: formData,
@@ -1199,7 +1199,7 @@ export interface V2PermissionTableRow {
  */
 export async function getPermissionTableV2(): Promise<V2PermissionTableRow[]> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.api_docs.get_permission_table",
+    "/api/method/agency_tracking.api.system.read?op=get_permission_table",
     { method: "POST" }
   );
   const payload = (res && "message" in res && (res as any).message) ? (res as any).message : res;
@@ -1220,7 +1220,7 @@ export async function cancelCommissionBatchV2(
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.cancel_commission_batch",
+    "/api/method/agency_tracking.api.batch.write?op=cancel_commission_batch",
     {
       method: "POST",
       body: {
@@ -1242,7 +1242,7 @@ export async function undoCancelCommissionBatchV2(
   reason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.finance_api.undo_cancel_commission_batch",
+    "/api/method/agency_tracking.api.batch.write?op=undo_cancel_commission_batch",
     {
       method: "POST",
       body: {

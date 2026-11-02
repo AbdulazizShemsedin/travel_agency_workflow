@@ -45,7 +45,7 @@ export async function getCachedOrFetchCsrfToken(forceFresh = false): Promise<str
 
   isFetchingCsrfToken = (async () => {
     try {
-      const res = await fetch("/api/method/agency_tracking.auth_api.get_csrf_token", {
+      const res = await fetch("/api/method/agency_tracking.api.auth.read?op=get_csrf_token", {
         method: "GET",
         credentials: "include",
         headers: {
@@ -124,15 +124,35 @@ export async function requestV2<T = any>(
     }
   }
 
+  // Each endpoint serves several operations, named by `op`. A GET keeps `op` in the query
+  // string; a POST sends it in the body, because the server reads only the body of a JSON POST.
+  let url = endpoint;
+  let payload = options.body;
+  const queryStart = endpoint.indexOf("?");
+  if (method !== "GET" && queryStart !== -1) {
+    const params = new URLSearchParams(endpoint.slice(queryStart + 1));
+    const op = params.get("op");
+    if (op) {
+      params.delete("op");
+      const rest = params.toString();
+      url = endpoint.slice(0, queryStart) + (rest ? `?${rest}` : "");
+      if (payload instanceof FormData) {
+        payload.set("op", op);
+      } else {
+        payload = { ...(payload || {}), op };
+      }
+    }
+  }
+
   let bodyData: BodyInit | undefined = undefined;
 
-  if (options.body) {
-    if (options.isMultipart || options.body instanceof FormData) {
-      bodyData = options.body as FormData;
+  if (payload) {
+    if (options.isMultipart || payload instanceof FormData) {
+      bodyData = payload as FormData;
       // Do not manually set Content-Type for multipart; browser calculates boundary
     } else {
       headers["Content-Type"] = "application/json";
-      bodyData = JSON.stringify(options.body);
+      bodyData = JSON.stringify(payload);
     }
   }
 
@@ -146,7 +166,7 @@ export async function requestV2<T = any>(
 
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(url, {
       method,
       headers,
       credentials: "include",

@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// The operation a request runs: `op` on a grouped endpoint, otherwise the method's own name.
+function operationName(methodPath: string, op?: string | null) {
+  return op || methodPath.split(".").pop() || methodPath;
+}
+
+function opFromBody(bodyText: string): string | null {
+  try {
+    const parsed = JSON.parse(bodyText || "{}");
+    return typeof parsed?.op === "string" ? parsed.op : null;
+  } catch {
+    return null;
+  }
+}
+
 function getFrappeConfig(req: NextRequest, methodPath = "") {
   const url =
     process.env.FRAPPE_BASE_URL ||
@@ -26,7 +40,7 @@ function getFrappeConfig(req: NextRequest, methodPath = "") {
   const isAuthOrCsrf =
     methodPath === "login" ||
     methodPath.endsWith("/login") ||
-    methodPath.includes("get_csrf_token");
+    operationName(methodPath, req.nextUrl.searchParams.get("op")) === "get_csrf_token";
 
   // Forward CSRF token for state-changing operations including logout (never on login or token retrieval)
   if (csrfToken && !isAuthOrCsrf) {
@@ -230,9 +244,8 @@ export async function POST(
       "Content-Type": "application/json",
     };
 
-    const isHeavyCvOrPdf =
-      methodPath === "agency_tracking.cv_api.generate_cv" ||
-      methodPath === "agency_tracking.cv_api.render_cv_pdf";
+    const op = operationName(methodPath, req.nextUrl.searchParams.get("op") || opFromBody(bodyText));
+    const isHeavyCvOrPdf = op === "generate_cv" || op === "render_cv_pdf";
     const isLoginMethod = methodPath === "login" || methodPath.endsWith("/login");
     const postMaxRetries = isHeavyCvOrPdf || isLoginMethod ? 0 : 2;
     const postTimeoutMs = isHeavyCvOrPdf ? 180000 : isLoginMethod ? 90000 : 45000;
@@ -268,7 +281,7 @@ export async function POST(
     }
 
     // Special handler for get_thread_messages: enrich with thread participants presence & read receipts
-    if (methodPath === "agency_tracking.chat_api.get_thread_messages") {
+    if (op === "get_thread_messages") {
       if (res.ok) {
         const rawData = await res.json().catch(() => ({ message: [] }));
         const messagesList: any[] = Array.isArray(rawData.message)
@@ -283,11 +296,11 @@ export async function POST(
           const targetThreadName = parsed.thread_name;
           if (targetThreadName) {
             const threadDocRes = await fetchWithRetry(
-              `${config.url}/api/method/agency_tracking.chat_api.get_thread_participants`,
+              `${config.url}/api/method/agency_tracking.api.chat.read`,
               {
                 method: "POST",
                 headers: forwardHeaders,
-                body: JSON.stringify({ thread_name: targetThreadName }),
+                body: JSON.stringify({ op: "get_thread_participants", thread_name: targetThreadName }),
               }
             );
             if (threadDocRes.ok) {
@@ -347,7 +360,7 @@ export async function POST(
       const isExpectedAuthChallenge = (res.status === 401 || (res.status === 417 && isLoginMethod)) && (
         methodPath.includes("login") ||
         methodPath.includes("logout") ||
-        methodPath.includes("get_current_user") ||
+        op === "get_current_user" ||
         methodPath.includes("get_logged_user")
       );
       const isPermissionError = res.status === 403 && (
@@ -437,9 +450,8 @@ export async function GET(
   }
 
   try {
-    const isHeavyCvOrPdf =
-      methodPath === "agency_tracking.cv_api.render_cv_pdf" ||
-      methodPath.includes("get_batch_invoice_pdf");
+    const op = operationName(methodPath, req.nextUrl.searchParams.get("op"));
+    const isHeavyCvOrPdf = op === "render_cv_pdf" || op === "get_batch_invoice_pdf";
     const getMaxRetries = isHeavyCvOrPdf ? 0 : 2;
     const getTimeoutMs = isHeavyCvOrPdf ? 180000 : 45000;
 
@@ -489,7 +501,7 @@ export async function GET(
       const isExpectedAuthChallenge = res.status === 401 && (
         methodPath.includes("login") ||
         methodPath.includes("logout") ||
-        methodPath.includes("get_current_user") ||
+        op === "get_current_user" ||
         methodPath.includes("get_logged_user")
       );
       const isPermissionError = res.status === 403 && (
@@ -497,7 +509,7 @@ export async function GET(
         String(data?.exception || "").includes("PermissionError") ||
         String(data?._error_message || "").includes("No permission")
       );
-      const isPhotoNotFoundError = res.status === 404 && methodPath.includes("get_candidate_photo");
+      const isPhotoNotFoundError = res.status === 404 && op === "get_candidate_photo";
       if (!isExpectedAuthChallenge && !isPermissionError && !isPhotoNotFoundError) {
         console.error("[PROXY ERROR GET]", methodPath, res.status, data);
       } else if (isPermissionError) {
@@ -533,7 +545,7 @@ export async function GET(
 
     // If photo is not found on backend (404), return a 1x1 transparent GIF with 200 OK
     // so browser <img> tags render cleanly without broken image icons or terminal 404 noise
-    const isPhotoNotFound = res.status === 404 && methodPath.includes("get_candidate_photo");
+    const isPhotoNotFound = res.status === 404 && op === "get_candidate_photo";
     if (isPhotoNotFound) {
       const transparentGif = Buffer.from(
         "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",

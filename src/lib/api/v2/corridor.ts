@@ -2,7 +2,7 @@
  * V2 Corridor Engine API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.corridor_engine.get_corridor_steps
+ * - POST /api/method/agency_tracking.api.system.read?op=get_corridor_steps
  */
 
 import { requestV2 } from "./client";
@@ -30,7 +30,7 @@ export async function getCorridorStepsV2(
   destinationCountry: string
 ): Promise<V2CorridorStepDefinition[]> {
   const result = await requestV2<V2CorridorStepsResponse | V2CorridorStepDefinition[]>(
-    "/api/method/agency_tracking.corridor_engine.get_corridor_steps",
+    "/api/method/agency_tracking.api.system.read?op=get_corridor_steps",
     {
       method: "POST",
       body: { destination_country: destinationCountry },

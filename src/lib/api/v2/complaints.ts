@@ -2,11 +2,11 @@
  * V2 Complaints Desk API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.complaint_api.create_complaint
- * - POST /api/method/agency_tracking.complaint_api.acknowledge_complaint
- * - POST /api/method/agency_tracking.complaint_api.list_unresolved_complaints
- * - POST /api/method/agency_tracking.complaint_api.resolve_complaint
- * - POST /api/method/agency_tracking.report_api.get_complaint_aging_report
+ * - POST /api/method/agency_tracking.api.complaint.write?op=create_complaint
+ * - POST /api/method/agency_tracking.api.complaint.write?op=acknowledge_complaint
+ * - POST /api/method/agency_tracking.api.complaint.read?op=list_unresolved_complaints
+ * - POST /api/method/agency_tracking.api.complaint.write?op=resolve_complaint
+ * - POST /api/method/agency_tracking.api.report.read?op=get_complaint_aging_report
  */
 
 import { requestV2 } from "./client";
@@ -55,7 +55,7 @@ export async function createComplaintV2(
   extra?: { applicant?: string; applicant_name?: string }
 ): Promise<{ name?: string; message?: string }> {
   return requestV2(
-    "/api/method/agency_tracking.complaint_api.create_complaint",
+    "/api/method/agency_tracking.api.complaint.write?op=create_complaint",
     {
       method: "POST",
       body: {
@@ -76,7 +76,7 @@ export async function acknowledgeComplaintV2(
   complaintName: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.complaint_api.acknowledge_complaint",
+    "/api/method/agency_tracking.api.complaint.write?op=acknowledge_complaint",
     {
       method: "POST",
       body: { complaint_name: complaintName },
@@ -89,7 +89,7 @@ export async function acknowledgeComplaintV2(
  */
 export async function listUnresolvedComplaintsV2(): Promise<V2ComplaintRecord[]> {
   const result = await requestV2<V2ComplaintRecord[] | { complaints?: V2ComplaintRecord[] }>(
-    "/api/method/agency_tracking.complaint_api.list_unresolved_complaints",
+    "/api/method/agency_tracking.api.complaint.read?op=list_unresolved_complaints",
     { method: "POST" }
   );
 
@@ -108,7 +108,7 @@ export async function resolveComplaintV2(
   overrideReason?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.complaint_api.resolve_complaint",
+    "/api/method/agency_tracking.api.complaint.write?op=resolve_complaint",
     {
       method: "POST",
       body: {
@@ -127,7 +127,7 @@ export async function resolveComplaintV2(
  */
 export async function listNewComplaintsV2(): Promise<V2ComplaintRecord[]> {
   const result = await requestV2<V2ComplaintRecord[] | { message?: V2ComplaintRecord[] }>(
-    "/api/method/agency_tracking.complaint_api.list_new_complaints",
+    "/api/method/agency_tracking.api.complaint.read?op=list_new_complaints",
     { method: "GET" }
   );
 
@@ -173,10 +173,10 @@ export async function listComplaintsV2(
     params.set("with_total", "1");
   }
 
-  const query = params.toString() ? `?${params.toString()}` : "";
+  const query = params.toString() ? `&${params.toString()}` : "";
 
   const result = await requestV2<any>(
-    `/api/method/agency_tracking.complaint_api.list_complaints${query}`,
+    `/api/method/agency_tracking.api.complaint.read?op=list_complaints${query}`,
     { method: "GET" }
   );
 

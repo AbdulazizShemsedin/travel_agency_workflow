@@ -2,7 +2,7 @@
  * V2 Storage Engine Diagnostics API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.storage_engine.test_storage_connection
+ * - POST /api/method/agency_tracking.api.settings.write?op=test_storage_connection
  */
 
 import { requestV2 } from "./client";
@@ -20,7 +20,7 @@ export interface V2StorageConnectionStatus {
  */
 export async function testStorageConnectionV2(): Promise<V2StorageConnectionStatus> {
   const result = await requestV2<V2StorageConnectionStatus | { message: V2StorageConnectionStatus }>(
-    "/api/method/agency_tracking.storage_engine.test_storage_connection",
+    "/api/method/agency_tracking.api.settings.write?op=test_storage_connection",
     {
       method: "POST",
       body: {},

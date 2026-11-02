@@ -239,9 +239,10 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
 
       assert.equal(
         interceptedUrl,
-        "/api/method/agency_tracking.clearance_api.record_police_ashara",
-        "Must call agency_tracking.clearance_api.record_police_ashara"
+        "/api/method/agency_tracking.api.clearance.write",
+        "Must call agency_tracking.api.clearance.write"
       );
+      assert.equal(interceptedBody.op, "record_police_ashara");
       assert.equal(interceptedBody.clearance_step_name, "CLR-00010");
       assert.equal(interceptedBody.police_ashara_status, "Scheduled");
       assert.equal(interceptedBody.police_ashara_appointment_date, "2026-11-05");
@@ -250,9 +251,10 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
       await completeClearanceStepV2("CLR-00011", "TL-REF-12345");
       assert.equal(
         interceptedUrl,
-        "/api/method/agency_tracking.clearance_api.complete_clearance_step",
-        "Must call agency_tracking.clearance_api.complete_clearance_step"
+        "/api/method/agency_tracking.api.clearance.write",
+        "Must call agency_tracking.api.clearance.write"
       );
+      assert.equal(interceptedBody.op, "complete_clearance_step");
       assert.equal(interceptedBody.clearance_step_name, "CLR-00011");
       assert.equal(interceptedBody.reference_no, "TL-REF-12345");
     } finally {
@@ -284,9 +286,10 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
       const res = await advancePlacementV2("PLM-00042", "Processing");
       assert.equal(
         interceptedUrl,
-        "/api/method/agency_tracking.placement_api.advance_placement",
-        "Must invoke agency_tracking.placement_api.advance_placement"
+        "/api/method/agency_tracking.api.placement.write",
+        "Must call agency_tracking.api.placement.write"
       );
+      assert.equal(interceptedBody.op, "advance_placement");
       assert.equal(interceptedBody.placement_name, "PLM-00042");
       assert.equal(interceptedBody.new_status, "Processing");
       assert.equal(res.status, "Processing");
@@ -313,23 +316,27 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
     try {
       // 1. Record Ticket
       await recordTicketDetailsV2("PLM-00042", "TK-ET-9944", "2026-11-20", 85000);
-      assert.equal(calls[0].url, "/api/method/agency_tracking.placement_api.record_ticket_details");
+      assert.equal(calls[0].url, "/api/method/agency_tracking.api.placement.write");
+      assert.equal(calls[0].body.op, "record_ticket_details");
       assert.equal(calls[0].body.ticket_cost, 85000);
 
       // 2. Reschedule with Internal cause and cost
       await recordRescheduleV2("PLM-00042", "2026-11-25", "Internal", 12000, "TK-ET-9945");
-      assert.equal(calls[1].url, "/api/method/agency_tracking.placement_api.record_reschedule");
+      assert.equal(calls[1].url, "/api/method/agency_tracking.api.placement.write");
+      assert.equal(calls[1].body.op, "record_reschedule");
       assert.equal(calls[1].body.reschedule_cause, "Internal");
       assert.equal(calls[1].body.reschedule_cost, 12000);
 
       // 3. Pre-departure Medical 2
       await recordPredepartureMedicalResultV2("PLM-00042", "FIT", "2026-11-22");
-      assert.equal(calls[2].url, "/api/method/agency_tracking.placement_api.record_predeparture_medical_result");
+      assert.equal(calls[2].url, "/api/method/agency_tracking.api.placement.write");
+      assert.equal(calls[2].body.op, "record_predeparture_medical_result");
       assert.equal(calls[2].body.status, "FIT");
 
       // 4. Confirm Departure
       await advancePlacementV2("PLM-00042", "Departed");
-      assert.equal(calls[3].url, "/api/method/agency_tracking.placement_api.advance_placement");
+      assert.equal(calls[3].url, "/api/method/agency_tracking.api.placement.write");
+      assert.equal(calls[3].body.op, "advance_placement");
       assert.equal(calls[3].body.new_status, "Departed");
     } finally {
       globalThis.fetch = originalFetch;

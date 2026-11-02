@@ -2,7 +2,7 @@
  * V2 CV Generation API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.cv_api.generate_cv
+ * - POST /api/method/agency_tracking.api.cv.write?op=generate_cv
  */
 
 import { ApiV2Error, requestV2 } from "./client";
@@ -24,7 +24,7 @@ export interface V2GenerateCvResponse {
 export async function generateCvV2(applicantName: string): Promise<V2GenerateCvResponse> {
   try {
     const res = await requestV2<{ message?: any; applicant_status?: string; cv_record?: string } | any>(
-      "/api/method/agency_tracking.cv_api.generate_cv",
+      "/api/method/agency_tracking.api.cv.write?op=generate_cv",
       {
         method: "POST",
         body: { applicant_name: applicantName },
@@ -82,7 +82,7 @@ export async function generateCvV2(applicantName: string): Promise<V2GenerateCvR
  */
 export async function renderCvPdfV2(applicantName?: string): Promise<Blob> {
   const blob = await requestV2<Blob>(
-    "/api/method/agency_tracking.cv_api.render_cv_pdf",
+    "/api/method/agency_tracking.api.cv.read?op=render_cv_pdf",
     {
       method: "POST",
       body: applicantName ? { applicant_name: applicantName } : {},
@@ -113,7 +113,7 @@ export async function setCvRemarksV2(
   remarks: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.cv_api.set_cv_remarks",
+    "/api/method/agency_tracking.api.cv.write?op=set_cv_remarks",
     {
       method: "POST",
       body: {

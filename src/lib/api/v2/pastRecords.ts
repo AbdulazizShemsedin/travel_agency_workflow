@@ -2,11 +2,11 @@
  * V2 Past Records API — Historical Worker Entry & History
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.past_records_api.get_past_record_form
- * - POST /api/method/agency_tracking.past_records_api.create_past_record
- * - POST /api/method/agency_tracking.past_records_api.list_past_records
- * - POST /api/method/agency_tracking.past_records_api.get_past_record
- * - POST /api/method/agency_tracking.past_records_api.undo_past_record
+ * - POST /api/method/agency_tracking.api.past_record.read?op=get_past_record_form
+ * - POST /api/method/agency_tracking.api.past_record.write?op=create_past_record
+ * - POST /api/method/agency_tracking.api.past_record.read?op=list_past_records
+ * - POST /api/method/agency_tracking.api.past_record.read?op=get_past_record
+ * - POST /api/method/agency_tracking.api.past_record.write?op=undo_past_record
  */
 
 import { requestV2 } from "./client";
@@ -186,7 +186,7 @@ export interface V2PastRecordItem {
  */
 export async function getPastRecordFormV2(): Promise<V2PastRecordFormConfig> {
   const result = await requestV2<V2PastRecordFormConfig | { message: V2PastRecordFormConfig }>(
-    "/api/method/agency_tracking.past_records_api.get_past_record_form",
+    "/api/method/agency_tracking.api.past_record.read?op=get_past_record_form",
     { method: "POST" }
   );
 
@@ -203,7 +203,7 @@ export async function createPastRecordV2(
   payload: V2PastRecordCreatePayload
 ): Promise<{ name?: string; message?: string; applicant?: string; placement?: string; [key: string]: any }> {
   return await requestV2(
-    "/api/method/agency_tracking.past_records_api.create_past_record",
+    "/api/method/agency_tracking.api.past_record.write?op=create_past_record",
     {
       method: "POST",
       body: payload,
@@ -221,7 +221,7 @@ export async function listPastRecordsV2(params?: {
   start?: number;
 }): Promise<V2PastRecordItem[]> {
   const result = await requestV2<V2PastRecordItem[] | { message: V2PastRecordItem[] }>(
-    "/api/method/agency_tracking.past_records_api.list_past_records",
+    "/api/method/agency_tracking.api.past_record.read?op=list_past_records",
     {
       method: "POST",
       body: params || {},
@@ -238,7 +238,7 @@ export async function listPastRecordsV2(params?: {
  */
 export async function getPastRecordV2(pastRecordName: string): Promise<V2PastRecordItem | null> {
   const result = await requestV2<V2PastRecordItem | { message: V2PastRecordItem }>(
-    "/api/method/agency_tracking.past_records_api.get_past_record",
+    "/api/method/agency_tracking.api.past_record.read?op=get_past_record",
     {
       method: "POST",
       body: { past_record: pastRecordName },
@@ -259,7 +259,7 @@ export async function undoPastRecordV2(
   reason: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return await requestV2(
-    "/api/method/agency_tracking.past_records_api.undo_past_record",
+    "/api/method/agency_tracking.api.past_record.write?op=undo_past_record",
     {
       method: "POST",
       body: {

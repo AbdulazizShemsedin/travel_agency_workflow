@@ -238,14 +238,14 @@ export function resolveEffectiveMedical(
 /**
  * Retrieves the authoritative 3-stage medical status (Registration, Selection, Pre-departure)
  * along with the current authoritative `medical_current` for an applicant or placement.
- * Backend RPC: POST /api/method/agency_tracking.medical_status.get_medical_status
+ * Backend RPC: POST /api/method/agency_tracking.api.applicant.read?op=get_medical_status
  */
 export async function getMedicalStatusV2(params: {
   applicant_name?: string;
   placement_name?: string;
 }): Promise<V2MedicalStatusResponse> {
   return requestV2<V2MedicalStatusResponse>(
-    "/api/method/agency_tracking.medical_status.get_medical_status",
+    "/api/method/agency_tracking.api.applicant.read?op=get_medical_status",
     {
       method: "POST",
       body: params,

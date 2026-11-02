@@ -4,8 +4,8 @@
  * Endpoints:
  * - POST /api/method/login
  * - POST /api/method/logout
- * - POST /api/method/agency_tracking.auth_api.get_current_user
- * - POST /api/method/agency_tracking.auth_api.get_csrf_token
+ * - POST /api/method/agency_tracking.api.auth.read?op=get_current_user
+ * - POST /api/method/agency_tracking.api.auth.read?op=get_csrf_token
  */
 
 import { requestV2, setCachedCsrfToken, clearCsrfToken, getCachedOrFetchCsrfToken } from "./client";
@@ -90,7 +90,7 @@ export async function logoutV2(): Promise<void> {
  */
 export async function getCurrentUserV2(): Promise<V2AuthUser | null> {
   const data = await requestV2<V2CurrentUserResponse | null>(
-    "/api/method/agency_tracking.auth_api.get_current_user",
+    "/api/method/agency_tracking.api.auth.read?op=get_current_user",
     { method: "GET" }
   );
 
@@ -131,7 +131,7 @@ export interface V2AssignableRole {
  */
 export async function getAssignableRolesWithAccessV2(): Promise<V2AssignableRole[]> {
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.auth_api.get_assignable_roles",
+    "/api/method/agency_tracking.api.auth.read?op=get_assignable_roles",
     {
       method: "POST",
       body: { with_access: 1 },
@@ -162,7 +162,7 @@ export async function getAssignableRolesWithAccessV2(): Promise<V2AssignableRole
  */
 export async function getAssignableRolesV2(): Promise<string[]> {
   const result = await requestV2<string[] | { message: string[] }>(
-    "/api/method/agency_tracking.auth_api.get_assignable_roles",
+    "/api/method/agency_tracking.api.auth.read?op=get_assignable_roles",
     { method: "POST" }
   );
 

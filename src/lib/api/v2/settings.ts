@@ -79,7 +79,7 @@ export interface V2StorageSettings {
 
 export async function getStorageSettingsV2(): Promise<V2StorageSettings> {
   const result = await requestV2<V2StorageSettings | { message: V2StorageSettings }>(
-    "/api/method/agency_tracking.settings_api.get_storage_settings",
+    "/api/method/agency_tracking.api.settings.read?op=get_storage_settings",
     { method: "POST" }
   );
   return (result as any)?.message || result || {};
@@ -93,7 +93,7 @@ export async function updateStorageSettingsV2(payload: {
   r2_secret_access_key?: string;
 }): Promise<V2StorageSettings> {
   const result = await requestV2<V2StorageSettings | { message: V2StorageSettings }>(
-    "/api/method/agency_tracking.settings_api.update_storage_settings",
+    "/api/method/agency_tracking.api.settings.write?op=update_storage_settings",
     {
       method: "POST",
       body: payload,
@@ -120,7 +120,7 @@ export interface V2ExchangeRateSettings {
 
 export async function getExchangeRateSettingsV2(): Promise<V2ExchangeRateSettings> {
   const result = await requestV2<V2ExchangeRateSettings | { message: V2ExchangeRateSettings }>(
-    "/api/method/agency_tracking.settings_api.get_exchange_rate_settings",
+    "/api/method/agency_tracking.api.settings.read?op=get_exchange_rate_settings",
     { method: "POST" }
   );
   return (result as any)?.message || result || {};
@@ -132,7 +132,7 @@ export async function updateExchangeRateSettingsV2(payload: {
   fetch_interval?: string;
 }): Promise<V2ExchangeRateSettings> {
   const result = await requestV2<V2ExchangeRateSettings | { message: V2ExchangeRateSettings }>(
-    "/api/method/agency_tracking.settings_api.update_exchange_rate_settings",
+    "/api/method/agency_tracking.api.settings.write?op=update_exchange_rate_settings",
     {
       method: "POST",
       body: payload,
@@ -157,7 +157,7 @@ export interface V2NotificationSettings {
 
 export async function getNotificationSettingsV2(): Promise<V2NotificationSettings> {
   const result = await requestV2<V2NotificationSettings | { message: V2NotificationSettings }>(
-    "/api/method/agency_tracking.settings_api.get_notification_settings",
+    "/api/method/agency_tracking.api.settings.read?op=get_notification_settings",
     { method: "POST" }
   );
   return (result as any)?.message || result || {};
@@ -170,7 +170,7 @@ export async function updateNotificationSettingsV2(payload: {
   contract_age_threshold_days?: number;
 }): Promise<V2NotificationSettings> {
   const result = await requestV2<V2NotificationSettings | { message: V2NotificationSettings }>(
-    "/api/method/agency_tracking.settings_api.update_notification_settings",
+    "/api/method/agency_tracking.api.settings.write?op=update_notification_settings",
     {
       method: "POST",
       body: payload,
@@ -206,7 +206,7 @@ export interface V2CorridorConfig {
 
 export async function listCorridorsV2(): Promise<V2CorridorConfig[]> {
   const result = await requestV2<V2CorridorConfig[] | { message: V2CorridorConfig[] }>(
-    "/api/method/agency_tracking.settings_api.list_corridors",
+    "/api/method/agency_tracking.api.system.read?op=list_corridors",
     { method: "POST" }
   );
   if (Array.isArray(result)) return result;
@@ -219,7 +219,7 @@ export async function updateCorridorFeesV2(
   fees: V2CorridorFeeItem[]
 ): Promise<{ message?: string; destination_country?: string; fees?: V2CorridorFeeItem[] }> {
   return await requestV2(
-    "/api/method/agency_tracking.settings_api.update_corridor_fees",
+    "/api/method/agency_tracking.api.settings.write?op=update_corridor_fees",
     {
       method: "POST",
       body: {

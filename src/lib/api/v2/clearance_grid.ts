@@ -2,9 +2,9 @@
  * V2 Clearance Grid API (#11)
  *
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.clearance_grid.get_clearance_grid_columns
- * - POST /api/method/agency_tracking.clearance_grid.list_clearance_grid
- * - POST /api/method/agency_tracking.clearance_grid.save_clearance_grid
+ * - POST /api/method/agency_tracking.api.clearance.read?op=get_clearance_grid_columns
+ * - POST /api/method/agency_tracking.api.clearance.read?op=list_clearance_grid
+ * - POST /api/method/agency_tracking.api.clearance.write?op=save_clearance_grid
  */
 
 import { requestV2 } from "./client";
@@ -81,7 +81,7 @@ export async function getClearanceGridColumnsV2(
   stepType: ClearanceGridStepType | string
 ): Promise<ClearanceGridColumn[]> {
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.clearance_grid.get_clearance_grid_columns",
+    "/api/method/agency_tracking.api.clearance.read?op=get_clearance_grid_columns",
     {
       method: "POST",
       body: { step_type: stepType },
@@ -132,7 +132,7 @@ export async function listClearanceGridV2(
   if (options?.include_closed !== undefined) body.include_closed = options.include_closed;
 
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.clearance_grid.list_clearance_grid",
+    "/api/method/agency_tracking.api.clearance.read?op=list_clearance_grid",
     {
       method: "POST",
       body,
@@ -166,7 +166,7 @@ export async function saveClearanceGridV2(
   const cappedChanges = changes.slice(0, 200);
 
   const res = await requestV2<any>(
-    "/api/method/agency_tracking.clearance_grid.save_clearance_grid",
+    "/api/method/agency_tracking.api.clearance.write?op=save_clearance_grid",
     {
       method: "POST",
       body: { changes: cappedChanges },

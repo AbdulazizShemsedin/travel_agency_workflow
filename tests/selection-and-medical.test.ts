@@ -63,7 +63,8 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
 
     try {
       const res = await requestCandidateSelectionV2("APP-1001", "Test Agency Contractor");
-      assert.equal(interceptedUrl.includes("portal_api.select_candidate"), true);
+      assert.equal(interceptedUrl.endsWith("agency_tracking.api.portal.write"), true);
+      assert.equal(interceptedBody?.op, "select_candidate");
       assert.equal(interceptedBody?.applicant_name, "APP-1001");
       assert.equal(interceptedBody?.contractor_name, "Test Agency Contractor");
       assert.equal(interceptedBody?.contractor, "Test Agency Contractor");
@@ -211,7 +212,8 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
 
     try {
       const res = await approveSelectionRequestV2("PLM-007", "Candidate available and confirmed");
-      assert.equal(interceptedUrl.includes("placement_api.approve_selection_request"), true);
+      assert.equal(interceptedUrl.endsWith("agency_tracking.api.placement.write"), true);
+      assert.equal(interceptedBody?.op, "approve_selection_request");
       assert.equal(interceptedBody?.placement_name, "PLM-007");
       assert.equal(interceptedBody?.remarks, "Candidate available and confirmed");
       assert.equal(res.status, "Selected");
@@ -235,7 +237,8 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
 
     try {
       const res = await denySelectionRequestV2("PLM-008", "Candidate took another offer");
-      assert.equal(interceptedUrl.includes("placement_api.deny_selection_request"), true);
+      assert.equal(interceptedUrl.endsWith("agency_tracking.api.placement.write"), true);
+      assert.equal(interceptedBody?.op, "deny_selection_request");
       assert.equal(interceptedBody?.placement_name, "PLM-008");
       assert.equal(interceptedBody?.reason, "Candidate took another offer");
       assert.equal(res.status, "Cancelled");
@@ -260,7 +263,8 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
 
     try {
       const res = await makeApplicantAvailableV2("APP-009", "Candidate is ready again");
-      assert.equal(interceptedUrl.includes("placement_api.make_applicant_available"), true);
+      assert.equal(interceptedUrl.endsWith("agency_tracking.api.applicant.write"), true);
+      assert.equal(interceptedBody?.op, "make_applicant_available");
       assert.equal(interceptedBody?.applicant_name, "APP-009");
       assert.equal(interceptedBody?.reason, "Candidate is ready again");
       assert.equal(res.unavailable, 0);

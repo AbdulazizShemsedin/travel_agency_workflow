@@ -2,8 +2,8 @@
  * V2 Foreign Contractor & Agency API
  * 
  * Authoritative Backend Endpoints:
- * - POST /api/method/agency_tracking.contractor_api.list_contractors
- * - POST /api/method/agency_tracking.contractor_api.create_contractor
+ * - POST /api/method/agency_tracking.api.contractor.read?op=list_contractors
+ * - POST /api/method/agency_tracking.api.contractor.write?op=create_contractor
  */
 
 import { requestV2, ApiV2Error } from "./client";
@@ -83,7 +83,7 @@ export async function listContractorsV2(
 ): Promise<V2ContractorRecord[] | { data: V2ContractorRecord[]; total_count: number }> {
   const filtersParam = typeof filters === "object" ? JSON.stringify(filters) : filters;
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.contractor_api.list_contractors",
+    "/api/method/agency_tracking.api.contractor.read?op=list_contractors",
     {
       method: "POST",
       body: {
@@ -122,7 +122,7 @@ export async function createContractorV2(
   }
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.contractor_api.create_contractor",
+    "/api/method/agency_tracking.api.contractor.write?op=create_contractor",
     {
       method: "POST",
       body: {
@@ -159,7 +159,7 @@ export async function updateContractorV2(
   }
 ): Promise<any> {
   return await requestV2(
-    "/api/method/agency_tracking.contractor_api.update_contractor",
+    "/api/method/agency_tracking.api.contractor.write?op=update_contractor",
     {
       method: "POST",
       body: {
@@ -186,7 +186,7 @@ export async function updateContractorV2(
  */
 export async function getContractorV2(name: string): Promise<V2ContractorRecord | null> {
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.contractor_api.get_contractor",
+    "/api/method/agency_tracking.api.contractor.read?op=get_contractor",
     {
       method: "POST",
       body: {
@@ -227,7 +227,7 @@ export async function updateContractorBatchConfigV2(
   }
 
   const res = await requestV2(
-    "/api/method/agency_tracking.contractor_api.update_contractor",
+    "/api/method/agency_tracking.api.contractor.write?op=update_contractor",
     {
       method: "POST",
       body,
@@ -252,7 +252,7 @@ export async function getCommissionRatesV2(
 ): Promise<V2ContractorCommissionRate[]> {
   try {
     const result = await requestV2<V2ContractorCommissionRate[] | { message: V2ContractorCommissionRate[] }>(
-      "/api/method/agency_tracking.contractor_api.get_commission_rates",
+      "/api/method/agency_tracking.api.contractor.read?op=get_commission_rates",
       {
         method: "POST",
         body: { contractor },
@@ -330,7 +330,7 @@ export async function setCommissionRatesV2(
 
   try {
     const result = await requestV2<V2ContractorCommissionRate[] | { message: V2ContractorCommissionRate[] }>(
-      "/api/method/agency_tracking.contractor_api.set_commission_rates",
+      "/api/method/agency_tracking.api.contractor.write?op=set_commission_rates",
       {
         method: "POST",
         body: {

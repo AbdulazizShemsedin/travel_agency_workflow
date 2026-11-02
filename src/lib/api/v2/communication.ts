@@ -2,13 +2,13 @@
  * V2 Chat & Messaging API
  * 
  * Endpoints:
- * - POST /api/method/agency_tracking.chat_api.create_agency_thread
- * - POST /api/method/agency_tracking.chat_api.create_internal_thread
- * - POST /api/method/agency_tracking.chat_api.list_threads
- * - POST /api/method/agency_tracking.chat_api.get_thread_messages
- * - POST /api/method/agency_tracking.chat_api.send_message
- * - POST /api/method/agency_tracking.chat_api.mark_read
- * - POST /api/method/agency_tracking.chat_api.add_participant
+ * - POST /api/method/agency_tracking.api.chat.write?op=create_agency_thread
+ * - POST /api/method/agency_tracking.api.chat.write?op=create_internal_thread
+ * - POST /api/method/agency_tracking.api.chat.read?op=list_threads
+ * - POST /api/method/agency_tracking.api.chat.read?op=get_thread_messages
+ * - POST /api/method/agency_tracking.api.chat.write?op=send_message
+ * - POST /api/method/agency_tracking.api.chat.write?op=mark_read
+ * - POST /api/method/agency_tracking.api.chat.write?op=add_participant
  */
 
 import { requestV2 } from "./client";
@@ -47,7 +47,7 @@ export interface V2ChatMessage {
  */
 export async function createAgencyThreadV2(contractor?: string): Promise<{ thread_name: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.chat_api.create_agency_thread",
+    "/api/method/agency_tracking.api.chat.write?op=create_agency_thread",
     {
       method: "POST",
       body: contractor ? { contractor } : undefined,
@@ -64,7 +64,7 @@ export async function createInternalThreadV2(
   contextReference?: string
 ): Promise<{ thread_name: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.chat_api.create_internal_thread",
+    "/api/method/agency_tracking.api.chat.write?op=create_internal_thread",
     {
       method: "POST",
       body: {
@@ -81,7 +81,7 @@ export async function createInternalThreadV2(
  */
 export async function listThreadsV2(): Promise<V2ChatThread[]> {
   const result = await requestV2<V2ChatThread[] | { threads?: V2ChatThread[]; message?: V2ChatThread[] }>(
-    "/api/method/agency_tracking.chat_api.list_threads",
+    "/api/method/agency_tracking.api.chat.read?op=list_threads",
     { method: "POST" }
   );
 
@@ -97,7 +97,7 @@ export async function listThreadsV2(): Promise<V2ChatThread[]> {
  */
 export async function listAllThreadsForOversightV2(): Promise<V2ChatThread[]> {
   const result = await requestV2<V2ChatThread[] | { threads?: V2ChatThread[]; message?: V2ChatThread[] }>(
-    "/api/method/agency_tracking.chat_api.list_all_threads",
+    "/api/method/agency_tracking.api.chat.read?op=list_all_threads",
     { method: "POST" }
   );
 
@@ -114,7 +114,7 @@ export async function getThreadMessagesV2(threadName: string): Promise<V2ChatMes
   const result = await requestV2<
     V2ChatMessage[] | { message?: V2ChatMessage[]; messages?: V2ChatMessage[]; participants?: { user: string; last_read_at?: string | null }[] }
   >(
-    "/api/method/agency_tracking.chat_api.get_thread_messages",
+    "/api/method/agency_tracking.api.chat.read?op=get_thread_messages",
     {
       method: "POST",
       body: { thread_name: threadName },
@@ -147,7 +147,7 @@ export async function sendMessageV2(
   attachmentFileUrl?: string
 ): Promise<{ name?: string; message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.chat_api.send_message",
+    "/api/method/agency_tracking.api.chat.write?op=send_message",
     {
       method: "POST",
       body: {
@@ -166,7 +166,7 @@ export async function sendMessageV2(
  */
 export async function markReadV2(threadName: string): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.chat_api.mark_read",
+    "/api/method/agency_tracking.api.chat.write?op=mark_read",
     {
       method: "POST",
       body: { thread_name: threadName },
@@ -182,7 +182,7 @@ export async function addParticipantV2(
   userEmail: string
 ): Promise<{ message?: string; [key: string]: any }> {
   return requestV2(
-    "/api/method/agency_tracking.chat_api.add_participant",
+    "/api/method/agency_tracking.api.chat.write?op=add_participant",
     {
       method: "POST",
       body: {
@@ -200,7 +200,7 @@ export async function addParticipantV2(
  */
 export async function deleteMessageV2(messageName: string): Promise<any> {
   return await requestV2(
-    "/api/method/agency_tracking.chat_api.delete_message",
+    "/api/method/agency_tracking.api.chat.write?op=delete_message",
     {
       method: "POST",
       body: { message_name: messageName },
@@ -238,7 +238,7 @@ export async function listDeletedMessagesV2(params?: {
   if (params?.limitPageLength) body.limit_page_length = params.limitPageLength;
 
   const result = await requestV2<any>(
-    "/api/method/agency_tracking.chat_api.list_deleted_messages",
+    "/api/method/agency_tracking.api.chat.read?op=list_deleted_messages",
     {
       method: "POST",
       body: Object.keys(body).length > 0 ? body : undefined,

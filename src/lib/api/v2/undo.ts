@@ -28,7 +28,7 @@ export async function getUndoableStepV2(
   name: string
 ): Promise<UndoableStepInfo> {
   return requestV2<UndoableStepInfo>(
-    "/api/method/agency_tracking.reversal.get_undoable_step",
+    "/api/method/agency_tracking.api.reversal.read?op=get_undoable_step",
     {
       method: "POST",
       body: { doctype, name },
@@ -47,7 +47,7 @@ export async function reverseLastStepV2(
   reason?: string
 ): Promise<ReverseLastStepResult> {
   return requestV2<ReverseLastStepResult>(
-    "/api/method/agency_tracking.reversal.reverse_last_step",
+    "/api/method/agency_tracking.api.reversal.write?op=reverse_last_step",
     {
       method: "POST",
       body: {
