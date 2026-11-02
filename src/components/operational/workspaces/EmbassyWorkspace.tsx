@@ -272,7 +272,9 @@ export function EmbassyWorkspace({
           editingRow.injaz?.status === "Completed" ||
           editingRow.injaz?.status === "Complete" ||
           editingRow.injaz?.status === "Issued" ||
-          editingRow.injaz?.status === "Approved";
+          editingRow.injaz?.status === "Approved" ||
+          // An embassy officer is sent only their own step; the backend says whether the step before it is done.
+          Boolean((editingRow.embassy as any)?.previous_step_done);
 
         if (modalStatus === "Approved") {
           if (!isEmbassyTerminal(stepStatus) && isSaudi && !isTaeshirDone) {
