@@ -229,6 +229,7 @@ export default function ApplicantDetailPage() {
     return ownStatus;
   }, [applicant, activePlacement]);
 
+  const isKuwait = (applicant?.destination_country || activePlacement?.destination_country || "").toLowerCase().includes("kuwait");
   const activeStages = isMuayena ? MUAYENA_STAGES : CANONICAL_STAGES;
 
   const normalizedStageForProgress = React.useMemo(() => {
@@ -651,7 +652,7 @@ export default function ApplicantDetailPage() {
                         : "text-slate-400 dark:text-zinc-500"
                     )}
                   >
-                    {STAGE_DISPLAY_LABELS[stage] || stage}
+                    {stage === "Processing" ? (isKuwait ? "Processing (LMIS & Telesign)" : "Processing (LMIS and Teashir)") : (STAGE_DISPLAY_LABELS[stage] || stage)}
                   </span>
                 </div>
                 {idx !== activeStages.length - 1 && (

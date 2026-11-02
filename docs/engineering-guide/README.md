@@ -82,21 +82,21 @@ flowchart TD
 
 ## 3. Technology Stack Inventory
 
-| Technology | Version | Purpose in this System |
-| :--- | :--- | :--- |
-| **Next.js** | `16.3.1` | App Router framework providing SSR/SSG, nested layouts, route guards, and server-side API proxying. |
-| **React** | `19.2.8` | Component rendering engine utilizing hooks, Context API, and stateful interfaces. |
-| **TypeScript** | `5.x` | Static type safety, interface contracts matching backend Swagger definitions, and strict prop checking. |
-| **Tailwind CSS** | `4.x` | Modern styling engine using `@tailwindcss/postcss` and CSS variable theming for responsive light/dark modes. |
-| **@tanstack/react-query**| `5.101.4` | Asynchronous server-state management, cache deduplication, and window refetching. |
-| **@tanstack/react-table**| `9.1.2` | Headless table engine supporting sorting, filtering, and high-performance row virtualization. |
-| **React Hook Form** | `7.85.0` | Performant form state handling with minimal re-renders during complex multi-step candidate registration. |
-| **Zod** | `3.25.76` | Runtime schema validation and error message formatting for candidate intake. |
-| **Radix UI** | Multiple | Accessible, unstyled headless UI primitives (Dialogs, Popovers, Tabs, Switches, Select). |
-| **jsPDF / pdf-lib** | `4.2.1 / 1.17.1`| In-browser client-side PDF generation for standard Ethiopian CVs and agency bios. |
-| **Tesseract.js** | `7.0.0` | Client-side Optical Character Recognition (OCR) for reading passport Machine Readable Zones (MRZ). |
-| **Lucide React** | `1.31.0` | Unified system iconography. |
-| **Sonner** | `2.0.8` | Notification toast engine for action confirmations and non-intrusive error toasts. |
+| Technology                | Version          | Purpose in this System                                                                                       |
+| :------------------------ | :--------------- | :----------------------------------------------------------------------------------------------------------- |
+| **Next.js**               | `16.3.1`         | App Router framework providing SSR/SSG, nested layouts, route guards, and server-side API proxying.          |
+| **React**                 | `19.2.8`         | Component rendering engine utilizing hooks, Context API, and stateful interfaces.                            |
+| **TypeScript**            | `5.x`            | Static type safety, interface contracts matching backend Swagger definitions, and strict prop checking.      |
+| **Tailwind CSS**          | `4.x`            | Modern styling engine using `@tailwindcss/postcss` and CSS variable theming for responsive light/dark modes. |
+| **@tanstack/react-query** | `5.101.4`        | Asynchronous server-state management, cache deduplication, and window refetching.                            |
+| **@tanstack/react-table** | `9.1.2`          | Headless table engine supporting sorting, filtering, and high-performance row virtualization.                |
+| **React Hook Form**       | `7.85.0`         | Performant form state handling with minimal re-renders during complex multi-step candidate registration.     |
+| **Zod**                   | `3.25.76`        | Runtime schema validation and error message formatting for candidate intake.                                 |
+| **Radix UI**              | Multiple         | Accessible, unstyled headless UI primitives (Dialogs, Popovers, Tabs, Switches, Select).                     |
+| **jsPDF / pdf-lib**       | `4.2.1 / 1.17.1` | In-browser client-side PDF generation for standard Ethiopian CVs and agency bios.                            |
+| **Tesseract.js**          | `7.0.0`          | Client-side Optical Character Recognition (OCR) for reading passport Machine Readable Zones (MRZ).           |
+| **Lucide React**          | `1.31.0`         | Unified system iconography.                                                                                  |
+| **Sonner**                | `2.0.8`          | Notification toast engine for action confirmations and non-intrusive error toasts.                           |
 
 ---
 
@@ -104,18 +104,18 @@ flowchart TD
 
 This documentation set is divided into 10 structured, progressive manuals:
 
-| Document | Title | Purpose |
-| :--- | :--- | :--- |
-| [01-system-architecture.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/01-system-architecture.md) | **System Architecture** | Outside-in view of architectural layers, system boundaries, and technology trade-offs. |
-| [02-repository-and-file-map.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/02-repository-and-file-map.md) | **Repository & File Map** | Directory tree and an exhaustive file-by-file catalog of every first-party file in the codebase. |
-| [03-frontend-fundamentals.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/03-frontend-fundamentals.md) | **Frontend Fundamentals** | Step-by-step mentor guide teaching JS, TS, React, and Next.js through real code excerpts from this project. |
-| [04-feature-walkthroughs.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/04-feature-walkthroughs.md) | **Feature Walkthroughs** | End-to-end traces of user journeys from button click to database commit and back. |
-| [05-api-and-data-flow.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/05-api-and-data-flow.md) | **API & Data Flow** | Request lifecycle, proxy routing, CSRF management, error handling, and complete endpoint-to-feature matrix. |
-| [06-authentication-and-permissions.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/06-authentication-and-permissions.md) | **Auth & Permissions** | Session cookies, `AuthProvider`, route guards, canonical roles, and partner portal isolation. |
-| [07-design-decisions-and-tradeoffs.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/07-design-decisions-and-tradeoffs.md) | **Architectural Decisions & Trade-offs**| Senior engineering analysis of 12 major design patterns, evaluating pros, cons, and alternatives. |
-| [08-developer-field-guide.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/08-developer-field-guide.md) | **Developer Field Guide** | Practical recipes for debugging, locating code, diagnosing errors, and safely modifying features. |
-| [09-learning-roadmap.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/09-learning-roadmap.md) | **7-Stage Learning Roadmap** | Progressive self-study syllabus taking you from code reading to independent architecture and maintenance. |
-| [10-self-assessment.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/10-self-assessment.md) | **Self-Assessment & Exercises** | Comprehension tests, non-destructive exercises, teach-back checkpoints, and answer keys. |
+| Document                                                                                                                                                                                                                                    | Title                                    | Purpose                                                                                                     |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| [01-system-architecture.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/01-system-architecture.md)                       | **System Architecture**                  | Outside-in view of architectural layers, system boundaries, and technology trade-offs.                      |
+| [02-repository-and-file-map.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/02-repository-and-file-map.md)               | **Repository & File Map**                | Directory tree and an exhaustive file-by-file catalog of every first-party file in the codebase.            |
+| [03-frontend-fundamentals.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/03-frontend-fundamentals.md)                   | **Frontend Fundamentals**                | Step-by-step mentor guide teaching JS, TS, React, and Next.js through real code excerpts from this project. |
+| [04-feature-walkthroughs.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/04-feature-walkthroughs.md)                     | **Feature Walkthroughs**                 | End-to-end traces of user journeys from button click to database commit and back.                           |
+| [05-api-and-data-flow.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/05-api-and-data-flow.md)                           | **API & Data Flow**                      | Request lifecycle, proxy routing, CSRF management, error handling, and complete endpoint-to-feature matrix. |
+| [06-authentication-and-permissions.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/06-authentication-and-permissions.md) | **Auth & Permissions**                   | Session cookies, `AuthProvider`, route guards, canonical roles, and partner portal isolation.               |
+| [07-design-decisions-and-tradeoffs.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/07-design-decisions-and-tradeoffs.md) | **Architectural Decisions & Trade-offs** | Senior engineering analysis of 12 major design patterns, evaluating pros, cons, and alternatives.           |
+| [08-developer-field-guide.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/08-developer-field-guide.md)                   | **Developer Field Guide**                | Practical recipes for debugging, locating code, diagnosing errors, and safely modifying features.           |
+| [09-learning-roadmap.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/09-learning-roadmap.md)                             | **7-Stage Learning Roadmap**             | Progressive self-study syllabus taking you from code reading to independent architecture and maintenance.   |
+| [10-self-assessment.md](file:///c:/Users/azwis/OneDrive/Desktop/Doc/Pro/Internship/Travel%20Agency%20Workflow/Travel%20Agency%20Frontend/travel_agency_workflow/docs/engineering-guide/10-self-assessment.md)                               | **Self-Assessment & Exercises**          | Comprehension tests, non-destructive exercises, teach-back checkpoints, and answer keys.                    |
 
 ---
 

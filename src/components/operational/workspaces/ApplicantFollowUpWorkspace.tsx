@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -440,6 +441,7 @@ export function ApplicantFollowUpWorkspace({
   const [embassySubmissionDateVal, setEmbassySubmissionDateVal] = React.useState("");
   const [embassyVisaIssueDateVal, setEmbassyVisaIssueDateVal] = React.useState("");
   const [embassyVisaExpiryDateVal, setEmbassyVisaExpiryDateVal] = React.useState("");
+  const [isAdvancingToProcessing, setIsAdvancingToProcessing] = React.useState(false);
 
   // Ticket & Departure direct editable fields
   const [ticketNumberVal, setTicketNumberVal] = React.useState("");
@@ -1275,6 +1277,44 @@ export function ApplicantFollowUpWorkspace({
                   <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
                     All operational cards (LMIS, Te&apos;shir, Embassy, and Ticket &amp; Departure) are disabled because this applicant has not reached the <strong>Processing</strong> stage. The applicant is currently in the <strong>{currentStageName}</strong> stage. Please proceed accordingly through earlier stages (Registration, CV Generation, Foreign Agency Selection, or Muayena Placement Contract Attachment) before updating follow-up clearance records.
                   </p>
+                  {currentStageName === "Selected" && placementName && (
+                    <div className="pt-2 flex items-center gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        disabled={isAdvancingToProcessing}
+                        onClick={async () => {
+                          try {
+                            setIsAdvancingToProcessing(true);
+                            await advancePlacementV2(placementName, "Processing");
+                            toast.success("Placement advanced to Processing successfully!");
+                            refreshAll();
+                          } catch (err: any) {
+                            toast.error("Advance to Processing Blocked", {
+                              description: formatCleanErrorMessage(err),
+                            });
+                          } finally {
+                            setIsAdvancingToProcessing(false);
+                          }
+                        }}
+                        className="h-7 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-semibold gap-1.5 cursor-pointer"
+                      >
+                        {isAdvancingToProcessing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3 w-3" />
+                        )}
+                        <span>Advance to Processing</span>
+                      </Button>
+                      {currentRow.applicantId && (
+                        <Link
+                          href={`/applicants/${encodeURIComponent(currentRow.applicantId)}/contractor-doc`}
+                          className="text-xs text-amber-900 dark:text-amber-200 underline font-medium hover:text-amber-950 dark:hover:text-amber-100"
+                        >
+                          Review / Attach Contract
+                        </Link>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

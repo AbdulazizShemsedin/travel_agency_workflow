@@ -598,10 +598,32 @@ export function ApplicantTable() {
         ["medical_2_examination_date", "medical_2_examination_date"],
         ["medical_2_date", "medical_2_date"],
         ["medical_current", "medical_current"],
+        ["contract_file", "contract_file"],
         ["contract_file_url", "contract_file_url"],
+        ["visa_file", "visa_file"],
+        ["visa_file_url", "visa_file_url"],
+        ["visa_reference_number", "visa_reference_number"],
+        ["employment_site", "employment_site"],
+        ["contract_duration", "contract_duration"],
+        ["contract_salary_amount", "contract_salary_amount"],
+        ["contract_salary_currency", "contract_salary_currency"],
+        ["kuwait_agency_name", "kuwait_agency_name"],
+        ["kuwait_agency_license", "kuwait_agency_license"],
       ] as const;
       for (const [src, dst] of mergeKeys) {
         if ((plc as any)[src] && !(copy as any)[dst]) (copy as any)[dst] = (plc as any)[src];
+      }
+      if (!copy.destination_country && plc.destination_country) {
+        copy.destination_country = plc.destination_country;
+      }
+      if (!copy.contract_file && (plc.contract_file || (plc as any).contract_file_url)) {
+        copy.contract_file = plc.contract_file || (plc as any).contract_file_url;
+      }
+      if (!copy.contract_file_url && ((plc as any).contract_file_url || plc.contract_file)) {
+        copy.contract_file_url = (plc as any).contract_file_url || plc.contract_file;
+      }
+      if (!copy.visa_file && (plc.visa_file || (plc as any).visa_file_url)) {
+        copy.visa_file = plc.visa_file || (plc as any).visa_file_url;
       }
       if (!copy.sponsor_name && (copy.employer_name || plc.employer_name)) {
         copy.sponsor_name = copy.employer_name || plc.employer_name;
@@ -623,8 +645,8 @@ export function ApplicantTable() {
       copy.flight_outcome_date = plc.flight_outcome_date || (applicant as any).flight_outcome_date;
       copy.replacement_owed = plc.replacement_owed ?? (applicant as any).replacement_owed;
       // Store the active placement name so we can look up clearance steps per row
-        copy._activePlacementName = plc.name;
-        return copy;
+      copy._activePlacementName = plc.name;
+      return copy;
       });
     }, [applicants, placementsData, clearedPlacementNames]);
 
@@ -1110,8 +1132,8 @@ export function ApplicantTable() {
                   const contractFileUrl =
                     (applicant as any).contract_file_url ||
                     (applicant as any).contract_doc_url ||
+                    (applicant as any).contract_file ||
                     null;
-                  const hasContract = Boolean(contractNo || contractFileUrl);
 
                   // Active placement reference
                   const plcName = String(
@@ -1122,11 +1144,42 @@ export function ApplicantTable() {
                   const plcRecord = plcName ? placementByName.get(plcName) : undefined;
                   const clrSteps = plcName ? (clearanceByPlacement.get(plcName) || {}) : {};
 
+                  const effectiveContractFile =
+                    contractFileUrl ||
+                    plcRecord?.contract_file ||
+                    (plcRecord as any)?.contract_file_url ||
+                    null;
+                  const effectiveContractDate =
+                    contractDate ||
+                    plcRecord?.contract_signed_date ||
+                    null;
+                  const effectiveContractNo =
+                    contractNo ||
+                    plcRecord?.contract_number ||
+                    (plcRecord as any)?.contract_no ||
+                    null;
+
+                  const isKuwaitRow =
+                    (applicant.destination_country || (applicant as any).country || plcRecord?.destination_country || "")
+                      .toLowerCase()
+                      .includes("kuwait");
+
+                  const hasContract = Boolean(
+                    effectiveContractNo ||
+                    effectiveContractFile ||
+                    (isKuwaitRow && (effectiveContractDate || (applicant as any).employment_site || plcRecord?.employment_site))
+                  );
+
                   // Authoritative hierarchical medical resolution
                   const effectiveMedical = resolveEffectiveMedical(applicant, plcRecord);
                   const medicalStatus = effectiveMedical.status;
                   const examDate = effectiveMedical.examDate;
                   const examExpiry = effectiveMedical.expiryDate;
+
+                  // Check if Selected medical gate is satisfied (FIT)
+                  const isMedicalFit =
+                    plcRecord?.medical_selected_status === "FIT" ||
+                    medicalStatus === "FIT";
 
                   const teshirStatus = (clrSteps as any).teshir?.status || null;
                   const injazStatus = (clrSteps as any).injaz?.status || null;
@@ -1217,7 +1270,7 @@ export function ApplicantTable() {
                       {/* Col 5: Stage Status */}
                       <td className="px-1.5 py-2 xl:py-2.5 text-center truncate border-r border-slate-100 dark:border-[#1e1e26]">
                         <Badge variant={badge.variant} dotColor={badge.dotColor} className={cn("py-0.5 px-2 text-[9.5px] xl:text-[10px] font-semibold inline-block max-w-full leading-tight", badge.className)}>
-                          {stage === "Processing" ? "Processing (LMIS / Teashir)" : stage}
+                          {stage === "Processing" ? (isKuwaitRow ? "Processing (LMIS / Telesign)" : "Processing (LMIS / Teashir)") : stage}
                         </Badge>
                       </td>
 
@@ -1428,8 +1481,8 @@ export function ApplicantTable() {
                             </Link>
                           )}
 
-                          {/* Record Medical — Selected stage, opens inline modal only if NOT yet recorded */}
-                          {stage === "Selected" && (applicant as any)._activePlacementName && (!medicalStatus || (medicalStatus !== "FIT" && medicalStatus !== "UNFIT")) && (
+                          {/* Record Medical — Selected stage, opens inline modal only if NOT yet recorded on placement */}
+                          {stage === "Selected" && (applicant as any)._activePlacementName && (plcRecord?.medical_selected_status !== "FIT" && plcRecord?.medical_selected_status !== "UNFIT") && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1437,8 +1490,8 @@ export function ApplicantTable() {
                                 setMedicalTargetPlacementName((applicant as any)._activePlacementName);
                                 setMedicalTargetApplicantName(applicant.full_name || applicant.name);
                                 setMed1Status("FIT");
-                                setMed1Date(examDate || "");
-                                setMed1Expiry("");
+                                setMed1Date(plcRecord?.medical_selected_examination_date || examDate || new Date().toISOString().split("T")[0]);
+                                setMed1Expiry(plcRecord?.medical_selected_expiry_date || examExpiry || "");
                                 setIsMedicalModalOpen(true);
                               }}
                               className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold border transition cursor-pointer shadow-2xs text-rose-800 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 border-rose-300 dark:border-rose-700"
@@ -1450,7 +1503,7 @@ export function ApplicantTable() {
                           )}
 
                           {/* Advance to Processing — Selected stage with contract + FIT medical */}
-                          {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && medicalStatus === "FIT" && (
+                          {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && (
                             <button
                               type="button"
                               disabled={advanceToProcessingMutation.isPending}
@@ -1467,6 +1520,28 @@ export function ApplicantTable() {
                                 <Clock className="h-2.5 w-2.5 text-blue-600 dark:text-blue-400" />
                               )}
                               <span>Processing</span>
+                            </button>
+                          )}
+
+                          {/* Stage: Stamped — Record Flight Ticket */}
+                          {stage === "Stamped" && (applicant as any)._activePlacementName && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const plc = (applicant as any)._activePlacementName
+                                  ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                  : null;
+                                setTicketingTargetPlacement(plc || null);
+                                setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                setTicketingInitialTab("ticket");
+                                setIsTicketingModalOpen(true);
+                              }}
+                              className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-indigo-950 dark:text-indigo-200 bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 border border-indigo-300 dark:border-indigo-700 transition cursor-pointer shadow-2xs"
+                              title="Record flight ticket details (moves to Ticketed)"
+                            >
+                              <Ticket className="h-2.5 w-2.5 text-indigo-700 dark:text-indigo-400" />
+                              <span>Ticket</span>
                             </button>
                           )}
 
@@ -1635,28 +1710,32 @@ export function ApplicantTable() {
                                   </Link>
                                 )}
 
-                                {/* Record Medical (Selected stage) */}
-                                {stage === "Selected" && (applicant as any)._activePlacementName && (!medicalStatus || (medicalStatus !== "FIT" && medicalStatus !== "UNFIT")) && (
+                                {/* Record / Update Medical (Selected stage) */}
+                                {stage === "Selected" && (applicant as any)._activePlacementName && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setMedicalTargetPlacementName((applicant as any)._activePlacementName);
                                       setMedicalTargetApplicantName(applicant.full_name || applicant.name);
-                                      setMed1Status("FIT");
-                                      setMed1Date(examDate || "");
-                                      setMed1Expiry("");
+                                      setMed1Status(plcRecord?.medical_selected_status === "UNFIT" ? "UNFIT" : "FIT");
+                                      setMed1Date(plcRecord?.medical_selected_examination_date || examDate || new Date().toISOString().split("T")[0]);
+                                      setMed1Expiry(plcRecord?.medical_selected_expiry_date || examExpiry || "");
                                       setIsMedicalModalOpen(true);
                                     }}
                                     className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                                   >
                                     <HeartPulse className="h-3.5 w-3.5 text-rose-500" />
-                                    <span>Record Medical (FIT/UNFIT)</span>
+                                    <span>
+                                      {plcRecord?.medical_selected_status === "FIT" || plcRecord?.medical_selected_status === "UNFIT"
+                                        ? "Update Medical (FIT/UNFIT)"
+                                        : "Record Medical (FIT/UNFIT)"}
+                                    </span>
                                   </button>
                                 )}
 
                                 {/* Advance to Processing (Selected stage) */}
-                                {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && medicalStatus === "FIT" && (
+                                {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && (
                                   <button
                                     type="button"
                                     disabled={advanceToProcessingMutation.isPending}
@@ -1672,6 +1751,27 @@ export function ApplicantTable() {
                                       <Clock className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                                     )}
                                     <span>Advance to Processing</span>
+                                  </button>
+                                )}
+
+                                {/* Record Flight Ticket (Stamped stage) */}
+                                {stage === "Stamped" && (applicant as any)._activePlacementName && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const plc = (applicant as any)._activePlacementName
+                                        ? placementByName.get(String((applicant as any)._activePlacementName).toLowerCase().trim())
+                                        : null;
+                                      setTicketingTargetPlacement(plc || null);
+                                      setTicketingTargetApplicantName(applicant.full_name || applicant.name);
+                                      setTicketingInitialTab("ticket");
+                                      setIsTicketingModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition cursor-pointer"
+                                  >
+                                    <Ticket className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                                    <span>Record Flight Ticket</span>
                                   </button>
                                 )}
 
