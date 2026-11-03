@@ -4,6 +4,7 @@ export type PermissionAction =
   | "manageUsers"
   | "viewDashboard"
   | "viewApplicants"
+  | "viewPastRecords"
   | "registerApplicant"
   | "generateCv"
   | "manageClearances"
@@ -248,6 +249,8 @@ const ACTION_ROLE_MAP: Record<PermissionAction, string[]> = {
     "CV",
     "Medical Officer",
   ],
+  // Past records: the backend lets only these roles read or enter them (past_records_api).
+  viewPastRecords: ["Admin", "Manager", "Registrar"],
   viewApplicants: [
     "Admin",
     "Manager",
@@ -509,6 +512,7 @@ export const ROUTE_PERMISSION_MAP: Record<string, PermissionAction> = {
   "/dashboard": "viewDashboard",
   "/applicants": "viewApplicants",
   "/applicants/new": "registerApplicant",
+  "/past-records": "viewPastRecords",
   "/selection-requests": "manageSelectionRequests",
   "/chat": "manageCommunication",
   "/employees": "manageUsers",

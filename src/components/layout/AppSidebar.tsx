@@ -54,7 +54,7 @@ interface NavItemConfig {
 const navItems: NavItemConfig[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, action: "viewDashboard", tourId: "sidebar-nav-dashboard" },
   { label: "Applicants", href: "/applicants", icon: Users, action: "viewApplicants", tourId: "sidebar-nav-applicants" },
-  { label: "Past Records", href: "/past-records", icon: History, action: "viewApplicants", tourId: "sidebar-nav-past-records" },
+  { label: "Past Records", href: "/past-records", icon: History, action: "viewPastRecords", tourId: "sidebar-nav-past-records" },
   { label: "Messages", href: "/chat", icon: MessageSquare, action: "manageCommunication", tourId: "sidebar-nav-chat" },
   { label: "Employees", href: "/employees", icon: Briefcase, action: "manageUsers", tourId: "sidebar-nav-employees" },
   { label: "Foreign Agencies", href: "/contractors", icon: Building2, action: "manageContractors", tourId: "sidebar-nav-contractors" },

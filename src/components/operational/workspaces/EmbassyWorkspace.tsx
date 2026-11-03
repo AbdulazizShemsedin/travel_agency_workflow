@@ -46,8 +46,9 @@ import {
   recordWakalaPaymentV2,
   setVisaIssueDateV2,
   getInjazPaperV2,
+  setStepRemarksV2,
 } from "@/lib/api/v2/clearance";
-import { updateApplicantForLmisV2, updateApplicantV2, getApplicantV2 } from "@/lib/api/v2/applicants";
+import { getApplicantV2 } from "@/lib/api/v2/applicants";
 import { updatePlacementParsedFieldsV2 } from "@/lib/api/v2/placements";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
@@ -103,6 +104,12 @@ export function EmbassyWorkspace({
       ["manager", "agency admin"].includes(String(r).trim().toLowerCase())
     );
   const canEdit = can("editEmbassy");
+  // The visa number on the placement is the Injaz paper's; only the parsing staff may change it.
+  const canEditVisaNumber =
+    isStrictAdmin ||
+    (authUserV2?.roles || []).some((r: any) =>
+      ["contract parser", "manager", "admin", "system manager"].includes(String(r).trim().toLowerCase())
+    );
 
 
 
@@ -153,7 +160,7 @@ export function EmbassyWorkspace({
     setModalEmployee(embassy?.assigned_officer || embassy?.employee || "");
     setModalStampNumber(editingRow.visaNumber || (editingRow.applicant as any)?.visa_number || "");
     setModalStampDate(editingRow.appointmentDate || (editingRow.applicant as any)?.stamp_date || "");
-    setModalRejectionRemark(embassy?.rejection_remark || (embassy as any)?.notes || editingRow.remark || "");
+    setModalRejectionRemark(editingRow.embassyRemarks || embassy?.rejection_remark || "");
 
     const isWakalaPaid = (editingRow.wakalaStatus || "").toLowerCase() === "paid";
     setModalWakalaStatus(isWakalaPaid ? "Paid" : "Pending");
@@ -237,12 +244,12 @@ export function EmbassyWorkspace({
     }
   };
 
-  // In-cell quick update helper: Remark (Applicant.remarks)
+  // In-cell quick update helper: Remark (the Embassy step's remark)
   const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
     try {
-      await updateApplicantV2(row.applicantId, {
-        remarks: remark,
-      });
+      const stepName = row.embassy?.name;
+      if (!stepName) throw new Error("No clearance step found for this candidate.");
+      await setStepRemarksV2(stepName, remark.trim());
       toast.success("Remark saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -382,27 +389,15 @@ export function EmbassyWorkspace({
         }
       }
 
-      // Update visa number on placement if provided
-      const plcName = editingRow.placementId || editingRow.dsrName;
-      if (modalStampNumber.trim() && plcName) {
-        try {
-          await updatePlacementParsedFieldsV2(plcName, {
-            visa_number: modalStampNumber.trim(),
-          });
-        } catch (err) {
-          console.warn("Placement visa_number update warning:", err);
-        }
-      }
-
-      // Update remark on applicant record
-      if (modalRejectionRemark.trim()) {
-        try {
-          await updateApplicantV2(editingRow.applicantId, {
-            remarks: modalRejectionRemark.trim(),
-          });
-        } catch (err) {
-          console.warn("Applicant doc update warning:", err);
-        }
+      // The stamp number is saved by the stamp itself. The remark belongs to the Embassy step;
+      // a rejection already carries its own remark.
+      const embassyStepName = editingRow.embassy?.name || stepName;
+      if (
+        embassyStepName &&
+        modalStatus !== "Rejected" &&
+        modalRejectionRemark.trim() !== (editingRow.embassyRemarks || "").trim()
+      ) {
+        await setStepRemarksV2(embassyStepName, modalRejectionRemark.trim());
       }
     },
     onSuccess: async () => {
@@ -526,7 +521,7 @@ export function EmbassyWorkspace({
         <ExcelTextInput
           value={row.visaNumber || (row.applicant as any)?.visa_number || ""}
           placeholder="Visa #"
-          disabled={!canEdit}
+          disabled={!canEdit || !canEditVisaNumber}
           onSave={(val) => handleUpdateVisaNumber(row, val)}
           className="font-mono font-bold text-blue-900 dark:text-blue-300"
         />
@@ -699,7 +694,7 @@ export function EmbassyWorkspace({
       editable: true,
       cell: (row) => (
         <ExcelTextInput
-          value={row.remark || row.embassy?.rejection_remark || (row.embassy as any)?.notes || ""}
+          value={row.embassyRemarks || ""}
           placeholder="Remark / Note"
           disabled={!canEdit}
           onSave={(val) => handleUpdateRemark(row, val)}

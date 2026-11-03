@@ -3590,7 +3590,7 @@ export function ApplicantRegistrationForm({
               Confirm Applicant Registration
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 dark:text-zinc-400 mt-1">
-              Are you sure you want to promote this applicant to <strong>Registered</strong>? This will validate all KYC, medical requirements, and field floors in accordance with <code>state_machine.py</code>.
+              Register this applicant? The system checks that the required details, documents and medical information are complete before saving.
             </DialogDescription>
           </DialogHeader>
 

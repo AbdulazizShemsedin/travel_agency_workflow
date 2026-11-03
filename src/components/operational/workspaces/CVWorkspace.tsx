@@ -357,9 +357,6 @@ export function CVWorkspace({
             >
               {row.fullName}
             </Link>
-            <span className="font-mono text-[10px] text-slate-400">
-              {row.applicantId}
-            </span>
           </div>
         ),
       },
