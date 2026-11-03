@@ -357,6 +357,7 @@ describe("Applicant Process Restoration vs Restart Workflow (Scenarios A through
       }
       if (options?.body) {
         sentRestoreBody = JSON.parse(options.body);
+        sentRestoreBody.__url = urlStr;
       }
       return createMockResponse({
         message: {
@@ -372,7 +373,12 @@ describe("Applicant Process Restoration vs Restart Workflow (Scenarios A through
         "APP-00111",
         "Administrative error: applicant was cancelled mistakenly by registrar."
       );
-      assert.equal(sentRestoreBody.applicant_name, "APP-00111");
+      // A restore is the backend's undo of the cancel.
+      assert.match(sentRestoreBody.__url, /reversal\.write/);
+      assert.equal(sentRestoreBody.op, "reverse_last_step");
+      assert.equal(sentRestoreBody.doctype, "Applicant");
+      assert.equal(sentRestoreBody.name, "APP-00111");
+      assert.equal(sentRestoreBody.from_status, "Cancelled");
       assert.equal(
         sentRestoreBody.reason,
         "Administrative error: applicant was cancelled mistakenly by registrar."

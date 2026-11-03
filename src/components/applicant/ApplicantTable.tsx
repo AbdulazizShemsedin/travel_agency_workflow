@@ -476,24 +476,7 @@ export function ApplicantTable() {
       toast.success(data?.message || "Applicant process successfully restored to previous state.");
     },
     onError: (err: any) => {
-      const msg = err?.message || String(err);
-      const isUnimplemented =
-        err?.statusCode === 501 ||
-        err?.statusCode === 404 ||
-        err?.code === "MethodNotImplemented" ||
-        msg.includes("not yet implemented") ||
-        msg.includes("Failed to get method") ||
-        msg.includes("has no attribute 'restore_applicant'");
-      if (isUnimplemented) {
-        setRestoreErrorNotice(
-          "Backend restoration service ('applicant_api.restore_applicant') is not yet implemented on the server. To resume the applicant's workflow, use 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
-        );
-        toast.info("Backend restoration service pending deployment", {
-          description: "Use 'Restart as New Attempt' to start a new cycle in the meantime."
-        });
-      } else {
-        toast.error("Restoration failed", { description: msg });
-      }
+      toast.error("Restoration failed", { description: err?.message || String(err) });
     },
   });
 
