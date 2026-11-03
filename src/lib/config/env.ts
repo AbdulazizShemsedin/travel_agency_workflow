@@ -10,6 +10,8 @@
 
 export function getFrappeBaseUrl(): string {
   const url =
+    process.env.BACKEND_URL ||
+    process.env.GO_BACKEND_URL ||
     process.env.FRAPPE_BASE_URL ||
     process.env.NEXT_PUBLIC_FRAPPE_URL ||
     "";
