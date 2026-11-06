@@ -48,7 +48,7 @@ function createMockResponse(bodyData: any, status = 200): Response {
 }
 
 describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", () => {
-  test("1. Foreign agency request helper sends contractor_name and contractor to satisfy backend requirement", async () => {
+  test("1. Foreign agency request helper does NOT pass contractor_name, keeping status as Requested", async () => {
     const originalFetch = globalThis.fetch;
     let interceptedUrl = "";
     let interceptedBody: any = null;
@@ -62,19 +62,19 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      const res = await requestCandidateSelectionV2("APP-1001", "Test Agency Contractor");
+      const res = await requestCandidateSelectionV2("APP-1001");
       assert.equal(interceptedUrl.endsWith("agency_tracking.api.portal.write"), true);
       assert.equal(interceptedBody?.op, "select_candidate");
       assert.equal(interceptedBody?.applicant_name, "APP-1001");
-      assert.equal(interceptedBody?.contractor_name, "Test Agency Contractor");
-      assert.equal(interceptedBody?.contractor, "Test Agency Contractor");
+      assert.equal(interceptedBody?.contractor_name, undefined);
+      assert.equal(interceptedBody?.contractor, undefined);
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
 
-  test("2. Agency request with replacement passes replacement_for and contractor_name", async () => {
+  test("2. Agency request with replacement passes replacement_for without contractor_name", async () => {
     const originalFetch = globalThis.fetch;
     let interceptedBody: any = null;
 
@@ -86,10 +86,11 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      const res = await requestCandidateSelectionV2("APP-1002", "Test Agency Contractor", "PLM-OLD-999");
+      const res = await requestCandidateSelectionV2("APP-1002", "PLM-OLD-999");
       assert.equal(interceptedBody?.applicant_name, "APP-1002");
-      assert.equal(interceptedBody?.contractor_name, "Test Agency Contractor");
       assert.equal(interceptedBody?.replacement_for, "PLM-OLD-999");
+      assert.equal(interceptedBody?.contractor_name, undefined);
+      assert.equal(interceptedBody?.contractor, undefined);
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
@@ -120,16 +121,7 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }
   });
 
-  test("4. Selection helpers reject missing or empty contractorName to prevent 417 errors", async () => {
-    await assert.rejects(
-      async () => {
-        await requestCandidateSelectionV2("APP-1004", "");
-      },
-      {
-        message: /Contractor \/ Agency identity is required/i,
-      }
-    );
-
+  test("4. Staff direct selection rejects missing or empty contractorName", async () => {
     await assert.rejects(
       async () => {
         await selectCandidateDirectlyV2("APP-1004", "");
@@ -140,7 +132,7 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     );
   });
 
-  test("5. Backward-compatible selectCandidateV2 forwards contractor_name and rejects missing contractor", async () => {
+  test("5. Backward-compatible selectCandidateV2 routes agency request vs staff direct selection", async () => {
     const originalFetch = globalThis.fetch;
     const interceptedBodies: any[] = [];
 
@@ -152,24 +144,17 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
     }) as any;
 
     try {
-      // Call with contractor -> forwards contractor_name
+      // Call with contractor -> forwards contractor_name (direct selection)
       await selectCandidateV2("APP-1006", "AGY-DUBAI");
       assert.equal(interceptedBodies[0]?.contractor_name, "AGY-DUBAI");
 
-      // Call without contractor -> rejects early
-      await assert.rejects(
-        async () => {
-          await selectCandidateV2("APP-1005");
-        },
-        {
-          message: /Contractor name is required/i,
-        }
-      );
+      // Call without contractor -> agency request (no contractor_name)
+      await selectCandidateV2("APP-1005");
+      assert.equal(interceptedBodies[1]?.contractor_name, undefined);
     } finally {
       globalThis.fetch = originalFetch;
     }
   });
-
   test("6. listSelectionRequestsV2 handles empty responses and various envelope shapes without throwing", async () => {
     const originalFetch = globalThis.fetch;
 

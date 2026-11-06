@@ -175,18 +175,16 @@ export async function getCandidateDetailV2(applicantName: string): Promise<any> 
  */
 export async function requestCandidateSelectionV2(
   applicantName: string,
-  contractorName: string,
-  replacementFor?: string
+  replacementFor?: string,
+  contractorName?: string
 ): Promise<V2SelectCandidateResponse> {
-  const resolvedContractor = (contractorName || "").trim();
-  if (!resolvedContractor) {
-    throw new Error("Contractor / Agency identity is required to request candidate selection.");
-  }
   const body: Record<string, any> = {
     applicant_name: applicantName,
-    contractor_name: resolvedContractor,
-    contractor: resolvedContractor,
   };
+  if (contractorName && contractorName.trim()) {
+    body.contractor_name = contractorName.trim();
+    body.contractor = contractorName.trim();
+  }
   if (replacementFor && replacementFor.trim()) {
     body.replacement_for = replacementFor.trim();
     body.free_replacement_for_complaint = replacementFor.trim();
@@ -245,9 +243,9 @@ export async function selectCandidateV2(
     !contractorOrReplacement.startsWith("PLM-") &&
     !contractorOrReplacement.startsWith("APP-")
   ) {
-    return requestCandidateSelectionV2(applicantName, contractorOrReplacement);
+    return selectCandidateDirectlyV2(applicantName, contractorOrReplacement);
   }
-  throw new Error("Contractor name is required for candidate selection.");
+  return requestCandidateSelectionV2(applicantName, contractorOrReplacement);
 }
 
 export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V2WakalaRequestItem[]> {

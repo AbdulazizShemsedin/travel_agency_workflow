@@ -280,23 +280,8 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
-      const targetContractor =
-        effectiveContractor ||
-        resolveContractorString(agencyContext?.contractor?.name) ||
-        resolveContractorString(authUser?.contractor) ||
-        activeContractor ||
-        fallbackContractor;
-
-      if (!targetContractor) {
-        throw new ApiV2Error(
-          "Unable to request selection: your account is not associated with an agency contractor. Please contact your administrator.",
-          400
-        );
-      }
-
       return await requestCandidateSelectionV2(
         candidate.name,
-        targetContractor,
         replacementFor || undefined
       );
     },
