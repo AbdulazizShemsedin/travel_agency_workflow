@@ -28,11 +28,12 @@ export const V2_CUSTOM_ROLES = [
 export type V2CustomRole = (typeof V2_CUSTOM_ROLES)[number];
 
 export interface V2AuthUser {
-  user: string; // email or username
-  full_name: string;
+  user?: string; // email or username
+  email?: string;
+  full_name?: string;
   roles: string[];
   read_only_roles?: string[];
-  contractor?: string | null;
+  contractor?: any;
   is_internal_staff?: boolean;
 }
 
@@ -98,13 +99,43 @@ export function hasAnyV2Role(user: V2AuthUser | null | undefined, targetRoles: (
   return targetRoles.some((role) => hasV2Role(user, role));
 }
 
+export const STAFF_SELECTION_ROLES = new Set([
+  "admin",
+  "administrator",
+  "system manager",
+  "manager",
+]);
+
+/**
+ * Checks if user is an internal staff member authorized for direct candidate selection
+ * (holds Administrator, Manager, Admin, or System Manager).
+ */
+export function isStaffSelectionUser(user: V2AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  const username = (user.user || user.email || "").toLowerCase().trim();
+  if (username === "administrator") return true;
+  if (!Array.isArray(user.roles)) return false;
+  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase().replace(" (view)", ""));
+  return normRoles.some((r) => STAFF_SELECTION_ROLES.has(r));
+}
+
+/**
+ * Checks if user is a pure external Foreign Agency (holds 'Foreign Agency'
+ * and does NOT hold Manager, Admin, System Manager, or Administrator).
+ */
+export function isPureForeignAgency(user: V2AuthUser | null | undefined): boolean {
+  if (!user || !Array.isArray(user.roles)) return false;
+  const username = (user.user || user.email || "").toLowerCase().trim();
+  if (username === "administrator") return false;
+  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase().replace(" (view)", ""));
+  const hasForeignRole = normRoles.includes("foreign agency");
+  const hasStaffRole = normRoles.some((r) => STAFF_SELECTION_ROLES.has(r));
+  return hasForeignRole && !hasStaffRole;
+}
+
 /**
  * Checks if user is exclusively an external partner agency.
  */
 export function isV2ForeignAgency(user: V2AuthUser | null | undefined): boolean {
-  if (!user || !Array.isArray(user.roles)) return false;
-  const normRoles = user.roles.map((r) => (typeof r === "string" ? r : "").trim().toLowerCase().replace(" (view)", ""));
-  const isForeign = normRoles.includes("foreign agency");
-  const isAdmin = normRoles.some((r) => ADMIN_OVERRIDE_ROLES.has(r));
-  return isForeign && !isAdmin;
+  return isPureForeignAgency(user);
 }

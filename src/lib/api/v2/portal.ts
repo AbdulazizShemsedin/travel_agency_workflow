@@ -8,6 +8,7 @@
  */
 
 import { requestV2 } from "./client";
+import { getCurrentUserV2 } from "./auth";
 
 /**
  * Candidate item presented on Foreign Agency Candidate Directory.
@@ -167,27 +168,25 @@ export async function getCandidateDetailV2(applicantName: string): Promise<any> 
 }
 
 /**
- * Requests selection of a candidate by a foreign agency (creates a Placement in status "Requested").
- * Per backend contract, contractor_name must be supplied. The backend verifies that the contractor
- * matches the authenticated foreign agency session and records the placement strictly in status
- * "Requested" awaiting internal staff approval (contract 0.-5).
- * replacement_for: placement ID of the returned worker if this selection is a replacement.
+ * Requests selection of a candidate by a pure foreign agency (creates a Placement in status "Requested").
+ * Binds the placement to the authenticated foreign agency session and records the placement strictly
+ * in status "Requested" awaiting internal staff review and approval (/selection-requests).
+ *
+ * Per confirmed Go backend contract:
+ * Pure foreign agency MUST NOT supply contractor_name or contractor. The backend infers the contractor
+ * from the authenticated user's session and creates the Placement in status "Requested".
  */
 export async function requestCandidateSelectionV2(
   applicantName: string,
-  replacementFor?: string,
-  contractorName?: string
+  replacementFor?: string
 ): Promise<V2SelectCandidateResponse> {
   const body: Record<string, any> = {
     applicant_name: applicantName,
   };
-  if (contractorName && contractorName.trim()) {
-    body.contractor_name = contractorName.trim();
-    body.contractor = contractorName.trim();
-  }
-  if (replacementFor && replacementFor.trim()) {
-    body.replacement_for = replacementFor.trim();
-    body.free_replacement_for_complaint = replacementFor.trim();
+  if (replacementFor && typeof replacementFor === "string" && replacementFor.trim()) {
+    const trimmed = replacementFor.trim();
+    body.replacement_for = trimmed;
+    body.free_replacement_for_complaint = trimmed;
   }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.api.portal.write?op=select_candidate",
@@ -199,14 +198,15 @@ export async function requestCandidateSelectionV2(
 }
 
 /**
- * Directly selects a candidate for an agency by internal staff (Manager or Admin only).
- * Per backend contract 0.-23, passing `contractor_name` from an authorized staff account
- * bypasses the "Requested" review step and transitions the candidate directly to "Selected".
+ * Directly selects a candidate for an agency by internal staff (Manager, Admin, System Manager, or Administrator).
+ * Per backend contract, passing `contractor_name` from an authorized staff account
+ * bypasses the "Requested" review step and creates the placement directly in status "Selected".
  * Endpoint: POST /api/method/agency_tracking.api.portal.write?op=select_candidate
  */
 export async function selectCandidateDirectlyV2(
   applicantName: string,
-  contractorName: string
+  contractorName: string,
+  replacementFor?: string
 ): Promise<V2SelectCandidateResponse> {
   if (!contractorName || !contractorName.trim()) {
     throw new Error("Contractor/Agency name is required for direct staff selection.");
@@ -216,6 +216,11 @@ export async function selectCandidateDirectlyV2(
     contractor_name: contractorName.trim(),
     contractor: contractorName.trim(),
   };
+  if (replacementFor && typeof replacementFor === "string" && replacementFor.trim()) {
+    const trimmed = replacementFor.trim();
+    body.replacement_for = trimmed;
+    body.free_replacement_for_complaint = trimmed;
+  }
   return requestV2<V2SelectCandidateResponse>(
     "/api/method/agency_tracking.api.portal.write?op=select_candidate",
     {
@@ -227,8 +232,8 @@ export async function selectCandidateDirectlyV2(
 
 /**
  * General selection wrapper preserving backwards compatibility.
- * When contractorName is supplied (or when replacementForOrContractor is an agency name),
- * forwards contractor_name to portal_api.select_candidate.
+ * When contractorName is supplied (or when contractorOrReplacement is an agency name),
+ * forwards contractor_name to selectCandidateDirectlyV2. Otherwise forwards to requestCandidateSelectionV2.
  */
 export async function selectCandidateV2(
   applicantName: string,
@@ -236,11 +241,12 @@ export async function selectCandidateV2(
   contractorName?: string
 ): Promise<V2SelectCandidateResponse> {
   if (contractorName) {
-    return selectCandidateDirectlyV2(applicantName, contractorName);
+    return selectCandidateDirectlyV2(applicantName, contractorName, contractorOrReplacement);
   }
   if (
     contractorOrReplacement &&
     !contractorOrReplacement.startsWith("PLM-") &&
+    !contractorOrReplacement.startsWith("CMP-") &&
     !contractorOrReplacement.startsWith("APP-")
   ) {
     return selectCandidateDirectlyV2(applicantName, contractorOrReplacement);

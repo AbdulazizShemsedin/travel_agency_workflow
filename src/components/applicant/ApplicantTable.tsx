@@ -29,6 +29,7 @@ import {
   Briefcase,
   AlertCircle,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { V2ApplicantDetails, listApplicantsV2, listPlacementsV2, listMyClearanceStepsV2, registerApplicantV2 } from "@/lib/api/v2";
 import {
@@ -38,7 +39,7 @@ import {
   getPreCancellationSnapshot,
 } from "@/lib/api/v2/applicants";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
-import { generateCvV2 } from "@/lib/api/v2/cv";
+import { generateCvV2, renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { recordSelectedMedicalResultV2, clearSelectedMedicalResultV2, advancePlacementV2 } from "@/lib/api/v2/placements";
 import { TicketingDepartureModal } from "@/components/applicant/TicketingDepartureModal";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
@@ -333,6 +334,31 @@ export function ApplicantTable() {
       setGeneratingCvFor(null);
     },
   });
+
+  // Direct CV PDF download handler for optional user download
+  const [downloadingCvId, setDownloadingCvId] = React.useState<string | null>(null);
+  const handleDownloadCvDirect = async (applicantName: string, passportNumber?: string) => {
+    try {
+      setDownloadingCvId(applicantName);
+      toast.info(`Preparing CV PDF for ${applicantName}...`);
+      const blob = await renderCvPdfV2(applicantName);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CV_${(passportNumber || applicantName).replace(/\s+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("CV PDF downloaded successfully");
+    } catch (err: any) {
+      toast.error("Failed to download CV PDF", {
+        description: err?.message || "Please ensure the applicant profile has required photo and details.",
+      });
+    } finally {
+      setDownloadingCvId(null);
+    }
+  };
 
   // Inline Register Applicant mutation (Draft -> Registered)
   const [registeringApplicant, setRegisteringApplicant] = React.useState<string | null>(null);
@@ -1458,10 +1484,10 @@ export function ApplicantTable() {
                               Boolean((applicant as any).is_muayena)
                             ) && (
                             <Link
-                              href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
+                              href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
                               onClick={(e) => e.stopPropagation()}
                               className="hidden 2xl:inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9.5px] font-bold text-teal-950 dark:text-teal-200 bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/80 dark:hover:bg-teal-900 border border-teal-300 dark:border-teal-700 transition cursor-pointer shadow-2xs"
-                              title="View or download CV"
+                              title="View CV"
                             >
                               <FileText className="h-2.5 w-2.5 text-teal-700 dark:text-teal-400" />
                               <span>View CV</span>
@@ -1688,15 +1714,33 @@ export function ApplicantTable() {
                                   </button>
                                 )}
 
-                                {/* View CV (T9: table CV buttons open with ?download=1) */}
+                                {/* View CV & Optional Download CV */}
                                 {(cvGeneratedSet.has(applicant.name) || !["Draft", "Registered", "Cancelled"].includes(stage) || applicant.cv_attachment || applicant.cv_file) && (
-                                  <Link
-                                    href={`/applicants/${encodeURIComponent(applicant.name)}/cv?download=1`}
-                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition"
-                                  >
-                                    <FileText className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                                    <span>View / Download CV</span>
-                                  </Link>
+                                  <>
+                                    <Link
+                                      href={`/applicants/${encodeURIComponent(applicant.name)}/cv`}
+                                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition"
+                                    >
+                                      <FileText className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                                      <span>View CV</span>
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      disabled={downloadingCvId === applicant.name}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownloadCvDirect(applicant.name, applicant.passport_number);
+                                      }}
+                                      className="flex items-center gap-2 w-full text-left px-2.5 py-1.5 rounded-md text-slate-700 dark:text-zinc-200 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 transition cursor-pointer disabled:opacity-50"
+                                    >
+                                      {downloadingCvId === applicant.name ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+                                      ) : (
+                                        <Download className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                                      )}
+                                      <span>{downloadingCvId === applicant.name ? "Downloading CV..." : "Download CV"}</span>
+                                    </button>
+                                  </>
                                 )}
 
                                 {/* View Contract / Contract Doc */}

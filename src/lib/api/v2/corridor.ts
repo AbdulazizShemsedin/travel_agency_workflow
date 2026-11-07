@@ -7,6 +7,18 @@
 
 import { requestV2 } from "./client";
 
+/**
+ * Registered destination countries with implemented clearance corridor workflows.
+ * Baseline registered corridors: Saudi Arabia and Kuwait.
+ * Scales dynamically as new country corridor workflows are implemented in the platform.
+ */
+export const REGISTERED_WORKFLOW_COUNTRIES = [
+  "Saudi Arabia",
+  "Kuwait",
+] as const;
+
+export type RegisteredWorkflowCountry = (typeof REGISTERED_WORKFLOW_COUNTRIES)[number];
+
 export interface V2CorridorStepDefinition {
   step_name: string;
   step_type: string;

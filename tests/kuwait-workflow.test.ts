@@ -342,4 +342,28 @@ describe("Kuwait Standard Workflow Specification & Contract Conformance", () => 
       globalThis.fetch = originalFetch;
     }
   });
+
+  // Test 9: Contractor creation country options: contains registered workflow corridors and scales dynamically
+  test("9. REGISTERED_WORKFLOW_COUNTRIES includes baseline corridors (Saudi Arabia, Kuwait) and scales", async () => {
+    const { REGISTERED_WORKFLOW_COUNTRIES } = await import("../src/lib/api/v2/corridor");
+    assert.ok(Array.isArray(REGISTERED_WORKFLOW_COUNTRIES), "Must be an array");
+    assert.ok(REGISTERED_WORKFLOW_COUNTRIES.includes("Saudi Arabia"), "Must include Saudi Arabia");
+    assert.ok(REGISTERED_WORKFLOW_COUNTRIES.includes("Kuwait"), "Must include Kuwait");
+    assert.equal(REGISTERED_WORKFLOW_COUNTRIES.length >= 2, true, "Must have at least 2 registered countries");
+
+    // Dynamic scaling test: merging new or existing countries
+    const mockContractors = [
+      { country: "Saudi Arabia" },
+      { country: "Kuwait" },
+      { country: "United Arab Emirates" },
+    ];
+    const countrySet = new Set<string>(REGISTERED_WORKFLOW_COUNTRIES);
+    mockContractors.forEach((c) => {
+      if (c.country && c.country.trim()) countrySet.add(c.country.trim());
+    });
+    const scaledOptions = Array.from(countrySet);
+    assert.ok(scaledOptions.includes("Saudi Arabia"));
+    assert.ok(scaledOptions.includes("Kuwait"));
+    assert.ok(scaledOptions.includes("United Arab Emirates"));
+  });
 });

@@ -35,6 +35,7 @@ interface CandidateDetailModalProps {
   onSelect?: (candidate: PortalAvailableCandidate) => void;
   isSelecting?: boolean;
   isAlreadyReserved?: boolean;
+  actionLabel?: string;
 }
 
 export function CandidateDetailModal({
@@ -44,6 +45,7 @@ export function CandidateDetailModal({
   onSelect,
   isSelecting = false,
   isAlreadyReserved = false,
+  actionLabel = "Request Candidate",
 }: CandidateDetailModalProps) {
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
@@ -534,12 +536,12 @@ export function CandidateDetailModal({
               {isSelecting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending Request...
+                  {actionLabel === "Select for agency" ? "Selecting..." : "Sending Request..."}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Request Candidate Selection
+                  {actionLabel}
                 </>
               )}
             </Button>

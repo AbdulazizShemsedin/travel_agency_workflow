@@ -40,7 +40,6 @@ export default function CandidateCvPreviewPage() {
   const { can } = useAuth();
   const canGenerateCv = can("generateCv");
   const applicantId = typeof params?.id === "string" ? decodeURIComponent(params.id) : "";
-  const autoDownloadTriggered = React.useRef(false);
 
   const { data: applicant, isLoading, refetch } = useQuery<V2ApplicantDetails>({
     queryKey: ["applicant", applicantId],
@@ -120,17 +119,6 @@ export default function CandidateCvPreviewPage() {
   React.useEffect(() => {
     setPassportScanImg(passportScanSrc);
   }, [passportScanSrc]);
-
-  // T9: Auto-download CV if ?download=1 query parameter is present once applicant loads
-  React.useEffect(() => {
-    if (applicant && searchParams?.get("download") === "1" && !autoDownloadTriggered.current) {
-      autoDownloadTriggered.current = true;
-      const t = setTimeout(() => {
-        void handleSavePdf();
-      }, 600);
-      return () => clearTimeout(t);
-    }
-  }, [applicant, searchParams]);
 
   if (isLoading) {
     return (

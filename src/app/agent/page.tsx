@@ -25,10 +25,12 @@ import { Badge } from "@/components/ui/badge";
 import {
   listPortalCandidatesV2,
   requestCandidateSelectionV2,
+  selectCandidateDirectlyV2,
   listContractorsV2,
   V2PortalCandidate,
   ApiV2Error,
 } from "@/lib/api/v2";
+import { isStaffSelectionUser } from "@/lib/auth/v2Roles";
 import { getUndoableStepV2, reverseLastStepV2 } from "@/lib/api/v2/undo";
 import { PortalAvailableCandidate } from "@/types/applicant";
 import { AgentLayout } from "@/components/agent/AgentLayout";
@@ -77,6 +79,10 @@ export default function AgentDiscoveryPage() {
   const isInternalStaff = userRoles.some((r) =>
     ["administrator", "system manager", "admin", "manager", "operations manager", "operation manager", "registrar"].includes(r)
   );
+  // Authoritative Go backend contract: users with Administrator, Manager, Admin, or System Manager
+  // directly select candidates on behalf of an agency, while pure Foreign Agency users submit requests.
+  const isStaff = isStaffSelectionUser(authUser) || isInternalStaff;
+  const actionLabel = isStaff ? "Select for agency" : "Request Candidate";
 
   const resolveContractorString = (c: any): string => {
     if (!c) return "";
@@ -89,7 +95,7 @@ export default function AgentDiscoveryPage() {
 
   // Contractor context: authoritative from auth, with state for internal staff switching
   const defaultContractor = resolveContractorString(
-    agencyContext?.contractor?.name || authUser?.contractor
+    agencyContext?.contractor || authUser?.contractor
   );
   const [activeContractor, setActiveContractor] = React.useState<string>(defaultContractor);
 
@@ -101,6 +107,16 @@ export default function AgentDiscoveryPage() {
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
+
+  const matchedAgencyContractor = React.useMemo(() => {
+    if (!authUser?.email || !contractors.length) return "";
+    const matched = contractors.find(
+      (c) =>
+        c.user?.toLowerCase() === authUser.email.toLowerCase() ||
+        c.user_email?.toLowerCase() === authUser.email.toLowerCase()
+    );
+    return matched ? resolveContractorString(matched.name || matched.contractor_name) : "";
+  }, [authUser?.email, contractors]);
 
   const fallbackContractor =
     contractors.length > 0
@@ -126,8 +142,9 @@ export default function AgentDiscoveryPage() {
   }, []);
 
   const effectiveContractor =
-    resolveContractorString(agencyContext?.contractor?.name) ||
+    resolveContractorString(agencyContext?.contractor) ||
     resolveContractorString(authUser?.contractor) ||
+    matchedAgencyContractor ||
     activeContractor ||
     fallbackContractor;
 
@@ -280,6 +297,26 @@ export default function AgentDiscoveryPage() {
   const selectMutation = useMutation({
     mutationFn: async (candidate: PortalAvailableCandidate) => {
       setSelectingCandidateId(candidate.name);
+      if (isStaff) {
+        const targetContractor =
+          effectiveContractor ||
+          resolveContractorString(agencyContext?.contractor) ||
+          resolveContractorString(authUser?.contractor) ||
+          matchedAgencyContractor ||
+          activeContractor ||
+          fallbackContractor;
+
+        if (!targetContractor) {
+          throw new ApiV2Error("A contractor/agency must be specified for direct staff selection.", 400);
+        }
+
+        return await selectCandidateDirectlyV2(
+          candidate.name,
+          targetContractor,
+          replacementFor || undefined
+        );
+      }
+
       return await requestCandidateSelectionV2(
         candidate.name,
         replacementFor || undefined
@@ -296,22 +333,24 @@ export default function AgentDiscoveryPage() {
         setSelectedCandidateForDetail(null);
       }
 
-      // Agency selection requests are recorded in status "Requested" awaiting staff confirmation
-      const successToastMsg = "Request sent. Waiting for internal staff approval.";
+      const successToastMsg = isStaff
+        ? `Candidate ${candidate.full_name || ""} directly selected for agency.`
+        : "Request sent. Waiting for internal staff approval.";
 
       setSuccessToast(successToastMsg);
       setTimeout(() => setSuccessToast(null), 6000);
 
-      // Set up the 7-second undo window for the foreign agent
+      // Set up the 7-second undo window
       const placementName = (res as any)?.placement_name || (res as any)?.name || "";
       if (undoTimeoutRef.current) {
         clearTimeout(undoTimeoutRef.current);
         undoTimeoutRef.current = null;
       }
+      const actionText = isStaff ? "Selection completed" : "Request sent";
       setUndoState({
         candidate,
         placementName,
-        message: `Request sent for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`,
+        message: `${actionText} for ${candidate.full_name}. Click Undo within 7 seconds to cancel.`,
       });
       undoTimeoutRef.current = setTimeout(() => {
         setUndoState(null);
@@ -688,6 +727,7 @@ export default function AgentDiscoveryPage() {
                     onViewDetails={setSelectedCandidateForDetail}
                     onSelect={handleSelectCandidate}
                     isSelecting={selectingCandidateId === candidate.name}
+                    actionLabel={actionLabel}
                   />
                 ))}
               </div>
@@ -815,9 +855,12 @@ export default function AgentDiscoveryPage() {
                                 className="text-xs h-7 rounded-lg bg-emerald-800 hover:bg-emerald-900 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white"
                               >
                                 {selectingCandidateId === candidate.name ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <>
+                                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                                    {isStaff ? "Selecting..." : "Requesting..."}
+                                  </>
                                 ) : (
-                                  "Request Selection"
+                                  actionLabel
                                 )}
                               </Button>
                             </div>
@@ -908,9 +951,10 @@ export default function AgentDiscoveryPage() {
         onClose={() => setSelectedCandidateForDetail(null)}
         onSelect={handleSelectCandidate}
         isSelecting={selectingCandidateId === selectedCandidateForDetail?.name}
+        actionLabel={actionLabel}
       />
 
-      {/* Confirmation Dialog — appears before the foreign agent commits to selecting a candidate */}
+      {/* Confirmation Dialog — appears before the user commits to selecting a candidate */}
       <Dialog
         open={!!candidatePendingConfirm}
         onOpenChange={(open) => {
@@ -920,10 +964,34 @@ export default function AgentDiscoveryPage() {
         <DialogContent className="sm:max-w-md bg-white dark:bg-[#121216] border-slate-200 dark:border-[#222227]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-              <ShieldCheck className="h-5 w-5" /> Request Applicant Selection
+              {isStaff ? (
+                <>
+                  <Building2 className="h-5 w-5" /> Select Candidate for Agency
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-5 w-5" /> Request Applicant Selection
+                </>
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
-              Your request will be sent to internal staff for review and approval. The applicant will be reserved for your agency while the request is pending. The applicant can proceed to the next stage only after internal staff confirms availability and approves the request.
+              {isStaff ? (
+                <>
+                  Directly allocate candidate{" "}
+                  <strong className="text-slate-800 dark:text-zinc-200">
+                    {candidatePendingConfirm?.full_name}
+                  </strong>{" "}
+                  to{" "}
+                  <strong className="text-slate-800 dark:text-zinc-200">
+                    {effectiveContractor || activeContractor || "the selected agency"}
+                  </strong>
+                  . As an authorized staff member, this action will immediately place the applicant in &quot;Selected&quot; status without requiring internal review.
+                </>
+              ) : (
+                <>
+                  Your request will be sent to internal staff for review and approval. The applicant will be reserved for your agency while the request is pending. The applicant can proceed to the next stage only after internal staff confirms availability and approves the request.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -984,7 +1052,7 @@ export default function AgentDiscoveryPage() {
                 </div>
               </div>
               <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
-                <Undo2 className="h-3 w-3" /> You will have 7 seconds to undo after requesting.
+                <Undo2 className="h-3 w-3" /> You will have 7 seconds to undo after {isStaff ? "selection" : "requesting"}.
               </p>
             </div>
           )}
@@ -1008,12 +1076,12 @@ export default function AgentDiscoveryPage() {
               {selectingCandidateId !== null ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending Request...
+                  {isStaff ? "Selecting Candidate..." : "Sending Request..."}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                  Request Applicant Selection
+                  {actionLabel}
                 </>
               )}
             </Button>

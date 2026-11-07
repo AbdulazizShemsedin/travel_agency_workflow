@@ -40,6 +40,7 @@ import {
   resetEmployeePasswordV2,
   getUserPasswordV2,
   V2ContractorItem,
+  REGISTERED_WORKFLOW_COUNTRIES,
 } from "@/lib/api/v2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,17 @@ export default function ContractorsPage() {
       }
     });
     return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  // Registered corridor countries for contractor creation/editing, scaling with newly added workflows or backend records
+  const registeredCountries = React.useMemo(() => {
+    const countrySet = new Set<string>(REGISTERED_WORKFLOW_COUNTRIES);
+    contractors.forEach((c) => {
+      if (c.country && typeof c.country === "string" && c.country.trim()) {
+        countrySet.add(c.country.trim());
+      }
+    });
+    return Array.from(countrySet);
   }, [contractors]);
 
   // Filtered Contractors
@@ -721,13 +733,19 @@ export default function ContractorsPage() {
                   <Label htmlFor="con_country" className="text-xs font-semibold">
                     Country <span className="text-rose-500">*</span>
                   </Label>
-                  <Input
+                  <select
                     id="con_country"
                     required
-                    placeholder="e.g., Saudi Arabia, Kuwait, UAE"
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                  />
+                    className="flex h-10 w-full rounded-lg border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-2 text-xs font-medium text-slate-900 dark:text-zinc-200 shadow-xs transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-700/30 focus:border-emerald-700 cursor-pointer"
+                  >
+                    {registeredCountries.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -849,12 +867,24 @@ export default function ContractorsPage() {
                   <Label htmlFor="edit_country" className="text-xs font-semibold">
                     Country <span className="text-rose-500">*</span>
                   </Label>
-                  <Input
+                  <select
                     id="edit_country"
                     required
                     value={editFormData.country}
                     onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
-                  />
+                    className="flex h-10 w-full rounded-lg border border-slate-300 dark:border-[#2b2b35] bg-white dark:bg-[#121215] px-3 py-2 text-xs font-medium text-slate-900 dark:text-zinc-200 shadow-xs transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-700/30 focus:border-emerald-700 cursor-pointer"
+                  >
+                    {Array.from(
+                      new Set([
+                        ...registeredCountries,
+                        ...(editFormData.country && editFormData.country.trim() ? [editFormData.country.trim()] : []),
+                      ])
+                    ).map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">

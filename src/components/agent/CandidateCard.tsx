@@ -21,6 +21,7 @@ interface CandidateCardProps {
   onViewDetails: (candidate: PortalAvailableCandidate) => void;
   onSelect: (candidate: PortalAvailableCandidate) => void;
   isSelecting?: boolean;
+  actionLabel?: string;
 }
 
 export function CandidateCard({
@@ -28,6 +29,7 @@ export function CandidateCard({
   onViewDetails,
   onSelect,
   isSelecting = false,
+  actionLabel = "Request Candidate",
 }: CandidateCardProps) {
   const [passportImgError, setPassportImgError] = React.useState(false);
   const [fullBodyImgError, setFullBodyImgError] = React.useState(false);
@@ -305,12 +307,12 @@ export function CandidateCard({
             {isSelecting ? (
               <>
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Requesting...
+                {actionLabel === "Select for agency" ? "Selecting..." : "Requesting..."}
               </>
             ) : (
               <>
                 <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Request Selection
+                {actionLabel}
               </>
             )}
           </Button>

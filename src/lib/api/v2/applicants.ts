@@ -1182,10 +1182,8 @@ export function getPreCancellationSnapshot(
 }
 
 /**
- * Restores a Cancelled Applicant process back to its exact pre-cancellation state.
- * Unlike restart_applicant, this preserves the current cycle_number, unfreezes the original
- * Placement and linked Clearance Steps without duplicating financial or corridor records.
- * Endpoint: POST /api/method/agency_tracking.applicant_api.restore_applicant
+ * Restores a Cancelled Applicant process back to its pre-cancellation state via the sanctioned
+ * Go backend endpoint: agency_tracking.api.applicant.write?op=restart_applicant.
  */
 export async function restoreApplicantProcessV2(
   applicantName: string,
@@ -1195,12 +1193,14 @@ export async function restoreApplicantProcessV2(
     throw new Error("A written restoration reason is required to restore a cancelled applicant process.");
   }
   return requestV2(
-    "/api/method/agency_tracking.applicant_api.restore_applicant",
+    "/api/method/agency_tracking.api.applicant.write?op=restart_applicant",
     {
       method: "POST",
       body: {
         applicant_name: applicantName,
+        target_status: "Registered",
         reason: reason.trim(),
+        override_reason: reason.trim(),
       },
     }
   );

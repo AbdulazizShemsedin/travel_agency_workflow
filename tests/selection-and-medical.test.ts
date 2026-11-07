@@ -10,6 +10,10 @@ import {
   listPortalCandidatesV2,
 } from "../src/lib/api/v2/portal";
 import {
+  isPureForeignAgency,
+  isStaffSelectionUser,
+} from "../src/lib/auth/v2Roles";
+import {
   listSelectionRequestsV2,
   approveSelectionRequestV2,
   denySelectionRequestV2,
@@ -66,8 +70,11 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
       assert.equal(interceptedUrl.endsWith("agency_tracking.api.portal.write"), true);
       assert.equal(interceptedBody?.op, "select_candidate");
       assert.equal(interceptedBody?.applicant_name, "APP-1001");
+      // Per confirmed Go backend contract: pure foreign agency MUST NOT send contractor_name or dummy status flags
       assert.equal(interceptedBody?.contractor_name, undefined);
       assert.equal(interceptedBody?.contractor, undefined);
+      assert.equal(interceptedBody?.status, undefined);
+      assert.equal(interceptedBody?.is_request, undefined);
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
@@ -91,10 +98,50 @@ describe("Foreign Agency Selection Request vs Staff Direct Selection Workflow", 
       assert.equal(interceptedBody?.replacement_for, "PLM-OLD-999");
       assert.equal(interceptedBody?.contractor_name, undefined);
       assert.equal(interceptedBody?.contractor, undefined);
+      assert.equal(interceptedBody?.status, undefined);
       assert.equal(res.status, "Requested");
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test("2b. Staff selectCandidateDirectlyV2 with replacement passes contractor_name, contractor, and replacement_for", async () => {
+    const originalFetch = globalThis.fetch;
+    let interceptedBody: any = null;
+
+    globalThis.fetch = (async (_url: any, options: any = {}) => {
+      if (options.body) {
+        interceptedBody = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+      }
+      return createMockResponse({ message: { name: "PLM-002B", status: "Selected", contractor: "AGY-RIYADH" } });
+    }) as any;
+
+    try {
+      const res = await selectCandidateDirectlyV2("APP-1002B", "AGY-RIYADH", "PLM-OLD-999");
+      assert.equal(interceptedBody?.applicant_name, "APP-1002B");
+      assert.equal(interceptedBody?.contractor_name, "AGY-RIYADH");
+      assert.equal(interceptedBody?.contractor, "AGY-RIYADH");
+      assert.equal(interceptedBody?.replacement_for, "PLM-OLD-999");
+      assert.equal(res.status, "Selected");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("2c. Role differentiation adheres to Go backend contract (Pure Foreign Agency vs Staff)", () => {
+    // Pure Foreign Agency: has Foreign Agency and lacks Admin, Administrator, System Manager, Manager
+    assert.equal(isPureForeignAgency({ email: "agency@partner.com", roles: ["Foreign Agency"] }), true);
+    assert.equal(isStaffSelectionUser({ email: "agency@partner.com", roles: ["Foreign Agency"] }), false);
+
+    // Staff User: Manager or Admin has direct selection authority
+    assert.equal(isPureForeignAgency({ email: "manager@agency.com", roles: ["Foreign Agency", "Manager"] }), false);
+    assert.equal(isStaffSelectionUser({ email: "manager@agency.com", roles: ["Foreign Agency", "Manager"] }), true);
+
+    // Administrator
+    assert.equal(isPureForeignAgency({ email: "administrator", roles: ["Foreign Agency"] }), false);
+    assert.equal(isStaffSelectionUser({ email: "administrator", roles: [] }), true);
+    assert.equal(isStaffSelectionUser({ email: "admin@agency.com", roles: ["Admin"] }), true);
+    assert.equal(isStaffSelectionUser({ email: "sysadmin@agency.com", roles: ["System Manager"] }), true);
   });
 
   test("3. Staff direct selection (0.-23) explicitly includes contractor_name", async () => {
