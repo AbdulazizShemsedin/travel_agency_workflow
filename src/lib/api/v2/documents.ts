@@ -40,15 +40,29 @@ export interface V2ParsedContractData {
   status?: string;
   message?: string;
   contract_number?: string;
+  contract_signed_date?: string;
+  contract_date?: string;
   visa_number?: string;
+  employer_name?: string;
   sponsor_name?: string;
+  employer_national_id?: string;
   sponsor_id?: string;
+  employer_address?: string;
   contractor_name?: string;
+  saudi_agency_name?: string;
+  saudi_agency_license?: string;
+  kuwait_agency_name?: string;
+  kuwait_agency_license?: string;
   salary?: number | string;
+  salary_amount?: number | string;
+  contract_salary_amount?: number | string;
+  salary_currency?: string;
+  contract_salary_currency?: string;
   contract_period?: string | number;
   duration?: string | number;
-  contract_signed_date?: string;
+  contract_duration?: string | number;
   work_site?: string;
+  employment_site?: string;
   [key: string]: any;
 }
 
@@ -57,8 +71,18 @@ export interface V2ParsedVisaData {
   message?: string;
   visa_number?: string;
   visa_type?: string;
+  visa_issue_date?: string;
+  issue_date?: string;
+  visa_expiry_date?: string;
+  expiry_date?: string;
+  sponsor_name?: string;
+  employer_name?: string;
+  sponsor_id?: string;
+  civil_id?: string;
+  employer_national_id?: string;
   dates?: string;
   reference?: string;
+  reference_number?: string;
   [key: string]: any;
 }
 
@@ -249,12 +273,13 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
 
 /**
  * Extracts structured fields from an uploaded contract file.
+ * Handles both wrapped and flat response envelopes, and normalizes field aliases.
  */
 export async function parseContractFileV2(
   fileUrl: string,
   destinationCountry?: "Saudi Arabia" | "Kuwait" | string
 ): Promise<V2ParsedContractData> {
-  const result = await requestV2<V2ParsedContractData>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.api.document.write?op=parse_contract_file",
     {
       method: "POST",
@@ -264,19 +289,119 @@ export async function parseContractFileV2(
       },
     }
   );
-  return { status: "success", message: "Contract document parsed successfully", ...result };
+
+  let data: Record<string, any> = {};
+  if (result && typeof result === "object") {
+    if (result.data && typeof result.data === "object") {
+      data = result.data;
+    } else if (result.parsed_data && typeof result.parsed_data === "object") {
+      data = result.parsed_data;
+    } else if (result.parsed_contract && typeof result.parsed_contract === "object") {
+      data = result.parsed_contract;
+    } else if (result.message && typeof result.message === "object") {
+      data = result.message;
+    } else {
+      data = result;
+    }
+  }
+
+  const contractSignedDate = data.contract_signed_date || data.contract_date || data.signed_date || data.date || "";
+  const contractNumber = data.contract_number || data.contract_no || "";
+  const visaNumber = data.visa_number || data.visa_no || "";
+  const employerName = data.employer_name || data.sponsor_name || data.employer || "";
+  const employerId = data.employer_national_id || data.sponsor_id || data.employer_id || data.national_id || "";
+  const employerAddress = data.employer_address || data.sponsor_address || data.address || "";
+  const saudiAgencyName = data.saudi_agency_name || data.agency_name || data.contractor_name || data.saudi_agency || "";
+  const saudiAgencyLicense = data.saudi_agency_license || data.agency_license || "";
+  const kuwaitAgencyName = data.kuwait_agency_name || data.agency_name || data.contractor_name || data.kuwait_agency || "";
+  const kuwaitAgencyLicense = data.kuwait_agency_license || data.agency_license || "";
+  const salary = data.salary_amount ?? data.contract_salary_amount ?? data.salary ?? "";
+  const salaryCurrency = data.salary_currency || data.contract_salary_currency || data.currency || "";
+  const workSite = data.employment_site || data.work_site || data.site || "";
+  const duration = data.contract_duration || data.duration || data.contract_period || "";
+
+  return {
+    status: "success",
+    message: typeof result?.message === "string" ? result.message : "Contract document parsed successfully",
+    ...data,
+    contract_signed_date: contractSignedDate,
+    contract_date: contractSignedDate,
+    contract_number: contractNumber,
+    visa_number: visaNumber,
+    employer_name: employerName,
+    sponsor_name: employerName,
+    employer_national_id: employerId,
+    sponsor_id: employerId,
+    employer_address: employerAddress,
+    saudi_agency_name: saudiAgencyName,
+    saudi_agency_license: saudiAgencyLicense,
+    kuwait_agency_name: kuwaitAgencyName,
+    kuwait_agency_license: kuwaitAgencyLicense,
+    salary_amount: salary,
+    contract_salary_amount: salary,
+    salary: salary,
+    salary_currency: salaryCurrency,
+    contract_salary_currency: salaryCurrency,
+    employment_site: workSite,
+    work_site: workSite,
+    contract_duration: duration,
+    duration: duration,
+    contract_period: duration,
+  };
 }
 
 /**
  * Extracts fields from a Kuwait eVisa document.
+ * Handles both wrapped and flat response envelopes, and normalizes field aliases.
  */
 export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData> {
-  const result = await requestV2<V2ParsedVisaData>(
+  const result = await requestV2<any>(
     "/api/method/agency_tracking.api.document.write?op=parse_visa_file",
     {
       method: "POST",
       body: { file_url: fileUrl },
     }
   );
-  return { status: "success", message: "Visa parsed successfully", ...result };
+
+  let data: Record<string, any> = {};
+  if (result && typeof result === "object") {
+    if (result.data && typeof result.data === "object") {
+      data = result.data;
+    } else if (result.parsed_data && typeof result.parsed_data === "object") {
+      data = result.parsed_data;
+    } else if (result.parsed_visa && typeof result.parsed_visa === "object") {
+      data = result.parsed_visa;
+    } else if (result.message && typeof result.message === "object") {
+      data = result.message;
+    } else {
+      data = result;
+    }
+  }
+
+  const visaNumber = data.visa_number || data.visa_no || "";
+  const visaType = data.visa_type || data.type || "";
+  const issueDate = data.visa_issue_date || data.issue_date || data.dates?.issue || "";
+  const expiryDate = data.visa_expiry_date || data.expiry_date || data.dates?.expiry || "";
+  const sponsorName = data.sponsor_name || data.employer_name || data.sponsor || "";
+  const sponsorId = data.sponsor_id || data.civil_id || data.employer_national_id || data.national_id || "";
+  const reference = data.reference || data.reference_number || data.ref || "";
+
+  return {
+    status: "success",
+    message: typeof result?.message === "string" ? result.message : "Visa parsed successfully",
+    ...data,
+    visa_number: visaNumber,
+    visa_type: visaType,
+    visa_issue_date: issueDate,
+    issue_date: issueDate,
+    visa_expiry_date: expiryDate,
+    expiry_date: expiryDate,
+    sponsor_name: sponsorName,
+    employer_name: sponsorName,
+    sponsor_id: sponsorId,
+    civil_id: sponsorId,
+    employer_national_id: sponsorId,
+    reference: reference,
+    reference_number: reference,
+  };
 }

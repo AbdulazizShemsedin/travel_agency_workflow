@@ -66,6 +66,63 @@ import {
 } from "@/lib/api/v2/documents";
 import { cn } from "@/lib/utils";
 
+/**
+ * Extracts only valid, non-null, non-empty, non-zero values from a source object,
+ * stripping internal DocType metadata so unpopulated placement fields do not clobber
+ * extracted document data.
+ */
+export function extractValidContractFields(source: any): Record<string, any> {
+  if (!source || typeof source !== "object") return {};
+  const cleaned: Record<string, any> = {};
+  const ignoredKeys = new Set([
+    "name", "doctype", "owner", "creation", "modified", "modified_by",
+    "idx", "docstatus", "_user_tags", "_comments", "_assign", "_liked_by",
+    "status", "message", "success"
+  ]);
+
+  for (const [key, value] of Object.entries(source)) {
+    if (ignoredKeys.has(key)) continue;
+    if (value !== null && value !== undefined && value !== "" && value !== 0 && value !== "0") {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+}
+
+/**
+ * Counts meaningful extracted contract fields to accurately discriminate
+ * between full extraction, partial extraction, and extraction failure.
+ */
+export function countExtractedContractFields(parsed: Record<string, any>): number {
+  if (!parsed || typeof parsed !== "object") return 0;
+  let count = 0;
+  if (parsed.contract_signed_date || parsed.contract_date) count++;
+  if (parsed.contract_number) count++;
+  if (parsed.employer_name || parsed.sponsor_name) count++;
+  if (parsed.employer_national_id || parsed.sponsor_id) count++;
+  if (parsed.salary_amount || parsed.contract_salary_amount || parsed.salary) count++;
+  if (parsed.saudi_agency_name || parsed.kuwait_agency_name || parsed.contractor_name) count++;
+  if (parsed.visa_number) count++;
+  if (parsed.employment_site || parsed.work_site) count++;
+  if (parsed.contract_duration || parsed.duration || parsed.contract_period) count++;
+  return count;
+}
+
+/**
+ * Counts meaningful extracted visa fields.
+ */
+export function countExtractedVisaFields(parsed: Record<string, any>): number {
+  if (!parsed || typeof parsed !== "object") return 0;
+  let count = 0;
+  if (parsed.visa_number) count++;
+  if (parsed.visa_type) count++;
+  if (parsed.visa_issue_date || parsed.issue_date) count++;
+  if (parsed.visa_expiry_date || parsed.expiry_date) count++;
+  if (parsed.sponsor_name || parsed.employer_name) count++;
+  if (parsed.sponsor_id || parsed.civil_id || parsed.employer_national_id) count++;
+  return count;
+}
+
 export default function PlacementDocumentCenterPage() {
   const params = useParams();
   const router = useRouter();
@@ -80,6 +137,7 @@ export default function PlacementDocumentCenterPage() {
   const [contractFile, setContractFile] = React.useState<File | null>(null);
   const [contractPreviewUrl, setContractPreviewUrl] = React.useState<string>("");
   const [isContractUploading, setIsContractUploading] = React.useState(false);
+  const [isRetryingExtraction, setIsRetryingExtraction] = React.useState(false);
   const [contractParseResult, setContractParseResult] = React.useState<V2ParsedContractData | null>(null);
   const [isApprovingContract, setIsApprovingContract] = React.useState(false);
   const [isContractApproved, setIsContractApproved] = React.useState(false);
@@ -88,6 +146,7 @@ export default function PlacementDocumentCenterPage() {
   const [visaFile, setVisaFile] = React.useState<File | null>(null);
   const [visaPreviewUrl, setVisaPreviewUrl] = React.useState<string>("");
   const [isVisaUploading, setIsVisaUploading] = React.useState(false);
+  const [isRetryingVisaExtraction, setIsRetryingVisaExtraction] = React.useState(false);
   const [visaParseResult, setVisaParseResult] = React.useState<V2ParsedVisaData | null>(null);
 
   // Active Preview Target
@@ -430,38 +489,80 @@ export default function PlacementDocumentCenterPage() {
 
       const fileUrl = uploadRes.file_url;
       setPreviewFileUrl(fileUrl);
+      setContractPreviewUrl(fileUrl);
 
       if (previewOnly) {
         // Run OCR parsing preview only (does not attach to placement)
-        const parsed = await parseContractFileV2(fileUrl, destinationCountry);
-        setContractParseResult(parsed);
-        toast.success("Contract Parsed for Preview", {
-          description: "Structured fields extracted from contract file. Review and then attach.",
-        });
+        try {
+          const parsed = await parseContractFileV2(fileUrl, destinationCountry);
+          const validParsed = extractValidContractFields(parsed);
+          setContractParseResult(validParsed);
+          const count = countExtractedContractFields(validParsed);
+          if (count >= 4) {
+            toast.success("Contract Parsed for Preview", {
+              description: "Structured fields extracted from contract file. Review and then attach.",
+            });
+          } else if (count > 0) {
+            toast.info("Partial Terms Extracted for Preview", {
+              description: "Some fields extracted. Review and then attach to placement.",
+            });
+          } else {
+            toast.warning("Extraction Incomplete", {
+              description: "Could not extract structured fields. You can still attach and edit terms manually.",
+            });
+          }
+        } catch (e: any) {
+          toast.error("Contract Preview Extraction Failed", {
+            description: e?.message || "Failed to extract terms from preview document.",
+          });
+        }
       } else {
         // Authoritative upload_contract attachment to Placement
         const uploadContractRes = await uploadContractV2(targetPlacement!.name, fileUrl);
 
         // Also run OCR extraction immediately so extracted fields populate
+        let parsed: any = null;
+        let parseError: any = null;
         try {
-          const parsed = await parseContractFileV2(fileUrl, destinationCountry);
-          setContractParseResult({
-            ...parsed,
-            ...(uploadContractRes && typeof uploadContractRes === "object" ? uploadContractRes : {}),
-          });
-        } catch {
-          // Non-fatal: OCR parse failed but file is attached; propagate placement response if any
-          if (uploadContractRes && typeof uploadContractRes === "object") {
-            setContractParseResult((prev: any) => ({
-              ...prev,
-              ...uploadContractRes,
-            }));
-          }
+          parsed = await parseContractFileV2(fileUrl, destinationCountry);
+        } catch (e: any) {
+          parseError = e;
+          console.warn("[Contract Doc] OCR parsing error:", e);
         }
 
-        toast.success("Contract Attached & Info Extracted", {
-          description: `Contract attached to ${targetPlacement!.name}. Review extracted info below and approve to save.`,
-        });
+        const validPlacement = extractValidContractFields(uploadContractRes);
+        const validParsed = parsed ? extractValidContractFields(parsed) : {};
+        // validParsed takes precedence over validPlacement; neither has null or empty values
+        const combined = {
+          ...validPlacement,
+          ...validParsed,
+        };
+        if (Object.keys(combined).length > 0) {
+          setContractParseResult((prev: any) => ({
+            ...(prev ? extractValidContractFields(prev) : {}),
+            ...combined,
+          }));
+        }
+
+        const extractedCount = countExtractedContractFields(validParsed);
+
+        if (!parseError && extractedCount >= 4) {
+          // Outcome A: Attachment + Extraction successful
+          toast.success("Contract Attached & Info Extracted", {
+            description: `Contract attached to ${targetPlacement!.name}. Review extracted info below and approve to save.`,
+          });
+        } else if (!parseError && extractedCount > 0) {
+          // Outcome E: Partial extraction
+          toast.info("Contract Attached — Partial Info Extracted", {
+            description: `Contract attached to ${targetPlacement!.name}. Some terms were extracted. Review and complete the remaining fields below.`,
+          });
+        } else {
+          // Outcome B: Attachment successful but extraction failed/empty
+          toast.warning("Contract Attached — Extraction Incomplete", {
+            description: "Contract attached successfully, but information could not be extracted. Please retry extraction or review the contract manually.",
+          });
+        }
+
         setContractFile(null);
         queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center"] });
         refetchPlacements();
@@ -473,6 +574,53 @@ export default function PlacementDocumentCenterPage() {
       });
     } finally {
       setIsContractUploading(false);
+    }
+  };
+
+  // One-click Retry Extraction for Attached Contract
+  const handleRetryContractExtraction = async () => {
+    const targetFileUrl = previewFileUrl || contractPreviewUrl || activePlacement?.contract_file;
+    if (!targetFileUrl) {
+      toast.error("No Contract Document", {
+        description: "Please attach a contract document before retrying extraction.",
+      });
+      return;
+    }
+
+    setIsRetryingExtraction(true);
+    try {
+      const parsed = await parseContractFileV2(targetFileUrl, destinationCountry);
+      const validParsed = extractValidContractFields(parsed);
+      const validPlacement = extractValidContractFields(activePlacement);
+      const combined = {
+        ...validPlacement,
+        ...validParsed,
+      };
+      setContractParseResult((prev: any) => ({
+        ...(prev ? extractValidContractFields(prev) : {}),
+        ...combined,
+      }));
+
+      const count = countExtractedContractFields(validParsed);
+      if (count >= 4) {
+        toast.success("Contract Info Extracted", {
+          description: "Contract document parsed successfully. Review extracted terms below and approve to save.",
+        });
+      } else if (count > 0) {
+        toast.info("Contract Terms Partially Extracted", {
+          description: "Some terms were extracted. Review and complete the remaining terms manually.",
+        });
+      } else {
+        toast.warning("Contract Extraction Incomplete", {
+          description: "Could not extract structured information from this document. Please review and enter terms manually using Edit Terms.",
+        });
+      }
+    } catch (err: any) {
+      toast.error("Contract Extraction Failed", {
+        description: err?.message || "Failed to extract terms from contract document. Please review manually.",
+      });
+    } finally {
+      setIsRetryingExtraction(false);
     }
   };
 
@@ -638,35 +786,78 @@ export default function PlacementDocumentCenterPage() {
 
       const fileUrl = uploadRes.file_url;
       setPreviewFileUrl(fileUrl);
+      setVisaPreviewUrl(fileUrl);
 
       if (previewOnly) {
         // Run OCR parsing preview only
-        const parsed = await parseVisaFileV2(fileUrl);
-        setVisaParseResult(parsed);
-        toast.success("eVisa Parsed for Preview", {
-          description: "Structured fields extracted from visa file.",
-        });
+        try {
+          const parsed = await parseVisaFileV2(fileUrl);
+          const validParsed = extractValidContractFields(parsed);
+          setVisaParseResult(validParsed);
+          const count = countExtractedVisaFields(validParsed);
+          if (count >= 3) {
+            toast.success("eVisa Parsed for Preview", {
+              description: "Structured fields extracted from visa file.",
+            });
+          } else if (count > 0) {
+            toast.info("Partial eVisa Extracted for Preview", {
+              description: "Some visa details extracted. Review and then attach.",
+            });
+          } else {
+            toast.warning("eVisa Extraction Incomplete", {
+              description: "Could not extract visa details. You can still attach and edit fields manually.",
+            });
+          }
+        } catch (e: any) {
+          toast.error("eVisa Preview Extraction Failed", {
+            description: e?.message || "Failed to extract visa details from preview file.",
+          });
+        }
       } else {
         // Authoritative upload_visa attachment to Placement
         const res = await uploadVisaV2(targetPlacement!.name, fileUrl);
         // Also run OCR extraction immediately so extracted fields populate
+        let parsed: any = null;
+        let parseError: any = null;
         try {
-          const parsed = await parseVisaFileV2(fileUrl);
-          setVisaParseResult({
-            ...parsed,
-            ...(res && typeof res === "object" ? res : {}),
-          });
-        } catch {
-          if (res && typeof res === "object") {
-            setVisaParseResult((prev: any) => ({
-              ...prev,
-              ...res,
-            }));
-          }
+          parsed = await parseVisaFileV2(fileUrl);
+        } catch (e: any) {
+          parseError = e;
+          console.warn("[Visa Doc] OCR parsing error:", e);
         }
-        toast.success("Kuwait eVisa Successfully Attached to Placement", {
-          description: `Visa attached to ${targetPlacement!.name}. Parsed reference and sponsor registered.`,
-        });
+
+        const validPlacement = extractValidContractFields(res);
+        const validParsed = parsed ? extractValidContractFields(parsed) : {};
+        const combined = {
+          ...validPlacement,
+          ...validParsed,
+        };
+        if (Object.keys(combined).length > 0) {
+          setVisaParseResult((prev: any) => ({
+            ...(prev ? extractValidContractFields(prev) : {}),
+            ...combined,
+          }));
+        }
+
+        const extractedCount = countExtractedVisaFields(validParsed);
+
+        if (!parseError && extractedCount >= 3) {
+          // Outcome A
+          toast.success("Kuwait eVisa Attached & Info Extracted", {
+            description: `Visa attached to ${targetPlacement!.name}. Review extracted visa details below.`,
+          });
+        } else if (!parseError && extractedCount > 0) {
+          // Outcome E
+          toast.info("Kuwait eVisa Attached — Partial Info Extracted", {
+            description: `Visa attached to ${targetPlacement!.name}. Some visa details were extracted. Review and complete any missing terms.`,
+          });
+        } else {
+          // Outcome B
+          toast.warning("eVisa Attached — Extraction Incomplete", {
+            description: "Visa attached successfully, but information could not be extracted. Please retry extraction or review the visa manually.",
+          });
+        }
+
         setVisaFile(null);
         queryClient.invalidateQueries({ queryKey: ["v2_placements_for_doc_center"] });
         refetchPlacements();
@@ -678,6 +869,53 @@ export default function PlacementDocumentCenterPage() {
       });
     } finally {
       setIsVisaUploading(false);
+    }
+  };
+
+  // One-click Retry Extraction for Kuwait eVisa
+  const handleRetryVisaExtraction = async () => {
+    const targetFileUrl = previewFileUrl || visaPreviewUrl || activePlacement?.visa_file;
+    if (!targetFileUrl) {
+      toast.error("No eVisa Document", {
+        description: "Please attach an eVisa document before retrying extraction.",
+      });
+      return;
+    }
+
+    setIsRetryingVisaExtraction(true);
+    try {
+      const parsed = await parseVisaFileV2(targetFileUrl);
+      const validParsed = extractValidContractFields(parsed);
+      const validPlacement = extractValidContractFields(activePlacement);
+      const combined = {
+        ...validPlacement,
+        ...validParsed,
+      };
+      setVisaParseResult((prev: any) => ({
+        ...(prev ? extractValidContractFields(prev) : {}),
+        ...combined,
+      }));
+
+      const count = countExtractedVisaFields(validParsed);
+      if (count >= 3) {
+        toast.success("eVisa Info Extracted", {
+          description: "Visa document parsed successfully. Review extracted details below.",
+        });
+      } else if (count > 0) {
+        toast.info("Partial eVisa Extracted", {
+          description: "Some details were extracted. Review and complete the remaining details manually.",
+        });
+      } else {
+        toast.warning("eVisa Extraction Incomplete", {
+          description: "Could not extract structured information from this visa document. Please review and enter details manually.",
+        });
+      }
+    } catch (err: any) {
+      toast.error("eVisa Extraction Failed", {
+        description: err?.message || "Failed to extract details from visa document. Please review manually.",
+      });
+    } finally {
+      setIsRetryingVisaExtraction(false);
     }
   };
 
@@ -1144,18 +1382,37 @@ export default function PlacementDocumentCenterPage() {
                       Extracted Contract Terms
                     </CardTitle>
                   </div>
-                  {activePlacement && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleOpenEditModal}
-                      className="text-[11px] h-6 px-2 gap-1 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-                    >
-                      <Pencil className="h-2.5 w-2.5" />
-                      Edit Terms
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {(activePlacement?.contract_file || previewFileUrl || contractPreviewUrl) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isRetryingExtraction || isContractUploading}
+                        onClick={handleRetryContractExtraction}
+                        className="text-[11px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                      >
+                        {isRetryingExtraction ? (
+                          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-2.5 w-2.5" />
+                        )}
+                        Retry Extraction
+                      </Button>
+                    )}
+                    {activePlacement && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenEditModal}
+                        className="text-[11px] h-6 px-2 gap-1 border-amber-500/40 text-amber-800 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                        Edit Terms
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
 
@@ -1435,10 +1692,29 @@ export default function PlacementDocumentCenterPage() {
                 {/* Extracted Visa Fields Card */}
                 <Card className="border-slate-200 dark:border-[#222228] bg-white dark:bg-[#121216]">
                   <CardHeader className="py-2 px-3">
-                    <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-                      <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      Extracted Visa Information
-                    </CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                        <FileCheck2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        Extracted Visa Information
+                      </CardTitle>
+                      {(activePlacement?.visa_file || previewFileUrl || visaPreviewUrl) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isRetryingVisaExtraction || isVisaUploading}
+                          onClick={handleRetryVisaExtraction}
+                          className="text-[11px] h-6 px-2 gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                        >
+                          {isRetryingVisaExtraction ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-2.5 w-2.5" />
+                          )}
+                          Retry Extraction
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
 
                   <CardContent className="px-3 pb-3 pt-0 space-y-2">
