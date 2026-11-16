@@ -1238,6 +1238,7 @@ export function ApplicantRegistrationForm({
       if (savedId) setDraftApplicantId(savedId);
       setApplicantState(data?.status || data?.applicant_state || "Draft");
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants_v2_dashboard"] });
       if (savedId) queryClient.invalidateQueries({ queryKey: ["applicant", savedId] });
       toast.success(`Applicant Saved Successfully (ID: ${savedId || ""})`, {
         description: "Draft saved. Redirecting to applicant list...",
@@ -1300,6 +1301,7 @@ export function ApplicantRegistrationForm({
         (initialData as any)?.name ||
         (initialData as any)?.applicant_id;
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants_v2_dashboard"] });
       if (targetId) queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
       toast.success("Applicant changes saved successfully!", {
         description: "Profile updated. Redirecting to applicant list...",
@@ -1399,6 +1401,7 @@ export function ApplicantRegistrationForm({
       setApplicantState("Registered");
       setIsConfirmRegisterOpen(false);
       queryClient.invalidateQueries({ queryKey: ["applicants"] });
+      queryClient.invalidateQueries({ queryKey: ["applicants_v2_dashboard"] });
       if (targetId) queryClient.invalidateQueries({ queryKey: ["applicant", targetId] });
       toast.success("Applicant Registered Successfully!", {
         description: `Record ${targetId} is now Registered. Redirecting to applicant list...`,
