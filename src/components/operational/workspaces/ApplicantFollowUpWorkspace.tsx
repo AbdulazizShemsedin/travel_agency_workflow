@@ -2288,8 +2288,8 @@ export function ApplicantFollowUpWorkspace({
                             <span>Finish stage</span>
                           </Button>
 
-                          {/* Missed Appointment Button */}
-                          {injazStepName && (
+                          {/* Missed Appointment Button: not on a finished stage (the backend refuses it there) */}
+                          {injazStepName && !isTeshirCompleted && (
                             <Button
                               type="button"
                               variant="outline"
