@@ -1065,12 +1065,10 @@ export function ChatContainer() {
       if (pendingAttachment?.file && !attachmentUrl) {
         setIsUploadingAttachment(true);
         try {
-          const uploadRes = await uploadFileV2(
-            pendingAttachment.file,
-            false,
-            "Chat Thread",
-            selectedThread.name
-          );
+          // Private and not attached to the thread: the backend gives the file to the message when it
+          // is sent, and only people who may read the thread can open it. Attaching it to the thread
+          // asked for write access to the thread, which agencies do not have (403).
+          const uploadRes = await uploadFileV2(pendingAttachment.file, true);
           const rawAttach = uploadRes.id || uploadRes.file_id || uploadRes.file_url;
           attachmentUrl = cleanFileId(rawAttach) || rawAttach;
         } finally {
