@@ -81,6 +81,7 @@ import {
   V2CommissionBatchItem,
   V2CommissionWriteOffRow,
   V2SupportedCurrency,
+  listTransactionsV2,
 } from "@/lib/api/v2/finance";
 import {
   listContractorsV2,
@@ -96,7 +97,6 @@ import { downloadBackendSpreadsheet } from "@/lib/utils/reportExport";
 import { uploadFileV2 } from "@/lib/api/v2/documents";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
-import { requestV2 } from "@/lib/api/v2/client";
 import { ContractorRateMatrixModal } from "@/components/contractors/ContractorRateMatrixModal";
 import { FxRateModal } from "@/components/finance/FxRateModal";
 import { useBirrConversion } from "@/components/finance/useBirrConversion";
@@ -363,22 +363,8 @@ export default function AdminCommissionPage() {
     queryKey: ["v2_all_applicant_transactions_for_commission"],
     queryFn: async () => {
       try {
-        const res = await requestV2<any[]>("/api/method/frappe.client.get_list", {
-          method: "POST",
-          body: {
-            doctype: "Applicant Transaction",
-            fields: JSON.stringify([
-              "name",
-              "placement",
-              "applicant",
-              "commission_batch_request",
-              "transaction_type",
-              "amount_original",
-              "currency_original",
-              "status",
-            ]),
-            limit_page_length: 500,
-          },
+        const res = await listTransactionsV2({
+          limitPageLength: 500,
         });
         return Array.isArray(res) ? res : [];
       } catch {

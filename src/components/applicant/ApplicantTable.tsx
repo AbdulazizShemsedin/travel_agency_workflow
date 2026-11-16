@@ -183,7 +183,8 @@ export function ApplicantTable() {
   const queryClient = useQueryClient();
   const urlFilter = searchParams?.get("status") || searchParams?.get("stage") || searchParams?.get("filter") || "";
 
-  const { authUser, roles = [], can } = useAuth();
+  const { authUser, roles = [], can, isReadOnly } = useAuth();
+  const isStaffReadOnly = isReadOnly();
 
   // Derive corridor restriction from user roles
   const corridorRestriction = React.useMemo(() => {
@@ -1529,7 +1530,7 @@ export function ApplicantTable() {
                           )}
 
                           {/* Advance to Processing — Selected stage with contract + FIT medical */}
-                          {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && (
+                          {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && !isStaffReadOnly && (
                             <button
                               type="button"
                               disabled={advanceToProcessingMutation.isPending}
@@ -1779,7 +1780,7 @@ export function ApplicantTable() {
                                 )}
 
                                 {/* Advance to Processing (Selected stage) */}
-                                {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && (
+                                {stage === "Selected" && (applicant as any)._activePlacementName && hasContract && isMedicalFit && !isStaffReadOnly && (
                                   <button
                                     type="button"
                                     disabled={advanceToProcessingMutation.isPending}

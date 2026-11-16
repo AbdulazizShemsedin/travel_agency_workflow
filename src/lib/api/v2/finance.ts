@@ -28,7 +28,7 @@ export type V2SupportedCurrency = "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR";
 
 export interface V2TransactionRecord {
   name: string;
-  transaction_type: "Expense" | "Income";
+  transaction_type: "Expense" | "Income" | "Commission" | string;
   amount: number;
   currency: V2SupportedCurrency;
   status: "Pending" | "Approved" | "Rejected" | "Voided";
@@ -535,48 +535,36 @@ export async function listCommissionBatchesV2(
 export async function getCommissionBatchV2(
   batchName: string
 ): Promise<V2CommissionBatch | null> {
-  try {
-    const res = await requestV2<any>(
-      "/api/method/agency_tracking.api.batch.read?op=get_commission_batch",
-      {
-        method: "POST",
-        body: { batch_name: batchName },
-      }
-    );
-    const batch = res && "name" in res ? res : res?.message;
-    if (batch) {
-      if (Array.isArray(batch.items_detail) && batch.items_detail.length > 0) {
-        const detailByItem = new Map<string, any>(
-          batch.items_detail.map((d: any) => [String(d.item || d.transaction), d])
-        );
-        batch.items = (batch.items || []).map((it: any) => {
-          const key = String(it.name || it.transaction || "");
-          const d = detailByItem.get(key) || detailByItem.get(String(it.transaction || "")) || {};
-          return {
-            ...it,
-            applicant: d.applicant || it.applicant,
-            applicant_name: d.full_name || it.applicant_name,
-            full_name: d.full_name || it.full_name,
-            placement: d.placement || it.placement,
-            amount_original: d.amount_original ?? it.amount_original,
-            amount_birr: d.amount_birr ?? it.amount_birr,
-          };
-        });
-      }
-      return batch as V2CommissionBatch;
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.api.batch.read?op=get_commission_batch",
+    {
+      method: "POST",
+      body: { batch_name: batchName },
     }
-  } catch (err) {
-    console.warn("[finance_api.get_commission_batch] failed, falling back to frappe.client.get:", err);
+  );
+  const batch = res && "name" in res ? res : res?.message;
+  if (batch) {
+    if (Array.isArray(batch.items_detail) && batch.items_detail.length > 0) {
+      const detailByItem = new Map<string, any>(
+        batch.items_detail.map((d: any) => [String(d.item || d.transaction), d])
+      );
+      batch.items = (batch.items || []).map((it: any) => {
+        const key = String(it.name || it.transaction || "");
+        const d = detailByItem.get(key) || detailByItem.get(String(it.transaction || "")) || {};
+        return {
+          ...it,
+          applicant: d.applicant || it.applicant,
+          applicant_name: d.full_name || it.applicant_name,
+          full_name: d.full_name || it.full_name,
+          placement: d.placement || it.placement,
+          amount_original: d.amount_original ?? it.amount_original,
+          amount_birr: d.amount_birr ?? it.amount_birr,
+        };
+      });
+    }
+    return batch as V2CommissionBatch;
   }
-
-  const result = await requestV2<any>("/api/method/frappe.client.get", {
-    method: "POST",
-    body: {
-      doctype: "Commission Batch Request",
-      name: batchName,
-    },
-  });
-  return result || null;
+  return null;
 }
 
 /**

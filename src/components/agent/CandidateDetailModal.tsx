@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { getCandidateDetailV2, getCandidatePhotoUrl } from "@/lib/api/v2/portal";
 import { getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
+import { SecureVideoPlayer } from "@/components/video/SecureVideoPlayer";
 import { cn } from "@/lib/utils";
 
 interface CandidateDetailModalProps {
@@ -78,7 +79,11 @@ export function CandidateDetailModal({
     "";
   const hasVideo = Boolean(rawVideoUrl && typeof rawVideoUrl === "string" && rawVideoUrl.trim() !== "");
 
-  const { data: mediaUrlData, isLoading: isMediaLoading } = useQuery({
+  const {
+    data: mediaUrlData,
+    isLoading: isMediaLoading,
+    refetch: refetchMediaUrl,
+  } = useQuery({
     queryKey: ["candidate_detail_media_url", candidate?.name],
     queryFn: async () => {
       if (!candidate?.name) return null;
@@ -86,8 +91,9 @@ export function CandidateDetailModal({
     },
     enabled: isOpen && Boolean(candidate?.name && hasVideo),
     staleTime: 1000 * 60 * 90,
+    retry: false,
   });
-  const streamableVideoUrl = mediaUrlData?.url || rawVideoUrl;
+  const streamableVideoUrl = mediaUrlData !== undefined ? (mediaUrlData?.url || "") : rawVideoUrl;
 
   if (!isOpen || !candidate) return null;
 
@@ -458,13 +464,16 @@ export function CandidateDetailModal({
                       <span className="text-xs">Loading secure video stream...</span>
                     </div>
                   ) : streamableVideoUrl ? (
-                    <video
+                    <SecureVideoPlayer
                       key={streamableVideoUrl}
                       src={streamableVideoUrl}
                       controls
                       playsInline
                       preload="metadata"
                       className="w-full max-h-[260px] object-contain rounded-lg bg-black"
+                      onRefreshUrl={async () => {
+                        await refetchMediaUrl();
+                      }}
                     />
                   ) : (
                     <div className="py-6 text-center text-xs text-slate-400">

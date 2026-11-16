@@ -273,35 +273,100 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
 
 /**
  * Extracts structured fields from an uploaded contract file.
+ * Supports async job enqueue with status polling and graceful synchronous fallback.
  * Handles both wrapped and flat response envelopes, and normalizes field aliases.
  */
 export async function parseContractFileV2(
   fileUrl: string,
   destinationCountry?: "Saudi Arabia" | "Kuwait" | string
 ): Promise<V2ParsedContractData> {
-  const result = await requestV2<any>(
-    "/api/method/agency_tracking.api.document.write?op=parse_contract_file",
-    {
-      method: "POST",
-      body: {
-        file_url: fileUrl,
-        ...(destinationCountry ? { destination_country: destinationCountry } : {}),
-      },
+  let rawResult: any = null;
+
+  try {
+    // 1. Primary path: Enqueue async background job if backend supports background parsing
+    const enqueueRes = await requestV2<any>(
+      "/api/method/agency_tracking.api.document.write?op=enqueue_parse_contract_file",
+      {
+        method: "POST",
+        body: {
+          file_url: fileUrl,
+          ...(destinationCountry ? { destination_country: destinationCountry } : {}),
+        },
+      }
+    );
+
+    const jobName = enqueueRes?.message?.job || enqueueRes?.job || enqueueRes?.message?.name;
+    if (jobName) {
+      const maxAttempts = 30; // 30 x 1500ms = 45s max
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const jobStatusRes = await requestV2<any>(
+          "/api/method/agency_tracking.api.system.read?op=get_job_status",
+          {
+            method: "POST",
+            body: { job_name: jobName },
+          }
+        );
+
+        const job = jobStatusRes?.message || jobStatusRes || {};
+        const status = (job.status || "").toLowerCase();
+
+        if (status === "completed") {
+          rawResult = job.result || {};
+          break;
+        } else if (status === "failed") {
+          throw new ApiV2Error(
+            job.error || "Contract parsing failed on server. Please verify the document.",
+            417
+          );
+        }
+      }
+    } else if (enqueueRes && typeof enqueueRes === "object" && (enqueueRes.message || enqueueRes.data)) {
+      rawResult = enqueueRes;
     }
-  );
+  } catch (err: any) {
+    if (err instanceof ApiV2Error && err.statusCode === 417) {
+      throw err;
+    }
+    // Fallback to synchronous parse_contract_file
+  }
+
+  // 2. Synchronous fallback if async did not produce result
+  if (!rawResult) {
+    const syncRes = await requestV2<any>(
+      "/api/method/agency_tracking.api.document.write?op=parse_contract_file",
+      {
+        method: "POST",
+        body: {
+          file_url: fileUrl,
+          ...(destinationCountry ? { destination_country: destinationCountry } : {}),
+        },
+      }
+    );
+    rawResult = syncRes;
+  }
 
   let data: Record<string, any> = {};
-  if (result && typeof result === "object") {
-    if (result.data && typeof result.data === "object") {
-      data = result.data;
-    } else if (result.parsed_data && typeof result.parsed_data === "object") {
-      data = result.parsed_data;
-    } else if (result.parsed_contract && typeof result.parsed_contract === "object") {
-      data = result.parsed_contract;
-    } else if (result.message && typeof result.message === "object") {
-      data = result.message;
+  if (rawResult && typeof rawResult === "object") {
+    if (rawResult.data && typeof rawResult.data === "object") {
+      data = rawResult.data;
+    } else if (rawResult.parsed_data && typeof rawResult.parsed_data === "object") {
+      data = rawResult.parsed_data;
+    } else if (rawResult.parsed_contract && typeof rawResult.parsed_contract === "object") {
+      data = rawResult.parsed_contract;
+    } else if (rawResult.message && typeof rawResult.message === "object") {
+      const msg = rawResult.message;
+      if (msg.data && typeof msg.data === "object") {
+        data = msg.data;
+      } else if (msg.parsed_data && typeof msg.parsed_data === "object") {
+        data = msg.parsed_data;
+      } else if (msg.parsed_contract && typeof msg.parsed_contract === "object") {
+        data = msg.parsed_contract;
+      } else {
+        data = msg;
+      }
     } else {
-      data = result;
+      data = rawResult;
     }
   }
 
@@ -322,7 +387,7 @@ export async function parseContractFileV2(
 
   return {
     status: "success",
-    message: typeof result?.message === "string" ? result.message : "Contract document parsed successfully",
+    message: typeof rawResult?.message === "string" ? rawResult.message : "Contract document parsed successfully",
     ...data,
     contract_signed_date: contractSignedDate,
     contract_date: contractSignedDate,
@@ -352,29 +417,91 @@ export async function parseContractFileV2(
 
 /**
  * Extracts fields from a Kuwait eVisa document.
+ * Supports async job enqueue with status polling and graceful synchronous fallback.
  * Handles both wrapped and flat response envelopes, and normalizes field aliases.
  */
 export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData> {
-  const result = await requestV2<any>(
-    "/api/method/agency_tracking.api.document.write?op=parse_visa_file",
-    {
-      method: "POST",
-      body: { file_url: fileUrl },
+  let rawResult: any = null;
+
+  try {
+    // 1. Primary path: Enqueue async background job if backend supports background parsing
+    const enqueueRes = await requestV2<any>(
+      "/api/method/agency_tracking.api.document.write?op=enqueue_parse_visa_file",
+      {
+        method: "POST",
+        body: { file_url: fileUrl },
+      }
+    );
+
+    const jobName = enqueueRes?.message?.job || enqueueRes?.job || enqueueRes?.message?.name;
+    if (jobName) {
+      const maxAttempts = 30; // 30 x 1500ms = 45s max
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const jobStatusRes = await requestV2<any>(
+          "/api/method/agency_tracking.api.system.read?op=get_job_status",
+          {
+            method: "POST",
+            body: { job_name: jobName },
+          }
+        );
+
+        const job = jobStatusRes?.message || jobStatusRes || {};
+        const status = (job.status || "").toLowerCase();
+
+        if (status === "completed") {
+          rawResult = job.result || {};
+          break;
+        } else if (status === "failed") {
+          throw new ApiV2Error(
+            job.error || "Visa parsing failed on server. Please verify the document.",
+            417
+          );
+        }
+      }
+    } else if (enqueueRes && typeof enqueueRes === "object" && (enqueueRes.message || enqueueRes.data)) {
+      rawResult = enqueueRes;
     }
-  );
+  } catch (err: any) {
+    if (err instanceof ApiV2Error && err.statusCode === 417) {
+      throw err;
+    }
+    // Fallback to synchronous parse_visa_file
+  }
+
+  // 2. Synchronous fallback if async did not produce rawResult
+  if (!rawResult) {
+    const syncRes = await requestV2<any>(
+      "/api/method/agency_tracking.api.document.write?op=parse_visa_file",
+      {
+        method: "POST",
+        body: { file_url: fileUrl },
+      }
+    );
+    rawResult = syncRes;
+  }
 
   let data: Record<string, any> = {};
-  if (result && typeof result === "object") {
-    if (result.data && typeof result.data === "object") {
-      data = result.data;
-    } else if (result.parsed_data && typeof result.parsed_data === "object") {
-      data = result.parsed_data;
-    } else if (result.parsed_visa && typeof result.parsed_visa === "object") {
-      data = result.parsed_visa;
-    } else if (result.message && typeof result.message === "object") {
-      data = result.message;
+  if (rawResult && typeof rawResult === "object") {
+    if (rawResult.data && typeof rawResult.data === "object") {
+      data = rawResult.data;
+    } else if (rawResult.parsed_data && typeof rawResult.parsed_data === "object") {
+      data = rawResult.parsed_data;
+    } else if (rawResult.parsed_visa && typeof rawResult.parsed_visa === "object") {
+      data = rawResult.parsed_visa;
+    } else if (rawResult.message && typeof rawResult.message === "object") {
+      const msg = rawResult.message;
+      if (msg.data && typeof msg.data === "object") {
+        data = msg.data;
+      } else if (msg.parsed_data && typeof msg.parsed_data === "object") {
+        data = msg.parsed_data;
+      } else if (msg.parsed_visa && typeof msg.parsed_visa === "object") {
+        data = msg.parsed_visa;
+      } else {
+        data = msg;
+      }
     } else {
-      data = result;
+      data = rawResult;
     }
   }
 
@@ -388,7 +515,7 @@ export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData
 
   return {
     status: "success",
-    message: typeof result?.message === "string" ? result.message : "Visa parsed successfully",
+    message: typeof rawResult?.message === "string" ? rawResult.message : "Visa parsed successfully",
     ...data,
     visa_number: visaNumber,
     visa_type: visaType,

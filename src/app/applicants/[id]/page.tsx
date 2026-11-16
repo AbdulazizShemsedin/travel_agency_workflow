@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Loader2,
   RotateCcw,
@@ -21,6 +22,7 @@ import {
   History,
   RefreshCw,
   Info,
+  Inbox,
 } from "lucide-react";
 import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import {
@@ -32,6 +34,7 @@ import {
 } from "@/lib/api/v2/applicants";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { UndoLastStepButton } from "@/components/ui/UndoLastStepButton";
+import { SecureVideoPlayer } from "@/components/video/SecureVideoPlayer";
 import { MuayenaPlacementModal } from "@/components/applicant/MuayenaPlacementModal";
 import { SelectForAgencyModal } from "@/components/applicant/SelectForAgencyModal";
 import { MedicalBadge } from "@/components/ui/MedicalBadge";
@@ -256,9 +259,10 @@ export default function ApplicantDetailPage() {
     },
     enabled: Boolean(applicant?.name && candidateVideoUrl),
     staleTime: 1000 * 60 * 90, // 90 min (backend signed URL expires in 2 hours)
+    retry: false,
   });
 
-  const activeVideoPlayUrl = mediaUrlData?.url || candidateVideoUrl;
+  const activeVideoPlayUrl = mediaUrlData !== undefined ? (mediaUrlData?.url || "") : candidateVideoUrl;
 
   // Pre-cancellation snapshot derivation
   const preCancellationSnapshot = React.useMemo(() => {
@@ -621,6 +625,30 @@ export default function ApplicantDetailPage() {
         </div>
       </div>
 
+      {/* Pending Agency Selection Request Alert Banner */}
+      {activePlacement?.status === "Requested" && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <Inbox className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <p className="text-xs font-bold">
+                Foreign Agency Selection Request Pending Approval
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300/80">
+                Requested by <strong className="font-semibold text-amber-900 dark:text-amber-100">{activePlacement.contractor || "Foreign Agency Partner"}</strong>. This candidate is currently held awaiting internal staff review.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/selection-requests"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white shadow-2xs transition self-start sm:self-auto shrink-0"
+          >
+            Review in Selection Requests
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
+
       {/* Stage Status Bar */}
       <Card className="border-slate-200/80 dark:border-[#222227] bg-white dark:bg-[#121215] p-3 sm:p-4 shadow-xs overflow-x-auto">
         <div className="flex items-center justify-between min-w-[700px] lg:min-w-0 gap-2">
@@ -709,15 +737,15 @@ export default function ApplicantDetailPage() {
                   <span className="ml-2 text-xs font-medium text-slate-300">Loading secure video stream...</span>
                 </div>
               ) : activeVideoPlayUrl ? (
-                <video
+                <SecureVideoPlayer
                   key={activeVideoPlayUrl}
                   src={activeVideoPlayUrl}
                   controls
                   playsInline
                   preload="metadata"
                   className="w-full max-h-[380px] object-contain bg-black"
-                  onError={() => {
-                    refetchMediaUrl();
+                  onRefreshUrl={async () => {
+                    await refetchMediaUrl();
                   }}
                 />
               ) : (
@@ -1026,18 +1054,18 @@ export default function ApplicantDetailPage() {
                 <span className="ml-2 text-xs text-slate-300">Loading secure video stream...</span>
               </div>
             ) : activeVideoPlayUrl ? (
-              <video
+              <SecureVideoPlayer
                 key={activeVideoPlayUrl}
                 src={activeVideoPlayUrl}
                 controls
                 autoPlay
                 playsInline
                 preload="metadata"
-                onError={() => {
-                  toast.error("Video stream expired or failed to load. Refreshing authorization...");
-                  refetchMediaUrl();
-                }}
                 className="w-full max-h-[500px] object-contain bg-black rounded-lg"
+                onRefreshUrl={async () => {
+                  toast.info("Refreshing secure video authorization...");
+                  await refetchMediaUrl();
+                }}
               />
             ) : (
               <div className="p-8 text-center text-xs text-slate-400">

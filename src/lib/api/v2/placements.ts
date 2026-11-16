@@ -263,6 +263,32 @@ export async function recordPredepartureMedicalResultV2(
   );
 }
 
+export interface V2NextAction {
+  action: string;
+  endpoint: string;
+  op: string;
+  to_status?: string;
+  blocked?: boolean;
+  reason?: string | null;
+  can_override?: boolean;
+}
+
+/**
+ * Reads next actions allowed for current user on any target record.
+ * Authoritative Backend Endpoint: GET agency_tracking.api.actions.read?op=next_actions&doctype=<doctype>&name=<name>
+ * Works for Applicant, Placement, Clearance Step, Applicant Transaction, Complaint, Commission Batch Request, etc.
+ */
+export async function getNextActionsV2(
+  doctype: string,
+  name: string
+): Promise<{ doctype: string; name: string; status: string; next_actions: V2NextAction[] }> {
+  const result = await requestV2<any>(
+    `/api/method/agency_tracking.api.actions.read?op=next_actions&doctype=${encodeURIComponent(doctype)}&name=${encodeURIComponent(name)}`,
+    { method: "GET" }
+  );
+  return result?.message || result || { doctype, name, status: "", next_actions: [] };
+}
+
 /**
  * Moves a Placement forward via the sanctioned server state transition.
  */

@@ -544,7 +544,7 @@ export default function PlacementDocumentCenterPage() {
           }));
         }
 
-        const extractedCount = countExtractedContractFields(validParsed);
+        const extractedCount = countExtractedContractFields(combined);
 
         if (!parseError && extractedCount >= 4) {
           // Outcome A: Attachment + Extraction successful
@@ -601,7 +601,7 @@ export default function PlacementDocumentCenterPage() {
         ...combined,
       }));
 
-      const count = countExtractedContractFields(validParsed);
+      const count = countExtractedContractFields(combined);
       if (count >= 4) {
         toast.success("Contract Info Extracted", {
           description: "Contract document parsed successfully. Review extracted terms below and approve to save.",
@@ -839,7 +839,7 @@ export default function PlacementDocumentCenterPage() {
           }));
         }
 
-        const extractedCount = countExtractedVisaFields(validParsed);
+        const extractedCount = countExtractedVisaFields(combined);
 
         if (!parseError && extractedCount >= 3) {
           // Outcome A
@@ -896,7 +896,7 @@ export default function PlacementDocumentCenterPage() {
         ...combined,
       }));
 
-      const count = countExtractedVisaFields(validParsed);
+      const count = countExtractedVisaFields(combined);
       if (count >= 3) {
         toast.success("eVisa Info Extracted", {
           description: "Visa document parsed successfully. Review extracted details below.",

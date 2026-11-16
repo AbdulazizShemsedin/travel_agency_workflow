@@ -10,9 +10,10 @@
  */
 
 import { requestV2 } from "./client";
+import { getCompanySettingsV2, updateCompanySettingsV2 } from "./finance";
 
 // ==========================================
-// 1. Frappe Singleton Settings
+// 1. Frappe Singleton Settings (delegates to get_company_settings / update_company_settings)
 // ==========================================
 
 export interface V2AgencyTrackingSettings {
@@ -20,7 +21,16 @@ export interface V2AgencyTrackingSettings {
   agency_name?: string;
   agency_email?: string;
   agency_phone?: string;
+  agency_address?: string;
   bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  bank_address?: string;
+  bank_swift_code?: string;
+  bank_phone?: string;
+  bank_email?: string;
+  logo?: string;
+  stamp_image?: string;
   bank_account_no?: string;
   iban?: string;
   license_number?: string;
@@ -32,16 +42,10 @@ export interface V2AgencyTrackingSettings {
 
 export async function getAgencyTrackingSettingsV2(): Promise<V2AgencyTrackingSettings> {
   try {
-    const res = await requestV2<{ message?: V2AgencyTrackingSettings } | V2AgencyTrackingSettings>(
-      "/api/method/frappe.client.get",
-      {
-        method: "POST",
-        body: { doctype: "Agency Tracking Settings" },
-      }
-    );
-    return (res as any)?.message || res || {};
+    const res = await getCompanySettingsV2();
+    return res || {};
   } catch (err) {
-    console.warn("Could not load Agency Tracking Settings via frappe.client.get:", err);
+    console.warn("Could not load Agency Tracking Settings via getCompanySettingsV2:", err);
     return {};
   }
 }
@@ -49,18 +53,8 @@ export async function getAgencyTrackingSettingsV2(): Promise<V2AgencyTrackingSet
 export async function updateAgencyTrackingSettingsV2(
   fields: Partial<V2AgencyTrackingSettings>
 ): Promise<V2AgencyTrackingSettings> {
-  const res = await requestV2<{ message?: V2AgencyTrackingSettings } | V2AgencyTrackingSettings>(
-    "/api/method/frappe.client.set_value",
-    {
-      method: "POST",
-      body: {
-        doctype: "Agency Tracking Settings",
-        name: "Agency Tracking Settings",
-        fieldname: fields,
-      },
-    }
-  );
-  return (res as any)?.message || res || {};
+  const res = await updateCompanySettingsV2(fields);
+  return res || {};
 }
 
 // ==========================================

@@ -167,52 +167,23 @@ function resolveFrappeUserDocName(userIdentifier: string): string {
 
 /**
  * Retrieves the recorded password for a user from their User profile if available.
+ * Note: Go backend has no bio field and never stores a readable password. Always returns null.
  */
-export async function getUserPasswordV2(userEmail: string): Promise<string | null> {
-  try {
-    const docName = resolveFrappeUserDocName(userEmail);
-    const res = await requestV2<any>("/api/method/frappe.client.get_value", {
-      method: "POST",
-      body: {
-        doctype: "User",
-        filters: { name: docName },
-        fieldname: ["name", "bio"],
-      },
-    });
-    const bio = res?.bio || res?.message?.bio;
-    if (typeof bio === "string" && bio.startsWith("pwd:")) {
-      return bio.slice(4);
-    }
-    return null;
-  } catch (err) {
-    console.warn("[getUserPasswordV2] Could not fetch user password:", err);
-    return null;
-  }
+export async function getUserPasswordV2(_userEmail: string): Promise<string | null> {
+  return null;
 }
 
 /**
- * Saves/records the plain password into the User profile (bio field) so administrators
- * can view and communicate credentials to staff or foreign agents.
+ * Saves/records the plain password into the User profile.
+ * Note: Go backend has no bio field and never stores a readable password. No-op.
  */
-export async function saveUserPasswordRecordV2(userEmail: string, password: string): Promise<void> {
-  try {
-    const docName = resolveFrappeUserDocName(userEmail);
-    await requestV2("/api/method/frappe.client.set_value", {
-      method: "POST",
-      body: {
-        doctype: "User",
-        name: docName,
-        fieldname: { bio: `pwd:${password}` },
-      },
-    });
-  } catch (err) {
-    console.warn("[saveUserPasswordRecordV2] Could not save password record:", err);
-  }
+export async function saveUserPasswordRecordV2(_userEmail: string, _password: string): Promise<void> {
+  // No-op per Go backend specification
 }
 
 /**
  * Resets employee login password.
- * Uses native Frappe RPCs (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md) and persists the password record.
+ * Uses authoritative agency_tracking.api.employee.write?op=reset_employee_password.
  */
 export async function resetEmployeePasswordV2(
   userEmail: string,
@@ -220,7 +191,6 @@ export async function resetEmployeePasswordV2(
 ): Promise<void> {
   const normalizedEmail = (userEmail || "").trim().toLowerCase();
   await resetEmployeePasswordApiV2(normalizedEmail, newPassword);
-  await saveUserPasswordRecordV2(normalizedEmail, newPassword);
 }
 
 /**
@@ -243,54 +213,46 @@ export async function deleteEmployeeV2(userEmail: string): Promise<DeleteEmploye
 }
 
 /**
- * Renames an employee user account identifier (email) via native frappe.client.rename_doc RPC.
- */
-export async function renameEmployeeV2(oldEmail: string, newEmail: string): Promise<string> {
-  const oldDocName = resolveFrappeUserDocName(oldEmail);
-  const newDocName = newEmail.trim().toLowerCase();
-  const res = await requestV2<any>("/api/method/frappe.client.rename_doc", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      old_name: oldDocName,
-      new_name: newDocName,
-      merge: 0,
-    },
-  });
-  return res?.message || newDocName;
-}
-
-/**
- * Updates an employee's personal profile information (email, name, phone) on the User record.
- * Handles document renaming if email changes, and uses native frappe.client.set_value RPC per AGENTS.md Rule 7.
+ * Updates an employee's personal profile information (email, name, phone) via authoritative update_employee_info RPC.
+ * Go backend: POST /api/method/agency_tracking.api.employee.write?op=update_employee_info
  */
 export async function updateEmployeeInfoV2(
   payload: UpdateEmployeeInfoPayload
-): Promise<{ email: string }> {
-  let targetEmail = payload.email.trim().toLowerCase();
-  const newEmail = payload.new_email?.trim().toLowerCase();
-
-  if (newEmail && newEmail !== targetEmail) {
-    await renameEmployeeV2(targetEmail, newEmail);
-    targetEmail = newEmail;
+): Promise<{ email: string; first_name?: string; last_name?: string; full_name?: string; phone?: string; mobile_no?: string }> {
+  const body: Record<string, any> = {
+    email: payload.email.trim().toLowerCase(),
+    first_name: payload.first_name.trim(),
+  };
+  if (payload.new_email) {
+    body.new_email = payload.new_email.trim().toLowerCase();
+  }
+  if (payload.last_name !== undefined) {
+    body.last_name = payload.last_name != null ? payload.last_name.trim() : "";
+  }
+  if (payload.phone !== undefined) {
+    body.phone = payload.phone != null ? payload.phone.trim() : "";
+  }
+  if (payload.mobile_no !== undefined) {
+    body.mobile_no = payload.mobile_no != null ? payload.mobile_no.trim() : "";
   }
 
-  await requestV2("/api/method/frappe.client.set_value", {
-    method: "POST",
-    body: {
-      doctype: "User",
-      name: targetEmail,
-      fieldname: {
-        email: targetEmail,
-        first_name: payload.first_name.trim(),
-        last_name: (payload.last_name || "").trim(),
-        phone: (payload.phone || "").trim(),
-        mobile_no: (payload.mobile_no || payload.phone || "").trim(),
-      },
-    },
-  });
+  const res = await requestV2<any>(
+    "/api/method/agency_tracking.api.employee.write?op=update_employee_info",
+    {
+      method: "POST",
+      body,
+    }
+  );
 
-  return { email: targetEmail };
+  const finalEmail = body.new_email || body.email;
+  return {
+    email: res?.email || finalEmail,
+    first_name: res?.first_name || body.first_name,
+    last_name: res?.last_name || body.last_name,
+    full_name: res?.full_name,
+    phone: res?.phone || body.phone,
+    mobile_no: res?.mobile_no || body.mobile_no,
+  };
 }
 
 /**
@@ -380,42 +342,22 @@ export async function updateEmployeeRolesApiV2(
 }
 
 /**
- * Resets an employee's password via native Frappe RPC (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md #9)
- * with graceful fallback to employee_api.reset_employee_password if deployed.
+ * Resets an employee's password via authoritative employee_api.reset_employee_password RPC.
+ * Go backend: POST /api/method/agency_tracking.api.employee.write?op=reset_employee_password
+ * Requires a password of at least 8 characters.
  */
 export async function resetEmployeePasswordApiV2(
   email: string,
   newPassword: string
 ): Promise<void> {
   const normalizedEmail = (email || "").trim().toLowerCase();
-  const docName = resolveFrappeUserDocName(normalizedEmail);
-
-  // 1. Primary: Use native Frappe client set_value RPC on User doctype (Rule 7 & CHANGES_HARDENING_AND_FEATURES.md #9)
-  try {
-    await requestV2("/api/method/frappe.client.set_value", {
+  await requestV2(
+    "/api/method/agency_tracking.api.employee.write?op=reset_employee_password",
+    {
       method: "POST",
-      body: {
-        doctype: "User",
-        name: docName,
-        fieldname: "new_password",
-        value: newPassword.trim(),
-      },
-    });
-    return;
-  } catch (nativeErr: any) {
-    // If native set_value failed, attempt custom RPC endpoint if whitelisted on server
-    try {
-      await requestV2(
-        "/api/method/agency_tracking.api.employee.write?op=reset_employee_password",
-        {
-          method: "POST",
-          body: { email: normalizedEmail, new_password: newPassword.trim() },
-        }
-      );
-    } catch {
-      throw nativeErr;
+      body: { email: normalizedEmail, new_password: newPassword.trim() },
     }
-  }
+  );
 }
 
 /**

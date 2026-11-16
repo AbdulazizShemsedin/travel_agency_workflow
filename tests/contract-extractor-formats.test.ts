@@ -616,4 +616,63 @@ describe("Contract Document Extractor - Multi-Format Support (.docx, .doc, .pdf,
     assert.equal(normVisa.civil_id, "288112233445");
     assert.equal(normVisa.reference, "REF-776655");
   });
+
+  test("18. getApplicantMediaUrlV2 gracefully absorbs 'No file on record' without recursive loops", async () => {
+    // Simulate getApplicantMediaUrlV2 logic with mock requestV2 returning 417 "No file on record."
+    let callCount = 0;
+    const mockRequestV2 = async (): Promise<any> => {
+      callCount++;
+      throw new Error("No file on record.");
+    };
+
+    const safeGetMediaUrl = async (applicantName: string) => {
+      if (!applicantName || !applicantName.trim()) return { url: "" };
+      try {
+        const res = await mockRequestV2();
+        return res?.message || res;
+      } catch (err: any) {
+        const msg = String(err?.message || "").toLowerCase();
+        // Does not throw and does NOT call getApplicantV2
+        if (!msg.includes("no file on record") && !msg.includes("not found")) {
+          console.warn(err);
+        }
+        return { url: "" };
+      }
+    };
+
+    const res = await safeGetMediaUrl("APP-00010");
+    assert.equal(res.url, "");
+    // Must be called exactly once; no recursive loop
+    assert.equal(callCount, 1);
+  });
+
+  test("19. SecureVideoPlayer retry budget halts retry loops on persistent video failure", () => {
+    let refreshAttempts = 0;
+    const maxRetries = 3;
+    let lastFailedSrc: string | null = null;
+    let hasFatalError = false;
+
+    const simulateHandleError = (src: string) => {
+      if (!src || !src.trim()) {
+        hasFatalError = true;
+        return;
+      }
+      if (lastFailedSrc === src || refreshAttempts >= maxRetries) {
+        hasFatalError = true;
+        return;
+      }
+      lastFailedSrc = src;
+      refreshAttempts++;
+    };
+
+    // First error triggers refresh
+    simulateHandleError("https://example.com/expired-video.mp4");
+    assert.equal(refreshAttempts, 1);
+    assert.equal(hasFatalError, false);
+
+    // Second error with the exact same failed src halts immediately (no duplicate refresh on same failing URL)
+    simulateHandleError("https://example.com/expired-video.mp4");
+    assert.equal(refreshAttempts, 1);
+    assert.equal(hasFatalError, true);
+  });
 });

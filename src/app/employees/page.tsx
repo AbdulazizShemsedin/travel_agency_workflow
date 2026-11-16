@@ -1698,6 +1698,12 @@ export default function EmployeesPage() {
                 toast.error("Please provide an initial password.");
                 return;
               }
+              if (addForm.password.trim().length < 8) {
+                toast.error("Password too short", {
+                  description: "Password must be at least 8 characters.",
+                });
+                return;
+              }
               if (addForm.password !== addForm.confirmPassword) {
                 toast.error("Passwords do not match", {
                   description: "Initial password and confirm password must match.",
@@ -1923,19 +1929,6 @@ export default function EmployeesPage() {
               </div>
             </div>
 
-            {/* Notification Checkbox */}
-            <label className="flex items-center gap-2 pt-1 text-slate-600 dark:text-zinc-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={addForm.send_welcome_email}
-                onChange={(e) => setAddForm({ ...addForm, send_welcome_email: e.target.checked })}
-                className="rounded text-emerald-600 focus:ring-emerald-500"
-              />
-              <span className="text-[11px]">
-                Send account onboarding notification email with login credentials
-              </span>
-            </label>
-
             <DialogFooter className="border-t border-slate-100 dark:border-[#1e1e24] pt-3 flex items-center justify-end gap-2">
               <Button
                 type="button"
@@ -1951,6 +1944,7 @@ export default function EmployeesPage() {
                   createMutation.isPending ||
                   isDuplicateAddEmail ||
                   !addForm.password.trim() ||
+                  addForm.password.trim().length < 8 ||
                   !addForm.confirmPassword.trim() ||
                   addForm.password !== addForm.confirmPassword
                 }
@@ -2291,33 +2285,8 @@ export default function EmployeesPage() {
               </div>
             </DialogHeader>
 
-            <div className="rounded-lg border border-slate-200 dark:border-[#24242e] bg-slate-50/70 dark:bg-[#131317] p-3 space-y-1 font-mono">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Current Account Password</span>
-              {isLoadingStaffPassword ? (
-                <span className="text-xs text-slate-400 flex items-center gap-1 font-sans">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Fetching recorded password...
-                </span>
-              ) : currentStaffPassword ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-amber-800 dark:text-amber-300 font-bold text-xs select-all">
-                    {currentStaffPassword}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(currentStaffPassword);
-                      toast.success("Password copied to clipboard!");
-                    }}
-                    className="text-[10px] font-sans text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer flex items-center gap-0.5"
-                  >
-                    <Copy className="h-3 w-3" /> Copy
-                  </button>
-                </div>
-              ) : (
-                <span className="text-[11px] text-slate-400 font-sans italic">
-                  Not recorded yet — set a password below to store and view it
-                </span>
-              )}
+            <div className="rounded-lg border border-slate-200 dark:border-[#24242e] bg-slate-50/70 dark:bg-[#131317] p-3 text-xs text-slate-600 dark:text-zinc-400">
+              <p>Enter a new password of at least 8 characters. Performing a password reset updates credentials immediately and revokes existing active sessions.</p>
             </div>
 
             <form
@@ -2325,6 +2294,12 @@ export default function EmployeesPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!newPassword.trim() || resetPasswordMutation.isPending) return;
+                if (newPassword.trim().length < 8) {
+                  toast.error("Password too short", {
+                    description: "Password must be at least 8 characters.",
+                  });
+                  return;
+                }
                 if (newPassword !== confirmNewPassword) {
                   toast.error("Passwords do not match", {
                     description: "New password and confirm password must match.",
