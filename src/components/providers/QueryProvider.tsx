@@ -60,6 +60,20 @@ function patchSonnerToast() {
 // Execute patch immediately upon module load
 patchSonnerToast();
 
+// Queries that hold case data. When one of them reloads, the Undo buttons ask again.
+const CASE_DATA_KEYS = new Set([
+  "operational_workspace_v2",
+  "placement_clearance_steps",
+  "clearance_steps_for_applicant",
+  "applicant",
+  "applicants",
+  "placement",
+  "placements",
+  "clearance",
+  "clearance_step",
+  "v2_clearance_queue",
+]);
+
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     patchSonnerToast();
@@ -82,6 +96,23 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         },
       })
   );
+
+  // What can be undone changes whenever a case changes: here, on another screen, or by another user.
+  // Each Undo button keeps its own answer, so when case data reloads from the server, every answer
+  // is asked again (one burst per reload, not one per query).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== "updated" || event.action.type !== "success") return;
+      if (!CASE_DATA_KEYS.has(String(event.query.queryKey[0]))) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["undoable_step"] }), 200);
+    });
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
