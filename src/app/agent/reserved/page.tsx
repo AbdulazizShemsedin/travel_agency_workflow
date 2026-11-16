@@ -468,7 +468,7 @@ export default function MyReservedCandidatesPage() {
                                 </span>
                               ) : c.contract_file ? (
                                 <a
-                                  href={c.contract_file}
+                                  href={getFileDownloadUrl(c.contract_file)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >

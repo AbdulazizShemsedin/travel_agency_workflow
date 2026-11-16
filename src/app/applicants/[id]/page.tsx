@@ -1,5 +1,6 @@
 "use client";
 
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import * as React from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -719,7 +720,7 @@ export default function ApplicantDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <a
-                href={activeVideoPlayUrl || candidateVideoUrl}
+                href={getFileDownloadUrl(activeVideoPlayUrl || candidateVideoUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"

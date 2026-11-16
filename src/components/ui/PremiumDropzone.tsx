@@ -21,7 +21,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { getFileDownloadUrl } from "@/lib/api/v2/documents";
+import { getFileDownloadUrl, getFileInfoV2 } from "@/lib/api/v2/documents";
+
+// A stored file is named by its ID (file_ + 20 hex). The ID is never shown; its name is looked up.
+const FILE_ID_RE = /^file_[0-9a-f]{20}$/;
+const fileNameCache = new Map<string, string>();
 
 export type DropzoneVariant =
   | "passport"
@@ -82,6 +86,7 @@ export function PremiumDropzone({
   const [dragError, setDragError] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
+  const [, setNamesLoaded] = React.useState(0);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const dragCounterRef = React.useRef(0);
@@ -122,8 +127,27 @@ export function PremiumDropzone({
   }, [value]);
 
   // Extract display file name & size - never displays raw technical file IDs to users
+  // A stored file's name comes from the server.
+  const storedId = typeof value === "string" && FILE_ID_RE.test(value.trim()) ? value.trim() : "";
+  const nameIsId = Boolean(fileName && FILE_ID_RE.test(fileName));
+  const needsName = Boolean(storedId) && (!fileName || nameIsId);
+  React.useEffect(() => {
+    if (!needsName || fileNameCache.has(storedId)) return;
+    let live = true;
+    getFileInfoV2([storedId]).then((info) => {
+      const name = info?.[storedId]?.name;
+      if (name) fileNameCache.set(storedId, name);
+      if (live) setNamesLoaded((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, [needsName, storedId]);
+  const storedName = storedId ? fileNameCache.get(storedId) || "" : "";
+
   const displayFileName = React.useMemo(() => {
-    if (fileName) return fileName;
+    if (fileName && !nameIsId) return fileName;
+    if (storedName) return storedName;
     if (value instanceof File) return value.name;
     if (typeof value === "string") {
       const s = value.trim();
@@ -160,7 +184,7 @@ export function PremiumDropzone({
       return cleanName || "Uploaded File";
     }
     return "";
-  }, [fileName, value, variant, label]);
+  }, [fileName, nameIsId, storedName, value, variant, label]);
 
   const displayFileSize = React.useMemo(() => {
     if (fileSize !== undefined) {

@@ -1287,7 +1287,7 @@ export default function PlacementDocumentCenterPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const url = contractPreviewUrl || previewFileUrl;
+                          const url = getFileDownloadUrl(contractPreviewUrl || previewFileUrl);
                           const win = window.open(url, "_blank");
                           win?.focus();
                         }}
