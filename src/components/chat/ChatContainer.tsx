@@ -274,13 +274,7 @@ export function ChatContainer() {
     enabled: isForeignAgency,
     staleTime: 60000,
   });
-  const allowedStaffForAgency = React.useMemo(
-    () =>
-      agencyContacts
-        .filter((c) => c.user.toLowerCase() !== currentEmail)
-        .map((c) => ({ name: c.user, email: c.user, full_name: c.full_name, roles: ["Communication Manager"] })),
-    [agencyContacts, currentEmail]
-  );
+
 
   const { data: availableContractors = [], isLoading: isContractorsLoading } = useQuery({
     queryKey: ["v2_contractors_chat_dropdown"],
@@ -502,6 +496,12 @@ export function ChatContainer() {
         };
       }
 
+      // 3b. An agency cannot read the staff roster: its Communication Managers come from list_chat_contacts.
+      const contact = agencyContacts.find((c) => c.user.toLowerCase().trim() === clean);
+      if (contact) {
+        return { name: contact.full_name || contact.user, email: contact.user, role: "Communication Manager", isStaff: true, isSelf: false };
+      }
+
       // 4. Search in availableContractors
       const con = availableContractors.find(
         (c: any) =>
@@ -553,7 +553,7 @@ export function ChatContainer() {
         isSelf: false,
       };
     },
-    [user, authUser, currentEmail, isAdmin, isCommunicationManager, roles, internalEmployees, availableContractors, resolvePrimaryRole]
+    [user, authUser, currentEmail, isAdmin, isCommunicationManager, roles, internalEmployees, agencyContacts, availableContractors, resolvePrimaryRole]
   );
 
   // Resolves communicating parties for any thread: who communicated with whom
@@ -585,6 +585,8 @@ export function ChatContainer() {
         // Identify internal staff participant
         const staffParticipants = participants.filter((p) => {
           const cleanP = p.toLowerCase().trim();
+          // An agency cannot read the agency list (con is unknown to it): it leaves itself out by its login.
+          if (isForeignAgency && cleanP === currentEmail) return false;
           return cleanP !== conUser && cleanP !== (con?.name || "").toLowerCase().trim();
         });
 
@@ -1123,6 +1125,10 @@ export function ChatContainer() {
     sendMessageMutation.mutate();
   }, [messageText, pendingAttachment, sendMessageMutation, isUploadingAttachment]);
 
+  // An agency has one conversation with headquarters (the backend picks who answers it), so its
+  // buttons open that conversation; staff choose a person or agency in the window.
+  const openNewConversation = () => (isForeignAgency ? createThreadMutation.mutate() : setIsNewThreadModalOpen(true));
+
   const createThreadMutation = useMutation({
     mutationFn: async () => {
       if (isForeignAgency) {
@@ -1318,10 +1324,10 @@ export function ChatContainer() {
           )}
           <button
             type="button"
-            onClick={() => setIsNewThreadModalOpen(true)}
+            onClick={openNewConversation}
             disabled={createThreadMutation.isPending}
             className="p-1.5 sm:p-2 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors"
-            title={isForeignAgency ? "Contact Headquarters Staff" : "New Conversation"}
+            title={isForeignAgency ? "Message Headquarters" : "New Conversation"}
           >
             <Plus className="h-5 w-5" />
           </button>
@@ -1387,7 +1393,7 @@ export function ChatContainer() {
           <Button
             type="button"
             size="sm"
-            onClick={() => setIsNewThreadModalOpen(true)}
+            onClick={openNewConversation}
             disabled={createThreadMutation.isPending}
             className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white text-xs h-8 shadow-xs font-semibold"
           >
@@ -1398,7 +1404,7 @@ export function ChatContainer() {
             ) : (
               <Plus className="mr-1.5 h-3.5 w-3.5" />
             )}
-            {isForeignAgency ? "Contact Headquarters Staff" : canCommunicateWithForeignAgents ? "New Conversation" : "New Staff Discussion"}
+            {isForeignAgency ? "Message Headquarters" : canCommunicateWithForeignAgents ? "New Conversation" : "New Staff Discussion"}
           </Button>
         </div>
       </div>
@@ -1651,7 +1657,7 @@ export function ChatContainer() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsNewThreadModalOpen(true)}
+                  onClick={openNewConversation}
                   className="text-xs h-7 mt-1"
                 >
                   {isForeignAgency ? "Connect with manager" : "Start Discussion"}
@@ -2207,7 +2213,7 @@ export function ChatContainer() {
               </div>
               <Button
                 type="button"
-                onClick={() => setIsNewThreadModalOpen(true)}
+                onClick={openNewConversation}
                 disabled={createThreadMutation.isPending}
                 className="bg-emerald-900 text-white text-xs h-8 font-semibold"
               >
@@ -2247,34 +2253,7 @@ export function ChatContainer() {
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
-            {isForeignAgency ? (
-              /* Foreign Agency Modal: Only Admin and Communication Manager allowed */
-              <div className="space-y-3 pt-1">
-                <div>
-                  <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                    Select a Communication Manager:
-                  </label>
-                  <select
-                    value={newThreadRecipient}
-                    onChange={(e) => setNewThreadRecipient(e.target.value)}
-                    className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
-                  >
-                    <option value="">-- Select Headquarters Contact --</option>
-                    {allowedStaffForAgency.length === 0 && (
-                      <option value="" disabled>No Communication Manager is available right now</option>
-                    )}
-                    {allowedStaffForAgency.map((emp: any) => {
-                      const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
-                      return (
-                        <option key={emp.email || emp.name} value={emp.email || emp.name}>
-                          {emp.full_name || emp.name} ({emp.email || emp.name}) {roleList ? `— [${roleList}]` : ""}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-            ) : (
+            {isForeignAgency ? null /* an agency's buttons open its HQ conversation, never this window */ : (
               /* Internal Staff Modal */
               <div className="space-y-3 pt-1">
                 {/* Channel Selector for Staff with Admin or Communication Manager Role */}
