@@ -588,23 +588,24 @@ export function ApplicantFollowUpWorkspace({
   const isEmbassyStamped = isEmbassyConfirmedFinished;
   const isDepartureComplete = isDepartureConfirmedFinished;
 
-  const normalizedInjazPayment = React.useMemo(() => {
+  // Plain values, not hooks: this runs after the early return above, where a hook would change React's hook order.
+  const normalizedInjazPayment = (() => {
     const p = String(currentRow?.injazPayment || currentRow?.injaz?.injaz_payment_status || currentRow?.injaz?.payment_status || "").trim().toLowerCase();
     if (p === "paid") return "Paid";
     if (p === "printed") return "Printed";
     return "Unpaid";
-  }, [currentRow?.injazPayment, currentRow?.injaz]);
+  })();
 
   const isInjazPaid = normalizedInjazPayment === "Paid";
 
-  const normalizedTeshirStatus = React.useMemo(() => {
+  const normalizedTeshirStatus = (() => {
     if (isTeshirConfirmedFinished) return "Completed";
     // The step's own Tesheer status first; a new step has none (the backend sets no default).
     const st = String((currentRow?.injaz as any)?.taeshir_status || currentRow?.teshirStatus || "").trim().toUpperCase();
     if (st === "INFORMED" || st === "RECEIVED" || st === "READY TO EMBASSY") return st;
     if (st === "COMPLETED" || st === "COMPLETE" || st === "ISSUED" || st === "APPROVED") return "Completed";
     return "";
-  }, [isTeshirConfirmedFinished, currentRow?.teshirStatus, currentRow?.injaz]);
+  })();
 
   // Check if pipeline has advanced past embassy / ticketing
   const isPlacementAdvanced = ["Stamped", "Ticketed", "Departed"].includes(

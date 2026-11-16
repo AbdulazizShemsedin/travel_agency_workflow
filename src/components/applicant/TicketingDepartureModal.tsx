@@ -86,8 +86,6 @@ export function TicketingDepartureModal({
   const [medical2ExamDate, setMedical2ExamDate] = React.useState(new Date().toISOString().split("T")[0]);
   const [isUnfitConfirmOpen, setIsUnfitConfirmOpen] = React.useState(false);
 
-  if (!placement) return null;
-
   const visaDeadline = (placement as any)?.visa_deadline || (placement as any)?.visa_valid_until;
   const visaDeadlineInfo = React.useMemo(() => {
     if (!visaDeadline) return null;
@@ -100,6 +98,9 @@ export function TicketingDepartureModal({
     );
     return { deadline: visaDeadline, diffDays };
   }, [visaDeadline]);
+
+  // After every hook: a hook below an early return runs on some renders only (React's hook order).
+  if (!placement) return null;
 
   // 1. Record Ticket Details
   const handleRecordTicket = async (e: React.FormEvent) => {
