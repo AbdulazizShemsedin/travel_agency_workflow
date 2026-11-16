@@ -79,6 +79,9 @@ import { exportGroupScheduleBioXlsV2 } from "@/lib/api/v2/reports";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { hasAnyV2Role } from "@/lib/auth/v2Roles";
 
+
+// Tesheer statuses the backend accepts (set_taeshir_status).
+const TAESHIR_STATUSES = ["INFORMED", "RECEIVED", "READY TO EMBASSY"];
 export interface StageValidationResult {
   isComplete: boolean;
   isPartial: boolean;
@@ -267,7 +270,8 @@ export function checkTaeshirStageRequirements(row: WorkspaceApplicantRow): Stage
         ? "Printed"
         : "Unpaid";
 
-    const teshirStatusVal = row.teshirStatus || (row.injaz as any)?.taeshir_status || "INFORMED";
+    // The step's own Tesheer status; a new step has none (the backend sets no default).
+    const teshirStatusVal = (row.injaz as any)?.taeshir_status || "";
     const teshirRemarkVal = (row.injaz as any)?.remarks || "";
     const isCompleted = row.teshirStatus === "Completed" || (row.injaz as any)?.status === "Complete";
 
@@ -847,7 +851,7 @@ export function FollowUpWorkspace({
   const [formAppointmentDate, setFormAppointmentDate] = React.useState("");
   const [formInjazAppId, setFormInjazAppId] = React.useState("");
   const [formInjazPaymentStatus, setFormInjazPaymentStatus] = React.useState("Paid");
-  const [formTeshirStatus, setFormTeshirStatus] = React.useState("INFORMED");
+  const [formTeshirStatus, setFormTeshirStatus] = React.useState("");
   const [formTeshirCompleted, setFormTeshirCompleted] = React.useState("In Progress");
   const [formTeshirRemark, setFormTeshirRemark] = React.useState("");
   const [formVisaNumber, setFormVisaNumber] = React.useState("");
@@ -1376,7 +1380,7 @@ export function FollowUpWorkspace({
               : "Unpaid";
           await recordInjazPaymentV2(stepName, injazStatus);
         }
-        if (formTeshirStatus) {
+        if (TAESHIR_STATUSES.includes(formTeshirStatus) && formTeshirStatus !== (row.injaz as any)?.taeshir_status) {
           await setTaeshirStatusV2(stepName, formTeshirStatus);
         }
         if (formTeshirRemark.trim()) {
@@ -1696,7 +1700,12 @@ export function FollowUpWorkspace({
         const isKuwait = (row.destinationCountry || "").toLowerCase().includes("kuwait");
         const status = row.teshirStatus || (isKuwait ? "Pending" : "—");
         const isComplete = status === "Completed" || row.injaz?.status === "Complete";
-        const options = isKuwait ? kuwaitTelesignOptions : saudiTaeshirOptions;
+        // A step with no Tesheer status shows "Not set" (the select would otherwise show its first option).
+        const options = isKuwait
+          ? kuwaitTelesignOptions
+          : status === "—" || status === ""
+          ? [{ value: "", label: "Not set", badgeClass: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-zinc-800 dark:text-zinc-400" }, ...saudiTaeshirOptions]
+          : saudiTaeshirOptions;
         const hasStep = Boolean(
           row.injazStepName ||
           row.injaz?.name ||
@@ -1713,9 +1722,9 @@ export function FollowUpWorkspace({
         return (
           <div onClick={(e) => e.stopPropagation()}>
             <ExcelSelect
-              value={status}
+              value={status === "—" ? "" : status}
               options={options}
-              onSave={(newVal) => handleSaveTeshirStatus(row, newVal)}
+              onSave={(newVal) => (newVal ? handleSaveTeshirStatus(row, newVal) : undefined)}
               disabled={isComplete}
               ariaLabel="Te'shir / Telesign Status"
               className="text-[10px]"
@@ -2192,7 +2201,7 @@ export function FollowUpWorkspace({
                               <div>
                                 <span className="text-slate-500 dark:text-zinc-400 block text-[10.5px]">Te&apos;shir Status:</span>
                                 <Badge variant="outline" className="text-blue-700 border-blue-300 dark:border-blue-700 font-semibold">
-                                  {stageModalState.validation.fieldValues.teshirStatus || "INFORMED"}
+                                  {stageModalState.validation.fieldValues.teshirStatus || "Not set"}
                                 </Badge>
                               </div>
                               <div>
@@ -2614,14 +2623,11 @@ export function FollowUpWorkspace({
                               onChange={(e) => setFormTeshirStatus(e.target.value)}
                               className="w-full h-8 px-2.5 text-xs rounded-md border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#1a1a22] text-slate-900 dark:text-white font-medium"
                             >
+                              {/* The backend's Tesheer statuses. Finishing the stage is "Te'shir Completed" below. */}
+                              <option value="" disabled>Not set</option>
                               <option value="INFORMED">INFORMED</option>
                               <option value="RECEIVED">RECEIVED</option>
-                              <option value="SUBMITTED">SUBMITTED</option>
-                              <option value="BIOMETRICS">BIOMETRICS</option>
-                              <option value="MEDICAL">MEDICAL</option>
-                              <option value="CONTRACT">CONTRACT</option>
                               <option value="READY TO EMBASSY">READY TO EMBASSY</option>
-                              <option value="Completed">Completed</option>
                             </select>
                           </div>
                         </div>

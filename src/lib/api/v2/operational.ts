@@ -501,9 +501,9 @@ export async function fetchOperationalWorkspaceDataV2(
             injazStep?.status === "Issued" ||
             injazStep?.status === "Approved";
           const rawTaeshir = (injazStep as any)?.taeshir_status;
-          if (rawTaeshir === "READY TO EMBASSY" || rawTaeshir === "RECEIVED") return rawTaeshir;
           if (isDone) return "Completed";
-          return rawTaeshir || injazStep?.status || "—";
+          // The Tesheer status only; the step's own status (Pending) is not one, and a new step has none.
+          return rawTaeshir || (injazStep ? "" : "—");
         })(),
         medical2Status: (plc as any)?.medical_2_status || (applicant as any)?.medical_2_status || "—",
         departureStatus:

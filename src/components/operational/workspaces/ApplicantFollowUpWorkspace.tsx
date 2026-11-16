@@ -696,11 +696,11 @@ export function ApplicantFollowUpWorkspace({
 
   const normalizedTeshirStatus = React.useMemo(() => {
     if (isTeshirConfirmedFinished) return "Completed";
-    const st = String(currentRow?.teshirStatus || (currentRow?.injaz as any)?.taeshir_status || "").trim().toUpperCase();
-    if (st === "RECEIVED") return "RECEIVED";
-    if (st === "READY TO EMBASSY") return "READY TO EMBASSY";
+    // The step's own Tesheer status first; a new step has none (the backend sets no default).
+    const st = String((currentRow?.injaz as any)?.taeshir_status || currentRow?.teshirStatus || "").trim().toUpperCase();
+    if (st === "INFORMED" || st === "RECEIVED" || st === "READY TO EMBASSY") return st;
     if (st === "COMPLETED" || st === "COMPLETE" || st === "ISSUED" || st === "APPROVED") return "Completed";
-    return "INFORMED";
+    return "";
   }, [isTeshirConfirmedFinished, currentRow?.teshirStatus, currentRow?.injaz]);
 
   // Check if pipeline has advanced past embassy / ticketing
@@ -2146,9 +2146,8 @@ export function ApplicantFollowUpWorkspace({
                               onChange={async (e) => {
                                 const val = e.target.value;
                                 try {
-                                  if (injazStepName && val !== "Completed") {
-                                    await setTaeshirStatusV2(injazStepName, val);
-                                  }
+                                  if (!injazStepName) return;
+                                  await setTaeshirStatusV2(injazStepName, val);
                                   toast.success(`Te'shir status updated to ${val}`);
                                   setCurrentRow((prev) => (prev ? { 
                                     ...prev, 
@@ -2169,10 +2168,12 @@ export function ApplicantFollowUpWorkspace({
                                   : "bg-white dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                               )}
                             >
+                              {/* The backend's Tesheer statuses. Completed is shown, not chosen: the stage is finished with "Te'shir Completed". */}
+                              <option value="" disabled>Not set</option>
                               <option value="INFORMED">INFORMED</option>
                               <option value="RECEIVED">RECEIVED</option>
                               <option value="READY TO EMBASSY">READY TO EMBASSY</option>
-                              <option value="Completed">Completed</option>
+                              <option value="Completed" disabled>Completed</option>
                             </select>
                           ) : (
                             <div className={cn(
@@ -2181,7 +2182,7 @@ export function ApplicantFollowUpWorkspace({
                                 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500 font-bold"
                                 : "bg-slate-50 dark:bg-[#16161d] border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200"
                             )}>
-                              <span>{normalizedTeshirStatus}</span>
+                              <span>{normalizedTeshirStatus || "Not set"}</span>
                               {!canEditTaeshir && <Lock className="h-3 w-3 text-slate-400" />}
                             </div>
                           )}
