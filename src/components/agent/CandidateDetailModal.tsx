@@ -59,7 +59,7 @@ export function CandidateDetailModal({
   }, [candidate?.name, isOpen]);
 
   // Fetch full live candidate document on demand via sanctioned portal RPC
-  const { data: fullApplicant } = useQuery({
+  const { data: fullApplicant, refetch: refetchDetail } = useQuery({
     queryKey: ["candidate_detail_full", candidate?.name],
     queryFn: () => (candidate?.name ? getCandidateDetailV2(candidate.name) : Promise.resolve(null)),
     enabled: isOpen && !!candidate?.name,
@@ -79,6 +79,9 @@ export function CandidateDetailModal({
     (candidate as any)?.intro_video ||
     "";
   const hasVideo = Boolean(rawVideoUrl && typeof rawVideoUrl === "string" && rawVideoUrl.trim() !== "");
+  // The agency's candidate detail already carries a signed video link (2 hours). Only a bare file id
+  // (staff screens) needs get_applicant_media_url, which agencies may not call.
+  const isReadyLink = hasVideo && /^https?:\/\//i.test(String(rawVideoUrl).trim());
 
   const {
     data: mediaUrlData,
@@ -90,11 +93,11 @@ export function CandidateDetailModal({
       if (!candidate?.name) return null;
       return await getApplicantMediaUrlV2(candidate.name, "experience_video");
     },
-    enabled: isOpen && Boolean(candidate?.name && hasVideo),
+    enabled: isOpen && Boolean(candidate?.name && hasVideo) && !isReadyLink,
     staleTime: 1000 * 60 * 90,
     retry: false,
   });
-  const streamableVideoUrl = mediaUrlData !== undefined ? (mediaUrlData?.url || "") : rawVideoUrl;
+  const streamableVideoUrl = isReadyLink ? String(rawVideoUrl).trim() : mediaUrlData?.url || "";
 
   if (!isOpen || !candidate) return null;
 
@@ -473,7 +476,8 @@ export function CandidateDetailModal({
                       preload="metadata"
                       className="w-full max-h-[260px] object-contain rounded-lg bg-black"
                       onRefreshUrl={async () => {
-                        await refetchMediaUrl();
+                        // An expired link: a ready link comes again with the candidate detail.
+                        await (isReadyLink ? refetchDetail() : refetchMediaUrl());
                       }}
                     />
                   ) : (

@@ -9,7 +9,7 @@
 
 import { requestV2 } from "./client";
 import { listApplicantsV2 } from "./applicants";
-import { listPlacementsV2, listSelectionRequestsV2 } from "./placements";
+import { listMyPlacementsV2, listPlacementsV2, listSelectionRequestsV2 } from "./placements";
 import { listUnresolvedComplaintsV2 } from "./complaints";
 import { listMyClearanceStepsV2 } from "./clearance";
 import { listMyWakalaRequestsV2 } from "./portal";
@@ -495,7 +495,8 @@ export async function getForeignAgencyNotificationsV2(contractorName?: string): 
   try {
     const [wakalaRequests, placements] = await Promise.all([
       listMyWakalaRequestsV2(contractorName).catch(() => []),
-      listPlacementsV2().catch(() => []),
+      // The agency's own placements; the staff list (list_placements) refuses agencies with 403.
+      listMyPlacementsV2(contractorName).catch(() => []),
     ]);
 
     // 1. Pending Wakala Requests

@@ -375,6 +375,7 @@ export function ChatContainer() {
   const { data: allPlacements = [] } = useQuery({
     queryKey: ["v2_placements_chat_mentions"],
     queryFn: () => listPlacementsV2(),
+    enabled: !isForeignAgency, // the staff list refuses agencies; they mention from portalCandidates
     staleTime: 60000,
   });
 
