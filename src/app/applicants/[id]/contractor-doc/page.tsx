@@ -67,6 +67,7 @@ import {
   V2ContractExtractionMetadata,
 } from "@/lib/api/v2/documents";
 import { cn } from "@/lib/utils";
+import { shortRef } from "@/lib/utils/display-id";
 
 /**
  * Extracts only valid, non-null, non-empty, non-zero values from a source object,
@@ -1180,7 +1181,7 @@ export default function PlacementDocumentCenterPage() {
           <span className="text-[10px] uppercase font-bold text-slate-400">Placement:</span>
           {activePlacement ? (
             <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-              {activePlacement.name}
+              {shortRef(activePlacement.name)}
             </span>
           ) : (
             <span className="text-amber-700 dark:text-amber-400 font-semibold">
