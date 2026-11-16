@@ -61,14 +61,16 @@ import {
   uploadFileV2,
   parseContractFileV2,
   parseVisaFileV2,
+  getFileDownloadUrl,
   V2ParsedContractData,
   V2ParsedVisaData,
+  V2ContractExtractionMetadata,
 } from "@/lib/api/v2/documents";
 import { cn } from "@/lib/utils";
 
 /**
  * Extracts only valid, non-null, non-empty, non-zero values from a source object,
- * stripping internal DocType metadata so unpopulated placement fields do not clobber
+ * stripping internal DocType metadata and extraction status blocks so unpopulated placement fields do not clobber
  * extracted document data.
  */
 export function extractValidContractFields(source: any): Record<string, any> {
@@ -77,7 +79,7 @@ export function extractValidContractFields(source: any): Record<string, any> {
   const ignoredKeys = new Set([
     "name", "doctype", "owner", "creation", "modified", "modified_by",
     "idx", "docstatus", "_user_tags", "_comments", "_assign", "_liked_by",
-    "status", "message", "success"
+    "status", "message", "success", "extraction"
   ]);
 
   for (const [key, value] of Object.entries(source)) {
@@ -139,6 +141,7 @@ export default function PlacementDocumentCenterPage() {
   const [isContractUploading, setIsContractUploading] = React.useState(false);
   const [isRetryingExtraction, setIsRetryingExtraction] = React.useState(false);
   const [contractParseResult, setContractParseResult] = React.useState<V2ParsedContractData | null>(null);
+  const [contractExtractionMeta, setContractExtractionMeta] = React.useState<V2ContractExtractionMetadata | null>(null);
   const [isApprovingContract, setIsApprovingContract] = React.useState(false);
   const [isContractApproved, setIsContractApproved] = React.useState(false);
 
@@ -276,9 +279,13 @@ export default function PlacementDocumentCenterPage() {
   // Set default preview from existing placement files
   React.useEffect(() => {
     if (activePlacement?.contract_file && !previewFileUrl) {
-      setPreviewFileUrl(activePlacement.contract_file);
+      if (!activePlacement.contract_file.startsWith("uploads/")) {
+        setPreviewFileUrl(activePlacement.contract_file);
+      }
     } else if (activePlacement?.visa_file && !previewFileUrl) {
-      setPreviewFileUrl(activePlacement.visa_file);
+      if (!activePlacement.visa_file.startsWith("uploads/")) {
+        setPreviewFileUrl(activePlacement.visa_file);
+      }
     }
   }, [activePlacement, previewFileUrl]);
 
@@ -331,7 +338,7 @@ export default function PlacementDocumentCenterPage() {
     const url = contractPreviewUrl || previewFileUrl;
     if (!url) return;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = getFileDownloadUrl(url);
     a.download = `Contract_${applicantId || "candidate"}.${contractDownloadExt}`;
     a.target = "_blank";
     document.body.appendChild(a);
@@ -479,7 +486,7 @@ export default function PlacementDocumentCenterPage() {
         return;
       }
 
-      // 1. Upload file via /api/method/upload_file
+      // 1. Upload file via uploadFileV2
       const uploadRes = await uploadFileV2(
         contractFile,
         false,
@@ -487,18 +494,55 @@ export default function PlacementDocumentCenterPage() {
         targetPlacement?.name
       );
 
-      const fileUrl = uploadRes.file_url;
-      setPreviewFileUrl(fileUrl);
-      setContractPreviewUrl(fileUrl);
+      const fileId = (uploadRes.id && uploadRes.id.startsWith("file_"))
+        ? uploadRes.id
+        : (uploadRes.file_url || uploadRes.file_id || uploadRes.id || "");
+      if (!fileId) {
+        throw new Error("Upload completed but no file reference was returned by the server.");
+      }
+      const downloadUrl = uploadRes.file_url || getFileDownloadUrl(fileId);
+      setPreviewFileUrl(downloadUrl);
+      setContractPreviewUrl(downloadUrl);
 
       if (previewOnly) {
         // Run OCR parsing preview only (does not attach to placement)
         try {
-          const parsed = await parseContractFileV2(fileUrl, destinationCountry);
+          const parsed = await parseContractFileV2(fileId, destinationCountry);
           const validParsed = extractValidContractFields(parsed);
           setContractParseResult(validParsed);
           const count = countExtractedContractFields(validParsed);
-          if (count >= 4) {
+          const extraction = parsed.extraction;
+          if (extraction) {
+            switch (extraction.status) {
+              case "ok":
+                toast.success("Contract Parsed for Preview", {
+                  description: `Structured fields extracted (${extraction.fields_found?.length || count} fields). Review and then attach.`,
+                });
+                break;
+              case "reader_missing":
+                toast.warning("Server Document Reader Missing", {
+                  description: extraction.message || "Document reader is missing on the server. Please enter terms manually.",
+                });
+                break;
+              case "no_fields":
+                toast.info("No Matching Terms", {
+                  description: extraction.message || "No contract terms matched the expected format. Please enter terms manually.",
+                });
+                break;
+              case "no_text":
+                toast.warning("No Readable Text", {
+                  description: extraction.message || "Could not read text from this document. Please enter terms manually.",
+                });
+                break;
+              case "file_unreadable":
+                toast.error("File Unreadable", {
+                  description: extraction.message || "The file could not be read by the server.",
+                });
+                break;
+              default:
+                toast.info("Preview Extraction", { description: extraction.message || "Review extracted terms below." });
+            }
+          } else if (count >= 4) {
             toast.success("Contract Parsed for Preview", {
               description: "Structured fields extracted from contract file. Review and then attach.",
             });
@@ -517,50 +561,72 @@ export default function PlacementDocumentCenterPage() {
           });
         }
       } else {
-        // Authoritative upload_contract attachment to Placement
-        const uploadContractRes = await uploadContractV2(targetPlacement!.name, fileUrl);
-
-        // Also run OCR extraction immediately so extracted fields populate
-        let parsed: any = null;
-        let parseError: any = null;
-        try {
-          parsed = await parseContractFileV2(fileUrl, destinationCountry);
-        } catch (e: any) {
-          parseError = e;
-          console.warn("[Contract Doc] OCR parsing error:", e);
-        }
+        // Authoritative upload_contract attachment to Placement (Go backend extracts and saves in one operation)
+        const uploadContractRes = await uploadContractV2(targetPlacement!.name, fileId);
 
         const validPlacement = extractValidContractFields(uploadContractRes);
-        const validParsed = parsed ? extractValidContractFields(parsed) : {};
-        // validParsed takes precedence over validPlacement; neither has null or empty values
-        const combined = {
-          ...validPlacement,
-          ...validParsed,
-        };
-        if (Object.keys(combined).length > 0) {
+        if (Object.keys(validPlacement).length > 0) {
           setContractParseResult((prev: any) => ({
             ...(prev ? extractValidContractFields(prev) : {}),
-            ...combined,
+            ...validPlacement,
           }));
         }
 
-        const extractedCount = countExtractedContractFields(combined);
+        const extraction = uploadContractRes?.extraction || (uploadContractRes as any)?.message?.extraction;
+        if (extraction) {
+          setContractExtractionMeta(extraction);
+        }
+        const extractedCount = countExtractedContractFields(validPlacement);
 
-        if (!parseError && extractedCount >= 4) {
-          // Outcome A: Attachment + Extraction successful
-          toast.success("Contract Attached & Info Extracted", {
-            description: `Contract attached to ${targetPlacement!.name}. Review extracted info below and approve to save.`,
-          });
-        } else if (!parseError && extractedCount > 0) {
-          // Outcome E: Partial extraction
-          toast.info("Contract Attached — Partial Info Extracted", {
-            description: `Contract attached to ${targetPlacement!.name}. Some terms were extracted. Review and complete the remaining fields below.`,
-          });
+        if (extraction) {
+          switch (extraction.status) {
+            case "ok":
+              toast.success("Contract Attached & Info Extracted", {
+                description: `Contract attached to ${targetPlacement!.name}. Terms extracted (${extraction.fields_found?.length || extractedCount} fields found). Review and approve to save.`,
+              });
+              break;
+            case "reader_missing":
+              toast.warning("Server Document Reader Missing", {
+                description: extraction.message || "Contract attached, but the server has no document reader installed (mutool missing). Please enter terms manually.",
+              });
+              break;
+            case "no_fields":
+              toast.info("No Matching Contract Terms Found", {
+                description: extraction.message || "Contract attached, but no fields matched the destination format. Please enter terms manually.",
+              });
+              break;
+            case "no_text":
+              toast.warning("No Readable Text in Contract", {
+                description: extraction.message || "Contract attached, but no readable text was obtained from the file. Please enter terms manually.",
+              });
+              break;
+            case "file_unreadable":
+              toast.error("Contract File Unreadable", {
+                description: extraction.message || "The stored file could not be read by the server.",
+              });
+              break;
+            default:
+              if (extractedCount > 0) {
+                toast.success("Contract Attached", { description: extraction.message || "Review extracted info below." });
+              } else {
+                toast.info("Contract Attached", { description: extraction.message || "Please enter terms manually." });
+              }
+          }
         } else {
-          // Outcome B: Attachment successful but extraction failed/empty
-          toast.warning("Contract Attached — Extraction Incomplete", {
-            description: "Contract attached successfully, but information could not be extracted. Please retry extraction or review the contract manually.",
-          });
+          // Fallback for older server responses without extraction block
+          if (extractedCount >= 4) {
+            toast.success("Contract Attached & Info Extracted", {
+              description: `Contract attached to ${targetPlacement!.name}. Review extracted info below and approve to save.`,
+            });
+          } else if (extractedCount > 0) {
+            toast.info("Contract Attached — Partial Info Extracted", {
+              description: `Contract attached to ${targetPlacement!.name}. Some terms were extracted. Review and complete the remaining fields below.`,
+            });
+          } else {
+            toast.warning("Contract Attached (Manual Entry Required)", {
+              description: "Contract attached successfully, but information could not be extracted. Please review and enter terms manually.",
+            });
+          }
         }
 
         setContractFile(null);
@@ -579,17 +645,17 @@ export default function PlacementDocumentCenterPage() {
 
   // One-click Retry Extraction for Attached Contract
   const handleRetryContractExtraction = async () => {
-    const targetFileUrl = previewFileUrl || contractPreviewUrl || activePlacement?.contract_file;
-    if (!targetFileUrl) {
-      toast.error("No Contract Document", {
-        description: "Please attach a contract document before retrying extraction.",
+    const targetFile = activePlacement?.contract_file || previewFileUrl || contractPreviewUrl;
+    if (!targetFile || targetFile.startsWith("uploads/")) {
+      toast.error("Contract Document Needs Re-upload", {
+        description: "Please attach the contract document using the file uploader below.",
       });
       return;
     }
 
     setIsRetryingExtraction(true);
     try {
-      const parsed = await parseContractFileV2(targetFileUrl, destinationCountry);
+      const parsed = await parseContractFileV2(targetFile, destinationCountry);
       const validParsed = extractValidContractFields(parsed);
       const validPlacement = extractValidContractFields(activePlacement);
       const combined = {
@@ -602,7 +668,39 @@ export default function PlacementDocumentCenterPage() {
       }));
 
       const count = countExtractedContractFields(combined);
-      if (count >= 4) {
+      const extraction = parsed.extraction;
+      if (extraction) {
+        setContractExtractionMeta(extraction);
+        switch (extraction.status) {
+          case "ok":
+            toast.success("Contract Info Extracted", {
+              description: `Terms extracted successfully (${extraction.fields_found?.length || count} fields). Review below and approve.`,
+            });
+            break;
+          case "reader_missing":
+            toast.warning("Server Document Reader Missing", {
+              description: extraction.message || "Document reader is missing on the server (mutool). Please enter contract terms manually.",
+            });
+            break;
+          case "no_fields":
+            toast.info("No Matching Terms", {
+              description: extraction.message || "File read successfully, but no fields matched destination layout. Please enter terms manually.",
+            });
+            break;
+          case "no_text":
+            toast.warning("No Readable Text in File", {
+              description: extraction.message || "No readable text obtained from document. Please enter terms manually.",
+            });
+            break;
+          case "file_unreadable":
+            toast.error("File Unreadable", {
+              description: extraction.message || "Stored contract file could not be read.",
+            });
+            break;
+          default:
+            toast.info("Extraction Result", { description: extraction.message || "Review terms below." });
+        }
+      } else if (count >= 4) {
         toast.success("Contract Info Extracted", {
           description: "Contract document parsed successfully. Review extracted terms below and approve to save.",
         });
@@ -617,7 +715,7 @@ export default function PlacementDocumentCenterPage() {
       }
     } catch (err: any) {
       toast.error("Contract Extraction Failed", {
-        description: err?.message || "Failed to extract terms from contract document. Please review manually.",
+        description: err?.message || "Failed to extract terms from contract file. Please try again.",
       });
     } finally {
       setIsRetryingExtraction(false);
@@ -784,14 +882,20 @@ export default function PlacementDocumentCenterPage() {
         targetPlacement?.name
       );
 
-      const fileUrl = uploadRes.file_url;
-      setPreviewFileUrl(fileUrl);
-      setVisaPreviewUrl(fileUrl);
+      const fileId = (uploadRes.id && uploadRes.id.startsWith("file_"))
+        ? uploadRes.id
+        : (uploadRes.file_url || uploadRes.file_id || uploadRes.id || "");
+      if (!fileId) {
+        throw new Error("Upload completed but no file reference was returned by the server.");
+      }
+      const downloadUrl = uploadRes.file_url || getFileDownloadUrl(fileId);
+      setPreviewFileUrl(downloadUrl);
+      setVisaPreviewUrl(downloadUrl);
 
       if (previewOnly) {
         // Run OCR parsing preview only
         try {
-          const parsed = await parseVisaFileV2(fileUrl);
+          const parsed = await parseVisaFileV2(fileId);
           const validParsed = extractValidContractFields(parsed);
           setVisaParseResult(validParsed);
           const count = countExtractedVisaFields(validParsed);
@@ -815,12 +919,12 @@ export default function PlacementDocumentCenterPage() {
         }
       } else {
         // Authoritative upload_visa attachment to Placement
-        const res = await uploadVisaV2(targetPlacement!.name, fileUrl);
+        const res = await uploadVisaV2(targetPlacement!.name, fileId);
         // Also run OCR extraction immediately so extracted fields populate
         let parsed: any = null;
         let parseError: any = null;
         try {
-          parsed = await parseVisaFileV2(fileUrl);
+          parsed = await parseVisaFileV2(fileId);
         } catch (e: any) {
           parseError = e;
           console.warn("[Visa Doc] OCR parsing error:", e);
@@ -875,9 +979,9 @@ export default function PlacementDocumentCenterPage() {
   // One-click Retry Extraction for Kuwait eVisa
   const handleRetryVisaExtraction = async () => {
     const targetFileUrl = previewFileUrl || visaPreviewUrl || activePlacement?.visa_file;
-    if (!targetFileUrl) {
-      toast.error("No eVisa Document", {
-        description: "Please attach an eVisa document before retrying extraction.",
+    if (!targetFileUrl || targetFileUrl.startsWith("uploads/")) {
+      toast.error("eVisa Document Needs Re-upload", {
+        description: "Please attach an eVisa document using the file uploader below.",
       });
       return;
     }
@@ -978,6 +1082,7 @@ export default function PlacementDocumentCenterPage() {
         ...prev,
         ...editFields,
       }));
+      setContractExtractionMeta(null);
       toast.success("Placement Parsed Fields Updated", {
         description: "Permitted contract and visa terms updated successfully.",
       });
@@ -1210,7 +1315,7 @@ export default function PlacementDocumentCenterPage() {
                   )}
                   {previewFileUrl && !contractPreviewUrl && (
                     <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
-                      {previewFileUrl}
+                      {previewFileUrl.startsWith("file_") ? "Attached Document" : previewFileUrl}
                     </span>
                   )}
                 </CardTitle>
@@ -1223,7 +1328,7 @@ export default function PlacementDocumentCenterPage() {
                     </div>
                     <div className="space-y-1 max-w-sm">
                       <p className="text-xs font-bold text-slate-800 dark:text-zinc-100 truncate px-2">
-                        {contractFile?.name || (currentContractUrl ? currentContractUrl.split("/").pop()?.split("?")[0] : "Word Contract Document")}
+                        {contractFile?.name || (currentContractUrl ? (currentContractUrl.startsWith("file_") ? "Attached Word Contract" : currentContractUrl.split("/").pop()?.split("?")[0]) : "Word Contract Document")}
                       </p>
                       <Badge variant="outline" className="text-[10px] uppercase font-mono border-blue-300 dark:border-blue-800 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30">
                         Microsoft Word Document ({contractDownloadExt.toUpperCase()})
@@ -1248,7 +1353,7 @@ export default function PlacementDocumentCenterPage() {
                           type="button"
                           size="sm"
                           onClick={() => {
-                            window.open(currentContractUrl, "_blank");
+                            window.open(getFileDownloadUrl(currentContractUrl), "_blank");
                           }}
                           className="text-xs h-7.5 px-3 bg-blue-900 hover:bg-blue-950 text-white"
                         >
@@ -1260,7 +1365,7 @@ export default function PlacementDocumentCenterPage() {
                   </div>
                 ) : contractPreviewUrl || previewFileUrl ? (
                   <iframe
-                    src={contractPreviewUrl || previewFileUrl}
+                    src={getFileDownloadUrl(contractPreviewUrl || previewFileUrl)}
                     title="Contract Document Viewer"
                     className="w-full h-full rounded-lg border-0"
                   />
@@ -1332,15 +1437,21 @@ export default function PlacementDocumentCenterPage() {
                     <PremiumDropzone
                       id="contract-doc-dropzone"
                       variant="compact"
-                      accept=".pdf, .docx, .doc, .odt, .rtf, .txt, image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/msword, application/vnd.oasis.opendocument.text, application/rtf, text/rtf, text/plain"
+                      accept=".pdf, .docx, .odt, image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.oasis.opendocument.text"
                       value={contractFile || contractPreviewUrl}
                       fileName={contractFile?.name}
                       fileSize={contractFile?.size}
                       isLoading={isContractUploading}
                       loadingText="Uploading & extracting contract info..."
                       label="Employment Contract Document"
-                      description="PDF, Word (.docx, .doc), or image (up to 20MB)"
+                      description="PDF, Word (.docx, .odt), or image (PNG, JPEG, WebP up to 20MB)"
                       onFileSelect={(file) => {
+                        if (file.name.toLowerCase().endsWith(".doc")) {
+                          toast.error("Unsupported Format (.doc)", {
+                            description: "Legacy Word .doc is not supported by the backend parser. Please save as .docx or .pdf before uploading.",
+                          });
+                          return;
+                        }
                         setContractFile(file);
                         setContractPreviewUrl(URL.createObjectURL(file));
                       }}
@@ -1417,6 +1528,52 @@ export default function PlacementDocumentCenterPage() {
               </CardHeader>
 
               <CardContent className="px-3 pb-3 pt-0 space-y-2">
+                {contractExtractionMeta?.status === "reader_missing" && (
+                  <div className="p-2.5 rounded-lg border border-amber-300/80 bg-amber-50/90 dark:bg-amber-950/30 dark:border-amber-800 text-amber-950 dark:text-amber-200 text-xs flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-xs text-amber-900 dark:text-amber-200">Server Document Reader Missing</div>
+                      <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5 leading-relaxed">
+                        {contractExtractionMeta.message || "This server cannot read contract files right now: its document reader is not installed. Enter the fields by hand, and tell support."}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleOpenEditModal}
+                          className="h-6 text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium px-2.5 shadow-xs"
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Enter Terms Manually
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {contractExtractionMeta?.status === "no_fields" && (
+                  <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/90 dark:bg-blue-950/30 dark:border-blue-800 text-blue-950 dark:text-blue-200 text-xs flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="font-semibold text-xs text-blue-900 dark:text-blue-200">No Matching Fields Found</div>
+                      <div className="text-[11px] text-blue-800 dark:text-blue-300 mt-0.5 leading-relaxed">
+                        {contractExtractionMeta.message || "Contract attached, but no fields matched destination layout. Please enter terms manually."}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleOpenEditModal}
+                          className="h-6 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium px-2.5 shadow-xs"
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Enter Terms Manually
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
                   <div className="p-1.5 px-2 rounded-md bg-slate-50 dark:bg-[#181820] border border-slate-100 dark:border-[#22222a]">
                     <span className="text-[9.5px] uppercase font-semibold text-slate-400 block leading-tight">Signed Date</span>
@@ -1496,7 +1653,7 @@ export default function PlacementDocumentCenterPage() {
                   {activePlacement?.contract_file && (
                     <div className="p-1.5 px-2 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/40 flex items-center">
                       <a
-                        href={activePlacement.contract_file}
+                        href={getFileDownloadUrl(activePlacement.contract_file)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline truncate"
@@ -1765,13 +1922,13 @@ export default function PlacementDocumentCenterPage() {
                     {activePlacement?.visa_file && (
                       <div className="pt-1">
                         <a
-                          href={activePlacement.visa_file}
+                          href={getFileDownloadUrl(activePlacement.visa_file)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-400 hover:underline"
                         >
                           <Download className="h-3 w-3" />
-                          View Attached Visa File ({activePlacement.visa_file})
+                          View Attached Visa File ({activePlacement.visa_file.startsWith("file_") ? "Attached Document" : activePlacement.visa_file})
                           <ExternalLink className="h-2.5 w-2.5" />
                         </a>
                       </div>
@@ -1796,7 +1953,7 @@ export default function PlacementDocumentCenterPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              const url = visaPreviewUrl || previewFileUrl;
+                              const url = getFileDownloadUrl(visaPreviewUrl || previewFileUrl);
                               const win = window.open(url, "_blank");
                               win?.focus();
                             }}
@@ -1810,7 +1967,7 @@ export default function PlacementDocumentCenterPage() {
                             type="button"
                             size="sm"
                             onClick={() => {
-                              const url = visaPreviewUrl || previewFileUrl;
+                              const url = getFileDownloadUrl(visaPreviewUrl || previewFileUrl);
                               const a = document.createElement("a");
                               a.href = url;
                               a.download = `eVisa_${applicantId || "candidate"}.pdf`;
@@ -1830,7 +1987,7 @@ export default function PlacementDocumentCenterPage() {
                       )}
                       {previewFileUrl && !visaPreviewUrl && (
                         <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
-                          {previewFileUrl}
+                          {previewFileUrl.startsWith("file_") ? "Attached Document" : previewFileUrl}
                         </span>
                       )}
                     </CardTitle>
@@ -1838,7 +1995,7 @@ export default function PlacementDocumentCenterPage() {
                   <CardContent className="p-1.5 bg-slate-100 dark:bg-[#0d0d11] rounded-b-xl overflow-hidden flex items-center justify-center h-[420px] lg:h-[480px]">
                     {visaPreviewUrl || previewFileUrl ? (
                       <iframe
-                        src={visaPreviewUrl || previewFileUrl}
+                        src={getFileDownloadUrl(visaPreviewUrl || previewFileUrl)}
                         title="Kuwait eVisa Viewer"
                         className="w-full h-full rounded-lg border-0"
                       />

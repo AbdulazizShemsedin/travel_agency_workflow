@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { isAdminUser } from "@/lib/auth/permissions";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import {
   getCompanySettingsV2,
   updateCompanySettingsV2,
@@ -880,7 +881,7 @@ export default function SettingsPage() {
                 {companySettings?.logo ? (
                   <div className="p-3 bg-white dark:bg-zinc-900 rounded border border-slate-200 dark:border-zinc-700 flex items-center justify-center h-28">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={companySettings.logo} alt="Agency Logo" className="max-h-24 max-w-full object-contain" />
+                    <img src={getFileDownloadUrl(companySettings.logo)} alt="Agency Logo" className="max-h-24 max-w-full object-contain" />
                   </div>
                 ) : (
                   <div className="h-28 border-2 border-dashed border-slate-200 dark:border-zinc-700 rounded flex items-center justify-center text-xs text-slate-400">
@@ -921,7 +922,7 @@ export default function SettingsPage() {
                 {companySettings?.stamp_image ? (
                   <div className="p-3 bg-white dark:bg-zinc-900 rounded border border-slate-200 dark:border-zinc-700 flex items-center justify-center h-28">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={companySettings.stamp_image} alt="Official Stamp" className="max-h-24 max-w-full object-contain" />
+                    <img src={getFileDownloadUrl(companySettings.stamp_image)} alt="Official Stamp" className="max-h-24 max-w-full object-contain" />
                   </div>
                 ) : (
                   <div className="h-28 border-2 border-dashed border-slate-200 dark:border-zinc-700 rounded flex items-center justify-center text-xs text-slate-400">

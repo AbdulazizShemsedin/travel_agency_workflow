@@ -455,21 +455,19 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.photo_passport = photo;
   }
 
-  // 5.1 Candidate Video / Interview Video (Synchronize all video aliases)
+  // 5.1 Candidate Video / Interview Video (Go backend contract: experience_video / video_key)
   const videoVal =
+    result.experience_video ||
+    result.video_key ||
     result.video_url ||
     result.intro_video ||
-    result.video ||
-    result.video_interview ||
-    result.candidate_video ||
-    result.interview_video;
-  if (videoVal) {
-    result.video_url = videoVal;
-    result.intro_video = videoVal;
-    result.video = videoVal;
-    result.video_interview = videoVal;
-    result.candidate_video = videoVal;
-    result.interview_video = videoVal;
+    result.video;
+  if (videoVal && typeof videoVal === "string") {
+    // Ensure temporary storage URLs or blobs are never saved back to database file fields
+    if (!videoVal.startsWith("http://") && !videoVal.startsWith("https://") && !videoVal.startsWith("blob:")) {
+      result.experience_video = videoVal;
+      result.video_key = videoVal;
+    }
   }
 
   // 6. Passport Expiry Date
@@ -1397,7 +1395,7 @@ export async function startVideoUploadV2(
   applicantName?: string | null,
   filename?: string,
   sizeBytes?: number
-): Promise<{ upload_url: string; headers?: Record<string, string>; key: string; [key: string]: any }> {
+): Promise<{ upload_url: string; headers?: Record<string, string>; key: string; file_id: string; [key: string]: any }> {
   const body: Record<string, any> = {
     filename,
     size: sizeBytes,
@@ -1412,16 +1410,23 @@ export async function startVideoUploadV2(
       body,
     }
   );
-  return res?.message || res;
+  const payload = res?.message || res || {};
+  const resolvedId = payload.file_id || payload.key || payload.id || "";
+  return {
+    ...payload,
+    key: resolvedId,
+    file_id: resolvedId,
+  };
 }
 
 export async function finishVideoUploadV2(
   applicantName?: string | null,
-  key?: string
+  fileIdOrKey?: string
 ): Promise<any> {
   const body: Record<string, any> = {};
-  if (key) {
-    body.key = key;
+  if (fileIdOrKey) {
+    body.file_id = fileIdOrKey;
+    body.key = fileIdOrKey;
   }
   if (applicantName) {
     body.applicant_name = applicantName;

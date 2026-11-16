@@ -22,6 +22,7 @@ import {
   listMyComplaintsV2,
   createComplaintV2,
   uploadFileV2,
+  getFileDownloadUrl,
   listMyPlacementsV2,
   V2MyComplaintItem,
 } from "@/lib/api/v2";
@@ -182,11 +183,11 @@ export default function AgentComplaintsPage() {
     setFormError(null);
     try {
       const res = await uploadFileV2(file, true);
-      const fileUrl = res?.file_url || "";
-      if (fileUrl) {
-        setFormData((prev) => ({ ...prev, attachment: fileUrl }));
+      const fileId = res?.id || res?.file_id || res?.file_url || "";
+      if (fileId) {
+        setFormData((prev) => ({ ...prev, attachment: fileId }));
       } else {
-        throw new Error("No file URL returned from server.");
+        throw new Error("No file ID or URL returned from server.");
       }
     } catch (err: any) {
       setFormError(err?.message || "Failed to upload attachment file to server. Please try again.");
@@ -401,7 +402,7 @@ export default function AgentComplaintsPage() {
                           <div className="flex items-center justify-end gap-2">
                             {c.attachment && (
                               <a
-                                href={c.attachment}
+                                href={getFileDownloadUrl(c.attachment)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 dark:border-[#26262f] px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-[#1c1c22]"

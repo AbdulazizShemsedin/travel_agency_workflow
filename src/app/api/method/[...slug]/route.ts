@@ -252,7 +252,19 @@ export async function POST(
     const postMaxRetries = isHeavyCvOrPdf || isLoginMethod ? 0 : 2;
     const postTimeoutMs = isHeavyCvOrPdf ? 180000 : isLoginMethod ? 90000 : 45000;
 
-    const effectiveBodyText = bodyText || "{}";
+    let effectiveBodyText = bodyText || "{}";
+    const queryOp = req.nextUrl.searchParams.get("op");
+    if (queryOp) {
+      try {
+        const parsed = JSON.parse(effectiveBodyText);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && !parsed.op) {
+          parsed.op = queryOp;
+          effectiveBodyText = JSON.stringify(parsed);
+        }
+      } catch {
+        // Leave bodyText as is
+      }
+    }
 
     let res = await fetchWithRetry(
       `${config.url}/api/method/${methodPath}${req.nextUrl.search}`,
@@ -329,6 +341,9 @@ export async function POST(
     const resContentType = res.headers.get("content-type") || "";
     const contentDisposition = res.headers.get("content-disposition") || "";
     const isBinary =
+      resContentType.startsWith("image/") ||
+      resContentType.startsWith("video/") ||
+      resContentType.startsWith("audio/") ||
       resContentType.includes("application/pdf") ||
       resContentType.includes("application/vnd.openxmlformats") ||
       resContentType.includes("application/vnd.ms-excel") ||
@@ -471,6 +486,9 @@ export async function GET(
     const resContentType = res.headers.get("content-type") || "";
     const contentDisposition = res.headers.get("content-disposition") || "";
     const isBinary =
+      resContentType.startsWith("image/") ||
+      resContentType.startsWith("video/") ||
+      resContentType.startsWith("audio/") ||
       resContentType.includes("application/pdf") ||
       resContentType.includes("application/vnd.openxmlformats") ||
       resContentType.includes("application/vnd.ms-excel") ||

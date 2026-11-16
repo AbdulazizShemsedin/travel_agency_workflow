@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { getCandidateDetailV2, getCandidatePhotoUrl } from "@/lib/api/v2/portal";
 import { getApplicantMediaUrlV2 } from "@/lib/api/v2/applicants";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { SecureVideoPlayer } from "@/components/video/SecureVideoPlayer";
 import { cn } from "@/lib/utils";
 
@@ -503,7 +504,7 @@ export function CandidateDetailModal({
 
             {candidate.cv_file_url ? (
               <a
-                href={candidate.cv_file_url}
+                href={getFileDownloadUrl(candidate.cv_file_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-[#26262f] bg-white dark:bg-[#1b1b22] px-3.5 py-2 text-xs font-semibold text-slate-800 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-[#22222a] transition shadow-2xs"

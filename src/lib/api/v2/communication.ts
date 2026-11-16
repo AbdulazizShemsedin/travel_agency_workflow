@@ -12,6 +12,7 @@
  */
 
 import { requestV2 } from "./client";
+import { cleanFileId } from "./documents";
 
 export interface V2ChatThread {
   name: string;
@@ -155,7 +156,7 @@ export async function sendMessageV2(
         ...(message ? { message } : {}),
         ...(mentionedApplicant ? { mentioned_applicant: mentionedApplicant } : {}),
         ...(mentionedPlacement ? { mentioned_placement: mentionedPlacement } : {}),
-        ...(attachmentFileUrl ? { attachment: attachmentFileUrl } : {}),
+        ...(attachmentFileUrl ? { attachment: cleanFileId(attachmentFileUrl) } : {}),
       },
     }
   );

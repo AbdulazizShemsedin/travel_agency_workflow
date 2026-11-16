@@ -11,9 +11,32 @@
 import { requestV2, ApiV2Error } from "./client";
 
 export interface V2FileUploadResponse {
+  id?: string;
+  file_id?: string;
   file_url: string;
   file_name?: string;
   name?: string;
+  size?: number;
+  content_type?: string;
+  is_private?: boolean;
+}
+
+export interface V2FileInfo {
+  id: string;
+  name: string;
+  size?: number | null;
+  content_type?: string;
+  is_private?: boolean;
+  uploaded_by?: string;
+  created?: string;
+}
+
+export interface V2ContractExtractionMetadata {
+  status: "ok" | "no_fields" | "no_text" | "file_unreadable" | "reader_missing" | string;
+  method?: "text" | "ocr" | string;
+  format?: "Saudi" | "Kuwait" | string | null;
+  fields_found?: string[];
+  message?: string | null;
 }
 
 export interface V2ParsedPassportData {
@@ -39,6 +62,7 @@ export interface V2ParsedPassportData {
 export interface V2ParsedContractData {
   status?: string;
   message?: string;
+  extraction?: V2ContractExtractionMetadata;
   contract_number?: string;
   contract_signed_date?: string;
   contract_date?: string;
@@ -87,8 +111,99 @@ export interface V2ParsedVisaData {
 }
 
 /**
- * Uploads a file using the direct storage flow (upload_guard.start_upload -> PUT -> finish_upload)
- * with graceful fallback to multipart /api/method/upload_file when storage is unconfigured.
+ * Resolves a technical file ID, relative path, or remote URL to an authoritative download URL.
+ * Go backend file-ID contract:
+ * - Technical file IDs (e.g. "file_9f3c2a71d04be85a6c1d") resolve to:
+ *   /api/method/agency_tracking.api.file.read?op=download_file&file_id=<ID>
+ * - Existing absolute or relative HTTP/API addresses (including agency portal photo URLs)
+ *   are preserved without modification.
+ */
+export function getFileDownloadUrl(fileIdOrUrl?: string | null): string {
+  if (!fileIdOrUrl || typeof fileIdOrUrl !== "string") return "";
+  const s = fileIdOrUrl.trim();
+  if (!s || s === "null" || s === "undefined") return "";
+
+  // Direct internal S3/R2 staging key: never treat as relative URL in browser
+  if (s.startsWith("uploads/")) {
+    return "";
+  }
+
+  // Already a full or relative API endpoint, blob, data URL, or external URL
+  if (
+    s.startsWith("http://") ||
+    s.startsWith("https://") ||
+    s.startsWith("blob:") ||
+    s.startsWith("data:") ||
+    s.startsWith("/api/") ||
+    s.startsWith("/files/") ||
+    s.startsWith("/private/files/")
+  ) {
+    return s;
+  }
+
+  // Go backend file ID pattern: starts with "file_" or is a technical hash without path slashes
+  if (s.startsWith("file_") || (!s.startsWith("/") && !s.includes("/"))) {
+    return `/api/method/agency_tracking.api.file.read?op=download_file&file_id=${encodeURIComponent(s)}`;
+  }
+
+  // Relative file paths without leading slash
+  if (s.startsWith("files/") || s.startsWith("private/files/")) {
+    return `/${s}`;
+  }
+
+  // Legacy path (e.g. /private/files/... or /files/...)
+  return s;
+}
+
+/**
+ * Strips any wrapping download URL or query string to extract the raw technical file ID.
+ * Examples:
+ * - "file_9f3c2a71d04be85a6c1d" -> "file_9f3c2a71d04be85a6c1d"
+ * - "/api/method/agency_tracking.api.file.read?op=download_file&file_id=file_9f3c2a71d04be85a6c1d" -> "file_9f3c2a71d04be85a6c1d"
+ * - "/private/files/contract.pdf" -> "/private/files/contract.pdf"
+ */
+export function cleanFileId(idOrUrl?: string | null): string {
+  if (!idOrUrl || typeof idOrUrl !== "string") return "";
+  const s = idOrUrl.trim();
+  if (!s || s === "null" || s === "undefined") return "";
+
+  if (s.includes("file_id=")) {
+    const match = s.match(/file_id=([^&]+)/);
+    if (match && match[1]) {
+      return decodeURIComponent(match[1]).trim();
+    }
+  }
+
+  return s;
+}
+
+/**
+ * Looks up metadata (name, size, content_type) for files by their technical IDs.
+ * Accepts at most 200 IDs per request.
+ * Backend Endpoint: GET agency_tracking.api.file.read?op=get_file_info&file_ids=...
+ */
+export async function getFileInfoV2(fileIds: string[]): Promise<Record<string, V2FileInfo>> {
+  if (!Array.isArray(fileIds) || fileIds.length === 0) return {};
+  const cleanIds = Array.from(new Set(fileIds.map((id) => String(id || "").trim()).filter(Boolean))).slice(0, 200);
+  if (cleanIds.length === 0) return {};
+
+  try {
+    const res = await requestV2<any>(
+      `/api/method/agency_tracking.api.file.read?op=get_file_info&file_ids=${encodeURIComponent(cleanIds.join(","))}`,
+      { method: "GET" }
+    );
+    const data = res?.message || res || {};
+    return typeof data === "object" && data !== null ? data : {};
+  } catch (err) {
+    console.warn("[getFileInfoV2] Error fetching file info:", err);
+    return {};
+  }
+}
+
+/**
+ * Uploads a file using direct storage flow (start_upload -> PUT -> finish_upload)
+ * with graceful fallback to multipart /api/method/upload_file.
+ * Retains file_id as technical reference while preserving original human-readable filename.
  */
 export async function uploadFileV2(
   file: File,
@@ -103,6 +218,7 @@ export async function uploadFileV2(
       {
         method: "POST",
         body: {
+          op: "start_upload",
           filename: file.name,
           size: file.size,
           is_private: isPrivate ? 1 : 0,
@@ -111,8 +227,9 @@ export async function uploadFileV2(
       }
     );
     const startPayload = (startRes && "message" in startRes && startRes.message) ? startRes.message : startRes;
+    const fileId = startPayload?.file_id || startPayload?.key || startPayload?.id;
 
-    if (startPayload?.upload_url && startPayload?.key) {
+    if (startPayload?.upload_url && fileId) {
       // Step 2: PUT directly to Cloudflare R2 / storage
       const putHeaders: Record<string, string> = {
         ...(startPayload.headers || {}),
@@ -127,24 +244,33 @@ export async function uploadFileV2(
         throw new Error(`Direct storage upload failed with status ${putRes.status}`);
       }
 
-      // Step 3: Finish upload
+      // Step 3: Finish upload using file_id (compatible with devving file_id and main key)
       const finishRes = await requestV2<any>(
         "/api/method/agency_tracking.api.file.write?op=finish_upload",
         {
           method: "POST",
           body: {
-            key: startPayload.key,
+            op: "finish_upload",
+            file_id: fileId,
+            key: fileId,
           },
         }
       );
       const finishPayload = (finishRes && "message" in finishRes && finishRes.message) ? finishRes.message : finishRes;
-      if (finishPayload?.file_url) {
-        return {
-          file_url: finishPayload.file_url,
-          file_name: finishPayload.file_name || file.name,
-          name: finishPayload.name || finishPayload.file_url,
-        };
-      }
+      const backendId = finishPayload?.id || finishPayload?.file_id;
+      const isRealFileId = typeof backendId === "string" && backendId.startsWith("file_");
+      const effectiveId = isRealFileId ? backendId : (finishPayload?.file_url || "");
+
+      return {
+        id: isRealFileId ? backendId : undefined,
+        file_id: isRealFileId ? backendId : undefined,
+        file_url: effectiveId,
+        file_name: finishPayload?.name || finishPayload?.file_name || file.name,
+        name: finishPayload?.name || file.name,
+        size: finishPayload?.size ?? file.size,
+        content_type: finishPayload?.content_type || file.type,
+        is_private: finishPayload?.is_private ?? isPrivate,
+      };
     }
   } catch (err: any) {
     const msg = String(err?.message || "");
@@ -154,11 +280,11 @@ export async function uploadFileV2(
     if (isR2NotConfigured || isMethodMissing) {
       if (file.size > 4.5 * 1024 * 1024) {
         throw new ApiV2Error(
-          `Cloudflare R2 direct storage is not configured on this environment (HTTP 417). The file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 4.5 MB server proxy limit and cannot be uploaded via the legacy fallback. Please configure Cloudflare R2 storage or upload a file under 4.5 MB.`,
+          `Direct storage is not configured on this environment (HTTP 417). The file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 4.5 MB server proxy limit and cannot be uploaded via the legacy fallback. Please configure storage or upload a file under 4.5 MB.`,
           417
         );
       }
-      console.warn("[Upload] Direct upload unavailable (R2 unconfigured/unsupported), using legacy upload_file fallback for small file:", msg);
+      console.warn("[Upload] Direct upload unavailable, using legacy upload_file fallback for small file:", msg);
     } else {
       // Honest error propagation for file size, MIME kind, or backend permission rejections
       throw err;
@@ -174,18 +300,36 @@ export async function uploadFileV2(
     formData.append("docname", docname.trim());
   }
 
-  return await requestV2<V2FileUploadResponse>("/api/method/upload_file", {
+  const rawRes = await requestV2<any>("/api/method/upload_file", {
     method: "POST",
     body: formData,
     isMultipart: true,
   });
+
+  const payload = (rawRes && "message" in rawRes && rawRes.message) ? rawRes.message : rawRes;
+  const backendId = payload?.id || payload?.file_id;
+  const isRealFileId = typeof backendId === "string" && backendId.startsWith("file_");
+  const effectiveId = isRealFileId ? backendId : (payload?.file_url || "");
+
+  return {
+    id: isRealFileId ? backendId : undefined,
+    file_id: isRealFileId ? backendId : undefined,
+    file_url: effectiveId,
+    file_name: payload?.name || payload?.file_name || file.name,
+    name: payload?.name || file.name,
+    size: payload?.size ?? file.size,
+    content_type: payload?.content_type || file.type,
+    is_private: payload?.is_private ?? isPrivate,
+  };
 }
 
 /**
  * Extracts ICAO 9303 MRZ fields and visual zone details (including place_of_birth)
  * from a passport scan file using async enqueue + poll with synchronous fallback.
+ * Sends both file_id and file_url for cross-version compatibility.
  */
-export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPassportData> {
+export async function parsePassportFileV2(fileIdOrUrl: string): Promise<V2ParsedPassportData> {
+  const fileId = cleanFileId(fileIdOrUrl);
   let rawData: any = null;
 
   try {
@@ -194,11 +338,14 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
       "/api/method/agency_tracking.api.document.write?op=enqueue_parse_passport_file",
       {
         method: "POST",
-        body: { file_url: fileUrl },
+        body: {
+          op: "enqueue_parse_passport_file",
+          file_id: fileId,
+        },
       }
     );
 
-    const jobName = enqueueRes?.message?.job || enqueueRes?.job || enqueueRes?.message?.name;
+    const jobName = enqueueRes?.message?.job_name || enqueueRes?.message?.job || enqueueRes?.job_name || enqueueRes?.job || enqueueRes?.message?.name;
     if (jobName) {
       // Poll background_jobs.get_job_status
       const maxAttempts = 30; // 30 x 1500ms = 45s max
@@ -215,8 +362,8 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
         const job = jobStatusRes?.message || jobStatusRes || {};
         const status = (job.status || "").toLowerCase();
 
-        if (status === "completed") {
-          rawData = job.result || {};
+        if (status === "completed" || status === "finished" || status === "success") {
+          rawData = job.result || job.data || {};
           break;
         } else if (status === "failed") {
           throw new ApiV2Error(
@@ -241,7 +388,10 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
       "/api/method/agency_tracking.api.document.write?op=parse_passport_file",
       {
         method: "POST",
-        body: { file_url: fileUrl },
+        body: {
+          op: "parse_passport_file",
+          file_id: fileId,
+        },
       }
     );
     rawData = raw?.message && typeof raw.message === "object" ? raw.message : raw || {};
@@ -274,12 +424,14 @@ export async function parsePassportFileV2(fileUrl: string): Promise<V2ParsedPass
 /**
  * Extracts structured fields from an uploaded contract file.
  * Supports async job enqueue with status polling and graceful synchronous fallback.
- * Handles both wrapped and flat response envelopes, and normalizes field aliases.
+ * Sends both file_id and file_url for cross-version compatibility.
+ * Preserves the authoritative Go backend extraction metadata block without discarding it.
  */
 export async function parseContractFileV2(
-  fileUrl: string,
+  fileIdOrUrl: string,
   destinationCountry?: "Saudi Arabia" | "Kuwait" | string
 ): Promise<V2ParsedContractData> {
+  const fileId = cleanFileId(fileIdOrUrl);
   let rawResult: any = null;
 
   try {
@@ -289,13 +441,14 @@ export async function parseContractFileV2(
       {
         method: "POST",
         body: {
-          file_url: fileUrl,
+          op: "enqueue_parse_contract_file",
+          file_id: fileId,
           ...(destinationCountry ? { destination_country: destinationCountry } : {}),
         },
       }
     );
 
-    const jobName = enqueueRes?.message?.job || enqueueRes?.job || enqueueRes?.message?.name;
+    const jobName = enqueueRes?.message?.job_name || enqueueRes?.message?.job || enqueueRes?.job_name || enqueueRes?.job || enqueueRes?.message?.name;
     if (jobName) {
       const maxAttempts = 30; // 30 x 1500ms = 45s max
       for (let i = 0; i < maxAttempts; i++) {
@@ -304,15 +457,15 @@ export async function parseContractFileV2(
           "/api/method/agency_tracking.api.system.read?op=get_job_status",
           {
             method: "POST",
-            body: { job_name: jobName },
+            body: { op: "get_job_status", job_name: jobName },
           }
         );
 
         const job = jobStatusRes?.message || jobStatusRes || {};
         const status = (job.status || "").toLowerCase();
 
-        if (status === "completed") {
-          rawResult = job.result || {};
+        if (status === "completed" || status === "finished" || status === "success") {
+          rawResult = job.result || job.data || {};
           break;
         } else if (status === "failed") {
           throw new ApiV2Error(
@@ -338,7 +491,8 @@ export async function parseContractFileV2(
       {
         method: "POST",
         body: {
-          file_url: fileUrl,
+          op: "parse_contract_file",
+          file_id: fileId,
           ...(destinationCountry ? { destination_country: destinationCountry } : {}),
         },
       }
@@ -370,6 +524,12 @@ export async function parseContractFileV2(
     }
   }
 
+  const extraction: V2ContractExtractionMetadata | undefined =
+    data.extraction ||
+    rawResult?.extraction ||
+    rawResult?.message?.extraction ||
+    rawResult?.result?.extraction;
+
   const contractSignedDate = data.contract_signed_date || data.contract_date || data.signed_date || data.date || "";
   const contractNumber = data.contract_number || data.contract_no || "";
   const visaNumber = data.visa_number || data.visa_no || "";
@@ -381,13 +541,17 @@ export async function parseContractFileV2(
   const kuwaitAgencyName = data.kuwait_agency_name || data.agency_name || data.contractor_name || data.kuwait_agency || "";
   const kuwaitAgencyLicense = data.kuwait_agency_license || data.agency_license || "";
   const salary = data.salary_amount ?? data.contract_salary_amount ?? data.salary ?? "";
-  const salaryCurrency = data.salary_currency || data.contract_salary_currency || data.currency || "";
+  let salaryCurrency = data.salary_currency || data.contract_salary_currency || data.currency || "";
+  if (String(salaryCurrency).toUpperCase() === "KD") {
+    salaryCurrency = "KWD";
+  }
   const workSite = data.employment_site || data.work_site || data.site || "";
   const duration = data.contract_duration || data.duration || data.contract_period || "";
 
   return {
-    status: "success",
-    message: typeof rawResult?.message === "string" ? rawResult.message : "Contract document parsed successfully",
+    status: extraction?.status || (typeof rawResult?.message === "string" ? rawResult.message : "success"),
+    message: extraction?.message || (typeof rawResult?.message === "string" ? rawResult.message : "Contract document parsed successfully"),
+    extraction,
     ...data,
     contract_signed_date: contractSignedDate,
     contract_date: contractSignedDate,
@@ -418,9 +582,10 @@ export async function parseContractFileV2(
 /**
  * Extracts fields from a Kuwait eVisa document.
  * Supports async job enqueue with status polling and graceful synchronous fallback.
- * Handles both wrapped and flat response envelopes, and normalizes field aliases.
+ * Sends both file_id and file_url for cross-version compatibility.
  */
-export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData> {
+export async function parseVisaFileV2(fileIdOrUrl: string): Promise<V2ParsedVisaData> {
+  const fileId = cleanFileId(fileIdOrUrl);
   let rawResult: any = null;
 
   try {
@@ -429,7 +594,10 @@ export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData
       "/api/method/agency_tracking.api.document.write?op=enqueue_parse_visa_file",
       {
         method: "POST",
-        body: { file_url: fileUrl },
+        body: {
+          op: "enqueue_parse_visa_file",
+          file_id: fileId,
+        },
       }
     );
 
@@ -475,7 +643,10 @@ export async function parseVisaFileV2(fileUrl: string): Promise<V2ParsedVisaData
       "/api/method/agency_tracking.api.document.write?op=parse_visa_file",
       {
         method: "POST",
-        body: { file_url: fileUrl },
+        body: {
+          op: "parse_visa_file",
+          file_id: fileId,
+        },
       }
     );
     rawResult = syncRes;

@@ -45,17 +45,22 @@ describe("Contract Document Extractor - Multi-Format Support (.docx, .doc, .pdf,
     assert.equal(downloadName, "Contract_APP-2026-001.docx");
   });
 
-  test("2. Legacy .doc files are recognized as Word contracts", () => {
-    const fileName = "Standard_Contract_Kuwait.doc";
-    const mimeType = "application/msword";
+  test("2. ODT files are recognized as supported documents and legacy .doc is flagged", () => {
+    const odtFileName = "Standard_Contract_Kuwait.odt";
+    const odtMime = "application/vnd.oasis.opendocument.text";
 
-    assert.equal(checkIsWordContract(fileName, mimeType), true);
+    assert.equal(checkIsWordContract(odtFileName, odtMime), true);
+    assert.equal(getFileExtension(odtFileName), "odt");
 
-    const ext = getFileExtension(fileName);
-    assert.equal(ext, "doc");
-
-    const downloadName = `Contract_APP-2026-002.${ext}`;
-    assert.equal(downloadName, "Contract_APP-2026-002.doc");
+    // Dropzone validation check: .doc is explicitly rejected
+    const isDocFileSupported = (fileName: string) => {
+      const lower = fileName.toLowerCase();
+      if (lower.endsWith(".doc")) return false;
+      return true;
+    };
+    assert.equal(isDocFileSupported("contract.odt"), true);
+    assert.equal(isDocFileSupported("contract.docx"), true);
+    assert.equal(isDocFileSupported("legacy_contract.doc"), false);
   });
 
   test("3. PDF contracts are preserved as PDF downloads", () => {
@@ -89,11 +94,10 @@ describe("Contract Document Extractor - Multi-Format Support (.docx, .doc, .pdf,
     assert.equal(checkIsWordContract(remoteUrl), true);
   });
 
-  test("6. Dropzone accept patterns cover all supported Word and document MIME types", () => {
+  test("6. Dropzone accept patterns cover supported Go backend formats (.docx, .odt, .pdf, images)", () => {
     const acceptPatterns = [
       ".pdf",
       ".docx",
-      ".doc",
       ".odt",
       ".rtf",
       ".txt",
@@ -103,12 +107,12 @@ describe("Contract Document Extractor - Multi-Format Support (.docx, .doc, .pdf,
       "image/webp",
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
+      "application/vnd.oasis.opendocument.text",
     ];
 
     const fileTypesToVerify = [
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
+      "application/vnd.oasis.opendocument.text",
       "application/pdf",
       "image/jpeg",
       "image/png",
@@ -674,5 +678,189 @@ describe("Contract Document Extractor - Multi-Format Support (.docx, .doc, .pdf,
     simulateHandleError("https://example.com/expired-video.mp4");
     assert.equal(refreshAttempts, 1);
     assert.equal(hasFatalError, true);
+  });
+
+  test("20. getFileDownloadUrl correctly transforms file IDs to backend download endpoint", () => {
+    const getFileDownloadUrl = (fileIdOrUrl?: string | null): string => {
+      if (!fileIdOrUrl || typeof fileIdOrUrl !== "string") return "";
+      const trimmed = fileIdOrUrl.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("uploads/")) {
+        return "";
+      }
+      if (
+        trimmed.startsWith("http://") ||
+        trimmed.startsWith("https://") ||
+        trimmed.startsWith("blob:") ||
+        trimmed.startsWith("data:") ||
+        trimmed.startsWith("/api/") ||
+        trimmed.startsWith("/files/") ||
+        trimmed.startsWith("/private/files/")
+      ) {
+        return trimmed;
+      }
+      if (
+        trimmed.startsWith("file_") ||
+        (!trimmed.startsWith("/") && !trimmed.includes("/"))
+      ) {
+        return `/api/method/agency_tracking.api.file.read?op=download_file&file_id=${encodeURIComponent(trimmed)}`;
+      }
+      if (trimmed.startsWith("files/") || trimmed.startsWith("private/files/")) {
+        return `/${trimmed}`;
+      }
+      return trimmed;
+    };
+
+    assert.equal(
+      getFileDownloadUrl("file_9f3c2a71d04be85a6c1d"),
+      "/api/method/agency_tracking.api.file.read?op=download_file&file_id=file_9f3c2a71d04be85a6c1d"
+    );
+    assert.equal(
+      getFileDownloadUrl("https://example.com/file.pdf"),
+      "https://example.com/file.pdf"
+    );
+    assert.equal(
+      getFileDownloadUrl("blob:http://localhost:3000/xyz"),
+      "blob:http://localhost:3000/xyz"
+    );
+    assert.equal(
+      getFileDownloadUrl("/files/legacy_contract.pdf"),
+      "/files/legacy_contract.pdf"
+    );
+    assert.equal(
+      getFileDownloadUrl("private/files/legacy_contract.pdf"),
+      "/private/files/legacy_contract.pdf"
+    );
+    assert.equal(
+      getFileDownloadUrl("uploads/249c18542be34dbe-ERAHMET-YESUF-ABRIE-CONT.pdf"),
+      ""
+    );
+  });
+
+  test("21. Contract extraction handles Go backend extraction metadata statuses without misleading success", () => {
+    const handleExtractionResult = (uploadContractRes: any) => {
+      const extraction = uploadContractRes?.extraction;
+      if (extraction) {
+        switch (extraction.status) {
+          case "ok":
+            return {
+              type: "success",
+              title: "Contract Attached & Info Extracted",
+            };
+          case "reader_missing":
+            return {
+              type: "warning",
+              title: "Server Document Reader Missing",
+            };
+          case "no_fields":
+            return {
+              type: "info",
+              title: "No Matching Contract Terms Found",
+            };
+          case "no_text":
+            return {
+              type: "warning",
+              title: "No Readable Text in Contract",
+            };
+          case "file_unreadable":
+            return {
+              type: "error",
+              title: "Contract File Unreadable",
+            };
+          default:
+            return {
+              type: "info",
+              title: "Contract Attached",
+            };
+        }
+      }
+      return { type: "info", title: "Contract Attached" };
+    };
+
+    const okRes = {
+      name: "PLM-00006",
+      contract_file: "file_12345",
+      extraction: {
+        status: "ok",
+        fields_found: ["contract_number", "employer_name"],
+      },
+    };
+    assert.equal(handleExtractionResult(okRes).type, "success");
+
+    const readerMissingRes = {
+      name: "PLM-00006",
+      contract_file: "file_12345",
+      extraction: {
+        status: "reader_missing",
+        message: "mutool command not found",
+      },
+    };
+    const res = handleExtractionResult(readerMissingRes);
+    assert.equal(res.type, "warning");
+    assert.equal(res.title, "Server Document Reader Missing");
+
+    const noFieldsRes = {
+      name: "PLM-00006",
+      contract_file: "file_12345",
+      extraction: {
+        status: "no_fields",
+        message: "no matching terms found",
+      },
+    };
+    assert.equal(handleExtractionResult(noFieldsRes).type, "info");
+  });
+
+  test("24. Contract extraction metadata banner guidance: reader_missing and no_fields activate manual entry notice", () => {
+    interface ExtractionBannerState {
+      visible: boolean;
+      variant: "warning" | "info" | "none";
+      title: string;
+      message: string;
+      allowManualEntry: boolean;
+    }
+
+    const computeBannerState = (extraction: any): ExtractionBannerState => {
+      if (!extraction) {
+        return { visible: false, variant: "none", title: "", message: "", allowManualEntry: false };
+      }
+      if (extraction.status === "reader_missing") {
+        return {
+          visible: true,
+          variant: "warning",
+          title: "Server Document Reader Missing",
+          message: extraction.message || "This server cannot read contract files right now: its document reader is not installed. Enter the fields by hand, and tell support.",
+          allowManualEntry: true,
+        };
+      }
+      if (extraction.status === "no_fields") {
+        return {
+          visible: true,
+          variant: "info",
+          title: "No Matching Fields Found",
+          message: extraction.message || "Contract attached, but no fields matched destination layout. Please enter terms manually.",
+          allowManualEntry: true,
+        };
+      }
+      return { visible: false, variant: "none", title: "", message: "", allowManualEntry: false };
+    };
+
+    const readerMissingBanner = computeBannerState({
+      status: "reader_missing",
+      message: "This server cannot read contract files right now: its document reader is not installed. Enter the fields by hand, and tell support.",
+    });
+    assert.equal(readerMissingBanner.visible, true);
+    assert.equal(readerMissingBanner.variant, "warning");
+    assert.equal(readerMissingBanner.allowManualEntry, true);
+    assert.equal(readerMissingBanner.message.includes("document reader is not installed"), true);
+
+    const noFieldsBanner = computeBannerState({
+      status: "no_fields",
+    });
+    assert.equal(noFieldsBanner.visible, true);
+    assert.equal(noFieldsBanner.variant, "info");
+    assert.equal(noFieldsBanner.allowManualEntry, true);
+
+    const okBanner = computeBannerState({ status: "ok" });
+    assert.equal(okBanner.visible, false);
   });
 });

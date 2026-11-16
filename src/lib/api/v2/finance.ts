@@ -23,6 +23,7 @@
  */
 
 import { requestV2 } from "./client";
+import { cleanFileId } from "./documents";
 
 export type V2SupportedCurrency = "SAR" | "KWD" | "USD" | "ETB" | "AED" | "QAR";
 
@@ -588,8 +589,9 @@ export async function getBatchInvoicePdfV2(batchName: string): Promise<Blob> {
  */
 export async function uploadBatchPaymentProofV2(
   batchName: string,
-  fileUrl: string
+  fileIdOrUrl: string
 ): Promise<{ matched_items: string[]; unmatched_names: string[]; [key: string]: any }> {
+  const cleanId = cleanFileId(fileIdOrUrl);
   const result = await requestV2<{
     message?: {
       matched_items?: string[];
@@ -604,7 +606,8 @@ export async function uploadBatchPaymentProofV2(
       method: "POST",
       body: {
         batch_name: batchName,
-        file_url: fileUrl,
+        file_id: cleanId,
+        file_url: cleanId,
       },
     }
   );
@@ -913,15 +916,17 @@ export async function listCommissionWriteOffsV2(
  * Uploads a bank statement CSV for automatic line-to-batch matching.
  */
 export async function uploadBankStatementV2(
-  fileUrl: string,
+  fileIdOrUrl: string,
   currency?: string
 ): Promise<{ message?: string; matched?: number; unmatched?: number; [key: string]: any }> {
+  const cleanId = cleanFileId(fileIdOrUrl);
   return await requestV2(
     "/api/method/agency_tracking.api.reconciliation.write?op=upload_bank_statement",
     {
       method: "POST",
       body: {
-        file_url: fileUrl,
+        file_id: cleanId,
+        file_url: cleanId,
         ...(currency ? { currency } : {}),
       },
     }

@@ -13,6 +13,7 @@
  */
 
 import { requestV2 } from "./client";
+import { cleanFileId } from "./documents";
 import { V2UserTodoItem } from "@/types/workspace";
 
 export interface V2ClearanceStepItem {
@@ -565,7 +566,7 @@ export async function recordOtherPaymentV2(
         ...(params.currency ? { currency: params.currency } : {}),
         ...(params.status ? { status: params.status } : {}),
         ...(params.remark ? { remark: params.remark } : {}),
-        ...(params.receipt_url ? { receipt_url: params.receipt_url } : {}),
+        ...(params.receipt_url ? { receipt_url: cleanFileId(params.receipt_url) } : {}),
         ...(params.payment_row_name ? { payment_row_name: params.payment_row_name } : {}),
       },
     }

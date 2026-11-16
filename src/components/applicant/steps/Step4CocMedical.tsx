@@ -52,9 +52,9 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
       setIsUploadingCollegeCert(true);
       // Identity / educational documents must upload with is_private = true (T12)
       const res = await uploadFileV2(file, true, "Applicant");
-      const url = res.file_url || (res as any)?.message?.file_url;
-      if (!url) throw new Error("Upload succeeded but no file URL returned.");
-      setValue("college_certificate", url, { shouldDirty: true });
+      const fileIdOrUrl = res.id || res.file_id || res.file_url || (res as any)?.message?.file_url;
+      if (!fileIdOrUrl) throw new Error("Upload succeeded but no file reference returned.");
+      setValue("college_certificate", fileIdOrUrl, { shouldDirty: true });
       toast.success("College Certificate uploaded securely!");
     } catch (err: any) {
       toast.error("Upload failed", { description: formatCleanErrorMessage(err) });
@@ -71,9 +71,9 @@ export function Step4CocMedical({ form }: Step4CocMedicalProps) {
       setIsUploadingOriginalId(true);
       // Identity documents must upload with is_private = true (T12)
       const res = await uploadFileV2(file, true, "Applicant");
-      const url = res.file_url || (res as any)?.message?.file_url;
-      if (!url) throw new Error("Upload succeeded but no file URL returned.");
-      setValue("original_id_scan", url, { shouldDirty: true });
+      const fileIdOrUrl = res.id || res.file_id || res.file_url || (res as any)?.message?.file_url;
+      if (!fileIdOrUrl) throw new Error("Upload succeeded but no file reference returned.");
+      setValue("original_id_scan", fileIdOrUrl, { shouldDirty: true });
       toast.success("Original ID scan uploaded securely!");
     } catch (err: any) {
       toast.error("Upload failed", { description: formatCleanErrorMessage(err) });

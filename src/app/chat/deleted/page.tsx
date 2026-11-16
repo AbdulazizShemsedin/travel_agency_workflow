@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { listDeletedMessagesV2, V2DeletedMessageRecord } from "@/lib/api/v2/communication";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
 import { LoadError } from "@/components/ui/LoadError";
 
@@ -235,13 +236,13 @@ export default function DeletedMessagesAuditPage() {
 
                         {row.attachment && (
                           <a
-                            href={row.attachment}
+                            href={getFileDownloadUrl(row.attachment)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:underline pt-0.5"
                           >
                             <FileText className="h-3 w-3" />
-                            <span>Attachment: {row.attachment.split("/").pop()}</span>
+                            <span>Attachment: {row.attachment.startsWith("file_") ? "Attached Document" : (row.attachment.split("/").pop() || "Attached File")}</span>
                             <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
                           </a>
                         )}

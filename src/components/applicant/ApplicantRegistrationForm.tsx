@@ -66,6 +66,7 @@ import {
   registerApplicantV2,
   uploadFileV2,
   parsePassportFileV2,
+  cleanFileId,
   normalizeApplicantFields,
   mapEducationLevelToBackend,
   isExperiencedCountry,
@@ -198,7 +199,12 @@ export function ApplicantRegistrationForm({
 
   // Active top media tab
   const [activeMediaTab, setActiveMediaTab] = React.useState<MediaTabType>("photo");
-  const [isUploadingMedia, setIsUploadingMedia] = React.useState(false);
+  const [uploadingTabs, setUploadingTabs] = React.useState<Record<MediaTabType, boolean>>({
+    photo: false,
+    full_size: false,
+    passport: false,
+    video: false,
+  });
   // The bucket is private, so a just-uploaded video previews from the browser's own copy.
   const [videoPreviewFile, setVideoPreviewFile] = React.useState<File | null>(null);
 
@@ -215,6 +221,7 @@ export function ApplicantRegistrationForm({
   const handleCancelPassportScan = () => {
     isOcrCancelledRef.current = true;
     setIsScanningOCR(false);
+    setUploadingTabs((prev) => ({ ...prev, passport: false }));
     if (activeOcrToastIdRef.current) {
       toast.dismiss(activeOcrToastIdRef.current);
       activeOcrToastIdRef.current = null;
@@ -889,6 +896,7 @@ export function ApplicantRegistrationForm({
     if (!file) return;
     isOcrCancelledRef.current = false;
     setIsScanningOCR(true);
+    setUploadingTabs((prev) => ({ ...prev, passport: true }));
     const toastId = toast.loading("Uploading and analyzing passport scan...");
     activeOcrToastIdRef.current = toastId;
 
@@ -896,17 +904,18 @@ export function ApplicantRegistrationForm({
       // 1. Upload scan file (private per T12 security requirements)
       const uploadRes = await uploadFileV2(file, true, "Applicant", draftApplicantId || undefined);
       if (isOcrCancelledRef.current) return;
-      const fileUrl = (uploadRes as any)?.message?.file_url || (uploadRes as any)?.file_url;
-      if (fileUrl) {
-        setValue("passport_scan", fileUrl);
+      const rawFileId = (uploadRes as any)?.id || (uploadRes as any)?.file_id || (uploadRes as any)?.message?.id || (uploadRes as any)?.message?.file_id || (uploadRes as any)?.file_url || (uploadRes as any)?.message?.file_url;
+      const fileId = cleanFileId(rawFileId) || rawFileId;
+      if (fileId) {
+        setValue("passport_scan", fileId);
       }
 
       // 2. Run Backend Passport Parser (T16: Browser OCR removed to prevent misread names/dates)
       let parsedData: ParsedPassportMRZ | null = null;
 
-      if (fileUrl) {
+      if (fileId) {
         try {
-          const serverParsed = await parsePassportFileV2(fileUrl);
+          const serverParsed = await parsePassportFileV2(fileId);
           if (isOcrCancelledRef.current) return;
           if (serverParsed && (serverParsed.passport_number || serverParsed.first_name)) {
             parsedData = {
@@ -948,6 +957,7 @@ export function ApplicantRegistrationForm({
       }
     } finally {
       setIsScanningOCR(false);
+      setUploadingTabs((prev) => ({ ...prev, passport: false }));
       activeOcrToastIdRef.current = null;
     }
   };
@@ -1040,10 +1050,10 @@ export function ApplicantRegistrationForm({
       salary_amount: salaryNum,
       monthly_salary: String(salaryNum),
       salary_currency: data.salary_currency || "SAR",
-      photograph: data.photograph || data.photo_passport || data.profile_photo_url || "",
-      photo_passport: data.photo_passport || data.photograph || "",
-      passport_scan: data.passport_scan || "",
-      photo_full_body: data.photo_full_body || "",
+      photograph: cleanFileId(data.photograph || data.photo_passport || data.profile_photo_url || ""),
+      photo_passport: cleanFileId(data.photo_passport || data.photograph || ""),
+      passport_scan: cleanFileId(data.passport_scan || ""),
+      photo_full_body: cleanFileId(data.photo_full_body || ""),
       emergency_contact_name: data.relative_name || data.emergency_contact_name || "",
       emergency_contact_phone: data.relative_phone || data.emergency_contact_phone || "",
       emergency_relationship: data.relative_kinship || data.emergency_relationship || "Mother",
@@ -1061,18 +1071,21 @@ export function ApplicantRegistrationForm({
       exam_date: data.exam_date || data.certified_date || "",
       certified_date: data.exam_date || data.certified_date || "",
       coc_status: toBackendCocStatus(data.coc_status),
-      college_certificate: data.college_certificate || "",
-      original_id_scan: data.original_id_scan || "",
+      college_certificate: cleanFileId(data.college_certificate || ""),
+      original_id_scan: cleanFileId(data.original_id_scan || ""),
       labor_id: (data.labor_id || data.labour_id || "").trim() || (existingApplicantId ? "" : undefined),
       national_id: (data.national_id || "").trim() || (existingApplicantId ? "" : undefined),
     };
 
-    if ((data as any).video_key || getValues("video_key" as any)) {
-      rawPayload.video_key = (data as any).video_key || getValues("video_key" as any);
+    const videoFileId =
+      (data as any).experience_video ||
+      getValues("experience_video" as any) ||
+      (data as any).video_key ||
+      getValues("video_key" as any);
+    if (videoFileId) {
+      rawPayload.experience_video = videoFileId;
+      rawPayload.video_key = videoFileId;
     }
-
-    // Do not include experience_video in save payloads per Oct 21 backend requirement
-    delete (rawPayload as any).experience_video;
 
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
   };
@@ -1097,57 +1110,47 @@ export function ApplicantRegistrationForm({
       (initialData as any)?.name ||
       (initialData as any)?.applicant_id;
 
-    setIsUploadingMedia(true);
+    setUploadingTabs((prev) => ({ ...prev, video: true }));
     try {
       if (activeTargetId) {
-        try {
-          const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
-          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-          await finishVideoUploadV2(activeTargetId, uploadMeta.key);
-          const playUrl = uploadMeta.upload_url.split("?")[0];
-          setValue("video_url", playUrl, { shouldDirty: true });
-          setValue("intro_video" as any, playUrl, { shouldDirty: true });
-          setValue("video" as any, playUrl, { shouldDirty: true });
-          setVideoPreviewFile(file);
-          toast.success("Candidate video uploaded successfully!");
-          return;
-        } catch (videoUploadErr) {
-          console.warn("Direct video upload protocol failed, falling back to uploadFileV2:", videoUploadErr);
+        // Direct video upload for existing applicant
+        const uploadMeta = await startVideoUploadV2(activeTargetId, file.name, file.size);
+        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+        const finishRes = await finishVideoUploadV2(activeTargetId, uploadMeta.file_id || uploadMeta.key);
+        const resolvedId = finishRes?.experience_video || finishRes?.id || finishRes?.file_id || uploadMeta.file_id || uploadMeta.key;
+        if (resolvedId) {
+          setValue("experience_video" as any, resolvedId, { shouldDirty: true });
+          setValue("video_key" as any, resolvedId, { shouldDirty: true });
         }
+        const playUrl = uploadMeta.upload_url.split("?")[0];
+        setValue("video_url", playUrl, { shouldDirty: true });
+        setValue("intro_video" as any, playUrl, { shouldDirty: true });
+        setValue("video" as any, playUrl, { shouldDirty: true });
+        setVideoPreviewFile(file);
+        toast.success("Candidate video uploaded successfully!");
+        return;
       } else {
-        // Section 0.-17: Stage video upload for new applicant before save
-        try {
-          const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
-          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-          await finishVideoUploadV2(undefined, uploadMeta.key);
-          setValue("video_key" as any, uploadMeta.key, { shouldDirty: true });
-          const playUrl = uploadMeta.upload_url.split("?")[0];
-          setValue("video_url", playUrl, { shouldDirty: true });
-          setValue("intro_video" as any, playUrl, { shouldDirty: true });
-          setValue("video" as any, playUrl, { shouldDirty: true });
-          setVideoPreviewFile(file);
-          toast.success("Candidate video staged successfully! Will be attached upon saving.");
-          return;
-        } catch (stagedErr) {
-          console.warn("Staged video upload failed, falling back to uploadFileV2:", stagedErr);
-        }
+        // Direct staged video upload for new applicant before save (Go backend file-ID contract)
+        const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
+        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+        const finishRes = await finishVideoUploadV2(undefined, uploadMeta.file_id || uploadMeta.key);
+        const resolvedId = finishRes?.id || finishRes?.file_id || finishRes?.message?.id || uploadMeta.file_id || uploadMeta.key;
+        setValue("experience_video" as any, resolvedId, { shouldDirty: true });
+        setValue("video_key" as any, resolvedId, { shouldDirty: true });
+        const playUrl = uploadMeta.upload_url.split("?")[0];
+        setValue("video_url", playUrl, { shouldDirty: true });
+        setValue("intro_video" as any, playUrl, { shouldDirty: true });
+        setValue("video" as any, playUrl, { shouldDirty: true });
+        setVideoPreviewFile(file);
+        toast.success("Candidate video staged successfully! Will be attached upon saving.");
+        return;
       }
-
-      // If direct/staged protocol failed, upload directly via uploadFileV2
-      setVideoPreviewFile(null);
-      const res = await uploadFileV2(file, false, "Applicant", activeTargetId || undefined);
-      const url = (res as any)?.message?.file_url || (res as any)?.file_url;
-      if (!url) throw new Error("Upload succeeded but no file URL returned.");
-      setValue("video_url", url, { shouldDirty: true });
-      setValue("intro_video" as any, url, { shouldDirty: true });
-      setValue("video" as any, url, { shouldDirty: true });
-      toast.success("Candidate video uploaded successfully!");
     } catch (err: any) {
       toast.error("Video upload failed", {
-        description: err?.message || "Could not upload the video. Please check your connection and try again.",
+        description: err?.message || "Could not upload the video directly to storage. Please verify file format and size, and try again.",
       });
     } finally {
-      setIsUploadingMedia(false);
+      setUploadingTabs((prev) => ({ ...prev, video: false }));
     }
   };
 
@@ -1156,14 +1159,15 @@ export function ApplicantRegistrationForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (activeMediaTab === "video") {
+    const targetTab = activeMediaTab;
+    if (targetTab === "video") {
       await handleVideoUpload(file);
       return;
     }
 
-    setIsUploadingMedia(true);
+    setUploadingTabs((prev) => ({ ...prev, [targetTab]: true }));
     try {
-      const isPrivate = activeMediaTab === "passport";
+      const isPrivate = targetTab === "passport";
       const activeTargetId =
         draftApplicantId ||
         existingApplicantId ||
@@ -1171,19 +1175,20 @@ export function ApplicantRegistrationForm({
         (initialData as any)?.applicant_id;
 
       const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
-      const url = (res as any)?.message?.file_url || (res as any)?.file_url;
-      if (!url) throw new Error("Upload succeeded but no file URL returned.");
+      const rawId = (res as any)?.id || (res as any)?.file_id || (res as any)?.message?.id || (res as any)?.message?.file_id || (res as any)?.file_url || (res as any)?.message?.file_url;
+      const fileIdentifier = cleanFileId(rawId) || rawId;
+      if (!fileIdentifier) throw new Error("Upload succeeded but no file identifier returned.");
 
-      if (activeMediaTab === "photo") {
-        setValue("photograph", url, { shouldDirty: true });
-        setValue("photo_passport", url, { shouldDirty: true });
-        setValue("profile_photo_url", url, { shouldDirty: true });
+      if (targetTab === "photo") {
+        setValue("photograph", fileIdentifier, { shouldDirty: true });
+        setValue("photo_passport", fileIdentifier, { shouldDirty: true });
+        setValue("profile_photo_url", fileIdentifier, { shouldDirty: true });
         toast.success("Photo uploaded successfully!");
-      } else if (activeMediaTab === "full_size") {
-        setValue("photo_full_body", url, { shouldDirty: true });
+      } else if (targetTab === "full_size") {
+        setValue("photo_full_body", fileIdentifier, { shouldDirty: true });
         toast.success("Full-size photo uploaded successfully!");
-      } else if (activeMediaTab === "passport") {
-        setValue("passport_scan", url, { shouldDirty: true });
+      } else if (targetTab === "passport") {
+        setValue("passport_scan", fileIdentifier, { shouldDirty: true });
         toast.success("Passport scan uploaded!");
         // Run OCR on passport
         handlePassportAutoScan(file);
@@ -1193,7 +1198,7 @@ export function ApplicantRegistrationForm({
         description: formatCleanErrorMessage(err),
       });
     } finally {
-      setIsUploadingMedia(false);
+      setUploadingTabs((prev) => ({ ...prev, [targetTab]: false }));
       e.target.value = "";
     }
   };
@@ -1508,6 +1513,13 @@ export function ApplicantRegistrationForm({
 
   const activeMediaUrl = getMediaPreview();
   const isSaving = saveDraftMutation.isPending || saveChangesMutation.isPending;
+  const isAnyMediaUploading = Boolean(
+    uploadingTabs.photo ||
+    uploadingTabs.full_size ||
+    uploadingTabs.passport ||
+    uploadingTabs.video ||
+    isScanningOCR
+  );
 
   return (
     <div data-tour="registration-form-container" className="space-y-6 max-w-5xl mx-auto">
@@ -1759,7 +1771,7 @@ export function ApplicantRegistrationForm({
               id="registration-passport-scan-dropzone"
               variant="passport"
               value={watch("passport_scan")}
-              isLoading={isScanningOCR}
+              isLoading={isScanningOCR || uploadingTabs.passport}
               loadingText="Scanning passport & running OCR extraction..."
               onCancel={handleCancelPassportScan}
               onFileSelect={handlePassportAutoScan}
@@ -1836,7 +1848,11 @@ export function ApplicantRegistrationForm({
             >
               <Camera className={`h-3.5 w-3.5 ${activeMediaTab === "photo" ? "text-emerald-200" : "text-slate-500"}`} />
               <span>Photo <span className="text-rose-500 font-bold ml-0.5">*</span></span>
-              {activeMediaTab === "photo" ? (
+              {uploadingTabs.photo ? (
+                <span className="ml-1 text-[10px] font-bold text-amber-300 dark:text-amber-400 flex items-center gap-1 animate-pulse">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Uploading
+                </span>
+              ) : activeMediaTab === "photo" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
                 </span>
@@ -1857,7 +1873,11 @@ export function ApplicantRegistrationForm({
             >
               <User className={`h-3.5 w-3.5 ${activeMediaTab === "full_size" ? "text-emerald-200" : "text-slate-500"}`} />
               <span>Full Size <span className="text-slate-400 font-normal text-[10px] ml-1">(Optional)</span></span>
-              {activeMediaTab === "full_size" ? (
+              {uploadingTabs.full_size ? (
+                <span className="ml-1 text-[10px] font-bold text-amber-300 dark:text-amber-400 flex items-center gap-1 animate-pulse">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Uploading
+                </span>
+              ) : activeMediaTab === "full_size" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
                 </span>
@@ -1878,7 +1898,11 @@ export function ApplicantRegistrationForm({
             >
               <FileText className={`h-3.5 w-3.5 ${activeMediaTab === "passport" ? "text-emerald-200" : "text-slate-500"}`} />
               <span>Passport <span className="text-rose-500 font-bold ml-0.5">*</span></span>
-              {activeMediaTab === "passport" ? (
+              {uploadingTabs.passport || isScanningOCR ? (
+                <span className="ml-1 text-[10px] font-bold text-amber-300 dark:text-amber-400 flex items-center gap-1 animate-pulse">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Uploading
+                </span>
+              ) : activeMediaTab === "passport" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
                 </span>
@@ -1899,7 +1923,11 @@ export function ApplicantRegistrationForm({
             >
               <Video className={`h-3.5 w-3.5 ${activeMediaTab === "video" ? "text-emerald-200" : "text-slate-500"}`} />
               <span>Video Interview <span className="text-slate-400 font-normal text-[10px] ml-1">(Optional)</span></span>
-              {activeMediaTab === "video" ? (
+              {uploadingTabs.video ? (
+                <span className="ml-1 text-[10px] font-bold text-amber-300 dark:text-amber-400 flex items-center gap-1 animate-pulse">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" /> Uploading
+                </span>
+              ) : activeMediaTab === "video" ? (
                 <span className="ml-1 text-[10px] uppercase font-bold bg-emerald-800 dark:bg-emerald-600 px-1.5 py-0.5 rounded text-white flex items-center gap-1">
                   <Check className="h-2.5 w-2.5" /> Selected
                 </span>
@@ -1922,7 +1950,11 @@ export function ApplicantRegistrationForm({
             </span>
           </div>
           <div className="text-[11px] font-medium">
-            {activeMediaUrl ? (
+            {(activeMediaTab === "passport" ? (uploadingTabs.passport || isScanningOCR) : uploadingTabs[activeMediaTab]) ? (
+              <span className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1 animate-pulse">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading in progress...
+              </span>
+            ) : activeMediaUrl ? (
               <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5" /> File attached and ready
               </span>
@@ -1957,7 +1989,11 @@ export function ApplicantRegistrationForm({
                 : errors.video_url?.message
             }
             value={activeMediaUrl}
-            isLoading={isUploadingMedia}
+            isLoading={
+              activeMediaTab === "passport"
+                ? Boolean(uploadingTabs.passport || isScanningOCR)
+                : Boolean(uploadingTabs[activeMediaTab])
+            }
             loadingText={`Uploading ${
               activeMediaTab === "photo"
                 ? "passport photo"
@@ -1968,13 +2004,14 @@ export function ApplicantRegistrationForm({
                 : "passport scan"
             }...`}
             onFileSelect={async (file) => {
-              if (activeMediaTab === "passport") {
+              const targetTab = activeMediaTab;
+              if (targetTab === "passport") {
                 handlePassportAutoScan(file);
-              } else if (activeMediaTab === "video") {
+              } else if (targetTab === "video") {
                 await handleVideoUpload(file);
               } else {
+                setUploadingTabs((prev) => ({ ...prev, [targetTab]: true }));
                 try {
-                  setIsUploadingMedia(true);
                   const isPrivate = false;
                   const activeTargetId =
                     draftApplicantId ||
@@ -1982,21 +2019,22 @@ export function ApplicantRegistrationForm({
                     (initialData as any)?.name ||
                     (initialData as any)?.applicant_id;
                   const res = await uploadFileV2(file, isPrivate, "Applicant", activeTargetId || undefined);
-                  const url = res.file_url || (res as any).message?.file_url;
-                  if (url) {
-                    if (activeMediaTab === "photo") {
-                      setValue("photograph", url, { shouldDirty: true });
-                      setValue("photo_passport", url, { shouldDirty: true });
-                      setValue("profile_photo_url", url, { shouldDirty: true });
-                    } else if (activeMediaTab === "full_size") {
-                      setValue("photo_full_body", url, { shouldDirty: true });
+                  const rawId = (res as any)?.id || (res as any)?.file_id || (res as any)?.message?.id || (res as any)?.message?.file_id || (res as any)?.file_url || (res as any)?.message?.file_url;
+                  const fileIdentifier = cleanFileId(rawId) || rawId;
+                  if (fileIdentifier) {
+                    if (targetTab === "photo") {
+                      setValue("photograph", fileIdentifier, { shouldDirty: true });
+                      setValue("photo_passport", fileIdentifier, { shouldDirty: true });
+                      setValue("profile_photo_url", fileIdentifier, { shouldDirty: true });
+                    } else if (targetTab === "full_size") {
+                      setValue("photo_full_body", fileIdentifier, { shouldDirty: true });
                     }
                     toast.success("File uploaded successfully");
                   }
                 } catch (err: any) {
                   toast.error("Upload failed", { description: err.message });
                 } finally {
-                  setIsUploadingMedia(false);
+                  setUploadingTabs((prev) => ({ ...prev, [targetTab]: false }));
                 }
               }
             }}
@@ -3437,7 +3475,7 @@ export function ApplicantRegistrationForm({
                 <Button
                   type="button"
                   onClick={() => saveDraftMutation.mutate()}
-                  disabled={isSaving || registerMutation.isPending}
+                  disabled={isSaving || isAnyMediaUploading || registerMutation.isPending}
                   className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
                 >
                   {saveDraftMutation.isPending ? (
@@ -3457,7 +3495,7 @@ export function ApplicantRegistrationForm({
                 <Button
                   type="button"
                   onClick={() => saveChangesMutation.mutate()}
-                  disabled={isSaving}
+                  disabled={isSaving || isAnyMediaUploading}
                   className="bg-emerald-900 hover:bg-emerald-950 dark:bg-emerald-700 dark:hover:bg-emerald-600 text-white font-bold px-6 text-xs shadow-md"
                 >
                   {saveChangesMutation.isPending ? (
@@ -3478,7 +3516,7 @@ export function ApplicantRegistrationForm({
                   type="button"
                   variant="outline"
                   onClick={() => setIsConfirmRegisterOpen(true)}
-                  disabled={registerMutation.isPending || isSaving || watch("medical_status") === "UNFIT"}
+                  disabled={registerMutation.isPending || isSaving || isAnyMediaUploading || watch("medical_status") === "UNFIT"}
                   className="border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-xs font-semibold"
                 >
                   <FileCheck2 className="mr-1.5 h-3.5 w-3.5" /> Register Applicant

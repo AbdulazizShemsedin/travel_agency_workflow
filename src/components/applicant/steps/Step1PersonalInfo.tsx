@@ -300,12 +300,12 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
       try {
         const uploadRes = await uploadFileV2(file, true);
         if (isOcrCancelledRef.current) return;
-        const fileUrl = uploadRes?.file_url || "";
-        if (fileUrl) {
-          uploadedUrl = fileUrl;
-          setValue("passport_scan", fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("passport_copy" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("passport_image" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+        const fileIdOrUrl = uploadRes?.id || uploadRes?.file_id || uploadRes?.file_url || "";
+        if (fileIdOrUrl) {
+          uploadedUrl = fileIdOrUrl;
+          setValue("passport_scan", fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("passport_copy" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("passport_image" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
         }
       } catch (e) {
         console.warn("File upload notice:", e);
@@ -412,11 +412,11 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
       try {
         const res = await uploadFileV2(file, true);
-        const fileUrl = res?.file_url || "";
-        if (fileUrl) {
-          setValue("profile_photo_url", fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("photo_passport", fileUrl, { shouldDirty: true, shouldValidate: true });
-          setValue("photograph" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+        const fileIdOrUrl = res?.id || res?.file_id || res?.file_url || "";
+        if (fileIdOrUrl) {
+          setValue("profile_photo_url", fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("photo_passport", fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
+          setValue("photograph" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
           toast.success("Portrait photo uploaded successfully!");
         } else {
           toast.error("We couldn't save the portrait photo. Please try uploading again.");
@@ -438,17 +438,17 @@ export function Step1PersonalInfo({ form, locked = false, editingApplicantName }
 
       try {
         const res = await uploadFileV2(file, true);
-        const fileUrl = res?.file_url || "";
-        if (fileUrl) {
-          setValue("photo_full_body", fileUrl, { shouldDirty: true, shouldValidate: true });
+        const fileIdOrUrl = res?.id || res?.file_id || res?.file_url || "";
+        if (fileIdOrUrl) {
+          setValue("photo_full_body", fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
           if (!getValues("photograph")) {
-            setValue("photograph" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+            setValue("photograph" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
           }
           if (!getValues("photo_passport")) {
-            setValue("photo_passport" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+            setValue("photo_passport" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
           }
           if (!getValues("profile_photo_url")) {
-            setValue("profile_photo_url" as any, fileUrl, { shouldDirty: true, shouldValidate: true });
+            setValue("profile_photo_url" as any, fileIdOrUrl, { shouldDirty: true, shouldValidate: true });
           }
           toast.success("Full body photo uploaded successfully!");
         } else {

@@ -118,11 +118,11 @@ export function MuayenaPlacementModal({
     try {
       // Direct upload to storage (private)
       const res = await uploadFileV2(file, true, "Placement");
-      const url = res.file_url || (res as any)?.url || (res as any)?.message?.file_url;
-      if (!url) {
-        throw new Error("Upload did not return a valid file URL.");
+      const fileIdOrUrl = res.id || res.file_id || res.file_url || (res as any)?.url || (res as any)?.message?.file_url;
+      if (!fileIdOrUrl) {
+        throw new Error("Upload did not return a valid file reference.");
       }
-      setUploadedFileUrl(url);
+      setUploadedFileUrl(fileIdOrUrl);
       toast.success("Contract file uploaded to storage.");
     } catch (err: any) {
       const msg = formatApiError(err) || "Failed to upload contract file.";

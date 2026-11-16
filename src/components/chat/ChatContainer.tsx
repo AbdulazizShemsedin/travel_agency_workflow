@@ -61,7 +61,7 @@ import {
   V2ChatThread,
   V2ChatMessage,
 } from "@/lib/api/v2/communication";
-import { uploadFileV2 } from "@/lib/api/v2/documents";
+import { uploadFileV2, getFileDownloadUrl, cleanFileId } from "@/lib/api/v2/documents";
 import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
@@ -1113,7 +1113,8 @@ export function ChatContainer() {
             "Chat Thread",
             selectedThread.name
           );
-          attachmentUrl = uploadRes.file_url;
+          const rawAttach = uploadRes.id || uploadRes.file_id || uploadRes.file_url;
+          attachmentUrl = cleanFileId(rawAttach) || rawAttach;
         } finally {
           setIsUploadingAttachment(false);
         }
@@ -1980,7 +1981,7 @@ export function ChatContainer() {
                           {msg.attachment && (
                             <div className="pt-1">
                               <a
-                                href={msg.attachment}
+                                href={getFileDownloadUrl(msg.attachment)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={cn(
@@ -1992,7 +1993,7 @@ export function ChatContainer() {
                               >
                                 <FileText className="h-3.5 w-3.5" />
                                 <span className="truncate max-w-[200px]">
-                                  {msg.attachment.split("/").pop() || "Attached File"}
+                                  {msg.attachment.startsWith("file_") ? "Attached Document" : (msg.attachment.split("/").pop() || "Attached File")}
                                 </span>
                                 <ExternalLink className="h-3 w-3 shrink-0" />
                               </a>

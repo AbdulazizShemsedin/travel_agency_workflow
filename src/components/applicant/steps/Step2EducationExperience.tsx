@@ -81,49 +81,40 @@ export function Step2EducationExperience({
       const activeApplicantName = ((watch("name" as any) || (form.getValues() as any)?.name) || "") as string;
 
       if (activeApplicantName) {
-        try {
-          const uploadMeta = await startVideoUploadV2(activeApplicantName, file.name, file.size);
-          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-          await finishVideoUploadV2(activeApplicantName, uploadMeta.key);
-          const playUrl = uploadMeta.upload_url.split("?")[0];
-          setValue("video_url" as any, playUrl, { shouldDirty: true });
-          setValue("intro_video" as any, playUrl, { shouldDirty: true });
-          setValue("video" as any, playUrl, { shouldDirty: true });
-          setVideoPreviewFile(file);
-          toast.success("Candidate video uploaded successfully!");
-          return;
-        } catch (directErr) {
-          console.warn("Direct S3 upload failed, falling back to uploadFileV2:", directErr);
+        // Direct video upload for existing applicant
+        const uploadMeta = await startVideoUploadV2(activeApplicantName, file.name, file.size);
+        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+        const finishRes = await finishVideoUploadV2(activeApplicantName, uploadMeta.file_id || uploadMeta.key);
+        const resolvedId = finishRes?.experience_video || finishRes?.id || finishRes?.file_id || uploadMeta.file_id || uploadMeta.key;
+        if (resolvedId) {
+          setValue("experience_video" as any, resolvedId, { shouldDirty: true });
+          setValue("video_key" as any, resolvedId, { shouldDirty: true });
         }
+        const playUrl = uploadMeta.upload_url.split("?")[0];
+        setValue("video_url" as any, playUrl, { shouldDirty: true });
+        setValue("intro_video" as any, playUrl, { shouldDirty: true });
+        setValue("video" as any, playUrl, { shouldDirty: true });
+        setVideoPreviewFile(file);
+        toast.success("Candidate video uploaded successfully!");
+        return;
       } else {
-        // Section 0.-17: Stage video upload for new applicant before save
-        try {
-          const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
-          await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
-          await finishVideoUploadV2(undefined, uploadMeta.key);
-          setValue("video_key" as any, uploadMeta.key, { shouldDirty: true });
-          const playUrl = uploadMeta.upload_url.split("?")[0];
-          setValue("video_url" as any, playUrl, { shouldDirty: true });
-          setValue("intro_video" as any, playUrl, { shouldDirty: true });
-          setValue("video" as any, playUrl, { shouldDirty: true });
-          setVideoPreviewFile(file);
-          toast.success("Candidate video staged successfully! Will be attached upon saving.");
-          return;
-        } catch (stagedErr) {
-          console.warn("Staged video upload failed, falling back to uploadFileV2:", stagedErr);
-        }
+        // Staged direct video upload for new applicant before save (Go backend file-ID contract)
+        const uploadMeta = await startVideoUploadV2(undefined, file.name, file.size);
+        await uploadVideoFileDirectly(uploadMeta.upload_url, uploadMeta.headers || {}, file);
+        const finishRes = await finishVideoUploadV2(undefined, uploadMeta.file_id || uploadMeta.key);
+        const resolvedId = finishRes?.id || finishRes?.file_id || finishRes?.message?.id || uploadMeta.file_id || uploadMeta.key;
+        setValue("experience_video" as any, resolvedId, { shouldDirty: true });
+        setValue("video_key" as any, resolvedId, { shouldDirty: true });
+        const playUrl = uploadMeta.upload_url.split("?")[0];
+        setValue("video_url" as any, playUrl, { shouldDirty: true });
+        setValue("intro_video" as any, playUrl, { shouldDirty: true });
+        setValue("video" as any, playUrl, { shouldDirty: true });
+        setVideoPreviewFile(file);
+        toast.success("Candidate video staged successfully! Will be attached upon saving.");
+        return;
       }
-
-      setVideoPreviewFile(null);
-      const res = await uploadFileV2(file, false, "Applicant", activeApplicantName || undefined);
-      const url = (res as any)?.message?.file_url || (res as any)?.file_url;
-      if (!url) throw new Error("Upload succeeded but no file URL returned.");
-      setValue("video_url" as any, url, { shouldDirty: true });
-      setValue("intro_video" as any, url, { shouldDirty: true });
-      setValue("video" as any, url, { shouldDirty: true });
-      toast.success("Candidate video uploaded successfully!");
     } catch (err: any) {
-      toast.error("Video upload failed", { description: err?.message || "Could not upload the video. Please check your connection and try again." });
+      toast.error("Video upload failed", { description: err?.message || "Could not upload the video directly to storage. Please verify file format and size, and try again." });
     } finally {
       setIsUploadingVideo(false);
     }

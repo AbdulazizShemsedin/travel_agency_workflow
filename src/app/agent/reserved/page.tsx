@@ -22,6 +22,7 @@ import {
   V2PlacementRecord,
 } from "@/lib/api/v2";
 import { getCandidatePhotoUrl, listMyMuayenaWorkersV2, V2MyMuayenaWorkerItem } from "@/lib/api/v2/portal";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { AgentLayout } from "@/components/agent/AgentLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -420,7 +421,7 @@ export default function MyReservedCandidatesPage() {
                           <td className="px-4 py-3.5 text-center border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
                             {c.cv_file_url ? (
                               <a
-                                href={c.cv_file_url}
+                                href={getFileDownloadUrl(c.cv_file_url)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}

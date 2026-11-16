@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { getApplicantV2, generateCvV2, V2ApplicantDetails, isExperiencedCountry } from "@/lib/api/v2";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCleanErrorMessage } from "@/lib/utils/error-formatter";
@@ -82,7 +83,7 @@ export default function CandidateCvPreviewPage() {
     ) {
       return fallback;
     }
-    return clean;
+    return getFileDownloadUrl(clean);
   };
 
   const portraitSrc = resolvePhotoUrl(

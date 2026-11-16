@@ -14,6 +14,7 @@
  */
 
 import { requestV2, ApiV2Error } from "./client";
+import { cleanFileId } from "./documents";
 
 export type V2PlacementStatus =
   | "Requested"
@@ -71,8 +72,9 @@ export interface V2PlacementRecord {
 export async function createMuayenaPlacementV2(
   applicantName: string,
   contractorName?: string,
-  fileUrl?: string
+  fileIdOrUrl?: string
 ): Promise<{ name?: string; placement_name?: string; message?: string; [key: string]: any }> {
+  const cleanId = cleanFileId(fileIdOrUrl);
   return requestV2(
     "/api/method/agency_tracking.api.placement.write?op=create_muayena_placement",
     {
@@ -80,7 +82,12 @@ export async function createMuayenaPlacementV2(
       body: {
         applicant_name: applicantName,
         ...(contractorName ? { contractor_name: contractorName } : {}),
-        ...(fileUrl ? { file_url: fileUrl } : {}),
+        ...(cleanId
+          ? {
+              file_id: cleanId,
+              file_url: cleanId,
+            }
+          : {}),
       },
     }
   );
@@ -164,17 +171,19 @@ export async function listPlacementsV2(
  */
 export async function uploadPlacementContractV2(
   placementName: string,
-  fileUrl: string,
+  fileIdOrUrl: string,
   contractNumber?: string,
   contractSignedDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
+  const cleanId = cleanFileId(fileIdOrUrl);
   return requestV2(
     "/api/method/agency_tracking.api.placement.write?op=upload_contract",
     {
       method: "POST",
       body: {
         placement_name: placementName,
-        file_url: fileUrl,
+        file_id: cleanId,
+        file_url: cleanId,
         ...(contractNumber ? { contract_number: contractNumber } : {}),
         ...(contractSignedDate ? { contract_signed_date: contractSignedDate } : {}),
       },
@@ -187,13 +196,14 @@ export async function uploadPlacementContractV2(
  */
 export async function uploadPlacementVisaV2(
   placementName: string,
-  fileUrl: string,
+  fileIdOrUrl: string,
   visaNumber?: string,
   visaIssueDate?: string,
   visaExpiryDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
-  if (!fileUrl) {
-    // If no file_url is provided, update the parsed visa fields directly via update_placement_parsed_fields
+  const cleanId = cleanFileId(fileIdOrUrl);
+  if (!cleanId) {
+    // If no file is provided, update the parsed visa fields directly via update_placement_parsed_fields
     return updatePlacementParsedFieldsV2(placementName, {
       ...(visaNumber ? { visa_number: visaNumber } : {}),
       ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
@@ -206,7 +216,8 @@ export async function uploadPlacementVisaV2(
       method: "POST",
       body: {
         placement_name: placementName,
-        file_url: fileUrl,
+        file_id: cleanId,
+        file_url: cleanId,
         ...(visaNumber ? { visa_number: visaNumber } : {}),
         ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
         ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
