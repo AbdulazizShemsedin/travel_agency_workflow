@@ -1420,7 +1420,8 @@ export function ApplicantTable() {
                         className="px-1.5 py-2 xl:py-2.5 text-right truncate"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-end gap-1 truncate">
+                        {/* Wrap, never clip: with justify-end a clipped row hid its first buttons under the date cell. */}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           {/* Stage: Draft — Register Applicant */}
                           {stage === "Draft" && (
                             <button
