@@ -23,6 +23,7 @@ import {
   getExpiryBadgeStatus,
 } from "@/lib/validations/applicant.schema";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -69,7 +70,7 @@ export function Step5Review({
             {values.profile_photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={values.profile_photo_url}
+                src={getFileDownloadUrl(values.profile_photo_url)}
                 alt={fullName}
                 className="h-16 w-16 rounded-full border border-slate-200 object-cover shadow-xs"
               />

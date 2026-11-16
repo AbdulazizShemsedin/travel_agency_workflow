@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { getFileDownloadUrl } from "@/lib/api/v2/documents";
 
 export type DropzoneVariant =
   | "passport"
@@ -112,7 +113,7 @@ export function PremiumDropzone({
       return;
     }
     if (typeof value === "string") {
-      setPreviewUrl(value);
+      setPreviewUrl(getFileDownloadUrl(value));
     } else if (value instanceof File) {
       const url = URL.createObjectURL(value);
       setPreviewUrl(url);
@@ -120,16 +121,46 @@ export function PremiumDropzone({
     }
   }, [value]);
 
-  // Extract display file name & size
+  // Extract display file name & size - never displays raw technical file IDs to users
   const displayFileName = React.useMemo(() => {
     if (fileName) return fileName;
     if (value instanceof File) return value.name;
     if (typeof value === "string") {
-      const parts = value.split("/");
-      return parts[parts.length - 1] || "Uploaded File";
+      const s = value.trim();
+      const parts = s.split("/");
+      const lastPart = parts[parts.length - 1] || "";
+      // Strip any query parameters
+      const cleanName = lastPart.split("?")[0].split("#")[0];
+
+      // If the cleanName is a technical file ID (e.g. starts with "file_" or is a hash without extension),
+      // provide a human-readable fallback based on the component's variant.
+      const isFileId =
+        cleanName.startsWith("file_") ||
+        s.includes("file_id=") ||
+        (!cleanName.includes(".") && cleanName.length >= 12);
+
+      if (isFileId) {
+        switch (variant) {
+          case "passport":
+            return "Passport Scan";
+          case "portrait":
+            return "Passport Photo";
+          case "full_body":
+            return "Full Body Photo";
+          case "video":
+            return "Candidate Video Interview";
+          case "spreadsheet":
+            return "Bank Statement CSV";
+          case "document":
+          case "compact":
+          default:
+            return label || "Attached Document";
+        }
+      }
+      return cleanName || "Uploaded File";
     }
     return "";
-  }, [fileName, value]);
+  }, [fileName, value, variant, label]);
 
   const displayFileSize = React.useMemo(() => {
     if (fileSize !== undefined) {
@@ -379,25 +410,52 @@ export function PremiumDropzone({
     }
   }, [description, variant]);
 
-  const isImagePreview =
-    previewUrl &&
-    variant !== "video" &&
-    (variant === "passport" ||
-      variant === "portrait" ||
-      variant === "full_body" ||
-      (!/\.(pdf|csv|mp4|webm|mov|m4v)(\?.*)?$/i.test(previewUrl)));
+  const detectedType = React.useMemo(() => {
+    if (value instanceof File) {
+      if (value.type.startsWith("image/")) return "image";
+      if (value.type.startsWith("video/")) return "video";
+      if (value.type === "application/pdf" || value.name.toLowerCase().endsWith(".pdf")) return "document";
+      if (value.type.includes("csv") || value.name.toLowerCase().endsWith(".csv")) return "spreadsheet";
+      if (
+        value.type.includes("word") ||
+        value.name.toLowerCase().endsWith(".docx") ||
+        value.name.toLowerCase().endsWith(".odt") ||
+        value.name.toLowerCase().endsWith(".doc")
+      ) {
+        return "document";
+      }
+    }
 
-  const isVideoPreview =
-    previewUrl &&
-    (variant === "video" ||
-      /\.(mp4|webm|mov|m4v|ogg|ogv)(\?.*)?$/i.test(previewUrl) ||
-      (typeof previewUrl === "string" && previewUrl.includes("video")));
+    const checkStr = `${fileName || ""} ${displayFileName || ""} ${typeof value === "string" ? value : ""}`.toLowerCase();
+    if (/\.(jpg|jpeg|png|webp|gif|bmp|svg)(\?.*)?$/i.test(checkStr) || checkStr.includes(".jpg") || checkStr.includes(".jpeg") || checkStr.includes(".png") || checkStr.includes(".webp")) {
+      return "image";
+    }
+    if (/\.(mp4|webm|mov|m4v|ogg|ogv)(\?.*)?$/i.test(checkStr) || checkStr.includes(".mp4") || checkStr.includes(".webm") || checkStr.includes(".mov")) {
+      return "video";
+    }
+    if (/\.(pdf|docx|odt|doc|txt|rtf)(\?.*)?$/i.test(checkStr) || checkStr.includes(".pdf") || checkStr.includes(".docx") || checkStr.includes(".odt")) {
+      return "document";
+    }
+    if (/\.(csv|xls|xlsx)(\?.*)?$/i.test(checkStr) || checkStr.includes(".csv")) {
+      return "spreadsheet";
+    }
 
-  const isDocumentPreview =
-    previewUrl && (previewUrl.endsWith(".pdf") || variant === "document" || variant === "compact");
+    // Default by variant
+    if (variant === "portrait" || variant === "full_body") return "image";
+    if (variant === "video") return "video";
+    if (variant === "spreadsheet") return "spreadsheet";
+    if (variant === "document" || variant === "compact") return "document";
+    if (variant === "passport") return "image";
 
-  const isSpreadsheetPreview =
-    previewUrl && (previewUrl.endsWith(".csv") || variant === "spreadsheet");
+    return "document";
+  }, [value, fileName, displayFileName, variant]);
+
+  const isImagePreview = Boolean(previewUrl && detectedType === "image");
+  const isVideoPreview = Boolean(previewUrl && detectedType === "video");
+  const isSpreadsheetPreview = Boolean(previewUrl && detectedType === "spreadsheet");
+  const isDocumentPreview = Boolean(
+    previewUrl && (detectedType === "document" || (!isImagePreview && !isVideoPreview && !isSpreadsheetPreview))
+  );
 
   return (
     <div

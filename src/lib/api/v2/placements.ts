@@ -82,12 +82,7 @@ export async function createMuayenaPlacementV2(
       body: {
         applicant_name: applicantName,
         ...(contractorName ? { contractor_name: contractorName } : {}),
-        ...(cleanId
-          ? {
-              file_id: cleanId,
-              file_url: cleanId,
-            }
-          : {}),
+        ...(cleanId ? { file_id: cleanId } : {}),
       },
     }
   );
@@ -114,7 +109,7 @@ export async function listPlacementsV2(
 export async function listPlacementsV2(
   filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "creation desc",
+  orderBy: string = "modified desc",
   limitStart: number = 0,
   withTotal: number = 0
 ): Promise<V2PlacementRecord[] | { data: V2PlacementRecord[]; total_count: number }> {
@@ -183,7 +178,6 @@ export async function uploadPlacementContractV2(
       body: {
         placement_name: placementName,
         file_id: cleanId,
-        file_url: cleanId,
         ...(contractNumber ? { contract_number: contractNumber } : {}),
         ...(contractSignedDate ? { contract_signed_date: contractSignedDate } : {}),
       },
@@ -217,7 +211,6 @@ export async function uploadPlacementVisaV2(
       body: {
         placement_name: placementName,
         file_id: cleanId,
-        file_url: cleanId,
         ...(visaNumber ? { visa_number: visaNumber } : {}),
         ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
         ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),

@@ -68,6 +68,8 @@ interface MergedMedicalRecord {
   registrationMedicalStatus?: string;
   registrationMedicalExpiry?: string;
   isCoveredByRegistrationMedical: boolean;
+  modified?: string;
+  creation?: string;
 }
 
 export function MedicalWorkspace({
@@ -177,8 +179,29 @@ export function MedicalWorkspace({
         registrationMedicalStatus: regStatus || undefined,
         registrationMedicalExpiry: regExpiry,
         isCoveredByRegistrationMedical: isCovered,
+        modified: plc.modified || app?.modified,
+        creation: plc.creation || app?.creation,
       });
     }
+
+    // Bring applicants recently changed on the top of the medical table
+    records.sort((a, b) => {
+      const getTimestamp = (rec: MergedMedicalRecord): number => {
+        let maxTime = 0;
+        const candidates = [
+          rec.modified,
+          rec.creation,
+        ];
+        for (const c of candidates) {
+          if (c) {
+            const t = new Date(c).getTime();
+            if (!isNaN(t) && t > maxTime) maxTime = t;
+          }
+        }
+        return maxTime;
+      };
+      return getTimestamp(b) - getTimestamp(a);
+    });
 
     return records;
   }, [placements, applicants]);

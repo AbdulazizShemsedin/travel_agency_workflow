@@ -38,7 +38,6 @@ import {
   createContractorV2,
   updateContractorV2,
   resetEmployeePasswordV2,
-  getUserPasswordV2,
   V2ContractorItem,
   REGISTERED_WORKFLOW_COUNTRIES,
 } from "@/lib/api/v2";
@@ -65,14 +64,7 @@ export default function ContractorsPage() {
       return s === "administrator" || s === "system manager" || s === "admin";
     })
   );
-  const canManageCredentials = Boolean(
-    isAdmin ||
-    (!isContractorReadOnly &&
-      (roles || []).some((r: any) => {
-        const s = String(r?.role || r?.name || r).toLowerCase().trim();
-        return s === "manager";
-      }))
-  );
+  const canManageCredentials = Boolean(isAdmin);
 
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [editingContractor, setEditingContractor] = React.useState<V2ContractorItem | null>(null);
@@ -106,10 +98,9 @@ export default function ContractorsPage() {
   // Credentials / Password State
   const [agentNewPassword, setAgentNewPassword] = React.useState("");
   const [confirmAgentPassword, setConfirmAgentPassword] = React.useState("");
-  const [showAgentPassword, setShowAgentPassword] = React.useState(true);
-  const [currentAgentPassword, setCurrentAgentPassword] = React.useState<string | null>(null);
-  const [isLoadingAgentPassword, setIsLoadingAgentPassword] = React.useState(false);
+  const [showAgentPassword, setShowAgentPassword] = React.useState(false);
   const [copiedCredentials, setCopiedCredentials] = React.useState(false);
+  const [justResetPassword, setJustResetPassword] = React.useState<string | null>(null);
 
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
@@ -243,6 +234,9 @@ export default function ContractorsPage() {
               phone: variables.values.phone !== undefined ? variables.values.phone : con.phone,
               whatsapp: variables.values.whatsapp !== undefined ? variables.values.whatsapp : con.whatsapp,
               communication_manager: variables.values.communication_manager !== undefined ? variables.values.communication_manager : con.communication_manager,
+              email: variables.values.email !== undefined ? variables.values.email : con.email,
+              user_email: variables.values.email !== undefined ? variables.values.email : con.user_email,
+              user: variables.values.email !== undefined ? variables.values.email : con.user,
               notes: variables.values.notes !== undefined ? variables.values.notes : con.notes,
             };
           }
@@ -268,7 +262,9 @@ export default function ContractorsPage() {
     mutationFn: (payload: { userEmail: string; newPassword: string }) =>
       resetEmployeePasswordV2(payload.userEmail, payload.newPassword),
     onSuccess: (_, variables) => {
-      setCurrentAgentPassword(variables.newPassword);
+      setJustResetPassword(variables.newPassword);
+      setAgentNewPassword("");
+      setConfirmAgentPassword("");
       toast.success("Agent portal password updated successfully!");
     },
     onError: (err: any) => {
@@ -292,30 +288,22 @@ export default function ContractorsPage() {
     });
   };
 
-  const handleOpenCredentials = async (c: V2ContractorItem) => {
+  const handleOpenCredentials = (c: V2ContractorItem) => {
     setCredentialsContractor(c);
     setAgentNewPassword("");
     setConfirmAgentPassword("");
-    setShowAgentPassword(true);
+    setShowAgentPassword(false);
     setCopiedCredentials(false);
-    setCurrentAgentPassword(null);
+    setJustResetPassword(null);
+  };
 
-    const targetUser = c.user || c.user_email || c.email;
-    if (targetUser) {
-      setIsLoadingAgentPassword(true);
-      try {
-        const recorded = await getUserPasswordV2(targetUser);
-        if (recorded) {
-          setCurrentAgentPassword(recorded);
-          setAgentNewPassword(recorded);
-          setConfirmAgentPassword(recorded);
-        }
-      } catch (err) {
-        console.warn("[handleOpenCredentials] Could not load recorded password:", err);
-      } finally {
-        setIsLoadingAgentPassword(false);
-      }
-    }
+  const handleCloseCredentials = () => {
+    setCredentialsContractor(null);
+    setJustResetPassword(null);
+    setAgentNewPassword("");
+    setConfirmAgentPassword("");
+    setShowAgentPassword(false);
+    setCopiedCredentials(false);
   };
 
   const handleGenerateRandomPassword = () => {
@@ -333,7 +321,7 @@ export default function ContractorsPage() {
     if (!credentialsContractor) return;
     const loginUser = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email || "";
     const portalUrl = typeof window !== "undefined" ? `${window.location.origin}/login` : "Portal Login";
-    const activePwd = agentNewPassword || currentAgentPassword || "(No password set)";
+    const activePwd = justResetPassword || (agentNewPassword.trim() ? agentNewPassword : "(Existing password set - reset below to issue a new one)");
     const text = `Foreign Agent Portal Credentials:\nAgency: ${credentialsContractor.contractor_name || credentialsContractor.name}\nURL: ${portalUrl}\nUsername: ${loginUser}\nPassword: ${activePwd}`;
     navigator.clipboard.writeText(text);
     setCopiedCredentials(true);
@@ -377,6 +365,12 @@ export default function ContractorsPage() {
   const handleSubmitEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingContractor) return;
+    if (!editFormData.email.trim()) {
+      toast.error("Portal Email Required", {
+        description: "User login email is strictly required to update the agency account.",
+      });
+      return;
+    }
     updateContractorMutation.mutate({
       name: editingContractor.name,
       values: {
@@ -385,7 +379,7 @@ export default function ContractorsPage() {
         contact_person: editFormData.contact_person,
         phone: editFormData.phone,
         whatsapp: editFormData.whatsapp,
-        email: editFormData.email,
+        email: editFormData.email.trim(),
         communication_manager: editFormData.communication_manager,
         notes: editFormData.notes,
       },
@@ -924,6 +918,20 @@ export default function ContractorsPage() {
               </div>
 
               <div className="space-y-1">
+                <Label htmlFor="edit_email" className="text-xs font-semibold">
+                  Portal Login Email / Account <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  id="edit_email"
+                  type="email"
+                  required
+                  placeholder="contact@agency.sa"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
                 <Label htmlFor="edit_comm_mgr" className="text-xs font-semibold">
                   Communication Manager
                 </Label>
@@ -997,7 +1005,7 @@ export default function ContractorsPage() {
                 </div>
               </div>
               <button
-                onClick={() => setCredentialsContractor(null)}
+                onClick={handleCloseCredentials}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 p-1"
               >
                 <X className="h-4 w-4" />
@@ -1019,41 +1027,62 @@ export default function ContractorsPage() {
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Current Password</span>
-                  {isLoadingAgentPassword ? (
-                    <span className="text-xs text-slate-400 flex items-center gap-1 font-sans">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Fetching password...
-                    </span>
-                  ) : currentAgentPassword ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-amber-800 dark:text-amber-300 font-bold text-xs select-all">
-                        {currentAgentPassword}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(currentAgentPassword);
-                          toast.success("Password copied!");
-                        }}
-                        className="text-[10px] font-sans text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer flex items-center gap-0.5"
-                      >
-                        <Copy className="h-2.5 w-2.5" /> Copy
-                      </button>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Password Status</span>
+                  {credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-sans">
+                          Password: Set (Securely Hashed)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-sans">
+                        For security, passwords cannot be retrieved once stored. Reset below to issue a new password.
+                      </p>
                     </div>
                   ) : (
-                    <span className="text-[11px] text-slate-400 font-sans italic">
-                      Not yet recorded — set a password below to store it
+                    <span className="text-xs text-rose-500 font-sans">
+                      No linked user account — edit agency to configure email.
                     </span>
                   )}
                 </div>
               </div>
+
+              {justResetPassword && (
+                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      New Password Issued Successfully
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(justResetPassword);
+                        toast.success("New password copied to clipboard!");
+                      }}
+                      className="h-6 text-[11px] px-2 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                    >
+                      <Copy className="h-3 w-3 mr-1" /> Copy Password
+                    </Button>
+                  </div>
+                  <div className="bg-white dark:bg-[#121215] p-2 rounded border border-emerald-200 dark:border-emerald-900/60 font-mono text-sm font-bold text-emerald-900 dark:text-emerald-200 select-all break-all">
+                    {justResetPassword}
+                  </div>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-sans">
+                    Please copy and share this password with the foreign agency representative now. Once you close this modal, plain text cannot be viewed again.
+                  </p>
+                </div>
+              )}
 
               {!canManageCredentials && (
                 <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/30 p-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold block">Read-Only Credentials View</span>
-                    Only Administrators and Managers can update portal login passwords. You can view or copy the current credentials below.
+                    Only Administrators and System Managers can update portal login passwords.
                   </div>
                 </div>
               )}
@@ -1064,13 +1093,19 @@ export default function ContractorsPage() {
                   e.preventDefault();
                   if (!canManageCredentials) {
                     toast.error("Permission Denied", {
-                      description: "Only Administrators and Managers can update agent portal passwords.",
+                      description: "Only Administrators and System Managers can update agent portal passwords.",
                     });
                     return;
                   }
                   const rawTarget = credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email;
                   const targetUser = (rawTarget || "").trim().toLowerCase();
-                  if (!targetUser || !agentNewPassword.trim() || resetAgentPasswordMutation.isPending) return;
+                  if (!targetUser || resetAgentPasswordMutation.isPending) return;
+                  if (agentNewPassword.trim().length < 8) {
+                    toast.error("Password Too Short", {
+                      description: "Password must be at least 8 characters long for security compliance.",
+                    });
+                    return;
+                  }
                   if (agentNewPassword !== confirmAgentPassword) {
                     toast.error("Passwords do not match", {
                       description: "Please ensure the password and confirm password fields match exactly.",
@@ -1079,7 +1114,7 @@ export default function ContractorsPage() {
                   }
                   resetAgentPasswordMutation.mutate({
                     userEmail: targetUser,
-                    newPassword: agentNewPassword,
+                    newPassword: agentNewPassword.trim(),
                   });
                 }}
                 className="space-y-3"
@@ -1106,7 +1141,7 @@ export default function ContractorsPage() {
                     type={showAgentPassword ? "text" : "password"}
                     autoComplete="new-password"
                     data-lpignore="true"
-                    placeholder="Enter or generate password"
+                    placeholder="Enter or generate password (min 8 chars)"
                     value={agentNewPassword}
                     onChange={(e) => setAgentNewPassword(e.target.value)}
                     disabled={!canManageCredentials || resetAgentPasswordMutation.isPending}
@@ -1148,11 +1183,13 @@ export default function ContractorsPage() {
                       Passwords do not match
                     </p>
                   )}
+                  {agentNewPassword && agentNewPassword.length > 0 && agentNewPassword.length < 8 && (
+                    <p className="text-[11px] text-amber-600 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      Password must be at least 8 characters (current: {agentNewPassword.length})
+                    </p>
+                  )}
                 </div>
-
-                <p className="text-[11px] text-slate-400">
-                  Password is visible above so you can easily review and share it with the foreign agency representative.
-                </p>
 
                 <div className="flex items-center gap-2 pt-1">
                   <Button
@@ -1160,13 +1197,13 @@ export default function ContractorsPage() {
                     size="sm"
                     disabled={
                       !canManageCredentials ||
-                      !agentNewPassword.trim() ||
-                      !confirmAgentPassword.trim() ||
+                      agentNewPassword.trim().length < 8 ||
+                      confirmAgentPassword.trim().length < 8 ||
                       agentNewPassword !== confirmAgentPassword ||
                       !(credentialsContractor.user || credentialsContractor.user_email || credentialsContractor.email) ||
                       resetAgentPasswordMutation.isPending
                     }
-                    title={!canManageCredentials ? "Only Administrators and Managers can update portal credentials" : undefined}
+                    title={!canManageCredentials ? "Only Administrators and System Managers can update portal credentials" : undefined}
                     className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs"
                   >
                     {resetAgentPasswordMutation.isPending ? (
@@ -1206,7 +1243,7 @@ export default function ContractorsPage() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setCredentialsContractor(null)}
+                  onClick={handleCloseCredentials}
                 >
                   Close
                 </Button>

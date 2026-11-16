@@ -142,6 +142,44 @@ input::placeholder, textarea::placeholder {
   box-shadow: 0 0 0 1px #059669 !important;
 }
 
+/* Date & Time inputs: ensure native calendar UI picker is prominent, clickable, and styled in light & dark modes */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.dark input[type="date"],
+.dark input[type="datetime-local"],
+.dark input[type="time"] {
+  color-scheme: dark !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  padding: 4px;
+  margin-right: -2px;
+  border-radius: 4px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: rgba(148, 163, 184, 0.22);
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+.dark input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
 /* Card and container dark mode utilities */
 .dark .bg-white {
   background-color: #121215 !important;

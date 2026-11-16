@@ -494,13 +494,11 @@ export default function PlacementDocumentCenterPage() {
         targetPlacement?.name
       );
 
-      const fileId = (uploadRes.id && uploadRes.id.startsWith("file_"))
-        ? uploadRes.id
-        : (uploadRes.file_url || uploadRes.file_id || uploadRes.id || "");
+      const fileId = uploadRes.id || uploadRes.file_id || uploadRes.file_url || "";
       if (!fileId) {
         throw new Error("Upload completed but no file reference was returned by the server.");
       }
-      const downloadUrl = uploadRes.file_url || getFileDownloadUrl(fileId);
+      const downloadUrl = getFileDownloadUrl(fileId);
       setPreviewFileUrl(downloadUrl);
       setContractPreviewUrl(downloadUrl);
 
@@ -882,13 +880,11 @@ export default function PlacementDocumentCenterPage() {
         targetPlacement?.name
       );
 
-      const fileId = (uploadRes.id && uploadRes.id.startsWith("file_"))
-        ? uploadRes.id
-        : (uploadRes.file_url || uploadRes.file_id || uploadRes.id || "");
+      const fileId = uploadRes.id || uploadRes.file_id || uploadRes.file_url || "";
       if (!fileId) {
         throw new Error("Upload completed but no file reference was returned by the server.");
       }
-      const downloadUrl = uploadRes.file_url || getFileDownloadUrl(fileId);
+      const downloadUrl = getFileDownloadUrl(fileId);
       setPreviewFileUrl(downloadUrl);
       setVisaPreviewUrl(downloadUrl);
 
@@ -1439,7 +1435,7 @@ export default function PlacementDocumentCenterPage() {
                       variant="compact"
                       accept=".pdf, .docx, .odt, image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.oasis.opendocument.text"
                       value={contractFile || contractPreviewUrl}
-                      fileName={contractFile?.name}
+                      fileName={contractFile?.name || (activePlacement?.contract_file ? "Employment Contract" : undefined)}
                       fileSize={contractFile?.size}
                       isLoading={isContractUploading}
                       loadingText="Uploading & extracting contract info..."
@@ -1798,7 +1794,7 @@ export default function PlacementDocumentCenterPage() {
                       id="visa-doc-dropzone"
                       variant="compact"
                       value={visaFile || visaPreviewUrl}
-                      fileName={visaFile?.name}
+                      fileName={visaFile?.name || (activePlacement?.visa_file ? "Kuwait eVisa Document" : undefined)}
                       fileSize={visaFile?.size}
                       isLoading={isVisaUploading}
                       loadingText="Processing and parsing Kuwait eVisa..."

@@ -244,7 +244,7 @@ export async function uploadFileV2(
         throw new Error(`Direct storage upload failed with status ${putRes.status}`);
       }
 
-      // Step 3: Finish upload using file_id (compatible with devving file_id and main key)
+      // Step 3: Finish upload using file_id (Go backend file-ID contract)
       const finishRes = await requestV2<any>(
         "/api/method/agency_tracking.api.file.write?op=finish_upload",
         {
@@ -252,21 +252,20 @@ export async function uploadFileV2(
           body: {
             op: "finish_upload",
             file_id: fileId,
-            key: fileId,
           },
         }
       );
       const finishPayload = (finishRes && "message" in finishRes && finishRes.message) ? finishRes.message : finishRes;
-      const backendId = finishPayload?.id || finishPayload?.file_id;
-      const isRealFileId = typeof backendId === "string" && backendId.startsWith("file_");
-      const effectiveId = isRealFileId ? backendId : (finishPayload?.file_url || "");
+      const backendId = String(finishPayload?.id || finishPayload?.file_id || fileId || "").trim();
+      const effectiveId = backendId || (finishPayload?.file_url ? String(finishPayload.file_url).trim() : "");
+      const fileName = finishPayload?.name || finishPayload?.file_name || file.name;
 
       return {
-        id: isRealFileId ? backendId : undefined,
-        file_id: isRealFileId ? backendId : undefined,
+        id: effectiveId,
+        file_id: effectiveId,
         file_url: effectiveId,
-        file_name: finishPayload?.name || finishPayload?.file_name || file.name,
-        name: finishPayload?.name || file.name,
+        file_name: fileName,
+        name: fileName,
         size: finishPayload?.size ?? file.size,
         content_type: finishPayload?.content_type || file.type,
         is_private: finishPayload?.is_private ?? isPrivate,
@@ -307,16 +306,16 @@ export async function uploadFileV2(
   });
 
   const payload = (rawRes && "message" in rawRes && rawRes.message) ? rawRes.message : rawRes;
-  const backendId = payload?.id || payload?.file_id;
-  const isRealFileId = typeof backendId === "string" && backendId.startsWith("file_");
-  const effectiveId = isRealFileId ? backendId : (payload?.file_url || "");
+  const backendId = String(payload?.id || payload?.file_id || "").trim();
+  const effectiveId = backendId || (payload?.file_url ? String(payload.file_url).trim() : "");
+  const fileName = payload?.name || payload?.file_name || file.name;
 
   return {
-    id: isRealFileId ? backendId : undefined,
-    file_id: isRealFileId ? backendId : undefined,
+    id: effectiveId,
+    file_id: effectiveId,
     file_url: effectiveId,
-    file_name: payload?.name || payload?.file_name || file.name,
-    name: payload?.name || file.name,
+    file_name: fileName,
+    name: fileName,
     size: payload?.size ?? file.size,
     content_type: payload?.content_type || file.type,
     is_private: payload?.is_private ?? isPrivate,

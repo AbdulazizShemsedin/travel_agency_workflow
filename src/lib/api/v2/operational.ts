@@ -66,13 +66,13 @@ export async function fetchOperationalWorkspaceDataV2(
     let placementsError: any = null;
 
     const [applicants, placements, clearanceSteps] = await Promise.all([
-      listApplicantsV2().catch((err) => {
+      listApplicantsV2(undefined, 100, "modified desc").catch((err) => {
         if (isNetworkError(err)) throw err;
         applicantsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listApplicantsV2 failed", err);
         return [] as V2ApplicantDetails[];
       }),
-      listPlacementsV2().catch((err) => {
+      listPlacementsV2(undefined, 100, "modified desc").catch((err) => {
         if (isNetworkError(err)) throw err;
         placementsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listPlacementsV2 failed", err);
@@ -593,6 +593,35 @@ export async function fetchOperationalWorkspaceDataV2(
 
       rows.push(row);
     }
+
+    // Sort rows so applicants recently changed (by applicant, placement, or clearance step) appear on top
+    rows.sort((a, b) => {
+      const getLatestTimestamp = (row: WorkspaceApplicantRow): number => {
+        let maxTime = 0;
+        const candidates = [
+          row.applicant?.modified,
+          row.plc?.modified,
+          row.lms?.modified,
+          row.injaz?.modified,
+          row.embassy?.modified,
+          row.ticket?.modified,
+          row.applicant?.creation,
+          row.plc?.creation,
+          row.lms?.creation,
+          row.injaz?.creation,
+          row.embassy?.creation,
+        ];
+        for (const c of candidates) {
+          if (c) {
+            const t = new Date(c).getTime();
+            if (!isNaN(t) && t > maxTime) maxTime = t;
+          }
+        }
+        return maxTime;
+      };
+
+      return getLatestTimestamp(b) - getLatestTimestamp(a);
+    });
 
     return rows;
   } catch (err) {

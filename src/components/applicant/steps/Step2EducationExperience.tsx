@@ -58,7 +58,7 @@ export function Step2EducationExperience({
   const [isUploadingVideo, setIsUploadingVideo] = React.useState(false);
   // The bucket is private, so a just-uploaded video previews from the browser's own copy.
   const [videoPreviewFile, setVideoPreviewFile] = React.useState<File | null>(null);
-  const videoUrl = watch("video_url" as any) || watch("intro_video" as any) || watch("video" as any);
+  const videoUrl = watch("experience_video" as any) || watch("video_url" as any) || watch("intro_video" as any) || watch("video" as any);
 
   const handleVideoFileSelect = async (file: File) => {
     try {
@@ -88,7 +88,6 @@ export function Step2EducationExperience({
         const resolvedId = finishRes?.experience_video || finishRes?.id || finishRes?.file_id || uploadMeta.file_id || uploadMeta.key;
         if (resolvedId) {
           setValue("experience_video" as any, resolvedId, { shouldDirty: true });
-          setValue("video_key" as any, resolvedId, { shouldDirty: true });
         }
         const playUrl = uploadMeta.upload_url.split("?")[0];
         setValue("video_url" as any, playUrl, { shouldDirty: true });
@@ -104,7 +103,6 @@ export function Step2EducationExperience({
         const finishRes = await finishVideoUploadV2(undefined, uploadMeta.file_id || uploadMeta.key);
         const resolvedId = finishRes?.id || finishRes?.file_id || finishRes?.message?.id || uploadMeta.file_id || uploadMeta.key;
         setValue("experience_video" as any, resolvedId, { shouldDirty: true });
-        setValue("video_key" as any, resolvedId, { shouldDirty: true });
         const playUrl = uploadMeta.upload_url.split("?")[0];
         setValue("video_url" as any, playUrl, { shouldDirty: true });
         setValue("intro_video" as any, playUrl, { shouldDirty: true });

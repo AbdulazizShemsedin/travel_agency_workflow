@@ -599,7 +599,7 @@ export function ApplicantTable() {
       if (p.applicant) byApplicant.set(String(p.applicant).toLowerCase().trim(), p);
       if (p.name) byName.set(String(p.name).toLowerCase().trim(), p);
     }
-    return applicants.map((applicant) => {
+    const mapped = applicants.map((applicant) => {
       let plc =
         byApplicant.get(String(applicant.name || "").toLowerCase().trim()) ||
         byApplicant.get(String((applicant as any).active_placement || "").toLowerCase().trim()) ||
@@ -674,8 +674,29 @@ export function ApplicantTable() {
       // Store the active placement name so we can look up clearance steps per row
       copy._activePlacementName = plc.name;
       return copy;
-      });
-    }, [applicants, placementsData, clearedPlacementNames]);
+    });
+
+    // Bring applicants recently changed on the top of the table
+    return mapped.sort((a, b) => {
+      const getTimestamp = (app: any): number => {
+        let maxTime = 0;
+        const candidates = [
+          app.modified,
+          (app as any).applicant_modified,
+          (app as any).placement_modified,
+          app.creation,
+        ];
+        for (const c of candidates) {
+          if (c) {
+            const t = new Date(c).getTime();
+            if (!isNaN(t) && t > maxTime) maxTime = t;
+          }
+        }
+        return maxTime;
+      };
+      return getTimestamp(b) - getTimestamp(a);
+    });
+  }, [applicants, placementsData, clearedPlacementNames]);
 
   // Dynamically discover all destination countries present across applicants
   const availableCountries = React.useMemo(() => {

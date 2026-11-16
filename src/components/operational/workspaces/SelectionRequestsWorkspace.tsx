@@ -90,14 +90,25 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
   });
 
   const requests = React.useMemo<V2SelectionRequestItem[]>(() => {
-    if (Array.isArray(rawRequests)) return rawRequests;
-    if (rawRequests && typeof rawRequests === "object") {
-      if (Array.isArray((rawRequests as any).data)) return (rawRequests as any).data;
-      if (Array.isArray((rawRequests as any).message)) return (rawRequests as any).message;
-      if (Array.isArray((rawRequests as any).rows)) return (rawRequests as any).rows;
-      if (Array.isArray((rawRequests as any).requests)) return (rawRequests as any).requests;
+    let list: V2SelectionRequestItem[] = [];
+    if (Array.isArray(rawRequests)) list = rawRequests;
+    else if (rawRequests && typeof rawRequests === "object") {
+      if (Array.isArray((rawRequests as any).data)) list = (rawRequests as any).data;
+      else if (Array.isArray((rawRequests as any).message)) list = (rawRequests as any).message;
+      else if (Array.isArray((rawRequests as any).rows)) list = (rawRequests as any).rows;
+      else if (Array.isArray((rawRequests as any).requests)) list = (rawRequests as any).requests;
     }
-    return [];
+    return [...list].sort((a, b) => {
+      const tA = Math.max(
+        a.modified ? new Date(a.modified).getTime() || 0 : 0,
+        a.creation ? new Date(a.creation).getTime() || 0 : 0
+      );
+      const tB = Math.max(
+        b.modified ? new Date(b.modified).getTime() || 0 : 0,
+        b.creation ? new Date(b.creation).getTime() || 0 : 0
+      );
+      return tB - tA;
+    });
   }, [rawRequests]);
 
   // 2. Fetch Unavailable Applicants
@@ -108,7 +119,7 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
     refetch: refetchUnavailable,
   } = useQuery<V2ApplicantDetails[]>({
     queryKey: ["v2_unavailable_applicants_list"],
-    queryFn: () => listApplicantsV2({ unavailable: 1 } as any),
+    queryFn: () => listApplicantsV2({ unavailable: 1 } as any, 100, "modified desc"),
     enabled: subTab === "unavailable",
     staleTime: 0,
     refetchOnMount: "always",
@@ -116,12 +127,23 @@ export function SelectionRequestsWorkspace({ onRefreshParent }: SelectionRequest
   });
 
   const unavailableApplicants = React.useMemo<V2ApplicantDetails[]>(() => {
-    if (Array.isArray(rawUnavailable)) return rawUnavailable;
-    if (rawUnavailable && typeof rawUnavailable === "object") {
-      if (Array.isArray((rawUnavailable as any).data)) return (rawUnavailable as any).data;
-      if (Array.isArray((rawUnavailable as any).message)) return (rawUnavailable as any).message;
+    let list: V2ApplicantDetails[] = [];
+    if (Array.isArray(rawUnavailable)) list = rawUnavailable;
+    else if (rawUnavailable && typeof rawUnavailable === "object") {
+      if (Array.isArray((rawUnavailable as any).data)) list = (rawUnavailable as any).data;
+      else if (Array.isArray((rawUnavailable as any).message)) list = (rawUnavailable as any).message;
     }
-    return [];
+    return [...list].sort((a, b) => {
+      const tA = Math.max(
+        a.modified ? new Date(a.modified).getTime() || 0 : 0,
+        a.creation ? new Date(a.creation).getTime() || 0 : 0
+      );
+      const tB = Math.max(
+        b.modified ? new Date(b.modified).getTime() || 0 : 0,
+        b.creation ? new Date(b.creation).getTime() || 0 : 0
+      );
+      return tB - tA;
+    });
   }, [rawUnavailable]);
 
   // Actions

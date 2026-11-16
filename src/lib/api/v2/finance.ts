@@ -607,7 +607,6 @@ export async function uploadBatchPaymentProofV2(
       body: {
         batch_name: batchName,
         file_id: cleanId,
-        file_url: cleanId,
       },
     }
   );
@@ -926,7 +925,6 @@ export async function uploadBankStatementV2(
       method: "POST",
       body: {
         file_id: cleanId,
-        file_url: cleanId,
         ...(currency ? { currency } : {}),
       },
     }

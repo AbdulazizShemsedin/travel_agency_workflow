@@ -455,7 +455,7 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     result.photo_passport = photo;
   }
 
-  // 5.1 Candidate Video / Interview Video (Go backend contract: experience_video / video_key)
+  // 5.1 Candidate Video / Interview Video (Go backend contract: experience_video)
   const videoVal =
     result.experience_video ||
     result.video_key ||
@@ -466,9 +466,9 @@ export function normalizeApplicantFields<T extends Record<string, any>>(payload:
     // Ensure temporary storage URLs or blobs are never saved back to database file fields
     if (!videoVal.startsWith("http://") && !videoVal.startsWith("https://") && !videoVal.startsWith("blob:")) {
       result.experience_video = videoVal;
-      result.video_key = videoVal;
     }
   }
+  delete result.video_key;
 
   // 6. Passport Expiry Date
   const expiry = result.passport_expiry_date || result.passport_expiry;
@@ -700,7 +700,7 @@ export async function listApplicantsV2(
 export async function listApplicantsV2(
   filters?: Record<string, any> | any[] | string,
   limitPageLength: number = 100,
-  orderBy: string = "creation desc",
+  orderBy: string = "modified desc",
   limitStart: number = 0,
   withTotal: number = 0
 ): Promise<V2ApplicantDetails[] | { data: V2ApplicantDetails[]; total_count: number }> {
@@ -1426,7 +1426,6 @@ export async function finishVideoUploadV2(
   const body: Record<string, any> = {};
   if (fileIdOrKey) {
     body.file_id = fileIdOrKey;
-    body.key = fileIdOrKey;
   }
   if (applicantName) {
     body.applicant_name = applicantName;

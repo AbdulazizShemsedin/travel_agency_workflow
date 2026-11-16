@@ -205,6 +205,12 @@ export function ApplicantRegistrationForm({
     passport: false,
     video: false,
   });
+  const [mediaFileNames, setMediaFileNames] = React.useState<Record<MediaTabType, string>>({
+    photo: "",
+    full_size: "",
+    passport: "",
+    video: "",
+  });
   // The bucket is private, so a just-uploaded video previews from the browser's own copy.
   const [videoPreviewFile, setVideoPreviewFile] = React.useState<File | null>(null);
 
@@ -894,6 +900,7 @@ export function ApplicantRegistrationForm({
   // Main Passport Auto-Scan Handler
   const handlePassportAutoScan = async (file: File) => {
     if (!file) return;
+    setMediaFileNames((prev) => ({ ...prev, passport: file.name }));
     isOcrCancelledRef.current = false;
     setIsScanningOCR(true);
     setUploadingTabs((prev) => ({ ...prev, passport: true }));
@@ -1084,13 +1091,13 @@ export function ApplicantRegistrationForm({
       getValues("video_key" as any);
     if (videoFileId) {
       rawPayload.experience_video = videoFileId;
-      rawPayload.video_key = videoFileId;
     }
 
     return normalizeApplicantFields(stripLockedIdentityFields(rawPayload, lockedIdentityFields));
   };
 
   const handleVideoUpload = async (file: File) => {
+    setMediaFileNames((prev) => ({ ...prev, video: file.name }));
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!["mp4", "webm", "mov"].includes(ext || "")) {
       toast.error("Invalid Video Format", {
@@ -1120,7 +1127,6 @@ export function ApplicantRegistrationForm({
         const resolvedId = finishRes?.experience_video || finishRes?.id || finishRes?.file_id || uploadMeta.file_id || uploadMeta.key;
         if (resolvedId) {
           setValue("experience_video" as any, resolvedId, { shouldDirty: true });
-          setValue("video_key" as any, resolvedId, { shouldDirty: true });
         }
         const playUrl = uploadMeta.upload_url.split("?")[0];
         setValue("video_url", playUrl, { shouldDirty: true });
@@ -1136,7 +1142,6 @@ export function ApplicantRegistrationForm({
         const finishRes = await finishVideoUploadV2(undefined, uploadMeta.file_id || uploadMeta.key);
         const resolvedId = finishRes?.id || finishRes?.file_id || finishRes?.message?.id || uploadMeta.file_id || uploadMeta.key;
         setValue("experience_video" as any, resolvedId, { shouldDirty: true });
-        setValue("video_key" as any, resolvedId, { shouldDirty: true });
         const playUrl = uploadMeta.upload_url.split("?")[0];
         setValue("video_url", playUrl, { shouldDirty: true });
         setValue("intro_video" as any, playUrl, { shouldDirty: true });
@@ -1774,12 +1779,14 @@ export function ApplicantRegistrationForm({
               id="registration-passport-scan-dropzone"
               variant="passport"
               value={watch("passport_scan")}
+              fileName={mediaFileNames.passport || undefined}
               isLoading={isScanningOCR || uploadingTabs.passport}
               loadingText="Scanning passport & running OCR extraction..."
               onCancel={handleCancelPassportScan}
               onFileSelect={handlePassportAutoScan}
               onRemove={() => {
                 setValue("passport_scan", "");
+                setMediaFileNames((prev) => ({ ...prev, passport: "" }));
                 setOcrSuccessData(null);
                 setPassportConflict(null);
                 toast.info("Passport scan cleared");
@@ -1992,6 +1999,7 @@ export function ApplicantRegistrationForm({
                 : errors.video_url?.message
             }
             value={activeMediaUrl}
+            fileName={mediaFileNames[activeMediaTab] || undefined}
             isLoading={
               activeMediaTab === "passport"
                 ? Boolean(uploadingTabs.passport || isScanningOCR)
@@ -2008,6 +2016,7 @@ export function ApplicantRegistrationForm({
             }...`}
             onFileSelect={async (file) => {
               const targetTab = activeMediaTab;
+              setMediaFileNames((prev) => ({ ...prev, [targetTab]: file.name }));
               if (targetTab === "passport") {
                 handlePassportAutoScan(file);
               } else if (targetTab === "video") {
@@ -2042,6 +2051,7 @@ export function ApplicantRegistrationForm({
               }
             }}
             onRemove={() => {
+              setMediaFileNames((prev) => ({ ...prev, [activeMediaTab]: "" }));
               if (activeMediaTab === "photo") {
                 setValue("photograph", "");
                 setValue("photo_passport", "");

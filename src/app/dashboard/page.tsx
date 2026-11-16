@@ -113,9 +113,10 @@ export default function DashboardPage() {
 
   const canAccessClearances = can("manageClearances") || can("manageTicketing");
 
-  const { data: rawApplicants = [], isLoading: isApplicantsLoading } = useQuery({
-    queryKey: ["applicants_v2_dashboard"],
-    queryFn: () => listApplicantsV2(),
+  const { data: applicantsResponse, isLoading: isApplicantsLoading } = useQuery({
+    queryKey: ["applicants", "dashboard"],
+    queryFn: () => listApplicantsV2(undefined, 100, "modified desc", 0, 1),
+    refetchOnWindowFocus: true,
   });
 
   const { data: placementsData = [], isLoading: isPlacementsLoading } = useQuery({
@@ -134,7 +135,12 @@ export default function DashboardPage() {
 
   const isLoading = isApplicantsLoading || isPlacementsLoading;
 
-  const applicants = rawApplicants as V2ApplicantDetails[];
+  const applicants = React.useMemo<V2ApplicantDetails[]>(() => {
+    if (!applicantsResponse) return [];
+    if (Array.isArray(applicantsResponse)) return applicantsResponse as V2ApplicantDetails[];
+    if (Array.isArray((applicantsResponse as any).data)) return (applicantsResponse as any).data;
+    return [];
+  }, [applicantsResponse]);
 
   // Live backend truth: determine which placements have finished all clearance steps
   const clearedPlacementNames = React.useMemo(() => {
@@ -186,7 +192,12 @@ export default function DashboardPage() {
   }, [applicants, placementsData, clearedPlacementNames]);
 
   // Calculate dynamic stats matching authoritative live database state
-  const totalCount = applicantRows.length;
+  const totalCount = React.useMemo(() => {
+    if (typeof (applicantsResponse as any)?.total_count === "number") {
+      return (applicantsResponse as any).total_count;
+    }
+    return applicantRows.length;
+  }, [applicantsResponse, applicantRows.length]);
   const draftCount = applicantRows.filter(
     (a) => (a.status || a.applicant_state) === "Draft"
   ).length;
