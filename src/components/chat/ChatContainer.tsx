@@ -1895,7 +1895,7 @@ export function ChatContainer() {
                             "p-2.5 lg:p-3 rounded-2xl text-xs space-y-1.5 leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] lg:shadow-2xs",
                             isOutgoing
                               ? "bg-[#d9fdd3] dark:bg-[#005c4b] lg:bg-emerald-900 text-[#111b21] dark:text-[#e9edef] lg:text-white rounded-tr-xs"
-                              : "bg-white dark:bg-[#202c33] lg:bg-slate-100 lg:dark:bg-[#181822] text-[#111b21] dark:text-[#e9edef] lg:text-zinc-100 rounded-tl-xs border-0 lg:border lg:border-slate-200/80 lg:dark:border-[#262634]"
+                              : "bg-white dark:bg-[#202c33] lg:bg-slate-100 lg:dark:bg-[#181822] text-[#111b21] dark:text-[#e9edef] lg:text-slate-900 lg:dark:text-zinc-100 rounded-tl-xs border-0 lg:border lg:border-slate-200/80 lg:dark:border-[#262634]"
                           )}
                         >
                           {msg.message && (
