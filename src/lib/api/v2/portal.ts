@@ -454,3 +454,20 @@ export async function listMyMuayenaWorkersV2(
 }
 
 
+
+export interface V2ChatContact {
+  user: string;
+  full_name: string;
+}
+
+/**
+ * The staff an agency may start a conversation with: acting Communication Managers (the chat rule
+ * refuses anyone else). Agencies cannot read the employee roster.
+ * Backend: portal.read?op=list_chat_contacts
+ */
+export async function listChatContactsV2(): Promise<V2ChatContact[]> {
+  const result = await requestV2<V2ChatContact[]>("/api/method/agency_tracking.api.portal.read?op=list_chat_contacts", {
+    method: "POST",
+  });
+  return Array.isArray(result) ? result : [];
+}

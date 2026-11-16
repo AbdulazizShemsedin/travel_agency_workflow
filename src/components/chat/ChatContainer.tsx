@@ -66,7 +66,7 @@ import { listEmployeeRosterV2 } from "@/lib/api/v2/employees";
 import { listContractorsV2 } from "@/lib/api/v2/contractors";
 import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
-import { listPortalCandidatesV2 } from "@/lib/api/v2/portal";
+import { listChatContactsV2, listPortalCandidatesV2 } from "@/lib/api/v2/portal";
 import { requestV2 } from "@/lib/api/v2/client";
 import { shortRef, stripRecordIds } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
@@ -262,70 +262,25 @@ export function ChatContainer() {
   const { data: internalEmployees = [] } = useQuery({
     queryKey: ["v2_employees_chat_dropdown"],
     queryFn: listEmployeeRosterV2,
+    enabled: !isForeignAgency, // staff only; agencies get their contacts from list_chat_contacts
     staleTime: 60000,
   });
 
-  // Foreign agents can ONLY communicate internally with users holding Admin or Communication Manager roles.
-  // Any user with roles other than these must NOT be listed.
-  const allowedStaffForAgency = React.useMemo(() => {
-    const authorizedRoles = new Set([
-      "admin",
-      "administrator",
-      "system manager",
-      "communication manager",
-      "communications manager",
-    ]);
-    const systemTags = new Set(["desk user", "all"]);
-
-    const filtered = internalEmployees.filter((emp: any) => {
-      // Must be an active / enabled account
-      if (emp.enabled === 0 || emp.enabled === false) return false;
-
-      const email = (emp.email || "").toLowerCase().trim();
-      const name = (emp.name || "").toLowerCase().trim();
-
-      // Exclude self
-      if (email === currentEmail || name === currentEmail) return false;
-
-      // Administrator is always authorized headquarters personnel
-      if (email === "administrator" || name === "administrator") return true;
-
-      const rawRoles: unknown[] = Array.isArray(emp.roles) ? emp.roles : [];
-      const normRoles = rawRoles
-        .map((r: any) => (typeof r === "string" ? r : r?.role || "").toLowerCase().trim())
-        .filter(Boolean);
-
-      // Explicitly reject if employee has foreign agency role
-      const isForeign = normRoles.some((r) => r.includes("foreign agency") || r.includes("foreign agent"));
-      if (isForeign) return false;
-
-      // Filter out general system tags ("desk user", "all")
-      const functionalRoles = normRoles.filter((r) => !systemTags.has(r));
-      if (functionalRoles.length === 0) return false;
-
-      // Must have at least one authorized role (Admin, System Manager, Communication Manager)
-      const hasAuthorizedRole = functionalRoles.some((r) => authorizedRoles.has(r));
-      if (!hasAuthorizedRole) return false;
-
-      // Any user with roles other than these must NOT be listed
-      const hasUnauthorizedRole = functionalRoles.some((r) => !authorizedRoles.has(r));
-      if (hasUnauthorizedRole) return false;
-
-      return true;
-    });
-
-    if (filtered.length === 0) {
-      return [
-        {
-          name: "Administrator",
-          email: "Administrator",
-          full_name: "Agency Headquarters Administrator",
-          roles: ["Admin"],
-        },
-      ];
-    }
-    return filtered;
-  }, [internalEmployees, currentEmail]);
+  // The staff an agency may message: acting Communication Managers, from the backend (the chat rule
+  // refuses anyone else, and agencies cannot read the employee roster).
+  const { data: agencyContacts = [] } = useQuery({
+    queryKey: ["v2_agency_chat_contacts"],
+    queryFn: listChatContactsV2,
+    enabled: isForeignAgency,
+    staleTime: 60000,
+  });
+  const allowedStaffForAgency = React.useMemo(
+    () =>
+      agencyContacts
+        .filter((c) => c.user.toLowerCase() !== currentEmail)
+        .map((c) => ({ name: c.user, email: c.user, full_name: c.full_name, roles: ["Communication Manager"] })),
+    [agencyContacts, currentEmail]
+  );
 
   const { data: availableContractors = [], isLoading: isContractorsLoading } = useQuery({
     queryKey: ["v2_contractors_chat_dropdown"],
@@ -2284,7 +2239,7 @@ export function ChatContainer() {
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 dark:text-zinc-400">
               {isForeignAgency
-                ? "Communicate directly with Agency Administrator or Communication Manager."
+                ? "Start a conversation with one of the agency's Communication Managers."
                 : canCommunicateWithForeignAgents
                 ? "Initiate a channel with a Foreign Agency partner or internal agency colleague."
                 : "Coordinate directly with an internal agency colleague."}
@@ -2297,7 +2252,7 @@ export function ChatContainer() {
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="font-semibold text-slate-700 dark:text-zinc-300 block mb-1">
-                    Select Headquarters Personnel (Admin or Communication Manager):
+                    Select a Communication Manager:
                   </label>
                   <select
                     value={newThreadRecipient}
@@ -2305,6 +2260,9 @@ export function ChatContainer() {
                     className="w-full h-9 px-2.5 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a35] bg-white dark:bg-[#15151c] text-slate-800 dark:text-zinc-200 font-medium"
                   >
                     <option value="">-- Select Headquarters Contact --</option>
+                    {allowedStaffForAgency.length === 0 && (
+                      <option value="" disabled>No Communication Manager is available right now</option>
+                    )}
                     {allowedStaffForAgency.map((emp: any) => {
                       const roleList = (emp.roles || []).filter((r: string) => r !== "Desk User").join(", ");
                       return (
