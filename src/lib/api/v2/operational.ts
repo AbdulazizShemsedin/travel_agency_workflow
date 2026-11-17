@@ -15,8 +15,8 @@
 
 import { ApiV2Error } from "./client";
 import { toClientCocStatus } from "@/lib/validations/applicant.schema";
-import { listApplicantsV2, V2ApplicantDetails } from "./applicants";
-import { listPlacementsV2, V2PlacementRecord } from "./placements";
+import { getApplicantV2, listApplicantsV2, V2ApplicantDetails } from "./applicants";
+import { listPlacementsForApplicantV2, listPlacementsV2, V2PlacementRecord } from "./placements";
 import { listMyClearanceStepsV2, V2ClearanceStepItem } from "./clearance";
 import { resolveEffectiveMedical } from "./medical";
 import type { WorkspaceApplicantRow, OperationalStreamType } from "@/types/workspace";
@@ -42,9 +42,16 @@ export function resolveApplicantStage(app: any, plc: any): string {
   return ownStatus;
 }
 
+/**
+ * Builds the workspace rows. With `onlyApplicant`, it loads just that applicant and its
+ * placements instead of the 100 most recently changed, so a page for an older applicant still
+ * finds its row. If that applicant can't be fetched by name (e.g. the id is a passport number),
+ * it falls back to the recent lists.
+ */
 export async function fetchOperationalWorkspaceDataV2(
   streamType: OperationalStreamType,
-  corridorFilter: string = "All"
+  corridorFilter: string = "All",
+  onlyApplicant?: string
 ): Promise<WorkspaceApplicantRow[]> {
   try {
     const isNetworkError = (err: any) => {
@@ -65,14 +72,30 @@ export async function fetchOperationalWorkspaceDataV2(
     let applicantsError: any = null;
     let placementsError: any = null;
 
+    let single: V2ApplicantDetails | null = null;
+    const singleId = String(onlyApplicant || "").trim();
+    if (singleId) {
+      single = await getApplicantV2(singleId).catch((err) => {
+        if (isNetworkError(err)) throw err;
+        return null;
+      });
+      if (!single?.name) single = null;
+    }
+
     const [applicants, placements, clearanceSteps] = await Promise.all([
-      listApplicantsV2(undefined, 100, "modified desc").catch((err) => {
+      (single
+        ? Promise.resolve([single])
+        : listApplicantsV2(undefined, 100, "modified desc")
+      ).catch((err) => {
         if (isNetworkError(err)) throw err;
         applicantsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listApplicantsV2 failed", err);
         return [] as V2ApplicantDetails[];
       }),
-      listPlacementsV2(undefined, 100, "modified desc").catch((err) => {
+      (single
+        ? listPlacementsForApplicantV2(single.name)
+        : listPlacementsV2(undefined, 100, "modified desc")
+      ).catch((err) => {
         if (isNetworkError(err)) throw err;
         placementsError = err;
         console.warn("fetchOperationalWorkspaceDataV2: listPlacementsV2 failed", err);
