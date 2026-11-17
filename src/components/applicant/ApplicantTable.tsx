@@ -289,7 +289,10 @@ export function ApplicantTable() {
   // Join active-placement derived fields onto each applicant row.
   const { data: placementsData = [] } = useQuery({
     queryKey: ["applicants-placement-join"],
-    queryFn: () => listPlacementsV2(),
+    // The badge shows the case's status (a worker's own status stays "CV Generated" for the whole
+    // case), so load as many cases as one /v1 page allows: with the default 100, an older case
+    // was missing and a departed worker showed "CV Generated".
+    queryFn: () => listPlacementsV2(undefined, 500),
     enabled: Boolean(authUser),
     staleTime: 30000,
     retry: false,

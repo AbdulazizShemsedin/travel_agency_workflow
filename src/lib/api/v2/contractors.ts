@@ -131,6 +131,9 @@ export async function createContractorV2(
         user_email: payload.user_email || payload.email,
         user_first_name: payload.user_first_name || payload.contact_person,
         ...(payload.communication_manager ? { communication_manager: payload.communication_manager } : {}),
+        ...(payload.notes?.trim() ? { notes: payload.notes.trim() } : {}),
+        ...(payload.phone?.trim() ? { phone: payload.phone.trim() } : {}),
+        ...(payload.whatsapp?.trim() ? { whatsapp: payload.whatsapp.trim() } : {}),
       },
     }
   );
@@ -170,7 +173,9 @@ export async function updateContractorV2(
         communication_manager: payload.communication_manager,
         phone: payload.phone,
         whatsapp: payload.whatsapp,
-        // email and notes: the Contractor record has no such fields; the backend never saved them.
+        // Staff notes (blank clears them). The e-mail is the agency's login and is not sent: the
+        // backend refuses a change, and the edit form shows it read-only.
+        ...(payload.notes !== undefined ? { notes: payload.notes ?? "" } : {}),
         ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
         ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),
       },

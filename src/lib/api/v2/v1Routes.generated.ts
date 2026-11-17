@@ -204,6 +204,7 @@ export const V1_ROUTES: Record<string, V1Route> = {
       "communication_manager",
       "contractor_name",
       "country",
+      "notes",
       "phone",
       "user_email",
       "user_first_name",
@@ -354,6 +355,7 @@ export const V1_ROUTES: Record<string, V1Route> = {
     "p": "/v1/exports/commissions.xlsx",
     "q": {
       "contractor": "contractor",
+      "destination_country": "destination_country",
       "from_date": "from_date",
       "period": "period",
       "to_date": "to_date"
@@ -839,6 +841,10 @@ export const V1_ROUTES: Record<string, V1Route> = {
     "path": {
       "name": "batch_name"
     }
+  },
+  "list_chat_contacts": {
+    "m": "GET",
+    "p": "/v1/portal/chat-contacts"
   },
   "list_clearance_grid": {
     "m": "GET",
@@ -2075,6 +2081,8 @@ export const V1_ROUTES: Record<string, V1Route> = {
       "contact_person",
       "contractor_name",
       "country",
+      "email",
+      "notes",
       "phone",
       "whatsapp"
     ]
@@ -2187,6 +2195,18 @@ export const V1_ROUTES: Record<string, V1Route> = {
       "visa_number",
       "visa_reference_number",
       "visa_type"
+    ]
+  },
+  "update_storage_settings": {
+    "m": "PUT",
+    "p": "/v1/settings/storage",
+    "body": "json",
+    "props": [
+      "r2_access_key_id",
+      "r2_account_id",
+      "r2_bucket_name",
+      "r2_public_url_base",
+      "r2_secret_access_key"
     ]
   },
   "upload_bank_statement": {

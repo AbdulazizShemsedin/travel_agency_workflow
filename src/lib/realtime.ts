@@ -14,7 +14,8 @@ import { requestV2 } from "@/lib/api/v2/client";
  */
 
 export interface RealtimeEvent {
-  type?: "message" | "message_deleted" | "read" | string;
+  /** "reconnected": pushes may have been missed while the socket was down; refetch everything. */
+  type?: "message" | "message_deleted" | "read" | "reconnected" | string;
   thread?: string;
   [key: string]: unknown;
 }
@@ -62,7 +63,20 @@ async function start(): Promise<void> {
       return next.enabled && next.token ? next.token : "";
     },
   });
-  c.on("connected", () => setConnected(true));
+  let wasConnected = false;
+  c.on("connected", () => {
+    setConnected(true);
+    if (wasConnected) {
+      listeners.forEach((l) => {
+        try {
+          l({ type: "reconnected" });
+        } catch (err) {
+          console.warn("realtime listener failed", err);
+        }
+      });
+    }
+    wasConnected = true;
+  });
   c.on("disconnected", () => setConnected(false));
   c.on("connecting", () => setConnected(false));
   // The user's channel is a server-side subscription, so its messages arrive on the client.

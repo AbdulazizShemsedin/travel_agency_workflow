@@ -348,6 +348,9 @@ export function ChatContainer() {
         queryClient.invalidateQueries({ queryKey: ["chat_threads_oversight"] });
         if (event.thread) {
           queryClient.invalidateQueries({ queryKey: ["chat_messages", event.thread] });
+        } else {
+          // e.g. "reconnected": pushes may have been missed, so reload every open thread
+          queryClient.invalidateQueries({ queryKey: ["chat_messages"] });
         }
       }),
     [queryClient]
