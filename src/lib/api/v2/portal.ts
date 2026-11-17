@@ -214,7 +214,6 @@ export async function selectCandidateDirectlyV2(
   const body: Record<string, any> = {
     applicant_name: applicantName,
     contractor_name: contractorName.trim(),
-    contractor: contractorName.trim(),
   };
   if (replacementFor && typeof replacementFor === "string" && replacementFor.trim()) {
     const trimmed = replacementFor.trim();
@@ -258,7 +257,6 @@ export async function listMyWakalaRequestsV2(contractorName?: string): Promise<V
   const body: Record<string, any> = {};
   if (contractorName) {
     body.contractor_name = contractorName;
-    body.contractor = contractorName;
   }
   const result = await requestV2<V2WakalaRequestItem[] | { requests?: V2WakalaRequestItem[] }>(
     "/api/method/agency_tracking.api.portal.read?op=list_my_wakala_requests",
@@ -285,6 +283,7 @@ export function getCandidatePhotoUrl(
   kind: "photograph" | "photo_full_body" = "photograph"
 ): string {
   if (!applicantName) return "";
+  // The proxy forwards this to /v1/portal/candidates/<name>/photo when the backend serves /v1.
   return `/api/method/agency_tracking.api.portal.read?op=get_candidate_photo&applicant_name=${encodeURIComponent(
     applicantName
   )}&kind=${kind}`;
@@ -339,7 +338,6 @@ export async function listMyComplaintsV2(status?: string, contractorName?: strin
   if (status) body.status = status;
   if (contractorName) {
     body.contractor_name = contractorName;
-    body.contractor = contractorName;
   }
   const result = await requestV2<any>(
     "/api/method/agency_tracking.api.portal.read?op=list_my_complaints",

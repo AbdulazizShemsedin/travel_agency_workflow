@@ -1068,7 +1068,6 @@ export async function restoreApplicantProcessV2(
       body: {
         applicant_name: applicantName,
         target_status: "Registered",
-        reason: reason.trim(),
         override_reason: reason.trim(),
       },
     }

@@ -165,14 +165,12 @@ export async function updateContractorV2(
       body: {
         name,
         contractor_name: payload.contractor_name || payload.company_name,
-        company_name: payload.company_name,
         country: payload.country,
         contact_person: payload.contact_person,
         communication_manager: payload.communication_manager,
         phone: payload.phone,
         whatsapp: payload.whatsapp,
-        email: payload.email,
-        notes: payload.notes,
+        // email and notes: the Contractor record has no such fields; the backend never saved them.
         ...(payload.batch_mode !== undefined ? { batch_mode: payload.batch_mode } : {}),
         ...(payload.batch_threshold !== undefined ? { batch_threshold: payload.batch_threshold } : {}),
       },
@@ -190,7 +188,6 @@ export async function getContractorV2(name: string): Promise<V2ContractorRecord 
     {
       method: "POST",
       body: {
-        contractor_name: name,
         name,
       },
     }

@@ -13,7 +13,7 @@
  * - POST /api/method/agency_tracking.api.placement.write?op=record_reschedule
  */
 
-import { requestV2, ApiV2Error } from "./client";
+import { requestV2, ApiV2Error, isV1Unavailable } from "./client";
 import { cleanFileId } from "./documents";
 
 export type V2PlacementStatus =
@@ -123,11 +123,12 @@ export async function listPlacementsV2(
     cleanFilters = undefined;
   }
 
-  const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
-  const result = await requestV2<any>(
-    "/api/method/agency_tracking.api.placement.read?op=list_placements",
-    {
+  // A backend without /v1: the old list_placements with a field-map filter.
+  if (isV1Unavailable()) {
+    const filtersParam = typeof cleanFilters === "object" ? JSON.stringify(cleanFilters) : cleanFilters;
+    const old = await requestV2<any>("/api/method/agency_tracking.api.placement.read?op=list_placements", {
       method: "POST",
+      legacy: true,
       body: {
         ...(filtersParam ? { filters: filtersParam } : {}),
         limit_page_length: limitPageLength,
@@ -135,26 +136,60 @@ export async function listPlacementsV2(
         ...(withTotal ? { with_total: withTotal } : {}),
         order_by: orderBy,
       },
-    }
-  );
-
-  let list: V2PlacementRecord[] = [];
-  if (Array.isArray(result)) {
-    list = result;
-  } else if (result && Array.isArray((result as any).placements)) {
-    list = (result as any).placements;
-  } else if (result && Array.isArray((result as any).data)) {
-    list = (result as any).data;
-  } else if (result && Array.isArray((result as any).items)) {
-    list = (result as any).items;
-  } else if (result && Array.isArray((result as any).message)) {
-    list = (result as any).message;
+    });
+    const rows: V2PlacementRecord[] = Array.isArray(old) ? old : Array.isArray(old?.data) ? old.data : Array.isArray(old?.placements) ? old.placements : [];
+    return withTotal ? { data: rows, total_count: Number(old?.total_count ?? rows.length) } : rows;
   }
+
+  // /v1/placements takes named filters instead of a `filters` expression.
+  const qs = new URLSearchParams();
+  const f: Record<string, any> =
+    cleanFilters && typeof cleanFilters === "object" && !Array.isArray(cleanFilters)
+      ? cleanFilters
+      : typeof cleanFilters === "string" && cleanFilters.trim().startsWith("{")
+      ? JSON.parse(cleanFilters)
+      : {};
+  if (cleanFilters && (Array.isArray(cleanFilters) || (typeof cleanFilters === "string" && !cleanFilters.trim().startsWith("{")))) {
+    // A list of conditions has no /v1 form; refuse rather than answer every placement.
+    throw new ApiV2Error("listPlacementsV2: pass filters as { field: value }", 400, "ValidationError");
+  }
+  for (const [key, raw] of Object.entries(f)) {
+    // ["in", [a, b]] and ["=", a] reduce to their values; plain values pass as they are.
+    const value = Array.isArray(raw) && typeof raw[0] === "string" && ["in", "="].includes(raw[0]) ? raw[1] : raw;
+    const text = Array.isArray(value) ? value.map(String).join(",") : String(value ?? "").trim();
+    if (!text) continue;
+    const param = { destination_country: "destination", name: "q" }[key] || key;
+    if (!["status", "contractor", "applicant", "destination", "q"].includes(param)) {
+      throw new ApiV2Error(`listPlacementsV2: /v1/placements cannot filter by ${key}`, 400, "ValidationError");
+    }
+    qs.set(param, text);
+  }
+  const [field, dir] = String(orderBy || "modified desc").trim().split(/\s+/);
+  const sort = `${(dir || "asc").toLowerCase() === "desc" ? "-" : ""}${field}`;
+  if (["-modified", "modified", "-creation", "creation", "name", "-name"].includes(sort)) qs.set("sort", sort);
+  qs.set("limit", String(Math.min(Math.max(limitPageLength || 100, 1), 500)));
+  if (limitStart) qs.set("offset", String(limitStart));
+
+  let result: { items?: V2PlacementRecord[]; total?: number };
+  try {
+    result = await requestV2<{ items?: V2PlacementRecord[]; total?: number }>(`/v1/placements?${qs}`, {
+      method: "GET",
+      raw: true,
+    });
+  } catch (err: any) {
+    // The first call to a backend without /v1 lands here; isV1Unavailable() is then known.
+    if (err?.statusCode === 404 && !err?.excType) {
+      await requestV2("/api/method/agency_tracking.api.auth.read?op=get_current_user", { method: "POST" }).catch(() => {});
+      if (isV1Unavailable()) return listPlacementsV2(cleanFilters as any, limitPageLength, orderBy, limitStart, withTotal as any) as any;
+    }
+    throw err;
+  }
+  const list: V2PlacementRecord[] = Array.isArray(result?.items) ? result.items : [];
 
   if (withTotal) {
     return {
       data: list,
-      total_count: Number(result?.total_count ?? list.length),
+      total_count: Number(result?.total ?? list.length),
     };
   }
 
@@ -192,18 +227,24 @@ export async function uploadPlacementContractV2(
   contractSignedDate?: string
 ): Promise<{ message?: string; [key: string]: any }> {
   const cleanId = cleanFileId(fileIdOrUrl);
-  return requestV2(
+  const result = await requestV2(
     "/api/method/agency_tracking.api.placement.write?op=upload_contract",
     {
       method: "POST",
       body: {
         placement_name: placementName,
         file_id: cleanId,
-        ...(contractNumber ? { contract_number: contractNumber } : {}),
-        ...(contractSignedDate ? { contract_signed_date: contractSignedDate } : {}),
       },
     }
   );
+  // upload_contract stores the file only; the number and date are saved as parsed fields.
+  if (contractNumber || contractSignedDate) {
+    await updatePlacementParsedFieldsV2(placementName, {
+      ...(contractNumber ? { contract_number: contractNumber } : {}),
+      ...(contractSignedDate ? { contract_signed_date: contractSignedDate } : {}),
+    });
+  }
+  return result;
 }
 
 /**
@@ -225,19 +266,25 @@ export async function uploadPlacementVisaV2(
       ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
     });
   }
-  return requestV2(
+  const result = await requestV2(
     "/api/method/agency_tracking.api.placement.write?op=upload_visa",
     {
       method: "POST",
       body: {
         placement_name: placementName,
         file_id: cleanId,
-        ...(visaNumber ? { visa_number: visaNumber } : {}),
-        ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
-        ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
       },
     }
   );
+  // upload_visa stores the file only; the visa details are saved as parsed fields.
+  if (visaNumber || visaIssueDate || visaExpiryDate) {
+    await updatePlacementParsedFieldsV2(placementName, {
+      ...(visaNumber ? { visa_number: visaNumber } : {}),
+      ...(visaIssueDate ? { visa_issue_date: visaIssueDate } : {}),
+      ...(visaExpiryDate ? { visa_expiry_date: visaExpiryDate } : {}),
+    });
+  }
+  return result;
 }
 
 export const uploadContractV2 = uploadPlacementContractV2;
@@ -688,7 +735,6 @@ export async function listMyPlacementsV2(
   const body: Record<string, any> = {};
   if (contractorName && contractorName.trim()) {
     body.contractor_name = contractorName.trim();
-    body.contractor = contractorName.trim();
   }
   if (limitStart > 0) body.limit_start = limitStart;
   if (limitPageLength !== undefined) body.limit_page_length = limitPageLength;

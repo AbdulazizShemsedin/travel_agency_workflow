@@ -62,8 +62,7 @@ export async function createComplaintV2(
         placement,
         description,
         worker_status_at_complaint: workerStatusAtComplaint,
-        ...(extra?.applicant ? { applicant: extra.applicant } : {}),
-        ...(extra?.applicant_name ? { applicant_name: extra.applicant_name } : {}),
+        ...(extra?.applicant || extra?.applicant_name ? { applicant: extra.applicant || extra.applicant_name } : {}),
       },
     }
   );

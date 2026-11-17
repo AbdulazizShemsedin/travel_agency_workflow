@@ -115,6 +115,7 @@ export interface V2ParsedVisaData {
  * Go backend file-ID contract:
  * - Technical file IDs (e.g. "file_9f3c2a71d04be85a6c1d") resolve to:
  *   /api/method/agency_tracking.api.file.read?op=download_file&file_id=<ID>
+ *   (the proxy forwards it to /v1/files/<ID> when the backend serves /v1)
  * - Existing absolute or relative HTTP/API addresses (including agency portal photo URLs)
  *   are preserved without modification.
  */
@@ -134,6 +135,7 @@ export function getFileDownloadUrl(fileIdOrUrl?: string | null): string {
     s.startsWith("https://") ||
     s.startsWith("blob:") ||
     s.startsWith("data:") ||
+    s.startsWith("/v1/") ||
     s.startsWith("/api/") ||
     s.startsWith("/files/") ||
     s.startsWith("/private/files/")
@@ -143,6 +145,8 @@ export function getFileDownloadUrl(fileIdOrUrl?: string | null): string {
 
   // Go backend file ID pattern: starts with "file_" or is a technical hash without path slashes
   if (s.startsWith("file_") || (!s.startsWith("/") && !s.includes("/"))) {
+    // The old address on purpose: the /api/method proxy sends it on to /v1/files/<id> when the
+    // backend serves /v1, and to the old route when it doesn't.
     return `/api/method/agency_tracking.api.file.read?op=download_file&file_id=${encodeURIComponent(s)}`;
   }
 
@@ -160,12 +164,18 @@ export function getFileDownloadUrl(fileIdOrUrl?: string | null): string {
  * Examples:
  * - "file_9f3c2a71d04be85a6c1d" -> "file_9f3c2a71d04be85a6c1d"
  * - "/api/method/agency_tracking.api.file.read?op=download_file&file_id=file_9f3c2a71d04be85a6c1d" -> "file_9f3c2a71d04be85a6c1d"
+ * - "/v1/files/file_9f3c2a71d04be85a6c1d" -> "file_9f3c2a71d04be85a6c1d"
  * - "/private/files/contract.pdf" -> "/private/files/contract.pdf"
  */
 export function cleanFileId(idOrUrl?: string | null): string {
   if (!idOrUrl || typeof idOrUrl !== "string") return "";
   const s = idOrUrl.trim();
   if (!s || s === "null" || s === "undefined") return "";
+
+  const v1 = s.match(/\/v1\/files\/([^/?#]+)/);
+  if (v1 && v1[1]) {
+    return decodeURIComponent(v1[1]).trim();
+  }
 
   if (s.includes("file_id=")) {
     const match = s.match(/file_id=([^&]+)/);

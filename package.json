@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx --test tests/**/*.test.ts"
+    "test": "npx tsx --test tests/**/*.test.ts",
+    "gen:v1-routes": "node scripts/gen-v1-routes.mjs",
+    "check:v1-calls": "node scripts/check-v1-calls.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",
