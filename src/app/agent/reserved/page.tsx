@@ -375,15 +375,15 @@ export default function MyReservedCandidatesPage() {
                           </td>
 
                           {/* Reservation Status */}
-                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227] whitespace-nowrap">
+                          <td className="px-4 py-3.5 border-b border-slate-100 dark:border-[#222227]">
                             <div className="flex flex-col items-start gap-1">
                               {(c as any).request_denied === 1 || (c.status === "Cancelled" && (c as any).denied) ? (
-                                <Badge className="bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold">
+                                <Badge className="bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px] font-bold rounded-md leading-snug">
                                   Unavailable. Please select another candidate.
                                 </Badge>
                               ) : c.status === "Requested" ? (
                                 <div className="flex flex-col items-start gap-0.5">
-                                  <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold">
+                                  <Badge className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-bold rounded-md leading-snug">
                                     Selection request under review
                                   </Badge>
                                   <span className="text-[9px] text-slate-500 dark:text-zinc-400">

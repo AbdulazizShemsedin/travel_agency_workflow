@@ -71,8 +71,8 @@ export default function CandidateCvPreviewPage() {
     },
   });
 
-  const resolvePhotoUrl = (url?: string | null, fallback: string = "") => {
-    if (!url || typeof url !== "string") return fallback;
+  const resolvePhotoUrl = (url?: string | null) => {
+    if (!url || typeof url !== "string") return "";
     const clean = url.trim();
     if (
       clean === "" ||
@@ -81,24 +81,21 @@ export default function CandidateCvPreviewPage() {
       clean.includes("placeholder-user") ||
       clean.includes("default-avatar")
     ) {
-      return fallback;
+      return "";
     }
     return getFileDownloadUrl(clean);
   };
 
   const portraitSrc = resolvePhotoUrl(
-    applicant?.photo_passport || applicant?.profile_photo_url || applicant?.photo_url,
-    "/cv-template/page_0_img_1.png"
+    applicant?.photo_passport || applicant?.profile_photo_url || applicant?.photo_url
   );
 
   const fullBodySrc = resolvePhotoUrl(
-    applicant?.photo_full_body,
-    "/cv-template/page_0_img_2.png"
+    applicant?.photo_full_body
   );
 
   const passportScanSrc = resolvePhotoUrl(
-    applicant?.passport_scan,
-    "/cv-template/page_1_img_0.png"
+    applicant?.passport_scan
   );
 
   const [portraitImg, setPortraitImg] = React.useState(portraitSrc);
@@ -476,12 +473,14 @@ export default function CandidateCvPreviewPage() {
               {/* Blue curved wave accent below circle */}
               <div className="absolute -bottom-1 right-0 w-20 h-10 bg-[#125488] rounded-b-full -z-0 transform scale-105" />
               <div className="w-18 h-18 rounded-full overflow-hidden border-2 border-[#125488] bg-slate-100 flex items-center justify-center shadow-xs z-10 relative">
-                <img
-                  src={portraitImg}
-                  onError={() => setPortraitImg("/cv-template/page_0_img_1.png")}
-                  alt={fullName}
-                  className="w-full h-full object-cover"
-                />
+                {portraitImg && (
+                  <img
+                    src={portraitImg}
+                    onError={() => setPortraitImg("")}
+                    alt={fullName}
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -497,12 +496,14 @@ export default function CandidateCvPreviewPage() {
             
             {/* Full Length Standing Photo */}
             <div className="w-full h-[370px] rounded border border-black overflow-hidden bg-white flex items-center justify-center p-1 shadow-xs">
-              <img
-                src={fullBodyImg}
-                onError={() => setFullBodyImg("/cv-template/page_0_img_2.png")}
-                alt="Full Body Posture"
-                className="w-full h-full object-contain object-top"
-              />
+              {fullBodyImg && (
+                <img
+                  src={fullBodyImg}
+                  onError={() => setFullBodyImg("")}
+                  alt="Full Body Posture"
+                  className="w-full h-full object-contain object-top"
+                />
+              )}
             </div>
 
             {/* Work Experience Table */}
@@ -756,12 +757,14 @@ export default function CandidateCvPreviewPage() {
 
         {/* Passport Scan Display */}
         <div className="w-full max-w-xl rounded-xl border-2 border-slate-300 overflow-hidden bg-white p-3 shadow-md flex items-center justify-center">
-          <img
-            src={passportScanImg}
-            onError={() => setPassportScanImg("/cv-template/page_1_img_0.png")}
-            alt="Ethiopian Passport Scan"
-            className="w-full h-auto max-h-[750px] object-contain rounded"
-          />
+          {passportScanImg && (
+            <img
+              src={passportScanImg}
+              onError={() => setPassportScanImg("")}
+              alt="Ethiopian Passport Scan"
+              className="w-full h-auto max-h-[750px] object-contain rounded"
+            />
+          )}
         </div>
 
       </div>
