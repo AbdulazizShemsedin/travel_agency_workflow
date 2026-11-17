@@ -68,6 +68,7 @@ import { listApplicantsV2 } from "@/lib/api/v2/applicants";
 import { listPlacementsV2 } from "@/lib/api/v2/placements";
 import { listChatContactsV2, listPortalCandidatesV2 } from "@/lib/api/v2/portal";
 import { requestV2 } from "@/lib/api/v2/client";
+import { subscribeRealtime, subscribeRealtimeState } from "@/lib/realtime";
 import { shortRef, stripRecordIds } from "@/lib/utils/display-id";
 import { cn } from "@/lib/utils";
 
@@ -335,6 +336,24 @@ export function ChatContainer() {
     staleTime: 60000,
   });
 
+  // 0. Live updates. While Centrifugo is connected, a pushed event refetches what changed and the
+  // polling below slows to a safety net; without it (off on the server, or socket down) polling
+  // runs at its usual pace.
+  const [isLive, setIsLive] = React.useState(false);
+  React.useEffect(() => subscribeRealtimeState(setIsLive), []);
+  React.useEffect(
+    () =>
+      subscribeRealtime((event) => {
+        queryClient.invalidateQueries({ queryKey: ["chat_threads_my"] });
+        queryClient.invalidateQueries({ queryKey: ["chat_threads_oversight"] });
+        if (event.thread) {
+          queryClient.invalidateQueries({ queryKey: ["chat_messages", event.thread] });
+        }
+      }),
+    [queryClient]
+  );
+  const SAFETY_POLL_MS = 60000;
+
   // 1. Fetch User's Real Participating Threads (My Discussions)
   const {
     data: myThreads = [],
@@ -344,7 +363,7 @@ export function ChatContainer() {
     queryKey: ["chat_threads_my"],
     queryFn: listThreadsV2,
     staleTime: 10000,
-    refetchInterval: 15000,
+    refetchInterval: isLive ? SAFETY_POLL_MS : 15000,
   });
 
   // 2. Fetch All Organization Threads for Oversight (strictly Admin only)
@@ -357,6 +376,7 @@ export function ChatContainer() {
     queryFn: listAllThreadsForOversightV2,
     enabled: isSupervisorOrAdmin,
     staleTime: 15000,
+    // Pushes reach a thread's participants only, so oversight of other threads keeps polling.
     refetchInterval: 20000,
   });
 
@@ -820,7 +840,8 @@ export function ChatContainer() {
     queryFn: () => (selectedThread?.name ? getThreadMessagesV2(selectedThread.name) : Promise.resolve([])),
     enabled: !!selectedThread?.name,
     staleTime: 5000,
-    refetchInterval: 10000,
+    refetchInterval:
+      isLive && myThreads.some((t) => t.name === selectedThread?.name) ? SAFETY_POLL_MS : 10000,
   });
 
   // 4. In-Chat Presence Heartbeat & Auto Mark-As-Read
