@@ -355,6 +355,10 @@ export default function ApplicantDetailPage() {
     );
   }, [authUser]);
 
+  // A user whose every role is view-only gets no Cancel / Restore / Restart buttons. Anyone with a
+  // writable role still sees them; the backend decides whether that role may do it.
+  const canChangeCase = isManagerOrAdmin || !isReadOnly();
+
   const canSelectForAgency = React.useMemo(() => {
     if (!isManagerOrAdmin) return false;
     if (isMuayena) return false;
@@ -544,7 +548,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Cancelled Applicant Actions: Restore Previous Process vs Restart as New Attempt */}
-            {currentStage === "Cancelled" && (
+            {currentStage === "Cancelled" && canChangeCase && (
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -573,7 +577,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Send Again button for International return */}
-            {isInternationalReturn && currentStage !== "Cancelled" && (
+            {isInternationalReturn && currentStage !== "Cancelled" && canChangeCase && (
               <Button
                 type="button"
                 size="sm"
@@ -607,7 +611,7 @@ export default function ApplicantDetailPage() {
             )}
 
             {/* Cancel Applicant button (when not already cancelled) */}
-            {currentStage !== "Cancelled" && (
+            {currentStage !== "Cancelled" && canChangeCase && (
               <Button
                 type="button"
                 variant="outline"

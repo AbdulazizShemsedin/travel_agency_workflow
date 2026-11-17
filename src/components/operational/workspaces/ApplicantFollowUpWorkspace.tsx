@@ -116,7 +116,13 @@ export function ApplicantFollowUpWorkspace({
   isFullPage = false,
 }: ApplicantFollowUpWorkspaceProps) {
   const queryClient = useQueryClient();
-  const { authUser, roles } = useAuth();
+  const { authUser, roles: allRoles, isReadOnly } = useAuth();
+  // Only roles held with write access decide what this screen lets the user change. A role held
+  // view-only still shows its data, but its buttons stay disabled (the backend refuses them anyway).
+  const roles = React.useMemo(
+    () => (allRoles || []).filter((r) => !isReadOnly(String(r))),
+    [allRoles, isReadOnly]
+  );
 
   // Local state copy of current applicant row for instant feedback
   const [currentRow, setCurrentRow] = React.useState<WorkspaceApplicantRow | null>(row);
@@ -171,10 +177,10 @@ export function ApplicantFollowUpWorkspace({
       ? {
           user: authUser.email,
           full_name: authUser.full_name || authUser.email,
-          roles: Array.isArray(authUser.roles) ? authUser.roles : [],
+          roles,
         }
       : null;
-  }, [authUser]);
+  }, [authUser, roles]);
 
   const isAdmin = React.useMemo(() => {
     const emailOrName = (authUser?.email || authUser?.full_name || "").toLowerCase().trim();
@@ -1185,7 +1191,7 @@ export function ApplicantFollowUpWorkspace({
                     <div className="pt-2 flex items-center gap-2 flex-wrap">
                       <Button
                         size="sm"
-                        disabled={isAdvancingToProcessing}
+                        disabled={isAdvancingToProcessing || !isFollowUpOperator}
                         onClick={async () => {
                           try {
                             setIsAdvancingToProcessing(true);
@@ -1233,6 +1239,7 @@ export function ApplicantFollowUpWorkspace({
               {/* ----------------------------------------------------------- */}
               {/* CARD 1: LMIS (Top-Left)                                     */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditLmis} className="contents">
               <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
                 <div>
                   {/* Card Header */}
@@ -1630,10 +1637,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 2: TELESIGN (KUWAIT) OR TE'SHIR / INJAZ (SAUDI)        */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditTaeshir} className="contents">
               {isKuwait ? (
                 <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between">
                   <div>
@@ -2368,10 +2377,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               )}
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 3: EMBASSY / WAKALA (Bottom-Left)                      */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditEmbassy} className="contents">
               <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden">
                 <div>
                   {/* Card Header */}
@@ -2885,10 +2896,12 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
               {/* ----------------------------------------------------------- */}
               {/* CARD 4: TICKET & DEPARTURE (Bottom-Right)                   */}
               {/* ----------------------------------------------------------- */}
+              <fieldset disabled={!canEditMedical} className="contents">
               <div className={cn("rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121216] shadow-xs flex flex-col justify-between overflow-hidden transition-opacity", isTicketLocked && "opacity-60 bg-slate-50/50 dark:bg-[#121216]/50")}>
                 <div>
                   {/* Card Header */}
@@ -3290,6 +3303,7 @@ export function ApplicantFollowUpWorkspace({
                   </div>
                 </div>
               </div>
+              </fieldset>
 
             </div>
           </div>
