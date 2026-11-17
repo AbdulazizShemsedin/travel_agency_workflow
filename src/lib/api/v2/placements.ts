@@ -162,6 +162,27 @@ export async function listPlacementsV2(
 }
 
 /**
+ * Lists the Placements that belong to one Applicant.
+ *
+ * Sends the filter as a field map (`{ applicant }`), the shape every backend
+ * reads, and then keeps only rows whose `applicant` matches. The second step
+ * matters: a backend that ignores or misreads the filter returns every
+ * Placement, and showing another applicant's case on this page would let its
+ * buttons act on the wrong case.
+ */
+export async function listPlacementsForApplicantV2(
+  applicantId: string
+): Promise<V2PlacementRecord[]> {
+  const id = String(applicantId || "").trim();
+  if (!id) return [];
+  const rows = await listPlacementsV2({ applicant: id });
+  const want = id.toLowerCase();
+  return rows.filter(
+    (p) => String(p?.applicant || "").trim().toLowerCase() === want
+  );
+}
+
+/**
  * Uploads a contract file and sets contract fields on Placement.
  */
 export async function uploadPlacementContractV2(

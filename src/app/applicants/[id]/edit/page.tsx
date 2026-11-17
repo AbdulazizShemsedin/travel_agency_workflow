@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
-import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { getApplicantV2, listPlacementsForApplicantV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import { ApplicantRegistrationForm } from "@/components/applicant/ApplicantRegistrationForm";
 import { Button } from "@/components/ui/button";
 
@@ -31,7 +31,7 @@ export default function EditApplicantPage() {
 
   const { data: placements = [] } = useQuery({
     queryKey: ["placements", applicantId],
-    queryFn: () => listPlacementsV2([{ applicant: applicantId }]),
+    queryFn: () => listPlacementsForApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 

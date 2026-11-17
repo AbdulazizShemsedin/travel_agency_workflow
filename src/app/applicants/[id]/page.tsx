@@ -25,7 +25,7 @@ import {
   Info,
   Inbox,
 } from "lucide-react";
-import { getApplicantV2, listPlacementsV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
+import { getApplicantV2, listPlacementsForApplicantV2, listMyClearanceStepsV2, V2ApplicantDetails } from "@/lib/api/v2";
 import {
   restartApplicantV2,
   cancelApplicantV2,
@@ -109,7 +109,7 @@ export default function ApplicantDetailPage() {
 
   const { data: placements = [], refetch: refetchPlacements } = useQuery({
     queryKey: ["placements", applicantId],
-    queryFn: () => listPlacementsV2([{ applicant: applicantId }]),
+    queryFn: () => listPlacementsForApplicantV2(applicantId),
     enabled: !!applicantId,
   });
 
