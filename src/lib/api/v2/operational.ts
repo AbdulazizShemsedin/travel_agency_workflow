@@ -568,23 +568,23 @@ export async function fetchOperationalWorkspaceDataV2(
           (embassyStep?.creation ? embassyStep.creation.split(" ")[0] : "") ||
           "",
         embassyRemarks:
+          (embassyStep as any)?.remarks ||
           embassyStep?.notes ||
           embassyStep?.rejection_remark ||
-          (embassyStep as any)?.remarks ||
           "",
         lmisRemark:
+          (lmsStep as any)?.remarks ||
           lmsStep?.notes ||
           lmsStep?.rejection_remark ||
-          (lmsStep as any)?.remarks ||
           "",
         teshirRemark:
+          (injazStep as any)?.remarks ||
           injazStep?.notes ||
           injazStep?.rejection_remark ||
-          (injazStep as any)?.remarks ||
           "",
         ticketRemark:
-          (plc as any)?.remarks ||
           (plc as any)?.ticketing_remarks ||
+          (plc as any)?.remarks ||
           "",
         plc,
 

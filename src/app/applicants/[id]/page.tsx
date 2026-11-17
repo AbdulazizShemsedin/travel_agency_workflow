@@ -294,14 +294,7 @@ export default function ApplicantDetailPage() {
       toast.success(data?.message || "Applicant process successfully restored to previous state.");
     },
     onError: (err: any) => {
-      const msg = err?.message || String(err);
-      if (err?.statusCode === 404 || msg.includes("not found") || msg.includes("does not exist") || err?.statusCode === 501) {
-        setRestoreErrorNotice(
-          "Backend Restoration Endpoint ('applicant_api.restore_applicant') is not yet available on the active backend. To resume workflow, internal staff can either 'Restart as New Attempt' (which starts a new cycle at Draft/Registered) or contact your administrator."
-        );
-      } else {
-        toast.error("Restoration failed", { description: msg });
-      }
+      toast.error("Restoration failed", { description: err?.message || String(err) });
     },
   });
 

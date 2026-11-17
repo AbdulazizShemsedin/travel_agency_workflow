@@ -48,10 +48,10 @@ import {
   setLmisStatusV2,
   LMIS_WORKING_STATUSES,
   LMIS_REJECTION_REASONS,
+  setStepRemarksV2,
 } from "@/lib/api/v2/clearance";
 import {
   updateApplicantForLmisV2,
-  updateApplicantV2,
   toClientCocStatus,
   toBackendCocStatus,
   CLIENT_COC_STATUS_OPTIONS,
@@ -250,12 +250,12 @@ export function LMISWorkspace({
     }
   };
 
-  // In-cell quick update helper: Remark (Applicant.remarks)
-  const handleUpdateRemark = async (applicantId: string, remark: string) => {
+  // In-cell quick update helper: Remark (the LMIS step's remark)
+  const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
     try {
-      await updateApplicantV2(applicantId, {
-        remarks: remark,
-      });
+      const stepName = row.lms?.name;
+      if (!stepName) throw new Error("No clearance step found for this candidate.");
+      await setStepRemarksV2(stepName, remark.trim());
       toast.success("Remark saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -870,10 +870,10 @@ export function LMISWorkspace({
       editable: true,
       cell: (row) => (
         <ExcelTextInput
-          value={row.remark}
+          value={row.lmisRemark || ""}
           disabled={!canEdit}
           placeholder="Add remark..."
-          onSave={(val) => handleUpdateRemark(row.applicantId, val)}
+          onSave={(val) => handleUpdateRemark(row, val)}
         />
       ),
     },

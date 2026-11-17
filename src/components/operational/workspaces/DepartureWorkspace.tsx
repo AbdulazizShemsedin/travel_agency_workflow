@@ -41,8 +41,8 @@ import {
   recordPredepartureMedicalResultV2,
   advancePlacementV2,
   getPlacementV2,
+  setTicketingRemarksV2,
 } from "@/lib/api/v2/placements";
-import { updateApplicantForLmisV2, updateApplicantV2 } from "@/lib/api/v2/applicants";
 import { renderCvPdfV2 } from "@/lib/api/v2/cv";
 import { sendApplicantToExtension } from "@/lib/extensionBridge";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -157,7 +157,7 @@ export function DepartureWorkspace({
     setModalFlightDate(tkt?.flight_date || "");
     setModalFlightTime((tkt as any)?.flight_time || (dep as any)?.flight_time || "");
     setModalTicketCost((tkt as any)?.ticket_cost || "");
-    setModalTicketDetails((tkt as any)?.ticket_details || "");
+    setModalTicketDetails(editingRow.ticketRemark || "");
     setModalEmployee((tkt as any)?.employee || (dep as any)?.employee || "");
 
     const med2Val = (dep as any)?.medical_2_result || (dep as any)?.medical_2_status;
@@ -329,12 +329,12 @@ export function DepartureWorkspace({
     }
   };
 
-  // In-cell quick update helper: Remark (Applicant.remarks)
+  // In-cell quick update helper: Remark (the ticketing remark)
   const handleUpdateRemark = async (row: WorkspaceApplicantRow, remark: string) => {
     try {
-      await updateApplicantV2(row.applicantId, {
-        remarks: remark,
-      });
+      const placementName = row.placementId || row.dsrName;
+      if (!placementName) throw new Error("No linked placement found");
+      await setTicketingRemarksV2(placementName, remark.trim());
       toast.success("Remark saved");
       await queryClient.invalidateQueries({ queryKey: ["operational_workspace_v2"] });
       await queryClient.invalidateQueries({ queryKey: ["applicants"] });
@@ -393,16 +393,15 @@ export function DepartureWorkspace({
         modalMedical2Result === "Pass" ? "FIT" : "UNFIT"
       );
 
-      // Save remark or notes if present
-      if (modalMedical2Remark.trim() || modalTicketDetails.trim()) {
-        try {
-          await updateApplicantForLmisV2({
-            applicant_name: editingRow.applicantId,
-            remarks: modalMedical2Remark.trim() || modalTicketDetails.trim(),
-          });
-        } catch (rErr) {
-          console.warn("Remark save warning:", rErr);
-        }
+      // Ticket notes are the ticketing remark. The backend keeps no separate Medical 2 remark,
+      // so it is added to the same note.
+      let ticketNote = modalTicketDetails.trim();
+      const med2Note = modalMedical2Remark.trim();
+      if (med2Note && !ticketNote.includes(med2Note)) {
+        ticketNote = ticketNote ? `${ticketNote} | Medical 2: ${med2Note}` : `Medical 2: ${med2Note}`;
+      }
+      if (ticketNote !== (editingRow.ticketRemark || "").trim()) {
+        await setTicketingRemarksV2(placementName, ticketNote);
       }
 
       // 3. Record Reschedule if applicable
@@ -687,7 +686,7 @@ export function DepartureWorkspace({
       editable: true,
       cell: (row) => (
         <ExcelTextInput
-          value={row.remark || ""}
+          value={row.ticketRemark || ""}
           placeholder="Add remark..."
           disabled={!canEdit}
           onSave={(val) => handleUpdateRemark(row, val)}

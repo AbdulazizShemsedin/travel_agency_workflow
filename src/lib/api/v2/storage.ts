@@ -27,7 +27,9 @@ export async function testStorageConnectionV2(): Promise<V2StorageConnectionStat
     }
   );
 
-  const payload = (result as any)?.message || result;
+  // The answer may come wrapped in { message: {...} } or already unwrapped; its own "message" is text.
+  const raw = result as any;
+  const payload = raw && typeof raw.message === "object" && raw.message !== null ? raw.message : raw;
   return {
     status: payload?.status || "error",
     bucket: payload?.bucket,
