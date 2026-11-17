@@ -897,3 +897,9 @@ Integrated all requirements from the 2026-09-12 backend release notes across Fin
   6. Direct authoritative support for backend `medical_current` (0.-22).
 - **Applicant Table Column Audit**: Audited all 16 columns of `ApplicantTable.tsx`. Integrated `resolveEffectiveMedical` across columns 8 (Medical Status), 9 (Exam Date), and 10 (Exam Remaining). Fixed registration form default from `"Pending"` to `""`.
 - **Automated Persistent Regression Test Suite**: Created `tests/selection-and-medical.test.ts` (16 unit and integration test assertions across 2 test suites) running via `npm test` (`npx tsx --test`). Verified 16/16 tests passing, clean TypeScript check (`npx tsc --noEmit`), and full Next.js production build (`npm run build`, 30/30 static and dynamic routes compiled in 9.2s).
+
+## 29. Applicant-Scoped Placements, View-Only Controls & Live Chat (2026-11-16)
+- **Placements for one applicant**: `listPlacementsForApplicantV2` sends `{ applicant }` and keeps only matching rows. The backend drops a list-of-objects filter and returned every placement (see `BACKEND_FIX_PROMPT_list_filters.md`). Used by the applicant detail, edit and document-center pages.
+- **View-only roles**: the follow-up workspace derives edit rights from roles held with write access only; each stage card is a `<fieldset disabled>` for users without that right. The applicant page hides Cancel / Restore / Restart from users whose every role is view-only.
+- **Follow-up page for older applicants**: `fetchOperationalWorkspaceDataV2(stream, corridor, onlyApplicant)` loads that applicant and its placements directly instead of the 100 most recent.
+- **Live chat (Centrifugo)**: `src/lib/realtime.ts` connects with the token from `auth.read?op=get_realtime_token`; pushed events refetch threads and messages, and polling slows to 60s while connected. With Centrifugo off on the server, chat polls as before.
