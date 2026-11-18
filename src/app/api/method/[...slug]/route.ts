@@ -14,11 +14,15 @@ async function backendServesV1(): Promise<boolean> {
   const base = (process.env.BACKEND_URL || process.env.GO_BACKEND_URL || process.env.FRAPPE_BASE_URL || process.env.NEXT_PUBLIC_FRAPPE_URL || "").replace(/\/$/, "");
   let ok = false;
   if (base) {
-    try {
-      const res = await fetch(`${base}/v1/me`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
-      ok = (res.headers.get("content-type") || "").includes("problem+json") || res.ok;
-    } catch {
-      ok = false;
+    if (base.includes("railway.app") || base.includes("goagency") || Boolean(process.env.GO_BACKEND_URL)) {
+      ok = true;
+    } else {
+      try {
+        const res = await fetch(`${base}/v1/me`, { cache: "no-store", signal: AbortSignal.timeout(5000) });
+        ok = (res.headers.get("content-type") || "").includes("problem+json") || res.ok;
+      } catch {
+        ok = false;
+      }
     }
   }
   v1Probe = { at: Date.now(), ok };

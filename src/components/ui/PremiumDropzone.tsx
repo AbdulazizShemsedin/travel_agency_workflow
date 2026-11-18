@@ -85,6 +85,7 @@ export function PremiumDropzone({
   const [isHovered, setIsHovered] = React.useState(false);
   const [dragError, setDragError] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [imageError, setImageError] = React.useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = React.useState(false);
   const [, setNamesLoaded] = React.useState(0);
 
@@ -113,6 +114,7 @@ export function PremiumDropzone({
 
   // Compute preview URL whenever value changes
   React.useEffect(() => {
+    setImageError(false);
     if (!value) {
       setPreviewUrl(null);
       return;
@@ -599,15 +601,28 @@ export function PremiumDropzone({
                   variant === "document" && "h-40 w-full max-w-sm"
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewUrl}
-                  alt={displayFileName || "Preview"}
-                  className={cn(
-                    "h-full w-full object-contain transition-transform duration-300 group-hover/img:scale-105",
-                    variant === "full_body" && "object-cover"
-                  )}
-                />
+                {imageError ? (
+                  <div className="flex flex-col items-center justify-center p-3 text-center text-slate-400 dark:text-zinc-500">
+                    <Camera className="h-8 w-8 stroke-[1.5] mb-1 opacity-60 text-slate-400" />
+                    <span className="text-[10px] font-medium text-slate-600 dark:text-zinc-300">
+                      {displayFileName || "Attached Photo"}
+                    </span>
+                    <span className="text-[9px] text-slate-400 dark:text-zinc-500 mt-0.5">
+                      Preview unavailable
+                    </span>
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={previewUrl}
+                    alt={displayFileName || "Preview"}
+                    onError={() => setImageError(true)}
+                    className={cn(
+                      "h-full w-full object-contain transition-transform duration-300 group-hover/img:scale-105",
+                      variant === "full_body" && "object-cover"
+                    )}
+                  />
+                )}
                 {/* Floating Quick Action Overlay */}
                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <a

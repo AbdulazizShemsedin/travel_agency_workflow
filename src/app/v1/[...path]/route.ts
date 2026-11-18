@@ -80,6 +80,7 @@ async function pass(req: NextRequest, ctx: { params: Promise<{ path: string[] }>
   if (base.includes("ngrok")) headers.set("ngrok-skip-browser-warning", "true");
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const isGetOrHead = req.method === "GET" || req.method === "HEAD";
   // Long work (CV and PDF rendering, OCR) answers slowly; everything else gets 45s.
   const slow = /\/(cv|cv\.pdf|invoice\.pdf|injaz-paper\.pdf|parse\/[a-z]+)$/.test(req.nextUrl.pathname);
   const controller = new AbortController();
@@ -91,7 +92,7 @@ async function pass(req: NextRequest, ctx: { params: Promise<{ path: string[] }>
       method: req.method,
       headers,
       body: hasBody ? await req.arrayBuffer() : undefined,
-      redirect: "manual",
+      redirect: isGetOrHead ? "follow" : "manual",
       signal: controller.signal,
       cache: "no-store",
     });
@@ -110,6 +111,10 @@ async function pass(req: NextRequest, ctx: { params: Promise<{ path: string[] }>
   if (out.has("content-disposition")) {
     out.set("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
   }
+  const isFileOrMedia = req.nextUrl.pathname.includes("/files/") || req.nextUrl.pathname.includes("/photo");
+  if (isFileOrMedia && res.ok && !out.has("cache-control")) {
+    out.set("cache-control", "private, max-age=3600, stale-while-revalidate=86400");
+  }
   const https = isHttps(req);
   const cookies: string[] =
     typeof res.headers.getSetCookie === "function"
@@ -117,7 +122,10 @@ async function pass(req: NextRequest, ctx: { params: Promise<{ path: string[] }>
       : res.headers.get("set-cookie")
       ? [res.headers.get("set-cookie") as string]
       : [];
-  for (const c of cookies) out.append("set-cookie", sanitizeCookie(c, https));
+  // Never pass auth-clearing cookies back on file/media requests
+  if (!isFileOrMedia) {
+    for (const c of cookies) out.append("set-cookie", sanitizeCookie(c, https));
+  }
 
   // A body can't go with 204/304; otherwise stream it (the timer covers the wait for headers only).
   const noBody = res.status === 204 || res.status === 304 || req.method === "HEAD";
